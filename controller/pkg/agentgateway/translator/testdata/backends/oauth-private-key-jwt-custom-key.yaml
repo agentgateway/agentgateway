@@ -58,10 +58,11 @@ output:
               clientId: gateway
               method: PRIVATE_KEY_JWT
               privateKeyJwt:
-                alg: ES256
                 assertionAudience: https://sts.example.com/oauth/token
-                kid: key-1
-                signingKey: pem-value
+                key:
+                  alg: ES256
+                  kid: key-1
+                  signingKey: pem-value
             tokenEndpoint:
               backend: default/token-endpoint
       key: default/static-backend

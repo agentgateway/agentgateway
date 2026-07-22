@@ -427,14 +427,6 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 			want: "requestedTokenType is only valid with TokenExchange",
 		},
 		{
-			name: "custom-requested-token-type",
-			auth: agentgateway.OAuthTokenExchange{
-				BackendRef:         oauthTokenEndpointRef(),
-				RequestedTokenType: ptr.Of(agentgateway.OAuthTokenType("urn:company:domain:token")),
-			},
-			want: "custom token types are only supported for subjectToken and actorToken",
-		},
-		{
 			name: "may-act-without-jwt-actor",
 			auth: agentgateway.OAuthTokenExchange{
 				BackendRef: oauthTokenEndpointRef(),
@@ -663,6 +655,26 @@ func TestOAuthTokenExchangeCustomSubjectTokenTypeTranslation(t *testing.T) {
 	}
 }
 
+func TestOAuthTokenExchangeCustomRequestedTokenTypeTranslation(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t)
+
+	path := "/oauth/token"
+	customTokenType := agentgateway.OAuthTokenType("urn:company:domain:token")
+	policy, err := buildOAuthTokenExchangePolicy(ctx, &agentgateway.OAuthTokenExchange{
+		BackendRef:         oauthTokenEndpointRef(),
+		Path:               &path,
+		RequestedTokenType: ptr.Of(customTokenType),
+	}, "default")
+	if err != nil {
+		t.Fatalf("buildOAuthTokenExchangePolicy() error = %v, want nil", err)
+	}
+
+	oauth := policy.GetOauthTokenExchange()
+	if oauth.GetRequestedTokenType() != string(customTokenType) {
+		t.Fatalf("requested token type = %q, want %q", oauth.GetRequestedTokenType(), customTokenType)
+	}
+}
+
 func TestOAuthTokenExchangeRejectsInvalidCustomTokenTypes(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -670,6 +682,28 @@ func TestOAuthTokenExchangeRejectsInvalidCustomTokenTypes(t *testing.T) {
 		tokenType agentgateway.OAuthTokenType
 		wantErr   string
 	}{
+		{
+			name: "requested typo",
+			buildAuth: func(tokenType agentgateway.OAuthTokenType) *agentgateway.OAuthTokenExchange {
+				return &agentgateway.OAuthTokenExchange{
+					BackendRef:         oauthTokenEndpointRef(),
+					RequestedTokenType: new(tokenType),
+				}
+			},
+			tokenType: agentgateway.OAuthTokenType("JWt"),
+			wantErr:   "oauth requestedTokenType",
+		},
+		{
+			name: "requested fragment",
+			buildAuth: func(tokenType agentgateway.OAuthTokenType) *agentgateway.OAuthTokenExchange {
+				return &agentgateway.OAuthTokenExchange{
+					BackendRef:         oauthTokenEndpointRef(),
+					RequestedTokenType: new(tokenType),
+				}
+			},
+			tokenType: agentgateway.OAuthTokenType("https://tokens.example/custom#fragment"),
+			wantErr:   "without a fragment",
+		},
 		{
 			name: "subject typo",
 			buildAuth: func(tokenType agentgateway.OAuthTokenType) *agentgateway.OAuthTokenExchange {

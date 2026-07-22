@@ -1253,7 +1253,12 @@ fn validate_load_rejects_invalid_local_config(
 
 #[test]
 fn accepts_supported_requested_token_types_from_proto() {
-	for token_type in [TOKEN_TYPE_ACCESS, TOKEN_TYPE_JWT, TOKEN_TYPE_ID] {
+	for token_type in [
+		TOKEN_TYPE_ACCESS,
+		TOKEN_TYPE_JWT,
+		TOKEN_TYPE_ID,
+		"urn:company:domain:token",
+	] {
 		let auth = OAuthTokenExchangeAuth::from_proto(
 			proto::OAuthTokenExchange {
 				requested_token_type: Some(token_type.to_string()),
@@ -1304,7 +1309,7 @@ fn private_key_jwt_client_auth_from_proto() {
 #[rstest]
 #[case::unsupported_requested_token_type(
 	proto::OAuthTokenExchange {
-		requested_token_type: Some("urn:ietf:params:oauth:token-type:saml2".to_string()),
+		requested_token_type: Some("not a uri".to_string()),
 		..Default::default()
 	},
 	"unsupported requested_token_type"

@@ -1117,15 +1117,10 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 	}
 
 	if req := auth.RequestedTokenType; req != nil {
-		// mirror the data plane's requestable token type set
-		switch *req {
-		case agentgateway.OAuthTokenTypeAccessToken,
-			agentgateway.OAuthTokenTypeJWT,
-			agentgateway.OAuthTokenTypeIDToken:
-		case agentgateway.OAuthTokenTypeIDJAG:
+		if *req == agentgateway.OAuthTokenTypeIDJAG {
 			errs = append(errs, errors.New("oauth requestedTokenType IdJag is only supported by crossAppAccess"))
-		default:
-			errs = append(errs, fmt.Errorf("oauth requestedTokenType %q must be a built-in token type; custom token types are only supported for subjectToken and actorToken", *req))
+		} else {
+			errs = append(errs, validateOAuthTokenType(*req, "oauth requestedTokenType"))
 		}
 	}
 
