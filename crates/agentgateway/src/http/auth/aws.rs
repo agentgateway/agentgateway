@@ -593,13 +593,16 @@ pub(super) async fn sign_request(
 			}
 		},
 	};
-	let creds = Box::pin(load_credentials(
-		aws_auth,
-		region,
-		resolved_tags,
-		resolved_session_name,
-	))
-	.await?
+	let creds = tokio::time::timeout(
+		super::CLOUD_AUTH_TIMEOUT,
+		Box::pin(load_credentials(
+			aws_auth,
+			region,
+			resolved_tags,
+			resolved_session_name,
+		)),
+	)
+	.await??
 	.into();
 
 	let service = signing_service_name(req, aws_auth);

@@ -346,14 +346,25 @@ pub(super) async fn insert_token(
 				_ => anyhow::bail!("idToken auth requires a hostname target or explicit audience"),
 			};
 			match credential {
-				Some(credential) => explicit_id_token(aud.as_ref(), credential).await?,
-				None => fetch_id_token(aud.as_ref()).await?,
+				Some(credential) => {
+					tokio::time::timeout(
+						super::CLOUD_AUTH_TIMEOUT,
+						explicit_id_token(aud.as_ref(), credential),
+					)
+					.await??
+				},
+				None => {
+					tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, fetch_id_token(aud.as_ref())).await??
+				},
 			}
 		},
 		GcpAuth::AccessToken { credential, .. } => match credential {
-			Some(credential) => explicit_access_token(credential).await?,
+			Some(credential) => {
+				tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, explicit_access_token(credential)).await??
+			},
 			None => {
-				let token = creds()?.access_token().await?;
+				let token =
+					tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, creds()?.access_token()).await??;
 				token.token
 			},
 		},
