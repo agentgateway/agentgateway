@@ -3910,11 +3910,11 @@
             "type": "string"
           }
         },
-        "subjectTokenSource": {
-          "description": "Overrides where the exchanged `id_token` is read from; defaults to the Authorization\nBearer header. Set to a CEL `expression` to extract it from a claim of the validated\ninbound token (e.g. `{ expression: \"jwt.the_id_token\" }`).",
+        "subjectToken": {
+          "description": "Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read\nfrom the Authorization Bearer header.",
           "anyOf": [
             {
-              "$ref": "#/$defs/AuthorizationLocation"
+              "$ref": "#/$defs/CrossAppAccessSubjectToken"
             },
             {
               "type": "null"
@@ -4025,6 +4025,22 @@
       "required": [
         "clientAuth"
       ]
+    },
+    "CrossAppAccessSubjectToken": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Where to read the subject token. Defaults to the Authorization Bearer header.",
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Bearer "
+            }
+          }
+        }
+      },
+      "additionalProperties": false
     },
     "HTTP": {
       "type": "object",

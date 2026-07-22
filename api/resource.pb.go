@@ -8583,10 +8583,11 @@ type CrossAppAccessAuth struct {
 	Scopes []string `protobuf:"bytes,5,rep,name=scopes,proto3" json:"scopes,omitempty"`
 	// Response cache configuration. When unset uses InMemory cache with defaults.
 	Cache *OAuthTokenExchange_TokenCache `protobuf:"bytes,6,opt,name=cache,proto3" json:"cache,omitempty"`
-	// Optional override for where the subject id_token is read from.
-	SubjectTokenSource *AuthorizationLocation `protobuf:"bytes,7,opt,name=subject_token_source,json=subjectTokenSource,proto3" json:"subject_token_source,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// Subject token sent to the identity provider. Its type is fixed to an
+	// OpenID Connect ID token until other subject token types are supported.
+	SubjectToken  *CrossAppAccessAuth_SubjectToken `protobuf:"bytes,7,opt,name=subject_token,json=subjectToken,proto3" json:"subject_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CrossAppAccessAuth) Reset() {
@@ -8661,9 +8662,9 @@ func (x *CrossAppAccessAuth) GetCache() *OAuthTokenExchange_TokenCache {
 	return nil
 }
 
-func (x *CrossAppAccessAuth) GetSubjectTokenSource() *AuthorizationLocation {
+func (x *CrossAppAccessAuth) GetSubjectToken() *CrossAppAccessAuth_SubjectToken {
 	if x != nil {
-		return x.SubjectTokenSource
+		return x.SubjectToken
 	}
 	return nil
 }
@@ -15748,6 +15749,51 @@ func (x *CrossAppAccessAuth_Endpoint) GetClientAuth() *OAuthClientAuth {
 	return nil
 }
 
+type CrossAppAccessAuth_SubjectToken struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Where to read the subject token. Defaults to the Authorization Bearer header.
+	Source        *AuthorizationLocation `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CrossAppAccessAuth_SubjectToken) Reset() {
+	*x = CrossAppAccessAuth_SubjectToken{}
+	mi := &file_resource_proto_msgTypes[192]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CrossAppAccessAuth_SubjectToken) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CrossAppAccessAuth_SubjectToken) ProtoMessage() {}
+
+func (x *CrossAppAccessAuth_SubjectToken) ProtoReflect() protoreflect.Message {
+	mi := &file_resource_proto_msgTypes[192]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CrossAppAccessAuth_SubjectToken.ProtoReflect.Descriptor instead.
+func (*CrossAppAccessAuth_SubjectToken) Descriptor() ([]byte, []int) {
+	return file_resource_proto_rawDescGZIP(), []int{67, 1}
+}
+
+func (x *CrossAppAccessAuth_SubjectToken) GetSource() *AuthorizationLocation {
+	if x != nil {
+		return x.Source
+	}
+	return nil
+}
+
 var File_resource_proto protoreflect.FileDescriptor
 
 const file_resource_proto_rawDesc = "" +
@@ -17060,21 +17106,23 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"JWT_BEARER\x10\x02B\x16\n" +
 	"\x14_token_endpoint_pathB\x17\n" +
-	"\x15_requested_token_type\"\xf6\x05\n" +
+	"\x15_requested_token_type\"\xcd\x06\n" +
 	"\x12CrossAppAccessAuth\x12c\n" +
 	"\x11identity_provider\x18\x01 \x01(\v26.agentgateway.dev.resource.CrossAppAccessAuth.EndpointR\x10identityProvider\x12z\n" +
 	"\x1dresource_authorization_server\x18\x02 \x01(\v26.agentgateway.dev.resource.CrossAppAccessAuth.EndpointR\x1bresourceAuthorizationServer\x12\x1a\n" +
 	"\baudience\x18\x03 \x01(\tR\baudience\x12\x1c\n" +
 	"\tresources\x18\x04 \x03(\tR\tresources\x12\x16\n" +
 	"\x06scopes\x18\x05 \x03(\tR\x06scopes\x12N\n" +
-	"\x05cache\x18\x06 \x01(\v28.agentgateway.dev.resource.OAuthTokenExchange.TokenCacheR\x05cache\x12b\n" +
-	"\x14subject_token_source\x18\a \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x12subjectTokenSource\x1a\xf8\x01\n" +
+	"\x05cache\x18\x06 \x01(\v28.agentgateway.dev.resource.OAuthTokenExchange.TokenCacheR\x05cache\x12_\n" +
+	"\rsubject_token\x18\a \x01(\v2:.agentgateway.dev.resource.CrossAppAccessAuth.SubjectTokenR\fsubjectToken\x1a\xf8\x01\n" +
 	"\bEndpoint\x12R\n" +
 	"\x0etoken_endpoint\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\rtokenEndpoint\x123\n" +
 	"\x13token_endpoint_path\x18\x02 \x01(\tH\x00R\x11tokenEndpointPath\x88\x01\x01\x12K\n" +
 	"\vclient_auth\x18\x03 \x01(\v2*.agentgateway.dev.resource.OAuthClientAuthR\n" +
 	"clientAuthB\x16\n" +
-	"\x14_token_endpoint_path*I\n" +
+	"\x14_token_endpoint_path\x1aX\n" +
+	"\fSubjectToken\x12H\n" +
+	"\x06source\x18\x01 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x06source*I\n" +
 	"\bProtocol\x12\v\n" +
 	"\aUNKNOWN\x10\x00\x12\b\n" +
 	"\x04HTTP\x10\x01\x12\t\n" +
@@ -17096,7 +17144,7 @@ func file_resource_proto_rawDescGZIP() []byte {
 }
 
 var file_resource_proto_enumTypes = make([]protoimpl.EnumInfo, 50)
-var file_resource_proto_msgTypes = make([]protoimpl.MessageInfo, 192)
+var file_resource_proto_msgTypes = make([]protoimpl.MessageInfo, 193)
 var file_resource_proto_goTypes = []any{
 	(Protocol)(0),                                               // 0: agentgateway.dev.resource.Protocol
 	(Bind_Protocol)(0),                                          // 1: agentgateway.dev.resource.Bind.Protocol
@@ -17340,12 +17388,13 @@ var file_resource_proto_goTypes = []any{
 	(*OAuthTokenExchange_TokenCache)(nil),          // 239: agentgateway.dev.resource.OAuthTokenExchange.TokenCache
 	(*OAuthTokenExchange_TokenCache_InMemory)(nil), // 240: agentgateway.dev.resource.OAuthTokenExchange.TokenCache.InMemory
 	(*CrossAppAccessAuth_Endpoint)(nil),            // 241: agentgateway.dev.resource.CrossAppAccessAuth.Endpoint
-	(*workloadapi.Workload)(nil),                   // 242: istio.workload.Workload
-	(*workloadapi.Service)(nil),                    // 243: istio.workload.Service
-	(*workloadapi.NamespacedHostname)(nil),         // 244: istio.workload.NamespacedHostname
-	(*durationpb.Duration)(nil),                    // 245: google.protobuf.Duration
-	(*structpb.Struct)(nil),                        // 246: google.protobuf.Struct
-	(*structpb.Value)(nil),                         // 247: google.protobuf.Value
+	(*CrossAppAccessAuth_SubjectToken)(nil),        // 242: agentgateway.dev.resource.CrossAppAccessAuth.SubjectToken
+	(*workloadapi.Workload)(nil),                   // 243: istio.workload.Workload
+	(*workloadapi.Service)(nil),                    // 244: istio.workload.Service
+	(*workloadapi.NamespacedHostname)(nil),         // 245: istio.workload.NamespacedHostname
+	(*durationpb.Duration)(nil),                    // 246: google.protobuf.Duration
+	(*structpb.Struct)(nil),                        // 247: google.protobuf.Struct
+	(*structpb.Value)(nil),                         // 248: google.protobuf.Value
 }
 var file_resource_proto_depIdxs = []int32{
 	51,  // 0: agentgateway.dev.resource.Resource.bind:type_name -> agentgateway.dev.resource.Bind
@@ -17354,8 +17403,8 @@ var file_resource_proto_depIdxs = []int32{
 	63,  // 3: agentgateway.dev.resource.Resource.backend:type_name -> agentgateway.dev.resource.Backend
 	62,  // 4: agentgateway.dev.resource.Resource.policy:type_name -> agentgateway.dev.resource.Policy
 	59,  // 5: agentgateway.dev.resource.Resource.tcp_route:type_name -> agentgateway.dev.resource.TCPRoute
-	242, // 6: agentgateway.dev.resource.Resource.workload:type_name -> istio.workload.Workload
-	243, // 7: agentgateway.dev.resource.Resource.service:type_name -> istio.workload.Service
+	243, // 6: agentgateway.dev.resource.Resource.workload:type_name -> istio.workload.Workload
+	244, // 7: agentgateway.dev.resource.Resource.service:type_name -> istio.workload.Service
 	58,  // 8: agentgateway.dev.resource.Resource.route_group:type_name -> agentgateway.dev.resource.RouteGroup
 	1,   // 9: agentgateway.dev.resource.Bind.protocol:type_name -> agentgateway.dev.resource.Bind.Protocol
 	2,   // 10: agentgateway.dev.resource.Bind.tunnel_protocol:type_name -> agentgateway.dev.resource.Bind.TunnelProtocol
@@ -17364,12 +17413,12 @@ var file_resource_proto_depIdxs = []int32{
 	53,  // 13: agentgateway.dev.resource.Listener.name:type_name -> agentgateway.dev.resource.ListenerName
 	0,   // 14: agentgateway.dev.resource.Listener.protocol:type_name -> agentgateway.dev.resource.Protocol
 	65,  // 15: agentgateway.dev.resource.Listener.tls:type_name -> agentgateway.dev.resource.TLSConfig
-	244, // 16: agentgateway.dev.resource.Route.service_key:type_name -> istio.workload.NamespacedHostname
+	245, // 16: agentgateway.dev.resource.Route.service_key:type_name -> istio.workload.NamespacedHostname
 	52,  // 17: agentgateway.dev.resource.Route.name:type_name -> agentgateway.dev.resource.RouteName
 	86,  // 18: agentgateway.dev.resource.Route.matches:type_name -> agentgateway.dev.resource.RouteMatch
 	99,  // 19: agentgateway.dev.resource.Route.backends:type_name -> agentgateway.dev.resource.RouteBackend
 	104, // 20: agentgateway.dev.resource.Route.traffic_policies:type_name -> agentgateway.dev.resource.TrafficPolicySpec
-	244, // 21: agentgateway.dev.resource.TCPRoute.service_key:type_name -> istio.workload.NamespacedHostname
+	245, // 21: agentgateway.dev.resource.TCPRoute.service_key:type_name -> istio.workload.NamespacedHostname
 	52,  // 22: agentgateway.dev.resource.TCPRoute.name:type_name -> agentgateway.dev.resource.RouteName
 	99,  // 23: agentgateway.dev.resource.TCPRoute.backends:type_name -> agentgateway.dev.resource.RouteBackend
 	61,  // 24: agentgateway.dev.resource.ConditionalPolicies.policies:type_name -> agentgateway.dev.resource.ConditionalPolicy
@@ -17399,9 +17448,9 @@ var file_resource_proto_depIdxs = []int32{
 	7,   // 48: agentgateway.dev.resource.TLSConfig.mtls_mode:type_name -> agentgateway.dev.resource.TLSConfig.MTLSMode
 	9,   // 49: agentgateway.dev.resource.TLSConfig.key_exchange_groups:type_name -> agentgateway.dev.resource.TLSConfig.KeyExchangeGroup
 	5,   // 50: agentgateway.dev.resource.TLSConfig.certificate_source:type_name -> agentgateway.dev.resource.TLSConfig.CertificateSource
-	245, // 51: agentgateway.dev.resource.Timeout.request:type_name -> google.protobuf.Duration
-	245, // 52: agentgateway.dev.resource.Timeout.backend_request:type_name -> google.protobuf.Duration
-	245, // 53: agentgateway.dev.resource.Retry.backoff:type_name -> google.protobuf.Duration
+	246, // 51: agentgateway.dev.resource.Timeout.request:type_name -> google.protobuf.Duration
+	246, // 52: agentgateway.dev.resource.Timeout.backend_request:type_name -> google.protobuf.Duration
+	246, // 53: agentgateway.dev.resource.Retry.backoff:type_name -> google.protobuf.Duration
 	71,  // 54: agentgateway.dev.resource.BackendAuthPolicy.passthrough:type_name -> agentgateway.dev.resource.Passthrough
 	72,  // 55: agentgateway.dev.resource.BackendAuthPolicy.key:type_name -> agentgateway.dev.resource.Key
 	73,  // 56: agentgateway.dev.resource.BackendAuthPolicy.gcp:type_name -> agentgateway.dev.resource.Gcp
@@ -17431,7 +17480,7 @@ var file_resource_proto_depIdxs = []int32{
 	90,  // 80: agentgateway.dev.resource.RouteMatch.headers:type_name -> agentgateway.dev.resource.HeaderMatch
 	89,  // 81: agentgateway.dev.resource.RouteMatch.method:type_name -> agentgateway.dev.resource.MethodMatch
 	88,  // 82: agentgateway.dev.resource.RouteMatch.query_params:type_name -> agentgateway.dev.resource.QueryMatch
-	245, // 83: agentgateway.dev.resource.CORS.max_age:type_name -> google.protobuf.Duration
+	246, // 83: agentgateway.dev.resource.CORS.max_age:type_name -> google.protobuf.Duration
 	93,  // 84: agentgateway.dev.resource.DirectResponse.headers:type_name -> agentgateway.dev.resource.ExpressionHeader
 	98,  // 85: agentgateway.dev.resource.HeaderModifier.add:type_name -> agentgateway.dev.resource.Header
 	98,  // 86: agentgateway.dev.resource.HeaderModifier.set:type_name -> agentgateway.dev.resource.Header
@@ -17443,8 +17492,8 @@ var file_resource_proto_depIdxs = []int32{
 	130, // 92: agentgateway.dev.resource.PolicyTarget.backend:type_name -> agentgateway.dev.resource.PolicyTarget.BackendTarget
 	129, // 93: agentgateway.dev.resource.PolicyTarget.service:type_name -> agentgateway.dev.resource.PolicyTarget.ServiceTarget
 	133, // 94: agentgateway.dev.resource.PolicyTarget.listener_set:type_name -> agentgateway.dev.resource.PolicyTarget.ListenerSetTarget
-	245, // 95: agentgateway.dev.resource.KeepaliveConfig.time:type_name -> google.protobuf.Duration
-	245, // 96: agentgateway.dev.resource.KeepaliveConfig.interval:type_name -> google.protobuf.Duration
+	246, // 95: agentgateway.dev.resource.KeepaliveConfig.time:type_name -> google.protobuf.Duration
+	246, // 96: agentgateway.dev.resource.KeepaliveConfig.interval:type_name -> google.protobuf.Duration
 	136, // 97: agentgateway.dev.resource.FrontendPolicySpec.tcp:type_name -> agentgateway.dev.resource.FrontendPolicySpec.TCP
 	135, // 98: agentgateway.dev.resource.FrontendPolicySpec.tls:type_name -> agentgateway.dev.resource.FrontendPolicySpec.TLS
 	134, // 99: agentgateway.dev.resource.FrontendPolicySpec.http:type_name -> agentgateway.dev.resource.FrontendPolicySpec.HTTP
@@ -17517,14 +17566,14 @@ var file_resource_proto_depIdxs = []int32{
 	241, // 166: agentgateway.dev.resource.CrossAppAccessAuth.identity_provider:type_name -> agentgateway.dev.resource.CrossAppAccessAuth.Endpoint
 	241, // 167: agentgateway.dev.resource.CrossAppAccessAuth.resource_authorization_server:type_name -> agentgateway.dev.resource.CrossAppAccessAuth.Endpoint
 	239, // 168: agentgateway.dev.resource.CrossAppAccessAuth.cache:type_name -> agentgateway.dev.resource.OAuthTokenExchange.TokenCache
-	70,  // 169: agentgateway.dev.resource.CrossAppAccessAuth.subject_token_source:type_name -> agentgateway.dev.resource.AuthorizationLocation
+	242, // 169: agentgateway.dev.resource.CrossAppAccessAuth.subject_token:type_name -> agentgateway.dev.resource.CrossAppAccessAuth.SubjectToken
 	113, // 170: agentgateway.dev.resource.RequestMirrors.Mirror.backend:type_name -> agentgateway.dev.resource.BackendReference
-	245, // 171: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http1_idle_timeout:type_name -> google.protobuf.Duration
-	245, // 172: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http2_keepalive_interval:type_name -> google.protobuf.Duration
-	245, // 173: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http2_keepalive_timeout:type_name -> google.protobuf.Duration
-	245, // 174: agentgateway.dev.resource.FrontendPolicySpec.HTTP.max_connection_duration:type_name -> google.protobuf.Duration
+	246, // 171: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http1_idle_timeout:type_name -> google.protobuf.Duration
+	246, // 172: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http2_keepalive_interval:type_name -> google.protobuf.Duration
+	246, // 173: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http2_keepalive_timeout:type_name -> google.protobuf.Duration
+	246, // 174: agentgateway.dev.resource.FrontendPolicySpec.HTTP.max_connection_duration:type_name -> google.protobuf.Duration
 	10,  // 175: agentgateway.dev.resource.FrontendPolicySpec.HTTP.http1_header_case:type_name -> agentgateway.dev.resource.FrontendPolicySpec.HTTP.HTTPHeaderCase
-	245, // 176: agentgateway.dev.resource.FrontendPolicySpec.TLS.handshake_timeout:type_name -> google.protobuf.Duration
+	246, // 176: agentgateway.dev.resource.FrontendPolicySpec.TLS.handshake_timeout:type_name -> google.protobuf.Duration
 	114, // 177: agentgateway.dev.resource.FrontendPolicySpec.TLS.alpn:type_name -> agentgateway.dev.resource.Alpn
 	8,   // 178: agentgateway.dev.resource.FrontendPolicySpec.TLS.cipher_suites:type_name -> agentgateway.dev.resource.TLSConfig.CipherSuite
 	6,   // 179: agentgateway.dev.resource.FrontendPolicySpec.TLS.min_version:type_name -> agentgateway.dev.resource.TLSConfig.TLSVersion
@@ -17550,7 +17599,7 @@ var file_resource_proto_depIdxs = []int32{
 	164, // 199: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.descriptors:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.Descriptor
 	113, // 200: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.target:type_name -> agentgateway.dev.resource.BackendReference
 	18,  // 201: agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.failure_mode:type_name -> agentgateway.dev.resource.TrafficPolicySpec.RemoteRateLimit.FailureMode
-	245, // 202: agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.fill_interval:type_name -> google.protobuf.Duration
+	246, // 202: agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.fill_interval:type_name -> google.protobuf.Duration
 	19,  // 203: agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.type:type_name -> agentgateway.dev.resource.TrafficPolicySpec.LocalRateLimit.Type
 	113, // 204: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.target:type_name -> agentgateway.dev.resource.BackendReference
 	168, // 205: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.grpc:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.GRPCProtocol
@@ -17587,7 +17636,7 @@ var file_resource_proto_depIdxs = []int32{
 	173, // 236: agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.metadata:type_name -> agentgateway.dev.resource.TrafficPolicySpec.ExternalAuth.HTTPProtocol.MetadataEntry
 	37,  // 237: agentgateway.dev.resource.TrafficPolicySpec.JWT.MCP.provider:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.McpIDP
 	216, // 238: agentgateway.dev.resource.TrafficPolicySpec.JWT.MCP.resource_metadata:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata
-	246, // 239: agentgateway.dev.resource.TrafficPolicySpec.APIKey.User.metadata:type_name -> google.protobuf.Struct
+	247, // 239: agentgateway.dev.resource.TrafficPolicySpec.APIKey.User.metadata:type_name -> google.protobuf.Struct
 	158, // 240: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.set:type_name -> agentgateway.dev.resource.TrafficPolicySpec.HeaderTransformation
 	158, // 241: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.add:type_name -> agentgateway.dev.resource.TrafficPolicySpec.HeaderTransformation
 	159, // 242: agentgateway.dev.resource.TrafficPolicySpec.TransformationPolicy.Transform.body:type_name -> agentgateway.dev.resource.TrafficPolicySpec.BodyTransformation
@@ -17611,16 +17660,16 @@ var file_resource_proto_depIdxs = []int32{
 	215, // 260: agentgateway.dev.resource.BackendPolicySpec.Ai.routes:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RoutesEntry
 	113, // 261: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.endpoint_picker:type_name -> agentgateway.dev.resource.BackendReference
 	34,  // 262: agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.failure_mode:type_name -> agentgateway.dev.resource.BackendPolicySpec.InferenceRouting.FailureMode
-	245, // 263: agentgateway.dev.resource.BackendPolicySpec.Eviction.duration:type_name -> google.protobuf.Duration
+	246, // 263: agentgateway.dev.resource.BackendPolicySpec.Eviction.duration:type_name -> google.protobuf.Duration
 	188, // 264: agentgateway.dev.resource.BackendPolicySpec.Health.eviction:type_name -> agentgateway.dev.resource.BackendPolicySpec.Eviction
 	35,  // 265: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.verification:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendTLS.VerificationMode
 	114, // 266: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.alpn:type_name -> agentgateway.dev.resource.Alpn
 	9,   // 267: agentgateway.dev.resource.BackendPolicySpec.BackendTLS.key_exchange_groups:type_name -> agentgateway.dev.resource.TLSConfig.KeyExchangeGroup
 	36,  // 268: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.version:type_name -> agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.HttpVersion
-	245, // 269: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.request_timeout:type_name -> google.protobuf.Duration
+	246, // 269: agentgateway.dev.resource.BackendPolicySpec.BackendHTTP.request_timeout:type_name -> google.protobuf.Duration
 	113, // 270: agentgateway.dev.resource.BackendPolicySpec.BackendTunnel.proxy:type_name -> agentgateway.dev.resource.BackendReference
 	101, // 271: agentgateway.dev.resource.BackendPolicySpec.BackendTCP.keepalive:type_name -> agentgateway.dev.resource.KeepaliveConfig
-	245, // 272: agentgateway.dev.resource.BackendPolicySpec.BackendTCP.connect_timeout:type_name -> google.protobuf.Duration
+	246, // 272: agentgateway.dev.resource.BackendPolicySpec.BackendTCP.connect_timeout:type_name -> google.protobuf.Duration
 	37,  // 273: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.provider:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.McpIDP
 	216, // 274: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.resource_metadata:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata
 	38,  // 275: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.mode:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.Mode
@@ -17661,7 +17710,7 @@ var file_resource_proto_depIdxs = []int32{
 	33,  // 310: agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard.streaming:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard.Streaming
 	31,  // 311: agentgateway.dev.resource.BackendPolicySpec.Ai.RoutesEntry.value:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.RouteType
 	217, // 312: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.extra:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry
-	247, // 313: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry.value:type_name -> google.protobuf.Value
+	248, // 313: agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntry.value:type_name -> google.protobuf.Value
 	113, // 314: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Remote.target:type_name -> agentgateway.dev.resource.BackendReference
 	40,  // 315: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Remote.failure_mode:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.FailureMode
 	220, // 316: agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Remote.metadata:type_name -> agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.Remote.MetadataEntry
@@ -17687,14 +17736,15 @@ var file_resource_proto_depIdxs = []int32{
 	70,  // 336: agentgateway.dev.resource.OAuthTokenExchange.TokenSpec.source:type_name -> agentgateway.dev.resource.AuthorizationLocation
 	70,  // 337: agentgateway.dev.resource.OAuthTokenExchange.ActorToken.source:type_name -> agentgateway.dev.resource.AuthorizationLocation
 	240, // 338: agentgateway.dev.resource.OAuthTokenExchange.TokenCache.in_memory:type_name -> agentgateway.dev.resource.OAuthTokenExchange.TokenCache.InMemory
-	245, // 339: agentgateway.dev.resource.OAuthTokenExchange.TokenCache.InMemory.default_ttl:type_name -> google.protobuf.Duration
+	246, // 339: agentgateway.dev.resource.OAuthTokenExchange.TokenCache.InMemory.default_ttl:type_name -> google.protobuf.Duration
 	113, // 340: agentgateway.dev.resource.CrossAppAccessAuth.Endpoint.token_endpoint:type_name -> agentgateway.dev.resource.BackendReference
 	115, // 341: agentgateway.dev.resource.CrossAppAccessAuth.Endpoint.client_auth:type_name -> agentgateway.dev.resource.OAuthClientAuth
-	342, // [342:342] is the sub-list for method output_type
-	342, // [342:342] is the sub-list for method input_type
-	342, // [342:342] is the sub-list for extension type_name
-	342, // [342:342] is the sub-list for extension extendee
-	0,   // [0:342] is the sub-list for field type_name
+	70,  // 342: agentgateway.dev.resource.CrossAppAccessAuth.SubjectToken.source:type_name -> agentgateway.dev.resource.AuthorizationLocation
+	343, // [343:343] is the sub-list for method output_type
+	343, // [343:343] is the sub-list for method input_type
+	343, // [343:343] is the sub-list for extension type_name
+	343, // [343:343] is the sub-list for extension extendee
+	0,   // [0:343] is the sub-list for field type_name
 }
 
 func init() { file_resource_proto_init() }
@@ -17958,7 +18008,7 @@ func file_resource_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_resource_proto_rawDesc), len(file_resource_proto_rawDesc)),
 			NumEnums:      50,
-			NumMessages:   192,
+			NumMessages:   193,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

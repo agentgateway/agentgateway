@@ -1606,14 +1606,20 @@ type CrossAppAccessAuth struct {
 	// +optional
 	Scopes []string `json:"scopes,omitempty"`
 
-	// Optional override for where the subject id_token is read from.
-	// Defaults to the Authorization Bearer header.
+	// Subject token sent to the identity provider. Defaults to an OpenID Connect
+	// ID token read from the Authorization Bearer header.
 	// +optional
-	SubjectTokenSource *AuthorizationExtractionLocation `json:"subjectTokenSource,omitempty"`
+	SubjectToken *CrossAppAccessSubjectToken `json:"subjectToken,omitempty"`
 
 	// Response cache configuration.
 	// +optional
 	Cache *OAuthTokenCache `json:"cache,omitempty"`
+}
+
+type CrossAppAccessSubjectToken struct {
+	// Where to read the subject token. Defaults to the Authorization Bearer header.
+	// +optional
+	Source *AuthorizationExtractionLocation `json:"source,omitempty"`
 }
 
 type CrossAppAccessEndpoint struct {

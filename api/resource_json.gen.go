@@ -1920,6 +1920,17 @@ func (this *CrossAppAccessAuth_Endpoint) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for CrossAppAccessAuth_SubjectToken
+func (this *CrossAppAccessAuth_SubjectToken) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for CrossAppAccessAuth_SubjectToken
+func (this *CrossAppAccessAuth_SubjectToken) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 var (
 	ResourceMarshaler   = &jsonpb.Marshaler{}
 	ResourceUnmarshaler = &jsonpb.Unmarshaler{AllowUnknownFields: true}

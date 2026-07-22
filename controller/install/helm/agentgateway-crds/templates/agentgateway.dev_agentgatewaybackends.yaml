@@ -4569,60 +4569,67 @@ spec:
                                             maxItems: 64
                                             minItems: 1
                                             type: array
-                                          subjectTokenSource:
+                                          subjectToken:
                                             description: |-
-                                              Optional override for where the subject id_token is read from.
-                                              Defaults to the Authorization Bearer header.
+                                              Subject token sent to the identity provider. Defaults to an OpenID Connect
+                                              ID token read from the Authorization Bearer header.
                                             properties:
-                                              cookie:
+                                              source:
+                                                description: Where to read the subject
+                                                  token. Defaults to the Authorization
+                                                  Bearer header.
                                                 properties:
-                                                  name:
-                                                    maxLength: 256
+                                                  cookie:
+                                                    properties:
+                                                      name:
+                                                        maxLength: 256
+                                                        minLength: 1
+                                                        type: string
+                                                    required:
+                                                    - name
+                                                    type: object
+                                                  expression:
+                                                    description: CEL expression that
+                                                      extracts the credential from
+                                                      the request.
+                                                    maxLength: 16384
                                                     minLength: 1
                                                     type: string
-                                                required:
-                                                - name
+                                                  header:
+                                                    properties:
+                                                      name:
+                                                        description: Name of an HTTP
+                                                          header. HTTP/2 pseudo-headers
+                                                          (names beginning with `:`)
+                                                          are not supported
+                                                        maxLength: 256
+                                                        minLength: 1
+                                                        pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                        type: string
+                                                      prefix:
+                                                        maxLength: 256
+                                                        minLength: 1
+                                                        type: string
+                                                    required:
+                                                    - name
+                                                    type: object
+                                                  queryParameter:
+                                                    properties:
+                                                      name:
+                                                        maxLength: 256
+                                                        minLength: 1
+                                                        type: string
+                                                    required:
+                                                    - name
+                                                    type: object
                                                 type: object
-                                              expression:
-                                                description: CEL expression that extracts
-                                                  the credential from the request.
-                                                maxLength: 16384
-                                                minLength: 1
-                                                type: string
-                                              header:
-                                                properties:
-                                                  name:
-                                                    description: Name of an HTTP header.
-                                                      HTTP/2 pseudo-headers (names
-                                                      beginning with `:`) are not
-                                                      supported
-                                                    maxLength: 256
-                                                    minLength: 1
-                                                    pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
-                                                    type: string
-                                                  prefix:
-                                                    maxLength: 256
-                                                    minLength: 1
-                                                    type: string
-                                                required:
-                                                - name
-                                                type: object
-                                              queryParameter:
-                                                properties:
-                                                  name:
-                                                    maxLength: 256
-                                                    minLength: 1
-                                                    type: string
-                                                required:
-                                                - name
-                                                type: object
+                                                x-kubernetes-validations:
+                                                - message: exactly one of the fields
+                                                    in [header queryParameter cookie
+                                                    expression] must be set
+                                                  rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
+                                                    == 1'
                                             type: object
-                                            x-kubernetes-validations:
-                                            - message: exactly one of the fields in
-                                                [header queryParameter cookie expression]
-                                                must be set
-                                              rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
-                                                == 1'
                                         required:
                                         - audience
                                         - identityProvider
@@ -7232,59 +7239,67 @@ spec:
                                           maxItems: 64
                                           minItems: 1
                                           type: array
-                                        subjectTokenSource:
+                                        subjectToken:
                                           description: |-
-                                            Optional override for where the subject id_token is read from.
-                                            Defaults to the Authorization Bearer header.
+                                            Subject token sent to the identity provider. Defaults to an OpenID Connect
+                                            ID token read from the Authorization Bearer header.
                                           properties:
-                                            cookie:
+                                            source:
+                                              description: Where to read the subject
+                                                token. Defaults to the Authorization
+                                                Bearer header.
                                               properties:
-                                                name:
-                                                  maxLength: 256
+                                                cookie:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                expression:
+                                                  description: CEL expression that
+                                                    extracts the credential from the
+                                                    request.
+                                                  maxLength: 16384
                                                   minLength: 1
                                                   type: string
-                                              required:
-                                              - name
+                                                header:
+                                                  properties:
+                                                    name:
+                                                      description: Name of an HTTP
+                                                        header. HTTP/2 pseudo-headers
+                                                        (names beginning with `:`)
+                                                        are not supported
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                                      type: string
+                                                    prefix:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
+                                                queryParameter:
+                                                  properties:
+                                                    name:
+                                                      maxLength: 256
+                                                      minLength: 1
+                                                      type: string
+                                                  required:
+                                                  - name
+                                                  type: object
                                               type: object
-                                            expression:
-                                              description: CEL expression that extracts
-                                                the credential from the request.
-                                              maxLength: 16384
-                                              minLength: 1
-                                              type: string
-                                            header:
-                                              properties:
-                                                name:
-                                                  description: Name of an HTTP header.
-                                                    HTTP/2 pseudo-headers (names beginning
-                                                    with `:`) are not supported
-                                                  maxLength: 256
-                                                  minLength: 1
-                                                  pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
-                                                  type: string
-                                                prefix:
-                                                  maxLength: 256
-                                                  minLength: 1
-                                                  type: string
-                                              required:
-                                              - name
-                                              type: object
-                                            queryParameter:
-                                              properties:
-                                                name:
-                                                  maxLength: 256
-                                                  minLength: 1
-                                                  type: string
-                                              required:
-                                              - name
-                                              type: object
+                                              x-kubernetes-validations:
+                                              - message: exactly one of the fields
+                                                  in [header queryParameter cookie
+                                                  expression] must be set
+                                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
+                                                  == 1'
                                           type: object
-                                          x-kubernetes-validations:
-                                          - message: exactly one of the fields in
-                                              [header queryParameter cookie expression]
-                                              must be set
-                                            rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
-                                              == 1'
                                       required:
                                       - audience
                                       - identityProvider
@@ -11865,57 +11880,63 @@ spec:
                             maxItems: 64
                             minItems: 1
                             type: array
-                          subjectTokenSource:
+                          subjectToken:
                             description: |-
-                              Optional override for where the subject id_token is read from.
-                              Defaults to the Authorization Bearer header.
+                              Subject token sent to the identity provider. Defaults to an OpenID Connect
+                              ID token read from the Authorization Bearer header.
                             properties:
-                              cookie:
+                              source:
+                                description: Where to read the subject token. Defaults
+                                  to the Authorization Bearer header.
                                 properties:
-                                  name:
-                                    maxLength: 256
+                                  cookie:
+                                    properties:
+                                      name:
+                                        maxLength: 256
+                                        minLength: 1
+                                        type: string
+                                    required:
+                                    - name
+                                    type: object
+                                  expression:
+                                    description: CEL expression that extracts the
+                                      credential from the request.
+                                    maxLength: 16384
                                     minLength: 1
                                     type: string
-                                required:
-                                - name
+                                  header:
+                                    properties:
+                                      name:
+                                        description: Name of an HTTP header. HTTP/2
+                                          pseudo-headers (names beginning with `:`)
+                                          are not supported
+                                        maxLength: 256
+                                        minLength: 1
+                                        pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                        type: string
+                                      prefix:
+                                        maxLength: 256
+                                        minLength: 1
+                                        type: string
+                                    required:
+                                    - name
+                                    type: object
+                                  queryParameter:
+                                    properties:
+                                      name:
+                                        maxLength: 256
+                                        minLength: 1
+                                        type: string
+                                    required:
+                                    - name
+                                    type: object
                                 type: object
-                              expression:
-                                description: CEL expression that extracts the credential
-                                  from the request.
-                                maxLength: 16384
-                                minLength: 1
-                                type: string
-                              header:
-                                properties:
-                                  name:
-                                    description: Name of an HTTP header. HTTP/2 pseudo-headers
-                                      (names beginning with `:`) are not supported
-                                    maxLength: 256
-                                    minLength: 1
-                                    pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
-                                    type: string
-                                  prefix:
-                                    maxLength: 256
-                                    minLength: 1
-                                    type: string
-                                required:
-                                - name
-                                type: object
-                              queryParameter:
-                                properties:
-                                  name:
-                                    maxLength: 256
-                                    minLength: 1
-                                    type: string
-                                required:
-                                - name
-                                type: object
+                                x-kubernetes-validations:
+                                - message: exactly one of the fields in [header queryParameter
+                                    cookie expression] must be set
+                                  rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
+                                    == 1'
                             type: object
-                            x-kubernetes-validations:
-                            - message: exactly one of the fields in [header queryParameter
-                                cookie expression] must be set
-                              rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
-                                == 1'
                         required:
                         - audience
                         - identityProvider
