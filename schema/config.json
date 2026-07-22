@@ -4087,6 +4087,17 @@
         "proxy": {
           "description": "Proxy backend used to tunnel the connection.",
           "$ref": "#/$defs/SimpleLocalBackendSerde"
+        },
+        "policies": {
+          "description": "Policies to connect to the proxy backend",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,

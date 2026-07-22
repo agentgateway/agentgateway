@@ -10,7 +10,6 @@ use super::{
 use crate::http::auth::AuthorizationLocation;
 use crate::types::agent::SimpleBackendReferenceWithPolicies;
 use crate::types::agent_xds::{Diagnostics, authorization_location, resolve_simple_reference};
-use crate::types::agent_xds::{resolve_simple_reference};
 use crate::types::proto::{ProtoError, agent};
 use crate::{apply, schema};
 
