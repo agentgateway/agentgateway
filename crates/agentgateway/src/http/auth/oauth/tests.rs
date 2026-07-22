@@ -157,6 +157,26 @@ MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgltxBTVDLg7C6vE1T
 -----END PRIVATE KEY-----
 ";
 
+const TEST_EC_CERT_PEM: &str = "-----BEGIN CERTIFICATE-----
+MIIBEzCBugIBATAKBggqhkjOPQQDAjAWMRQwEgYDVQQDDAt0ZXN0LWNsaWVudDAe
+Fw0yNjA3MjIwNDE0NThaFw0zNjA3MTkwNDE0NThaMBYxFDASBgNVBAMMC3Rlc3Qt
+Y2xpZW50MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEWM7udBHga09KxC5kxq6G
+hrZ9M3Y8S9ZThq/XxsOcDhnFztPhp+RebCMRskzNBcJ1BxTc9kqIsWUeXbcYTXPi
+6DAKBggqhkjOPQQDAgNIADBFAiEAgECXIs3VPrp++0UvPRk1fVXbIo+p19qOQG8e
+a/ilbAkCIDgWcfFL3rujLODULW5JbYq9n2xykz5cFTkvLAoAury0
+-----END CERTIFICATE-----
+";
+
+const TEST_EC_CERT_DER_BASE64: &str = "MIIBEzCBugIBATAKBggqhkjOPQQDAjAWMRQwEgYDVQQDDAt0ZXN0LWNsaWVudDAeFw0yNjA3MjIwNDE0NThaFw0zNjA3MTkwNDE0NThaMBYxFDASBgNVBAMMC3Rlc3QtY2xpZW50MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEWM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq/XxsOcDhnFztPhp+RebCMRskzNBcJ1BxTc9kqIsWUeXbcYTXPi6DAKBggqhkjOPQQDAgNIADBFAiEAgECXIs3VPrp++0UvPRk1fVXbIo+p19qOQG8ea/ilbAkCIDgWcfFL3rujLODULW5JbYq9n2xykz5cFTkvLAoAury0";
+
+const TEST_MISMATCHED_CERT_PEM: &str =
+	include_str!("../../../../tests/common/testdata/root-cert.pem");
+
+const TEST_INVALID_CERT_PEM: &str = "-----BEGIN CERTIFICATE-----
+bm90IGEgY2VydGlmaWNhdGU=
+-----END CERTIFICATE-----
+";
+
 fn claims_with_may_act(
 	subject_token: &str,
 	may_act: serde_json::Value,
@@ -637,6 +657,7 @@ async fn private_key_jwt_sends_client_assertion_form_fields() {
 	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
 	let private_key = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
 		signing_key: FileOrInline::Inline(TEST_EC_PRIVATE_KEY_PEM.to_string()),
+		certificate: Some(FileOrInline::Inline(TEST_EC_CERT_PEM.to_string())),
 		alg: SigningAlg::Es256,
 		kid: Some("kid-1".into()),
 		assertion_audience: "https://issuer.example/token".into(),
@@ -676,6 +697,8 @@ async fn private_key_jwt_sends_client_assertion_form_fields() {
 		exp: u64,
 	}
 	let claims: AssertionClaims = decode_unverified_jwt_claims(&pairs["client_assertion"]).unwrap();
+	let header = jsonwebtoken::decode_header(&pairs["client_assertion"]).unwrap();
+	assert_eq!(header.x5c, Some(vec![TEST_EC_CERT_DER_BASE64.to_string()]));
 	assert_eq!(claims.iss, "gateway-client");
 	assert_eq!(claims.sub, "gateway-client");
 	assert_eq!(claims.aud, "https://issuer.example/token");
@@ -699,6 +722,61 @@ fn private_key_jwt_rejects_bad_key_at_deserialize_time() {
 	)
 	.expect_err("bad key must fail during config load");
 	assert!(err.to_string().contains("signing_key"), "got: {err}");
+}
+
+#[test]
+fn private_key_jwt_rejects_non_certificate_pem_at_deserialize_time() {
+	let config = format!(
+		r#"{{
+			"host": "localhost:8089",
+			"clientAuth": {{
+				"clientId": "gateway-client",
+				"method": "privateKeyJwt",
+				"signingKey": {signing_key:?},
+				"certificate": {certificate:?},
+				"alg": "ES256",
+				"assertionAudience": "https://issuer.example/token"
+			}}
+		}}"#,
+		signing_key = TEST_EC_PRIVATE_KEY_PEM,
+		certificate = TEST_EC_PRIVATE_KEY_PEM,
+	);
+	let err = serde_json::from_str::<OAuthTokenExchangeAuth>(&config)
+		.expect_err("non-certificate PEM must fail during config load");
+	assert!(
+		err.to_string().contains("expected CERTIFICATE"),
+		"got: {err}"
+	);
+}
+
+#[test]
+fn private_key_jwt_rejects_invalid_certificate_in_chain() {
+	let err = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
+		signing_key: FileOrInline::Inline(TEST_EC_PRIVATE_KEY_PEM.to_string()),
+		certificate: Some(FileOrInline::Inline(format!(
+			"{TEST_EC_CERT_PEM}{TEST_INVALID_CERT_PEM}"
+		))),
+		alg: SigningAlg::Es256,
+		kid: None,
+		assertion_audience: "https://issuer.example/token".into(),
+	})
+	.expect_err("every x5c entry must be a valid X.509 certificate");
+	assert!(
+		err.contains("failed to parse oauth private_key_jwt certificate"),
+		"got: {err}"
+	);
+}
+
+#[test]
+fn private_key_jwt_warns_but_accepts_mismatched_certificate() {
+	PrivateKeyJwt::try_from(RawPrivateKeyJwt {
+		signing_key: FileOrInline::Inline(TEST_EC_PRIVATE_KEY_PEM.to_string()),
+		certificate: Some(FileOrInline::Inline(TEST_MISMATCHED_CERT_PEM.to_string())),
+		alg: SigningAlg::Es256,
+		kid: None,
+		assertion_audience: "https://issuer.example/token".into(),
+	})
+	.expect("a certificate mismatch must remain non-fatal");
 }
 
 #[test]
@@ -1402,6 +1480,7 @@ fn private_key_jwt_client_auth_from_proto() {
 		method: proto::o_auth_client_auth::Method::PrivateKeyJwt as i32,
 		private_key_jwt: Some(proto::o_auth_client_auth::PrivateKeyJwt {
 			signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
+			certificate: TEST_EC_CERT_PEM.to_string(),
 			alg: proto::o_auth_client_auth::private_key_jwt::SigningAlg::Es256 as i32,
 			kid: Some("kid-1".to_string()),
 			assertion_audience: "https://issuer.example/token".to_string(),
@@ -1416,6 +1495,7 @@ fn private_key_jwt_client_auth_from_proto() {
 			let serialized = serde_json::to_value(private_key).unwrap();
 			assert_eq!(serialized["alg"].as_str(), Some("ES256"));
 			assert_eq!(serialized["kid"].as_str(), Some("kid-1"));
+			assert_eq!(serialized["x5c"], json!([TEST_EC_CERT_DER_BASE64]));
 			assert_eq!(
 				serialized["assertionAudience"].as_str(),
 				Some("https://issuer.example/token")
@@ -1423,6 +1503,22 @@ fn private_key_jwt_client_auth_from_proto() {
 		},
 		other => panic!("expected privateKeyJwt client auth, got {other:?}"),
 	}
+}
+
+#[test]
+fn private_key_jwt_serialization_omits_unset_optional_headers() {
+	let private_key = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
+		signing_key: FileOrInline::Inline(TEST_EC_PRIVATE_KEY_PEM.to_string()),
+		certificate: None,
+		alg: SigningAlg::Es256,
+		kid: None,
+		assertion_audience: "https://issuer.example/token".into(),
+	})
+	.unwrap();
+
+	let serialized = serde_json::to_value(private_key).unwrap();
+	assert!(serialized.get("kid").is_none());
+	assert!(serialized.get("x5c").is_none());
 }
 
 #[rstest]

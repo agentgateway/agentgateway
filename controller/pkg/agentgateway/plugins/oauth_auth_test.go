@@ -353,7 +353,8 @@ func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 			Name:      "oauth-signing-key",
 		},
 		Data: map[string][]byte{
-			"signingKey": []byte("-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----"),
+			"signingKey":  []byte("-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----"),
+			"certificate": []byte("-----BEGIN CERTIFICATE-----\ncert\n-----END CERTIFICATE-----"),
 		},
 	})
 
@@ -364,6 +365,9 @@ func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 			Method:   ptr.Of(agentgateway.OAuthClientAuthMethodPrivateKeyJWT),
 			PrivateKeyJWT: &agentgateway.OAuthPrivateKeyJWT{
 				SigningKeyRef: agentgateway.LocalSecretKeyRef{
+					Name: "oauth-signing-key",
+				},
+				CertificateRef: &agentgateway.LocalSecretKeyRef{
 					Name: "oauth-signing-key",
 				},
 				Alg:               ptr.Of(agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256),
@@ -389,6 +393,9 @@ func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 	}
 	if privateKeyJWT.GetSigningKey() == "" {
 		t.Fatal("signing key is empty, want secret value")
+	}
+	if privateKeyJWT.GetCertificate() == "" {
+		t.Fatal("certificate is empty, want secret value")
 	}
 	if privateKeyJWT.GetAlg() != api.OAuthClientAuth_PrivateKeyJwt_ES256 {
 		t.Fatalf("privateKeyJwt alg = %v, want ES256", privateKeyJWT.GetAlg())

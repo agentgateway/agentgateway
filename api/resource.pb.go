@@ -15419,8 +15419,11 @@ type OAuthClientAuth_PrivateKeyJwt struct {
 	Kid *string `protobuf:"bytes,3,opt,name=kid,proto3,oneof" json:"kid,omitempty"`
 	// Audience for the client assertion, typically the token endpoint URL.
 	AssertionAudience string `protobuf:"bytes,4,opt,name=assertion_audience,json=assertionAudience,proto3" json:"assertion_audience,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// PEM-encoded X.509 certificate chain for JWS x5c, leaf first.
+	// Public key must match signing_key.
+	Certificate   string `protobuf:"bytes,5,opt,name=certificate,proto3" json:"certificate,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *OAuthClientAuth_PrivateKeyJwt) Reset() {
@@ -15477,6 +15480,13 @@ func (x *OAuthClientAuth_PrivateKeyJwt) GetKid() string {
 func (x *OAuthClientAuth_PrivateKeyJwt) GetAssertionAudience() string {
 	if x != nil {
 		return x.AssertionAudience
+	}
+	return ""
+}
+
+func (x *OAuthClientAuth_PrivateKeyJwt) GetCertificate() string {
+	if x != nil {
+		return x.Certificate
 	}
 	return ""
 }
@@ -17061,18 +17071,19 @@ const file_resource_proto_rawDesc = "" +
 	"\bhostname\x18\x02 \x01(\tR\bhostnameB\x06\n" +
 	"\x04kind\"$\n" +
 	"\x04Alpn\x12\x1c\n" +
-	"\tprotocols\x18\x01 \x03(\tR\tprotocols\"\xb2\x05\n" +
+	"\tprotocols\x18\x01 \x03(\tR\tprotocols\"\xd4\x05\n" +
 	"\x0fOAuthClientAuth\x12\x1b\n" +
 	"\tclient_id\x18\x01 \x01(\tR\bclientId\x12(\n" +
 	"\rclient_secret\x18\x02 \x01(\tH\x00R\fclientSecret\x88\x01\x01\x12I\n" +
 	"\x06method\x18\x03 \x01(\x0e21.agentgateway.dev.resource.OAuthClientAuth.MethodR\x06method\x12`\n" +
-	"\x0fprivate_key_jwt\x18\x04 \x01(\v28.agentgateway.dev.resource.OAuthClientAuth.PrivateKeyJwtR\rprivateKeyJwt\x1a\xb7\x02\n" +
+	"\x0fprivate_key_jwt\x18\x04 \x01(\v28.agentgateway.dev.resource.OAuthClientAuth.PrivateKeyJwtR\rprivateKeyJwt\x1a\xd9\x02\n" +
 	"\rPrivateKeyJwt\x12\x1f\n" +
 	"\vsigning_key\x18\x01 \x01(\tR\n" +
 	"signingKey\x12U\n" +
 	"\x03alg\x18\x02 \x01(\x0e2C.agentgateway.dev.resource.OAuthClientAuth.PrivateKeyJwt.SigningAlgR\x03alg\x12\x15\n" +
 	"\x03kid\x18\x03 \x01(\tH\x00R\x03kid\x88\x01\x01\x12-\n" +
-	"\x12assertion_audience\x18\x04 \x01(\tR\x11assertionAudience\"`\n" +
+	"\x12assertion_audience\x18\x04 \x01(\tR\x11assertionAudience\x12 \n" +
+	"\vcertificate\x18\x05 \x01(\tR\vcertificate\"`\n" +
 	"\n" +
 	"SigningAlg\x12\x1b\n" +
 	"\x17SIGNING_ALG_UNSPECIFIED\x10\x00\x12\t\n" +

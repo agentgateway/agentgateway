@@ -1815,6 +1815,9 @@ message OAuthClientAuth {
     optional string kid = 3;
     // Audience for the client assertion, typically the token endpoint URL.
     string assertion_audience = 4;
+    // PEM-encoded X.509 certificate chain for JWS x5c, leaf first.
+    // Public key must match signing_key.
+    string certificate = 5;
   }
 
   // Required and non-empty when client_auth is set.

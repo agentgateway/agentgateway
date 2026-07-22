@@ -1783,27 +1783,29 @@ type OAuthClientAuth struct {
 	// +required
 	ClientID string `json:"clientId"`
 
-	// Secret providing the `clientSecret` key by default; override via
-	// `secretRef.key`. When omitted, client_id is sent without a secret, which
-	// is only valid with ClientSecretPost.
+	// Client secret credential; key defaults to `clientSecret`.
 	// +optional
 	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
 
-	// privateKeyJwt client assertion settings. Required when method is PrivateKeyJwt.
+	// Client assertion settings. Required when method is PrivateKeyJwt.
 	// +optional
 	PrivateKeyJWT *OAuthPrivateKeyJWT `json:"privateKeyJwt,omitempty"`
 
-	// Defaults to ClientSecretBasic.
+	// Client authentication method. Defaults to ClientSecretBasic.
 	// +optional
 	Method *OAuthClientAuthMethod `json:"method,omitempty"`
 }
 
 // OAuthPrivateKeyJWT configures RFC 7523 private_key_jwt client authentication.
 type OAuthPrivateKeyJWT struct {
-	// Secret providing the `signingKey` key by default with a PEM-encoded RSA
-	// or EC private key; override the key name via `signingKeyRef.key`.
+	// PEM-encoded RSA or EC private key; key defaults to `signingKey`.
 	// +required
 	SigningKeyRef LocalSecretKeyRef `json:"signingKeyRef"`
+
+	// PEM-encoded X.509 certificate chain for JWS x5c, leaf first.
+	// The key defaults to `certificate`.
+	// +optional
+	CertificateRef *LocalSecretKeyRef `json:"certificateRef,omitempty"`
 
 	// JWS signing algorithm. Defaults to RS256.
 	// +optional
