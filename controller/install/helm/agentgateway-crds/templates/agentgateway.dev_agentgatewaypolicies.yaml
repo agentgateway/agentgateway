@@ -3482,6 +3482,7 @@ spec:
                                         enum:
                                         - ES256
                                         - ES384
+                                        - PS256
                                         - RS256
                                         - RS384
                                         - RS512
@@ -3500,9 +3501,10 @@ spec:
                                         type: string
                                       certificateRef:
                                         description: |-
-                                          PEM-encoded X.509 certificate chain used by certificateHeader, leaf first.
-                                          Required when certificateHeader is set.
-                                          The key defaults to `certificate`.
+                                          PEM-encoded X.509 certificate chain, leaf first, for certificateHeader. The
+                                          leaf public key should match signingKeyRef; a mismatch only logs a warning
+                                          but the token endpoint will reject the assertions. Required when
+                                          certificateHeader is set. The key defaults to `certificate`.
                                         properties:
                                           group:
                                             description: API group of the referenced
@@ -3716,6 +3718,7 @@ spec:
                                         enum:
                                         - ES256
                                         - ES384
+                                        - PS256
                                         - RS256
                                         - RS384
                                         - RS512
@@ -3734,9 +3737,10 @@ spec:
                                         type: string
                                       certificateRef:
                                         description: |-
-                                          PEM-encoded X.509 certificate chain used by certificateHeader, leaf first.
-                                          Required when certificateHeader is set.
-                                          The key defaults to `certificate`.
+                                          PEM-encoded X.509 certificate chain, leaf first, for certificateHeader. The
+                                          leaf public key should match signingKeyRef; a mismatch only logs a warning
+                                          but the token endpoint will reject the assertions. Required when
+                                          certificateHeader is set. The key defaults to `certificate`.
                                         properties:
                                           group:
                                             description: API group of the referenced
@@ -4249,6 +4253,7 @@ spec:
                                     enum:
                                     - ES256
                                     - ES384
+                                    - PS256
                                     - RS256
                                     - RS384
                                     - RS512
@@ -4267,9 +4272,10 @@ spec:
                                     type: string
                                   certificateRef:
                                     description: |-
-                                      PEM-encoded X.509 certificate chain used by certificateHeader, leaf first.
-                                      Required when certificateHeader is set.
-                                      The key defaults to `certificate`.
+                                      PEM-encoded X.509 certificate chain, leaf first, for certificateHeader. The
+                                      leaf public key should match signingKeyRef; a mismatch only logs a warning
+                                      but the token endpoint will reject the assertions. Required when
+                                      certificateHeader is set. The key defaults to `certificate`.
                                     properties:
                                       group:
                                         description: API group of the referenced credential;

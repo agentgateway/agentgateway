@@ -2578,6 +2578,7 @@ const (
 	OAuthClientAuth_PrivateKeyJwt_RS512                   OAuthClientAuth_PrivateKeyJwt_SigningAlg = 3
 	OAuthClientAuth_PrivateKeyJwt_ES256                   OAuthClientAuth_PrivateKeyJwt_SigningAlg = 4
 	OAuthClientAuth_PrivateKeyJwt_ES384                   OAuthClientAuth_PrivateKeyJwt_SigningAlg = 5
+	OAuthClientAuth_PrivateKeyJwt_PS256                   OAuthClientAuth_PrivateKeyJwt_SigningAlg = 6
 )
 
 // Enum value maps for OAuthClientAuth_PrivateKeyJwt_SigningAlg.
@@ -2589,6 +2590,7 @@ var (
 		3: "RS512",
 		4: "ES256",
 		5: "ES384",
+		6: "PS256",
 	}
 	OAuthClientAuth_PrivateKeyJwt_SigningAlg_value = map[string]int32{
 		"SIGNING_ALG_UNSPECIFIED": 0,
@@ -2597,6 +2599,7 @@ var (
 		"RS512":                   3,
 		"ES256":                   4,
 		"ES384":                   5,
+		"PS256":                   6,
 	}
 )
 
@@ -15852,8 +15855,8 @@ func (x *BackendReference_Service) GetHostname() string {
 
 type OAuthClientAuth_PrivateKeyJwt struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// PEM-encoded private signing key. RSA keys are used with RS* algorithms;
-	// EC keys are used with ES* algorithms.
+	// PEM-encoded private signing key. RSA keys are used with RS* and PS*
+	// algorithms; EC keys are used with ES* algorithms.
 	SigningKey string `protobuf:"bytes,1,opt,name=signing_key,json=signingKey,proto3" json:"signing_key,omitempty"`
 	// JWS signing algorithm. Defaults to RS256.
 	Alg OAuthClientAuth_PrivateKeyJwt_SigningAlg `protobuf:"varint,2,opt,name=alg,proto3,enum=agentgateway.dev.resource.OAuthClientAuth_PrivateKeyJwt_SigningAlg" json:"alg,omitempty"`
@@ -15862,7 +15865,9 @@ type OAuthClientAuth_PrivateKeyJwt struct {
 	// Audience for the client assertion, typically the token endpoint URL.
 	AssertionAudience string `protobuf:"bytes,4,opt,name=assertion_audience,json=assertionAudience,proto3" json:"assertion_audience,omitempty"`
 	// PEM-encoded X.509 certificate chain used by certificate_header, leaf first.
-	// Public key must match signing_key.
+	// The leaf certificate's public key must correspond to signing_key for token
+	// endpoints to validate assertions. A mismatch or comparison failure is logged
+	// as a warning and does not prevent configuration from loading.
 	Certificate string `protobuf:"bytes,5,opt,name=certificate,proto3" json:"certificate,omitempty"`
 	// JWS certificate header. Required when certificate is set and must be
 	// unspecified otherwise.
@@ -18010,12 +18015,12 @@ const file_resource_proto_rawDesc = "" +
 	"\bhostname\x18\x02 \x01(\tR\bhostnameB\x06\n" +
 	"\x04kind\"$\n" +
 	"\x04Alpn\x12\x1c\n" +
-	"\tprotocols\x18\x01 \x03(\tR\tprotocols\"\x9f\a\n" +
+	"\tprotocols\x18\x01 \x03(\tR\tprotocols\"\xaa\a\n" +
 	"\x0fOAuthClientAuth\x12\x1b\n" +
 	"\tclient_id\x18\x01 \x01(\tR\bclientId\x12(\n" +
 	"\rclient_secret\x18\x02 \x01(\tH\x00R\fclientSecret\x88\x01\x01\x12I\n" +
 	"\x06method\x18\x03 \x01(\x0e21.agentgateway.dev.resource.OAuthClientAuth.MethodR\x06method\x12`\n" +
-	"\x0fprivate_key_jwt\x18\x04 \x01(\v28.agentgateway.dev.resource.OAuthClientAuth.PrivateKeyJwtR\rprivateKeyJwt\x1a\xa4\x04\n" +
+	"\x0fprivate_key_jwt\x18\x04 \x01(\v28.agentgateway.dev.resource.OAuthClientAuth.PrivateKeyJwtR\rprivateKeyJwt\x1a\xaf\x04\n" +
 	"\rPrivateKeyJwt\x12\x1f\n" +
 	"\vsigning_key\x18\x01 \x01(\tR\n" +
 	"signingKey\x12U\n" +
@@ -18023,7 +18028,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x03kid\x18\x03 \x01(\tH\x00R\x03kid\x88\x01\x01\x12-\n" +
 	"\x12assertion_audience\x18\x04 \x01(\tR\x11assertionAudience\x12 \n" +
 	"\vcertificate\x18\x05 \x01(\tR\vcertificate\x12y\n" +
-	"\x12certificate_header\x18\x06 \x01(\x0e2J.agentgateway.dev.resource.OAuthClientAuth.PrivateKeyJwt.CertificateHeaderR\x11certificateHeader\"`\n" +
+	"\x12certificate_header\x18\x06 \x01(\x0e2J.agentgateway.dev.resource.OAuthClientAuth.PrivateKeyJwt.CertificateHeaderR\x11certificateHeader\"k\n" +
 	"\n" +
 	"SigningAlg\x12\x1b\n" +
 	"\x17SIGNING_ALG_UNSPECIFIED\x10\x00\x12\t\n" +
@@ -18031,7 +18036,8 @@ const file_resource_proto_rawDesc = "" +
 	"\x05RS384\x10\x02\x12\t\n" +
 	"\x05RS512\x10\x03\x12\t\n" +
 	"\x05ES256\x10\x04\x12\t\n" +
-	"\x05ES384\x10\x05\"N\n" +
+	"\x05ES384\x10\x05\x12\t\n" +
+	"\x05PS256\x10\x06\"N\n" +
 	"\x11CertificateHeader\x12\"\n" +
 	"\x1eCERTIFICATE_HEADER_UNSPECIFIED\x10\x00\x12\a\n" +
 	"\x03X5C\x10\x01\x12\f\n" +

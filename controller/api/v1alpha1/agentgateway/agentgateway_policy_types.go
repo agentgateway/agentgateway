@@ -1848,9 +1848,10 @@ type OAuthPrivateKeyJWT struct {
 	// +required
 	SigningKeyRef LocalSecretKeyRef `json:"signingKeyRef"`
 
-	// PEM-encoded X.509 certificate chain used by certificateHeader, leaf first.
-	// Required when certificateHeader is set.
-	// The key defaults to `certificate`.
+	// PEM-encoded X.509 certificate chain, leaf first, for certificateHeader. The
+	// leaf public key should match signingKeyRef; a mismatch only logs a warning
+	// but the token endpoint will reject the assertions. Required when
+	// certificateHeader is set. The key defaults to `certificate`.
 	// +optional
 	CertificateRef *LocalSecretKeyRef `json:"certificateRef,omitempty"`
 
@@ -1887,6 +1888,7 @@ const (
 	OAuthPrivateKeyJWTSigningAlgorithmRS256 OAuthPrivateKeyJWTSigningAlgorithm = "RS256"
 	OAuthPrivateKeyJWTSigningAlgorithmRS384 OAuthPrivateKeyJWTSigningAlgorithm = "RS384"
 	OAuthPrivateKeyJWTSigningAlgorithmRS512 OAuthPrivateKeyJWTSigningAlgorithm = "RS512"
+	OAuthPrivateKeyJWTSigningAlgorithmPS256 OAuthPrivateKeyJWTSigningAlgorithm = "PS256"
 	OAuthPrivateKeyJWTSigningAlgorithmES256 OAuthPrivateKeyJWTSigningAlgorithm = "ES256"
 	OAuthPrivateKeyJWTSigningAlgorithmES384 OAuthPrivateKeyJWTSigningAlgorithm = "ES384"
 )

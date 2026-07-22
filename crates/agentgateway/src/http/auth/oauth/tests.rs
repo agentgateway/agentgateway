@@ -695,6 +695,7 @@ async fn private_key_jwt_sends_client_assertion_form_fields() {
 		sub: String,
 		aud: String,
 		jti: String,
+		nbf: u64,
 		iat: u64,
 		exp: u64,
 	}
@@ -706,7 +707,8 @@ async fn private_key_jwt_sends_client_assertion_form_fields() {
 	assert_eq!(claims.sub, "gateway-client");
 	assert_eq!(claims.aud, "https://issuer.example/token");
 	assert!(!claims.jti.is_empty());
-	assert!(claims.exp > claims.iat);
+	assert_eq!(claims.nbf, claims.iat);
+	assert!(claims.exp > claims.nbf);
 }
 
 #[test]
@@ -727,6 +729,36 @@ fn private_key_jwt_sets_x5t_s256_header() {
 		header.x5t_s256.as_deref(),
 		Some(TEST_EC_CERT_SHA256_THUMBPRINT)
 	);
+}
+
+#[test]
+fn private_key_jwt_signs_with_ps256() {
+	let signing_key = rcgen::KeyPair::generate_for(&rcgen::PKCS_RSA_SHA256).unwrap();
+	let public_key = signing_key.public_key_pem();
+	let private_key = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
+		signing_key: FileOrInline::Inline(signing_key.serialize_pem()),
+		certificate: None,
+		certificate_header: None,
+		alg: SigningAlg::Ps256,
+		kid: None,
+		assertion_audience: "https://issuer.example/token".into(),
+	})
+	.unwrap();
+
+	let assertion = sign_client_assertion("gateway-client", &private_key).unwrap();
+	assert_eq!(
+		jsonwebtoken::decode_header(&assertion).unwrap().alg,
+		jsonwebtoken::Algorithm::PS256
+	);
+	let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::PS256);
+	validation.set_audience(&["https://issuer.example/token"]);
+	validation.set_issuer(&["gateway-client"]);
+	jsonwebtoken::decode::<serde_json::Value>(
+		&assertion,
+		&jsonwebtoken::DecodingKey::from_rsa_pem(public_key.as_bytes()).unwrap(),
+		&validation,
+	)
+	.unwrap();
 }
 
 #[rstest]

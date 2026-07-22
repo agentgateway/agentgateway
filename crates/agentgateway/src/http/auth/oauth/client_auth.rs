@@ -18,6 +18,8 @@ use crate::{apply, schema_enum, ser_redact};
 // Keep privateKeyJwt assertions short-lived to limit replay exposure while
 // allowing reasonable clock skew and token endpoint latency.
 const CLIENT_ASSERTION_LIFETIME: Duration = Duration::from_secs(300);
+// Match Google auth's issuance margin to avoid future iat/nbf values under clock skew:
+const CLIENT_ASSERTION_CLOCK_SKEW: Duration = Duration::from_secs(10);
 
 #[serde_with::serde_as]
 #[derive(Debug, Clone, serde::Serialize)]
@@ -100,7 +102,9 @@ enum RawOAuthClientAuth {
 		/// PEM-encoded private signing key (RSA or EC, matching `alg`).
 		#[cfg_attr(feature = "schema", schemars(with = "crate::serdes::FileOrInline"))]
 		signing_key: FileOrInline,
-		/// PEM-encoded X.509 certificate chain, leaf first.
+		/// PEM-encoded X.509 certificate chain, leaf first. The leaf public key must
+		/// correspond to `signing_key` for token endpoints to validate assertions.
+		/// A mismatch or comparison failure is logged and does not prevent loading.
 		#[cfg_attr(
 			feature = "schema",
 			schemars(with = "Option<crate::serdes::FileOrInline>")
@@ -241,7 +245,9 @@ pub(super) struct RawPrivateKeyJwt {
 	/// PEM-encoded private signing key (RSA or EC, matching `alg`).
 	#[cfg_attr(feature = "schema", schemars(with = "crate::serdes::FileOrInline"))]
 	pub(super) signing_key: FileOrInline,
-	/// PEM-encoded X.509 certificate chain, leaf first.
+	/// PEM-encoded X.509 certificate chain, leaf first. The leaf public key must
+	/// correspond to `signing_key` for token endpoints to validate assertions.
+	/// A mismatch or comparison failure is logged and does not prevent loading.
 	#[cfg_attr(
 		feature = "schema",
 		schemars(with = "Option<crate::serdes::FileOrInline>")
@@ -531,6 +537,8 @@ pub enum SigningAlg {
 	Rs384,
 	#[serde(rename = "RS512")]
 	Rs512,
+	#[serde(rename = "PS256")]
+	Ps256,
 	#[serde(rename = "ES256")]
 	Es256,
 	#[serde(rename = "ES384")]
@@ -543,6 +551,7 @@ impl SigningAlg {
 			Self::Rs256 => Algorithm::RS256,
 			Self::Rs384 => Algorithm::RS384,
 			Self::Rs512 => Algorithm::RS512,
+			Self::Ps256 => Algorithm::PS256,
 			Self::Es256 => Algorithm::ES256,
 			Self::Es384 => Algorithm::ES384,
 		}
@@ -550,7 +559,7 @@ impl SigningAlg {
 
 	fn encoding_key(self, pem: &[u8]) -> anyhow::Result<EncodingKey> {
 		match self {
-			Self::Rs256 | Self::Rs384 | Self::Rs512 => {
+			Self::Rs256 | Self::Rs384 | Self::Rs512 | Self::Ps256 => {
 				EncodingKey::from_rsa_pem(pem).context("failed to load RSA signing key")
 			},
 			Self::Es256 | Self::Es384 => {
@@ -568,6 +577,7 @@ fn signing_alg_from_proto(alg: i32) -> Result<SigningAlg, ProtoError> {
 		Ok(ProtoSigningAlg::Rs256) => Ok(SigningAlg::Rs256),
 		Ok(ProtoSigningAlg::Rs384) => Ok(SigningAlg::Rs384),
 		Ok(ProtoSigningAlg::Rs512) => Ok(SigningAlg::Rs512),
+		Ok(ProtoSigningAlg::Ps256) => Ok(SigningAlg::Ps256),
 		Ok(ProtoSigningAlg::Es256) => Ok(SigningAlg::Es256),
 		Ok(ProtoSigningAlg::Es384) => Ok(SigningAlg::Es384),
 		Err(_) => Err(ProtoError::EnumParse(
@@ -599,6 +609,7 @@ pub(super) fn sign_client_assertion(
 		sub: &'a str,
 		aud: &'a str,
 		jti: String,
+		nbf: u64,
 		iat: u64,
 		exp: u64,
 	}
@@ -607,12 +618,14 @@ pub(super) fn sign_client_assertion(
 		.duration_since(UNIX_EPOCH)
 		.context("system clock is before the unix epoch")?
 		.as_secs();
+	let issued_at = now.saturating_sub(CLIENT_ASSERTION_CLOCK_SKEW.as_secs());
 	let claims = ClientAssertionClaims {
 		iss: client_id,
 		sub: client_id,
 		aud: &private_key.assertion_audience,
 		jti: uuid::Uuid::new_v4().to_string(),
-		iat: now,
+		nbf: issued_at,
+		iat: issued_at,
 		exp: now + CLIENT_ASSERTION_LIFETIME.as_secs(),
 	};
 
