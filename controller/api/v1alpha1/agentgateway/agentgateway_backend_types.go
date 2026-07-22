@@ -509,6 +509,7 @@ type BedrockSettings struct {
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=63
 	// +kubebuilder:validation:Pattern="^[a-z0-9-]+$"
+	// +required
 	Region string `json:"region"`
 
 	// Guardrail policy to use for the backend. See
