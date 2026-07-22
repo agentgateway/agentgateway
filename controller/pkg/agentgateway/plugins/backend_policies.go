@@ -656,6 +656,18 @@ func translateMCPAuthenticationSpec(
 		Mode:       mode,
 		ClientId:   authnPolicy.ClientID,
 	}
+
+	if authnPolicy.ClientSecretRef != nil {
+		data, key, err := ctx.ResolveCredentialKeyRef(*authnPolicy.ClientSecretRef, policy.Namespace, wellknown.ClientSecret)
+		if err != nil {
+			errs = append(errs, err)
+		} else if value, exists := kubeutils.GetSecretDataValue(data, key); !exists || value == "" {
+			errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", policy.Namespace, authnPolicy.ClientSecretRef.Name, key))
+		} else {
+			mcpAuthn.ClientSecret = &value
+		}
+	}
+
 	return mcpAuthn, errors.Join(errs...)
 }
 

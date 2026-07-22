@@ -11096,6 +11096,44 @@ spec:
                               Client ID to use for short-circuiting Dynamic Client Registration.
                               If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
                             type: string
+                          clientSecretRef:
+                            description: |-
+                              Reference to a Kubernetes Secret holding the OAuth client secret of the app
+                              registration identified by `clientId` (for example Entra ID confidential clients,
+                              which require the secret at the token endpoint). The gateway injects it into the
+                              token requests it proxies to the provider. Defaults to the `clientSecret` key;
+                              override via `clientSecretRef.key`.
+                            properties:
+                              group:
+                                description: API group of the referenced credential;
+                                  empty selects the core API group
+                                type: string
+                              key:
+                                description: Key in the referenced Secret. If omitted,
+                                  a location-specific default is used
+                                maxLength: 253
+                                minLength: 1
+                                type: string
+                              kind:
+                                description: Kind of the referenced credential; empty
+                                  defaults to `Secret`
+                                type: string
+                              name:
+                                description: Name of the referenced credential
+                                maxLength: 253
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                            x-kubernetes-map-type: atomic
+                            x-kubernetes-validations:
+                            - message: custom credential refs must set both group
+                                and kind
+                              rule: '(!has(self.group) || size(self.group) == 0) ?
+                                (!has(self.kind) || size(self.kind) == 0 || self.kind
+                                == ''Secret'') : (has(self.kind) && size(self.kind)
+                                > 0)'
                           issuer:
                             description: |-
                               IdP that issued the JWT. This corresponds to the

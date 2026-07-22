@@ -2061,6 +2061,14 @@ type MCPAuthentication struct {
 	// If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
 	// +optional
 	ClientID *string `json:"clientId,omitempty"`
+
+	// Reference to a Kubernetes Secret holding the OAuth client secret of the app
+	// registration identified by `clientId` (for example Entra ID confidential clients,
+	// which require the secret at the token endpoint). The gateway injects it into the
+	// token requests it proxies to the provider. Defaults to the `clientSecret` key;
+	// override via `clientSecretRef.key`.
+	// +optional
+	ClientSecretRef *LocalSecretKeyRef `json:"clientSecretRef,omitempty"`
 }
 
 // +k8s:enum
