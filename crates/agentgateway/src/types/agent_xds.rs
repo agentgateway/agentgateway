@@ -1550,6 +1550,7 @@ impl ModelRoute {
 						.collect::<Result<Vec<_>, _>>()?,
 				};
 				ModelRouteKind::Concrete(llm::model_router::ModelRoute {
+					id: None,
 					name: model_match.model.clone(),
 					visibility,
 					header_matches: vec![],
@@ -4568,6 +4569,7 @@ mod tests {
 				}),
 				backend_policies: vec![],
 			})),
+			ai_policy: None,
 		};
 
 		let (route, listener) = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())?;
@@ -4608,6 +4610,7 @@ mod tests {
 			listener_key: "default/gw.http".to_string(),
 			r#match: None,
 			kind: Some(Kind::ConcreteModel(ConcreteModel::default())),
+			ai_policy: None,
 		};
 
 		let err = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())
@@ -4643,6 +4646,7 @@ mod tests {
 					],
 				})),
 			})),
+			ai_policy: None,
 		};
 
 		let (route, listener) = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())?;
@@ -4688,6 +4692,7 @@ mod tests {
 					],
 				})),
 			})),
+			ai_policy: None,
 		};
 
 		let (route, listener) = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())?;
@@ -4731,6 +4736,7 @@ mod tests {
 					],
 				})),
 			})),
+			ai_policy: None,
 		};
 
 		let err = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())
@@ -4765,6 +4771,7 @@ mod tests {
 					}),
 				})),
 			})),
+			ai_policy: None,
 		};
 
 		let (route, _) = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())?;

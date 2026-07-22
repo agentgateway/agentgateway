@@ -2294,6 +2294,7 @@ mod tests {
 				}),
 				backend_policies: vec![],
 			})),
+			ai_policy: None,
 		};
 
 		let mut updates = vec![XdsUpdate::Update(XdsResource {
@@ -2341,6 +2342,7 @@ mod tests {
 				}),
 				backend_policies: vec![],
 			})),
+			ai_policy: None,
 		};
 		let mut second_update = vec![XdsUpdate::Update(XdsResource {
 			name: strng::literal!("model/default/claude-haiku"),
@@ -2413,6 +2415,7 @@ mod tests {
 					}),
 					backend_policies: vec![],
 				})),
+				ai_policy: None,
 			}
 		}
 

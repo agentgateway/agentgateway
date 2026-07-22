@@ -4134,9 +4134,7 @@ async fn convert_llm_config(
 					..custom_provider.clone()
 				})
 			},
-			LocalModelAIProvider::Preset(preset) => {
-				AIProvider::Custom(preset.provider(model.clone()))
-			},
+			LocalModelAIProvider::Preset(preset) => AIProvider::Custom(preset.provider(model.clone())),
 			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Vertex) => {
 				AIProvider::Vertex(crate::llm::vertex::Provider {
 					model,
