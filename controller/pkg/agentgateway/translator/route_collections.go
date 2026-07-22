@@ -959,9 +959,11 @@ type RouteContext struct {
 
 // RouteContextInputs defines the collections needed to translate a route.
 type RouteContextInputs struct {
+	Collections         *plugins.AgwCollections
 	Grants              ReferenceGrants
 	RouteParents        ParentResolver
 	Services            krt.Collection[*corev1.Service]
+	Secrets             krt.Collection[*corev1.Secret]
 	InferencePools      krt.Collection[*inf.InferencePool]
 	Namespaces          krt.Collection[*corev1.Namespace]
 	ServiceEntries      krt.Collection[*networkingclient.ServiceEntry]

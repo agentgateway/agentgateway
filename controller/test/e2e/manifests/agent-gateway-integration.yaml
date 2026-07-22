@@ -9,3 +9,6 @@ controller:
 
 inferenceExtension:
   enabled: true
+
+agentgatewayModels:
+  enabled: true

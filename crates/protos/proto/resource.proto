@@ -2079,4 +2079,9 @@ message ModelRoute {
     VirtualModel virtual_model = 4;
     ConcreteModel concrete_model = 5;
   }
+
+  // AI request policy applied after this model route is selected. This is shared
+  // by concrete and virtual models; provider transport policies remain on the
+  // selected backend or provider.
+  BackendPolicySpec.Ai ai_policy = 6;
 }

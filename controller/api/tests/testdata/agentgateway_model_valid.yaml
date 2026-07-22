@@ -104,6 +104,9 @@ spec:
   parentRefs:
   - name: ai-gateway
     sectionName: llm
+  transformations:
+  - field: temperature
+    expression: '0.2'
   virtualModel:
     weighted:
       targets:

@@ -42,14 +42,14 @@ type AgentgatewayModelList struct {
 
 // +kubebuilder:validation:ExactlyOneOf=provider;virtualModel
 // +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.upstreamOverrides)",message="upstreamOverrides requires provider"
-// +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.transformations)",message="transformations require provider"
+// +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.upstreamPolicies)",message="upstreamPolicies require provider"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || self.visibility != 'Internal'",message="virtual models must be public"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || !has(self.match) || !has(self.match.model) || !self.match.model.contains('*')",message="virtual model match.model must be an exact name"
 // +kubebuilder:validation:XValidation:rule="!has(self.provider) || self.provider != 'Ollama' || (has(self.upstreamOverrides) && has(self.upstreamOverrides.baseURL))",message="ollama requires upstreamOverrides.baseURL"
-// +kubebuilder:validation:XValidation:rule="has(self.azure) == (has(self.provider) && self.provider == 'Azure')",message="azure configuration is required only for the Azure provider"
-// +kubebuilder:validation:XValidation:rule="has(self.vertexai) == (has(self.provider) && self.provider == 'VertexAI')",message="vertexai configuration is required only for the VertexAI provider"
-// +kubebuilder:validation:XValidation:rule="has(self.bedrock) == (has(self.provider) && self.provider == 'Bedrock')",message="bedrock configuration is required only for the Bedrock provider"
-// +kubebuilder:validation:XValidation:rule="has(self.custom) == (has(self.provider) && self.provider == 'Custom')",message="custom configuration is required only for the Custom provider"
+// +kubebuilder:validation:XValidation:rule="has(self.azure) == (has(self.provider) && self.provider == 'Azure')",message="azure must be set if and only if provider is Azure"
+// +kubebuilder:validation:XValidation:rule="has(self.vertexai) == (has(self.provider) && self.provider == 'VertexAI')",message="vertexai must be set if and only if provider is VertexAI"
+// +kubebuilder:validation:XValidation:rule="has(self.bedrock) == (has(self.provider) && self.provider == 'Bedrock')",message="bedrock must be set if and only if provider is Bedrock"
+// +kubebuilder:validation:XValidation:rule="has(self.custom) == (has(self.provider) && self.provider == 'Custom')",message="custom must be set if and only if provider is Custom"
 type AgentgatewayModelSpec struct {
 	// Gateways and listeners to which this model attaches.
 	// +kubebuilder:validation:MinItems=1
@@ -92,8 +92,8 @@ type AgentgatewayModelSpec struct {
 	// +optional
 	UpstreamOverrides *UpstreamOverrides `json:"upstreamOverrides,omitempty"`
 
-	// CEL transformations applied to fields in the provider request body.
-	// Transformations take precedence over upstreamOverrides.model for the same field.
+	// CEL transformations applied to fields in the provider request body. These
+	// transformations apply to both concrete and virtual models.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
 	// +listType=map
@@ -101,9 +101,45 @@ type AgentgatewayModelSpec struct {
 	// +optional
 	Transformations []FieldTransformation `json:"transformations,omitempty"`
 
+	// Policies applied while communicating with this concrete model's provider.
+	// +optional
+	UpstreamPolicies *UpstreamPolicies `json:"upstreamPolicies,omitempty"`
+
 	// Request-time routing among concrete AgentgatewayModel resources.
 	// +optional
 	VirtualModel *VirtualModel `json:"virtualModel,omitempty"`
+}
+
+// UpstreamPolicies configures a concrete model's provider connection.
+// +kubebuilder:validation:AtLeastOneFieldSet
+type UpstreamPolicies struct {
+	// Health checking and eviction behavior for this model provider.
+	// +optional
+	Health *Health `json:"health,omitempty"`
+	// TLS settings for connections to this model provider.
+	// +optional
+	TLS *BackendTLS `json:"tls,omitempty"`
+	// Proxy tunnel used to reach this model provider.
+	// +optional
+	Tunnel *BackendTunnel `json:"tunnel,omitempty"`
+	// Request and response header changes applied to provider traffic.
+	// +optional
+	Headers *HeaderModifiers `json:"headers,omitempty"`
+	// AI request and response policies applied to this model provider.
+	// +optional
+	AI *ModelAIPolicies `json:"ai,omitempty"`
+}
+
+// ModelAIPolicies contains provider-specific AI policies.
+// +kubebuilder:validation:AtLeastOneFieldSet
+type ModelAIPolicies struct {
+	// Guardrails for requests and responses.
+	// +optional
+	PromptGuard *AIPromptGuard `json:"promptGuard,omitempty"`
+
+	// Automatic prompt caching for supported providers.
+	// +optional
+	PromptCaching *PromptCachingConfig `json:"promptCaching,omitempty"`
 }
 
 // Shared overrides for requests sent to an LLM provider.
@@ -213,6 +249,10 @@ type WeightedModelTarget struct {
 }
 
 type FailoverModelRouting struct {
+	// Health checking and eviction behavior for the failover backend.
+	// +optional
+	Health *Health `json:"health,omitempty"`
+
 	// Concrete model targets grouped by priority. Lower values are preferred.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64

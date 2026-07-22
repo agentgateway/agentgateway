@@ -1524,6 +1524,12 @@ impl ModelRoute {
 			));
 		}
 		let name = strng::new(&model_match.model);
+		let llm_policy = s
+			.ai_policy
+			.as_ref()
+			.map(|policy| convert_backend_ai_policy(policy, diagnostics).map(Arc::new))
+			.transpose()?
+			.unwrap_or_else(llm::model_router::default_route_types);
 		let kind = match &s.kind {
 			Some(model_route::Kind::ConcreteModel(concrete)) => {
 				let visibility = match concrete.model_visibility() {
@@ -1549,7 +1555,7 @@ impl ModelRoute {
 					header_matches: vec![],
 					backend,
 					policies: llm::model_router::ModelRoutePolicies {
-						llm: llm::model_router::default_route_types(),
+						llm: llm_policy.clone(),
 						authorization: None,
 					},
 					backend_policies: vec![],
@@ -1618,7 +1624,7 @@ impl ModelRoute {
 				};
 				ModelRouteKind::Virtual(llm::model_router::VirtualModelRoute {
 					name: model_match.model.clone(),
-					llm_policy: llm::model_router::default_route_types(),
+					llm_policy,
 					routing,
 				})
 			},

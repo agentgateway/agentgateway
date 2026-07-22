@@ -129,6 +129,10 @@ type PolicyCtx struct {
 	// in OSS, or an injected resolver (which may itself be a chain). Access it
 	// through ResolveCredentialRef, which is nil-safe.
 	CredentialResolver kubeutils.CredentialResolver
+
+	// RouteBackend resolves references emitted by route-like resources that
+	// inline backend policies without participating in policy attachment.
+	RouteBackend RouteBackendResolver
 }
 
 // PolicySourceGVK returns the Kubernetes kind that should be used as the
@@ -1824,6 +1828,9 @@ func BuildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS s
 	gk := schema.GroupKind{
 		Group: string(group),
 		Kind:  string(kind),
+	}
+	if ctx.RouteBackend != nil {
+		return ctx.RouteBackend(ctx.Krt, defaultNS, gk, ref.Name, ref.Namespace, ref.Port)
 	}
 	if err := checkBackendRefGrant(ctx, ref, defaultNS, gk); err != nil {
 		return nil, err

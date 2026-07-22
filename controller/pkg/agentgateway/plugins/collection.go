@@ -211,13 +211,16 @@ func NewAgwCollections(
 		// agentgateway-specific CRDs
 		AgentgatewayPolicies: krt.NewFilteredInformer[*agentgateway.AgentgatewayPolicy](client, filter, krtOptions.ToOptions("informer/AgentgatewayPolicies")...),
 		Backends:             krt.NewFilteredInformer[*agentgateway.AgentgatewayBackend](client, filter, krtOptions.ToOptions("informer/AgentgatewayBackends")...),
-		Models:               krt.NewFilteredInformer[*agentgateway.AgentgatewayModel](client, filter, krtOptions.ToOptions("informer/AgentgatewayModels")...),
+		Models:               krt.NewStaticCollection[*agentgateway.AgentgatewayModel](nil, nil, krtOptions.ToOptions("disable/AgentgatewayModels")...),
 	}
 
 	if settings.EnableInferExt {
 		// inference extensions cluster watch permissions are controlled by enabling EnableInferExt
 		inferencePoolGVR := wellknown.InferencePoolGVK.GroupVersion().WithResource("inferencepools")
 		agwCollections.InferencePools = krt.WrapClient(kclient.NewDelayedInformer[*inf.InferencePool](client, inferencePoolGVR, kubetypes.StandardInformer, kclient.Filter{ObjectFilter: client.ObjectFilter()}), krtOptions.ToOptions("informer/InferencePools")...)
+	}
+	if settings.EnableAgentgatewayModels {
+		agwCollections.Models = krt.NewFilteredInformer[*agentgateway.AgentgatewayModel](client, filter, krtOptions.ToOptions("informer/AgentgatewayModels")...)
 	}
 	agwCollections.SetupIndexes()
 

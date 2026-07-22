@@ -29,6 +29,43 @@ func TestModelReferenceIgnoresListenerHostname(t *testing.T) {
 	}
 }
 
+func TestAgentgatewayModelSupportedKindsFeatureGate(t *testing.T) {
+	modelKind := toRouteKind(wellknown.AgentgatewayModelGVK)
+	listener := gwv1.Listener{
+		Protocol: gwv1.HTTPProtocolType,
+		AllowedRoutes: &gwv1.AllowedRoutes{
+			Kinds: []gwv1.RouteGroupKind{modelKind},
+		},
+	}
+
+	for _, tt := range []struct {
+		name      string
+		enabled   bool
+		want      bool
+		wantValid bool
+	}{
+		{name: "disabled", enabled: false, want: false, wantValid: false},
+		{name: "enabled", enabled: true, want: true, wantValid: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			supported, valid := GenerateSupportedKinds(listener, tt.enabled)
+			if valid != tt.wantValid {
+				t.Errorf("listener valid = %t, want %t", valid, tt.wantValid)
+			}
+			found := false
+			for _, kind := range supported {
+				found = routeGroupKindEqual(kind, modelKind)
+				if found {
+					break
+				}
+			}
+			if found != tt.want {
+				t.Errorf("AgentgatewayModel supported = %t, want %t", found, tt.want)
+			}
+		})
+	}
+}
+
 func TestModelLLMProvider(t *testing.T) {
 	t.Run("default provider", func(t *testing.T) {
 		providerType := agentgateway.ModelProviderOpenAI
@@ -63,6 +100,63 @@ func TestModelLLMProvider(t *testing.T) {
 		}
 	})
 
+}
+
+func TestModelProviderInlinePolicies(t *testing.T) {
+	providerType := agentgateway.ModelProviderOpenAI
+	model := &agentgateway.AgentgatewayModelSpec{
+		Provider:        &providerType,
+		Transformations: []agentgateway.FieldTransformation{{Field: "temperature", Expression: "0.5"}},
+		UpstreamPolicies: &agentgateway.UpstreamPolicies{
+			Health: &agentgateway.Health{UnhealthyCondition: new(agentgateway.CELExpression("response.code >= 500"))},
+			Headers: &agentgateway.HeaderModifiers{
+				Request: &gwv1.HTTPHeaderFilter{Add: []gwv1.HTTPHeader{{Name: "x-model-policy", Value: "enabled"}}},
+			},
+			AI: &agentgateway.ModelAIPolicies{
+				PromptGuard: &agentgateway.AIPromptGuard{Request: []agentgateway.PromptguardRequest{{
+					Regex: &agentgateway.Regex{Action: new(agentgateway.Action(agentgateway.REJECT)), Matches: []agentgateway.LongString{"blocked"}},
+				}}},
+			},
+		},
+	}
+
+	provider, err := translateModelLLMProvider(RouteContext{}, "default", model, "openai", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(provider.InlinePolicies) != 3 {
+		t.Fatalf("inline policies = %d, want 3", len(provider.InlinePolicies))
+	}
+	if provider.InlinePolicies[0].GetHealth() == nil {
+		t.Errorf("health policy = %#v, want health", provider.InlinePolicies[0])
+	}
+	if provider.InlinePolicies[1].GetAi() == nil || provider.InlinePolicies[1].GetAi().GetPromptGuard() == nil {
+		t.Errorf("AI policy = %#v, want prompt guard", provider.InlinePolicies[1])
+	}
+	routePolicy, err := translateModelRouteAIPolicy(RouteContext{}, "default", model.Transformations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := routePolicy.GetTransformations()["temperature"]; got != "0.5" {
+		t.Errorf("temperature transformation = %q, want %q", got, "0.5")
+	}
+	if provider.InlinePolicies[2].GetRequestHeaderModifier() == nil {
+		t.Errorf("header policy = %#v, want request header modifier", provider.InlinePolicies[2])
+	}
+}
+
+func TestModelFailoverBackendPolicies(t *testing.T) {
+	condition := agentgateway.CELExpression("response.code == 429")
+	policies, err := modelFailoverBackendPolicies(RouteContext{}, "default", &agentgateway.Health{UnhealthyCondition: &condition})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(policies) != 1 || policies[0].GetHealth() == nil {
+		t.Fatalf("policies = %#v, want one health policy", policies)
+	}
+	if got := policies[0].GetHealth().GetUnhealthyCondition(); got != string(condition) {
+		t.Errorf("unhealthy condition = %q, want %q", got, condition)
+	}
 }
 
 func TestValidateModelBaseURL(t *testing.T) {

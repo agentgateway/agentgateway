@@ -25,6 +25,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
 	"github.com/agentgateway/agentgateway/controller/pkg/syncer/status"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
@@ -170,6 +171,11 @@ func convertAgentgatewayModel(ctx RouteContext, model *agentgateway.Agentgateway
 		Match:       &api.ModelRoute_Match{Model: effectiveModelName(model)},
 	}
 	var resources []*api.Resource
+	aiPolicy, err := translateModelRouteAIPolicy(ctx, model.Namespace, model.Spec.Transformations)
+	if err != nil {
+		return nil, err
+	}
+	route.AiPolicy = aiPolicy
 
 	if model.Spec.Provider != nil {
 		backend, err := modelConcreteBackend(ctx, model, parent, nil)
@@ -299,15 +305,22 @@ func modelFailoverBackend(ctx RouteContext, model *agentgateway.AgentgatewayMode
 		backend.ProviderGroups = append(backend.ProviderGroups, &api.AIBackend_ProviderGroup{Providers: providers})
 	}
 
+	inlinePolicies, err := modelFailoverBackendPolicies(ctx, model.Namespace, model.Spec.VirtualModel.Failover.Health)
+	if err != nil {
+		return nil, err
+	}
 	return &api.Backend{
 		Key:            modelBackendKey(model, parent, "failover"),
 		Name:           plugins.ResourceName(model),
 		Kind:           &api.Backend_Ai{Ai: backend},
-		InlinePolicies: modelFailoverBackendPolicies(),
+		InlinePolicies: inlinePolicies,
 	}, nil
 }
 
-func modelFailoverBackendPolicies() []*api.BackendPolicySpec {
+func modelFailoverBackendPolicies(ctx RouteContext, namespace string, health *agentgateway.Health) ([]*api.BackendPolicySpec, error) {
+	if health != nil {
+		return translateInlineModelBackendPolicy(ctx, namespace, &agentgateway.BackendFull{Health: health})
+	}
 	consecutiveFailures := int32(3)
 	restoreHealth := 1.0
 	return []*api.BackendPolicySpec{{
@@ -321,17 +334,21 @@ func modelFailoverBackendPolicies() []*api.BackendPolicySpec {
 				},
 			},
 		},
-	}}
+	}}, nil
 }
 
 func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentgateway.AgentgatewayModelSpec, providerName string, modelOverride *string) (*api.AIBackend_Provider, error) {
 	if err := validateModelBaseURL(model); err != nil {
 		return nil, err
 	}
+	inlinePolicies, err := translateModelUpstreamPolicies(ctx, namespace, model)
+	if err != nil {
+		return nil, err
+	}
 	if model.UpstreamOverrides != nil && model.UpstreamOverrides.Model != nil {
 		modelOverride = new(string(*model.UpstreamOverrides.Model))
 	}
-	provider := &api.AIBackend_Provider{Name: providerName}
+	provider := &api.AIBackend_Provider{Name: providerName, InlinePolicies: inlinePolicies}
 	if model.UpstreamOverrides != nil && model.UpstreamOverrides.BaseURL != nil {
 		provider.BaseUrl = new(string(*model.UpstreamOverrides.BaseURL))
 	}
@@ -420,6 +437,62 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 		return nil, fmt.Errorf("no supported LLM provider configured")
 	}
 	return provider, nil
+}
+
+func translateModelUpstreamPolicies(ctx RouteContext, namespace string, model *agentgateway.AgentgatewayModelSpec) ([]*api.BackendPolicySpec, error) {
+	if model.UpstreamPolicies == nil {
+		return nil, nil
+	}
+
+	policies := model.UpstreamPolicies
+	backend := &agentgateway.BackendFull{}
+	backend.BackendSimple.TLS = policies.TLS
+	backend.BackendSimple.Tunnel = policies.Tunnel
+	backend.Health = policies.Health
+	if policies.AI != nil {
+		backend.AI = &agentgateway.BackendAI{
+			PromptGuard:   policies.AI.PromptGuard,
+			PromptCaching: policies.AI.PromptCaching,
+		}
+	}
+	translated, err := translateInlineModelBackendPolicy(ctx, namespace, backend)
+	if err != nil {
+		return nil, err
+	}
+	if policies.Headers == nil {
+		return translated, nil
+	}
+	if request := CreateAgwHeadersFilter(policies.Headers.Request); request != nil {
+		translated = append(translated, &api.BackendPolicySpec{Kind: &api.BackendPolicySpec_RequestHeaderModifier{RequestHeaderModifier: request}})
+	}
+	if response := CreateAgwResponseHeadersFilter(policies.Headers.Response); response != nil {
+		translated = append(translated, &api.BackendPolicySpec{Kind: &api.BackendPolicySpec_ResponseHeaderModifier{ResponseHeaderModifier: response}})
+	}
+	return translated, nil
+}
+
+func translateModelRouteAIPolicy(ctx RouteContext, namespace string, transformations []agentgateway.FieldTransformation) (*api.BackendPolicySpec_Ai, error) {
+	if len(transformations) == 0 {
+		return nil, nil
+	}
+	translated, err := translateInlineModelBackendPolicy(ctx, namespace, &agentgateway.BackendFull{AI: &agentgateway.BackendAI{Transformations: transformations}})
+	if err != nil {
+		return nil, err
+	}
+	if len(translated) != 1 || translated[0].GetAi() == nil {
+		return nil, fmt.Errorf("model policies must translate to an AI policy")
+	}
+	return translated[0].GetAi(), nil
+}
+
+func translateInlineModelBackendPolicy(ctx RouteContext, namespace string, backend *agentgateway.BackendFull) ([]*api.BackendPolicySpec, error) {
+	policyCtx := plugins.PolicyCtx{
+		Krt:                ctx.Krt,
+		Collections:        ctx.Collections,
+		CredentialResolver: kubeutils.NewSecretCredentialResolver(ctx.Secrets),
+		RouteBackend:       ctx.References.RouteBackend,
+	}
+	return plugins.TranslateInlineBackendPolicy(policyCtx, namespace, backend)
 }
 
 func modelLLMProvider(model *agentgateway.AgentgatewayModelSpec) (*agentgateway.LLMProvider, error) {
