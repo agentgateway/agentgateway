@@ -3082,6 +3082,8 @@ tbody tr:hover {
 }
 
 .log-call-title-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
 }
 
@@ -5800,12 +5802,13 @@ details summary {
   }
 
   .log-call-summary {
-    grid-template-columns: 4px minmax(0, 1fr) auto;
+    grid-template-columns: 4px minmax(0, 1fr) 48px;
     gap: 10px;
     padding: 12px;
   }
 
   .log-status-rail {
+    grid-column: 1;
     grid-row: 1 / span 5;
   }
 
@@ -5831,7 +5834,7 @@ details summary {
   .log-call-status {
     grid-column: 3;
     grid-row: 2;
-    justify-self: end;
+    justify-self: stretch;
   }
 
   .log-call-title-row {
