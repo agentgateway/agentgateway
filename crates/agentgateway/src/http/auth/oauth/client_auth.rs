@@ -62,6 +62,22 @@ enum RawOAuthClientAuthConfig {
 	DefaultClientSecretBasic(RawDefaultClientSecretBasicAuth),
 }
 
+#[derive(Clone, serde::Deserialize)]
+#[serde(transparent)]
+pub(super) struct RedactedCertificate(FileOrInline);
+
+impl fmt::Debug for RedactedCertificate {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.write_str("[REDACTED]")
+	}
+}
+
+impl From<FileOrInline> for RedactedCertificate {
+	fn from(value: FileOrInline) -> Self {
+		Self(value)
+	}
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields, tag = "method")]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -101,7 +117,8 @@ enum RawOAuthClientAuth {
 		client_id: String,
 		/// PEM-encoded private signing key (RSA or EC, matching `alg`).
 		#[cfg_attr(feature = "schema", schemars(with = "crate::serdes::FileOrInline"))]
-		signing_key: FileOrInline,
+		#[serde(deserialize_with = "crate::serdes::deser_key_from_file")]
+		signing_key: SecretString,
 		/// PEM-encoded X.509 certificate chain, leaf first. The leaf public key must
 		/// correspond to `signing_key` for token endpoints to validate assertions.
 		/// A mismatch or comparison failure is logged and does not prevent loading.
@@ -109,7 +126,7 @@ enum RawOAuthClientAuth {
 			feature = "schema",
 			schemars(with = "Option<crate::serdes::FileOrInline>")
 		)]
-		certificate: Option<FileOrInline>,
+		certificate: Option<RedactedCertificate>,
 		/// JWS certificate header emitted from `certificate`. Required when `certificate` is set.
 		certificate_header: Option<CertificateHeader>,
 		#[serde(default)]
@@ -228,10 +245,10 @@ pub struct PrivateKeyJwt {
 impl fmt::Debug for PrivateKeyJwt {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("PrivateKeyJwt")
-			.field("signing_key", &"<redacted>")
+			.field("signing_key", &"[REDACTED]")
 			.field("alg", &self.alg)
 			.field("kid", &self.kid)
-			.field("x5c", &self.x5c)
+			.field("x5c", &self.x5c.as_ref().map(|_| "[REDACTED]"))
 			.field("x5t#S256", &self.x5t_s256)
 			.field("assertion_audience", &self.assertion_audience)
 			.finish()
@@ -244,7 +261,8 @@ impl fmt::Debug for PrivateKeyJwt {
 pub(super) struct RawPrivateKeyJwt {
 	/// PEM-encoded private signing key (RSA or EC, matching `alg`).
 	#[cfg_attr(feature = "schema", schemars(with = "crate::serdes::FileOrInline"))]
-	pub(super) signing_key: FileOrInline,
+	#[serde(deserialize_with = "crate::serdes::deser_key_from_file")]
+	pub(super) signing_key: SecretString,
 	/// PEM-encoded X.509 certificate chain, leaf first. The leaf public key must
 	/// correspond to `signing_key` for token endpoints to validate assertions.
 	/// A mismatch or comparison failure is logged and does not prevent loading.
@@ -252,7 +270,7 @@ pub(super) struct RawPrivateKeyJwt {
 		feature = "schema",
 		schemars(with = "Option<crate::serdes::FileOrInline>")
 	)]
-	pub(super) certificate: Option<FileOrInline>,
+	pub(super) certificate: Option<RedactedCertificate>,
 	/// JWS certificate header emitted from `certificate`. Required when `certificate` is set.
 	pub(super) certificate_header: Option<CertificateHeader>,
 	#[serde(default)]
@@ -269,18 +287,15 @@ impl TryFrom<RawPrivateKeyJwt> for PrivateKeyJwt {
 		if raw.assertion_audience.is_empty() {
 			return Err("oauth private_key_jwt assertion_audience must not be empty".into());
 		}
-		// TODO: file-based keys are read once at config load; consider reload/rotation (K8s secret remounts need a restart)
-		let signing_key_pem = raw
-			.signing_key
-			.load()
-			.map_err(|e| format!("failed to load oauth private_key_jwt signing_key: {e}"))?;
+		// TODO: file-based keys are loaded once at config load; consider reload/rotation (K8s secret remounts need a restart)
+		let signing_key_pem = raw.signing_key.expose_secret();
 		let signing_key = raw
 			.alg
 			.encoding_key(signing_key_pem.trim().as_bytes())
 			.map_err(|e| format!("failed to parse oauth private_key_jwt signing_key: {e}"))?;
 		let certificate_headers = match (raw.certificate, raw.certificate_header) {
 			(Some(certificate), Some(certificate_header)) => {
-				load_certificate_headers(certificate, certificate_header, &signing_key_pem)?
+				load_certificate_headers(certificate, certificate_header, signing_key_pem)?
 			},
 			(Some(_), None) => {
 				return Err(
@@ -312,11 +327,12 @@ struct CertificateHeaders {
 }
 
 fn load_certificate_headers(
-	certificate: FileOrInline,
+	certificate: RedactedCertificate,
 	certificate_header: CertificateHeader,
 	signing_key_pem: &str,
 ) -> Result<CertificateHeaders, String> {
 	let certificate_pem = certificate
+		.0
 		.load()
 		.map_err(|e| format!("failed to load oauth private_key_jwt certificate: {e}"))?;
 	let certificates = pem::parse_many(certificate_pem)
@@ -399,7 +415,7 @@ impl Clone for ParsedEncodingKey {
 
 impl fmt::Debug for ParsedEncodingKey {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str("<redacted>")
+		f.write_str("[REDACTED]")
 	}
 }
 
@@ -505,9 +521,9 @@ impl TryFrom<proto::o_auth_client_auth::PrivateKeyJwt> for PrivateKeyJwt {
 		private_key_jwt: proto::o_auth_client_auth::PrivateKeyJwt,
 	) -> Result<Self, Self::Error> {
 		Self::try_from(RawPrivateKeyJwt {
-			signing_key: FileOrInline::Inline(private_key_jwt.signing_key),
+			signing_key: SecretString::from(private_key_jwt.signing_key),
 			certificate: (!private_key_jwt.certificate.is_empty())
-				.then_some(FileOrInline::Inline(private_key_jwt.certificate)),
+				.then_some(FileOrInline::Inline(private_key_jwt.certificate).into()),
 			certificate_header: certificate_header_from_proto(private_key_jwt.certificate_header)?,
 			alg: signing_alg_from_proto(private_key_jwt.alg)?,
 			kid: private_key_jwt.kid,
