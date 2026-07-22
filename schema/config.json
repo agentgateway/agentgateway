@@ -2991,6 +2991,19 @@
           "const": "copilot"
         },
         {
+          "description": "Sign a short-lived JWT with a private key on each request.",
+          "type": "object",
+          "properties": {
+            "jwtSign": {
+              "$ref": "#/$defs/JwtSignAuth"
+            }
+          },
+          "required": [
+            "jwtSign"
+          ],
+          "additionalProperties": false
+        },
+        {
           "description": "Use OAuth token exchange flows to obtain a backend access token.",
           "type": "object",
           "properties": {
@@ -3494,6 +3507,67 @@
         }
       ]
     },
+    "JwtSignAuth": {
+      "description": "Signs a short-lived JWT with a private key on each request and sends it to\nthe backend. For upstreams that require per-request keypair JWTs (e.g. the\nSnowflake SQL API) rather than a static credential.",
+      "type": "object",
+      "properties": {
+        "signingKey": {
+          "description": "PEM-encoded private signing key (RSA or EC, matching `alg`).",
+          "$ref": "#/$defs/FileOrInline"
+        },
+        "alg": {
+          "description": "JWS signing algorithm. Defaults to RS256.",
+          "$ref": "#/$defs/SigningAlg",
+          "default": "RS256"
+        },
+        "kid": {
+          "description": "Optional JWS key ID header.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "claims": {
+          "description": "Static claims added to every token (e.g. iss, sub, aud). Values may be\nany JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,\nand `nbf` are reserved for the signer and cannot be configured here.",
+          "type": "object",
+          "additionalProperties": true,
+          "minProperties": 1
+        },
+        "ttl": {
+          "description": "Token lifetime used for `exp`. Defaults to 300s.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "description": "Where the signed token is written. Defaults to the Authorization\nheader with a `Bearer ` prefix.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthorizationLocation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "signingKey",
+        "claims"
+      ]
+    },
+    "SigningAlg": {
+      "type": "string",
+      "enum": [
+        "RS256",
+        "RS384",
+        "RS512",
+        "ES256",
+        "ES384"
+      ]
+    },
     "OAuthTokenExchangeAuth": {
       "type": "object",
       "properties": {
@@ -3829,16 +3903,6 @@
             "assertionAudience"
           ]
         }
-      ]
-    },
-    "SigningAlg": {
-      "type": "string",
-      "enum": [
-        "RS256",
-        "RS384",
-        "RS512",
-        "ES256",
-        "ES384"
       ]
     },
     "RawDefaultClientSecretBasicAuth": {

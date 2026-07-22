@@ -3799,6 +3799,122 @@ spec:
                         x-kubernetes-validations:
                         - message: audience is only valid with IdToken
                           rule: 'has(self.audience) ? self.type == ''IdToken'' : true'
+                      jwtSign:
+                        description: |-
+                          Signs a short-lived JWT with a private key on each request and sends it
+                          to the backend, for upstreams that require per-request keypair JWTs
+                          (e.g. the Snowflake SQL API) rather than a static credential.
+                        properties:
+                          alg:
+                            description: JWS signing algorithm. Defaults to RS256.
+                            enum:
+                            - ES256
+                            - ES384
+                            - RS256
+                            - RS384
+                            - RS512
+                            type: string
+                          claims:
+                            additionalProperties:
+                              x-kubernetes-preserve-unknown-fields: true
+                            description: |-
+                              Static claims added to every token (e.g. iss, sub, aud). Values may be
+                              any JSON value (e.g. a string, number, bool, or array). iat, exp, and
+                              nbf are reserved for the signer and cannot be configured here; the
+                              controller rejects them at translation time. (CEL admission validation
+                              cannot inspect this map: JSON-valued fields are excluded from CEL type
+                              declarations.)
+                            minProperties: 1
+                            type: object
+                          kid:
+                            description: Optional JWS key ID header.
+                            type: string
+                          location:
+                            description: |-
+                              Where the signed token is written on the backend request.
+                              Defaults to the Authorization header with a "Bearer " prefix.
+                            properties:
+                              cookie:
+                                properties:
+                                  name:
+                                    maxLength: 256
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              header:
+                                properties:
+                                  name:
+                                    description: Name of an HTTP header. HTTP/2 pseudo-headers
+                                      (names beginning with `:`) are not supported
+                                    maxLength: 256
+                                    minLength: 1
+                                    pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                    type: string
+                                  prefix:
+                                    maxLength: 256
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                              queryParameter:
+                                properties:
+                                  name:
+                                    maxLength: 256
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                            type: object
+                            x-kubernetes-validations:
+                            - message: exactly one of the fields in [header queryParameter
+                                cookie] must be set
+                              rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                == 1'
+                          signingKeyRef:
+                            description: Secret providing the `signingKey` key with
+                              a PEM-encoded RSA or EC private key.
+                            properties:
+                              group:
+                                description: API group of the referenced credential;
+                                  empty selects the core API group
+                                type: string
+                              kind:
+                                description: Kind of the referenced credential; empty
+                                  defaults to `Secret`
+                                type: string
+                              name:
+                                description: Name of the referenced credential
+                                maxLength: 253
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                            x-kubernetes-map-type: atomic
+                            x-kubernetes-validations:
+                            - message: custom credential refs must set both group
+                                and kind
+                              rule: '(!has(self.group) || size(self.group) == 0) ?
+                                (!has(self.kind) || size(self.kind) == 0 || self.kind
+                                == ''Secret'') : (has(self.kind) && size(self.kind)
+                                > 0)'
+                          ttl:
+                            description: Token lifetime used for exp. Defaults to
+                              300s.
+                            type: string
+                            x-kubernetes-validations:
+                            - message: invalid duration value
+                              rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                            - message: ttl must be at least 1 second
+                              rule: duration(self) >= duration('1s')
+                        required:
+                        - claims
+                        - signingKeyRef
+                        type: object
                       key:
                         description: |-
                           Inline key to use as the value of the
@@ -4337,12 +4453,14 @@ spec:
                             (has(self.kind) && size(self.kind) > 0)'
                     type: object
                     x-kubernetes-validations:
-                    - message: location may only be set for key or passthrough auth
+                    - message: location may only be set for key, secretRef, or passthrough
+                        auth
                       rule: 'has(self.location) ? has(self.key) || has(self.secretRef)
                         || has(self.passthrough) : true'
                     - message: exactly one of the fields in [key secretRef passthrough
-                        aws azure gcp oauthTokenExchange crossAppAccess] must be set
-                      rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange),has(self.crossAppAccess)].filter(x,x==true).size()
+                        aws azure gcp oauthTokenExchange crossAppAccess jwtSign] must
+                        be set
+                      rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange),has(self.crossAppAccess),has(self.jwtSign)].filter(x,x==true).size()
                         == 1'
                   extAuth:
                     description: |-
