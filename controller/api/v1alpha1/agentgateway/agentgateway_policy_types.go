@@ -1480,9 +1480,8 @@ type BackendAuth struct {
 	// +optional
 	CrossAppAccess *CrossAppAccessAuth `json:"crossAppAccess,omitempty"`
 
-	// Signs a short-lived JWT with a private key on each request and sends it
-	// to the backend, for upstreams that require per-request keypair JWTs
-	// (e.g. the Snowflake SQL API) rather than a static credential.
+	// Supplies a short-lived JWT signed with a private key to the backend.
+	// Tokens are reused until shortly before expiry.
 	// +optional
 	JwtSign *JwtSignAuth `json:"jwtSign,omitempty"`
 
@@ -1836,9 +1835,8 @@ const (
 	OAuthPrivateKeyJWTSigningAlgorithmES384 OAuthPrivateKeyJWTSigningAlgorithm = "ES384"
 )
 
-// JwtSignAuth signs a short-lived JWT with a private key on each request and
-// sends it to the backend, for upstreams that require per-request keypair
-// JWTs (e.g. the Snowflake SQL API) rather than a static credential.
+// JwtSignAuth supplies a short-lived JWT signed with a private key to the
+// backend. Tokens are reused until shortly before expiry.
 type JwtSignAuth struct {
 	// Secret providing the `signingKey` key with a PEM-encoded RSA or EC private key.
 	// +required

@@ -1273,7 +1273,7 @@ async fn test_jwt_sign_file_key_defers_to_resolve() {
 	};
 
 	let err = cfg
-		.sign()
+		.token()
 		.expect_err("signing must fail before the file key is resolved");
 	assert!(
 		err.to_string().contains("resolved"),
@@ -1285,7 +1285,7 @@ async fn test_jwt_sign_file_key_defers_to_resolve() {
 		.resolve(&resources)
 		.await
 		.expect("resolve should load and parse the file key");
-	cfg.sign().expect("signing must work after resolve");
+	cfg.token().expect("signing must work after resolve");
 }
 
 #[test]

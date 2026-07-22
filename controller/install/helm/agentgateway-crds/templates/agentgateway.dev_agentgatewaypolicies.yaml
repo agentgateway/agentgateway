@@ -3801,9 +3801,8 @@ spec:
                           rule: 'has(self.audience) ? self.type == ''IdToken'' : true'
                       jwtSign:
                         description: |-
-                          Signs a short-lived JWT with a private key on each request and sends it
-                          to the backend, for upstreams that require per-request keypair JWTs
-                          (e.g. the Snowflake SQL API) rather than a static credential.
+                          Supplies a short-lived JWT signed with a private key to the backend.
+                          Tokens are reused until shortly before expiry.
                         properties:
                           alg:
                             description: JWS signing algorithm. Defaults to RS256.

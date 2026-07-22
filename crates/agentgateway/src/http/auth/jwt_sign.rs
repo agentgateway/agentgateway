@@ -1,10 +1,13 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
 use jsonwebtoken::Header;
+use parking_lot::Mutex;
+use secrecy::SecretString;
 
 use super::AuthorizationLocation;
 use super::oauth::SigningAlg;
@@ -22,6 +25,10 @@ const DEFAULT_TTL: Duration = Duration::from_secs(300);
 /// library behavior.
 const CLOCK_SKEW_FUDGE: Duration = Duration::from_secs(10);
 
+/// Refresh cached tokens before they are close enough to expiry to fail while
+/// an upstream request is in flight.
+const CACHE_SAFETY_MARGIN: Duration = Duration::from_secs(15);
+
 /// Time-based claims the signer owns; user-configured claims must not collide
 /// with these. `iat` and `exp` are always set by the signer. `nbf` is not
 /// emitted (validators treat `iat` as the issue time and a static `nbf` makes
@@ -32,7 +39,9 @@ const RESERVED_CLAIMS: &[&str] = &["iat", "exp", "nbf"];
 /// 1500ms) never yields a shorter lifetime than configured, in both the
 /// signed token and any serialized/debug representation of the config.
 fn ttl_secs_ceil(ttl: Duration) -> u64 {
-	ttl.as_secs() + u64::from(ttl.subsec_nanos() > 0)
+	ttl
+		.as_secs()
+		.saturating_add(u64::from(ttl.subsec_nanos() > 0))
 }
 
 /// The signing key, either parsed eagerly (inline PEM) or deferred to
@@ -44,9 +53,48 @@ enum SigningKey {
 	File(PathBuf),
 }
 
-/// Signs a short-lived JWT with a private key on each request and sends it to
-/// the backend. For upstreams that require per-request keypair JWTs (e.g. the
-/// Snowflake SQL API) rather than a static credential.
+#[derive(Clone)]
+struct CachedJwt {
+	token: SecretString,
+	expires_at: u64,
+}
+
+#[derive(Clone, Default)]
+struct JwtTokenCache(Arc<Mutex<Option<CachedJwt>>>);
+
+impl JwtTokenCache {
+	fn get_or_insert_with<E>(
+		&self,
+		now: u64,
+		sign: impl FnOnce() -> Result<CachedJwt, E>,
+	) -> Result<SecretString, E> {
+		let mut entry = self.0.lock();
+		if let Some(cached) = entry.as_ref()
+			&& token_is_fresh(cached.expires_at, now)
+		{
+			return Ok(cached.token.clone());
+		}
+
+		*entry = None;
+		let signed = sign()?;
+		let token = signed.token.clone();
+		if token_is_fresh(signed.expires_at, now) {
+			*entry = Some(signed);
+		}
+		Ok(token)
+	}
+
+	fn clear(&self) {
+		*self.0.lock() = None;
+	}
+}
+
+fn token_is_fresh(expires_at: u64, now: u64) -> bool {
+	expires_at.saturating_sub(now) > CACHE_SAFETY_MARGIN.as_secs()
+}
+
+/// Supplies a short-lived JWT signed with a private key to the backend. Tokens
+/// are reused until shortly before expiry to avoid repeated signing work.
 #[derive(Clone, serde::Deserialize)]
 #[serde(try_from = "RawJwtSignAuth", rename_all = "camelCase")]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -63,6 +111,9 @@ pub struct JwtSignAuth {
 	ttl: Option<Duration>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub(super) location: Option<AuthorizationLocation>,
+	#[serde(skip)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	cache: JwtTokenCache,
 }
 
 impl fmt::Debug for JwtSignAuth {
@@ -149,6 +200,7 @@ impl TryFrom<RawJwtSignAuth> for JwtSignAuth {
 			claims: raw.claims,
 			ttl: raw.ttl,
 			location: raw.location,
+			cache: JwtTokenCache::default(),
 		})
 	}
 }
@@ -200,6 +252,7 @@ impl JwtSignAuth {
 			claims,
 			ttl,
 			location,
+			cache: JwtTokenCache::default(),
 		})
 	}
 
@@ -215,18 +268,23 @@ impl JwtSignAuth {
 			let pem = std::str::from_utf8(&pem).context("jwtSign signingKey is not valid UTF-8")?;
 			self.signing_key =
 				SigningKey::Parsed(parse_signing_key(self.alg, pem.trim()).map_err(anyhow::Error::msg)?);
+			self.cache.clear();
 		}
 		Ok(())
 	}
 
-	pub(super) fn sign(&self) -> anyhow::Result<String> {
-		let SigningKey::Parsed(signing_key) = &self.signing_key else {
-			anyhow::bail!("jwtSign file-based signingKey was not resolved at config load");
-		};
+	pub(super) fn token(&self) -> anyhow::Result<SecretString> {
 		let now = SystemTime::now()
 			.duration_since(UNIX_EPOCH)
 			.context("system clock is before the unix epoch")?
 			.as_secs();
+		self.cache.get_or_insert_with(now, || self.sign_at(now))
+	}
+
+	fn sign_at(&self, now: u64) -> anyhow::Result<CachedJwt> {
+		let SigningKey::Parsed(signing_key) = &self.signing_key else {
+			anyhow::bail!("jwtSign file-based signingKey was not resolved at config load");
+		};
 		let ttl = self.ttl.unwrap_or(DEFAULT_TTL);
 		let skew = CLOCK_SKEW_FUDGE.as_secs();
 
@@ -244,7 +302,118 @@ impl JwtSignAuth {
 
 		let mut header = Header::new(self.alg.algorithm());
 		header.kid = self.kid.clone();
-		jsonwebtoken::encode(&header, &serde_json::Value::Object(claims), &signing_key.0)
-			.context("failed to sign backend JWT")
+		let token = jsonwebtoken::encode(&header, &serde_json::Value::Object(claims), &signing_key.0)
+			.context("failed to sign backend JWT")?;
+		Ok(CachedJwt {
+			token: token.into(),
+			expires_at: exp,
+		})
+	}
+}
+
+#[cfg(test)]
+mod cache_tests {
+	use std::convert::Infallible;
+	use std::sync::Barrier;
+	use std::sync::atomic::{AtomicUsize, Ordering};
+
+	use secrecy::ExposeSecret;
+
+	use super::*;
+
+	fn cached(token: &str, expires_at: u64) -> CachedJwt {
+		CachedJwt {
+			token: token.to_string().into(),
+			expires_at,
+		}
+	}
+
+	#[test]
+	fn ttl_rounding_saturates_at_the_duration_limit() {
+		assert_eq!(ttl_secs_ceil(Duration::new(u64::MAX, 1)), u64::MAX);
+	}
+
+	#[test]
+	fn cache_is_shared_across_clones_and_refreshes_near_expiry() {
+		let cache = JwtTokenCache::default();
+		let calls = AtomicUsize::new(0);
+		let first = cache
+			.get_or_insert_with(100, || {
+				calls.fetch_add(1, Ordering::Relaxed);
+				Ok::<_, Infallible>(cached("first", 200))
+			})
+			.unwrap();
+		let hit = cache
+			.clone()
+			.get_or_insert_with(184, || {
+				calls.fetch_add(1, Ordering::Relaxed);
+				Ok::<_, Infallible>(cached("unexpected", 300))
+			})
+			.unwrap();
+		let refreshed = cache
+			.get_or_insert_with(185, || {
+				calls.fetch_add(1, Ordering::Relaxed);
+				Ok::<_, Infallible>(cached("second", 300))
+			})
+			.unwrap();
+
+		assert_eq!(first.expose_secret(), "first");
+		assert_eq!(hit.expose_secret(), "first");
+		assert_eq!(refreshed.expose_secret(), "second");
+		assert_eq!(calls.load(Ordering::Relaxed), 2);
+	}
+
+	#[test]
+	fn short_lived_tokens_and_errors_are_not_cached() {
+		let cache = JwtTokenCache::default();
+		let calls = AtomicUsize::new(0);
+		for _ in 0..2 {
+			cache
+				.get_or_insert_with(100, || {
+					calls.fetch_add(1, Ordering::Relaxed);
+					Ok::<_, Infallible>(cached("short", 115))
+				})
+				.unwrap();
+		}
+		assert_eq!(calls.load(Ordering::Relaxed), 2);
+
+		let attempts = AtomicUsize::new(0);
+		for _ in 0..2 {
+			let result = cache.get_or_insert_with(100, || {
+				attempts.fetch_add(1, Ordering::Relaxed);
+				Err::<CachedJwt, _>("signing failed")
+			});
+			assert_eq!(result.unwrap_err(), "signing failed");
+		}
+		assert_eq!(attempts.load(Ordering::Relaxed), 2);
+	}
+
+	#[test]
+	fn concurrent_misses_sign_once() {
+		const WORKERS: usize = 8;
+		let cache = JwtTokenCache::default();
+		let calls = Arc::new(AtomicUsize::new(0));
+		let barrier = Arc::new(Barrier::new(WORKERS));
+		let workers = (0..WORKERS)
+			.map(|_| {
+				let cache = cache.clone();
+				let calls = Arc::clone(&calls);
+				let barrier = Arc::clone(&barrier);
+				std::thread::spawn(move || {
+					barrier.wait();
+					cache
+						.get_or_insert_with(100, || {
+							calls.fetch_add(1, Ordering::Relaxed);
+							Ok::<_, Infallible>(cached("shared", 200))
+						})
+						.unwrap()
+				})
+			})
+			.collect::<Vec<_>>();
+
+		for worker in workers {
+			assert_eq!(worker.join().unwrap().expose_secret(), "shared");
+		}
+		assert_eq!(calls.load(Ordering::Relaxed), 1);
 	}
 }

@@ -64,7 +64,7 @@ pub enum BackendAuth {
 	/// Authenticate to GitHub Copilot.
 	#[serde(rename = "copilot")]
 	Copilot,
-	/// Sign a short-lived JWT with a private key on each request.
+	/// Supply a cached, short-lived JWT signed with a private key.
 	#[serde(rename = "jwtSign")]
 	JwtSign(Box<jwt_sign::JwtSignAuth>),
 	/// Use OAuth token exchange flows to obtain a backend access token.
@@ -195,7 +195,7 @@ pub async fn apply_backend_auth(
 		BackendAuth::JwtSign(cfg) => {
 			let explicit = cfg.location.is_some();
 			let token = cfg
-				.sign()
+				.token()
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
 			let resolved = cfg
 				.location
@@ -205,7 +205,7 @@ pub async fn apply_backend_auth(
 			// Authorization header instead of letting it ride through
 			// alongside (or instead of, if `location` differs) the signed JWT.
 			DEFAULT_AUTHORIZATION_LOCATION.remove(req)?;
-			resolved.insert(req, &token)?;
+			resolved.insert(req, token.expose_secret())?;
 			req
 				.extensions_mut()
 				.insert(AppliedBackendAuthLocation { explicit });

@@ -4775,9 +4775,8 @@ func (x *Key) GetAuthorizationLocation() *AuthorizationLocation {
 	return nil
 }
 
-// Signs a short-lived JWT with a private key on each request and sends it to
-// the backend. For upstreams that require per-request keypair JWTs (e.g. the
-// Snowflake SQL API) rather than a static credential.
+// Supplies a short-lived JWT signed with a private key to the backend. Tokens
+// are reused until shortly before expiry to avoid repeated signing work.
 type JwtSign struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// PEM-encoded private signing key. RSA keys are used with RS* algorithms;

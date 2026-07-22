@@ -1,4 +1,4 @@
-# Backend auth with per-request JWT signing
+# Backend auth with short-lived JWT signing
 
 Some upstreams reject static credentials and require every request to carry a
 short-lived JWT signed with a private key. The best-known example is the
@@ -7,9 +7,10 @@ which caps token lifetime at one hour and derives the expected `iss`/`sub`
 claims from the account, user, and public-key fingerprint.
 
 The `backendAuth.jwtSign` policy keeps the private key at the gateway and mints
-a fresh token on each request: configured static claims plus signer-controlled
-`iat`/`exp`, written to the `Authorization` header with a `Bearer ` prefix by
-default (configurable via `location`).
+a short-lived token from configured static claims plus signer-controlled
+`iat`/`exp`. The token is reused until shortly before expiry and written to the
+`Authorization` header with a `Bearer ` prefix by default (configurable via
+`location`).
 
 ### Running the example
 
@@ -31,7 +32,7 @@ Send a request and observe the signed token the upstream received:
 curl -s 127.0.0.1:3000/headers
 ```
 
-The echoed `Authorization` header carries a fresh JWT. Decode its claims:
+The echoed `Authorization` header carries the signed JWT. Decode its claims:
 
 ```bash
 payload=$(curl -s 127.0.0.1:3000/headers | jq -r '.headers.Authorization' | cut -d' ' -f2 | cut -d. -f2 | tr '_-' '/+')
@@ -46,11 +47,11 @@ The payload is base64url-encoded (RFC 7515): unlike standard base64, it uses
 `-`/`_` instead of `+`/`/` and omits padding, so `base64 -d` needs both fixed
 up first.
 
-Every request gets a new token: `iat`/`exp` are set by the signer (`ttl`
+Every request gets a valid token: `iat`/`exp` are set by the signer (`ttl`
 controls the lifetime, 300s by default) and cannot be configured as claims,
-nor can `nbf`. To tolerate clock skew between the gateway and the upstream,
-`iat` is backdated and `exp` extended by 10 seconds, mirroring Google's auth
-library.
+nor can `nbf`. Tokens are refreshed 15 seconds before expiry. To tolerate clock
+skew between the gateway and the upstream, `iat` is backdated and `exp`
+extended by 10 seconds, mirroring Google's auth library.
 
 ### Notes
 
