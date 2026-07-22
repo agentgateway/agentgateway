@@ -1941,4 +1941,6 @@ message CrossAppAccessAuth {
   repeated string scopes = 5;
   // Response cache configuration. When unset uses InMemory cache with defaults.
   OAuthTokenExchange.TokenCache cache = 6;
+  // Optional override for where the subject id_token is read from.
+  AuthorizationLocation subject_token_source = 7;
 }

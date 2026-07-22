@@ -9,7 +9,7 @@ use super::{
 };
 use crate::http::auth::AuthorizationLocation;
 use crate::types::agent::SimpleBackendReferenceWithPolicies;
-use crate::types::agent_xds::resolve_simple_reference;
+use crate::types::agent_xds::{Diagnostics, authorization_location, resolve_simple_reference};
 use crate::types::proto::{ProtoError, agent};
 use crate::{apply, schema};
 
@@ -166,6 +166,18 @@ impl CrossAppAccessAuth {
 			return Err("cross app access root and chained scopes must match".to_string());
 		}
 
+		// subjectTokenSource is an optional override (unlike oauthTokenExchange's required
+		// subjectToken.source), so the Bearer-header default is omitted here and re-derived as
+		// the default on deserialize.
+		let subject_token_source = match &self.oauth.subject_token.source {
+			AuthorizationLocation::Header { name, prefix }
+				if *name == http::header::AUTHORIZATION && prefix.as_deref() == Some("Bearer ") =>
+			{
+				None
+			},
+			source => Some(source.clone()),
+		};
+
 		Ok(CrossAppAccessAuthConfig {
 			identity_provider: CrossAppAccessEndpoint {
 				target: self.oauth.target.clone(),
@@ -178,10 +190,9 @@ impl CrossAppAccessAuth {
 				client_auth: chained_client_auth.clone(),
 			},
 			audience,
+			subject_token_source,
 			resources: self.oauth.resources.clone(),
 			scopes: self.oauth.scopes.clone(),
-			// Emitted explicitly, including when it holds the default Bearer-header source.
-			subject_token_source: Some(self.oauth.subject_token.source.clone()),
 			cache: self.oauth.cache.clone(),
 		})
 	}
@@ -207,7 +218,19 @@ impl CrossAppAccessAuth {
 		Ok(())
 	}
 
-	pub(crate) fn from_proto(t: agent::CrossAppAccessAuth) -> Result<Self, ProtoError> {
+	pub(crate) fn from_proto(
+		t: agent::CrossAppAccessAuth,
+		diagnostics: &mut Diagnostics,
+	) -> Result<Self, ProtoError> {
+		let subject_token_source = match t.subject_token_source.as_ref() {
+			Some(source) => Some(authorization_location(
+				diagnostics,
+				"crossAppAccess.subjectTokenSource",
+				Some(source),
+				AuthorizationLocation::default(),
+			)?),
+			None => None,
+		};
 		let config = CrossAppAccessAuthConfig {
 			identity_provider: CrossAppAccessEndpoint::from_proto(t.identity_provider)?,
 			resource_authorization_server: CrossAppAccessEndpoint::from_proto(
@@ -216,7 +239,7 @@ impl CrossAppAccessAuth {
 			audience: t.audience,
 			resources: t.resources,
 			scopes: t.scopes,
-			subject_token_source: None,
+			subject_token_source,
 			cache: token_cache_from_proto(t.cache)?,
 		};
 		let auth = Self::from(config);

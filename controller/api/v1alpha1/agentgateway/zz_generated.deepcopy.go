@@ -1908,6 +1908,11 @@ func (in *CrossAppAccessAuth) DeepCopyInto(out *CrossAppAccessAuth) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.SubjectTokenSource != nil {
+		in, out := &in.SubjectTokenSource, &out.SubjectTokenSource
+		*out = new(AuthorizationExtractionLocation)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.Cache != nil {
 		in, out := &in.Cache, &out.Cache
 		*out = new(OAuthTokenCache)
