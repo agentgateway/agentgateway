@@ -134,7 +134,17 @@ pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingP
 	if let Some(database) = &lp.database
 		&& !database.add.is_empty()
 	{
-		log.cel.database_fields.add = database.add.clone();
+		log.cel.database_fields.add = Arc::new(
+			log
+				.cel
+				.database_fields
+				.add
+				.iter()
+				.filter(|(key, _)| !database.add.contains_key(key))
+				.chain(database.add.iter())
+				.map(|(key, value)| (key.clone(), value.clone()))
+				.collect(),
+		);
 	}
 }
 
