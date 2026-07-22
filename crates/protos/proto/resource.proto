@@ -1804,6 +1804,7 @@ message OAuthClientAuth {
       RS512                   = 3;
       ES256                   = 4;
       ES384                   = 5;
+      PS256                   = 6;
     }
 
     enum CertificateHeader {
@@ -1812,8 +1813,8 @@ message OAuthClientAuth {
       X5T_S256                       = 2;
     }
 
-    // PEM-encoded private signing key. RSA keys are used with RS* algorithms;
-    // EC keys are used with ES* algorithms.
+    // PEM-encoded private signing key. RSA keys are used with RS* and PS*
+    // algorithms; EC keys are used with ES* algorithms.
     string signing_key = 1;
     // JWS signing algorithm. Defaults to RS256.
     SigningAlg alg = 2;
@@ -1822,7 +1823,9 @@ message OAuthClientAuth {
     // Audience for the client assertion, typically the token endpoint URL.
     string assertion_audience = 4;
     // PEM-encoded X.509 certificate chain used by certificate_header, leaf first.
-    // Public key must match signing_key.
+    // The leaf certificate's public key must correspond to signing_key for token
+    // endpoints to validate assertions. A mismatch or comparison failure is logged
+    // as a warning and does not prevent configuration from loading.
     string certificate = 5;
     // JWS certificate header. Required when certificate is set and must be
     // unspecified otherwise.

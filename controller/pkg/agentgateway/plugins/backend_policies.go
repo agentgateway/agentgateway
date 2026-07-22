@@ -1351,6 +1351,8 @@ func translateOAuthPrivateKeyJWTSigningAlg(alg *agentgateway.OAuthPrivateKeyJWTS
 		return api.OAuthClientAuth_PrivateKeyJwt_RS384
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS512:
 		return api.OAuthClientAuth_PrivateKeyJwt_RS512
+	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmPS256:
+		return api.OAuthClientAuth_PrivateKeyJwt_PS256
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256:
 		return api.OAuthClientAuth_PrivateKeyJwt_ES256
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES384:

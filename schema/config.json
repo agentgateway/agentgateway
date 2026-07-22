@@ -3804,7 +3804,7 @@
               "$ref": "#/$defs/FileOrInline"
             },
             "certificate": {
-              "description": "PEM-encoded X.509 certificate chain, leaf first.",
+              "description": "PEM-encoded X.509 certificate chain, leaf first. The leaf public key must\ncorrespond to `signing_key` for token endpoints to validate assertions.\nA mismatch or comparison failure is logged and does not prevent loading.",
               "anyOf": [
                 {
                   "$ref": "#/$defs/FileOrInline"
@@ -3873,6 +3873,7 @@
         "RS256",
         "RS384",
         "RS512",
+        "PS256",
         "ES256",
         "ES384"
       ]
