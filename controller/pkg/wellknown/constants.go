@@ -1,6 +1,5 @@
 package wellknown
 
-// AWS constants for lambda and bedrock configuration
 const (
 	// AccessKey is the key name for in the secret data for the access key id.
 	AccessKey = "accessKey"

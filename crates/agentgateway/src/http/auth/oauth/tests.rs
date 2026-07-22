@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use base64::Engine;
 use base64::prelude::{BASE64_STANDARD, BASE64_URL_SAFE_NO_PAD};
 use rstest::rstest;
-use secrecy::ExposeSecret;
+use secrecy::{ExposeSecret, SecretString};
 use serde_json::json;
 use url::form_urlencoded;
 use wiremock::matchers::{method, path};
@@ -657,8 +657,8 @@ async fn id_jag_chained_exchange_client_error_is_upstream_failure() {
 async fn private_key_jwt_sends_client_assertion_form_fields() {
 	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
 	let private_key = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
-		signing_key: FileOrInline::Inline(TEST_EC_PRIVATE_KEY_PEM.to_string()),
-		certificate: Some(FileOrInline::Inline(TEST_EC_CERT_PEM.to_string())),
+		signing_key: SecretString::from(TEST_EC_PRIVATE_KEY_PEM),
+		certificate: Some(FileOrInline::Inline(TEST_EC_CERT_PEM.to_string()).into()),
 		certificate_header: Some(CertificateHeader::X5c),
 		alg: SigningAlg::Es256,
 		kid: Some("kid-1".into()),
@@ -712,6 +712,29 @@ async fn private_key_jwt_sends_client_assertion_form_fields() {
 }
 
 #[test]
+fn private_key_jwt_debug_redacts_key_and_certificate() {
+	let raw = RawPrivateKeyJwt {
+		signing_key: SecretString::from(TEST_EC_PRIVATE_KEY_PEM),
+		certificate: Some(FileOrInline::Inline(TEST_EC_CERT_PEM.to_string()).into()),
+		certificate_header: Some(CertificateHeader::X5c),
+		alg: SigningAlg::Es256,
+		kid: Some("kid-1".into()),
+		assertion_audience: "https://issuer.example/token".into(),
+	};
+	let raw_debug = format!("{raw:?}");
+	assert!(!raw_debug.contains(TEST_EC_PRIVATE_KEY_PEM));
+	assert!(!raw_debug.contains(TEST_EC_CERT_PEM));
+	assert!(raw_debug.contains("[REDACTED]"));
+
+	let private_key = PrivateKeyJwt::try_from(raw).unwrap();
+	let debug = format!("{private_key:?}");
+	assert!(!debug.contains(TEST_EC_PRIVATE_KEY_PEM));
+	assert!(!debug.contains(TEST_EC_CERT_DER_BASE64));
+	assert!(debug.contains("x5c: Some(\"[REDACTED]\")"));
+	assert!(debug.contains("alg: Es256"));
+}
+
+#[test]
 fn private_key_jwt_sets_x5t_s256_header() {
 	let private_key = serde_json::from_value::<PrivateKeyJwt>(json!({
 		"signingKey": TEST_EC_PRIVATE_KEY_PEM,
@@ -736,7 +759,7 @@ fn private_key_jwt_signs_with_ps256() {
 	let signing_key = rcgen::KeyPair::generate_for(&rcgen::PKCS_RSA_SHA256).unwrap();
 	let public_key = signing_key.public_key_pem();
 	let private_key = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
-		signing_key: FileOrInline::Inline(signing_key.serialize_pem()),
+		signing_key: SecretString::from(signing_key.serialize_pem()),
 		certificate: None,
 		certificate_header: None,
 		alg: SigningAlg::Ps256,
@@ -770,8 +793,10 @@ fn private_key_jwt_requires_certificate_and_header_together(
 	#[case] expected: &str,
 ) {
 	let err = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
-		signing_key: FileOrInline::Inline(TEST_EC_PRIVATE_KEY_PEM.to_string()),
-		certificate: with_certificate.then(|| FileOrInline::Inline(TEST_EC_CERT_PEM.to_string())),
+		signing_key: SecretString::from(TEST_EC_PRIVATE_KEY_PEM),
+		certificate: with_certificate
+			.then(|| FileOrInline::Inline(TEST_EC_CERT_PEM.to_string()))
+			.map(Into::into),
 		certificate_header: with_certificate_header.then_some(CertificateHeader::X5c),
 		alg: SigningAlg::Es256,
 		kid: None,
@@ -828,10 +853,10 @@ fn private_key_jwt_rejects_non_certificate_pem_at_deserialize_time() {
 #[test]
 fn private_key_jwt_rejects_invalid_certificate_in_chain() {
 	let err = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
-		signing_key: FileOrInline::Inline(TEST_EC_PRIVATE_KEY_PEM.to_string()),
-		certificate: Some(FileOrInline::Inline(format!(
-			"{TEST_EC_CERT_PEM}{TEST_INVALID_CERT_PEM}"
-		))),
+		signing_key: SecretString::from(TEST_EC_PRIVATE_KEY_PEM),
+		certificate: Some(
+			FileOrInline::Inline(format!("{TEST_EC_CERT_PEM}{TEST_INVALID_CERT_PEM}")).into(),
+		),
 		certificate_header: Some(CertificateHeader::X5c),
 		alg: SigningAlg::Es256,
 		kid: None,
@@ -847,8 +872,8 @@ fn private_key_jwt_rejects_invalid_certificate_in_chain() {
 #[test]
 fn private_key_jwt_warns_but_accepts_mismatched_certificate() {
 	PrivateKeyJwt::try_from(RawPrivateKeyJwt {
-		signing_key: FileOrInline::Inline(TEST_EC_PRIVATE_KEY_PEM.to_string()),
-		certificate: Some(FileOrInline::Inline(TEST_MISMATCHED_CERT_PEM.to_string())),
+		signing_key: SecretString::from(TEST_EC_PRIVATE_KEY_PEM),
+		certificate: Some(FileOrInline::Inline(TEST_MISMATCHED_CERT_PEM.to_string()).into()),
 		certificate_header: Some(CertificateHeader::X5c),
 		alg: SigningAlg::Es256,
 		kid: None,
@@ -1587,7 +1612,7 @@ fn private_key_jwt_client_auth_from_proto() {
 #[test]
 fn private_key_jwt_serialization_omits_unset_optional_headers() {
 	let private_key = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
-		signing_key: FileOrInline::Inline(TEST_EC_PRIVATE_KEY_PEM.to_string()),
+		signing_key: SecretString::from(TEST_EC_PRIVATE_KEY_PEM),
 		certificate: None,
 		certificate_header: None,
 		alg: SigningAlg::Es256,
