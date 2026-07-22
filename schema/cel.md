@@ -105,6 +105,7 @@
 |`source.identity.trustDomain`|string|The trust domain of the identity.|
 |`source.identity.namespace`|string|The namespace of the identity.|
 |`source.identity.serviceAccount`|string|The service account of the identity.|
+|`source.spiffeId`|string|The raw SPIFFE ID (first `spiffe://` URI SAN) of the downstream client certificate, if<br>present. Unlike `identity`, this is populated for any SPIFFE ID, not only the Istio<br>`spiffe://td/ns/<ns>/sa/<sa>` format.|
 |`source.subjectAltNames`|[]string|The subject alt names from the downstream certificate, if available.|
 |`source.issuer`|string|The issuer from the downstream certificate, if available.|
 |`source.subject`|string|The subject from the downstream certificate, if available.|

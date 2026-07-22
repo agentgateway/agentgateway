@@ -35,6 +35,21 @@ use crate::*;
 const TRACE_POLICY_KIND: &str = "ext_auth";
 const DEFAULT_CACHE_ENTRIES: usize = 10_000;
 
+/// The verified peer principal for ext_authz: the Istio identity, falling back to the raw SPIFFE ID
+/// when the SVID isn't in Istio `ns/sa` form. Gateway-set from the verified peer cert (never
+/// client-supplied), so the authz server can trust it.
+fn peer_principal(tls_info: Option<&TLSConnectionInfo>) -> String {
+	tls_info
+		.and_then(|tls| tls.src_identity.as_ref())
+		.and_then(|id| {
+			id.identity
+				.as_ref()
+				.map(|i| i.to_string())
+				.or_else(|| id.spiffe_id.as_ref().map(|s| s.to_string()))
+		})
+		.unwrap_or_default()
+}
+
 #[cfg(test)]
 #[path = "ext_authz_tests.rs"]
 mod tests;
@@ -482,15 +497,7 @@ impl ExtAuthz {
 			}),
 			service: String::new(),
 			labels: HashMap::new(),
-			principal: tls_info
-				.as_ref()
-				.and_then(|tls| {
-					tls
-						.src_identity
-						.as_ref()
-						.and_then(|id| id.identity.as_ref().map(|s| s.to_string()))
-				})
-				.unwrap_or_default(),
+			principal: peer_principal(tls_info.as_ref()),
 			certificate: String::new(),
 		});
 

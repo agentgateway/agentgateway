@@ -1,0 +1,27 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+config:
+  spiffeEndpoint: unix:///tmp/spire-agent/public/api.sock
+binds:
+- port: 3000
+  listeners:
+  - name: default
+    protocol: HTTPS
+    tls:
+      spiffe: {}
+    routes:
+    - policies:
+        directResponse:
+          status: 200
+          bodyExpression: '"Your SPIFFE ID is: " + source.spiffeId'
+- port: 3001
+  listeners:
+  - name: upstream-mtls
+    protocol: HTTP
+    routes:
+    - policies:
+        backendTLS:
+          spiffe: {}
+          subjectAltNames:
+          - spiffe://example.org/ns/default/sa/upstream
+      backends:
+      - host: upstream.default.svc.cluster.local:8443

@@ -241,6 +241,7 @@ message TLSConfig {
     INLINE = 0;
     ISTIO_WORKLOAD = 1;
     DYNAMIC_CA = 2;
+    SPIFFE = 3;
   }
 
   enum TLSVersion {
@@ -1448,6 +1449,15 @@ message BackendPolicySpec {
       INSECURE_HOST = 1;
       INSECURE_ALL = 2;
     }
+    // Where the gateway's client identity and trust roots come from for this upstream.
+    enum CertificateSource {
+      // Use the inline cert/key/root fields (or system roots when unset).
+      INLINE = 0;
+      // Source the gateway's X.509-SVID and trust bundle from the SPIFFE Workload API
+      // (mutual TLS). The Workload API endpoint is configured gateway-wide, not per-backend. cert/key/root are ignored;
+      // pin specific upstream SPIFFE IDs via verify_subject_alt_names.
+      SPIFFE = 1;
+    }
     optional bytes cert = 1;
     optional bytes key = 2;
     // Root to verify. If not set, system certs will be used.
@@ -1466,6 +1476,7 @@ message BackendPolicySpec {
     // Key exchange groups allowed for negotiating TLS.
     // If empty, defaults are used.
     repeated TLSConfig.KeyExchangeGroup key_exchange_groups = 8;
+    CertificateSource certificate_source = 9;
   }
   message BackendHTTP {
     enum HttpVersion {

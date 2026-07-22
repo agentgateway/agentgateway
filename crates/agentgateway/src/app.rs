@@ -7,7 +7,7 @@ use agent_core::{drain, metrics, readiness, signal};
 use prometheus_client::registry::Registry;
 use tokio::task::JoinSet;
 
-use crate::control::caclient;
+use crate::control::{caclient, spiffe};
 use crate::telemetry::trc;
 use crate::{Config, ProxyInputs, client, config_store, mcp, proxy, state_manager};
 
@@ -64,6 +64,17 @@ pub async fn run(
 			cfg.clone(),
 		)?))
 	} else {
+		None
+	};
+	let spiffe = if let Some(cfg) = &config.spiffe {
+		let client = Arc::new(
+			spiffe::SpiffeClient::new(cfg.endpoint.clone(), cfg.connect_timeout)
+				.await
+				.context("connect to SPIFFE workload API")?,
+		);
+		Some(client)
+	} else {
+		debug!("SPIFFE not configured; skipping workload API client");
 		None
 	};
 	let pool = ca
@@ -140,6 +151,7 @@ pub async fn run(
 		admin: Some(admin_server.service()),
 		upstream: client.clone(),
 		ca,
+		spiffe,
 
 		mcp_state: mcp::App::new(stores.clone(), config.session_encoder.clone()),
 	};

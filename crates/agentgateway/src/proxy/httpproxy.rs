@@ -21,7 +21,9 @@ use types::discovery::*;
 
 use crate::cel::{BackendContext, RequestTime};
 use crate::client::{ApplicationTransport, HboneHeaders, HboneSourceRole, Transport};
-use crate::http::backendtls::BackendTLS;
+use crate::http::backendtls::{
+	BackendTLS, BackendTLSSource, SpiffeBackendTLS, VersionedBackendTLS,
+};
 use crate::http::buffer::Buffer;
 use crate::http::ext_proc::{ExtProcRequest, InferenceRoutingDestinationMode};
 use crate::http::filters::{AutoHostname, BackendRequestTimeout};
@@ -1561,6 +1563,50 @@ fn format_baggage(w: &Workload) -> String {
 	)
 }
 
+/// Selects the ALPN protocol set for a SPIFFE-sourced upstream connection. An explicit `alpn` is
+/// used verbatim regardless of the per-request hint; otherwise a version hint narrows the default
+/// `h2,http/1.1` set to a single protocol.
+fn spiffe_backend_alpns(
+	spiffe_tls: &SpiffeBackendTLS,
+	version_override: Option<::http::Version>,
+) -> Vec<Vec<u8>> {
+	match (&spiffe_tls.alpn, version_override) {
+		(Some(alpn), _) => alpn.iter().map(|a| a.as_bytes().to_vec()).collect(),
+		(None, Some(::http::Version::HTTP_11)) => vec![b"http/1.1".to_vec()],
+		(None, Some(::http::Version::HTTP_2)) => vec![b"h2".to_vec()],
+		(None, _) => vec![b"h2".to_vec(), b"http/1.1".to_vec()],
+	}
+}
+
+/// Resolves a [`BackendTLS`] policy into a concrete [`VersionedBackendTLS`] for this connection.
+/// Static configs are returned directly; SPIFFE-sourced configs are built from the live
+/// [`SpiffeClient`](control::spiffe::SpiffeClient) so they pick up SVID rotation.
+fn resolve_backend_tls(
+	inputs: &ProxyInputs,
+	backend_tls: BackendTLS,
+	http_version_override: Option<::http::Version>,
+) -> Result<VersionedBackendTLS, ProxyError> {
+	match &backend_tls.source {
+		BackendTLSSource::Static(_) => Ok(backend_tls.config_for(http_version_override)),
+		BackendTLSSource::Spiffe(spiffe_tls) => {
+			let spiffe = inputs.spiffe.as_ref().ok_or_else(|| {
+				ProxyError::Processing(anyhow!(
+					"backend TLS is configured for SPIFFE, but SPIFFE is not enabled; set config.spiffeEndpoint"
+				))
+			})?;
+			let alpns = spiffe_backend_alpns(spiffe_tls, http_version_override);
+			let config = spiffe
+				.client_config(alpns, spiffe_tls.verify_sans.clone())
+				.map_err(|e| ProxyError::Processing(anyhow!("SPIFFE backend TLS: {e}")))?;
+			Ok(VersionedBackendTLS {
+				hostname_override: backend_tls.hostname_override.clone(),
+				config,
+				peer_identity_mode: transport::tls::PeerIdentityMode::Spiffe,
+			})
+		},
+	}
+}
+
 pub async fn build_transport(
 	inputs: &ProxyInputs,
 	backend_call: &BackendCall,
@@ -1569,7 +1615,9 @@ pub async fn build_transport(
 	backend_tunnel: Option<&backend::Tunnel>,
 	backend_http_version_override: Option<::http::Version>,
 ) -> Result<Transport, ProxyError> {
-	let backend_tls = backend_tls.map(|btls| btls.config_for(backend_http_version_override));
+	let backend_tls = backend_tls
+		.map(|btls| resolve_backend_tls(inputs, btls, backend_http_version_override))
+		.transpose()?;
 	let app_transport = if let Some(tls) = backend_tls {
 		ApplicationTransport::Tls(tls)
 	} else {
@@ -3081,9 +3129,56 @@ mod tests {
 	use wiremock::{Mock, ResponseTemplate};
 
 	use super::{
-		apply_auto_hostname, apply_llm_request_policies, hop_by_hop_headers,
-		resolved_workload_target_hostname, select_service_target_port,
+		SpiffeBackendTLS, apply_auto_hostname, apply_llm_request_policies, hop_by_hop_headers,
+		resolved_workload_target_hostname, select_service_target_port, spiffe_backend_alpns,
 	};
+
+	#[test]
+	fn spiffe_backend_alpns_explicit_alpn_is_fixed() {
+		// An explicit ALPN list is used verbatim and is NOT narrowed by a per-request version hint.
+		let spiffe_tls = SpiffeBackendTLS {
+			alpn: Some(vec!["h2".to_string()]),
+			verify_sans: vec![],
+		};
+		assert_eq!(
+			spiffe_backend_alpns(&spiffe_tls, Some(::http::Version::HTTP_11)),
+			vec![b"h2".to_vec()]
+		);
+		assert_eq!(
+			spiffe_backend_alpns(&spiffe_tls, None),
+			vec![b"h2".to_vec()]
+		);
+	}
+
+	#[test]
+	fn spiffe_backend_alpns_default_offers_both() {
+		// No explicit ALPN and no version hint: offer the default h2,http/1.1 set.
+		let spiffe_tls = SpiffeBackendTLS {
+			alpn: None,
+			verify_sans: vec![],
+		};
+		assert_eq!(
+			spiffe_backend_alpns(&spiffe_tls, None),
+			vec![b"h2".to_vec(), b"http/1.1".to_vec()]
+		);
+	}
+
+	#[test]
+	fn spiffe_backend_alpns_version_override_narrows_when_allowed() {
+		let spiffe_tls = SpiffeBackendTLS {
+			alpn: None,
+			verify_sans: vec![],
+		};
+		assert_eq!(
+			spiffe_backend_alpns(&spiffe_tls, Some(::http::Version::HTTP_11)),
+			vec![b"http/1.1".to_vec()]
+		);
+		assert_eq!(
+			spiffe_backend_alpns(&spiffe_tls, Some(::http::Version::HTTP_2)),
+			vec![b"h2".to_vec()]
+		);
+	}
+
 	use crate::http::filters::AutoHostname;
 	use crate::llm::policy::{
 		PromptGuard, PromptGuardStreamingMode, RegexRule, RegexRules, RequestRejection, ResponseGuard,

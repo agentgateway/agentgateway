@@ -36,6 +36,8 @@ pub async fn handshake(
 		.connect(server_name, Box::new(tcp))
 		.await
 		.map_err(crate::http::Error::new)?;
-	let socket = Socket::from_tls(ext, counter, tls.into()).map_err(crate::http::Error::new)?;
+	let socket =
+		Socket::from_tls_with_identity(ext, counter, tls.into(), Some(cfg.peer_identity_mode))
+			.map_err(crate::http::Error::new)?;
 	Ok(socket)
 }

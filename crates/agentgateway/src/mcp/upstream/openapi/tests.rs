@@ -52,6 +52,7 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 		admin: None,
 		upstream: client.clone(),
 		ca: None,
+		spiffe: None,
 
 		mcp_state: mcp::router::App::new(stores.clone(), encoder),
 	});
@@ -1788,6 +1789,7 @@ async fn test_call_tool_with_binary_body() {
 		admin: None,
 		upstream: client.clone(),
 		ca: None,
+		spiffe: None,
 		mcp_state: mcp::router::App::new(stores.clone(), encoder),
 	});
 

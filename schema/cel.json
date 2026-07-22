@@ -761,6 +761,14 @@
           ],
           "default": null
         },
+        "spiffeId": {
+          "description": "The raw SPIFFE ID (first `spiffe://` URI SAN) of the downstream client certificate, if\npresent. Unlike `identity`, this is populated for any SPIFFE ID, not only the Istio\n`spiffe://td/ns/<ns>/sa/<sa>` format.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "subjectAltNames": {
           "description": "The subject alt names from the downstream certificate, if available.",
           "type": "array",
