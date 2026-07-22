@@ -99,7 +99,7 @@ func testAgentgatewayModelConditionalRouting(t base.Test, gw base.Gateway) {
 func testAgentgatewayModelWildcardTargetTransformations(t base.Test, gw base.Gateway) {
 	gw.Send(
 		t,
-		modelRoutingExpectModel("internal/agw-wildcard-selected"),
+		modelRoutingExpectModel("agw-wildcard-selected"),
 		modelRoutingCompletion("wildcard-virtual")...,
 	)
 }
@@ -107,7 +107,7 @@ func testAgentgatewayModelWildcardTargetTransformations(t base.Test, gw base.Gat
 func testAgentgatewayModelFailoverRouting(t base.Test, gw base.Gateway) {
 	gw.Send(
 		t,
-		modelRoutingExpectModel("internal-fast"),
+		modelRoutingExpectModel("agw-internal-fast"),
 		modelRoutingCompletion("resilient")...,
 	)
 }
