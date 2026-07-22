@@ -66,7 +66,7 @@ func NewFakeDiscoveryServerWith(t *testing.T, initialAddress []syncer.Address, i
 	discovery.RegisterAggregatedDiscoveryServiceServer(grpcServer, s)
 	go func() {
 		if err := grpcServer.Serve(listener); err != nil && !(err == grpc.ErrServerStopped || err.Error() == "closed") {
-			t.Fatal(err)
+			t.Error(err)
 		}
 	}()
 	t.Cleanup(func() {
