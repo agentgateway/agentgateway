@@ -1783,7 +1783,9 @@ type OAuthClientAuth struct {
 	// +required
 	ClientID string `json:"clientId"`
 
-	// Client secret credential; key defaults to `clientSecret`.
+	// Secret providing the `clientSecret` key by default; override via
+	// `secretRef.key`. When omitted, client_id is sent without a secret, which
+	// is only valid with ClientSecretPost.
 	// +optional
 	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
 
