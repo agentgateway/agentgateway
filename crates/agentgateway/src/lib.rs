@@ -171,6 +171,14 @@ pub struct RawConfig {
 	xds_address: Option<String>,
 	/// Authentication token for communicating with the xDS control plane.
 	xds_auth_token: Option<String>,
+	/// Endpoint of the local SPIFFE Workload API (e.g. `unix:///run/spire/agent.sock`).
+	/// When set, listeners and backends may source their TLS identity from SPIFFE.
+	spiffe_endpoint: Option<String>,
+	/// How long to wait for the initial connection to the SPIFFE Workload API before failing
+	/// startup. Defaults to 10s.
+	#[serde(default, with = "serde_dur_option")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	spiffe_connect_timeout: Option<Duration>,
 	/// Kubernetes namespace for this gateway instance.
 	namespace: Option<String>,
 	/// Name of this gateway. Required when xDS is configured.
@@ -315,6 +323,9 @@ mod defaults {
 	use std::time::Duration;
 
 	pub fn connect_timeout() -> Duration {
+		Duration::from_secs(10)
+	}
+	pub fn spiffe_connect_timeout() -> Duration {
 		Duration::from_secs(10)
 	}
 	pub fn pool_idle_timeout() -> Duration {
@@ -610,6 +621,8 @@ pub struct Config {
 	/// XDS address to use. If unset, XDS will not be used.
 	pub xds: XDSConfig,
 	pub ca: Option<caclient::Config>,
+	/// Connection to the local SPIFFE Workload API, enabling SPIFFE-sourced TLS on binds.
+	pub spiffe: Option<control::spiffe::Config>,
 
 	pub tracing: Option<trc::DeprecatedConfig>,
 	pub metrics: crate::telemetry::log::MetricsConfig,
@@ -775,6 +788,7 @@ pub struct ProxyInputs {
 	pub admin: Option<management::admin::AdminService>,
 	pub mcp_state: mcp::App,
 	pub ca: Option<Arc<CaClient>>,
+	pub spiffe: Option<Arc<control::spiffe::SpiffeClient>>,
 }
 
 impl ProxyInputs {
@@ -783,6 +797,7 @@ impl ProxyInputs {
 	/// This constructor is intended for use cases where the gateway is embedded
 	/// directly into another application, bypassing [`app::run`] which creates
 	/// its own admin servers, signal handlers, and XDS state management.
+	#[allow(clippy::too_many_arguments)]
 	pub fn new(
 		cfg: Arc<Config>,
 		stores: Stores,
@@ -791,6 +806,7 @@ impl ProxyInputs {
 		mcp_state: mcp::App,
 		model_catalog: Option<llm::cost::ModelCatalog>,
 		ca: Option<Arc<CaClient>>,
+		spiffe: Option<Arc<control::spiffe::SpiffeClient>>,
 	) -> Self {
 		Self {
 			cfg,
@@ -801,6 +817,7 @@ impl ProxyInputs {
 			admin: None,
 			mcp_state,
 			ca,
+			spiffe,
 		}
 	}
 }

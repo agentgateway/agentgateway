@@ -210,6 +210,21 @@
             "null"
           ]
         },
+        "spiffeEndpoint": {
+          "description": "Endpoint of the local SPIFFE Workload API (e.g. `unix:///run/spire/agent.sock`).\nWhen set, listeners and backends may source their TLS identity from SPIFFE.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "spiffeConnectTimeout": {
+          "description": "How long to wait for the initial connection to the SPIFFE Workload API before failing\nstartup. Defaults to 10s.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "namespace": {
           "description": "Kubernetes namespace for this gateway instance.",
           "type": [
@@ -1208,23 +1223,40 @@
       "type": "object",
       "properties": {
         "mode": {
-          "description": "Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA\nmode uses cert/key as a CA for on-demand SNI leaf certificate issuance.",
+          "description": "Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA\nmode uses cert/key as a CA for on-demand SNI leaf certificate issuance.\nRequired unless `spiffe` is set.",
           "$ref": "#/$defs/LocalTLSServerMode",
           "default": "static"
         },
         "cert": {
-          "description": "Path to the TLS certificate file (leaf certificate, or CA certificate in dynamic CA mode).",
-          "type": "string"
-        },
-        "key": {
-          "description": "Path to the TLS private key file.",
-          "type": "string"
-        },
-        "root": {
-          "description": "Path to a root CA certificate file used to validate client certificates.",
+          "description": "Path to the TLS certificate file (leaf certificate, or CA certificate in dynamic CA mode).\nRequired unless `spiffe` is set.",
           "type": [
             "string",
             "null"
+          ]
+        },
+        "key": {
+          "description": "Path to the TLS private key file.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "root": {
+          "description": "Path to a root CA certificate file used to validate client certificates. Required unless `spiffe` is set.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "spiffe": {
+          "description": "Source the serving identity from the SPIFFE Workload API.\nMutually exclusive with `cert`/`key`/`root`.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalSpiffeConfig"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "cipherSuites": {
@@ -1293,10 +1325,6 @@
         }
       },
       "additionalProperties": false,
-      "required": [
-        "cert",
-        "key"
-      ],
       "allOf": [
         {
           "not": {
@@ -1322,6 +1350,10 @@
         "static",
         "dynamicCa"
       ]
+    },
+    "LocalSpiffeConfig": {
+      "type": "object",
+      "additionalProperties": false
     },
     "TLSVersion": {
       "type": "string",
@@ -2833,6 +2865,17 @@
             "$ref": "#/$defs/KeyExchangeGroup"
           },
           "default": null
+        },
+        "spiffe": {
+          "description": "Get the gateway's client identity and trust roots from the SPIFFE Workload API.\nMutually exclusive with `cert`/`key`/`root`/`insecure`/`insecureHost`.\nPin specific upstream SPIFFE IDs via `subjectAltNames` (e.g. `spiffe://td/ns/foo/sa/bar`);\nIf `subjectAltNames` is omitted, any SVID chaining to the SPIFFE trust bundle is accepted",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalSpiffeBackendTLS"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -2845,6 +2888,10 @@
         "P-384",
         "X25519_MLKEM768"
       ]
+    },
+    "LocalSpiffeBackendTLS": {
+      "type": "object",
+      "additionalProperties": false
     },
     "BackendAuthCompat": {
       "anyOf": [

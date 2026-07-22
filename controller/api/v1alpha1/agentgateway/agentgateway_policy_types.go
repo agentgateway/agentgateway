@@ -390,10 +390,39 @@ const (
 	InsecureTLSModeHostname InsecureTLSMode = "Hostname"
 )
 
+// BackendTLSCertificateSource selects where the gateway's client identity and trust roots come
+// from when originating TLS to a backend.
+// +k8s:enum
+type BackendTLSCertificateSource string
+
+const (
+	// BackendTLSCertificateSourceInline uses the inline `mtlsCertificateRef`/`caCertificateRefs`
+	// (or the system trust roots when unset). This is the default.
+	BackendTLSCertificateSourceInline BackendTLSCertificateSource = "Inline"
+	// BackendTLSCertificateSourceSPIFFE sources the gateway's X.509-SVID and trust bundle from
+	// the SPIFFE Workload API (mutual TLS).
+	BackendTLSCertificateSourceSPIFFE BackendTLSCertificateSource = "SPIFFE"
+)
+
 // +kubebuilder:validation:AtMostOneOf=verifySubjectAltNames;insecureSkipVerify
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) && self.insecureSkipVerify == 'All' ? !has(self.caCertificateRefs) : true",message="insecureSkipVerify All and caCertificateRefs may not be set together"
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames) : true",message="insecureSkipVerify and verifySubjectAltNames may not be set together"
+// +kubebuilder:validation:XValidation:rule="!has(self.certificateSource) || self.certificateSource != 'SPIFFE' || (!has(self.mtlsCertificateRef) && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))",message="certificateSource SPIFFE may not be combined with mtlsCertificateRef, caCertificateRefs, or insecureSkipVerify"
 type BackendTLS struct {
+	// Source for the gateway's client identity and trust roots when originating TLS to the backend.
+	//
+	// * `Inline` (default) uses `mtlsCertificateRef`/`caCertificateRefs` (or the system trust
+	//   roots when unset).
+	// * `SPIFFE` sources the gateway's X.509-SVID and trust bundle from the SPIFFE Workload API
+	//   (mutual TLS). `mtlsCertificateRef`, `caCertificateRefs`, and
+	//   `insecureSkipVerify` may not be set in this mode; pin expected upstream SPIFFE IDs with
+	//   `verifySubjectAltNames`. Requires the gateway-wide SPIFFE integration (see
+	//   `AgentgatewayParameters.spec.spiffe`).
+	//
+	// +optional
+	// +kubebuilder:default=Inline
+	CertificateSource *BackendTLSCertificateSource `json:"certificateSource,omitempty"`
+
 	// Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
 	// referenced credential source (defaulting to a Kubernetes `Secret`). An
 	// optional `ca.cert`, if present, verifies the server certificate, but

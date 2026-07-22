@@ -2133,6 +2133,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 			raw_port: 12345,
 			tls: Some(TlsInfo {
 				identity: None,
+				spiffe_id: None,
 				subject_alt_names: vec!["san".into()],
 				issuer: Default::default(),
 				subject: Default::default(),

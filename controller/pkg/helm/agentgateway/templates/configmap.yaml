@@ -15,6 +15,16 @@ data:
     {{- with ($gateway.logging).format }}
     {{- $typedConfig = dict "config" (dict "logging" (dict "format" .)) }}
     {{- end }}
+    {{- if hasKey $gateway "spiffe" }}
+    {{- $spiffeSrc := ($gateway.spiffe).source | default dict }}
+    {{- $spiffeMount := $spiffeSrc.mountPath | default "/spiffe-workload-api" }}
+    {{- $spiffeSocketName := $spiffeSrc.socketName | default "spire-agent.sock" }}
+    {{- $spiffeConfig := dict "spiffeEndpoint" (printf "unix://%s/%s" $spiffeMount $spiffeSocketName) }}
+    {{- if ($gateway.spiffe).connectTimeout }}
+    {{- $_ := set $spiffeConfig "spiffeConnectTimeout" (printf "%ds" (($gateway.spiffe).connectTimeout | int64)) }}
+    {{- end }}
+    {{- $typedConfig = merge $typedConfig (dict "config" $spiffeConfig) }}
+    {{- end }}
     {{- /* Merge: typed config takes precedence over rawConfig */ -}}
     {{- $finalConfig := merge $typedConfig $baseConfig }}
     {{- if $finalConfig }}

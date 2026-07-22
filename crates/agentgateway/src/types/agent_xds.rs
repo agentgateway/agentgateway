@@ -299,6 +299,17 @@ fn server_tls_config_from_proto(
 		return ServerTLSConfig::istio_workload(require_client_cert, default_alpns);
 	}
 
+	if certificate_source == proto::agent::tls_config::CertificateSource::Spiffe {
+		// SPIFFE always requires client SVIDs (mutual TLS); mtls_mode does not apply.
+		if mtls_mode != proto::agent::tls_config::MtlsMode::Strict {
+			diagnostics.add_warning(
+				"mtls_mode is ignored for SPIFFE certificates; client SVIDs are always required"
+					.to_string(),
+			);
+		}
+		return ServerTLSConfig::spiffe(default_alpns);
+	}
+
 	if certificate_source == proto::agent::tls_config::CertificateSource::DynamicCa {
 		if value.root.is_some() {
 			diagnostics.add_warning("mTLS is not supported with DYNAMIC_CA certificates");
@@ -1814,6 +1825,9 @@ fn backend_policy_from_proto(
 					&btls.key_exchange_groups,
 					diagnostics,
 				),
+				spiffe: bps::backend_tls::CertificateSource::try_from(btls.certificate_source)
+					.unwrap_or_default()
+					== bps::backend_tls::CertificateSource::Spiffe,
 			}
 			.try_into()
 			.map_err(|e| ProtoError::Generic(e.to_string()))?;
@@ -4466,5 +4480,83 @@ mod tests {
 
 		assert_eq!(metrics.add.len(), 0);
 		Ok(())
+	}
+
+	#[tokio::test]
+	async fn server_tls_config_from_proto_maps_spiffe_source() {
+		use proto::agent::tls_config::{CertificateSource, MtlsMode};
+
+		// mtls_mode is ignored for SPIFFE (client SVIDs are always required); a non-Strict mode warns.
+		let tls = proto::agent::TlsConfig {
+			certificate_source: CertificateSource::Spiffe as i32,
+			mtls_mode: MtlsMode::Disable as i32,
+			..Default::default()
+		};
+		let mut diags = Diagnostics::default();
+		let cfg =
+			server_tls_config_from_proto(&tls, &mut diags, crate::DynamicCaCertCacheConfig::default());
+
+		let err = cfg
+			.config_for(None, None, None)
+			.await
+			.expect_err("SPIFFE config_for should require a SpiffeClient");
+		assert!(
+			err.to_string().contains("SPIFFE source is required"),
+			"unexpected error: {err}"
+		);
+
+		assert!(
+			diags
+				.warnings
+				.iter()
+				.any(|w| w.contains("mtls_mode is ignored for SPIFFE")),
+			"expected the mtls_mode-ignored warning, got {:?}",
+			diags.warnings
+		);
+
+		// Strict is the clean path the controller emits for SPIFFE: no warning.
+		let strict = proto::agent::TlsConfig {
+			certificate_source: CertificateSource::Spiffe as i32,
+			mtls_mode: MtlsMode::Strict as i32,
+			..Default::default()
+		};
+		let mut strict_diags = Diagnostics::default();
+		let _ = server_tls_config_from_proto(
+			&strict,
+			&mut strict_diags,
+			crate::DynamicCaCertCacheConfig::default(),
+		);
+		assert!(
+			strict_diags.warnings.is_empty(),
+			"Strict mtls_mode should not warn for SPIFFE, got {:?}",
+			strict_diags.warnings
+		);
+	}
+
+	#[test]
+	fn backend_policy_from_proto_maps_spiffe_source() {
+		use crate::http::backendtls::BackendTLSSource;
+		use crate::types::proto::agent::backend_policy_spec as bps;
+
+		let spec = proto::agent::BackendPolicySpec {
+			kind: Some(bps::Kind::BackendTls(bps::BackendTls {
+				certificate_source: bps::backend_tls::CertificateSource::Spiffe as i32,
+				verify_subject_alt_names: vec!["spiffe://example.org/ns/default/sa/upstream".to_string()],
+				..Default::default()
+			})),
+		};
+		let policy = backend_policy_from_proto(&spec, &mut Diagnostics::default())
+			.expect("backend TLS policy should translate");
+
+		let BackendTrafficPolicy::BackendTLS(bt) = policy else {
+			panic!("expected a BackendTLS policy");
+		};
+		let BackendTLSSource::Spiffe(spiffe) = bt.source else {
+			panic!("expected a SPIFFE-sourced upstream TLS config");
+		};
+		assert_eq!(
+			spiffe.verify_sans,
+			vec!["spiffe://example.org/ns/default/sa/upstream".to_string()]
+		);
 	}
 }
