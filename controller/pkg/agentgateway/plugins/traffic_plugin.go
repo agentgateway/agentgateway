@@ -1275,9 +1275,16 @@ func buildExtAuthSpec(
 	policy types.NamespacedName,
 ) (*api.TrafficPolicySpec_ExternalAuth, error) {
 	var errs []error
-	be, inlinePolicies, _, err := buildPolicyBackendEndpoint(ctx, extAuth.PolicyBackendEndpoint, policy.Namespace)
+	be, inlinePolicies, parsedURL, err := buildPolicyBackendEndpoint(ctx, extAuth.PolicyBackendEndpoint, policy.Namespace)
 	if err != nil {
 		errs = append(errs, fmt.Errorf("failed to build extAuth: %v", err))
+	}
+	urlPath := ""
+	if parsedURL != nil {
+		urlPath = parsedURL.EscapedPath()
+	}
+	if urlPath != "" && extAuth.HTTP == nil {
+		errs = append(errs, fmt.Errorf("extAuth url path is only valid with http"))
 	}
 
 	spec := &api.TrafficPolicySpec_ExternalAuth{
@@ -1297,7 +1304,16 @@ func buildExtAuthSpec(
 			Grpc: p,
 		}
 	} else if h := extAuth.HTTP; h != nil {
-		path := castCELPtr(h.Path, func(expr agentgateway.CELExpression) {
+		pathExpression := h.Path
+		if urlPath != "" {
+			if h.Path != nil {
+				errs = append(errs, fmt.Errorf("extAuth http.path may not be set when url includes a path"))
+			} else {
+				expression := agentgateway.CELExpression(strconv.Quote(urlPath))
+				pathExpression = &expression
+			}
+		}
+		path := castCELPtr(pathExpression, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth http path is not a valid CEL expression: %s", expr))
 		})
 		redirect := castCELPtr(h.Redirect, func(expr agentgateway.CELExpression) {
@@ -2237,38 +2253,39 @@ func referencedBackendRefsFromPolicy(policy *agentgateway.AgentgatewayPolicy) []
 	app := func(ref gwv1.BackendObjectReference) {
 		backends = append(backends, ref)
 	}
+	appP := func(ref *gwv1.BackendObjectReference) {
+		if ref != nil {
+			app(*ref)
+		}
+	}
 
 	s := policy.Spec
 	if s.Traffic != nil {
 		for p := range PolicyOrConditionalSeq(s.Traffic.ExtAuth) {
-			if p.BackendRef != nil {
-				app(*p.BackendRef)
-			}
+			appP(p.BackendRef)
 		}
 		for p := range PolicyOrConditionalSeq(s.Traffic.ExtProc) {
-			if p.BackendRef != nil {
-				app(*p.BackendRef)
-			}
+			appP(p.BackendRef)
 		}
 		for p := range PolicyOrConditionalSeq(s.Traffic.RateLimit) {
-			if p.Global != nil && p.Global.BackendRef != nil {
-				app(*p.Global.BackendRef)
+			if p.Global != nil {
+				appP(p.Global.BackendRef)
 			}
 		}
 		if s.Traffic.JWTAuthentication != nil {
 			for _, p := range s.Traffic.JWTAuthentication.Providers {
-				if remote := p.JWKS.Remote; remote != nil && remote.BackendRef != nil {
-					app(*remote.BackendRef)
+				if remote := p.JWKS.Remote; remote != nil {
+					appP(remote.BackendRef)
 				}
 			}
 		}
 	}
 	if s.Frontend != nil {
-		if s.Frontend.Tracing != nil && s.Frontend.Tracing.BackendRef != nil {
-			app(*s.Frontend.Tracing.BackendRef)
+		if s.Frontend.Tracing != nil {
+			appP(s.Frontend.Tracing.BackendRef)
 		}
-		if s.Frontend.AccessLog != nil && s.Frontend.AccessLog.Otlp != nil && s.Frontend.AccessLog.Otlp.BackendRef != nil {
-			app(*s.Frontend.AccessLog.Otlp.BackendRef)
+		if s.Frontend.AccessLog != nil && s.Frontend.AccessLog.Otlp != nil {
+			appP(s.Frontend.AccessLog.Otlp.BackendRef)
 		}
 	}
 	if s.Backend != nil {
@@ -2278,9 +2295,14 @@ func referencedBackendRefsFromPolicy(policy *agentgateway.AgentgatewayPolicy) []
 }
 
 func BackendReferencesFromBackendPolicy(s *agentgateway.BackendFull, app func(ref gwv1.BackendObjectReference)) {
+	appP := func(ref *gwv1.BackendObjectReference) {
+		if ref != nil {
+			app(*ref)
+		}
+	}
 	appTunnel := func(backend *agentgateway.BackendSimple) {
-		if backend != nil && backend.Tunnel != nil && backend.Tunnel.BackendRef != nil {
-			app(*backend.Tunnel.BackendRef)
+		if backend != nil && backend.Tunnel != nil {
+			appP(backend.Tunnel.BackendRef)
 		}
 	}
 	appAuxiliaryTunnel := func(backend interface {
@@ -2289,30 +2311,26 @@ func BackendReferencesFromBackendPolicy(s *agentgateway.BackendFull, app func(re
 		appTunnel(backend.BackendSimple())
 	}
 	appTunnel(&s.BackendSimple)
-	if s.ExtAuth != nil && s.ExtAuth.BackendRef != nil {
-		app(*s.ExtAuth.BackendRef)
+	if s.ExtAuth != nil {
+		appP(s.ExtAuth.BackendRef)
 	}
 	if auth := s.Auth; auth != nil {
-		if oauth := auth.OAuthTokenExchange; oauth != nil && oauth.BackendRef != nil {
-			app(*oauth.BackendRef)
+		if oauth := auth.OAuthTokenExchange; oauth != nil {
+			appP(oauth.BackendRef)
 		}
 		if cross := auth.CrossAppAccess; cross != nil {
-			if cross.IdentityProvider.BackendRef != nil {
-				app(*cross.IdentityProvider.BackendRef)
-			}
-			if cross.ResourceAuthorizationServer.BackendRef != nil {
-				app(*cross.ResourceAuthorizationServer.BackendRef)
-			}
+			appP(cross.IdentityProvider.BackendRef)
+			appP(cross.ResourceAuthorizationServer.BackendRef)
 		}
 	}
 	if mcp := s.MCP; mcp != nil {
-		if mcp.Authentication != nil && mcp.Authentication.JWKS.BackendRef != nil {
-			app(*mcp.Authentication.JWKS.BackendRef)
+		if mcp.Authentication != nil {
+			appP(mcp.Authentication.JWKS.BackendRef)
 		}
 		if mcp.Guardrails != nil {
 			for _, p := range mcp.Guardrails.Processors {
-				if p.Remote != nil && p.Remote.BackendRef != nil {
-					app(*p.Remote.BackendRef)
+				if p.Remote != nil {
+					appP(p.Remote.BackendRef)
 				}
 			}
 		}

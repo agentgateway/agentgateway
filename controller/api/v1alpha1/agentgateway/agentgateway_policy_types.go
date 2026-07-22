@@ -1188,8 +1188,6 @@ type RemoteJWKS struct {
 	// Path to the IdP `jwks` endpoint, relative to the root, commonly
 	// `".well-known/jwks.json"`.
 	// +optional
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:MaxLength=2000
 	JwksPath *LongString `json:"jwksPath,omitempty"`
 	// +optional
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
@@ -1197,10 +1195,6 @@ type RemoteJWKS struct {
 	// +kubebuilder:default="5m"
 	CacheDuration *metav1.Duration `json:"cacheDuration,omitempty"`
 	// Remote JWKS server to reach.
-	// Supported types are `Service` and static `Backend`. An
-	// `AgentgatewayPolicy` containing backend TLS config can then be attached
-	// to the `Service` or `Backend` in order to set TLS options for a
-	// connection to the remote `jwks` source.
 	PolicyBackendEndpoint `json:",inline"`
 }
 
@@ -2713,11 +2707,14 @@ func mapseq[E any, O any](s []E, f func(E) O) iter.Seq[O] {
 }
 
 // +kubebuilder:validation:XValidation:rule="!(has(self.forwardBody) && has(self.http) && has(self.http.body))",message="forwardBody cannot be used with http.body"
-// +kubebuilder:validation:XValidation:rule="!has(self.url) || self.url.matches('^https?://[^/?#]+$')",message="url must not include a path"
+// +kubebuilder:validation:XValidation:rule="!has(self.url) || !self.url.matches('^https?://[^/?#]+/') || has(self.http)",message="url path is only valid with http"
+// +kubebuilder:validation:XValidation:rule="!has(self.url) || !self.url.matches('^https?://[^/?#]+/') || !has(self.http) || !has(self.http.path)",message="http.path may not be set when url includes a path"
 type ExtAuth struct {
 	// External Authorization server to reach.
 	//
 	// Supported types: `Service` and `Backend`.
+	// An HTTP `url` may include the authorization path. A gRPC `url` must be
+	// origin-only.
 	// +optional
 	PolicyBackendEndpoint `json:",inline"`
 

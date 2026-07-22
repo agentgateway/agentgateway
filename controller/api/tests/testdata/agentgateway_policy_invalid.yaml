@@ -1387,7 +1387,7 @@ spec:
     extAuth:
       grpc: {}
 ---
-_err: 'url must not include a path'
+_err: 'url path is only valid with http'
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -1397,6 +1397,18 @@ spec:
     extAuth:
       url: https://auth.example.com/path
       grpc: {}
+---
+_err: 'http.path may not be set when url includes a path'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: traffic-extauth-url-and-explicit-path
+spec:
+  traffic:
+    extAuth:
+      url: https://auth.example.com/authorize
+      http:
+        path: '"/explicit"'
 ---
 _err: 'url must not include a path'
 apiVersion: agentgateway.dev/v1alpha1

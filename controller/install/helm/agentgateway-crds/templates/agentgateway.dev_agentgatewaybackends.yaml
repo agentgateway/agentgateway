@@ -13119,8 +13119,12 @@ spec:
                         == 1'
                     - message: forwardBody cannot be used with http.body
                       rule: '!(has(self.forwardBody) && has(self.http) && has(self.http.body))'
-                    - message: url must not include a path
-                      rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
+                    - message: url path is only valid with http
+                      rule: '!has(self.url) || !self.url.matches(''^https?://[^/?#]+/'')
+                        || has(self.http)'
+                    - message: http.path may not be set when url includes a path
+                      rule: '!has(self.url) || !self.url.matches(''^https?://[^/?#]+/'')
+                        || !has(self.http) || !has(self.http.path)'
                   health:
                     description: Settings for passive and active health checking.
                     properties:
@@ -13341,14 +13345,11 @@ spec:
                                 - message: cacheDuration must be at least 5m.
                                   rule: duration(self) >= duration('5m')
                               jwksPath:
-                                allOf:
-                                - maxLength: 1024
-                                  minLength: 1
-                                - maxLength: 2000
-                                  minLength: 1
                                 description: |-
                                   Path to the IdP `jwks` endpoint, relative to the root, commonly
                                   `".well-known/jwks.json"`.
+                                maxLength: 1024
+                                minLength: 1
                                 type: string
                               url:
                                 description: |-

@@ -1218,8 +1218,8 @@ spec:
               port: 443
             jwksPath: /.well-known/jwks.json
     extAuth:
-      url: https://auth.example.com:9443
-      grpc: {}
+      url: https://auth.example.com:9443/authorize
+      http: {}
     extProc:
       conditional:
       - condition: 'request.path.startsWith("/processed")'

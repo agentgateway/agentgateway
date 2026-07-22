@@ -10,11 +10,9 @@ spec:
     group: gateway.networking.k8s.io
   traffic:
     extAuth:
-      url: https://authz.example.com:9443
+      url: https://authz.example.com:9443/authorize
       failureMode: FailOpen
       http:
-        path: |
-          "/authorize"
         allowedRequestHeaders:
         - authorization
 
@@ -40,8 +38,7 @@ output:
         extAuthz:
           failureMode: ALLOW
           http:
-            path: |
-              "/authorize"
+            path: '"/authorize"'
           includeRequestHeaders:
           - authorization
           inlinePolicies:
