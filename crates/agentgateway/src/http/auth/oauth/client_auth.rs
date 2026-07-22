@@ -5,6 +5,7 @@ use anyhow::Context;
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
 use secrecy::{ExposeSecret, SecretString};
 
+use crate::resource_manager::ResourceFetcher;
 use crate::serdes::FileOrInline;
 use crate::types::proto::{ProtoError, agent as proto};
 use crate::{apply, schema_enum, ser_redact};
@@ -40,8 +41,7 @@ impl<'de> serde::Deserialize<'de> for OAuthClientAuth {
 	where
 		D: serde::Deserializer<'de>,
 	{
-		RawOAuthClientAuthConfig::deserialize(deserializer)?
-			.try_into()
+		OAuthClientAuth::try_from(RawOAuthClientAuthConfig::deserialize(deserializer)?)
 			.map_err(serde::de::Error::custom)
 	}
 }
@@ -49,7 +49,7 @@ impl<'de> serde::Deserialize<'de> for OAuthClientAuth {
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(untagged)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-enum RawOAuthClientAuthConfig {
+pub(crate) enum RawOAuthClientAuthConfig {
 	Tagged(RawOAuthClientAuth),
 	DefaultClientSecretBasic(RawDefaultClientSecretBasicAuth),
 }
@@ -57,18 +57,15 @@ enum RawOAuthClientAuthConfig {
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields, tag = "method")]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-enum RawOAuthClientAuth {
+pub(crate) enum RawOAuthClientAuth {
 	/// `client_id`/`client_secret` sent in the HTTP Basic Authorization header (RFC 6749 §2.3.1).
 	#[serde(rename_all = "camelCase")]
 	ClientSecretBasic {
 		/// `client_id` parameter identifying the gateway at the authorization server.
 		client_id: String,
 		#[cfg_attr(feature = "schema", schemars(with = "crate::serdes::FileOrInline"))]
-		#[serde(
-			rename = "clientSecret",
-			deserialize_with = "crate::serdes::deser_key_from_file"
-		)]
-		client_secret: SecretString,
+		#[serde(rename = "clientSecret")]
+		client_secret: FileOrInline,
 	},
 	/// `client_id`/`client_secret` sent in the request form body.
 	#[serde(rename_all = "camelCase")]
@@ -79,12 +76,8 @@ enum RawOAuthClientAuth {
 			feature = "schema",
 			schemars(with = "Option<crate::serdes::FileOrInline>")
 		)]
-		#[serde(
-			rename = "clientSecret",
-			default,
-			deserialize_with = "crate::serdes::deser_key_from_file_option"
-		)]
-		client_secret: Option<SecretString>,
+		#[serde(rename = "clientSecret", default)]
+		client_secret: Option<FileOrInline>,
 	},
 	/// `privateKeyJwt` client assertion (RFC 7523).
 	#[serde(rename_all = "camelCase")]
@@ -105,23 +98,24 @@ enum RawOAuthClientAuth {
 #[derive(Debug, Clone, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-struct RawDefaultClientSecretBasicAuth {
+pub(crate) struct RawDefaultClientSecretBasicAuth {
 	/// `client_id` parameter identifying the gateway at the authorization server.
 	client_id: String,
 	/// OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.
 	#[cfg_attr(feature = "schema", schemars(with = "crate::serdes::FileOrInline"))]
-	#[serde(
-		rename = "clientSecret",
-		deserialize_with = "crate::serdes::deser_key_from_file"
-	)]
-	client_secret: SecretString,
+	#[serde(rename = "clientSecret")]
+	client_secret: FileOrInline,
 }
 
-impl TryFrom<RawOAuthClientAuthConfig> for OAuthClientAuth {
-	type Error = String;
+enum RawOAuthClientAuthMethod {
+	ClientSecretBasic(FileOrInline),
+	ClientSecretPost(Option<FileOrInline>),
+	PrivateKeyJwt(RawPrivateKeyJwt),
+}
 
-	fn try_from(raw: RawOAuthClientAuthConfig) -> Result<Self, Self::Error> {
-		let (client_id, method) = match raw {
+impl RawOAuthClientAuthConfig {
+	fn into_fields(self) -> (String, RawOAuthClientAuthMethod) {
+		match self {
 			RawOAuthClientAuthConfig::Tagged(RawOAuthClientAuth::ClientSecretBasic {
 				client_id,
 				client_secret,
@@ -131,14 +125,14 @@ impl TryFrom<RawOAuthClientAuthConfig> for OAuthClientAuth {
 				client_secret,
 			}) => (
 				client_id,
-				OAuthClientAuthMethod::ClientSecretBasic { client_secret },
+				RawOAuthClientAuthMethod::ClientSecretBasic(client_secret),
 			),
 			RawOAuthClientAuthConfig::Tagged(RawOAuthClientAuth::ClientSecretPost {
 				client_id,
 				client_secret,
 			}) => (
 				client_id,
-				OAuthClientAuthMethod::ClientSecretPost { client_secret },
+				RawOAuthClientAuthMethod::ClientSecretPost(client_secret),
 			),
 			RawOAuthClientAuthConfig::Tagged(RawOAuthClientAuth::PrivateKeyJwt {
 				client_id,
@@ -146,21 +140,55 @@ impl TryFrom<RawOAuthClientAuthConfig> for OAuthClientAuth {
 				alg,
 				kid,
 				assertion_audience,
-			}) => {
-				let private_key_jwt = PrivateKeyJwt::try_from(RawPrivateKeyJwt {
+			}) => (
+				client_id,
+				RawOAuthClientAuthMethod::PrivateKeyJwt(RawPrivateKeyJwt {
 					signing_key,
 					alg,
 					kid,
 					assertion_audience,
-				})?;
-				(
-					client_id,
-					OAuthClientAuthMethod::PrivateKeyJwt(private_key_jwt),
-				)
+				}),
+			),
+		}
+	}
+}
+
+impl TryFrom<RawOAuthClientAuthConfig> for OAuthClientAuth {
+	type Error = String;
+
+	fn try_from(raw: RawOAuthClientAuthConfig) -> Result<Self, Self::Error> {
+		let (client_id, raw_method) = raw.into_fields();
+		let method = match raw_method {
+			RawOAuthClientAuthMethod::ClientSecretBasic(client_secret) => {
+				OAuthClientAuthMethod::ClientSecretBasic {
+					client_secret: load_secret_sync(
+						client_secret,
+						"oauth client_secret_basic client_secret",
+					)?,
+				}
+			},
+			RawOAuthClientAuthMethod::ClientSecretPost(client_secret) => {
+				OAuthClientAuthMethod::ClientSecretPost {
+					client_secret: client_secret
+						.map(|secret| load_secret_sync(secret, "oauth client_secret_post client_secret"))
+						.transpose()?,
+				}
+			},
+			RawOAuthClientAuthMethod::PrivateKeyJwt(private_key_jwt) => {
+				OAuthClientAuthMethod::PrivateKeyJwt(PrivateKeyJwt::try_from(private_key_jwt)?)
 			},
 		};
-		Ok(Self { client_id, method })
+		let auth = Self { client_id, method };
+		auth.validate_load()?;
+		Ok(auth)
 	}
+}
+
+fn load_secret_sync(input: FileOrInline, context: &str) -> Result<SecretString, String> {
+	input
+		.load()
+		.map(|s| SecretString::from(s.trim().to_string()))
+		.map_err(|e| format!("failed to load {context}: {e}"))
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -273,6 +301,28 @@ impl TryFrom<RawPrivateKeyJwt> for PrivateKeyJwt {
 	}
 }
 
+impl RawPrivateKeyJwt {
+	async fn into_private_key_jwt(
+		self,
+		resources: &ResourceFetcher,
+	) -> Result<PrivateKeyJwt, String> {
+		if self.assertion_audience.is_empty() {
+			return Err("oauth private_key_jwt assertion_audience must not be empty".into());
+		}
+		Ok(PrivateKeyJwt {
+			key: JwtSigningKey::try_from_raw_with_resources(
+				resources,
+				self.signing_key,
+				self.alg,
+				self.kid,
+				"oauth private_key_jwt signing_key",
+			)
+			.await?,
+			assertion_audience: self.assertion_audience,
+		})
+	}
+}
+
 pub(crate) struct ParsedEncodingKey(pub(crate) EncodingKey);
 
 #[derive(Clone)]
@@ -291,6 +341,19 @@ impl JwtSigningKey {
 	) -> Result<Self, String> {
 		let pem = signing_key
 			.load()
+			.map_err(|e| format!("failed to load {context}: {e}"))?;
+		Self::try_from_pem(pem.trim(), alg, kid, context)
+	}
+
+	pub(crate) async fn try_from_raw_with_resources(
+		resources: &ResourceFetcher,
+		signing_key: FileOrInline,
+		alg: SigningAlg,
+		kid: Option<String>,
+		context: &str,
+	) -> Result<Self, String> {
+		let pem = crate::serdes::load_file_or_inline(resources, &signing_key)
+			.await
 			.map_err(|e| format!("failed to load {context}: {e}"))?;
 		Self::try_from_pem(pem.trim(), alg, kid, context)
 	}
@@ -337,6 +400,42 @@ impl fmt::Debug for ParsedEncodingKey {
 impl OAuthClientAuth {
 	pub fn new(client_id: String, method: OAuthClientAuthMethod) -> Self {
 		Self { client_id, method }
+	}
+
+	pub(crate) async fn try_from_raw_config(
+		raw: RawOAuthClientAuthConfig,
+		resources: &ResourceFetcher,
+	) -> Result<Self, String> {
+		let (client_id, raw_method) = raw.into_fields();
+		let method = match raw_method {
+			RawOAuthClientAuthMethod::ClientSecretBasic(client_secret) => {
+				OAuthClientAuthMethod::ClientSecretBasic {
+					client_secret: crate::serdes::load_secret_file_or_inline(resources, &client_secret)
+						.await
+						.map_err(|e| format!("failed to load oauth client_secret_basic client_secret: {e}"))?,
+				}
+			},
+			RawOAuthClientAuthMethod::ClientSecretPost(client_secret) => {
+				OAuthClientAuthMethod::ClientSecretPost {
+					client_secret: match client_secret {
+						Some(client_secret) => Some(
+							crate::serdes::load_secret_file_or_inline(resources, &client_secret)
+								.await
+								.map_err(|e| {
+									format!("failed to load oauth client_secret_post client_secret: {e}")
+								})?,
+						),
+						None => None,
+					},
+				}
+			},
+			RawOAuthClientAuthMethod::PrivateKeyJwt(private_key_jwt) => {
+				OAuthClientAuthMethod::PrivateKeyJwt(private_key_jwt.into_private_key_jwt(resources).await?)
+			},
+		};
+		let auth = Self { client_id, method };
+		auth.validate_load()?;
+		Ok(auth)
 	}
 
 	pub(super) fn validate_load(&self) -> Result<(), String> {

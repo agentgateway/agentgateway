@@ -2,11 +2,37 @@ use std::path::PathBuf;
 
 pub use agent_core::serdes::*;
 use openapiv3::OpenAPI;
+use secrecy::SecretString;
 use serde::de::DeserializeOwned;
 
 use crate::resource_manager::{ResourceFetcher, ResourceKind, ResourceRef};
 
 define_schema_aliases!();
+
+pub async fn load_file_or_inline(
+	resources: &ResourceFetcher,
+	input: &FileOrInline,
+) -> anyhow::Result<String> {
+	Ok(match input {
+		FileOrInline::Inline(s) => s.clone(),
+		FileOrInline::File { file } => {
+			let bytes = resources.fetch(ResourceRef::File(file.clone())).await?;
+			String::from_utf8(bytes.to_vec())?
+		},
+	})
+}
+
+pub async fn load_secret_file_or_inline(
+	resources: &ResourceFetcher,
+	input: &FileOrInline,
+) -> anyhow::Result<SecretString> {
+	Ok(SecretString::from(
+		load_file_or_inline(resources, input)
+			.await?
+			.trim()
+			.to_string(),
+	))
+}
 
 #[derive(Debug, Clone, serde::Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]

@@ -12,6 +12,7 @@ use serde::Deserialize;
 use serde_json::Value;
 use tracing::trace;
 
+use crate::resource_manager::ResourceFetcher;
 use crate::serdes::{FileOrInline, schema};
 use crate::types::agent::Target;
 use crate::{apply, const_string, ser_redact};
@@ -60,6 +61,62 @@ impl Default for GcpAuth {
 			r#type: Default::default(),
 			credential: Default::default(),
 		}
+	}
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(untagged)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub(crate) enum RawGcpAuth {
+	#[serde(rename_all = "camelCase")]
+	IdToken {
+		r#type: IdToken,
+		audience: Option<String>,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		#[cfg_attr(feature = "schema", schemars(with = "Option<FileOrInline>"))]
+		credential: Option<FileOrInline>,
+	},
+	AccessToken {
+		#[serde(default)]
+		r#type: Option<AccessToken>,
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		#[cfg_attr(feature = "schema", schemars(with = "Option<FileOrInline>"))]
+		credential: Option<FileOrInline>,
+	},
+}
+
+impl RawGcpAuth {
+	pub(crate) async fn into_auth(self, resources: &ResourceFetcher) -> Result<GcpAuth, String> {
+		Ok(match self {
+			RawGcpAuth::IdToken {
+				r#type,
+				audience,
+				credential,
+			} => GcpAuth::IdToken {
+				r#type,
+				audience,
+				credential: load_credential(resources, credential).await?,
+			},
+			RawGcpAuth::AccessToken { r#type, credential } => GcpAuth::AccessToken {
+				r#type,
+				credential: load_credential(resources, credential).await?,
+			},
+		})
+	}
+}
+
+async fn load_credential(
+	resources: &ResourceFetcher,
+	credential: Option<FileOrInline>,
+) -> Result<Option<GcpCredential>, String> {
+	match credential {
+		Some(credential) => {
+			let raw = crate::serdes::load_secret_file_or_inline(resources, &credential)
+				.await
+				.map_err(|e| format!("failed to load gcp credential: {e}"))?;
+			Ok(Some(GcpCredential::new(raw).map_err(|e| e.to_string())?))
+		},
+		None => Ok(None),
 	}
 }
 

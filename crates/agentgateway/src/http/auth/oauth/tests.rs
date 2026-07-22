@@ -699,6 +699,21 @@ fn private_key_jwt_rejects_bad_key_at_deserialize_time() {
 }
 
 #[test]
+fn client_auth_rejects_empty_client_id_at_deserialize_time() {
+	let err = serde_json::from_str::<OAuthTokenExchangeAuth>(
+		r#"{
+			"host": "localhost:8089",
+			"clientAuth": {
+				"clientId": "",
+				"clientSecret": "secret"
+			}
+		}"#,
+	)
+	.expect_err("empty client id must fail during config load");
+	assert!(err.to_string().contains("client_id"), "got: {err}");
+}
+
+#[test]
 fn client_auth_rejects_unknown_fields() {
 	let err = serde_json::from_str::<OAuthTokenExchangeAuth>(
 		r#"{

@@ -14,6 +14,7 @@ use crate::http::jwt::Claims;
 use crate::http::oauth::{TOKEN_TYPE_ACCESS, TOKEN_TYPE_ID, TOKEN_TYPE_ID_JAG, TOKEN_TYPE_JWT};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::resource_manager::ResourceFetcher;
 use crate::serdes::schema;
 use crate::types::agent::SimpleBackendReferenceWithPolicies;
 use crate::types::agent_xds::{
@@ -29,9 +30,10 @@ mod cross_app_access;
 mod transport;
 
 use cache::{InMemoryTokenCache, TokenCacheResult};
-use client_auth::sign_client_assertion;
 pub use client_auth::{OAuthClientAuth, OAuthClientAuthMethod, PrivateKeyJwt, SigningAlg};
+use client_auth::{RawOAuthClientAuthConfig, sign_client_assertion};
 pub use cross_app_access::CrossAppAccessAuth;
+pub(crate) use cross_app_access::RawCrossAppAccessAuthConfig;
 pub(super) use transport::FetchError;
 
 #[apply(schema!)]
@@ -101,6 +103,95 @@ pub struct OAuthTokenExchangeAuth {
 	// Optional RFC 7523 jwt-bearer hop used internally by ID-JAG.
 	#[serde(skip)]
 	chained_exchange: Option<ChainedExchange>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct RawOAuthTokenExchangeAuth {
+	/// Backend serving the RFC 8693 token endpoint and policies used when connecting to it.
+	#[serde(flatten)]
+	target: SimpleBackendReferenceWithPolicies,
+	/// Token endpoint path on the backend; defaults to "/".
+	#[serde(default, skip_serializing_if = "String::is_empty")]
+	path: String,
+	/// Selects which RFC the request follows; defaults to token exchange (RFC 8693).
+	#[serde(default)]
+	grant_type: OAuthGrantType,
+	/// Where the subject token is read from, and its token type. Defaults to the
+	/// Authorization Bearer header with token type access_token.
+	#[serde(default)]
+	subject_token: TokenSpec,
+	/// RFC 8693 delegation actor token. Token-exchange grant only.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	actor_token: Option<ActorTokenSpec>,
+	/// `audience` parameters naming the target services at the authorization server.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	audiences: Vec<String>,
+	/// `scope` values for the requested token, sent space-delimited.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	scopes: Vec<String>,
+	/// `resource` parameters with the target service URIs.
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	resources: Vec<String>,
+	/// `requested_token_type` parameter. Under token exchange, unset defaults to
+	/// access_token because this policy forwards bearer access tokens.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	requested_token_type: Option<OAuthTokenType>,
+	/// Client authentication used when calling the token endpoint.
+	/// When unset, no client authentication fields are sent.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	client_auth: Option<RawOAuthClientAuthConfig>,
+	/// Extra form parameters appended to the token request.
+	/// Values are CEL expressions evaluated against the incoming request.
+	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+	additional_params: BTreeMap<String, Arc<cel::Expression>>,
+	/// Where to place the exchanged token in the backend request.
+	#[serde(default)]
+	authorization_location: AuthorizationLocation,
+	/// Response cache configuration.
+	#[serde(
+		default = "default_token_cache",
+		deserialize_with = "deserialize_token_cache",
+		skip_serializing
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<TokenCacheConfig>"))]
+	cache: Option<InMemoryTokenCache>,
+}
+
+impl RawOAuthTokenExchangeAuth {
+	pub(crate) async fn into_auth(
+		self,
+		resources: &ResourceFetcher,
+	) -> Result<OAuthTokenExchangeAuth, String> {
+		let client_auth = match self.client_auth {
+			Some(client_auth) => Some(
+				OAuthClientAuth::try_from_raw_config(client_auth, resources)
+					.await
+					.map_err(|e| format!("oauth token exchange client_auth: {e}"))?,
+			),
+			None => None,
+		};
+		let auth = OAuthTokenExchangeAuth {
+			target: self.target,
+			path: self.path,
+			grant_type: self.grant_type,
+			subject_token: self.subject_token,
+			actor_token: self.actor_token,
+			audiences: self.audiences,
+			scopes: self.scopes,
+			resources: self.resources,
+			requested_token_type: self.requested_token_type,
+			client_auth,
+			additional_params: self.additional_params,
+			chained_exchange: None,
+			authorization_location: self.authorization_location,
+			cache: self.cache,
+		};
+		auth.validate_load()?;
+		Ok(auth)
+	}
 }
 
 #[serde_with::serde_as]

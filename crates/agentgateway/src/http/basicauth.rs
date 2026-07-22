@@ -199,9 +199,13 @@ pub struct LocalBasicAuth {
 }
 
 impl LocalBasicAuth {
-	pub fn try_into(self) -> anyhow::Result<BasicAuthentication> {
+	pub async fn try_into(
+		self,
+		resources: &crate::resource_manager::ResourceFetcher,
+	) -> anyhow::Result<BasicAuthentication> {
+		let htpasswd = crate::serdes::load_file_or_inline(resources, &self.htpasswd).await?;
 		Ok(BasicAuthentication::new(
-			&self.htpasswd.load()?,
+			&htpasswd,
 			self.realm,
 			self.mode,
 			self.authorization_location,

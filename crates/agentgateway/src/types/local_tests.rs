@@ -1,10 +1,11 @@
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::sync::Arc;
 
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 
+use crate::http::auth::{AuthorizationLocation, BackendAuth};
 use crate::llm::{AIProvider, NamedAIProvider};
 use crate::serdes::FileInlineOrRemote;
 use crate::types::agent::{
@@ -15,6 +16,12 @@ use crate::types::local::NormalizedLocalConfig;
 use crate::*;
 
 const TEST_OIDC_JWKS: &str = r#"{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}"#;
+const TEST_EC_PRIVATE_KEY_PEM: &str = "-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgltxBTVDLg7C6vE1T
+7OtwJIZ/dpm8ygE2MBTjPCY3hgahRANCAARYzu50EeBrT0rELmTGroaGtn0zdjxL
+1lOGr9fGw5wOGcXO0+Gn5F5sIxGyTM0FwnUHFNz2SoixZR5dtxhNc+Lo
+-----END PRIVATE KEY-----
+";
 
 struct ClearTracingEnv {
 	_guard: tokio::sync::MutexGuard<'static, ()>,
@@ -165,41 +172,194 @@ async fn normalize_test_yaml(yaml: &str) -> anyhow::Result<NormalizedLocalConfig
 	.await
 }
 
-#[test]
-fn collects_nested_file_dependencies() {
-	let cfg = serde_json::json!({
-		"backends": [{
-			"policies": {
-				"backendAuth": {
-					"key": {
-						"file": "/tmp/backend-auth-key"
-					}
-				}
-			}
-		}],
-		"policies": [{
-			"jwt": {
-				"jwks": {
-					"file": "./jwks.json"
-				}
-			}
-		}],
-		"metadata": {
-			"file": "not-a-file-source",
-			"name": "ignored"
-		},
-		"inline": "not-a-file"
-	});
-	let mut files = std::collections::HashSet::new();
+#[tokio::test]
+async fn local_backend_auth_key_loads_file_dependency() {
+	let mut key_file = tempfile::NamedTempFile::new().unwrap();
+	key_file.write_all(b"secret-token\n").unwrap();
 
-	super::collect_local_file_dependencies(&cfg, &mut files);
+	let normalized = normalize_test_yaml(&format!(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            key:
+              file: "{}"
+"#,
+		key_file.path().display()
+	))
+	.await
+	.expect("backend auth file should normalize");
 
-	assert_eq!(
-		files,
-		std::collections::HashSet::from([
-			PathBuf::from("/tmp/backend-auth-key"),
-			PathBuf::from("./jwks.json")
-		])
+	let route = &normalized.listener_routes[0].1[0];
+	let [BackendTrafficPolicy::BackendAuth(BackendAuth::Key { value, .. })] =
+		route.backends[0].inline_policies.as_slice()
+	else {
+		panic!(
+			"expected one backend auth policy, got {:?}",
+			route.backends[0].inline_policies
+		);
+	};
+	assert_eq!(value.expose_secret(), "secret-token");
+}
+
+#[tokio::test]
+async fn local_oauth_private_key_jwt_loads_signing_key_file() {
+	let mut key_file = tempfile::NamedTempFile::new().unwrap();
+	key_file
+		.write_all(TEST_EC_PRIVATE_KEY_PEM.as_bytes())
+		.unwrap();
+
+	let normalized = normalize_test_yaml(&format!(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            oauthTokenExchange:
+              host: 127.0.0.1:9000
+              clientAuth:
+                method: privateKeyJwt
+                clientId: gateway-client
+                signingKey:
+                  file: "{}"
+                alg: ES256
+                assertionAudience: https://sts.example.com/oauth/token
+"#,
+		key_file.path().display()
+	))
+	.await
+	.expect("oauth private_key_jwt signing key file should normalize");
+
+	let route = &normalized.listener_routes[0].1[0];
+	assert!(matches!(
+		route.backends[0].inline_policies.as_slice(),
+		[BackendTrafficPolicy::BackendAuth(
+			BackendAuth::OAuthTokenExchange(_)
+		)]
+	));
+}
+
+#[tokio::test]
+async fn local_oauth_token_exchange_reports_unknown_fields() {
+	let err = normalize_test_yaml(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            oauthTokenExchange:
+              host: 127.0.0.1:9000
+              scopse:
+              - typo
+"#,
+	)
+	.await
+	.expect_err("unknown oauth token exchange field should fail");
+
+	assert!(err.to_string().contains("scopse"), "got: {err}");
+}
+
+#[tokio::test]
+async fn local_backend_auth_key_file_form_honors_location() {
+	let mut key_file = tempfile::NamedTempFile::new().unwrap();
+	key_file.write_all(b"secret-token\n").unwrap();
+
+	let normalized = normalize_test_yaml(&format!(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            key:
+              file: "{}"
+              location:
+                header:
+                  name: x-api-key
+"#,
+		key_file.path().display()
+	))
+	.await
+	.expect("key file form with location should normalize");
+
+	let route = &normalized.listener_routes[0].1[0];
+	let [
+		BackendTrafficPolicy::BackendAuth(BackendAuth::Key {
+			value,
+			location: Some(AuthorizationLocation::Header { name, .. }),
+		}),
+	] = route.backends[0].inline_policies.as_slice()
+	else {
+		panic!(
+			"expected one backend auth key policy with header location, got {:?}",
+			route.backends[0].inline_policies
+		);
+	};
+	assert_eq!(value.expose_secret(), "secret-token");
+	assert_eq!(name.as_str(), "x-api-key");
+}
+
+#[tokio::test]
+async fn local_backend_auth_key_file_form_rejects_unknown_sibling() {
+	let err = normalize_test_yaml(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth:
+            key:
+              file: /tmp/backend-auth-key
+              locaton:
+                header:
+                  name: x-api-key
+"#,
+	)
+	.await
+	.expect_err("unknown key file-form sibling should fail instead of being ignored");
+
+	assert!(err.to_string().contains("locaton"), "got: {err}");
+}
+
+#[tokio::test]
+async fn local_backend_auth_rejects_empty_object() {
+	let err = normalize_test_yaml(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8080
+        policies:
+          backendAuth: {}
+"#,
+	)
+	.await
+	.expect_err("empty backendAuth should fail with a specific error");
+
+	assert!(
+		err.to_string().contains("backendAuth must not be empty"),
+		"got: {err}"
 	);
 }
 

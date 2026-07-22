@@ -81,6 +81,7 @@ async fn track_local_file_dependencies(
 	resources: &crate::resource_manager::ResourceFetcher,
 	s: &str,
 ) -> anyhow::Result<()> {
+	// Keep a whole-config watch backstop for file forms that still deserialize synchronously
 	let cfg: serde_json::Value = serdes::yamlviajson::from_str(s)?;
 	let mut files = HashSet::new();
 	collect_local_file_dependencies(&cfg, &mut files);
@@ -484,7 +485,7 @@ pub struct LocalLLMProviderDefaults {
 	/// Authentication configuration for connecting to the LLM provider.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	auth: Option<BackendAuth>,
+	auth: Option<LocalBackendAuth>,
 	/// Outlier detection and health checking for this provider backend.
 	#[serde(default)]
 	health: Option<health::LocalHealthPolicy>,
@@ -824,7 +825,7 @@ pub struct LocalLLMModels {
 	/// auth configures authentication when connecting to the LLM provider.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	auth: Option<BackendAuth>,
+	auth: Option<LocalBackendAuth>,
 	/// health configures outlier detection for this model backend.
 	#[serde(default)]
 	health: Option<health::LocalHealthPolicy>,
@@ -900,13 +901,17 @@ pub enum LocalModelAIProvider {
 
 #[apply(schema_de!)]
 pub struct SecretFromFile(
-	#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
-	#[serde(
-		serialize_with = "ser_redact",
-		deserialize_with = "deser_key_from_file"
-	)]
-	SecretString,
+	#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))] FileOrInline,
 );
+
+impl SecretFromFile {
+	async fn load(
+		&self,
+		resources: &crate::resource_manager::ResourceFetcher,
+	) -> anyhow::Result<SecretString> {
+		crate::serdes::load_secret_file_or_inline(resources, &self.0).await
+	}
+}
 
 #[apply(schema_de!)]
 #[derive(Default)]
@@ -2234,43 +2239,223 @@ where
 		.map_err(serde::de::Error::custom)
 }
 
-pub fn de_backend_auth<'de, D>(deserializer: D) -> Result<Option<BackendAuth>, D::Error>
+fn de_backend_auth<'de, D>(deserializer: D) -> Result<Option<LocalBackendAuth>, D::Error>
 where
 	D: Deserializer<'de>,
 {
-	Option::<BackendAuthCompat>::deserialize(deserializer)?
-		.map(|auth| match auth {
-			BackendAuthCompat::Full(BackendAuth::OAuthTokenExchange(auth)) => {
-				// OAuth has a few cross-field checks serde won't catch on its own.
-				// Keep them here so untagged compat parsing still returns the real error.
-				auth.validate_load().map_err(serde::de::Error::custom)?;
-				Ok(BackendAuth::OAuthTokenExchange(auth))
-			},
-			BackendAuthCompat::Full(BackendAuth::CrossAppAccess(auth)) => {
-				// The derived exchange is built on deserialize; validate here so untagged
-				// compat parsing still returns the real cross-field error.
-				auth.validate_load().map_err(serde::de::Error::custom)?;
-				Ok(BackendAuth::CrossAppAccess(auth))
-			},
-			BackendAuthCompat::Full(auth) => Ok(auth),
-			BackendAuthCompat::PlainKey { key } => Ok(BackendAuth::Key {
-				value: key,
-				location: None,
-			}),
-		})
-		.transpose()
+	Ok(Option::<BackendAuthCompat>::deserialize(deserializer)?.map(Into::into))
 }
 
-#[derive(Debug, Clone, serde::Deserialize)]
-#[serde(untagged)]
+impl<'de> serde::Deserialize<'de> for BackendAuthCompat {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		let value = serde_json::Value::deserialize(deserializer)?;
+		parse_backend_auth_compat(value).map_err(serde::de::Error::custom)
+	}
+}
+
+fn parse_backend_auth_compat(value: serde_json::Value) -> Result<BackendAuthCompat, String> {
+	if let serde_json::Value::Object(map) = &value
+		&& map.is_empty()
+	{
+		return Err("backendAuth must not be empty".into());
+	}
+	if let serde_json::Value::Object(map) = &value
+		&& map.len() == 1
+	{
+		let Some((tag, inner)) = map.iter().next() else {
+			return Err("backendAuth must not be empty".into());
+		};
+		return match tag.as_str() {
+			"key" => parse_backend_key_compat(inner.clone()),
+			"oauthTokenExchange" => Ok(BackendAuthCompat::OAuthTokenExchange {
+				oauth_token_exchange: Box::new(parse_value(
+					inner.clone(),
+					"backendAuth.oauthTokenExchange",
+				)?),
+			}),
+			"crossAppAccess" => Ok(BackendAuthCompat::CrossAppAccess {
+				cross_app_access: Box::new(parse_value(inner.clone(), "backendAuth.crossAppAccess")?),
+			}),
+			"gcp" => Ok(BackendAuthCompat::Gcp {
+				gcp: parse_value(inner.clone(), "backendAuth.gcp")?,
+			}),
+			_ => Ok(BackendAuthCompat::Full(parse_value(value, "backendAuth")?)),
+		};
+	}
+
+	Ok(BackendAuthCompat::Full(parse_value(value, "backendAuth")?))
+}
+
+fn parse_backend_key_compat(value: serde_json::Value) -> Result<BackendAuthCompat, String> {
+	if let serde_json::Value::Object(map) = &value {
+		if let Some(file) = map.get("file") {
+			if let Some(field) = map
+				.keys()
+				.find(|field| field.as_str() != "file" && field.as_str() != "location")
+			{
+				return Err(format!(
+					"backendAuth.key file form has unknown field {field:?}; supported fields are file and location"
+				));
+			}
+			let value = parse_file_value(file, "backendAuth.key.file")?;
+			let location = map
+				.get("location")
+				.cloned()
+				.map(|location| parse_value(location, "backendAuth.key.location"))
+				.transpose()?;
+			return Ok(BackendAuthCompat::Key {
+				key: LocalBackendKey { value, location },
+			});
+		}
+		if map.contains_key("value") || map.contains_key("location") {
+			return Ok(BackendAuthCompat::Key {
+				key: parse_value(value, "backendAuth.key")?,
+			});
+		}
+	}
+
+	Ok(BackendAuthCompat::PlainKey {
+		key: parse_file_or_inline_strict(value, "backendAuth.key")?,
+	})
+}
+
+fn parse_file_value(value: &serde_json::Value, context: &str) -> Result<FileOrInline, String> {
+	match value {
+		serde_json::Value::String(file) => Ok(FileOrInline::File {
+			file: PathBuf::from(file),
+		}),
+		_ => Err(format!("{context} must be a string")),
+	}
+}
+
+fn parse_file_or_inline_strict(
+	value: serde_json::Value,
+	context: &str,
+) -> Result<FileOrInline, String> {
+	match value {
+		serde_json::Value::String(s) => Ok(FileOrInline::Inline(s)),
+		serde_json::Value::Object(mut map) if map.len() == 1 => match map.remove("file") {
+			Some(serde_json::Value::String(file)) => Ok(FileOrInline::File {
+				file: PathBuf::from(file),
+			}),
+			_ => Err(format!("{context} must be a string or {{file: ...}}")),
+		},
+		_ => Err(format!("{context} must be a string or {{file: ...}}")),
+	}
+}
+
+fn parse_value<T: serde::de::DeserializeOwned>(
+	value: serde_json::Value,
+	context: &str,
+) -> Result<T, String> {
+	serde_json::from_value(value).map_err(|e| format!("{context}: {e}"))
+}
+
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[cfg_attr(feature = "schema", serde(untagged))]
 enum BackendAuthCompat {
 	PlainKey {
 		#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
-		#[serde(deserialize_with = "deser_key_from_file")]
-		key: SecretString,
+		key: FileOrInline,
+	},
+	Key {
+		key: LocalBackendKey,
+	},
+	OAuthTokenExchange {
+		#[cfg_attr(feature = "schema", serde(rename = "oauthTokenExchange"))]
+		oauth_token_exchange: Box<crate::http::auth::oauth::RawOAuthTokenExchangeAuth>,
+	},
+	CrossAppAccess {
+		#[cfg_attr(feature = "schema", serde(rename = "crossAppAccess"))]
+		cross_app_access: Box<crate::http::auth::oauth::RawCrossAppAccessAuthConfig>,
+	},
+	Gcp {
+		#[cfg_attr(feature = "schema", serde(rename = "gcp"))]
+		gcp: crate::http::auth::gcp::RawGcpAuth,
 	},
 	Full(BackendAuth),
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+struct LocalBackendKey {
+	#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
+	value: FileOrInline,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	location: Option<crate::http::auth::AuthorizationLocation>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum LocalBackendAuth {
+	Ready(BackendAuth),
+	Key {
+		value: FileOrInline,
+		location: Option<crate::http::auth::AuthorizationLocation>,
+	},
+	OAuthTokenExchange(Box<crate::http::auth::oauth::RawOAuthTokenExchangeAuth>),
+	CrossAppAccess(Box<crate::http::auth::oauth::RawCrossAppAccessAuthConfig>),
+	Gcp(crate::http::auth::gcp::RawGcpAuth),
+}
+
+impl From<BackendAuthCompat> for LocalBackendAuth {
+	fn from(auth: BackendAuthCompat) -> Self {
+		match auth {
+			BackendAuthCompat::Full(auth) => LocalBackendAuth::Ready(auth),
+			BackendAuthCompat::PlainKey { key } => LocalBackendAuth::Key {
+				value: key,
+				location: None,
+			},
+			BackendAuthCompat::Key { key } => LocalBackendAuth::Key {
+				value: key.value,
+				location: key.location,
+			},
+			BackendAuthCompat::OAuthTokenExchange {
+				oauth_token_exchange,
+			} => LocalBackendAuth::OAuthTokenExchange(oauth_token_exchange),
+			BackendAuthCompat::CrossAppAccess { cross_app_access } => {
+				LocalBackendAuth::CrossAppAccess(cross_app_access)
+			},
+			BackendAuthCompat::Gcp { gcp } => LocalBackendAuth::Gcp(gcp),
+		}
+	}
+}
+
+impl LocalBackendAuth {
+	async fn into_backend_auth(
+		self,
+		resources: &crate::resource_manager::ResourceFetcher,
+	) -> anyhow::Result<BackendAuth> {
+		Ok(match self {
+			LocalBackendAuth::Ready(auth) => auth,
+			LocalBackendAuth::Key { value, location } => BackendAuth::Key {
+				value: crate::serdes::load_secret_file_or_inline(resources, &value).await?,
+				location,
+			},
+			LocalBackendAuth::OAuthTokenExchange(auth) => BackendAuth::OAuthTokenExchange(Box::new(
+				auth
+					.into_auth(resources)
+					.await
+					.map_err(anyhow::Error::msg)?,
+			)),
+			LocalBackendAuth::CrossAppAccess(auth) => BackendAuth::CrossAppAccess(Box::new(
+				auth
+					.into_auth(resources)
+					.await
+					.map_err(anyhow::Error::msg)?,
+			)),
+			LocalBackendAuth::Gcp(auth) => BackendAuth::Gcp(
+				auth
+					.into_auth(resources)
+					.await
+					.map_err(anyhow::Error::msg)?,
+			),
+		})
+	}
 }
 
 #[apply(schema_de!)]
@@ -2445,7 +2630,7 @@ pub struct SimpleLocalBackendPolicies {
 	/// Authentication credentials sent to this backend.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	pub backend_auth: Option<BackendAuth>,
+	backend_auth: Option<LocalBackendAuth>,
 
 	/// HTTP protocol settings for this backend.
 	#[serde(default)]
@@ -2601,7 +2786,9 @@ impl LocalBackendPolicies {
 			))
 		}
 		if let Some(p) = backend_auth {
-			pols.push(BackendTrafficPolicy::BackendAuth(p))
+			pols.push(BackendTrafficPolicy::BackendAuth(
+				p.into_backend_auth(resources).await?,
+			))
 		}
 		if let Some(p) = ext_authz {
 			pols.push(BackendTrafficPolicy::ExtAuthz(Arc::new(
@@ -2747,7 +2934,7 @@ pub struct FilterOrPolicy {
 	/// Authentication credentials sent to the backend.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	backend_auth: Option<BackendAuth>,
+	backend_auth: Option<LocalBackendAuth>,
 	/// Local rate limits for incoming requests.
 	#[serde(default)]
 	local_rate_limit: Option<LocalRateLimitPolicy>,
@@ -4402,7 +4589,7 @@ async fn convert_llm_config(
 		let mut pols = vec![];
 		if let Some(key) = p.api_key.as_ref() {
 			let backend_auth = BackendAuth::Key {
-				value: key.0.clone(),
+				value: key.load(resources).await?,
 				location: None,
 			};
 			pols.push(BackendTrafficPolicy::BackendAuth(backend_auth));
@@ -4435,7 +4622,9 @@ async fn convert_llm_config(
 			));
 		}
 		if let Some(p) = model_config.auth.clone() {
-			pols.push(BackendTrafficPolicy::BackendAuth(p));
+			pols.push(BackendTrafficPolicy::BackendAuth(
+				p.into_backend_auth(resources).await?,
+			));
 		}
 		if let Some(p) = model_config.backend_tunnel.clone() {
 			pols.push(BackendTrafficPolicy::Tunnel(p));
@@ -5257,7 +5446,9 @@ pub(crate) async fn split_policies_for_target(
 		backend_policies.push(BackendTrafficPolicy::Tunnel(p))
 	}
 	if let Some(p) = backend_auth {
-		backend_policies.push(BackendTrafficPolicy::BackendAuth(p))
+		backend_policies.push(BackendTrafficPolicy::BackendAuth(
+			p.into_backend_auth(resources).await?,
+		))
 	}
 
 	// Route policies (AI is dual-role when targeting a backend)
@@ -5300,7 +5491,7 @@ pub(crate) async fn split_policies_for_target(
 	};
 	if let Some(p) = basic_auth {
 		route_policies.push(TrafficPolicy::BasicAuth(RequestPolicy::single(
-			p.try_into()?,
+			p.try_into(resources).await?,
 		)));
 	}
 	if let Some(p) = api_key {

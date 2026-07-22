@@ -398,7 +398,7 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 			name: "id-jag",
 			auth: agentgateway.OAuthTokenExchange{
 				BackendRef:         oauthTokenEndpointRef(),
-				RequestedTokenType: ptr.Of(agentgateway.OAuthTokenTypeIDJAG),
+				RequestedTokenType: new(agentgateway.OAuthTokenTypeIDJAG),
 			},
 			want: "IdJag is only supported by crossAppAccess",
 		},
@@ -663,7 +663,7 @@ func TestOAuthTokenExchangeCustomRequestedTokenTypeTranslation(t *testing.T) {
 	policy, err := buildOAuthTokenExchangePolicy(ctx, &agentgateway.OAuthTokenExchange{
 		BackendRef:         oauthTokenEndpointRef(),
 		Path:               &path,
-		RequestedTokenType: ptr.Of(customTokenType),
+		RequestedTokenType: new(customTokenType),
 	}, "default")
 	if err != nil {
 		t.Fatalf("buildOAuthTokenExchangePolicy() error = %v, want nil", err)

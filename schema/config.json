@@ -1771,8 +1771,7 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "localRateLimit": {
           "description": "Local rate limits for incoming requests.",
@@ -2636,8 +2635,7 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "http": {
           "description": "HTTP protocol settings for this backend.",
@@ -2860,6 +2858,50 @@
           ]
         },
         {
+          "type": "object",
+          "properties": {
+            "key": {
+              "$ref": "#/$defs/LocalBackendKey"
+            }
+          },
+          "required": [
+            "key"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "oauthTokenExchange": {
+              "$ref": "#/$defs/RawOAuthTokenExchangeAuth"
+            }
+          },
+          "required": [
+            "oauthTokenExchange"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "crossAppAccess": {
+              "$ref": "#/$defs/RawCrossAppAccessAuthConfig"
+            }
+          },
+          "required": [
+            "crossAppAccess"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "gcp": {
+              "$ref": "#/$defs/RawGcpAuth"
+            }
+          },
+          "required": [
+            "gcp"
+          ]
+        },
+        {
           "$ref": "#/$defs/BackendAuth"
         }
       ]
@@ -2882,6 +2924,709 @@
           "type": "string"
         }
       ]
+    },
+    "LocalBackendKey": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "$ref": "#/$defs/FileOrInline"
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthorizationLocation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "value"
+      ]
+    },
+    "AuthorizationLocation": {
+      "oneOf": [
+        {
+          "description": "Read the credential from an HTTP header.",
+          "type": "object",
+          "properties": {
+            "header": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Header name containing the credential.",
+                  "type": "string"
+                },
+                "prefix": {
+                  "description": "Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "header"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Read the credential from a URL query parameter.",
+          "type": "object",
+          "properties": {
+            "queryParameter": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Query parameter name containing the credential.",
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "queryParameter"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Read the credential from a request cookie.",
+          "type": "object",
+          "properties": {
+            "cookie": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Cookie name containing the credential.",
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name"
+              ]
+            }
+          },
+          "required": [
+            "cookie"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Read the credential from a CEL expression evaluated against the incoming request.\nCEL expression that returns the credential string. This location can extract credentials but cannot insert them.",
+          "type": "object",
+          "properties": {
+            "expression": {
+              "$ref": "#/$defs/Expression"
+            }
+          },
+          "required": [
+            "expression"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "RawOAuthTokenExchangeAuth": {
+      "type": "object",
+      "properties": {
+        "policies": {
+          "description": "Backend policies used when connecting to the service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "description": "Token endpoint path on the backend; defaults to \"/\".",
+          "type": "string"
+        },
+        "grantType": {
+          "description": "Selects which RFC the request follows; defaults to token exchange (RFC 8693).",
+          "$ref": "#/$defs/OAuthGrantType",
+          "default": "tokenExchange"
+        },
+        "subjectToken": {
+          "description": "Where the subject token is read from, and its token type. Defaults to the\nAuthorization Bearer header with token type access_token.",
+          "$ref": "#/$defs/TokenSpec",
+          "default": {
+            "source": {
+              "header": {
+                "name": "authorization",
+                "prefix": "Bearer "
+              }
+            },
+            "tokenType": "urn:ietf:params:oauth:token-type:access_token"
+          }
+        },
+        "actorToken": {
+          "description": "RFC 8693 delegation actor token. Token-exchange grant only.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActorTokenSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "audiences": {
+          "description": "`audience` parameters naming the target services at the authorization server.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scopes": {
+          "description": "`scope` values for the requested token, sent space-delimited.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "resources": {
+          "description": "`resource` parameters with the target service URIs.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requestedTokenType": {
+          "description": "`requested_token_type` parameter. Under token exchange, unset defaults to\naccess_token because this policy forwards bearer access tokens.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clientAuth": {
+          "description": "Client authentication used when calling the token endpoint.\nWhen unset, no client authentication fields are sent.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawOAuthClientAuthConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "additionalParams": {
+          "description": "Extra form parameters appended to the token request.\nValues are CEL expressions evaluated against the incoming request.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "authorizationLocation": {
+          "description": "Where to place the exchanged token in the backend request.",
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Bearer "
+            }
+          }
+        },
+        "cache": {
+          "description": "Response cache configuration.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenCacheConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "writeOnly": true
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "description": "Port on the target Service to route to.",
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ]
+    },
+    "OAuthGrantType": {
+      "oneOf": [
+        {
+          "description": "RFC 8693 token exchange; the subject token is sent as `subject_token`.",
+          "type": "string",
+          "const": "tokenExchange"
+        },
+        {
+          "description": "RFC 7523; the subject token is sent as the `assertion`.",
+          "type": "string",
+          "const": "jwtBearer"
+        }
+      ]
+    },
+    "TokenSpec": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Where the token is read from in the incoming request. The CEL `expression`\nsource is permitted (extraction only).",
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Bearer "
+            }
+          }
+        },
+        "tokenType": {
+          "description": "RFC 8693 token type URN; when omitted defaults to access_token",
+          "type": "string",
+          "default": "urn:ietf:params:oauth:token-type:access_token"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ActorTokenSpec": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Where the actor token is read from in the incoming request. The CEL\n`expression` source is permitted (extraction only). Unlike subject tokens,\nactor tokens have no default source.",
+          "$ref": "#/$defs/AuthorizationLocation"
+        },
+        "tokenType": {
+          "description": "RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent",
+          "type": "string",
+          "default": "urn:ietf:params:oauth:token-type:access_token"
+        },
+        "enforceMayAct": {
+          "description": "Enforce that the subject's `may_act` claim authorizes the actor before exchanging.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source"
+      ]
+    },
+    "RawOAuthClientAuthConfig": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RawOAuthClientAuth"
+        },
+        {
+          "$ref": "#/$defs/RawDefaultClientSecretBasicAuth"
+        }
+      ]
+    },
+    "RawOAuthClientAuth": {
+      "oneOf": [
+        {
+          "description": "`client_id`/`client_secret` sent in the HTTP Basic Authorization header (RFC 6749 §2.3.1).",
+          "type": "object",
+          "properties": {
+            "clientId": {
+              "description": "`client_id` parameter identifying the gateway at the authorization server.",
+              "type": "string"
+            },
+            "clientSecret": {
+              "$ref": "#/$defs/FileOrInline"
+            },
+            "method": {
+              "type": "string",
+              "const": "clientSecretBasic"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "clientId",
+            "clientSecret"
+          ]
+        },
+        {
+          "description": "`client_id`/`client_secret` sent in the request form body.",
+          "type": "object",
+          "properties": {
+            "clientId": {
+              "description": "`client_id` parameter identifying the gateway at the authorization server.",
+              "type": "string"
+            },
+            "clientSecret": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FileOrInline"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "method": {
+              "type": "string",
+              "const": "clientSecretPost"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "clientId"
+          ]
+        },
+        {
+          "description": "`privateKeyJwt` client assertion (RFC 7523).",
+          "type": "object",
+          "properties": {
+            "clientId": {
+              "description": "`client_id` parameter identifying the gateway at the authorization server.",
+              "type": "string"
+            },
+            "signingKey": {
+              "description": "PEM-encoded private signing key (RSA or EC, matching `alg`).",
+              "$ref": "#/$defs/FileOrInline"
+            },
+            "alg": {
+              "$ref": "#/$defs/SigningAlg",
+              "default": "RS256"
+            },
+            "kid": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "assertionAudience": {
+              "type": "string"
+            },
+            "method": {
+              "type": "string",
+              "const": "privateKeyJwt"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "clientId",
+            "signingKey",
+            "assertionAudience"
+          ]
+        }
+      ]
+    },
+    "SigningAlg": {
+      "type": "string",
+      "enum": [
+        "RS256",
+        "RS384",
+        "RS512",
+        "ES256",
+        "ES384"
+      ]
+    },
+    "RawDefaultClientSecretBasicAuth": {
+      "type": "object",
+      "properties": {
+        "clientId": {
+          "description": "`client_id` parameter identifying the gateway at the authorization server.",
+          "type": "string"
+        },
+        "clientSecret": {
+          "description": "OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.",
+          "$ref": "#/$defs/FileOrInline"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "clientId",
+        "clientSecret"
+      ]
+    },
+    "TokenCacheConfig": {
+      "type": "object",
+      "properties": {
+        "maxEntries": {
+          "description": "Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
+        },
+        "defaultTtl": {
+          "description": "TTL used when the token endpoint omits `expires_in`. Defaults to 300s.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "RawCrossAppAccessAuthConfig": {
+      "type": "object",
+      "properties": {
+        "identityProvider": {
+          "description": "The user's IdP authorization server, used for the RFC 8693 token exchange.",
+          "$ref": "#/$defs/RawCrossAppAccessEndpoint"
+        },
+        "resourceAuthorizationServer": {
+          "description": "The resource authorization server, which exchanges the ID-JAG for an access token.",
+          "$ref": "#/$defs/RawCrossAppAccessEndpoint"
+        },
+        "audience": {
+          "description": "Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.",
+          "type": "string"
+        },
+        "resources": {
+          "description": "`resource` parameters naming the protected resource APIs.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scopes": {
+          "description": "`scope` values for the requested token, sent space-delimited.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cache": {
+          "description": "Response cache configuration.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenCacheConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "writeOnly": true
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "identityProvider",
+        "resourceAuthorizationServer",
+        "audience"
+      ]
+    },
+    "RawCrossAppAccessEndpoint": {
+      "type": "object",
+      "properties": {
+        "policies": {
+          "description": "Backend policies used when connecting to the service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "description": "Token endpoint path on the backend; defaults to \"/\".",
+          "type": "string"
+        },
+        "clientAuth": {
+          "description": "Client authentication used when calling the token endpoint.",
+          "$ref": "#/$defs/RawOAuthClientAuthConfig"
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "description": "Port on the target Service to route to.",
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ],
+      "required": [
+        "clientAuth"
+      ]
+    },
+    "RawGcpAuth": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "$ref": "#/$defs/IdToken"
+            },
+            "audience": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "credential": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FileOrInline"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/AccessToken"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null
+            },
+            "credential": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FileOrInline"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "IdToken": {
+      "type": "string",
+      "format": "const",
+      "const": "idToken"
+    },
+    "AccessToken": {
+      "type": "string",
+      "format": "const",
+      "const": "accessToken"
     },
     "BackendAuth": {
       "oneOf": [
@@ -3018,99 +3763,6 @@
         }
       ]
     },
-    "AuthorizationLocation": {
-      "oneOf": [
-        {
-          "description": "Read the credential from an HTTP header.",
-          "type": "object",
-          "properties": {
-            "header": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "description": "Header name containing the credential.",
-                  "type": "string"
-                },
-                "prefix": {
-                  "description": "Prefix to remove from the header value before validation, such as `Bearer ` or `Basic `.",
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "name"
-              ]
-            }
-          },
-          "required": [
-            "header"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "description": "Read the credential from a URL query parameter.",
-          "type": "object",
-          "properties": {
-            "queryParameter": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "description": "Query parameter name containing the credential.",
-                  "type": "string"
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "name"
-              ]
-            }
-          },
-          "required": [
-            "queryParameter"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "description": "Read the credential from a request cookie.",
-          "type": "object",
-          "properties": {
-            "cookie": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "description": "Cookie name containing the credential.",
-                  "type": "string"
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "name"
-              ]
-            }
-          },
-          "required": [
-            "cookie"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "description": "Read the credential from a CEL expression evaluated against the incoming request.\nCEL expression that returns the credential string. This location can extract credentials but cannot insert them.",
-          "type": "object",
-          "properties": {
-            "expression": {
-              "$ref": "#/$defs/Expression"
-            }
-          },
-          "required": [
-            "expression"
-          ],
-          "additionalProperties": false
-        }
-      ]
-    },
     "GcpAuth": {
       "anyOf": [
         {
@@ -3174,16 +3826,6 @@
           "additionalProperties": false
         }
       ]
-    },
-    "IdToken": {
-      "type": "string",
-      "format": "const",
-      "const": "idToken"
-    },
-    "AccessToken": {
-      "type": "string",
-      "format": "const",
-      "const": "accessToken"
     },
     "AwsAuth": {
       "anyOf": [
@@ -3669,64 +4311,6 @@
         }
       ]
     },
-    "OAuthGrantType": {
-      "oneOf": [
-        {
-          "description": "RFC 8693 token exchange; the subject token is sent as `subject_token`.",
-          "type": "string",
-          "const": "tokenExchange"
-        },
-        {
-          "description": "RFC 7523; the subject token is sent as the `assertion`.",
-          "type": "string",
-          "const": "jwtBearer"
-        }
-      ]
-    },
-    "TokenSpec": {
-      "type": "object",
-      "properties": {
-        "source": {
-          "description": "Where the token is read from in the incoming request. The CEL `expression`\nsource is permitted (extraction only).",
-          "$ref": "#/$defs/AuthorizationLocation",
-          "default": {
-            "header": {
-              "name": "authorization",
-              "prefix": "Bearer "
-            }
-          }
-        },
-        "tokenType": {
-          "description": "RFC 8693 token type URN; when omitted defaults to access_token",
-          "type": "string",
-          "default": "urn:ietf:params:oauth:token-type:access_token"
-        }
-      },
-      "additionalProperties": false
-    },
-    "ActorTokenSpec": {
-      "type": "object",
-      "properties": {
-        "source": {
-          "description": "Where the actor token is read from in the incoming request. The CEL\n`expression` source is permitted (extraction only). Unlike subject tokens,\nactor tokens have no default source.",
-          "$ref": "#/$defs/AuthorizationLocation"
-        },
-        "tokenType": {
-          "description": "RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent",
-          "type": "string",
-          "default": "urn:ietf:params:oauth:token-type:access_token"
-        },
-        "enforceMayAct": {
-          "description": "Enforce that the subject's `may_act` claim authorizes the actor before exchanging.",
-          "type": "boolean",
-          "default": false
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "source"
-      ]
-    },
     "OAuthClientAuth": {
       "anyOf": [
         {
@@ -3736,150 +4320,6 @@
           "$ref": "#/$defs/RawDefaultClientSecretBasicAuth"
         }
       ]
-    },
-    "RawOAuthClientAuth": {
-      "oneOf": [
-        {
-          "description": "`client_id`/`client_secret` sent in the HTTP Basic Authorization header (RFC 6749 §2.3.1).",
-          "type": "object",
-          "properties": {
-            "clientId": {
-              "description": "`client_id` parameter identifying the gateway at the authorization server.",
-              "type": "string"
-            },
-            "clientSecret": {
-              "$ref": "#/$defs/FileOrInline"
-            },
-            "method": {
-              "type": "string",
-              "const": "clientSecretBasic"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "method",
-            "clientId",
-            "clientSecret"
-          ]
-        },
-        {
-          "description": "`client_id`/`client_secret` sent in the request form body.",
-          "type": "object",
-          "properties": {
-            "clientId": {
-              "description": "`client_id` parameter identifying the gateway at the authorization server.",
-              "type": "string"
-            },
-            "clientSecret": {
-              "anyOf": [
-                {
-                  "$ref": "#/$defs/FileOrInline"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "method": {
-              "type": "string",
-              "const": "clientSecretPost"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "method",
-            "clientId"
-          ]
-        },
-        {
-          "description": "`privateKeyJwt` client assertion (RFC 7523).",
-          "type": "object",
-          "properties": {
-            "clientId": {
-              "description": "`client_id` parameter identifying the gateway at the authorization server.",
-              "type": "string"
-            },
-            "signingKey": {
-              "description": "PEM-encoded private signing key (RSA or EC, matching `alg`).",
-              "$ref": "#/$defs/FileOrInline"
-            },
-            "alg": {
-              "$ref": "#/$defs/SigningAlg",
-              "default": "RS256"
-            },
-            "kid": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "assertionAudience": {
-              "type": "string"
-            },
-            "method": {
-              "type": "string",
-              "const": "privateKeyJwt"
-            }
-          },
-          "additionalProperties": false,
-          "required": [
-            "method",
-            "clientId",
-            "signingKey",
-            "assertionAudience"
-          ]
-        }
-      ]
-    },
-    "SigningAlg": {
-      "type": "string",
-      "enum": [
-        "RS256",
-        "RS384",
-        "RS512",
-        "ES256",
-        "ES384"
-      ]
-    },
-    "RawDefaultClientSecretBasicAuth": {
-      "type": "object",
-      "properties": {
-        "clientId": {
-          "description": "`client_id` parameter identifying the gateway at the authorization server.",
-          "type": "string"
-        },
-        "clientSecret": {
-          "description": "OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.",
-          "$ref": "#/$defs/FileOrInline"
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "clientId",
-        "clientSecret"
-      ]
-    },
-    "TokenCacheConfig": {
-      "type": "object",
-      "properties": {
-        "maxEntries": {
-          "description": "Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.",
-          "type": [
-            "integer",
-            "null"
-          ],
-          "format": "uint",
-          "minimum": 0
-        },
-        "defaultTtl": {
-          "description": "TTL used when the token endpoint omits `expires_in`. Defaults to 300s.",
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "additionalProperties": false
     },
     "CrossAppAccessAuth": {
       "type": "object",
@@ -7958,8 +8398,7 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "http": {
           "description": "HTTP protocol settings for this backend.",
@@ -10526,8 +10965,7 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "health": {
           "description": "Outlier detection and health checking for this provider backend.",
@@ -10705,8 +11143,7 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "health": {
           "description": "health configures outlier detection for this model backend.",
