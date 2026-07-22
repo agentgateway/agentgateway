@@ -42,13 +42,13 @@ func NewAgentgatewayValidatorSkipMissing(t test.Failer) *crd.Validator {
 func newAgentgatewayValidator(skipMissing bool, skipCrdValidation bool) (*crd.Validator, error) {
 	root := fsutils.GetModuleRoot()
 	dirs := []string{}
-	agentgatewayDir, err := os.ReadDir(filepath.Join(root, "controller/install/helm/agentgateway-crds/templates/"))
+	agentgatewayDir, err := os.ReadDir(filepath.Join(root, "controller/install/helm/agentgateway-crds/crds/"))
 	if err != nil {
 		return nil, err
 	}
 	for _, d := range agentgatewayDir {
 		if strings.HasSuffix(d.Name(), ".yaml") {
-			dirs = append(dirs, filepath.Join(root, "controller/install/helm/agentgateway-crds/templates", d.Name()))
+			dirs = append(dirs, filepath.Join(root, "controller/install/helm/agentgateway-crds/crds", d.Name()))
 		}
 	}
 	opts := []crd.ValidatorOption{}

@@ -24,7 +24,7 @@ readonly VERSIONS=( v1alpha1 )
 readonly OPENAPI_GEN_DIR=pkg/generated/openapi
 readonly APPLY_CFG_DIR=api/applyconfiguration
 readonly CLIENT_GEN_DIR=pkg/client
-readonly AGENTGATEWAY_CRD_DIR=install/helm/agentgateway-crds/templates
+readonly AGENTGATEWAY_CRD_DIR=install/helm/agentgateway-crds/crds
 readonly AGENTGATEWAY_MANIFESTS_DIR=install/helm/agentgateway/templates
 readonly AGENTGATEWAY_CRD_MAX_DESC_LEN="${AGENTGATEWAY_CRD_MAX_DESC_LEN:-50000}"
 

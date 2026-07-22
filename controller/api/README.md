@@ -15,7 +15,7 @@ These are the steps required to add a new CRD to be used in the Kubernetes Gatew
 3. Run codegen via `make generated-code -B`. This will invoke the `controller-gen` command specified in [generate.go](/controller/hack/generate.go), which should result in the following:
     - A `zz_generated.deepcopy.go` file is created in the same directory as the Go types.
     - A `zz_generated.register.go` file is created in the same directory as the Go types, to help with registering the Go types with the scheme.
-    - CRDs are generated in the CRD helm chart template dir: [install/helm/agentgateway-crds/templates](/controller/install/helm/agentgateway-crds/templates)
+    - CRDs are generated in the CRD helm chart's [crds](https://helm.sh/docs/chart_best_practices/custom_resource_definitions/) dir: [install/helm/agentgateway-crds/crds](/controller/install/helm/agentgateway-crds/crds)
     - RBAC roles are generated in [controller/install/helm/templates/role.yaml](/agentgateway/install/helm/agentgateway/templates/role.yaml)
     - Updates the [api/applyconfiguration](/api/applyconfiguration), [pkg/generated](/pkg/generated) and [pkg/client](/pkg/client) folders with kube clients. These are used in plugin initialization and the fake client is used in tests.
 
