@@ -108,7 +108,6 @@ export function BackendAuthPolicyEditor(props: {
           ariaLabel="Auth method"
           value={kind}
           options={authKindOptions}
-          showSelectedDescription
           onChange={(next) => {
             setKind(next);
             setError(null);
@@ -118,7 +117,11 @@ export function BackendAuthPolicyEditor(props: {
 
       {kind === "passthrough" ? (
         <>
-          <PassthroughFields value={passthrough} onChange={setPassthrough} />
+          <PassthroughFields
+            value={passthrough}
+            help={props.help}
+            onChange={setPassthrough}
+          />
           <ResultingYaml value={passthroughPreview} />
         </>
       ) : (

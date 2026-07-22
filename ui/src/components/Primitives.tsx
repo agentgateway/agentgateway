@@ -93,7 +93,6 @@ export function Dropdown(props: {
   className?: string;
   allowEmpty?: boolean;
   disabled?: boolean;
-  showSelectedDescription?: boolean;
 }) {
   const id = useId();
   const [open, setOpen] = useState(false);
@@ -290,10 +289,7 @@ export function Dropdown(props: {
         onKeyDown={onComboboxKeyDown}
       >
         {selected ? (
-          <DropdownOptionContent
-            option={selected}
-            showDescription={props.showSelectedDescription}
-          />
+          <DropdownOptionContent option={selected} />
         ) : (
           <span className="muted">{props.placeholder ?? "No options"}</span>
         )}

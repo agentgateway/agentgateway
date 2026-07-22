@@ -4136,24 +4136,6 @@ textarea {
   padding: 10px 12px;
 }
 
-.api-key-location-panel {
-  padding: 12px;
-}
-
-.api-key-location-panel .advanced-setting-header {
-  margin-bottom: 12px;
-}
-
-.api-key-location-fields {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 10px;
-}
-
-.api-key-location-fields .field {
-  margin-bottom: 0;
-}
-
 .policy-section-list {
   display: flex;
   flex-direction: column;
