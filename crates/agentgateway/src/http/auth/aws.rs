@@ -540,9 +540,6 @@ impl AwsAuth {
 /// [`DefaultAwsServiceName`], so they reach signing with no service name at all.
 const DEFAULT_SIGNING_SERVICE: &str = "bedrock";
 
-/// Guards the warning below so a misconfigured backend does not log per request.
-static WARNED_DEFAULT_SIGNING_SERVICE: std::sync::Once = std::sync::Once::new();
-
 fn signing_service_name<'a>(req: &'a http::Request, aws_auth: &'a AwsAuth) -> &'a str {
 	aws_auth
 		.service_name()
@@ -552,23 +549,7 @@ fn signing_service_name<'a>(req: &'a http::Request, aws_auth: &'a AwsAuth) -> &'
 				.get::<DefaultAwsServiceName>()
 				.map(|default| default.0.as_str())
 		})
-		.unwrap_or_else(|| {
-			// Falling back here is a guess, not a decision, and a wrong guess is invisible
-			// until AWS rejects the signature at request time. Say so once, so the 403 is
-			// traceable back to config rather than to the gateway.
-			WARNED_DEFAULT_SIGNING_SERVICE.call_once(|| {
-				warn!(
-					"no AWS SigV4 signing service configured for backend {:?}; defaulting to {:?}. \
-					 If this backend is not Bedrock, AWS will reject requests with a 403 \
-					 (\"Credential should be scoped to correct service\"). Set \
-					 backendAuth.aws.serviceName (e.g. \"bedrock-agentcore\"), or use a typed \
-					 backend such as aws.agentCore which sets the service name for you.",
-					req.uri().host().unwrap_or("<unknown>"),
-					DEFAULT_SIGNING_SERVICE,
-				)
-			});
-			DEFAULT_SIGNING_SERVICE
-		})
+		.unwrap_or(DEFAULT_SIGNING_SERVICE)
 }
 
 pub(super) async fn sign_request(
