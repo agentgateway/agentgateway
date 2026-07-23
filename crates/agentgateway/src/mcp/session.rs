@@ -721,9 +721,35 @@ impl Session {
 				Box::pin(self.relay.send_notification(r, ctx)).await
 			},
 
-			_ => Err(UpstreamError::InvalidRequest(
-				"unsupported message type".to_string(),
-			)),
+			ClientJsonRpcMessage::Response(r) => {
+				let ctx = IncomingRequestContext::new(&parts);
+				let (_span, log, _cel) = mcp::handler::setup_request_log(parts, "response");
+				let session_id = self.id.to_string();
+				log.non_atomic_mutate(|l| {
+					l.session_id = Some(session_id);
+				});
+				Box::pin(
+					self
+						.relay
+						.send_client_response(ClientJsonRpcMessage::Response(r), ctx),
+				)
+				.await
+			},
+
+			ClientJsonRpcMessage::Error(e) => {
+				let ctx = IncomingRequestContext::new(&parts);
+				let (_span, log, _cel) = mcp::handler::setup_request_log(parts, "response");
+				let session_id = self.id.to_string();
+				log.non_atomic_mutate(|l| {
+					l.session_id = Some(session_id);
+				});
+				Box::pin(
+					self
+						.relay
+						.send_client_response(ClientJsonRpcMessage::Error(e), ctx),
+				)
+				.await
+			},
 		}
 	}
 
