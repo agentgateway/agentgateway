@@ -7,9 +7,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
-	"time"
 
-	"google.golang.org/protobuf/types/known/durationpb"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
@@ -314,39 +312,14 @@ func modelFailoverBackend(ctx RouteContext, model *agentgateway.AgentgatewayMode
 		backend.ProviderGroups = append(backend.ProviderGroups, &api.AIBackend_ProviderGroup{Providers: providers})
 	}
 
-	inlinePolicies, err := modelFailoverBackendPolicies(ctx, model.Namespace, model.Spec.VirtualModel.Failover.Health)
-	if err != nil {
-		return nil, err
-	}
 	return &api.Backend{
-		Key:            modelBackendKey(model, parent, "failover"),
-		Name:           plugins.ResourceName(model),
-		Kind:           &api.Backend_Ai{Ai: backend},
-		InlinePolicies: inlinePolicies,
+		Key:  modelBackendKey(model, parent, "failover"),
+		Name: plugins.ResourceName(model),
+		Kind: &api.Backend_Ai{Ai: backend},
 	}, nil
 }
 
-func modelFailoverBackendPolicies(ctx RouteContext, namespace string, health *agentgateway.Health) ([]*api.BackendPolicySpec, error) {
-	if health != nil {
-		return translateInlineModelBackendPolicy(ctx, namespace, &agentgateway.BackendFull{Health: health})
-	}
-	consecutiveFailures := int32(3)
-	restoreHealth := 1.0
-	return []*api.BackendPolicySpec{{
-		Kind: &api.BackendPolicySpec_Health_{
-			Health: &api.BackendPolicySpec_Health{
-				UnhealthyCondition: "response.code >= 500",
-				Eviction: &api.BackendPolicySpec_Eviction{
-					Duration:            durationpb.New(time.Minute),
-					ConsecutiveFailures: &consecutiveFailures,
-					RestoreHealth:       &restoreHealth,
-				},
-			},
-		},
-	}}, nil
-}
-
-func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentgateway.AgentgatewayModelSpec, providerName string, modelOverride *string) (*api.AIBackend_Provider, error) {
+func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentgateway.AgentgatewayModelSpec, providerName string, selectedModel *string) (*api.AIBackend_Provider, error) {
 	if err := validateModelBaseURL(model); err != nil {
 		return nil, err
 	}
@@ -354,16 +327,13 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 	if err != nil {
 		return nil, err
 	}
-	if model.UpstreamOverrides != nil && model.UpstreamOverrides.Model != nil {
-		modelOverride = new(string(*model.UpstreamOverrides.Model))
-	}
 	provider := &api.AIBackend_Provider{Name: providerName, InlinePolicies: inlinePolicies}
-	if model.UpstreamOverrides != nil && model.UpstreamOverrides.BaseURL != nil {
-		provider.BaseUrl = new(string(*model.UpstreamOverrides.BaseURL))
+	if model.BaseURL != nil {
+		provider.BaseUrl = new(string(*model.BaseURL))
 	}
 	if model.Provider != nil {
 		if preset, ok := modelProviderPreset(*model.Provider); ok {
-			provider.ModelOverride = modelOverride
+			provider.ModelOverride = selectedModel
 			provider.Provider = &api.AIBackend_Provider_ProviderPreset{ProviderPreset: preset}
 			return provider, nil
 		}
@@ -391,7 +361,7 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 
 	switch {
 	case llm.OpenAI != nil:
-		provider.Provider = &api.AIBackend_Provider_Openai{Openai: &api.AIBackend_OpenAI{Model: providerModel(modelOverride, llm.OpenAI.Model)}}
+		provider.Provider = &api.AIBackend_Provider_Openai{Openai: &api.AIBackend_OpenAI{Model: providerModel(selectedModel, llm.OpenAI.Model)}}
 	case llm.Azure != nil:
 		resourceType := api.AIBackend_OPEN_AI
 		if llm.Azure.ResourceType == agentgateway.AzureResourceTypeFoundry {
@@ -400,18 +370,18 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 		provider.Provider = &api.AIBackend_Provider_Azure{Azure: &api.AIBackend_Azure{
 			ResourceName: string(llm.Azure.ResourceName),
 			ResourceType: resourceType,
-			Model:        providerModel(modelOverride, llm.Azure.Model),
+			Model:        providerModel(selectedModel, llm.Azure.Model),
 			ApiVersion:   stringPtr(llm.Azure.ApiVersion),
 			ProjectName:  stringPtr(llm.Azure.ProjectName),
 		}}
 	case llm.Anthropic != nil:
-		provider.Provider = &api.AIBackend_Provider_Anthropic{Anthropic: &api.AIBackend_Anthropic{Model: providerModel(modelOverride, llm.Anthropic.Model)}}
+		provider.Provider = &api.AIBackend_Provider_Anthropic{Anthropic: &api.AIBackend_Anthropic{Model: providerModel(selectedModel, llm.Anthropic.Model)}}
 	case llm.Gemini != nil:
-		provider.Provider = &api.AIBackend_Provider_Gemini{Gemini: &api.AIBackend_Gemini{Model: providerModel(modelOverride, llm.Gemini.Model)}}
+		provider.Provider = &api.AIBackend_Provider_Gemini{Gemini: &api.AIBackend_Gemini{Model: providerModel(selectedModel, llm.Gemini.Model)}}
 	case llm.VertexAI != nil:
 		provider.Provider = &api.AIBackend_Provider_Vertex{Vertex: &api.AIBackend_Vertex{
 			Region:    string(llm.VertexAI.Region),
-			Model:     providerModel(modelOverride, llm.VertexAI.Model),
+			Model:     providerModel(selectedModel, llm.VertexAI.Model),
 			ProjectId: string(llm.VertexAI.ProjectId),
 		}}
 	case llm.Bedrock != nil:
@@ -421,7 +391,7 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 			guardrailVersion = new(string(llm.Bedrock.Guardrail.GuardrailVersion))
 		}
 		provider.Provider = &api.AIBackend_Provider_Bedrock{Bedrock: &api.AIBackend_Bedrock{
-			Model:               providerModel(modelOverride, llm.Bedrock.Model),
+			Model:               providerModel(selectedModel, llm.Bedrock.Model),
 			Region:              llm.Bedrock.Region,
 			GuardrailIdentifier: guardrailIdentifier,
 			GuardrailVersion:    guardrailVersion,
@@ -433,7 +403,7 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 		}
 		provider.Provider = &api.AIBackend_Provider_Custom{Custom: &api.AIBackend_Custom{
 			Formats: formats,
-			Model:   providerModel(modelOverride, llm.Custom.Model),
+			Model:   providerModel(selectedModel, llm.Custom.Model),
 		}}
 		if llm.Custom.BackendRef != nil {
 			ref, err := plugins.TranslateCustomProviderBackendRef(ctx.Krt, ctx.References.RouteBackend, namespace, *llm.Custom.BackendRef)
@@ -545,11 +515,11 @@ func modelLLMProvider(model *agentgateway.AgentgatewayModelSpec) (*agentgateway.
 
 func validateModelBaseURL(model *agentgateway.AgentgatewayModelSpec) error {
 	var baseURL string
-	if model.UpstreamOverrides != nil && model.UpstreamOverrides.BaseURL != nil {
-		baseURL = string(*model.UpstreamOverrides.BaseURL)
+	if model.BaseURL != nil {
+		baseURL = string(*model.BaseURL)
 	}
 	if model.Provider != nil && *model.Provider == agentgateway.ModelProviderOllama && baseURL == "" {
-		return fmt.Errorf("ollama requires upstreamOverrides.baseURL")
+		return fmt.Errorf("ollama requires baseURL")
 	}
 	if baseURL == "" {
 		return nil
@@ -557,29 +527,29 @@ func validateModelBaseURL(model *agentgateway.AgentgatewayModelSpec) error {
 
 	parsed, err := url.ParseRequestURI(baseURL)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
-		return fmt.Errorf("upstreamOverrides.baseURL must be an absolute URL")
+		return fmt.Errorf("baseURL must be an absolute URL")
 	}
 	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return fmt.Errorf("upstreamOverrides.baseURL must use http or https")
+		return fmt.Errorf("baseURL must use http or https")
 	}
 	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return fmt.Errorf("upstreamOverrides.baseURL cannot include user info, query parameters, or a fragment")
+		return fmt.Errorf("baseURL cannot include user info, query parameters, or a fragment")
 	}
 
 	host := parsed.Hostname()
 	if host == "" {
-		return fmt.Errorf("upstreamOverrides.baseURL must include a host")
+		return fmt.Errorf("baseURL must include a host")
 	}
 	if strings.EqualFold(host, "localhost") || strings.HasSuffix(strings.ToLower(host), ".localhost") {
-		return fmt.Errorf("upstreamOverrides.baseURL cannot target localhost, loopback, or link-local addresses")
+		return fmt.Errorf("baseURL cannot target localhost, loopback, or link-local addresses")
 	}
 	if addr, err := netip.ParseAddr(host); err == nil {
 		addr = addr.Unmap()
 		if addr.IsLoopback() || addr.IsLinkLocalUnicast() {
-			return fmt.Errorf("upstreamOverrides.baseURL cannot target localhost, loopback, or link-local addresses")
+			return fmt.Errorf("baseURL cannot target localhost, loopback, or link-local addresses")
 		}
 	} else if strings.Trim(host, ".0123456789") == "" || strings.HasPrefix(strings.ToLower(host), "0x") {
-		return fmt.Errorf("upstreamOverrides.baseURL cannot use an ambiguous IP address")
+		return fmt.Errorf("baseURL cannot use an ambiguous IP address")
 	}
 	return nil
 }

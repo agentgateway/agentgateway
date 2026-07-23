@@ -59,9 +59,10 @@ spec:
     name: model-routing
     sectionName: llm
   provider: OpenAI
-  upstreamOverrides:
-    baseURL: http://ai-testbox.default.svc.cluster.local:9234
-    model: agw-public-direct
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  transformations:
+  - field: model
+    expression: '"agw-public-direct"'
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
@@ -76,9 +77,10 @@ spec:
     sectionName: llm
   visibility: Internal
   provider: OpenAI
-  upstreamOverrides:
-    baseURL: http://ai-testbox.default.svc.cluster.local:9234
-    model: agw-internal-fast
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  transformations:
+  - field: model
+    expression: '"agw-internal-fast"'
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
@@ -93,9 +95,10 @@ spec:
     sectionName: llm
   visibility: Internal
   provider: OpenAI
-  upstreamOverrides:
-    baseURL: http://ai-testbox.default.svc.cluster.local:9234
-    model: agw-internal-premium
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  transformations:
+  - field: model
+    expression: '"agw-internal-premium"'
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
@@ -112,8 +115,7 @@ spec:
     model: internal/*
   visibility: Internal
   provider: OpenAI
-  upstreamOverrides:
-    baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234
   transformations:
   - field: model
     expression: 'llmRequest.model.stripPrefix("internal/")'
@@ -131,9 +133,10 @@ spec:
     sectionName: llm
   visibility: Internal
   provider: OpenAI
-  upstreamOverrides:
-    baseURL: http://model-routing-primary.default.svc.cluster.local:9235
-    model: agw-primary-down
+  baseURL: http://model-routing-primary.default.svc.cluster.local:9235
+  transformations:
+  - field: model
+    expression: '"agw-primary-down"'
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel

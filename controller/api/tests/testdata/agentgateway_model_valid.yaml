@@ -30,9 +30,7 @@ spec:
     policy:
       matchExpressions:
       - 'request.headers["x-model-access"] == "allowed"'
-  upstreamOverrides:
-    baseURL: https://api.openai.com
-    model: gpt-5-mini
+  baseURL: https://api.openai.com
   upstreamPolicies:
     auth:
       key: example-api-key
@@ -120,8 +118,9 @@ spec:
   match:
     model: local/llama-3.3
   provider: Custom
-  upstreamOverrides:
-    model: llama-3.3
+  transformations:
+  - field: model
+    expression: 'llmRequest.model.stripPrefix("local/")'
   custom:
     backendRef:
       group: inference.networking.k8s.io
@@ -139,9 +138,6 @@ spec:
   parentRefs:
   - name: ai-gateway
     sectionName: llm
-  transformations:
-  - field: temperature
-    expression: '0.2'
   virtualModel:
     weighted:
       targets:

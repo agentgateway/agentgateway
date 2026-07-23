@@ -41,12 +41,18 @@ type AgentgatewayModelList struct {
 }
 
 // +kubebuilder:validation:ExactlyOneOf=provider;virtualModel
-// +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.upstreamOverrides)",message="upstreamOverrides requires provider"
+// +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.baseURL)",message="baseURL requires provider"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || !has(self.upstreamPolicies)",message="upstreamPolicies cannot be used with virtualModel"
 // +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.authorization)",message="authorization requires provider"
+// +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.transformations)",message="transformations require provider"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || self.visibility != 'Internal'",message="virtual models must be public"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || !has(self.match) || !has(self.match.model) || !self.match.model.contains('*')",message="virtual model match.model must be an exact name"
-// +kubebuilder:validation:XValidation:rule="!has(self.provider) || self.provider != 'Ollama' || (has(self.upstreamOverrides) && has(self.upstreamOverrides.baseURL))",message="ollama requires upstreamOverrides.baseURL"
+// +kubebuilder:validation:XValidation:rule="!has(self.provider) || self.provider != 'Ollama' || has(self.baseURL)",message="ollama requires baseURL"
+// +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || self.baseURL.startsWith('http://') || self.baseURL.startsWith('https://')",message="baseURL must use http or https"
+// +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || !self.baseURL.matches(\"(?i)^https?://(localhost|[^/]+\\\\.localhost)(:[0-9]+)?(/|$)\")",message="baseURL cannot target localhost, loopback, or link-local addresses"
+// +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || !self.baseURL.matches(\"^https?://127(\\\\.[0-9]{1,3}){0,3}(:[0-9]+)?(/|$)\")",message="baseURL cannot target localhost, loopback, or link-local addresses"
+// +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || !self.baseURL.matches(\"^https?://169\\\\.254\\\\.[0-9]{1,3}\\\\.[0-9]{1,3}(:[0-9]+)?(/|$)\")",message="baseURL cannot target localhost, loopback, or link-local addresses"
+// +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || !self.baseURL.matches(\"(?i)^https?://\\\\[(::1|fe[89ab][0-9a-f:]*)\\\\](:[0-9]+)?(/|$)\")",message="baseURL cannot target localhost, loopback, or link-local addresses"
 // +kubebuilder:validation:XValidation:rule="has(self.azure) == (has(self.provider) && self.provider == 'Azure')",message="azure must be set if and only if provider is Azure"
 // +kubebuilder:validation:XValidation:rule="has(self.vertexai) == (has(self.provider) && self.provider == 'VertexAI')",message="vertexai must be set if and only if provider is VertexAI"
 // +kubebuilder:validation:XValidation:rule="has(self.bedrock) == (has(self.provider) && self.provider == 'Bedrock')",message="bedrock must be set if and only if provider is Bedrock"
@@ -89,12 +95,14 @@ type AgentgatewayModelSpec struct {
 	// +optional
 	Custom *CustomProviderSettings `json:"custom,omitempty"`
 
-	// Shared overrides for requests sent to the selected provider.
+	// BaseURL overrides the provider address and base path prefix. It must use the
+	// http or https scheme. Backend policies may override the default TLS
+	// configuration. Query parameters, fragments, and user info are not supported.
+	// +kubebuilder:validation:Format=uri
 	// +optional
-	UpstreamOverrides *UpstreamOverrides `json:"upstreamOverrides,omitempty"`
+	BaseURL *LongString `json:"baseURL,omitempty"`
 
-	// CEL transformations applied to fields in the provider request body. These
-	// transformations apply to both concrete and virtual models.
+	// CEL transformations applied to fields in the provider request body.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
 	// +listType=map
@@ -149,28 +157,6 @@ type ModelAIPolicies struct {
 	// Automatic prompt caching for supported providers.
 	// +optional
 	PromptCaching *PromptCachingConfig `json:"promptCaching,omitempty"`
-}
-
-// Shared overrides for requests sent to an LLM provider.
-// +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || self.baseURL.startsWith('http://') || self.baseURL.startsWith('https://')",message="upstreamOverrides.baseURL must use http or https"
-// +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || !self.baseURL.matches(\"(?i)^https?://(localhost|[^/]+\\\\.localhost)(:[0-9]+)?(/|$)\")",message="upstreamOverrides.baseURL cannot target localhost, loopback, or link-local addresses"
-// +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || !self.baseURL.matches(\"^https?://127(\\\\.[0-9]{1,3}){0,3}(:[0-9]+)?(/|$)\")",message="upstreamOverrides.baseURL cannot target localhost, loopback, or link-local addresses"
-// +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || !self.baseURL.matches(\"^https?://169\\\\.254\\\\.[0-9]{1,3}\\\\.[0-9]{1,3}(:[0-9]+)?(/|$)\")",message="upstreamOverrides.baseURL cannot target localhost, loopback, or link-local addresses"
-// +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || !self.baseURL.matches(\"(?i)^https?://\\\\[(::1|fe[89ab][0-9a-f:]*)\\\\](:[0-9]+)?(/|$)\")",message="upstreamOverrides.baseURL cannot target localhost, loopback, or link-local addresses"
-type UpstreamOverrides struct {
-	// BaseURL overrides the provider address and base path prefix. It must use the
-	// http or https scheme. Backend policies may override the default
-	// TLS configuration.
-	//
-	// Query parameters, fragments, and user info are not supported.
-	// +kubebuilder:validation:Format=uri
-	// +optional
-	BaseURL *LongString `json:"baseURL,omitempty"`
-
-	// Fixed model name sent to the provider. When omitted, the model selected by
-	// match.model is sent to the provider.
-	// +optional
-	Model *ShortString `json:"model,omitempty"`
 }
 
 // ModelMatch contains conditions for selecting a model.
@@ -258,10 +244,6 @@ type WeightedModelTarget struct {
 }
 
 type FailoverModelRouting struct {
-	// Health checking and eviction behavior for the failover backend.
-	// +optional
-	Health *Health `json:"health,omitempty"`
-
 	// Concrete model targets grouped by priority. Lower values are preferred.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64

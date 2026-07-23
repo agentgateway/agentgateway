@@ -185,20 +185,6 @@ func TestModelAuthorization(t *testing.T) {
 	}
 }
 
-func TestModelFailoverBackendPolicies(t *testing.T) {
-	condition := agentgateway.CELExpression("response.code == 429")
-	policies, err := modelFailoverBackendPolicies(RouteContext{}, "default", &agentgateway.Health{UnhealthyCondition: &condition})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(policies) != 1 || policies[0].GetHealth() == nil {
-		t.Fatalf("policies = %#v, want one health policy", policies)
-	}
-	if got := policies[0].GetHealth().GetUnhealthyCondition(); got != string(condition) {
-		t.Errorf("unhealthy condition = %q, want %q", got, condition)
-	}
-}
-
 func TestValidateModelBaseURL(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -207,7 +193,7 @@ func TestValidateModelBaseURL(t *testing.T) {
 		wantErr  string
 	}{
 		{name: "public address", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("https://api.example.com/v1"))},
-		{name: "ollama requires override", provider: agentgateway.ModelProviderOllama, wantErr: "ollama requires upstreamOverrides.baseURL"},
+		{name: "ollama requires base URL", provider: agentgateway.ModelProviderOllama, wantErr: "ollama requires baseURL"},
 		{name: "localhost", provider: agentgateway.ModelProviderOllama, baseURL: new(agentgateway.LongString("http://localhost:11434/v1")), wantErr: "cannot target localhost, loopback, or link-local"},
 		{name: "loopback IPv4", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("https://127.0.0.1/v1")), wantErr: "cannot target localhost, loopback, or link-local"},
 		{name: "loopback IPv6", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("https://[::1]/v1")), wantErr: "cannot target localhost, loopback, or link-local"},
@@ -216,9 +202,7 @@ func TestValidateModelBaseURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			model := &agentgateway.AgentgatewayModelSpec{Provider: &tt.provider}
-			if tt.baseURL != nil {
-				model.UpstreamOverrides = &agentgateway.UpstreamOverrides{BaseURL: tt.baseURL}
-			}
+			model.BaseURL = tt.baseURL
 			err := validateModelBaseURL(model)
 			if tt.wantErr == "" {
 				if err != nil {
@@ -233,19 +217,15 @@ func TestValidateModelBaseURL(t *testing.T) {
 	}
 }
 
-func TestTranslatePresetProviderOverrides(t *testing.T) {
+func TestTranslatePresetProviderBaseURL(t *testing.T) {
 	providerType := agentgateway.ModelProviderOllama
 	baseURL := agentgateway.LongString("https://ollama.example/v2")
-	model := agentgateway.ShortString("llama3.3")
 	provider, err := translateModelLLMProvider(
 		RouteContext{},
 		"default",
 		&agentgateway.AgentgatewayModelSpec{
 			Provider: &providerType,
-			UpstreamOverrides: &agentgateway.UpstreamOverrides{
-				BaseURL: &baseURL,
-				Model:   &model,
-			},
+			BaseURL:  &baseURL,
 		},
 		"ollama",
 		nil,
@@ -258,8 +238,5 @@ func TestTranslatePresetProviderOverrides(t *testing.T) {
 	}
 	if provider.GetBaseUrl() != string(baseURL) {
 		t.Errorf("base URL = %q, want %q", provider.GetBaseUrl(), baseURL)
-	}
-	if provider.GetModelOverride() != string(model) {
-		t.Errorf("model override = %q, want %q", provider.GetModelOverride(), model)
 	}
 }

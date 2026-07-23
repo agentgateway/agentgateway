@@ -65,7 +65,7 @@ spec:
     sectionName: llm
   provider: AzureOpenAI
 ---
-_err: upstreamOverrides.baseURL must use http or https
+_err: baseURL must use http or https
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
 metadata:
@@ -75,10 +75,9 @@ spec:
   - name: ai-gateway
     sectionName: llm
   provider: OpenAI
-  upstreamOverrides:
-    baseURL: ftp://api.openai.com
+  baseURL: ftp://api.openai.com
 ---
-_err: upstreamOverrides requires provider
+_err: baseURL requires provider
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
 metadata:
@@ -87,15 +86,14 @@ spec:
   parentRefs:
   - name: ai-gateway
     sectionName: llm
-  upstreamOverrides:
-    model: should-not-be-accepted
+  baseURL: https://api.example.com
   virtualModel:
     weighted:
       targets:
       - modelRef:
           name: concrete-model
 ---
-_err: ollama requires upstreamOverrides.baseURL
+_err: ollama requires baseURL
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
 metadata:
@@ -106,7 +104,7 @@ spec:
     sectionName: llm
   provider: Ollama
 ---
-_err: upstreamOverrides.baseURL cannot target localhost, loopback, or link-local addresses
+_err: baseURL cannot target localhost, loopback, or link-local addresses
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
 metadata:
@@ -116,8 +114,7 @@ spec:
   - name: ai-gateway
     sectionName: llm
   provider: OpenAI
-  upstreamOverrides:
-    baseURL: http://169.254.169.254/latest/meta-data
+  baseURL: http://169.254.169.254/latest/meta-data
 ---
 _err: upstreamPolicies cannot be used with virtualModel
 apiVersion: agentgateway.dev/v1alpha1
@@ -131,6 +128,24 @@ spec:
   upstreamPolicies:
     health:
       unhealthyCondition: response.code >= 500
+  virtualModel:
+    weighted:
+      targets:
+      - modelRef:
+          name: concrete-model
+---
+_err: transformations require provider
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: virtual-model-with-transformations
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  transformations:
+  - field: model
+    expression: '"replacement"'
   virtualModel:
     weighted:
       targets:

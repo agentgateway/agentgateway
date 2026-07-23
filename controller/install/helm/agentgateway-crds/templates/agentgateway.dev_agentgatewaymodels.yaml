@@ -142,6 +142,15 @@ spec:
                 x-kubernetes-validations:
                 - message: projectName is required when resourceType is Foundry
                   rule: self.resourceType != 'Foundry' || has(self.projectName)
+              baseURL:
+                description: |-
+                  BaseURL overrides the provider address and base path prefix. It must use the
+                  http or https scheme. Backend policies may override the default TLS
+                  configuration. Query parameters, fragments, and user info are not supported.
+                format: uri
+                maxLength: 1024
+                minLength: 1
+                type: string
               bedrock:
                 description: Provider-specific settings for Amazon Bedrock.
                 properties:
@@ -394,9 +403,8 @@ spec:
                 - XAI
                 type: string
               transformations:
-                description: |-
-                  CEL transformations applied to fields in the provider request body. These
-                  transformations apply to both concrete and virtual models.
+                description: CEL transformations applied to fields in the provider
+                  request body.
                 items:
                   description: |-
                     Maps a request JSON field to a CEL expression.
@@ -423,44 +431,6 @@ spec:
                 x-kubernetes-list-map-keys:
                 - field
                 x-kubernetes-list-type: map
-              upstreamOverrides:
-                description: Shared overrides for requests sent to the selected provider.
-                properties:
-                  baseURL:
-                    description: |-
-                      BaseURL overrides the provider address and base path prefix. It must use the
-                      http or https scheme. Backend policies may override the default
-                      TLS configuration.
-
-                      Query parameters, fragments, and user info are not supported.
-                    format: uri
-                    maxLength: 1024
-                    minLength: 1
-                    type: string
-                  model:
-                    description: |-
-                      Fixed model name sent to the provider. When omitted, the model selected by
-                      match.model is sent to the provider.
-                    maxLength: 256
-                    minLength: 1
-                    type: string
-                type: object
-                x-kubernetes-validations:
-                - message: upstreamOverrides.baseURL must use http or https
-                  rule: '!has(self.baseURL) || self.baseURL.startsWith(''http://'')
-                    || self.baseURL.startsWith(''https://'')'
-                - message: upstreamOverrides.baseURL cannot target localhost, loopback,
-                    or link-local addresses
-                  rule: '!has(self.baseURL) || !self.baseURL.matches("(?i)^https?://(localhost|[^/]+\\.localhost)(:[0-9]+)?(/|$)")'
-                - message: upstreamOverrides.baseURL cannot target localhost, loopback,
-                    or link-local addresses
-                  rule: '!has(self.baseURL) || !self.baseURL.matches("^https?://127(\\.[0-9]{1,3}){0,3}(:[0-9]+)?(/|$)")'
-                - message: upstreamOverrides.baseURL cannot target localhost, loopback,
-                    or link-local addresses
-                  rule: '!has(self.baseURL) || !self.baseURL.matches("^https?://169\\.254\\.[0-9]{1,3}\\.[0-9]{1,3}(:[0-9]+)?(/|$)")'
-                - message: upstreamOverrides.baseURL cannot target localhost, loopback,
-                    or link-local addresses
-                  rule: '!has(self.baseURL) || !self.baseURL.matches("(?i)^https?://\\[(::1|fe[89ab][0-9a-f:]*)\\](:[0-9]+)?(/|$)")'
               upstreamPolicies:
                 description: Policies applied while communicating with this concrete
                   model's provider.
@@ -5102,71 +5072,6 @@ spec:
                     description: Priority-based model selection with failover between
                       priority groups.
                     properties:
-                      health:
-                        description: Health checking and eviction behavior for the
-                          failover backend.
-                        properties:
-                          eviction:
-                            description: Settings for evicting unhealthy backends.
-                            properties:
-                              consecutiveFailures:
-                                description: |-
-                                  Number of consecutive unhealthy responses required before the backend is evicted.
-                                  For example, a value of 5 means the backend must receive 5 unhealthy responses in a row before being evicted.
-                                  When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
-                                  When neither is set, a single unhealthy response can trigger eviction.
-                                format: int32
-                                minimum: 0
-                                type: integer
-                              duration:
-                                default: 3s
-                                description: |-
-                                  Base time a backend should be evicted after being marked unhealthy.
-                                  Subsequent evictions use multiplicative backoff (duration * times_evicted).
-                                  If all endpoints are evicted, the load balancer falls back to returning evicted endpoints
-                                  rather than failing entirely.
-                                  If unset, defaults to `3s`.
-                                type: string
-                                x-kubernetes-validations:
-                                - message: invalid duration value
-                                  rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
-                                - message: evictionDuration must be at least 1 second
-                                  rule: duration(self) >= duration('1s')
-                              healthThreshold:
-                                description: |-
-                                  EWMA health score threshold, from 0 to 100. When set, a backend is evicted
-                                  only if its computed health drops below this value after an unhealthy
-                                  response (e.g. 50 evicts when EWMA health falls below 50%). Unlike
-                                  consecutiveFailures, this sliding-window average lets a single success delay
-                                  eviction. If both are set, either condition evicts; if neither, a single
-                                  unhealthy response evicts.
-                                format: int32
-                                maximum: 100
-                                minimum: 0
-                                type: integer
-                              restoreHealth:
-                                description: |-
-                                  Health score from 0 to 100 assigned to a backend when it returns from eviction.
-                                  For gradual recovery, set below 100; for full recovery immediately, set 100.
-                                  If unset, the backend resumes with the health it had when evicted.
-                                format: int32
-                                maximum: 100
-                                minimum: 0
-                                type: integer
-                            type: object
-                          unhealthyCondition:
-                            description: |-
-                              CEL expression that determines whether a response indicates an unhealthy backend.
-                              When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
-
-                              For example, to evict on 5xx responses: `response.code >= 500`.
-
-                              When unset, any 5xx response, or a connection failure, is treated as unhealthy.
-                              This default lowers the backend's health score but does not trigger eviction on its own.
-                            maxLength: 16384
-                            minLength: 1
-                            type: string
-                        type: object
                       targets:
                         description: Concrete model targets grouped by priority. Lower
                           values are preferred.
@@ -5271,20 +5176,32 @@ spec:
             - parentRefs
             type: object
             x-kubernetes-validations:
-            - message: upstreamOverrides requires provider
-              rule: has(self.provider) || !has(self.upstreamOverrides)
+            - message: baseURL requires provider
+              rule: has(self.provider) || !has(self.baseURL)
             - message: upstreamPolicies cannot be used with virtualModel
               rule: '!has(self.virtualModel) || !has(self.upstreamPolicies)'
             - message: authorization requires provider
               rule: has(self.provider) || !has(self.authorization)
+            - message: transformations require provider
+              rule: has(self.provider) || !has(self.transformations)
             - message: virtual models must be public
               rule: '!has(self.virtualModel) || self.visibility != ''Internal'''
             - message: virtual model match.model must be an exact name
               rule: '!has(self.virtualModel) || !has(self.match) || !has(self.match.model)
                 || !self.match.model.contains(''*'')'
-            - message: ollama requires upstreamOverrides.baseURL
-              rule: '!has(self.provider) || self.provider != ''Ollama'' || (has(self.upstreamOverrides)
-                && has(self.upstreamOverrides.baseURL))'
+            - message: ollama requires baseURL
+              rule: '!has(self.provider) || self.provider != ''Ollama'' || has(self.baseURL)'
+            - message: baseURL must use http or https
+              rule: '!has(self.baseURL) || self.baseURL.startsWith(''http://'') ||
+                self.baseURL.startsWith(''https://'')'
+            - message: baseURL cannot target localhost, loopback, or link-local addresses
+              rule: '!has(self.baseURL) || !self.baseURL.matches("(?i)^https?://(localhost|[^/]+\\.localhost)(:[0-9]+)?(/|$)")'
+            - message: baseURL cannot target localhost, loopback, or link-local addresses
+              rule: '!has(self.baseURL) || !self.baseURL.matches("^https?://127(\\.[0-9]{1,3}){0,3}(:[0-9]+)?(/|$)")'
+            - message: baseURL cannot target localhost, loopback, or link-local addresses
+              rule: '!has(self.baseURL) || !self.baseURL.matches("^https?://169\\.254\\.[0-9]{1,3}\\.[0-9]{1,3}(:[0-9]+)?(/|$)")'
+            - message: baseURL cannot target localhost, loopback, or link-local addresses
+              rule: '!has(self.baseURL) || !self.baseURL.matches("(?i)^https?://\\[(::1|fe[89ab][0-9a-f:]*)\\](:[0-9]+)?(/|$)")'
             - message: azure must be set if and only if provider is Azure
               rule: has(self.azure) == (has(self.provider) && self.provider == 'Azure')
             - message: vertexai must be set if and only if provider is VertexAI
