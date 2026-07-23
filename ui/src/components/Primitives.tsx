@@ -567,7 +567,9 @@ function clamp(value: number, min: number, max: number) {
 export function Drawer(props: {
   title: string;
   children: ReactNode;
-  footer?: ReactNode | ((requestClose: () => void) => ReactNode);
+  footer?:
+    | ReactNode
+    | ((requestClose: () => void, dirty: boolean) => ReactNode);
   headerActions?: ReactNode;
   onClose: () => void;
   variant?: "default" | "nested";
@@ -719,7 +721,7 @@ export function Drawer(props: {
           {props.footer ? (
             <div className="drawer-footer">
               {typeof props.footer === "function"
-                ? props.footer(requestClose)
+                ? props.footer(requestClose, dirty)
                 : props.footer}
             </div>
           ) : null}

@@ -11,6 +11,7 @@ import {
   Tooltip,
 } from "../components/Primitives";
 import type { BackendAuth } from "../gateway-config";
+import { takeHybridFileWriteOverride } from "../hooks";
 import type { SchemaHelp } from "../schemaHelp";
 import type { CorsPolicy, GatewayConfig } from "../types";
 import { AuthorizationPolicyEditor } from "./AuthorizationPolicyEditor";
@@ -110,12 +111,13 @@ export function PolicyDrawer(props: {
             </Tooltip>
           )
         }
-        footer={
+        footer={(_requestClose, dirty) => (
           <ConfigDiffSaveActions
             config={props.config}
             diffTitle={`${props.title} policy config diff`}
             saveLabel="Save policy"
             saving={props.saving}
+            diffDisabled={enabled && !dirty}
             onSave={() => {
               if (submitPolicyForm()) props.onSave(submittedValue.current);
             }}
@@ -126,7 +128,7 @@ export function PolicyDrawer(props: {
               }
             }}
           />
-        }
+        )}
       >
         <PolicyEditorBody
           formId={formId}
@@ -152,7 +154,10 @@ export function PolicyDrawer(props: {
           destructive
           confirmLabel="Delete policy"
           confirmDisabled={props.saving}
-          onCancel={() => setConfirmDelete(false)}
+          onCancel={() => {
+            takeHybridFileWriteOverride();
+            setConfirmDelete(false);
+          }}
           onConfirm={() => {
             setConfirmDelete(false);
             props.onDisable();

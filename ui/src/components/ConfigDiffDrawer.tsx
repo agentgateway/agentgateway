@@ -11,7 +11,7 @@ import {
 } from "../hooks";
 import { toYamlText } from "../policies/policyUtils";
 import type { GatewayConfig } from "../types";
-import { Drawer, EmptyState, Tooltip } from "./Primitives";
+import { Drawer, Tooltip } from "./Primitives";
 
 const hybridFileWriteMessage =
   "File configuration is read-only in hybrid mode. Copy this diff and update the configuration file directly.";
@@ -109,52 +109,43 @@ export function ConfigDiffDrawer(props: {
         </div>
       }
     >
-      {props.original === props.modified ? (
-        <div className="editor-wrap config-diff-editor config-diff-empty">
-          <EmptyState
-            title="No changes"
-            description="The configuration has no diff."
-          />
-        </div>
-      ) : (
-        <div className="editor-wrap config-diff-editor">
-          <DiffEditor
-            beforeMount={configureConfigYamlMonaco}
-            language="yaml"
-            original={props.original}
-            modified={props.modified}
-            originalModelPath={`inmemory://config-diff/${encodeURIComponent(props.title)}/original.yaml`}
-            modifiedModelPath={`inmemory://config-diff/${encodeURIComponent(props.title)}/modified.yaml`}
-            keepCurrentOriginalModel
-            keepCurrentModifiedModel
-            theme={
-              document.documentElement.dataset.theme === "dark"
-                ? "vs-dark"
-                : "light"
-            }
-            options={{
-              automaticLayout: true,
-              copyWithSyntaxHighlighting: false,
-              fontSize: 13,
-              minimap: { enabled: false },
-              originalEditable: false,
-              readOnly: true,
-              renderSideBySide: true,
-              hideUnchangedRegions: {
-                enabled: true,
-              },
-              overviewRulerLanes: 0,
-              scrollbar: {
-                vertical: "hidden",
-                verticalScrollbarSize: 0,
-                alwaysConsumeMouseWheel: false,
-              },
-              scrollBeyondLastLine: false,
-              wordWrap: "off",
-            }}
-          />
-        </div>
-      )}
+      <div className="editor-wrap config-diff-editor">
+        <DiffEditor
+          beforeMount={configureConfigYamlMonaco}
+          language="yaml"
+          original={props.original}
+          modified={props.modified}
+          originalModelPath={`inmemory://config-diff/${encodeURIComponent(props.title)}/original.yaml`}
+          modifiedModelPath={`inmemory://config-diff/${encodeURIComponent(props.title)}/modified.yaml`}
+          keepCurrentOriginalModel
+          keepCurrentModifiedModel
+          theme={
+            document.documentElement.dataset.theme === "dark"
+              ? "vs-dark"
+              : "light"
+          }
+          options={{
+            automaticLayout: true,
+            copyWithSyntaxHighlighting: false,
+            fontSize: 13,
+            minimap: { enabled: false },
+            originalEditable: false,
+            readOnly: true,
+            renderSideBySide: true,
+            hideUnchangedRegions: {
+              enabled: true,
+            },
+            overviewRulerLanes: 0,
+            scrollbar: {
+              vertical: "hidden",
+              verticalScrollbarSize: 0,
+              alwaysConsumeMouseWheel: false,
+            },
+            scrollBeyondLastLine: false,
+            wordWrap: "off",
+          }}
+        />
+      </div>
     </Drawer>
   );
 }
@@ -198,6 +189,23 @@ export function ConfigDiffSaveActions(props: {
     setDiff(configDiffText(props.config, modified));
   }
 
+  const diffButton = (
+    <button
+      className="button"
+      type="button"
+      disabled={
+        props.saving ||
+        (!props.config && !props.resourceDiff) ||
+        props.diffDisabled ||
+        props.saveDisabled
+      }
+      onClick={viewDiff}
+    >
+      <FileText size={16} />
+      View diff
+    </button>
+  );
+
   return (
     <>
       <div className="button-row">
@@ -206,20 +214,11 @@ export function ConfigDiffSaveActions(props: {
             Cancel
           </button>
         ) : null}
-        <button
-          className="button"
-          type="button"
-          disabled={
-            props.saving ||
-            (!props.config && !props.resourceDiff) ||
-            props.diffDisabled ||
-            props.saveDisabled
-          }
-          onClick={viewDiff}
-        >
-          <FileText size={16} />
-          View diff
-        </button>
+        {props.diffDisabled ? (
+          <Tooltip content="No diff">{diffButton}</Tooltip>
+        ) : (
+          diffButton
+        )}
         <ConfigSaveButton
           disabled={props.saving || props.saveDisabled}
           allowHybridWrite={Boolean(props.resourceDiff)}
