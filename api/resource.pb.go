@@ -4776,7 +4776,7 @@ func (x *Key) GetAuthorizationLocation() *AuthorizationLocation {
 }
 
 // Supplies a short-lived JWT signed with a private key to the backend. Tokens
-// are reused until shortly before expiry to avoid repeated signing work.
+// are reused until shortly before either expiry or the maximum token age.
 type JwtSign struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// PEM-encoded private signing key. RSA keys are used with RS* algorithms;
@@ -4789,7 +4789,8 @@ type JwtSign struct {
 	// Static claims added to every token (e.g. iss, sub, aud). iat, exp, and
 	// nbf are reserved for the signer and cannot be overridden here.
 	Claims map[string]*structpb.Value `protobuf:"bytes,4,rep,name=claims,proto3" json:"claims,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	// Token lifetime used for exp. Defaults to 300s.
+	// Token lifetime used for exp. Defaults to 300s. Cache reuse is also bounded
+	// by the token's issue time and may be shorter than this lifetime.
 	Ttl *durationpb.Duration `protobuf:"bytes,5,opt,name=ttl,proto3,oneof" json:"ttl,omitempty"`
 	// Where the signed token is written. Defaults to the Authorization header
 	// with a "Bearer " prefix.

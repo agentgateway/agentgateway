@@ -8,8 +8,8 @@ claims from the account, user, and public-key fingerprint.
 
 The `backendAuth.jwtSign` policy keeps the private key at the gateway and mints
 a short-lived token from configured static claims plus signer-controlled
-`iat`/`exp`. The token is reused until shortly before expiry and written to the
-`Authorization` header with a `Bearer ` prefix by default (configurable via
+`iat`/`exp`. The token is cached to avoid signing every request and written to
+the `Authorization` header with a `Bearer ` prefix by default (configurable via
 `location`).
 
 ### Running the example
@@ -48,10 +48,12 @@ The payload is base64url-encoded (RFC 7515): unlike standard base64, it uses
 up first.
 
 Every request gets a valid token: `iat`/`exp` are set by the signer (`ttl`
-controls the lifetime, 300s by default) and cannot be configured as claims,
-nor can `nbf`. Tokens are refreshed 15 seconds before expiry. To tolerate clock
-skew between the gateway and the upstream, `iat` is backdated and `exp`
-extended by 10 seconds, mirroring Google's auth library.
+controls `exp`, 300s by default) and cannot be configured as claims, nor can
+`nbf`. Cache reuse is capped at 60 seconds from `iat` and stops 15 seconds
+before that limit or `exp`, whichever comes first. Since `iat` is backdated by
+10 seconds to tolerate clock skew, the usual cache interval is about 35
+seconds. This age cap is applied to every signer so upstreams that enforce a
+maximum JWT age do not receive a stale cached token.
 
 ### Notes
 

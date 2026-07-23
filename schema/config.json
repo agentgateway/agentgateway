@@ -3508,7 +3508,7 @@
       ]
     },
     "JwtSignAuth": {
-      "description": "Supplies a short-lived JWT signed with a private key to the backend. Tokens\nare reused until shortly before expiry to avoid repeated signing work.",
+      "description": "Supplies a short-lived JWT signed with a private key to the backend. Tokens\nare reused until shortly before either expiry or the maximum token age.",
       "type": "object",
       "properties": {
         "signingKey": {
@@ -3534,7 +3534,7 @@
           "minProperties": 1
         },
         "ttl": {
-          "description": "Token lifetime used for `exp`. Defaults to 300s.",
+          "description": "Token lifetime used for `exp`. Defaults to 300s. Cache reuse is also\nbounded by the token's issue time and may be shorter than this lifetime.",
           "type": [
             "string",
             "null"

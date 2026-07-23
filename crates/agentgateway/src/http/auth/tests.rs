@@ -1111,6 +1111,26 @@ fn test_jwt_sign_rejects_zero_ttl_and_bad_key() {
 	assert!(bad_key.is_err(), "invalid PEM must be rejected");
 }
 
+#[test]
+fn test_jwt_sign_rejects_expression_location() {
+	let location = AuthorizationLocation::Expression(std::sync::Arc::new(
+		crate::cel::Expression::new_strict(r#"request.headers["x-token"]"#).unwrap(),
+	));
+	let result = JwtSignAuth::try_new(
+		TEST_JWT_SIGN_EC_KEY,
+		oauth::SigningAlg::Es256,
+		None,
+		[("iss".to_string(), "me".into())].into_iter().collect(),
+		None,
+		Some(location),
+	);
+
+	assert!(
+		result.is_err_and(|error| error.contains("location cannot be an expression")),
+		"expression locations must be rejected before request processing"
+	);
+}
+
 #[tokio::test]
 async fn test_backend_auth_jwt_sign_rounds_up_sub_second_ttl() {
 	let mut req = crate::http::Request::new(crate::http::Body::empty());

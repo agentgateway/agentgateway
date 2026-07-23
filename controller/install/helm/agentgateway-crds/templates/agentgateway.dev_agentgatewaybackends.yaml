@@ -4706,7 +4706,8 @@ spec:
                                       jwtSign:
                                         description: |-
                                           Supplies a short-lived JWT signed with a private key to the backend.
-                                          Tokens are reused until shortly before expiry.
+                                          Tokens are reused until shortly before either expiry or the maximum token
+                                          age.
                                         properties:
                                           alg:
                                             description: JWS signing algorithm. Defaults
@@ -4814,8 +4815,9 @@ spec:
                                                 (has(self.kind) && size(self.kind)
                                                 > 0)'
                                           ttl:
-                                            description: Token lifetime used for exp.
-                                              Defaults to 300s.
+                                            description: |-
+                                              Token lifetime used for exp. Defaults to 300s. Cache reuse is also bounded
+                                              by the token's issue time and may be shorter than this lifetime.
                                             type: string
                                             x-kubernetes-validations:
                                             - message: invalid duration value
@@ -7498,7 +7500,8 @@ spec:
                                     jwtSign:
                                       description: |-
                                         Supplies a short-lived JWT signed with a private key to the backend.
-                                        Tokens are reused until shortly before expiry.
+                                        Tokens are reused until shortly before either expiry or the maximum token
+                                        age.
                                       properties:
                                         alg:
                                           description: JWS signing algorithm. Defaults
@@ -7604,8 +7607,9 @@ spec:
                                               == 0 || self.kind == ''Secret'') : (has(self.kind)
                                               && size(self.kind) > 0)'
                                         ttl:
-                                          description: Token lifetime used for exp.
-                                            Defaults to 300s.
+                                          description: |-
+                                            Token lifetime used for exp. Defaults to 300s. Cache reuse is also bounded
+                                            by the token's issue time and may be shorter than this lifetime.
                                           type: string
                                           x-kubernetes-validations:
                                           - message: invalid duration value
@@ -12252,7 +12256,8 @@ spec:
                       jwtSign:
                         description: |-
                           Supplies a short-lived JWT signed with a private key to the backend.
-                          Tokens are reused until shortly before expiry.
+                          Tokens are reused until shortly before either expiry or the maximum token
+                          age.
                         properties:
                           alg:
                             description: JWS signing algorithm. Defaults to RS256.
@@ -12352,8 +12357,9 @@ spec:
                                 == ''Secret'') : (has(self.kind) && size(self.kind)
                                 > 0)'
                           ttl:
-                            description: Token lifetime used for exp. Defaults to
-                              300s.
+                            description: |-
+                              Token lifetime used for exp. Defaults to 300s. Cache reuse is also bounded
+                              by the token's issue time and may be shorter than this lifetime.
                             type: string
                             x-kubernetes-validations:
                             - message: invalid duration value
