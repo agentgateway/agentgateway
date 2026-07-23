@@ -1,5 +1,5 @@
-// SPIFFE Workload API definition, vendored verbatim from the `spiffe` crate
-// (spiffe-0.11.x: src/proto/workload.proto), which only generates the gRPC *client*.
+// SPIFFE Workload API definition, vendored verbatim from the `spiffe` crate's
+// `src/proto/workload.proto`, which only generates the gRPC *client*.
 //
 // TEST/E2E ONLY: this is compiled solely under the `protos/spiffe-test-server` feature so that
 // tests can stand up a fake Workload API *server* to exercise the SPIFFE dataplane without a real

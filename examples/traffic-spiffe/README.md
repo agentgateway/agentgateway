@@ -40,7 +40,7 @@ backendTLS:
   - spiffe://example.org/ns/default/sa/upstream
 ```
 
-> **Trust-domain scope:** all authorities in the SPIFFE bundle set (including any federated
-> trust domains) are accepted. Restrict further by pinning upstream SPIFFE IDs with
-> `subjectAltNames`, or, on the serving side, with a CEL authorization policy on
-> `source.spiffeId`.
+> **Trust-domain scope:** only SVIDs chaining to the gateway's own trust domain bundle are
+> accepted; SPIFFE federation across trust domains is not supported. Restrict further by pinning
+> upstream SPIFFE IDs with `subjectAltNames`, or, on the serving side, with a CEL authorization
+> policy on `source.spiffeId`.

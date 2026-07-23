@@ -1242,7 +1242,7 @@
           ]
         },
         "root": {
-          "description": "Path to a root CA certificate file used to validate client certificates. Required unless `spiffe` is set.",
+          "description": "Path to a root CA certificate file used to validate client certificates (mTLS).\nOmit for one-way server TLS. Not used when `spiffe` is set.",
           "type": [
             "string",
             "null"

@@ -1289,7 +1289,8 @@ pub struct LocalTLSServerConfig {
 	pub cert: Option<PathBuf>,
 	/// Path to the TLS private key file.
 	pub key: Option<PathBuf>,
-	/// Path to a root CA certificate file used to validate client certificates. Required unless `spiffe` is set.
+	/// Path to a root CA certificate file used to validate client certificates (mTLS).
+	/// Omit for one-way server TLS. Not used when `spiffe` is set.
 	pub root: Option<PathBuf>,
 	/// Source the serving identity from the SPIFFE Workload API.
 	/// Mutually exclusive with `cert`/`key`/`root`.
