@@ -76,6 +76,19 @@ pub struct ImportResult {
 	pub findings: Vec<ImportFinding>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ImportOptions {
+	pub database_url: String,
+}
+
+impl Default for ImportOptions {
+	fn default() -> Self {
+		Self {
+			database_url: "sqlite://data.db".to_string(),
+		}
+	}
+}
+
 pub fn available_sources() -> Vec<&'static str> {
 	importers()
 		.iter()
@@ -84,6 +97,14 @@ pub fn available_sources() -> Vec<&'static str> {
 }
 
 pub fn import_config(source: &str, input: &str) -> anyhow::Result<ImportResult> {
+	import_config_with_options(source, input, &ImportOptions::default())
+}
+
+pub fn import_config_with_options(
+	source: &str,
+	input: &str,
+	options: &ImportOptions,
+) -> anyhow::Result<ImportResult> {
 	let importer = importers()
 		.into_iter()
 		.find(|importer| importer.source().eq_ignore_ascii_case(source))
@@ -94,14 +115,14 @@ pub fn import_config(source: &str, input: &str) -> anyhow::Result<ImportResult> 
 			)
 		})?;
 	let plan = importer.import(input)?;
-	emit(importer.source(), plan)
+	emit(importer.source(), plan, options)
 }
 
 fn importers() -> Vec<Box<dyn ConfigImporter>> {
 	vec![Box::new(LiteLlmImporter)]
 }
 
-fn emit(source: &str, plan: ImportPlan) -> anyhow::Result<ImportResult> {
+fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Result<ImportResult> {
 	let ImportPlan {
 		models,
 		routes,
@@ -111,15 +132,38 @@ fn emit(source: &str, plan: ImportPlan) -> anyhow::Result<ImportResult> {
 		.iter()
 		.map(|model| (model.name.as_str(), model))
 		.collect();
+	let internal_names = models
+		.iter()
+		.map(|model| model.name.as_str())
+		.collect::<HashSet<_>>();
+	let direct_model_names = routes
+		.iter()
+		.filter_map(|(public_name, route)| {
+			let [target] = route.targets.as_slice() else {
+				return None;
+			};
+			if !route.fallback_groups.is_empty()
+				|| (internal_names.contains(public_name.as_str()) && public_name != target)
+			{
+				return None;
+			}
+			Some((target.clone(), public_name.clone()))
+		})
+		.collect::<HashMap<_, _>>();
 	let emitted_models = models
 		.iter()
 		.map(|model| {
-			let mut value = Map::from_iter([
-				("name".to_string(), json!(model.name)),
-				("visibility".to_string(), json!("internal")),
-				("provider".to_string(), json!(model.provider)),
-				("params".to_string(), Value::Object(model.params.clone())),
-			]);
+			let direct_name = direct_model_names.get(&model.name);
+			let mut value = Map::new();
+			value.insert(
+				"name".to_string(),
+				json!(direct_name.unwrap_or(&model.name)),
+			);
+			if direct_name.is_none() {
+				value.insert("visibility".to_string(), json!("internal"));
+			}
+			value.insert("provider".to_string(), json!(model.provider));
+			value.insert("params".to_string(), Value::Object(model.params.clone()));
 			if !model.defaults.is_empty() {
 				value.insert(
 					"defaults".to_string(),
@@ -135,12 +179,18 @@ fn emit(source: &str, plan: ImportPlan) -> anyhow::Result<ImportResult> {
 		if route.targets.is_empty() {
 			continue;
 		}
+		if let [target] = route.targets.as_slice()
+			&& direct_model_names.get(target) == Some(&name)
+		{
+			continue;
+		}
 		let routing = if route.fallback_groups.is_empty() {
 			let targets = route
 				.targets
 				.iter()
 				.map(|target| {
 					let weight = model_by_name.get(target.as_str()).map_or(1, |m| m.weight);
+					let target = direct_model_names.get(target).unwrap_or(target);
 					json!({"model": target, "weight": weight})
 				})
 				.collect::<Vec<_>>();
@@ -149,10 +199,14 @@ fn emit(source: &str, plan: ImportPlan) -> anyhow::Result<ImportResult> {
 			let mut targets = route
 				.targets
 				.iter()
-				.map(|target| json!({"model": target, "priority": 0}))
+				.map(|target| {
+					let target = direct_model_names.get(target).unwrap_or(target);
+					json!({"model": target, "priority": 0})
+				})
 				.collect::<Vec<_>>();
 			for (priority, fallback_group) in route.fallback_groups.iter().enumerate() {
 				for fallback in fallback_group {
+					let fallback = direct_model_names.get(fallback).unwrap_or(fallback);
 					targets.push(json!({"model": fallback, "priority": priority + 1}));
 				}
 			}
@@ -161,13 +215,18 @@ fn emit(source: &str, plan: ImportPlan) -> anyhow::Result<ImportResult> {
 		virtual_models.push(json!({"name": name, "routing": routing}));
 	}
 
-	let config = json!({
-		"llm": {
-			"port": 4000,
-			"models": emitted_models,
-			"virtualModels": virtual_models,
-		}
-	});
+	let mut config = crate::types::local::default_standalone_config(&options.database_url);
+	let mut llm = Map::from_iter([
+		("gateways".to_string(), json!("default")),
+		("models".to_string(), Value::Array(emitted_models)),
+	]);
+	if !virtual_models.is_empty() {
+		llm.insert("virtualModels".to_string(), Value::Array(virtual_models));
+	}
+	config
+		.as_object_mut()
+		.expect("default standalone config must be an object")
+		.insert("llm".to_string(), Value::Object(llm));
 	let yaml = crate::yamlviajson::to_string(&config)?;
 	let _: crate::types::local::LocalConfig = crate::yamlviajson::from_str(&yaml)
 		.context("generated agentgateway configuration is invalid")?;
@@ -301,16 +360,26 @@ impl ConfigImporter for LiteLlmImporter {
 			("general_settings", &config.general_settings),
 			("environment_variables", &config.environment_variables),
 		] {
-			report_unmapped_fields(
-				&mut plan.findings,
-				section,
-				values,
-				ImportStatus::Manual,
-				"Requires manual review and was not emitted",
-			);
+			for setting in values.keys() {
+				if setting == "database_url"
+					|| (section == "environment_variables" && setting == "DATABASE_URL")
+				{
+					report_litellm_database(&mut plan.findings, &format!("{section}.{setting}"));
+					continue;
+				}
+				plan.findings.push(ImportFinding {
+					source_path: format!("{section}.{setting}"),
+					status: ImportStatus::Manual,
+					message: "Requires manual review and was not emitted".to_string(),
+				});
+			}
 		}
 		for setting in config.litellm_settings.keys() {
 			if setting == "fallbacks" {
+				continue;
+			}
+			if setting == "database_url" {
+				report_litellm_database(&mut plan.findings, &format!("litellm_settings.{setting}"));
 				continue;
 			}
 			plan.findings.push(ImportFinding {
@@ -328,6 +397,15 @@ impl ConfigImporter for LiteLlmImporter {
 		);
 		Ok(plan)
 	}
+}
+
+fn report_litellm_database(findings: &mut Vec<ImportFinding>, source_path: &str) {
+	findings.push(ImportFinding {
+		source_path: source_path.to_string(),
+		status: ImportStatus::Manual,
+		message: "LiteLLM database configuration was not reused; generated config uses a new agentgateway SQLite database. Configure PostgreSQL manually if desired"
+			.to_string(),
+	});
 }
 
 fn import_litellm_model(
@@ -745,6 +823,16 @@ mod tests {
 	#[test]
 	fn reports_wildcard_models_without_emitting_malformed_names() {
 		assert_litellm_golden("wildcard-model");
+	}
+
+	#[test]
+	fn reports_litellm_database_settings_without_reusing_them() {
+		assert_litellm_golden("database-settings");
+	}
+
+	#[test]
+	fn keeps_routing_for_a_single_model_with_fallbacks() {
+		assert_litellm_golden("single-model-fallback");
 	}
 
 	#[test]

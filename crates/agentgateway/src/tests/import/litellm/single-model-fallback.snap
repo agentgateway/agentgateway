@@ -1,0 +1,45 @@
+---
+source: crates/agentgateway/src/import.rs
+description: src/tests/import/litellm/single-model-fallback.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: imported/litellm/primary/1
+        visibility: internal
+        provider: openAI
+        params:
+          model: gpt-4o
+      - name: backup
+        provider: anthropic
+        params:
+          model: claude-haiku-4
+    virtualModels:
+      - name: primary
+        routing:
+          failover:
+            targets:
+              - model: imported/litellm/primary/1
+                priority: 0
+              - model: backup
+                priority: 1
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for primary
+  - sourcePath: "model_list[1]"
+    status: exact
+    message: Imported model deployment for backup
+  - sourcePath: router_settings.fallbacks
+    status: approximate
+    message: Mapped ordinary LiteLLM fallbacks to agentgateway priority-based failover

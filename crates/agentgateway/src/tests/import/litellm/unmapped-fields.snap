@@ -4,21 +4,21 @@ description: src/tests/import/litellm/unmapped-fields.yaml
 ---
 source: litellm
 config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
   llm:
-    port: 4000
+    gateways: default
     models:
-      - name: imported/litellm/chat/1
-        visibility: internal
+      - name: chat
         provider: openAI
         params:
           model: gpt-4o
-    virtualModels:
-      - name: chat
-        routing:
-          weighted:
-            targets:
-              - model: imported/litellm/chat/1
-                weight: 1
 findings:
   - sourcePath: "model_list[0].model_info.id"
     status: manual

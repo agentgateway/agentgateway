@@ -4,10 +4,17 @@ description: src/tests/import/litellm/unsupported-provider.yaml
 ---
 source: litellm
 config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
   llm:
-    port: 4000
+    gateways: default
     models: []
-    virtualModels: []
 findings:
   - sourcePath: "model_list[0].litellm_params.model"
     status: unsupported

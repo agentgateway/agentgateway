@@ -237,25 +237,18 @@ fn ensure_default_config_file(path: &std::path::Path) -> anyhow::Result<()> {
 	let parent = path
 		.parent()
 		.ok_or_else(|| anyhow::anyhow!("config path has no parent: {}", path.display()))?;
-	fs_err::write(path, default_config_contents(parent))?;
+	fs_err::write(path, default_config_contents(parent)?)?;
 	Ok(())
 }
 
-fn default_config_contents(dir: &std::path::Path) -> String {
+fn default_config_contents(dir: &std::path::Path) -> anyhow::Result<String> {
 	let db = dir.join("data.db");
-	format!(
-		r#"# yaml-language-server: $schema=https://agentgateway.dev/schema/config
-config:
-  database:
-    url: sqlite://{}
-gateways:
-  default:
-    port: 4000
-ui:
-  gateways: default
-"#,
-		db.display()
-	)
+	let config =
+		agentgateway::types::local::default_standalone_config(&format!("sqlite://{}", db.display()));
+	let yaml = agentgateway::yamlviajson::to_string(&config)?;
+	Ok(format!(
+		"# yaml-language-server: $schema=https://agentgateway.dev/schema/config\n{yaml}"
+	))
 }
 
 fn existing_writable_dir(path: &std::path::Path) -> bool {

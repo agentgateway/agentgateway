@@ -4,11 +4,18 @@ description: src/tests/import/litellm/environment-references.yaml
 ---
 source: litellm
 config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
   llm:
-    port: 4000
+    gateways: default
     models:
-      - name: imported/litellm/chat/1
-        visibility: internal
+      - name: chat
         provider: azure
         params:
           model: gpt-4o
@@ -19,13 +26,6 @@ config:
           temperature: $DEFAULT_TEMPERATURE
           stop:
             - $STOP_SEQUENCE
-    virtualModels:
-      - name: chat
-        routing:
-          weighted:
-            targets:
-              - model: imported/litellm/chat/1
-                weight: 1
 findings:
   - sourcePath: "model_list[0]"
     status: exact
