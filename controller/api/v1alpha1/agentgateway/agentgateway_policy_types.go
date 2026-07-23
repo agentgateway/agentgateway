@@ -1506,16 +1506,11 @@ type BackendAuthCredential struct {
 	// +required
 	Location AuthorizationLocation `json:"location"`
 
-	// SecretRef references a Kubernetes Secret holding the credential value.
+	// SecretRef references a Kubernetes Secret holding the credential value, and
+	// optionally overrides the key read from it. Defaults to `Authorization`,
+	// matching the key convention used by the top-level `secretRef`.
 	// +required
-	SecretRef LocalSecretObjectRef `json:"secretRef"`
-
-	// SecretKey is the key in the referenced Secret whose value is used.
-	// Defaults to `Authorization`, matching the key convention used by `secretRef`.
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:MaxLength=253
-	// +optional
-	SecretKey *string `json:"secretKey,omitempty"`
+	SecretRef LocalSecretKeyRef `json:"secretRef"`
 }
 
 // OpenAIModerationAuth configures credentials for OpenAI Moderation requests.

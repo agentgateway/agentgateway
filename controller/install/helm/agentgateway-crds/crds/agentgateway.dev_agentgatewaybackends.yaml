@@ -4145,22 +4145,23 @@ spec:
                                                   must be set
                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                   == 1'
-                                            secretKey:
-                                              description: |-
-                                                SecretKey is the key in the referenced Secret whose value is used.
-                                                Defaults to `Authorization`, matching the key convention used by `secretRef`.
-                                              maxLength: 253
-                                              minLength: 1
-                                              type: string
                                             secretRef:
-                                              description: SecretRef references a
-                                                Kubernetes Secret holding the credential
-                                                value.
+                                              description: |-
+                                                SecretRef references a Kubernetes Secret holding the credential value, and
+                                                optionally overrides the key read from it. Defaults to `Authorization`,
+                                                matching the key convention used by the top-level `secretRef`.
                                               properties:
                                                 group:
                                                   description: API group of the referenced
                                                     credential; empty selects the
                                                     core API group
+                                                  type: string
+                                                key:
+                                                  description: Key in the referenced
+                                                    Secret. If omitted, a location-specific
+                                                    default is used
+                                                  maxLength: 253
+                                                  minLength: 1
                                                   type: string
                                                 kind:
                                                   description: Kind of the referenced
@@ -6941,21 +6942,23 @@ spec:
                                                 be set
                                               rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                                 == 1'
-                                          secretKey:
-                                            description: |-
-                                              SecretKey is the key in the referenced Secret whose value is used.
-                                              Defaults to `Authorization`, matching the key convention used by `secretRef`.
-                                            maxLength: 253
-                                            minLength: 1
-                                            type: string
                                           secretRef:
-                                            description: SecretRef references a Kubernetes
-                                              Secret holding the credential value.
+                                            description: |-
+                                              SecretRef references a Kubernetes Secret holding the credential value, and
+                                              optionally overrides the key read from it. Defaults to `Authorization`,
+                                              matching the key convention used by the top-level `secretRef`.
                                             properties:
                                               group:
                                                 description: API group of the referenced
                                                   credential; empty selects the core
                                                   API group
+                                                type: string
+                                              key:
+                                                description: Key in the referenced
+                                                  Secret. If omitted, a location-specific
+                                                  default is used
+                                                maxLength: 253
+                                                minLength: 1
                                                 type: string
                                               kind:
                                                 description: Kind of the referenced
@@ -11750,20 +11753,21 @@ spec:
                                   cookie] must be set
                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
                                   == 1'
-                            secretKey:
-                              description: |-
-                                SecretKey is the key in the referenced Secret whose value is used.
-                                Defaults to `Authorization`, matching the key convention used by `secretRef`.
-                              maxLength: 253
-                              minLength: 1
-                              type: string
                             secretRef:
-                              description: SecretRef references a Kubernetes Secret
-                                holding the credential value.
+                              description: |-
+                                SecretRef references a Kubernetes Secret holding the credential value, and
+                                optionally overrides the key read from it. Defaults to `Authorization`,
+                                matching the key convention used by the top-level `secretRef`.
                               properties:
                                 group:
                                   description: API group of the referenced credential;
                                     empty selects the core API group
+                                  type: string
+                                key:
+                                  description: Key in the referenced Secret. If omitted,
+                                    a location-specific default is used
+                                  maxLength: 253
+                                  minLength: 1
                                   type: string
                                 kind:
                                   description: Kind of the referenced credential;

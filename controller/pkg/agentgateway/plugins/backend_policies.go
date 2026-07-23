@@ -1393,12 +1393,8 @@ func translateBackendAuthCredentials(ctx PolicyCtx, creds []agentgateway.Backend
 	translated := make([]*api.BackendAuthCredential, 0, len(creds))
 	for _, c := range creds {
 		locName := credentialLocationName(c.Location)
-		secretKey := wellknown.Authorization
-		if c.SecretKey != nil {
-			secretKey = *c.SecretKey
-		}
 		var value string
-		data, err := ctx.ResolveCredentialRef(c.SecretRef, namespace)
+		data, secretKey, err := ctx.ResolveCredentialKeyRef(c.SecretRef, namespace, wellknown.Authorization)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("backendAuth credential %q: %w", locName, err))
 		} else if val, ok := data[secretKey]; !ok {
