@@ -1323,16 +1323,36 @@ impl Relay {
 		message: ClientJsonRpcMessage,
 		ctx: IncomingRequestContext,
 	) -> Result<Response, UpstreamError> {
-		let request_id = match &message {
-			ClientJsonRpcMessage::Response(r) => r.id.clone(),
-			ClientJsonRpcMessage::Error(e) => e.id.clone().ok_or_else(|| {
-				UpstreamError::InvalidRequest("JSON-RPC error response missing id".into())
-			})?,
+		match &message {
+			ClientJsonRpcMessage::Error(e) if e.id.is_none() => {
+				if self.upstreams.size() == 1 {
+					let name = self
+						.upstreams
+						.iter_named()
+						.next()
+						.map(|(name, _)| name)
+						.ok_or_else(|| UpstreamError::InvalidRequest("no upstreams available".into()))?;
+					let us = self.upstreams.get(name.as_str())?;
+					us.generic_client_message(message, &ctx).await?;
+					return Ok(accepted_response());
+				}
+				warn!(
+					"dropping client JSON-RPC error without id in multiplexed session; cannot route upstream"
+				);
+				return Ok(accepted_response());
+			},
+			ClientJsonRpcMessage::Response(_) | ClientJsonRpcMessage::Error(_) => {},
 			_ => {
 				return Err(UpstreamError::InvalidRequest(
 					"expected client JSON-RPC response".into(),
 				));
 			},
+		}
+
+		let request_id = match &message {
+			ClientJsonRpcMessage::Response(r) => r.id.clone(),
+			ClientJsonRpcMessage::Error(e) => e.id.clone().expect("id checked above"),
+			_ => unreachable!(),
 		};
 
 		let pending = resolve_pending_server_request(self, &request_id)?;

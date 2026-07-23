@@ -301,9 +301,11 @@ impl Upstream {
 			Upstream::McpStreamable(c) => {
 				let res = c.send_client_message(message, ctx).await?;
 				match res {
-					StreamableHttpPostResponse::Accepted => Ok(()),
+					StreamableHttpPostResponse::Accepted
+					| StreamableHttpPostResponse::Json(_, _)
+					| StreamableHttpPostResponse::Sse(_, _) => Ok(()),
 					_ => Err(UpstreamError::InvalidRequest(
-						"expected accepted response for client JSON-RPC reply".into(),
+						"unexpected response for client JSON-RPC reply".into(),
 					)),
 				}
 			},
