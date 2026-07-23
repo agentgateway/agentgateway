@@ -5578,6 +5578,10 @@ details summary {
   min-height: 460px;
 }
 
+.config-diff-empty .empty-state {
+  height: 100%;
+}
+
 .schema-yaml-editor.policy-yaml-editor {
   height: min(42vh, 460px);
   min-height: 300px;

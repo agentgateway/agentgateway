@@ -316,9 +316,6 @@ export function PolicyCatalogPage(props: {
           applySaveDiff={(next, value) => {
             props.onSavePolicy(next, selected, value);
           }}
-          applyDisableDiff={(next) => {
-            props.onDisablePolicy(next, selected);
-          }}
           onSave={(value) =>
             update.mutate(
               (next) => {

@@ -1,7 +1,15 @@
 import { Trash2 } from "lucide-react";
-import { useRef } from "react";
-import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
-import { Drawer, StatusBanner, Tooltip } from "../components/Primitives";
+import { useRef, useState } from "react";
+import {
+  ConfigDiffSaveActions,
+  ConfigSaveButton,
+} from "../components/ConfigDiffDrawer";
+import {
+  ConfirmDialog,
+  Drawer,
+  StatusBanner,
+  Tooltip,
+} from "../components/Primitives";
 import type { BackendAuth } from "../gateway-config";
 import type { SchemaHelp } from "../schemaHelp";
 import type { CorsPolicy, GatewayConfig } from "../types";
@@ -60,11 +68,11 @@ export function PolicyDrawer(props: {
   config?: GatewayConfig | null;
   onClose: () => void;
   applySaveDiff?: (config: GatewayConfig, value: unknown) => void;
-  applyDisableDiff?: (config: GatewayConfig) => void;
   onSave: (value: unknown) => void;
   onDisable: () => void;
 }) {
   const enabled = policyEnabled(props.policies, props.policyKey);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const submittedValue = useRef<unknown>(undefined);
   const formId = `policy-editor-${sanitizePolicyFormId(props.schemaRoot ?? "LocalLLMPolicy")}-${sanitizePolicyFormId(props.policyKey)}`;
 
@@ -76,68 +84,87 @@ export function PolicyDrawer(props: {
   }
 
   return (
-    <Drawer
-      title={props.title}
-      onClose={props.onClose}
-      headerActions={
-        enabled ? (
+    <>
+      <Drawer
+        title={props.title}
+        onClose={props.onClose}
+        headerActions={
+          enabled ? (
+            <ConfigSaveButton
+              disabled={props.saving}
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 size={16} />
+              Delete policy
+            </ConfigSaveButton>
+          ) : (
+            <Tooltip content="Policy is not enabled">
+              <button
+                className="icon-button danger"
+                type="button"
+                aria-label="Delete policy"
+                disabled
+              >
+                <Trash2 size={17} />
+              </button>
+            </Tooltip>
+          )
+        }
+        footer={
           <ConfigDiffSaveActions
             config={props.config}
-            diffTitle={`${props.title} policy removal diff`}
-            saveLabel="Delete policy"
+            diffTitle={`${props.title} policy config diff`}
+            saveLabel="Save policy"
             saving={props.saving}
-            onSave={props.onDisable}
-            applyDiff={(next) => props.applyDisableDiff?.(next)}
+            onSave={() => {
+              if (submitPolicyForm()) props.onSave(submittedValue.current);
+            }}
+            beforeDiff={submitPolicyForm}
+            applyDiff={(next) => {
+              if (props.applySaveDiff) {
+                props.applySaveDiff(next, submittedValue.current);
+              }
+            }}
           />
-        ) : (
-          <Tooltip content="Policy is not enabled">
-            <button
-              className="icon-button danger"
-              type="button"
-              aria-label="Delete policy"
-              disabled
-            >
-              <Trash2 size={17} />
-            </button>
-          </Tooltip>
-        )
-      }
-      footer={
-        <ConfigDiffSaveActions
-          config={props.config}
-          diffTitle={`${props.title} policy config diff`}
-          saveLabel="Save policy"
+        }
+      >
+        <PolicyEditorBody
+          formId={formId}
+          policyKey={props.policyKey}
+          customEditor={props.customEditor}
+          policyValue={props.policyValue}
+          help={props.help}
           saving={props.saving}
-          onSave={() => {
-            if (submitPolicyForm()) props.onSave(submittedValue.current);
-          }}
-          beforeDiff={submitPolicyForm}
-          applyDiff={(next) => {
-            if (props.applySaveDiff) {
-              props.applySaveDiff(next, submittedValue.current);
-            }
+          schemaRoot={props.schemaRoot}
+          onSave={(value) => {
+            submittedValue.current = value;
           }}
         />
-      }
-    >
-      <PolicyEditorBody
-        formId={formId}
-        policyKey={props.policyKey}
-        customEditor={props.customEditor}
-        policyValue={props.policyValue}
-        help={props.help}
-        saving={props.saving}
-        schemaRoot={props.schemaRoot}
-        onSave={(value) => {
-          submittedValue.current = value;
-        }}
-      />
-      {props.saveError ? (
-        <StatusBanner state="bad" title="Save failed">
-          {props.saveError}
-        </StatusBanner>
+        {props.saveError ? (
+          <StatusBanner state="bad" title="Save failed">
+            {props.saveError}
+          </StatusBanner>
+        ) : null}
+      </Drawer>
+      {confirmDelete ? (
+        <ConfirmDialog
+          title="Delete policy?"
+          destructive
+          confirmLabel="Delete policy"
+          confirmDisabled={props.saving}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={() => {
+            setConfirmDelete(false);
+            props.onDisable();
+          }}
+        >
+          <p>
+            Delete the <strong>{props.title}</strong> policy from this
+            configuration?
+          </p>
+        </ConfirmDialog>
       ) : null}
-    </Drawer>
+    </>
   );
 }
 
