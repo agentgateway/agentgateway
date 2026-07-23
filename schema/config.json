@@ -3803,6 +3803,28 @@
               "description": "PEM-encoded private signing key (RSA or EC, matching `alg`).",
               "$ref": "#/$defs/FileOrInline"
             },
+            "certificate": {
+              "description": "PEM-encoded X.509 certificate chain, leaf first. The leaf public key must\ncorrespond to `signing_key` for token endpoints to validate assertions.\nA mismatch or comparison failure is logged and does not prevent loading.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FileOrInline"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "certificateHeader": {
+              "description": "JWS certificate header emitted from `certificate`. Required when `certificate` is set.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CertificateHeader"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "alg": {
               "$ref": "#/$defs/SigningAlg",
               "default": "RS256"
@@ -3831,12 +3853,27 @@
         }
       ]
     },
+    "CertificateHeader": {
+      "oneOf": [
+        {
+          "description": "Send the X.509 certificate chain in `x5c`.",
+          "type": "string",
+          "const": "x5c"
+        },
+        {
+          "description": "Send the leaf certificate's SHA-256 thumbprint in `x5t#S256`.",
+          "type": "string",
+          "const": "x5t#S256"
+        }
+      ]
+    },
     "SigningAlg": {
       "type": "string",
       "enum": [
         "RS256",
         "RS384",
         "RS512",
+        "PS256",
         "ES256",
         "ES384"
       ]

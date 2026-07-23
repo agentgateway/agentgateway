@@ -1789,21 +1789,32 @@ type OAuthClientAuth struct {
 	// +optional
 	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
 
-	// privateKeyJwt client assertion settings. Required when method is PrivateKeyJwt.
+	// Client assertion settings. Required when method is PrivateKeyJwt.
 	// +optional
 	PrivateKeyJWT *OAuthPrivateKeyJWT `json:"privateKeyJwt,omitempty"`
 
-	// Defaults to ClientSecretBasic.
+	// Client authentication method. Defaults to ClientSecretBasic.
 	// +optional
 	Method *OAuthClientAuthMethod `json:"method,omitempty"`
 }
 
 // OAuthPrivateKeyJWT configures RFC 7523 private_key_jwt client authentication.
+// +kubebuilder:validation:XValidation:rule="has(self.certificateRef) == has(self.certificateHeader)",message="certificateRef and certificateHeader must be set together"
 type OAuthPrivateKeyJWT struct {
-	// Secret providing the `signingKey` key by default with a PEM-encoded RSA
-	// or EC private key; override the key name via `signingKeyRef.key`.
+	// PEM-encoded RSA or EC private key; key defaults to `signingKey`.
 	// +required
 	SigningKeyRef LocalSecretKeyRef `json:"signingKeyRef"`
+
+	// PEM-encoded X.509 certificate chain, leaf first, for certificateHeader. The
+	// leaf public key should match signingKeyRef; a mismatch only logs a warning
+	// but the token endpoint will reject the assertions. Required when
+	// certificateHeader is set. The key defaults to `certificate`.
+	// +optional
+	CertificateRef *LocalSecretKeyRef `json:"certificateRef,omitempty"`
+
+	// JWS certificate header. Required when certificateRef is set.
+	// +optional
+	CertificateHeader *OAuthPrivateKeyJWTCertificateHeader `json:"certificateHeader,omitempty"`
 
 	// JWS signing algorithm. Defaults to RS256.
 	// +optional
@@ -1820,12 +1831,21 @@ type OAuthPrivateKeyJWT struct {
 }
 
 // +k8s:enum
+type OAuthPrivateKeyJWTCertificateHeader string
+
+const (
+	OAuthPrivateKeyJWTCertificateHeaderX5C     OAuthPrivateKeyJWTCertificateHeader = "x5c"
+	OAuthPrivateKeyJWTCertificateHeaderX5TS256 OAuthPrivateKeyJWTCertificateHeader = "x5t#S256"
+)
+
+// +k8s:enum
 type OAuthPrivateKeyJWTSigningAlgorithm string
 
 const (
 	OAuthPrivateKeyJWTSigningAlgorithmRS256 OAuthPrivateKeyJWTSigningAlgorithm = "RS256"
 	OAuthPrivateKeyJWTSigningAlgorithmRS384 OAuthPrivateKeyJWTSigningAlgorithm = "RS384"
 	OAuthPrivateKeyJWTSigningAlgorithmRS512 OAuthPrivateKeyJWTSigningAlgorithm = "RS512"
+	OAuthPrivateKeyJWTSigningAlgorithmPS256 OAuthPrivateKeyJWTSigningAlgorithm = "PS256"
 	OAuthPrivateKeyJWTSigningAlgorithmES256 OAuthPrivateKeyJWTSigningAlgorithm = "ES256"
 	OAuthPrivateKeyJWTSigningAlgorithmES384 OAuthPrivateKeyJWTSigningAlgorithm = "ES384"
 )

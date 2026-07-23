@@ -3823,6 +3823,16 @@ func (in *OAuthInMemoryTokenCache) DeepCopy() *OAuthInMemoryTokenCache {
 func (in *OAuthPrivateKeyJWT) DeepCopyInto(out *OAuthPrivateKeyJWT) {
 	*out = *in
 	in.SigningKeyRef.DeepCopyInto(&out.SigningKeyRef)
+	if in.CertificateRef != nil {
+		in, out := &in.CertificateRef, &out.CertificateRef
+		*out = new(LocalSecretKeyRef)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.CertificateHeader != nil {
+		in, out := &in.CertificateHeader, &out.CertificateHeader
+		*out = new(OAuthPrivateKeyJWTCertificateHeader)
+		**out = **in
+	}
 	if in.Alg != nil {
 		in, out := &in.Alg, &out.Alg
 		*out = new(OAuthPrivateKeyJWTSigningAlgorithm)

@@ -1255,10 +1255,14 @@ func buildOAuthPrivateKeyJWT(ctx PolicyCtx, auth *agentgateway.OAuthPrivateKeyJW
 		Alg:               translateOAuthPrivateKeyJWTSigningAlg(auth.Alg),
 		Kid:               auth.KeyID,
 		AssertionAudience: auth.AssertionAudience,
+		CertificateHeader: translateOAuthPrivateKeyJWTCertificateHeader(auth.CertificateHeader),
 	}
 
 	if auth.AssertionAudience == "" {
 		errs = append(errs, errors.New("oauth clientAuth privateKeyJwt assertionAudience must not be empty"))
+	}
+	if (auth.CertificateRef == nil) != (auth.CertificateHeader == nil) {
+		errs = append(errs, errors.New("oauth clientAuth privateKeyJwt certificateRef and certificateHeader must be set together"))
 	}
 
 	data, key, err := ctx.ResolveCredentialKeyRef(auth.SigningKeyRef, namespace, wellknown.SigningKey)
@@ -1268,6 +1272,16 @@ func buildOAuthPrivateKeyJWT(ctx PolicyCtx, auth *agentgateway.OAuthPrivateKeyJW
 		errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SigningKeyRef.Name, key))
 	} else {
 		res.SigningKey = value
+	}
+	if auth.CertificateRef != nil {
+		data, key, err := ctx.ResolveCredentialKeyRef(*auth.CertificateRef, namespace, wellknown.Certificate)
+		if err != nil {
+			errs = append(errs, err)
+		} else if value, exists := kubeutils.GetSecretDataValue(data, key); !exists || value == "" {
+			errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.CertificateRef.Name, key))
+		} else {
+			res.Certificate = value
+		}
 	}
 
 	return res, errors.Join(errs...)
@@ -1337,12 +1351,28 @@ func translateOAuthPrivateKeyJWTSigningAlg(alg *agentgateway.OAuthPrivateKeyJWTS
 		return api.OAuthClientAuth_PrivateKeyJwt_RS384
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS512:
 		return api.OAuthClientAuth_PrivateKeyJwt_RS512
+	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmPS256:
+		return api.OAuthClientAuth_PrivateKeyJwt_PS256
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256:
 		return api.OAuthClientAuth_PrivateKeyJwt_ES256
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES384:
 		return api.OAuthClientAuth_PrivateKeyJwt_ES384
 	default:
 		return api.OAuthClientAuth_PrivateKeyJwt_SIGNING_ALG_UNSPECIFIED
+	}
+}
+
+func translateOAuthPrivateKeyJWTCertificateHeader(header *agentgateway.OAuthPrivateKeyJWTCertificateHeader) api.OAuthClientAuth_PrivateKeyJwt_CertificateHeader {
+	if header == nil {
+		return api.OAuthClientAuth_PrivateKeyJwt_CERTIFICATE_HEADER_UNSPECIFIED
+	}
+	switch *header {
+	case agentgateway.OAuthPrivateKeyJWTCertificateHeaderX5C:
+		return api.OAuthClientAuth_PrivateKeyJwt_X5C
+	case agentgateway.OAuthPrivateKeyJWTCertificateHeaderX5TS256:
+		return api.OAuthClientAuth_PrivateKeyJwt_X5T_S256
+	default:
+		return api.OAuthClientAuth_PrivateKeyJwt_CERTIFICATE_HEADER_UNSPECIFIED
 	}
 }
 

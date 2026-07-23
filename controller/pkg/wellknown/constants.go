@@ -16,6 +16,8 @@ const (
 	ClientSecret = "clientSecret"
 	// SigningKey is the key name in secret data for PEM-encoded signing keys.
 	SigningKey = "signingKey"
+	// Certificate is the key name in secret data for PEM-encoded certificates.
+	Certificate = "certificate"
 	// GCPCredentialsJSON is the key name for GCP ADC-compatible credential JSON.
 	GCPCredentialsJSON = "credentials.json"
 	// Authorization is the key name in secret data for a bearer credential.
