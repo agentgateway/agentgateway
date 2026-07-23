@@ -1950,45 +1950,6 @@ spec:
                         minLength: 1
                         type: string
                     type: object
-                  promptCaching:
-                    description: Automatic prompt caching for supported providers.
-                    properties:
-                      cacheMessageOffset:
-                        default: 0
-                        description: |-
-                          Shifts the message cache point further back in the
-                          conversation. 0 (default) places it at the second-to-last message.
-                          Higher values move it N additional messages towards the start, clamped
-                          to bounds.
-                        minimum: 0
-                        type: integer
-                      cacheMessages:
-                        default: true
-                        description: |-
-                          Enables caching for conversation messages.
-                          Caches all messages in the conversation for cost savings.
-                        type: boolean
-                      cacheSystem:
-                        default: true
-                        description: |-
-                          Enables caching for system prompts.
-                          Inserts a cache point after all system messages.
-                        type: boolean
-                      cacheTools:
-                        default: false
-                        description: |-
-                          Enables caching for tool definitions.
-                          Inserts a cache point after all tool specifications.
-                        type: boolean
-                      minTokens:
-                        default: 1024
-                        description: |-
-                          Minimum estimated token count
-                          before caching is enabled. Uses rough heuristic (word count × 1.3) to estimate tokens.
-                          Bedrock requires at least 1,024 tokens for caching to be effective.
-                        minimum: 0
-                        type: integer
-                    type: object
                   promptGuard:
                     description: Guardrails for requests and responses sent to this
                       model provider.
@@ -4876,9 +4837,9 @@ spec:
                     type: object
                 type: object
                 x-kubernetes-validations:
-                - message: at least one of the fields in [auth headers health promptCaching
-                    promptGuard tls tunnel] must be set
-                  rule: '[has(self.auth),has(self.headers),has(self.health),has(self.promptCaching),has(self.promptGuard),has(self.tls),has(self.tunnel)].filter(x,x==true).size()
+                - message: at least one of the fields in [auth headers health promptGuard
+                    tls tunnel] must be set
+                  rule: '[has(self.auth),has(self.headers),has(self.health),has(self.promptGuard),has(self.tls),has(self.tunnel)].filter(x,x==true).size()
                     >= 1'
               provider:
                 description: |-

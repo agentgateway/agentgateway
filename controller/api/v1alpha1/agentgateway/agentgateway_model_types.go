@@ -145,10 +145,6 @@ type ModelPolicies struct {
 	// Guardrails for requests and responses sent to this model provider.
 	// +optional
 	PromptGuard *AIPromptGuard `json:"promptGuard,omitempty"`
-
-	// Automatic prompt caching for supported providers.
-	// +optional
-	PromptCaching *PromptCachingConfig `json:"promptCaching,omitempty"`
 }
 
 // ModelMatch contains conditions for selecting a model.

@@ -44,6 +44,9 @@ spec:
     name: virtual-models
     sectionName: llm
   provider: OpenAI
+  transformations:
+  - field: model
+    expression: '"gpt-5-mini-transformed"'
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
@@ -149,7 +152,11 @@ output:
       ai:
         providerGroups:
         - providers:
-          - name: gpt-5-mini
+          - inlinePolicies:
+            - ai:
+                transformations:
+                  model: '"gpt-5-mini-transformed"'
+            name: gpt-5-mini
             openai:
               model: gpt-5-mini
         - providers:
@@ -200,6 +207,9 @@ output:
     Namespace: default
   resource:
     modelRoute:
+      aiPolicy:
+        transformations:
+          model: '"gpt-5-mini-transformed"'
       concreteModel:
         backend:
           backend: default/gpt-5-mini/backend.llm

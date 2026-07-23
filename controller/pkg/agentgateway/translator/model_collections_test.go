@@ -118,7 +118,6 @@ func TestModelProviderInlinePolicies(t *testing.T) {
 			PromptGuard: &agentgateway.AIPromptGuard{Request: []agentgateway.PromptguardRequest{{
 				Regex: &agentgateway.Regex{Action: new(agentgateway.Action(agentgateway.REJECT)), Matches: []agentgateway.LongString{"blocked"}},
 			}}},
-			PromptCaching: &agentgateway.PromptCachingConfig{CacheMessages: true, CacheSystem: true, CacheTools: true, MinTokens: 1024},
 		},
 	}
 
@@ -135,8 +134,8 @@ func TestModelProviderInlinePolicies(t *testing.T) {
 	if provider.InlinePolicies[1].GetHealth() == nil {
 		t.Errorf("health policy = %#v, want health", provider.InlinePolicies[1])
 	}
-	if ai := provider.InlinePolicies[2].GetAi(); ai == nil || ai.GetPromptGuard() == nil || ai.GetPromptCaching() == nil {
-		t.Errorf("AI policy = %#v, want prompt guard and caching", provider.InlinePolicies[2])
+	if ai := provider.InlinePolicies[2].GetAi(); ai == nil || ai.GetPromptGuard() == nil {
+		t.Errorf("AI policy = %#v, want prompt guard", provider.InlinePolicies[2])
 	}
 	if provider.InlinePolicies[3].GetAuth() == nil {
 		t.Errorf("auth policy = %#v, want backend auth", provider.InlinePolicies[3])

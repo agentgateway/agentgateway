@@ -294,6 +294,15 @@ func modelFailoverBackend(ctx RouteContext, model *agentgateway.AgentgatewayMode
 		if err != nil {
 			return nil, err
 		}
+		transformations, err := translateModelRouteAIPolicy(ctx, refModel.Namespace, refModel.Spec.Transformations)
+		if err != nil {
+			return nil, err
+		}
+		if transformations != nil {
+			provider.InlinePolicies = append(provider.InlinePolicies, &api.BackendPolicySpec{
+				Kind: &api.BackendPolicySpec_Ai_{Ai: transformations},
+			})
+		}
 		groups[target.Priority] = append(groups[target.Priority], provider)
 	}
 
@@ -429,10 +438,9 @@ func translateModelPolicies(ctx RouteContext, namespace string, model *agentgate
 	backend.BackendSimple.TLS = policies.TLS
 	backend.BackendSimple.Tunnel = policies.Tunnel
 	backend.Health = policies.Health
-	if policies.PromptGuard != nil || policies.PromptCaching != nil {
+	if policies.PromptGuard != nil {
 		backend.AI = &agentgateway.BackendAI{
-			PromptGuard:   policies.PromptGuard,
-			PromptCaching: policies.PromptCaching,
+			PromptGuard: policies.PromptGuard,
 		}
 	}
 	translated, err := translateInlineModelBackendPolicy(ctx, namespace, backend)
