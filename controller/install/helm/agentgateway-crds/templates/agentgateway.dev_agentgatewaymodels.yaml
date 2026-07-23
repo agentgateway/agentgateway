@@ -3876,6 +3876,8 @@ spec:
                                 Priority of this target. Lower values are preferred. Targets at the same
                                 priority are selected using a score that considers health and latency. The
                                 next priority is used only when every target at this priority is degraded.
+                                Configure upstreamPolicies.health on concrete target models to customize
+                                degradation and eviction behavior.
                               format: int32
                               maximum: 1000000
                               minimum: 0

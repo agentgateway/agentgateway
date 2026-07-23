@@ -266,6 +266,8 @@ type FailoverModelTarget struct {
 	// Priority of this target. Lower values are preferred. Targets at the same
 	// priority are selected using a score that considers health and latency. The
 	// next priority is used only when every target at this priority is degraded.
+	// Configure upstreamPolicies.health on concrete target models to customize
+	// degradation and eviction behavior.
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=1000000
 	// +required
