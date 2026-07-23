@@ -2,9 +2,11 @@ import { Trash2 } from "lucide-react";
 import { useRef } from "react";
 import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { Drawer, StatusBanner, Tooltip } from "../components/Primitives";
+import type { BackendAuth } from "../gateway-config";
 import type { SchemaHelp } from "../schemaHelp";
 import type { CorsPolicy, GatewayConfig } from "../types";
 import { AuthorizationPolicyEditor } from "./AuthorizationPolicyEditor";
+import { BackendAuthPolicyEditor } from "./backendAuth";
 import { CorsPolicyEditor } from "./CorsPolicyEditor";
 import { ExtAuthzPolicyEditor } from "./ExtAuthzPolicyEditor";
 import { ExtProcPolicyEditor } from "./ExtProcPolicyEditor";
@@ -32,6 +34,7 @@ import type {
 
 export type PolicyEditorKind =
   | "authorization"
+  | "backendAuth"
   | "cors"
   | "extAuthz"
   | "extProc"
@@ -178,6 +181,14 @@ export function PolicyEditorBody(props: {
           authorization={
             props.policyValue as AuthorizationDraft | null | undefined
           }
+          saving={props.saving}
+          onSave={props.onSave}
+        />
+      ) : props.customEditor === "backendAuth" ? (
+        <BackendAuthPolicyEditor
+          formId={props.formId}
+          backendAuth={props.policyValue as BackendAuth | null | undefined}
+          help={props.help}
           saving={props.saving}
           onSave={props.onSave}
         />

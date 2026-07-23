@@ -40,15 +40,15 @@ import {
   StatusBanner,
   Tooltip,
 } from "../components/Primitives";
-import { headerLocationFrom } from "../policies/HeaderLocationOverride";
 import {
-  AdvancedSettingPanel,
-  AdvancedSettingRow,
-} from "../policies/PolicyLayout";
+  authorizationLocationFrom,
+  authorizationLocationToValue,
+  CredentialLocationSetting,
+} from "../policies/AuthorizationLocation";
+import { AdvancedSettingRow } from "../policies/PolicyLayout";
 import { KeyValueEditor } from "../policies/PolicyFormControls";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import type { GatewayConfig, LlmApiKeyPolicy, VirtualApiKey } from "../types";
-import type { AuthorizationLocation } from "../gateway-config";
 
 export function KeysPage() {
   const { config, hybrid, resources, apiKeys: keys } = useLlmConfigData();
@@ -435,19 +435,12 @@ function PolicyControls(props: {
   onSave: (policy: Partial<LlmApiKeyPolicy>) => void;
 }) {
   const [mode, setMode] = useState(props.policy?.mode ?? "strict");
-  const header = headerLocationFrom(props.policy?.location);
-  const [customHeaderLocation, setCustomHeaderLocation] = useState(
-    Boolean(header),
+  const [location, setLocation] = useState(() =>
+    authorizationLocationFrom(props.policy?.location),
   );
-  const [headerName, setHeaderName] = useState(
-    header?.header.name ?? "authorization",
-  );
-  const [prefix, setPrefix] = useState(header?.header.prefix ?? "Bearer ");
   const patch: Partial<LlmApiKeyPolicy> = {
     mode,
-    location: customHeaderLocation
-      ? { header: { name: headerName, prefix } }
-      : undefined,
+    location: authorizationLocationToValue(location),
   };
   return (
     <div className="policy-controls api-key-policy-controls">
@@ -472,14 +465,23 @@ function PolicyControls(props: {
           }
         />
       </FieldGroup>
-      <ApiKeyLocationSetting
+      <CredentialLocationSetting
         help={props.help}
-        enabled={customHeaderLocation}
-        headerName={headerName}
-        headerPrefix={prefix}
-        onEnabledChange={setCustomHeaderLocation}
-        onHeaderNameChange={setHeaderName}
-        onHeaderPrefixChange={setPrefix}
+        value={location}
+        defaultDescription={
+          props.help.field<LlmApiKeyPolicy>(
+            "LocalAPIKeys",
+            "location",
+            "By default, callers send Authorization: Bearer key.",
+          ) ?? "By default, callers send Authorization: Bearer key."
+        }
+        description={
+          props.help.definition(
+            "AuthorizationLocation",
+            "Customize where virtual API keys are read from the request.",
+          ) ?? "Customize where virtual API keys are read from the request."
+        }
+        onChange={setLocation}
       />
       {props.policy && props.keyCount === 0 ? (
         <AdvancedSettingRow
@@ -514,96 +516,6 @@ function PolicyControls(props: {
         }}
       />
     </div>
-  );
-}
-
-function ApiKeyLocationSetting(props: {
-  help: SchemaHelp;
-  enabled: boolean;
-  headerName: string;
-  headerPrefix: string;
-  onEnabledChange: (enabled: boolean) => void;
-  onHeaderNameChange: (value: string) => void;
-  onHeaderPrefixChange: (value: string) => void;
-}) {
-  if (!props.enabled) {
-    return (
-      <AdvancedSettingRow
-        className="api-key-location-row"
-        icon={<KeyRound size={17} />}
-        title="Credential location"
-        description={
-          props.help.field<LlmApiKeyPolicy>(
-            "LocalAPIKeys",
-            "location",
-            "By default, callers send Authorization: Bearer key.",
-          ) ?? "By default, callers send Authorization: Bearer key."
-        }
-        action={
-          <button
-            className="button compact-action"
-            type="button"
-            onClick={() => props.onEnabledChange(true)}
-          >
-            <SlidersHorizontal size={15} />
-            Customize
-          </button>
-        }
-      />
-    );
-  }
-
-  return (
-    <AdvancedSettingPanel
-      className="api-key-location-panel"
-      icon={<KeyRound size={17} />}
-      title="Credential location"
-      description={
-        props.help.definition(
-          "AuthorizationLocation",
-          "Customize the request header used to read virtual API keys.",
-        ) ?? "Customize the request header used to read virtual API keys."
-      }
-      action={
-        <button
-          className="button"
-          type="button"
-          onClick={() => props.onEnabledChange(false)}
-        >
-          <X size={15} />
-          Use default
-        </button>
-      }
-    >
-      <div className="api-key-location-fields">
-        <Field
-          label="Header name"
-          tooltip={props.help.field<AuthorizationLocation>(
-            "AuthorizationLocation",
-            "header.name",
-          )}
-        >
-          <input
-            value={props.headerName}
-            onChange={(event) => props.onHeaderNameChange(event.target.value)}
-            placeholder="authorization"
-          />
-        </Field>
-        <Field
-          label="Header prefix"
-          tooltip={props.help.field<AuthorizationLocation>(
-            "AuthorizationLocation",
-            "header.prefix",
-          )}
-        >
-          <input
-            value={props.headerPrefix}
-            onChange={(event) => props.onHeaderPrefixChange(event.target.value)}
-            placeholder="Bearer "
-          />
-        </Field>
-      </div>
-    </AdvancedSettingPanel>
   );
 }
 

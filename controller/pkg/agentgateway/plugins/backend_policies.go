@@ -1017,14 +1017,30 @@ func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, n
 		errs = append(errs, err)
 	}
 
+	if auth.SubjectToken != nil {
+		if err := validateExtractionAuthorizationLocation(auth.SubjectToken.Source, "crossAppAccess subjectToken source"); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
 	return &api.CrossAppAccessAuth{
 		IdentityProvider:            identityProvider,
 		ResourceAuthorizationServer: resourceAuthorizationServer,
 		Audience:                    auth.Audience,
 		Resources:                   auth.Resources,
 		Scopes:                      auth.Scopes,
+		SubjectToken:                translateCrossAppAccessSubjectToken(auth.SubjectToken),
 		Cache:                       translateOAuthTokenCache(auth.Cache),
 	}, errors.Join(errs...)
+}
+
+func translateCrossAppAccessSubjectToken(spec *agentgateway.CrossAppAccessSubjectToken) *api.CrossAppAccessAuth_SubjectToken {
+	if spec == nil {
+		return nil
+	}
+	return &api.CrossAppAccessAuth_SubjectToken{
+		Source: translateAuthorizationExtractionLocation(spec.Source),
+	}
 }
 
 func buildCrossAppAccessPolicy(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, namespace string) (*api.BackendAuthPolicy, error) {

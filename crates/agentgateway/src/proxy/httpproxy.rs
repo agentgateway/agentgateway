@@ -136,7 +136,17 @@ pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingP
 	if let Some(database) = &lp.database
 		&& !database.add.is_empty()
 	{
-		log.cel.database_fields.add = database.add.clone();
+		log.cel.database_fields.add = Arc::new(
+			log
+				.cel
+				.database_fields
+				.add
+				.iter()
+				.filter(|(key, _)| !database.add.contains_key(key))
+				.chain(database.add.iter())
+				.map(|(key, value)| (key.clone(), value.clone()))
+				.collect(),
+		);
 	}
 }
 
@@ -1377,6 +1387,7 @@ impl HTTPProxy {
 					prompt_guard,
 					policy_client: self.policy_client(),
 					req_headers: upgrade_req_headers,
+					request_snapshot: log.request_snapshot.clone(),
 				});
 			}
 		}
@@ -1456,6 +1467,7 @@ async fn handle_upgrade(
 					guard_context.policy_client,
 					llm,
 					guard_context.req_headers,
+					guard_context.request_snapshot,
 				)
 				.await;
 				return;
@@ -3707,6 +3719,7 @@ struct RealtimeGuardContext {
 	prompt_guard: crate::llm::policy::PromptGuard,
 	policy_client: PolicyClient,
 	req_headers: ::http::HeaderMap,
+	request_snapshot: Option<Arc<cel::RequestSnapshot>>,
 }
 
 fn hop_by_hop_headers(req: &mut Request) -> Option<RequestUpgrade> {

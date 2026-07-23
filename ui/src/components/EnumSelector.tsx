@@ -25,7 +25,6 @@ export function EnumSelector<T extends string>(props: {
   className?: string;
   allowEmpty?: boolean;
   disabled?: boolean;
-  showSelectedDescription?: boolean;
 }) {
   const options = enumOptions({
     options: props.options,
@@ -46,7 +45,6 @@ export function EnumSelector<T extends string>(props: {
       className={props.className}
       allowEmpty={props.allowEmpty}
       disabled={props.disabled}
-      showSelectedDescription={props.showSelectedDescription}
     />
   );
 }

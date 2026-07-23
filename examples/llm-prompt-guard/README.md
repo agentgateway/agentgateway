@@ -175,3 +175,26 @@ policies:
         webhook:
           target: 127.0.0.1:8000
           # set forwardHeaderMatches for to forward response headers
+```
+
+The webhook calls `POST /request` and `POST /response` on the target by default.
+The `headers` field sets headers on the webhook request using
+[CEL expressions](/crates/agentgateway/src/cel/README.md), keyed by header name or the
+`:path`, `:method`, and `:authority` pseudo-headers; setting `:path` replaces the
+default path. Expressions are evaluated against the original incoming request (like
+the `transformation` policy), so `request.*` and `jwt.*` refer to the client's request:
+
+```yaml
+policies:
+  ai:
+    promptGuard:
+      request:
+        webhook:
+          target: 127.0.0.1:8000
+          headers:
+            # Replace the default /request path
+            ":path": '"/v3/guardrails/request"'
+            # Pass context from the original client request
+            x-user: jwt.sub
+            x-tenant: request.headers["x-tenant"]
+```

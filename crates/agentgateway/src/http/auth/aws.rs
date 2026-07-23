@@ -16,6 +16,7 @@ use secrecy::{ExposeSecret, SecretString};
 use tokio::sync::{Mutex, OnceCell};
 
 use crate::llm::bedrock::AwsRegion;
+use crate::util::ErrorContext;
 use crate::*;
 
 #[derive(Clone, Debug)]
@@ -593,13 +594,17 @@ pub(super) async fn sign_request(
 			}
 		},
 	};
-	let creds = Box::pin(load_credentials(
-		aws_auth,
-		region,
-		resolved_tags,
-		resolved_session_name,
-	))
-	.await?
+	let creds = tokio::time::timeout(
+		super::CLOUD_AUTH_TIMEOUT,
+		Box::pin(load_credentials(
+			aws_auth,
+			region,
+			resolved_tags,
+			resolved_session_name,
+		)),
+	)
+	.await
+	.ctx("AWS credential fetch timed out after 5s")??
 	.into();
 
 	let service = signing_service_name(req, aws_auth);

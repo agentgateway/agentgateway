@@ -354,6 +354,7 @@ pub async fn guarded_realtime_proxy<C, S>(
 	policy_client: PolicyClient,
 	log: AsyncLog<LLMInfo>,
 	req_headers: ::http::HeaderMap,
+	original: Option<std::sync::Arc<crate::cel::RequestSnapshot>>,
 ) where
 	C: AsyncRead + AsyncWrite + Unpin + Send + 'static,
 	S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
@@ -371,6 +372,7 @@ pub async fn guarded_realtime_proxy<C, S>(
 	let guard_clone = guard.clone();
 	let policy_client_clone = policy_client.clone();
 	let log_clone = log.clone();
+	let original_clone = original.clone();
 
 	let client_to_server = {
 		let server_tx = server_tx.clone();
@@ -408,7 +410,11 @@ pub async fn guarded_realtime_proxy<C, S>(
 
 								if !input_text.is_empty()
 									&& let Some(blocked_body) = guard
-										.apply_realtime_request_guards(input_text.trim(), &policy_client)
+										.apply_realtime_request_guards(
+											input_text.trim(),
+											&policy_client,
+											original.as_deref(),
+										)
 										.await
 								{
 									let _ = client_tx_err
@@ -433,8 +439,11 @@ pub async fn guarded_realtime_proxy<C, S>(
 		async move {
 			let mut accum = WsFrameAccumulator::new();
 			let mut read_buf = [0u8; 4096];
-			let mut evaluators =
-				guard_clone.begin_streaming_response_guard(&policy_client_clone, &req_headers);
+			let mut evaluators = guard_clone.begin_streaming_response_guard(
+				&policy_client_clone,
+				&req_headers,
+				original_clone,
+			);
 			let mut delta_hold: Vec<Bytes> = Vec::new();
 			let mut pending_text = String::new();
 			let mut overlap_tail = String::new();

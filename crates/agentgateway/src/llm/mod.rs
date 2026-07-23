@@ -1607,8 +1607,9 @@ impl AIProvider {
 			if original_format.supports_prompt_guard() {
 				let http_headers = &parts.headers;
 				let claims = parts.extensions.get::<Claims>().cloned();
+				let original = log.as_ref().and_then(|l| l.request_snapshot.clone());
 				if let Some((response, guardrail)) = p
-					.apply_prompt_guard(backend_info, req, http_headers, claims)
+					.apply_prompt_guard(backend_info, req, http_headers, claims, original.as_deref())
 					.await
 					.map_err(|e| {
 						warn!("failed to call prompt guard webhook: {e}");
@@ -1865,6 +1866,7 @@ impl AIProvider {
 				resp.as_mut(),
 				&prompt_guard_headers,
 				&rate_limit.prompt_guard,
+				req_snapshot.as_deref(),
 			)
 			.await
 			.map_err(|e| {
@@ -2222,7 +2224,11 @@ impl AIProvider {
 				request: vec![],
 				response: response_policies.prompt_guard.clone(),
 			};
-			temp_guard.begin_streaming_response_guard(&client, &prompt_guard_headers)
+			temp_guard.begin_streaming_response_guard(
+				&client,
+				&prompt_guard_headers,
+				req_snapshot.clone(),
+			)
 		} else {
 			vec![]
 		};
