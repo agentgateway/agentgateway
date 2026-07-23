@@ -2295,10 +2295,7 @@ mod tests {
 		new_bind.key = strng::literal!("bind2");
 		let err = updater
 			.sync_local(
-				vec![
-					standard_bind("127.0.0.1:0".parse().unwrap()),
-					new_bind,
-				],
+				vec![standard_bind("127.0.0.1:0".parse().unwrap()), new_bind],
 				vec![],
 				vec![],
 				vec![],
