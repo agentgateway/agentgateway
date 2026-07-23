@@ -7739,9 +7739,89 @@
             "string",
             "null"
           ]
+        },
+        "moderation": {
+          "description": "Configuration for running OpenAI inline moderation on request input and generated output.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpenAIModeration"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
+    },
+    "OpenAIModeration": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "description": "The moderation model to use. Defaults to `omni-moderation-latest`.",
+          "type": "string",
+          "default": "omni-moderation-latest"
+        },
+        "policy": {
+          "description": "Policies to apply to request input and generated output.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpenAIModerationPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "OpenAIModerationPolicy": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "description": "Policy for request input moderation.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpenAIModerationConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output": {
+          "description": "Policy for generated output moderation.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpenAIModerationConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "OpenAIModerationConfig": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/OpenAIModerationMode"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ]
+    },
+    "OpenAIModerationMode": {
+      "type": "string",
+      "enum": [
+        "score",
+        "block"
+      ]
     },
     "GeminiProvider": {
       "type": "object",

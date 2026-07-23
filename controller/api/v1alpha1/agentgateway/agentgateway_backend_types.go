@@ -387,7 +387,51 @@ type OpenAIConfig struct {
 	// If unset, the model name is taken from the request.
 	// +optional
 	Model *ShortString `json:"model,omitempty"`
+
+	// Inline moderation configuration to inject into OpenAI chat completions
+	// and responses requests.
+	// If unset, the OpenAI inline moderation parameter is not injected.
+	// +optional
+	Moderation *OpenAIInlineModeration `json:"moderation,omitempty"`
 }
+
+type OpenAIInlineModeration struct {
+	// The moderation model to use, such as `omni-moderation-latest`.
+	// Defaults to `omni-moderation-latest` if not specified.
+	// +optional
+	// +kubebuilder:default=omni-moderation-latest
+	Model ShortString `json:"model,omitempty"`
+
+	// Policies to apply to request input and generated output.
+	// +optional
+	Policy *OpenAIInlineModerationPolicy `json:"policy,omitempty"`
+}
+
+type OpenAIInlineModerationPolicy struct {
+	// Policy for request input moderation.
+	// +optional
+	Input *OpenAIInlineModerationConfig `json:"input,omitempty"`
+
+	// Policy for generated output moderation.
+	// +optional
+	Output *OpenAIInlineModerationConfig `json:"output,omitempty"`
+}
+
+type OpenAIInlineModerationConfig struct {
+	// Mode controls whether moderation only returns scores or blocks flagged content.
+	// +required
+	Mode OpenAIInlineModerationMode `json:"mode"`
+}
+
+// +k8s:enum
+type OpenAIInlineModerationMode string
+
+const (
+	// OpenAIInlineModerationModeScore returns moderation scores without blocking.
+	OpenAIInlineModerationModeScore OpenAIInlineModerationMode = "Score"
+	// OpenAIInlineModerationModeBlock blocks flagged content.
+	OpenAIInlineModerationModeBlock OpenAIInlineModerationMode = "Block"
+)
 
 // Settings for the [Azure OpenAI](https://learn.microsoft.com/en-us/azure/foundry/?view=foundry-classic) LLM provider.
 // +kubebuilder:validation:XValidation:message="deploymentName is required for this apiVersion",rule="!has(self.apiVersion) || self.apiVersion == 'v1' ? true : has(self.deploymentName)"

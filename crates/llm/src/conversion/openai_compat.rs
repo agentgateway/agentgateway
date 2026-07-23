@@ -6,10 +6,16 @@ pub mod from_responses {
 
 	/// Translate an OpenAI Responses request into an OpenAI-compatible chat completions request.
 	pub fn translate(req: &types::responses::Request) -> Result<Vec<u8>, AIError> {
+		let xlated = translate_request(req)?;
+		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+	}
+
+	pub fn translate_request(
+		req: &types::responses::Request,
+	) -> Result<types::completions::typed::Request, AIError> {
 		let typed =
 			json::convert::<_, responses::CreateResponse>(req).map_err(AIError::RequestMarshal)?;
-		let xlated = translate_internal(typed);
-		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+		Ok(translate_internal(typed))
 	}
 
 	fn translate_internal(req: responses::CreateResponse) -> completions::Request {

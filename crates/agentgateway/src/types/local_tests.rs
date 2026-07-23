@@ -788,6 +788,54 @@ llm:
 }
 
 #[tokio::test]
+async fn test_llm_openai_inline_moderation_config() {
+	let normalized = normalize_test_yaml(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - ai:
+          name: openai
+          provider:
+            openAI:
+              model: gpt-5
+              moderation:
+                policy:
+                  input:
+                    mode: block
+                  output:
+                    mode: score
+"#,
+	)
+	.await
+	.expect("OpenAI inline moderation config should normalize");
+
+	let provider = selected_ai_provider(&normalized);
+	let AIProvider::OpenAI(openai_provider) = &provider.provider else {
+		panic!("expected OpenAI provider");
+	};
+	let moderation = openai_provider
+		.moderation
+		.as_ref()
+		.expect("expected inline moderation config");
+	assert_eq!(moderation.model.as_str(), "omni-moderation-latest");
+	let policy = moderation
+		.policy
+		.as_ref()
+		.expect("expected moderation policy");
+	assert_eq!(
+		policy.input.as_ref().map(|config| config.mode),
+		Some(crate::llm::openai::ModerationMode::Block)
+	);
+	assert_eq!(
+		policy.output.as_ref().map(|config| config.mode),
+		Some(crate::llm::openai::ModerationMode::Score)
+	);
+}
+
+#[tokio::test]
 async fn test_llm_synthetic_provider_defaults_do_not_override_host_override() {
 	let normalized = normalize_test_config(
 		r#"

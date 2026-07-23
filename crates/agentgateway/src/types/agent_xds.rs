@@ -1357,6 +1357,55 @@ impl Route {
 	}
 }
 
+fn openai_moderation_from_proto(
+	moderation: &proto::agent::ai_backend::open_ai::Moderation,
+) -> Result<llm::openai::ModerationParam, ProtoError> {
+	Ok(llm::openai::ModerationParam {
+		model: if moderation.model.is_empty() {
+			llm::openai::DEFAULT_MODERATION_MODEL
+		} else {
+			strng::new(&moderation.model)
+		},
+		policy: moderation
+			.policy
+			.as_ref()
+			.map(openai_moderation_policy_from_proto)
+			.transpose()?,
+	})
+}
+
+fn openai_moderation_policy_from_proto(
+	policy: &proto::agent::ai_backend::open_ai::ModerationPolicy,
+) -> Result<llm::openai::ModerationPolicyParam, ProtoError> {
+	Ok(llm::openai::ModerationPolicyParam {
+		input: policy
+			.input
+			.as_ref()
+			.map(openai_moderation_config_from_proto)
+			.transpose()?,
+		output: policy
+			.output
+			.as_ref()
+			.map(openai_moderation_config_from_proto)
+			.transpose()?,
+	})
+}
+
+fn openai_moderation_config_from_proto(
+	config: &proto::agent::ai_backend::open_ai::ModerationConfig,
+) -> Result<llm::openai::ModerationConfigParam, ProtoError> {
+	let mode = match proto::agent::ai_backend::open_ai::ModerationMode::try_from(config.mode)? {
+		proto::agent::ai_backend::open_ai::ModerationMode::Score => llm::openai::ModerationMode::Score,
+		proto::agent::ai_backend::open_ai::ModerationMode::Block => llm::openai::ModerationMode::Block,
+		proto::agent::ai_backend::open_ai::ModerationMode::Unspecified => {
+			return Err(ProtoError::EnumParse(
+				"unknown OpenAI moderation mode".to_string(),
+			));
+		},
+	};
+	Ok(llm::openai::ModerationConfigParam { mode })
+}
+
 pub(crate) fn backend_with_policies_from_proto(
 	s: &proto::agent::Backend,
 	diagnostics: &mut Diagnostics,
@@ -1417,9 +1466,17 @@ pub(crate) fn backend_with_policies_from_proto(
 						.map(|policy| backend_policy_from_proto(policy, diagnostics))
 						.collect::<Result<Vec<_>, _>>()?;
 					let provider = match &provider_config.provider {
-						Some(provider::Provider::Openai(openai)) => AIProvider::OpenAI(llm::openai::Provider {
-							model: openai.model.as_deref().map(strng::new),
-						}),
+						Some(provider::Provider::Openai(openai)) => {
+							let moderation = openai
+								.moderation
+								.as_ref()
+								.map(openai_moderation_from_proto)
+								.transpose()?;
+							AIProvider::OpenAI(llm::openai::Provider {
+								model: openai.model.as_deref().map(strng::new),
+								moderation,
+							})
+						},
 						Some(provider::Provider::Gemini(gemini)) => AIProvider::Gemini(llm::gemini::Provider {
 							model: gemini.model.as_deref().map(strng::new),
 						}),

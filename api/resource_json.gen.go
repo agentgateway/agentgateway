@@ -1656,6 +1656,39 @@ func (this *AIBackend_OpenAI) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for AIBackend_OpenAI_Moderation
+func (this *AIBackend_OpenAI_Moderation) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for AIBackend_OpenAI_Moderation
+func (this *AIBackend_OpenAI_Moderation) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for AIBackend_OpenAI_ModerationPolicy
+func (this *AIBackend_OpenAI_ModerationPolicy) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for AIBackend_OpenAI_ModerationPolicy
+func (this *AIBackend_OpenAI_ModerationPolicy) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for AIBackend_OpenAI_ModerationConfig
+func (this *AIBackend_OpenAI_ModerationConfig) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for AIBackend_OpenAI_ModerationConfig
+func (this *AIBackend_OpenAI_ModerationConfig) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for AIBackend_Gemini
 func (this *AIBackend_Gemini) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)

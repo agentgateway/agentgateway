@@ -17,6 +17,7 @@ use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
 pub use policy::Policy;
 use rand::RngExt;
+use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::http::auth::{AppliedBackendAuthLocation, AwsAuth, AzureAuth, BackendAuth, GcpAuth};
@@ -320,23 +321,56 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 	]
 };
 
-fn render_openai_completions(req: types::ChatRequest<'_>) -> Result<Vec<u8>, AIError> {
+fn render_openai_completions(
+	req: types::ChatRequest<'_>,
+	ctx: &ChatRequestContext<'_>,
+) -> Result<Vec<u8>, AIError> {
 	match req {
-		types::ChatRequest::Completions(req) => {
-			serde_json::to_vec(req).map_err(AIError::RequestMarshal)
+		types::ChatRequest::Completions(req) => serialize_openai_request(req, ctx),
+		types::ChatRequest::Messages(req) => {
+			let translated = conversion::completions::from_messages::translate_request(req)?;
+			serialize_openai_request(&translated, ctx)
 		},
-		types::ChatRequest::Messages(req) => conversion::completions::from_messages::translate(req),
-		types::ChatRequest::Responses(req) => conversion::openai_compat::from_responses::translate(req),
+		types::ChatRequest::Responses(req) => {
+			let translated = conversion::openai_compat::from_responses::translate_request(req)?;
+			serialize_openai_request(&translated, ctx)
+		},
 	}
 }
 
-fn render_openai_responses(req: types::ChatRequest<'_>) -> Result<Vec<u8>, AIError> {
+fn render_openai_responses(
+	req: types::ChatRequest<'_>,
+	ctx: &ChatRequestContext<'_>,
+) -> Result<Vec<u8>, AIError> {
 	match req {
-		types::ChatRequest::Responses(req) => serde_json::to_vec(req).map_err(AIError::RequestMarshal),
+		types::ChatRequest::Responses(req) => serialize_openai_request(req, ctx),
 		_ => Err(AIError::UnsupportedConversion(strng::literal!(
 			"expected responses request"
 		))),
 	}
+}
+
+fn serialize_openai_request<T: Serialize>(
+	req: &T,
+	ctx: &ChatRequestContext<'_>,
+) -> Result<Vec<u8>, AIError> {
+	let Some(moderation) = (match ctx.provider {
+		AIProvider::OpenAI(provider) => provider.moderation.as_ref(),
+		_ => None,
+	}) else {
+		return serde_json::to_vec(req).map_err(AIError::RequestMarshal);
+	};
+	let mut body_json = serde_json::to_value(req).map_err(AIError::RequestMarshal)?;
+	let Some(body_obj) = body_json.as_object_mut() else {
+		return Err(AIError::UnsupportedConversion(strng::literal!(
+			"OpenAI request body must be a JSON object"
+		)));
+	};
+	body_obj.insert(
+		"moderation".to_string(),
+		serde_json::to_value(moderation).map_err(AIError::RequestMarshal)?,
+	);
+	serde_json::to_vec(&body_json).map_err(AIError::RequestMarshal)
 }
 
 fn render_anthropic_messages(req: types::ChatRequest<'_>) -> Result<Vec<u8>, AIError> {
@@ -412,8 +446,8 @@ impl ChatTranslation {
 		ctx: &ChatRequestContext<'_>,
 	) -> Result<RenderedChatRequest, AIError> {
 		let body = match self.output {
-			ChatFormat::OpenAICompletions => render_openai_completions(req),
-			ChatFormat::OpenAIResponses => render_openai_responses(req),
+			ChatFormat::OpenAICompletions => render_openai_completions(req, ctx),
+			ChatFormat::OpenAIResponses => render_openai_responses(req, ctx),
 			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Vertex(_)) => {
 				vertex::prepare_anthropic_message_body(render_anthropic_messages(req)?)
 			},

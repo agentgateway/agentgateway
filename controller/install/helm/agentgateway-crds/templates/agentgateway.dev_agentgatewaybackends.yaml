@@ -378,6 +378,56 @@ spec:
                                     maxLength: 256
                                     minLength: 1
                                     type: string
+                                  moderation:
+                                    description: |-
+                                      Inline moderation configuration to inject into OpenAI chat completions
+                                      and responses requests.
+                                      If unset, the OpenAI inline moderation parameter is not injected.
+                                    properties:
+                                      model:
+                                        default: omni-moderation-latest
+                                        description: |-
+                                          The moderation model to use, such as `omni-moderation-latest`.
+                                          Defaults to `omni-moderation-latest` if not specified.
+                                        maxLength: 256
+                                        minLength: 1
+                                        type: string
+                                      policy:
+                                        description: Policies to apply to request
+                                          input and generated output.
+                                        properties:
+                                          input:
+                                            description: Policy for request input
+                                              moderation.
+                                            properties:
+                                              mode:
+                                                description: Mode controls whether
+                                                  moderation only returns scores or
+                                                  blocks flagged content.
+                                                enum:
+                                                - Block
+                                                - Score
+                                                type: string
+                                            required:
+                                            - mode
+                                            type: object
+                                          output:
+                                            description: Policy for generated output
+                                              moderation.
+                                            properties:
+                                              mode:
+                                                description: Mode controls whether
+                                                  moderation only returns scores or
+                                                  blocks flagged content.
+                                                enum:
+                                                - Block
+                                                - Score
+                                                type: string
+                                            required:
+                                            - mode
+                                            type: object
+                                        type: object
+                                    type: object
                                 type: object
                               path:
                                 description: |-
@@ -6264,6 +6314,52 @@ spec:
                             maxLength: 256
                             minLength: 1
                             type: string
+                          moderation:
+                            description: |-
+                              Inline moderation configuration to inject into OpenAI chat completions
+                              and responses requests.
+                              If unset, the OpenAI inline moderation parameter is not injected.
+                            properties:
+                              model:
+                                default: omni-moderation-latest
+                                description: |-
+                                  The moderation model to use, such as `omni-moderation-latest`.
+                                  Defaults to `omni-moderation-latest` if not specified.
+                                maxLength: 256
+                                minLength: 1
+                                type: string
+                              policy:
+                                description: Policies to apply to request input and
+                                  generated output.
+                                properties:
+                                  input:
+                                    description: Policy for request input moderation.
+                                    properties:
+                                      mode:
+                                        description: Mode controls whether moderation
+                                          only returns scores or blocks flagged content.
+                                        enum:
+                                        - Block
+                                        - Score
+                                        type: string
+                                    required:
+                                    - mode
+                                    type: object
+                                  output:
+                                    description: Policy for generated output moderation.
+                                    properties:
+                                      mode:
+                                        description: Mode controls whether moderation
+                                          only returns scores or blocks flagged content.
+                                        enum:
+                                        - Block
+                                        - Score
+                                        type: string
+                                    required:
+                                    - mode
+                                    type: object
+                                type: object
+                            type: object
                         type: object
                       path:
                         description: |-

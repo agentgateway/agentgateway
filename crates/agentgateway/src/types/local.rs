@@ -4186,7 +4186,10 @@ async fn convert_llm_config(
 				)
 			},
 			LocalModelAIProvider::Anthropic => AIProvider::Anthropic(anthropic::Provider { model }),
-			LocalModelAIProvider::OpenAI => AIProvider::OpenAI(openai::Provider { model }),
+			LocalModelAIProvider::OpenAI => AIProvider::OpenAI(openai::Provider {
+				model,
+				moderation: None,
+			}),
 			LocalModelAIProvider::Copilot => AIProvider::Copilot(copilot::Provider { model }),
 			LocalModelAIProvider::Gemini => AIProvider::Gemini(crate::llm::gemini::Provider { model }),
 			LocalModelAIProvider::Custom(custom_provider) => {

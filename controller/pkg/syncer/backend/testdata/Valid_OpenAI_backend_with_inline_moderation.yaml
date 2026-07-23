@@ -1,0 +1,17 @@
+ai:
+  providerGroups:
+  - providers:
+    - name: backend
+      openai:
+        model: gpt-5
+        moderation:
+          model: omni-moderation-latest
+          policy:
+            input:
+              mode: MODERATION_MODE_BLOCK
+            output:
+              mode: MODERATION_MODE_SCORE
+key: test-ns/openai-moderation-backend
+name:
+  name: openai-moderation-backend
+  namespace: test-ns
