@@ -971,7 +971,7 @@ pub(crate) fn sse_stream_response(
 	use futures::StreamExt;
 	let stream = SseBody::new(stream.map(|message| {
 		let data = serde_json::to_string(&message.message).expect("valid message");
-		let mut sse = Sse::default().data(data);
+		let mut sse = Sse::default().event("message").data(data);
 		sse.id = message.event_id;
 		Result::<Sse, Infallible>::Ok(sse)
 	}));
