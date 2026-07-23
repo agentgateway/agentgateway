@@ -33,13 +33,19 @@
 
 <br> 
 <div align="center">
-  <img alt="agentgateway UI" src="img/architecture.svg" width="600">
+  <img alt="agentgateway UI" src="img/architecture.svg" width="800">
 </div>
 <br>
 
 ## Intro to Agentgateway Video
 
-[![Agentgateway Intro Video](https://img.youtube.com/vi/SomP92JWPmE/hqdefault.jpg)](https://youtu.be/SomP92JWPmE)
+<br>
+<div align="center">
+  <a href="https://youtu.be/SomP92JWPmE">
+    <img alt="Agentgateway Intro Video" src="https://img.youtube.com/vi/SomP92JWPmE/hqdefault.jpg">
+  </a>
+</div>
+<br>
 
 ## Key Features
 
