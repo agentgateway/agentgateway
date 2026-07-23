@@ -56,6 +56,10 @@ pub enum ConfigResourceKind {
 	LlmVirtualModel,
 	#[serde(rename = "llm.apiKey")]
 	LlmApiKey,
+	#[serde(rename = "llm.policy")]
+	LlmPolicy,
+	#[serde(rename = "ui.policy")]
+	UiPolicy,
 }
 
 impl ConfigResourceKind {
@@ -66,6 +70,8 @@ impl ConfigResourceKind {
 			Self::LlmModel => "llm.model",
 			Self::LlmVirtualModel => "llm.virtualModel",
 			Self::LlmApiKey => "llm.apiKey",
+			Self::LlmPolicy => "llm.policy",
+			Self::UiPolicy => "ui.policy",
 		}
 	}
 }
@@ -86,6 +92,8 @@ impl FromStr for ConfigResourceKind {
 			"llm.model" => Ok(Self::LlmModel),
 			"llm.virtualModel" => Ok(Self::LlmVirtualModel),
 			"llm.apiKey" => Ok(Self::LlmApiKey),
+			"llm.policy" => Ok(Self::LlmPolicy),
+			"ui.policy" => Ok(Self::UiPolicy),
 			_ => Err(ConfigResourceError::InvalidRequest(format!(
 				"unsupported config resource kind: {kind}"
 			))),
@@ -224,6 +232,32 @@ pub(crate) fn prepare_api_key_update(
 	})
 }
 
+#[cfg_attr(not(feature = "ui"), allow(dead_code))]
+pub(crate) fn prepare_policy_upsert(
+	kind: ConfigResourceKind,
+	id: String,
+	value: Value,
+) -> anyhow::Result<PreparedResource> {
+	validate_id(&id)?;
+	if !matches!(
+		kind,
+		ConfigResourceKind::LlmPolicy | ConfigResourceKind::UiPolicy
+	) {
+		return Err(
+			ConfigResourceError::InvalidRequest(format!("{kind} is not a policy resource")).into(),
+		);
+	}
+	if kind == ConfigResourceKind::LlmPolicy && id == "apiKey" && value.get("keys").is_some() {
+		return Err(
+			ConfigResourceError::InvalidRequest(
+				"llm.policy/apiKey must not include keys; use llm.apiKey resources".to_string(),
+			)
+			.into(),
+		);
+	}
+	Ok(PreparedResource { kind, id, value })
+}
+
 pub fn model_catalog_sources(
 	resources: &[ConfigResource],
 ) -> anyhow::Result<Vec<crate::ModelCatalogSource>> {
@@ -315,31 +349,129 @@ fn overlay_config_resources(
 				| ConfigResourceKind::LlmModel
 				| ConfigResourceKind::LlmVirtualModel
 				| ConfigResourceKind::LlmApiKey
+				| ConfigResourceKind::LlmPolicy
 		)
 	});
-	if !has_llm_resources {
+	let has_ui_resources = resources
+		.iter()
+		.any(|resource| resource.kind == ConfigResourceKind::UiPolicy);
+	let has_llm_policies = resources
+		.iter()
+		.any(|resource| resource.kind == ConfigResourceKind::LlmPolicy);
+	if !has_llm_resources && !has_ui_resources {
 		return Ok(());
 	}
 
 	let Some(root) = config.as_object_mut() else {
 		anyhow::bail!("local config root must be a JSON object");
 	};
-	let llm = root
-		.entry("llm")
-		.or_insert_with(|| Value::Object(serde_json::Map::new()));
-	let Some(llm) = llm.as_object_mut() else {
-		anyhow::bail!("local config llm must be a JSON object");
-	};
+	if has_llm_resources {
+		if has_llm_policies && !root.contains_key("llm") {
+			return Err(
+				ConfigResourceError::Conflict(
+					"DB-backed LLM policies require llm in the file config".to_string(),
+				)
+				.into(),
+			);
+		}
+		let llm = root
+			.entry("llm")
+			.or_insert_with(|| Value::Object(serde_json::Map::new()));
+		let Some(llm) = llm.as_object_mut() else {
+			if has_llm_policies {
+				return Err(
+					ConfigResourceError::Conflict(
+						"DB-backed LLM policies require llm to be an object in the file config".to_string(),
+					)
+					.into(),
+				);
+			}
+			anyhow::bail!("local config llm must be a JSON object");
+		};
 
-	append_llm_kind(llm, resources, ConfigResourceKind::LlmProvider, "providers")?;
-	append_llm_kind(llm, resources, ConfigResourceKind::LlmModel, "models")?;
-	append_llm_kind(
-		llm,
-		resources,
-		ConfigResourceKind::LlmVirtualModel,
-		"virtualModels",
-	)?;
-	append_api_keys(llm, resources)?;
+		append_policy_kind(llm, resources, ConfigResourceKind::LlmPolicy, "llm")?;
+		append_llm_kind(llm, resources, ConfigResourceKind::LlmProvider, "providers")?;
+		append_llm_kind(llm, resources, ConfigResourceKind::LlmModel, "models")?;
+		append_llm_kind(
+			llm,
+			resources,
+			ConfigResourceKind::LlmVirtualModel,
+			"virtualModels",
+		)?;
+		append_api_keys(llm, resources)?;
+	}
+	if has_ui_resources {
+		let Some(ui) = root.get_mut("ui") else {
+			return Err(
+				ConfigResourceError::Conflict(
+					"DB-backed UI policies require ui in the file config".to_string(),
+				)
+				.into(),
+			);
+		};
+		let Some(ui) = ui.as_object_mut() else {
+			return Err(
+				ConfigResourceError::Conflict(
+					"DB-backed UI policies require ui to be an object in the file config".to_string(),
+				)
+				.into(),
+			);
+		};
+		append_policy_kind(ui, resources, ConfigResourceKind::UiPolicy, "ui")?;
+	}
+	Ok(())
+}
+
+fn append_policy_kind(
+	section: &mut serde_json::Map<String, Value>,
+	resources: &[ConfigResource],
+	kind: ConfigResourceKind,
+	section_name: &str,
+) -> anyhow::Result<()> {
+	let Some(db_resources) = non_empty_resources(resources, kind) else {
+		return Ok(());
+	};
+	let policies = section
+		.entry("policies")
+		.or_insert_with(|| Value::Object(serde_json::Map::new()));
+	if policies.is_null() {
+		*policies = Value::Object(serde_json::Map::new());
+	}
+	let policies = policies.as_object_mut().ok_or_else(|| {
+		ConfigResourceError::Conflict(format!(
+			"DB-backed {section_name} policies require {section_name}.policies to be an object in the file config"
+		))
+	})?;
+	for resource in db_resources {
+		if policies.contains_key(&resource.id) {
+			return Err(
+				ConfigResourceError::Conflict(format!(
+					"config resource {kind}/{} conflicts with file-owned resource",
+					resource.id
+				))
+				.into(),
+			);
+		}
+		let mut value = resource.value.clone();
+		if kind == ConfigResourceKind::LlmPolicy && resource.id == "apiKey" {
+			let Some(policy) = value.as_object_mut() else {
+				return Err(
+					ConfigResourceError::InvalidRequest("llm.policy/apiKey must be an object".to_string())
+						.into(),
+				);
+			};
+			if policy.contains_key("keys") {
+				return Err(
+					ConfigResourceError::InvalidRequest(
+						"llm.policy/apiKey must not include keys; use llm.apiKey resources".to_string(),
+					)
+					.into(),
+				);
+			}
+			policy.insert("keys".to_string(), Value::Array(Vec::new()));
+		}
+		policies.insert(resource.id.clone(), value);
+	}
 	Ok(())
 }
 
@@ -353,18 +485,14 @@ fn append_api_keys(
 	let policies = llm
 		.get_mut("policies")
 		.ok_or_else(|| {
-			ConfigResourceError::Conflict(
-				"DB-backed API keys require llm.policies.apiKey in the file config".to_string(),
-			)
+			ConfigResourceError::Conflict("DB-backed API keys require llm.policies.apiKey".to_string())
 		})?
 		.as_object_mut()
 		.ok_or_else(|| anyhow::anyhow!("local config llm.policies must be an object"))?;
 	let policy = policies
 		.get_mut("apiKey")
 		.ok_or_else(|| {
-			ConfigResourceError::Conflict(
-				"DB-backed API keys require llm.policies.apiKey in the file config".to_string(),
-			)
+			ConfigResourceError::Conflict("DB-backed API keys require llm.policies.apiKey".to_string())
 		})?
 		.as_object_mut()
 		.ok_or_else(|| anyhow::anyhow!("local config llm.policies.apiKey must be an object"))?;
@@ -438,6 +566,11 @@ fn prepare_resource(
 			set_api_key_id(&mut value, id.clone())?;
 			id
 		},
+		ConfigResourceKind::LlmPolicy | ConfigResourceKind::UiPolicy => {
+			return Err(
+				ConfigResourceError::InvalidRequest(format!("{kind} resources require an item ID")).into(),
+			);
+		},
 		_ => resource_id(kind, &value)?,
 	};
 	Ok(PreparedResource { kind, id, value })
@@ -469,6 +602,9 @@ fn resource_id(kind: ConfigResourceKind, value: &Value) -> anyhow::Result<String
 				)
 				.into()
 			}),
+		ConfigResourceKind::LlmPolicy | ConfigResourceKind::UiPolicy => Err(
+			ConfigResourceError::InvalidRequest(format!("{kind} resources require an item ID")).into(),
+		),
 	}
 }
 
@@ -853,6 +989,14 @@ mod tests {
 			)
 			.is_err()
 		);
+		assert!(
+			prepare_policy_upsert(
+				ConfigResourceKind::LlmPolicy,
+				"apiKey".to_string(),
+				json!({"keys": []}),
+			)
+			.is_err()
+		);
 	}
 
 	#[test]
@@ -864,10 +1008,8 @@ llm:
     provider:
       openAI:
         model: gpt-4o-mini
-  policies:
-    apiKey:
-      keys: []
-      mode: strict
+ui:
+  gateways: default
 "#;
 		let resources = vec![
 			test_resource(
@@ -886,10 +1028,21 @@ llm:
 				json!({"name": "router", "routing": {"weighted": {"targets": [{"model": "db-model"}]}}}),
 			),
 			test_resource(
+				ConfigResourceKind::LlmPolicy,
+				"cors",
+				json!({"allowOrigins": ["https://example.com"]}),
+			),
+			test_resource(
+				ConfigResourceKind::LlmPolicy,
+				"apiKey",
+				json!({"mode": "strict"}),
+			),
+			test_resource(
 				ConfigResourceKind::LlmApiKey,
 				"key_01",
 				json!({"key": "agw_sk_test", "metadata": {"id": "key_01", "name": "test"}}),
 			),
+			test_resource(ConfigResourceKind::UiPolicy, "csrf", json!({})),
 		];
 
 		let materialized = materialize_config(base, &resources).expect("materialize");
@@ -907,6 +1060,11 @@ llm:
 			value.pointer("/llm/policies/apiKey/keys/0/key"),
 			Some(&json!("agw_sk_test"))
 		);
+		assert_eq!(
+			value.pointer("/llm/policies/cors/allowOrigins/0"),
+			Some(&json!("https://example.com"))
+		);
+		assert_eq!(value.pointer("/ui/policies/csrf"), Some(&json!({})));
 		assert_eq!(
 			value.pointer("/llm/models/1/name"),
 			Some(&json!("db-model"))
@@ -937,6 +1095,20 @@ llm:
 			err
 				.to_string()
 				.contains("conflicts with file-owned resource"),
+			"unexpected error: {err}"
+		);
+
+		let base = "llm:\n  models: []\n  policies:\n    cors: {}\n";
+		let resources = vec![test_resource(
+			ConfigResourceKind::LlmPolicy,
+			"cors",
+			json!({}),
+		)];
+		let err = materialize_config(base, &resources).expect_err("policy conflict should fail");
+		assert!(
+			err
+				.to_string()
+				.contains("config resource llm.policy/cors conflicts with file-owned resource"),
 			"unexpected error: {err}"
 		);
 	}

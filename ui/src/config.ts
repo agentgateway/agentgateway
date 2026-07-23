@@ -16,6 +16,7 @@ import type {
 import type {
   ConfigResource,
   ConfigResourceKind,
+  PolicyResourceKind,
 } from "./api/configResourcesApi";
 import { keyValue } from "./credentialDisplay";
 
@@ -296,6 +297,17 @@ export function llmApiKeyResources(
   resources: ConfigResource<ConfigResourceKind>[] | undefined,
 ): VirtualApiKey[] {
   return llmResourceValues(resources, "llm.apiKey");
+}
+
+export function policyResources(
+  resources: ConfigResource<ConfigResourceKind>[] | undefined,
+  kind: PolicyResourceKind,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    (resources ?? [])
+      .filter((resource) => resource.kind === kind)
+      .map((resource) => [resource.id, resource.value]),
+  );
 }
 
 export function isDatabaseConfigResource(

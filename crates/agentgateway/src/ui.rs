@@ -325,23 +325,32 @@ async fn update_config_resource(
 	let kind = kind
 		.parse::<ConfigResourceKind>()
 		.map_err(resource_api_error)?;
-	if kind != ConfigResourceKind::LlmApiKey {
-		return Err(resource_api_error(ConfigResourceError::InvalidRequest(
-			"item updates are only supported for llm.apiKey resources".to_string(),
-		)));
-	}
 	let resources = store.list(None).await.map_err(resource_api_error)?;
-	if !resources
-		.iter()
-		.any(|resource| resource.kind == kind && resource.id == id)
-	{
-		return Err(resource_api_error(ConfigResourceError::NotFound(format!(
-			"config resource not found: {kind}/{id}"
-		))));
-	}
-	let prepared = vec![
-		crate::config_store::prepare_api_key_update(id, resource.value).map_err(resource_api_error)?,
-	];
+	let prepared = match kind {
+		ConfigResourceKind::LlmApiKey => {
+			if !resources
+				.iter()
+				.any(|resource| resource.kind == kind && resource.id == id)
+			{
+				return Err(resource_api_error(ConfigResourceError::NotFound(format!(
+					"config resource not found: {kind}/{id}"
+				))));
+			}
+			vec![
+				crate::config_store::prepare_api_key_update(id, resource.value)
+					.map_err(resource_api_error)?,
+			]
+		},
+		ConfigResourceKind::LlmPolicy | ConfigResourceKind::UiPolicy => vec![
+			crate::config_store::prepare_policy_upsert(kind, id, resource.value)
+				.map_err(resource_api_error)?,
+		],
+		_ => {
+			return Err(resource_api_error(ConfigResourceError::InvalidRequest(
+				format!("item updates are not supported for {kind} resources"),
+			)));
+		},
+	};
 	let candidate =
 		crate::config_store::apply_prepared_upsert(resources, &prepared).map_err(resource_api_error)?;
 	validate_materialized_config(&app, &candidate).await?;

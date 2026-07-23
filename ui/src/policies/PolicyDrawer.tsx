@@ -67,6 +67,7 @@ export function PolicyDrawer(props: {
   saveError?: string | null;
   schemaRoot?: string;
   config?: GatewayConfig | null;
+  databaseBacked?: boolean;
   onClose: () => void;
   applySaveDiff?: (config: GatewayConfig, value: unknown) => void;
   onSave: (value: unknown) => void;
@@ -76,6 +77,12 @@ export function PolicyDrawer(props: {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const submittedValue = useRef<unknown>(undefined);
   const formId = `policy-editor-${sanitizePolicyFormId(props.schemaRoot ?? "LocalLLMPolicy")}-${sanitizePolicyFormId(props.policyKey)}`;
+  const saveResourceDiff = props.databaseBacked
+    ? () => ({
+        original: props.policyValue ?? {},
+        modified: submittedValue.current ?? {},
+      })
+    : undefined;
 
   function submitPolicyForm() {
     submittedValue.current = undefined;
@@ -118,6 +125,7 @@ export function PolicyDrawer(props: {
             saveLabel="Save policy"
             saving={props.saving}
             diffDisabled={enabled && !dirty}
+            resourceDiff={saveResourceDiff}
             onSave={() => {
               if (submitPolicyForm()) props.onSave(submittedValue.current);
             }}

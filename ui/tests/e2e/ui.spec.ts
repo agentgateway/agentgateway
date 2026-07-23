@@ -661,6 +661,77 @@ test("hybrid model edits use the resource's owning store", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("hybrid LLM and UI policies are stored as individual resources", async ({
+  page,
+}) => {
+  const config = emptyConfig();
+  delete (config.llm as Record<string, unknown>).policies;
+  config.gateways = { default: { port: 8080 } };
+  config.ui = { gateways: "default" };
+  const gateway = await mockGateway(page, config);
+  const resources: Array<Record<string, unknown>> = [];
+  const writes: Array<{ kind: string; id: string; value: unknown }> = [];
+
+  await page.route("**/api/runtime", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        build: {},
+        ui: { gatewayMode: "standalone", configStoreMode: "hybrid" },
+      }),
+    }),
+  );
+  await page.route("**/api/config/resources**", async (route) => {
+    const request = route.request();
+    if (request.method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ resources }),
+      });
+      return;
+    }
+    if (request.method() === "PUT") {
+      const parts = new URL(request.url()).pathname.split("/");
+      const kind = decodeURIComponent(parts.at(-2) ?? "");
+      const id = decodeURIComponent(parts.at(-1) ?? "");
+      const { value } = request.postDataJSON() as { value: unknown };
+      writes.push({ kind, id, value });
+      resources.push({
+        kind,
+        id,
+        value,
+        revision: 1,
+        createdAt: "2026-07-23T00:00:00Z",
+        updatedAt: "2026-07-23T00:00:00Z",
+      });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ resources: [resources.at(-1)] }),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.goto("/llm/policies");
+  await page.getByText("CORS", { exact: true }).click();
+  await page.getByRole("button", { name: "Add current origin" }).click();
+  await page.getByRole("button", { name: "Save policy" }).click();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0]).toMatchObject({ kind: "llm.policy", id: "cors" });
+
+  await page.goto("/settings");
+  await page.getByText("CORS", { exact: true }).click();
+  await page.getByRole("button", { name: "Add current origin" }).click();
+  await page.getByRole("button", { name: "Save policy" }).click();
+  await expect.poll(() => writes.length).toBe(2);
+  expect(writes[1]).toMatchObject({ kind: "ui.policy", id: "cors" });
+  expect(gateway.postedConfigs).toHaveLength(0);
+});
+
 test("reveals a virtual API key explicitly", async ({ page }) => {
   await mockGateway(page);
   await page.goto("/llm/keys");

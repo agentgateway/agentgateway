@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   Check,
   Copy,
@@ -26,6 +26,7 @@ import {
   useLlmConfigData,
   useUpdateConfig,
   useUpsertConfigResource,
+  useUpsertPolicyResource,
 } from "../hooks";
 import { isDatabaseConfigResource } from "../config";
 import {
@@ -51,15 +52,27 @@ import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import type { GatewayConfig, LlmApiKeyPolicy, VirtualApiKey } from "../types";
 
 export function KeysPage() {
-  const { config, hybrid, resources, apiKeys: keys } = useLlmConfigData();
+  const {
+    config,
+    hybrid,
+    resources,
+    policies,
+    apiKeys: keys,
+    isLoading,
+    error,
+  } = useLlmConfigData();
   const update = useUpdateConfig();
   const upsertResource = useUpsertConfigResource();
+  const upsertPolicy = useUpsertPolicyResource();
   const deleteResource = useDeleteConfigResource();
   const help = useSchemaHelp();
-  const policy = useMemo(
-    () => config.data?.llm?.policies?.apiKey,
-    [config.data],
+  const policy = (policies.apiKey ?? null) as LlmApiKeyPolicy | null;
+  const filePolicyOwned = Boolean(
+    config.data?.llm?.policies &&
+    Object.prototype.hasOwnProperty.call(config.data.llm.policies, "apiKey"),
   );
+  const databasePolicyOwned =
+    hybrid && isDatabaseConfigResource(resources, "llm.policy", "apiKey");
   const [editing, setEditing] = useState<{
     previousKey?: string;
     key: VirtualApiKey;
@@ -77,12 +90,17 @@ export function KeysPage() {
         : null);
   const advancedOpen = keyDrawer === "settings";
   const saving =
-    update.isPending || upsertResource.isPending || deleteResource.isPending;
+    update.isPending ||
+    upsertResource.isPending ||
+    upsertPolicy.isPending ||
+    deleteResource.isPending;
   const saveError =
     update.error?.message ??
     upsertResource.error?.message ??
+    upsertPolicy.error?.message ??
     deleteResource.error?.message ??
     null;
+  const unavailable = isLoading || Boolean(error);
 
   function databaseKeyId(key: VirtualApiKey) {
     const id = keyId(key);
@@ -142,8 +160,19 @@ export function KeysPage() {
   }
 
   function disablePolicy() {
+    const onSuccess = () => {
+      setDisablePolicyOpen(false);
+      closeKeyDrawer();
+    };
+    if (databasePolicyOwned) {
+      deleteResource.mutate(
+        { kind: "llm.policy", id: "apiKey" },
+        { onSuccess },
+      );
+      return;
+    }
     update.mutate((next) => disableApiKeyPolicy(next), {
-      onSuccess: closeKeyDrawer,
+      onSuccess,
     });
   }
 
@@ -159,6 +188,7 @@ export function KeysPage() {
                 <button
                   className="button"
                   type="button"
+                  disabled={unavailable || saving}
                   onClick={() => setKeyDrawer("settings")}
                 >
                   <SlidersHorizontal size={16} />
@@ -167,6 +197,7 @@ export function KeysPage() {
                 <button
                   className="button primary"
                   type="button"
+                  disabled={unavailable || saving}
                   onClick={openNewKey}
                 >
                   <Plus size={16} />
@@ -177,6 +208,7 @@ export function KeysPage() {
               <button
                 className="button primary"
                 type="button"
+                disabled={unavailable || saving}
                 onClick={() => setKeyDrawer("settings")}
               >
                 <KeyRound size={16} />
@@ -202,11 +234,11 @@ export function KeysPage() {
       ) : null}
 
       <Panel>
-        {config.isLoading ? (
+        {isLoading ? (
           <StatusBanner state="loading" title="Loading keys" />
-        ) : config.isError ? (
+        ) : error ? (
           <StatusBanner state="bad" title="Configuration API unavailable">
-            {config.error.message}
+            {error.message}
           </StatusBanner>
         ) : !policy ? (
           <EmptyState
@@ -216,6 +248,7 @@ export function KeysPage() {
               <button
                 className="button primary"
                 type="button"
+                disabled={saving}
                 onClick={() => setKeyDrawer("settings")}
               >
                 <KeyRound size={16} />
@@ -232,7 +265,7 @@ export function KeysPage() {
                 <button
                   className="button danger"
                   type="button"
-                  disabled={update.isPending}
+                  disabled={saving}
                   onClick={() => setDisablePolicyOpen(true)}
                 >
                   <X size={16} />
@@ -241,6 +274,7 @@ export function KeysPage() {
                 <button
                   className="button primary"
                   type="button"
+                  disabled={saving}
                   onClick={openNewKey}
                 >
                   <Plus size={16} />
@@ -347,16 +381,9 @@ export function KeysPage() {
           title="Disable API key policy?"
           destructive
           confirmLabel="Disable API Key Policy"
-          confirmDisabled={update.isPending}
+          confirmDisabled={saving}
           onCancel={() => setDisablePolicyOpen(false)}
-          onConfirm={() => {
-            update.mutate((next) => disableApiKeyPolicy(next), {
-              onSuccess: () => {
-                setDisablePolicyOpen(false);
-                closeKeyDrawer();
-              },
-            });
-          }}
+          onConfirm={disablePolicy}
         >
           <p>
             Disable virtual API key validation? Requests will no longer be
@@ -368,23 +395,32 @@ export function KeysPage() {
         <AdvancedSettingsDrawer
           config={config.data}
           policy={policy}
+          databaseBacked={hybrid && !filePolicyOwned}
           keyCount={keys.length}
           help={help}
-          saving={update.isPending}
-          saveError={update.isError ? update.error.message : null}
+          saving={saving}
+          saveError={saveError}
           onClose={closeKeyDrawer}
           onDisable={disablePolicy}
-          onSave={(nextPolicy) =>
+          onSave={(nextPolicy) => {
+            if (hybrid && !filePolicyOwned) {
+              upsertPolicy.mutate(
+                {
+                  kind: "llm.policy",
+                  id: "apiKey",
+                  value: nextPolicy,
+                },
+                { onSuccess: closeKeyDrawer },
+              );
+              return;
+            }
             update.mutate(
               (next) => {
-                const apiKey = getApiKeyPolicy(next);
-                Object.assign(apiKey, nextPolicy);
+                Object.assign(getApiKeyPolicy(next), nextPolicy);
               },
-              {
-                onSuccess: closeKeyDrawer,
-              },
-            )
-          }
+              { onSuccess: closeKeyDrawer },
+            );
+          }}
         />
       ) : null}
     </div>
@@ -394,6 +430,7 @@ export function KeysPage() {
 function AdvancedSettingsDrawer(props: {
   config?: GatewayConfig | null;
   policy?: LlmApiKeyPolicy | null;
+  databaseBacked?: boolean;
   keyCount: number;
   help: SchemaHelp;
   saving: boolean;
@@ -409,6 +446,7 @@ function AdvancedSettingsDrawer(props: {
     >
       <PolicyControls
         policy={props.policy}
+        databaseBacked={props.databaseBacked}
         config={props.config}
         keyCount={props.keyCount}
         help={props.help}
@@ -428,6 +466,7 @@ function AdvancedSettingsDrawer(props: {
 function PolicyControls(props: {
   config?: GatewayConfig | null;
   policy?: LlmApiKeyPolicy | null;
+  databaseBacked?: boolean;
   keyCount: number;
   help: SchemaHelp;
   saving: boolean;
@@ -503,6 +542,16 @@ function PolicyControls(props: {
       ) : null}
       <ConfigDiffSaveActions
         config={props.config}
+        resourceDiff={
+          props.databaseBacked
+            ? () => ({
+                original: props.policy
+                  ? apiKeyPolicyResourceValue(props.policy)
+                  : {},
+                modified: patch,
+              })
+            : undefined
+        }
         diffTitle={
           props.policy
             ? "API key policy config diff"
@@ -517,6 +566,12 @@ function PolicyControls(props: {
       />
     </div>
   );
+}
+
+function apiKeyPolicyResourceValue(policy: LlmApiKeyPolicy) {
+  const value: Partial<LlmApiKeyPolicy> = { ...policy };
+  delete value.keys;
+  return value;
 }
 
 function KeyEditor(props: {

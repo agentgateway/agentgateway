@@ -152,7 +152,9 @@ export function ConfigDiffDrawer(props: {
 
 export function ConfigDiffSaveActions(props: {
   config?: GatewayConfig | null;
-  resourceDiff?: { original: unknown; modified: unknown };
+  resourceDiff?:
+    | { original: unknown; modified: unknown }
+    | (() => { original: unknown; modified: unknown });
   diffTitle: string;
   saveLabel: string;
   saving?: boolean;
@@ -177,9 +179,13 @@ export function ConfigDiffSaveActions(props: {
       return;
     if (props.beforeDiff && !props.beforeDiff()) return;
     if (props.resourceDiff) {
+      const resourceDiff =
+        typeof props.resourceDiff === "function"
+          ? props.resourceDiff()
+          : props.resourceDiff;
       setDiff({
-        original: toYamlText(props.resourceDiff.original),
-        modified: toYamlText(props.resourceDiff.modified),
+        original: toYamlText(resourceDiff.original),
+        modified: toYamlText(resourceDiff.modified),
       });
       return;
     }

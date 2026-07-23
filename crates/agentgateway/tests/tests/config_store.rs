@@ -13,12 +13,26 @@ async fn hybrid_resources_reload_and_survive_restart() -> anyhow::Result<()> {
 	let config = hybrid_config(&database_url);
 
 	let gateway = AgentGateway::new(config.clone()).await?;
+	let response = gateway
+		.send_request_json_method(
+			Method::PUT,
+			"http://localhost/api/config/resources/llm.policy/notAPolicy",
+			json!({"value": {}}),
+		)
+		.await;
+	anyhow::ensure!(
+		response.status() == StatusCode::UNPROCESSABLE_ENTITY,
+		"unknown policy should be rejected by local config validation: {}",
+		response.status()
+	);
 	put_model(&gateway, "db-model").await?;
+	put_cors_policy(&gateway).await?;
 	wait_for_models(&gateway, &["db-model"]).await?;
 	gateway.shutdown().await;
 
 	let gateway = AgentGateway::new(config).await?;
 	assert_resource(&gateway, "db-model").await?;
+	assert_cors_policy(&gateway).await?;
 	wait_for_models(&gateway, &["db-model"]).await?;
 
 	put_model(&gateway, "renamed-model").await?;
@@ -34,6 +48,55 @@ async fn hybrid_resources_reload_and_survive_restart() -> anyhow::Result<()> {
 	assert_eq!(response.status(), StatusCode::OK);
 	wait_for_models(&gateway, &[]).await?;
 
+	Ok(())
+}
+
+async fn put_cors_policy(gateway: &AgentGateway) -> anyhow::Result<()> {
+	let response = gateway
+		.send_request_json_method(
+			Method::PUT,
+			"http://localhost/api/config/resources/llm.policy/cors",
+			json!({
+				"value": {
+					"allowOrigins": ["https://example.com"],
+					"allowMethods": ["POST"],
+					"allowHeaders": ["*"]
+				}
+			}),
+		)
+		.await;
+	let status = response.status();
+	let body = response.into_body().collect().await?.to_bytes();
+	anyhow::ensure!(
+		status == StatusCode::OK,
+		"policy upsert failed ({status}): {}",
+		String::from_utf8_lossy(&body)
+	);
+	Ok(())
+}
+
+async fn assert_cors_policy(gateway: &AgentGateway) -> anyhow::Result<()> {
+	let response = gateway
+		.send_request(
+			Method::GET,
+			"http://localhost/api/config/resources/llm.policy",
+		)
+		.await;
+	anyhow::ensure!(
+		response.status() == StatusCode::OK,
+		"policy resource list failed: {}",
+		response.status()
+	);
+	let body = response.into_body().collect().await?.to_bytes();
+	let value: Value = serde_json::from_slice(&body)?;
+	anyhow::ensure!(
+		value["resources"].as_array().is_some_and(|resources| {
+			resources.len() == 1
+				&& resources[0]["id"] == "cors"
+				&& resources[0]["value"]["allowOrigins"][0] == "https://example.com"
+		}),
+		"persisted CORS policy did not match: {value}"
+	);
 	Ok(())
 }
 

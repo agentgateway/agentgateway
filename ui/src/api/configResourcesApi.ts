@@ -11,7 +11,14 @@ export type ConfigResourceKind =
   | "llm.provider"
   | "llm.model"
   | "llm.virtualModel"
-  | "llm.apiKey";
+  | "llm.apiKey"
+  | "llm.policy"
+  | "ui.policy";
+
+export type PolicyResourceKind = Extract<
+  ConfigResourceKind,
+  `${string}.policy`
+>;
 
 export type ConfigResourceValue<K extends ConfigResourceKind> =
   K extends "modelCatalog"
@@ -24,7 +31,9 @@ export type ConfigResourceValue<K extends ConfigResourceKind> =
           ? LlmVirtualModel
           : K extends "llm.apiKey"
             ? VirtualApiKey
-            : unknown;
+            : K extends "llm.policy" | "ui.policy"
+              ? unknown
+              : never;
 
 export interface ConfigResource<
   K extends ConfigResourceKind = ConfigResourceKind,

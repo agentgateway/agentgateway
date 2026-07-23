@@ -8,6 +8,7 @@ import {
   updateConfigResource,
   type ConfigResourceKind,
   type ConfigResourceValue,
+  type PolicyResourceKind,
 } from "./api/configResourcesApi";
 import { getConfigDump } from "./api/configDumpApi";
 import { getRuntimeInfo } from "./api/runtimeApi";
@@ -17,9 +18,10 @@ import {
   llmModelResources,
   llmProviderResources,
   llmVirtualModelResources,
+  policyResources,
 } from "./config";
 import { validateGatewayConfig } from "./configValidation";
-import type { GatewayConfig } from "./types";
+import type { GatewayConfig, VirtualApiKey } from "./types";
 
 let hybridFileWriteOverride = false;
 
@@ -84,6 +86,13 @@ export function useLlmConfigData(options?: { enabled?: boolean }) {
   const hybrid = runtime.data?.ui.configStoreMode === "hybrid";
   const configResources = useConfigResources({ enabled: enabled && hybrid });
   const resources = configResources.data?.resources;
+  const policies = useMemo(
+    () => ({
+      ...(config.data?.llm?.policies ?? {}),
+      ...(hybrid ? policyResources(resources, "llm.policy") : {}),
+    }),
+    [config.data, hybrid, resources],
+  );
   const models = useMemo(
     () => [
       ...(config.data?.llm?.models ?? []),
@@ -107,10 +116,11 @@ export function useLlmConfigData(options?: { enabled?: boolean }) {
   );
   const apiKeys = useMemo(
     () => [
-      ...(config.data?.llm?.policies?.apiKey?.keys ?? []),
+      ...((policies.apiKey as { keys?: VirtualApiKey[] } | undefined)?.keys ??
+        []),
       ...(hybrid ? llmApiKeyResources(resources) : []),
     ],
-    [config.data, hybrid, resources],
+    [hybrid, policies, resources],
   );
 
   return {
@@ -122,12 +132,14 @@ export function useLlmConfigData(options?: { enabled?: boolean }) {
     models,
     virtualModels,
     providers,
+    policies,
     apiKeys,
     isLoading:
       config.isLoading ||
       runtime.isLoading ||
       (hybrid && configResources.isLoading),
-    error: config.error ?? (hybrid ? configResources.error : null),
+    error:
+      config.error ?? runtime.error ?? (hybrid ? configResources.error : null),
   };
 }
 
@@ -223,6 +235,18 @@ export function useDeleteConfigResource() {
   return useMutation({
     mutationFn: (input: { kind: ConfigResourceKind; id: string }) =>
       deleteConfigResource(input.kind, input.id),
+    onSuccess: () => invalidateConfigViews(queryClient),
+  });
+}
+
+export function useUpsertPolicyResource() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      kind: PolicyResourceKind;
+      id: string;
+      value: unknown;
+    }) => updateConfigResource(input.kind, input.id, input.value),
     onSuccess: () => invalidateConfigViews(queryClient),
   });
 }
