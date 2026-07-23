@@ -1,0 +1,20 @@
+{
+  "id": "msg_fixture_complete",
+  "type": "message",
+  "role": "assistant",
+  "content": [
+    {"type": "text", "text": "Inventory checked."},
+    {"type": "tool_use", "id": "call_weather", "name": "weather", "input": {"city": "Seattle"}}
+  ],
+  "model": "claude-upstream-model",
+  "stop_reason": "tool_use",
+  "stop_sequence": null,
+  "usage": {
+    "input_tokens": 10,
+    "output_tokens": 5,
+    "cache_read_input_tokens": 4,
+    "cache_creation_input_tokens": 1,
+    "output_tokens_details": {"thinking_tokens": 2},
+    "service_tier": "standard"
+  }
+}

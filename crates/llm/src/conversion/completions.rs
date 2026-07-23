@@ -192,6 +192,7 @@ pub mod from_messages {
 						id: f.id,
 						name: f.function.name,
 						input,
+						caller: None,
 						cache_control: None,
 					})
 				},
@@ -245,6 +246,7 @@ pub mod from_messages {
 				cache_creation_input_tokens,
 				cache_read_input_tokens,
 				service_tier,
+				output_tokens_details: None,
 			},
 			input_audio_tokens: usage.as_ref().and_then(|u| {
 				u.prompt_tokens_details
@@ -387,6 +389,7 @@ pub mod from_messages {
 							id,
 							name,
 							input: Value::Object(serde_json::Map::new()),
+							caller: None,
 							cache_control: None,
 						},
 					},
@@ -471,6 +474,7 @@ pub mod from_messages {
 						output_tokens: Some(output_tokens),
 						cache_creation_input_tokens,
 						cache_read_input_tokens,
+						output_tokens_details: None,
 					},
 				},
 			);
@@ -543,6 +547,7 @@ pub mod from_messages {
 										cache_creation_input_tokens: None,
 										cache_read_input_tokens: None,
 										service_tier: None,
+										output_tokens_details: None,
 									},
 									input_audio_tokens: None,
 									output_audio_tokens: None,

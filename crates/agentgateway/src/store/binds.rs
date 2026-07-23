@@ -752,6 +752,7 @@ impl Store {
 			"/models",
 			"/v1/messages/count_tokens",
 			"/v1/chat/completions",
+			"/v1/messages/count_tokens",
 			"/v1/messages",
 			"/v1/responses",
 			"/v1/responses/compact",
@@ -2438,6 +2439,12 @@ mod tests {
 			matches!(
 				route_match.path,
 				agent::PathMatch::Exact(ref path) if path == "/v1/chat/completions"
+			)
+		}));
+		assert!(matches.iter().any(|route_match| {
+			matches!(
+				route_match.path,
+				agent::PathMatch::Exact(ref path) if path == "/v1/messages/count_tokens"
 			)
 		}));
 		assert!(

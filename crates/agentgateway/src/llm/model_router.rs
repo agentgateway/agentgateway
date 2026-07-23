@@ -59,6 +59,10 @@ pub fn default_route_types() -> Arc<llm::Policy> {
 				strng::new("/v1/chat/completions"),
 				llm::RouteType::Completions,
 			),
+			(
+				strng::new("/v1/messages/count_tokens"),
+				llm::RouteType::AnthropicTokenCount,
+			),
 			(strng::new("/v1/messages"), llm::RouteType::Messages),
 			(
 				strng::new("/v1/messages/count_tokens"),
