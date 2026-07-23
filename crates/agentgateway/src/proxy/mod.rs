@@ -66,6 +66,9 @@ impl ProxyError {
 			| ProxyError::BackendDoesNotExist => ProxyResponseReason::NoHealthyBackend,
 			ProxyError::UpgradeFailed(_, _)
 			| ProxyError::InvalidRequest
+			| ProxyError::InvalidRequestString(_)
+			| ProxyError::PayloadTooLarge(_)
+			| ProxyError::UnsupportedMediaType(_)
 			| ProxyError::MethodNotAllowed
 			| ProxyError::ProcessingString(_)
 			| ProxyError::Processing(_)
@@ -242,6 +245,12 @@ pub enum ProxyError {
 	SubstrateEgressDenied(String),
 	#[error("{0}")]
 	SubstrateEgressUnavailable(String),
+	#[error("invalid request: {0}")]
+	InvalidRequestString(String),
+	#[error("payload too large: {0}")]
+	PayloadTooLarge(String),
+	#[error("unsupported media type: {0}")]
+	UnsupportedMediaType(String),
 	#[error("rate limit exceeded")]
 	RateLimitExceeded {
 		limit: u64,
@@ -437,6 +446,9 @@ impl ProxyError {
 			ProxyError::ProcessingString(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::RequestLimitExceeded => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::SubstrateIngressFailed(status, _) => status,
+			ProxyError::InvalidRequestString(_) => StatusCode::BAD_REQUEST,
+			ProxyError::PayloadTooLarge(_) => StatusCode::PAYLOAD_TOO_LARGE,
+			ProxyError::UnsupportedMediaType(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
 			ProxyError::RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
 			ProxyError::RemoteRateLimitExceeded {
 				response_headers,

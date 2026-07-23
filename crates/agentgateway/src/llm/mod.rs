@@ -291,7 +291,9 @@ struct ChatRequestContext<'a> {
 // Context provider to each response translation
 struct ChatResponseContext<'a> {
 	model: &'a str,
+	buffer_limit: usize,
 	tool_name_map: Option<&'a conversion::bedrock::BedrockToolNameMap>,
+	responses_to_messages_state: Option<&'a conversion::messages::from_responses::State>,
 }
 
 /// Log handles and content-capture flags threaded through response processing.
@@ -308,7 +310,9 @@ struct ChatStreamContext {
 	logger: agent_llm::StreamingUsageGuard,
 	model: String,
 	log_content: LogContentFields,
+	strip_messages_done: bool,
 	tool_name_map: Option<conversion::bedrock::BedrockToolNameMap>,
+	responses_to_messages_state: Option<conversion::messages::from_responses::State>,
 }
 
 /// Ordered chat conversion table.
@@ -341,9 +345,9 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 		chat(InputFormat::Messages, ChatFormat::OpenAIResponses),
 		chat(InputFormat::Messages, ChatFormat::BedrockConverse),
 		// Responses
+		chat(InputFormat::Responses, ChatFormat::AnthropicMessages),
 		chat(InputFormat::Responses, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Responses, ChatFormat::BedrockConverse),
-		// Missing: Responses -> Messages
 	]
 };
 
@@ -406,19 +410,75 @@ fn apply_openai_moderation(
 fn render_anthropic_messages(
 	req: types::ChatRequest,
 	catalog: agent_llm::model_catalog::Catalog<'_>,
-) -> Result<Vec<u8>, AIError> {
-	match req {
-		types::ChatRequest::Completions(req) => {
-			conversion::messages::from_completions::translate(&req, catalog)
+) -> Result<RenderedChatRequest, AIError> {
+	let (body, provider_state) = match req {
+		types::ChatRequest::Completions(req) => (
+			conversion::messages::from_completions::translate(&req, catalog)?,
+			None,
+		),
+		types::ChatRequest::Messages(req) => (
+			serde_json::to_vec(&req).map_err(AIError::RequestMarshal)?,
+			None,
+		),
+		types::ChatRequest::Responses(req) => {
+			let (body, state) = conversion::messages::from_responses::translate(&req)?;
+			(
+				body,
+				Some(ProviderState::ResponsesToMessages {
+					state: Arc::new(state),
+				}),
+			)
 		},
-		types::ChatRequest::Messages(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
-		types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
-			"responses to messages"
-		))),
-		types::ChatRequest::Gemini(_) => Err(AIError::UnsupportedConversion(strng::literal!(
-			"gemini to messages"
-		))),
+		types::ChatRequest::Gemini(_) => {
+			return Err(AIError::UnsupportedConversion(strng::literal!(
+				"gemini to messages"
+			)));
+		},
+	};
+	Ok(RenderedChatRequest {
+		body,
+		provider_state,
+	})
+}
+
+/// `anthropic-beta` entries confirmed to make Copilot reject the request outright. This is
+/// deliberately a denylist, not an allowlist: Copilot accepts most Anthropic beta features
+/// (thinking, prompt caching, context management, etc.), and only entries confirmed unsupported
+/// by a real Claude Code request should be added here.
+const COPILOT_UNSUPPORTED_BETA_HEADERS: &[&str] = &["advisor-tool-2026-03-01"];
+
+/// Removes confirmed-unsupported `anthropic-beta` entries for a Copilot-bound Messages request,
+/// preserving every other entry (including across repeated headers and comma-separated lists)
+/// and their relative order.
+fn filter_copilot_unsupported_beta_headers(headers: &mut HeaderMap) {
+	let mut kept = Vec::new();
+	for value in headers.get_all("anthropic-beta") {
+		let Ok(header_str) = value.to_str() else {
+			continue;
+		};
+		for feature in header_str.split(',') {
+			let trimmed = feature.trim();
+			if !trimmed.is_empty() && !COPILOT_UNSUPPORTED_BETA_HEADERS.contains(&trimmed) {
+				kept.push(trimmed.to_string());
+			}
+		}
 	}
+	headers.remove("anthropic-beta");
+	if !kept.is_empty()
+		&& let Ok(value) = HeaderValue::from_str(&kept.join(","))
+	{
+		headers.insert("anthropic-beta", value);
+	}
+}
+
+/// Removes top-level Messages fields confirmed to make Copilot reject the request outright.
+/// `context_management` is a real Anthropic Messages beta field (preserved for every other
+/// provider via `Request.rest`), but Copilot's narrower Anthropic Messages dialect rejects it.
+fn strip_copilot_unsupported_messages_fields(body: Vec<u8>) -> Result<Vec<u8>, AIError> {
+	let mut body: serde_json::Map<String, serde_json::Value> =
+		serde_json::from_slice(&body).map_err(AIError::RequestParsing)?;
+	body.remove("context_management");
+	serde_json::to_vec(&body).map_err(AIError::RequestMarshal)
 }
 
 fn render_vertex_gemini(
@@ -513,9 +573,16 @@ impl ChatTranslation {
 			ChatFormat::OpenAICompletions => render_openai_completions(req, ctx),
 			ChatFormat::OpenAIResponses => render_openai_responses(req, ctx),
 			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Vertex(_)) => {
-				vertex::prepare_anthropic_message_body(render_anthropic_messages(req, ctx.catalog)?)
+				let mut rendered = render_anthropic_messages(req, ctx.catalog)?;
+				rendered.body = vertex::prepare_anthropic_message_body(rendered.body)?;
+				return Ok(rendered);
 			},
-			ChatFormat::AnthropicMessages => render_anthropic_messages(req, ctx.catalog),
+			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Copilot(_)) => {
+				let mut rendered = render_anthropic_messages(req, ctx.catalog)?;
+				rendered.body = strip_copilot_unsupported_messages_fields(rendered.body)?;
+				return Ok(rendered);
+			},
+			ChatFormat::AnthropicMessages => return render_anthropic_messages(req, ctx.catalog),
 			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
 			ChatFormat::VertexGemini => {
 				return Ok(RenderedChatRequest {
@@ -564,6 +631,14 @@ impl ChatTranslation {
 				InputFormat::Completions => {
 					conversion::messages::from_completions::translate_response(bytes)
 				},
+				InputFormat::Responses => conversion::messages::from_responses::translate_response(
+					bytes,
+					ctx.model,
+					ctx.responses_to_messages_state.ok_or_else(|| {
+						AIError::UnsupportedConversion(strng::literal!("missing Responses-to-Messages state"))
+					})?,
+					ctx.buffer_limit,
+				),
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
 					"from {:?} to {:?}",
 					self.output,
@@ -606,8 +681,8 @@ impl ChatTranslation {
 		}
 	}
 
-	fn stream(&self, resp: Response, ctx: ChatStreamContext) -> Response {
-		match self.output {
+	fn stream(&self, resp: Response, ctx: ChatStreamContext) -> Result<Response, AIError> {
+		Ok(match self.output {
 			ChatFormat::OpenAICompletions => match self.input {
 				InputFormat::Completions => {
 					conversion::completions::passthrough_stream(ctx.logger, ctx.log_content, resp)
@@ -653,7 +728,13 @@ impl ChatTranslation {
 
 			ChatFormat::AnthropicMessages => match self.input {
 				InputFormat::Messages => resp.map(|b| {
-					conversion::messages::passthrough_stream(b, ctx.buffer_limit, ctx.logger, ctx.log_content)
+					conversion::messages::passthrough_stream(
+						b,
+						ctx.buffer_limit,
+						ctx.logger,
+						ctx.log_content,
+						ctx.strip_messages_done,
+					)
 				}),
 				InputFormat::Completions => resp.map(|b| {
 					conversion::messages::from_completions::translate_stream(
@@ -663,6 +744,21 @@ impl ChatTranslation {
 						ctx.log_content,
 					)
 				}),
+				InputFormat::Responses => {
+					let state = ctx.responses_to_messages_state.ok_or_else(|| {
+						AIError::UnsupportedConversion(strng::literal!("missing Responses-to-Messages state"))
+					})?;
+					resp.map(move |body| {
+						conversion::messages::from_responses::translate_stream(
+							body,
+							ctx.buffer_limit,
+							ctx.logger,
+							&ctx.model,
+							ctx.log_content,
+							state,
+						)
+					})
+				},
 				_ => resp,
 			},
 
@@ -714,7 +810,6 @@ impl ChatTranslation {
 				},
 				_ => resp,
 			},
-
 			ChatFormat::VertexGemini => match self.input {
 				InputFormat::Gemini => resp.map(|b| {
 					conversion::vertex_gemini::passthrough_stream(
@@ -735,7 +830,7 @@ impl ChatTranslation {
 				}),
 				_ => resp,
 			},
-		}
+		})
 	}
 
 	fn error(
@@ -791,6 +886,9 @@ impl ChatTranslation {
 					InputFormat::Messages => conversion::messages::translate_anthropic_error(bytes, status),
 					InputFormat::Completions => {
 						conversion::messages::from_completions::translate_error(bytes)
+					},
+					InputFormat::Responses => {
+						conversion::messages::from_responses::translate_error(bytes, status)
 					},
 					_ => unsupported(),
 				},
@@ -851,6 +949,7 @@ enum PreparedRequest {
 struct BufferedResponse {
 	parts: ::http::response::Parts,
 	bytes: Bytes,
+	buffer_limit: usize,
 }
 
 // The upstream chose this representation encoding. Keep it out of the headers while the decoded
@@ -1039,7 +1138,11 @@ impl AIProvider {
 		CHAT_TRANSLATIONS
 			.iter()
 			.find(|translation| {
-				translation.input == input_format && supported.contains(&translation.output)
+				translation.input == input_format
+					&& supported.contains(&translation.output)
+					&& (translation.input != InputFormat::Responses
+						|| translation.output != ChatFormat::AnthropicMessages
+						|| matches!(self, AIProvider::Copilot(_)))
 			})
 			.ok_or_else(|| {
 				AIError::UnsupportedConversion(strng::format!(
@@ -1225,7 +1328,33 @@ impl AIProvider {
 			return Ok(());
 		}
 
-		if has_host_override && path_prefix.is_none() && !matches!(self, AIProvider::Custom(_)) {
+		// A host override with no explicit pathPrefix normally means "trust the client's original
+		// path" -- correct for a native (unconverted) request, since the client's path is already
+		// right for whatever host serves it. But `route_type` here is the upstream wire route
+		// after any server-side format conversion (e.g. a Responses-format client request
+		// converted to an Anthropic Messages body for a Claude model via Copilot), and in that
+		// case the client's original path is guaranteed wrong for the now-translated body
+		// regardless of host override -- copilot::path_suffix(route_type) below is the one fixed,
+		// correct upstream path for that wire format. Only force the rewrite when a conversion
+		// actually produced this route, so a native request under a host override still keeps its
+		// operator-configured path untouched.
+		let converted_wire_route = matches!(
+			llm_request.and_then(|r| r.provider_state.as_ref()),
+			Some(ProviderState::ResponsesToMessages { .. })
+		) || llm_request.is_some_and(|request| {
+			matches!(
+				(request.input_format, route_type),
+				(
+					InputFormat::Completions | InputFormat::Responses,
+					RouteType::Messages
+				)
+			)
+		});
+		if has_host_override
+			&& path_prefix.is_none()
+			&& !matches!(self, AIProvider::Custom(_))
+			&& !converted_wire_route
+		{
 			return Ok(());
 		}
 
@@ -1460,6 +1589,13 @@ impl AIProvider {
 					Ok(())
 				})
 			},
+			AIProvider::Copilot(_) if route_type == RouteType::Messages => http::modify_req(req, |req| {
+				req
+					.headers
+					.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+				filter_copilot_unsupported_beta_headers(&mut req.headers);
+				Ok(())
+			}),
 			AIProvider::Azure(p) => {
 				// Foundry's Anthropic-native endpoint requires the anthropic-version header,
 				// but only for Claude models — GPT models use the OpenAI-compatible path.
@@ -2275,7 +2411,11 @@ impl AIProvider {
 			guardrails: guardrail_log,
 			content: log_content,
 		} = logging;
-		let BufferedResponse { mut parts, bytes } = buffered;
+		let BufferedResponse {
+			mut parts,
+			bytes,
+			buffer_limit,
+		} = buffered;
 
 		let (llm_resp, body) = if !parts.status.is_success() {
 			let body = self.process_error(
@@ -2289,6 +2429,7 @@ impl AIProvider {
 			let mut resp = self.translate_chat_or_detect_response(
 				&req,
 				&bytes,
+				buffer_limit,
 				model_catalog.map(|c| c.as_handle()),
 			)?;
 			let prompt_guard_headers =
@@ -2356,7 +2497,11 @@ impl AIProvider {
 			parts.extensions.insert(DeferredResponseEncoding(encoding));
 		}
 
-		Ok(BufferedResponse { parts, bytes })
+		Ok(BufferedResponse {
+			parts,
+			bytes,
+			buffer_limit,
+		})
 	}
 
 	fn finalize_response(
@@ -2638,6 +2783,7 @@ impl AIProvider {
 		&self,
 		req: &LLMRequest,
 		bytes: &Bytes,
+		buffer_limit: usize,
 		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<Box<dyn ResponseType>, AIError> {
 		if req.input_format == InputFormat::Detect {
@@ -2652,7 +2798,12 @@ impl AIProvider {
 			bytes,
 			&ChatResponseContext {
 				model: &req.request_model,
+				buffer_limit,
 				tool_name_map: bedrock_tool_name_map(req),
+				responses_to_messages_state: match &req.provider_state {
+					Some(ProviderState::ResponsesToMessages { state }) => Some(state.as_ref()),
+					_ => None,
+				},
 			},
 		)
 	}
@@ -2676,6 +2827,10 @@ impl AIProvider {
 		let model = req.request_model.clone();
 		let input_format = req.input_format;
 		let bedrock_tool_name_map = bedrock_tool_name_map(&req).cloned();
+		let responses_to_messages_state = match &req.provider_state {
+			Some(ProviderState::ResponsesToMessages { state }) => Some(state.as_ref().clone()),
+			_ => None,
+		};
 		let chat_translation = if input_format.is_chat() {
 			Some(self.chat_translation(
 				input_format,
@@ -2767,9 +2922,11 @@ impl AIProvider {
 					logger,
 					model: model.to_string(),
 					log_content,
+					strip_messages_done: matches!(self, AIProvider::Copilot(_)),
 					tool_name_map: bedrock_tool_name_map,
+					responses_to_messages_state,
 				},
-			)
+			)?
 		} else {
 			match (self, input_format) {
 				(AIProvider::Bedrock(_), InputFormat::Detect) => {

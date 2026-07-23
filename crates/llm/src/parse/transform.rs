@@ -19,6 +19,7 @@ pin_project! {
 		handler: F,
 		finished: bool,
 		pending_error: Option<axum_core::Error>,
+		strict: bool,
 		_phantom: std::marker::PhantomData<T>,
 	}
 }
@@ -34,19 +35,20 @@ fn encode_event<Input, E, F, I, T>(
 	handler: &mut F,
 	encoder: &mut E,
 	buffer: &mut BytesMut,
-) -> Result<(), axum_core::Error>
+) -> Result<bool, axum_core::Error>
 where
-	F: FnMut(TransformEvent<Input>) -> I,
+	F: FnMut(TransformEvent<Input>) -> (I, bool),
 	I: IntoIterator<Item = T>,
 	E: Encoder<T>,
 	E::Error: Into<axum_core::BoxError>,
 {
-	for item in handler(event) {
+	let (items, terminate) = handler(event);
+	for item in items {
 		encoder
 			.encode(item, buffer)
 			.map_err(axum_core::Error::new)?;
 	}
-	Ok(())
+	Ok(terminate)
 }
 
 fn terminal_error_frame<Input, E, F, I, T>(
@@ -57,13 +59,13 @@ fn terminal_error_frame<Input, E, F, I, T>(
 	pending_error: &mut Option<axum_core::Error>,
 ) -> Result<http_body::Frame<Bytes>, axum_core::Error>
 where
-	F: FnMut(TransformEvent<Input>) -> I,
+	F: FnMut(TransformEvent<Input>) -> (I, bool),
 	I: IntoIterator<Item = T>,
 	E: Encoder<T>,
 	E::Error: Into<axum_core::BoxError>,
 {
 	let preceding_output_len = preceding_output.len();
-	encode_event(
+	let _ = encode_event(
 		TransformEvent::Error,
 		handler,
 		encoder,
@@ -89,6 +91,51 @@ where
 	E::Error: Send + Into<axum_core::BoxError> + 'static,
 	T: Send + 'static,
 {
+	let mut handler = handler;
+	parser_inner(body, decoder, encoder, false, move |event| {
+		(handler(event), false)
+	})
+}
+
+pub(crate) fn strict_parser<D, E, F, I, T>(
+	body: AxumBody,
+	decoder: D,
+	encoder: E,
+	handler: F,
+) -> AxumBody
+where
+	D: Decoder + Send + 'static,
+	D::Error: Send + Into<axum_core::BoxError> + 'static,
+	F: FnMut(Result<D::Item, ()>) -> (I, bool) + Send + 'static,
+	I: IntoIterator<Item = T>,
+	E: Encoder<T> + Send + 'static,
+	E::Error: Send + Into<axum_core::BoxError> + 'static,
+	T: Send + 'static,
+{
+	let mut handler = handler;
+	parser_inner(body, decoder, encoder, true, move |event| match event {
+		TransformEvent::Item(item) => handler(Ok(item)),
+		TransformEvent::Error => handler(Err(())),
+		TransformEvent::Eof => unreachable!("strict decoders own their EOF event"),
+	})
+}
+
+fn parser_inner<D, E, F, I, T>(
+	body: AxumBody,
+	decoder: D,
+	encoder: E,
+	strict: bool,
+	handler: F,
+) -> AxumBody
+where
+	D: Decoder + Send + 'static,
+	D::Error: Send + Into<axum_core::BoxError> + 'static,
+	F: FnMut(TransformEvent<D::Item>) -> (I, bool) + Send + 'static,
+	I: IntoIterator<Item = T>,
+	E: Encoder<T> + Send + 'static,
+	E::Error: Send + Into<axum_core::BoxError> + 'static,
+	T: Send + 'static,
+{
 	AxumBody::new(TransformedBody {
 		body,
 		decoder,
@@ -98,6 +145,7 @@ where
 		encoder,
 		finished: false,
 		pending_error: None,
+		strict,
 		_phantom: std::marker::PhantomData,
 	})
 }
@@ -108,7 +156,7 @@ where
 	D::Error: Send + Into<axum_core::BoxError> + 'static,
 	E: Encoder<T> + Send + 'static,
 	E::Error: Send + Into<axum_core::BoxError> + 'static,
-	F: FnMut(TransformEvent<D::Item>) -> I + Send + 'static,
+	F: FnMut(TransformEvent<D::Item>) -> (I, bool) + Send + 'static,
 	I: IntoIterator<Item = T>,
 {
 	type Data = Bytes;
@@ -138,7 +186,9 @@ where
 		                  decoder: &mut D,
 		                  handler: &mut F,
 		                  encoder: &mut E,
-		                  encode_buf: &mut BytesMut| {
+		                  encode_buf: &mut BytesMut,
+		                  strict: bool,
+		                  stop: &mut bool| {
 			loop {
 				let decode = if finished {
 					decoder.decode_eof(buf)
@@ -147,34 +197,43 @@ where
 				};
 				match decode {
 					Ok(Some(decoded_item)) => {
-						encode_event(
+						let encoded_before = encode_buf.len();
+						let terminate = encode_event(
 							TransformEvent::Item(decoded_item),
 							handler,
 							encoder,
 							encode_buf,
 						)?;
+						if terminate {
+							*stop = true;
+							return Ok(());
+						}
+						if strict && !finished && encode_buf.len() > encoded_before {
+							return Ok(());
+						}
 					},
 					Ok(None) => {
-						if finished {
-							encode_event(TransformEvent::Eof, handler, encoder, encode_buf)?;
+						if finished && !strict {
+							let _ = encode_event(TransformEvent::Eof, handler, encoder, encode_buf)?;
 						}
 						return Ok(());
 					},
-					Err(e) => {
-						return Err(axum_core::Error::new(e));
-					},
+					Err(e) => return Err(axum_core::Error::new(e)),
 				}
 			}
 		};
 
 		// Try to decode and encode items from our buffer
+		let finished = *this.finished;
 		if let Err(e) = (try_decode)(
-			*this.finished,
+			finished,
 			this.decode_buffer,
 			&mut *this.decoder,
 			this.handler,
 			&mut *this.encoder,
 			&mut encode_buffer,
+			*this.strict,
+			this.finished,
 		) {
 			*this.finished = true;
 			return Poll::Ready(Some(terminal_error_frame(
@@ -193,6 +252,10 @@ where
 		}
 
 		// We need more input data - poll the underlying body
+		if *this.finished {
+			return Poll::Ready(None);
+		}
+
 		let res = ready!(this.body.as_mut().poll_frame(cx));
 		match res {
 			Some(Ok(frame)) => {
@@ -220,12 +283,14 @@ where
 				*this.finished = true;
 				// Try one more decode/encode cycle
 				match (try_decode)(
-					*this.finished,
+					true,
 					this.decode_buffer,
 					&mut *this.decoder,
 					this.handler,
 					&mut *this.encoder,
 					&mut encode_buffer,
+					*this.strict,
+					this.finished,
 				) {
 					Ok(_) => {
 						if !encode_buffer.is_empty() {
