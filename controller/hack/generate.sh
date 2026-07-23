@@ -24,9 +24,13 @@ readonly VERSIONS=( v1alpha1 )
 readonly OPENAPI_GEN_DIR=pkg/generated/openapi
 readonly APPLY_CFG_DIR=api/applyconfiguration
 readonly CLIENT_GEN_DIR=pkg/client
-readonly AGENTGATEWAY_CRD_DIR=install/helm/agentgateway-crds/crds
+readonly AGENTGATEWAY_CRD_DIR=install/helm/agentgateway-crds/templates
 readonly AGENTGATEWAY_MANIFESTS_DIR=install/helm/agentgateway/templates
-readonly AGENTGATEWAY_CRD_MAX_DESC_LEN="${AGENTGATEWAY_CRD_MAX_DESC_LEN:-50000}"
+# Helm's release-tracking Secret embeds every templates/ file verbatim (source
+# + rendered manifest) and Kubernetes caps a Secret at ~1MiB; descriptions are
+# ~40% of the rendered CRD size, so they're dropped here to leave headroom.
+# Full field docs remain on the Go types themselves.
+readonly AGENTGATEWAY_CRD_MAX_DESC_LEN="${AGENTGATEWAY_CRD_MAX_DESC_LEN:-0}"
 
 
 echo "Generating clientset at ${OUTPUT_PKG}/${CLIENTSET_PKG_NAME} for versions:" "${VERSIONS[@]}"
