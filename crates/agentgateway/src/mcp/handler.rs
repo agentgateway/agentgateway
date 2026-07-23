@@ -1210,11 +1210,8 @@ impl Relay {
 			match result {
 				Ok(s) => {
 					let s = self.rewrite_outbound_server_messages(name.as_str(), s, cel.clone());
-					let s = track_outbound_server_requests(
-						name.clone(),
-						s,
-						self.pending_server_requests.clone(),
-					);
+					let s =
+						track_outbound_server_requests(name.clone(), s, self.pending_server_requests.clone());
 					streams.push((name, s));
 				},
 				Err(e) => {
@@ -1289,11 +1286,8 @@ impl Relay {
 			.into_iter()
 			.map(|(name, s)| {
 				let s = self.rewrite_outbound_server_messages(name.as_str(), s, cel.clone());
-				let s = track_outbound_server_requests(
-					name.clone(),
-					s,
-					self.pending_server_requests.clone(),
-				);
+				let s =
+					track_outbound_server_requests(name.clone(), s, self.pending_server_requests.clone());
 				(name, s)
 			})
 			.collect::<Vec<_>>();
@@ -2187,8 +2181,14 @@ mod tests {
 		assert_eq!(id_b, downstream_server_request_id(b.as_str(), &shared_id));
 
 		let map = pending.lock().expect("lock");
-		assert_eq!(map.get(&id_a).map(|e| e.upstream.as_str()), Some("upstream-a"));
-		assert_eq!(map.get(&id_b).map(|e| e.upstream.as_str()), Some("upstream-b"));
+		assert_eq!(
+			map.get(&id_a).map(|e| e.upstream.as_str()),
+			Some("upstream-a")
+		);
+		assert_eq!(
+			map.get(&id_b).map(|e| e.upstream.as_str()),
+			Some("upstream-b")
+		);
 		assert_eq!(
 			map.get(&id_a).map(|e| e.original_id.clone()),
 			Some(shared_id.clone())
