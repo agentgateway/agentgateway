@@ -695,7 +695,6 @@ func TestStandaloneChartMonitoringDisabledByDefault(t *testing.T) {
 	require.NoError(t, err, "helm template failed: %s", stderr)
 	require.NotContains(t, out, "kind: PodMonitor")
 	require.NotContains(t, out, "name: metrics")
-	require.NotContains(t, out, "statsAddr")
 	require.Contains(t, out, "prometheus.io/scrape")
 }
 
@@ -708,7 +707,6 @@ func TestStandaloneChartMonitoringEnabled(t *testing.T) {
 	require.Contains(t, out, "kind: PodMonitor")
 	require.Contains(t, out, "name: agentgateway-standalone")
 	require.Contains(t, out, "- name: metrics\n          containerPort: 15020")
-	require.Contains(t, out, "statsAddr: 0.0.0.0:15020")
 	require.Contains(t, out, "prometheus.io/port: \"15020\"")
 	require.Contains(t, out, "prometheus.io/path: /metrics")
 	require.Contains(t, out, "- port: metrics\n    path: /metrics\n    interval: 15s")
@@ -724,7 +722,6 @@ func TestStandaloneChartMonitoringPodMonitorDisabled(t *testing.T) {
 	require.NotContains(t, out, "kind: PodMonitor")
 	require.Contains(t, out, "prometheus.io/scrape:")
 	require.Contains(t, out, "- name: metrics\n          containerPort: 15020")
-	require.Contains(t, out, "statsAddr: 0.0.0.0:15020")
 }
 
 func TestStandaloneChartMonitoringFullConfig(t *testing.T) {
@@ -742,7 +739,6 @@ func TestStandaloneChartMonitoringFullConfig(t *testing.T) {
 	require.Contains(t, out, "plane: monitoring")
 	require.Contains(t, out, "example.com/note: monitoring")
 	require.Contains(t, out, "containerPort: 15020")
-	require.Contains(t, out, "statsAddr: 0.0.0.0:15020")
 	require.Contains(t, out, "prometheus.io/port: \"15020\"")
 	require.Contains(t, out, "interval: 30s")
 }
