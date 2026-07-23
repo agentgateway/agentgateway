@@ -134,6 +134,10 @@ spec:
   visibility: Internal
   provider: OpenAI
   baseURL: http://model-routing-primary.default.svc.cluster.local:9235
+  policies:
+    health:
+      eviction:
+        consecutiveFailures: 1
   transformations:
   - field: model
     expression: '"agw-primary-down"'

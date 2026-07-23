@@ -180,8 +180,9 @@ impl ModelRouter {
 		);
 
 		match self.resolve_concrete_model(&requested_model.model, false, req) {
-			Some(route) => ResolveResult::Backend(route),
-			None => ResolveResult::DirectResponse(model_not_found_response()),
+			Ok(Some(route)) => ResolveResult::Backend(route),
+			Ok(None) => ResolveResult::DirectResponse(model_not_found_response()),
+			Err(()) => ResolveResult::DirectResponse(model_authorization_denied_response()),
 		}
 	}
 
@@ -264,8 +265,8 @@ impl ModelRouter {
 			return ResolveResult::DirectResponse(*resp);
 		}
 		match self.resolve_concrete_model(&target, true, req) {
-			Some(route) => ResolveResult::Backend(route),
-			None => {
+			Ok(Some(route)) => ResolveResult::Backend(route),
+			Ok(None) => {
 				tracing::debug!(
 					virtual_model = %virtual_model.name,
 					target_model = %target,
@@ -280,6 +281,7 @@ impl ModelRouter {
 					"virtual_model_target_not_found",
 				))
 			},
+			Err(()) => ResolveResult::DirectResponse(model_authorization_denied_response()),
 		}
 	}
 
@@ -288,18 +290,28 @@ impl ModelRouter {
 		requested_model: &str,
 		allow_internal: bool,
 		req: &Request,
-	) -> Option<ResolvedBackend> {
+	) -> Result<Option<ResolvedBackend>, ()> {
 		// `models` can store things like `provider/*`. The concrete `requested_model` will be like `provider/real-model`.
-		let model = self.models.iter().find(|model| {
+		let matches = |model: &ModelRoute| {
 			(allow_internal || model.visibility == ModelVisibility::Public)
 				&& model_name_matches(&model.name, requested_model)
 				&& header_matches(&model.header_matches, req)
-				&& model_authorized(model, req)
-		})?;
-		Some(ResolvedBackend {
+		};
+		let Some(model) = self
+			.models
+			.iter()
+			.find(|model| matches(model) && model_authorized(model, req))
+		else {
+			return if self.models.iter().any(matches) {
+				Err(())
+			} else {
+				Ok(None)
+			};
+		};
+		Ok(Some(ResolvedBackend {
 			backend: model.backend.clone(),
 			llm_policy: model.policies.llm.clone(),
-		})
+		}))
 	}
 }
 
@@ -308,6 +320,14 @@ fn model_not_found_response() -> Response {
 		::http::StatusCode::NOT_FOUND,
 		"Model not found",
 		"model_not_found",
+	)
+}
+
+fn model_authorization_denied_response() -> Response {
+	llm_error_response(
+		::http::StatusCode::FORBIDDEN,
+		"Model authorization denied",
+		"model_authorization_denied",
 	)
 }
 
