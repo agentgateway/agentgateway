@@ -115,12 +115,10 @@ func TestModelProviderInlinePolicies(t *testing.T) {
 				Request:  &gwv1.HTTPHeaderFilter{Add: []gwv1.HTTPHeader{{Name: "x-model-request-policy", Value: "enabled"}}},
 				Response: &gwv1.HTTPHeaderFilter{Add: []gwv1.HTTPHeader{{Name: "x-model-response-policy", Value: "enabled"}}},
 			},
-			AI: &agentgateway.ModelAIPolicies{
-				PromptGuard: &agentgateway.AIPromptGuard{Request: []agentgateway.PromptguardRequest{{
-					Regex: &agentgateway.Regex{Action: new(agentgateway.Action(agentgateway.REJECT)), Matches: []agentgateway.LongString{"blocked"}},
-				}}},
-				PromptCaching: &agentgateway.PromptCachingConfig{CacheMessages: true, CacheSystem: true, CacheTools: true, MinTokens: 1024},
-			},
+			PromptGuard: &agentgateway.AIPromptGuard{Request: []agentgateway.PromptguardRequest{{
+				Regex: &agentgateway.Regex{Action: new(agentgateway.Action(agentgateway.REJECT)), Matches: []agentgateway.LongString{"blocked"}},
+			}}},
+			PromptCaching: &agentgateway.PromptCachingConfig{CacheMessages: true, CacheSystem: true, CacheTools: true, MinTokens: 1024},
 		},
 	}
 

@@ -142,15 +142,7 @@ type UpstreamPolicies struct {
 	// Request and response header changes applied to provider traffic.
 	// +optional
 	Headers *HeaderModifiers `json:"headers,omitempty"`
-	// AI request and response policies applied to this model provider.
-	// +optional
-	AI *ModelAIPolicies `json:"ai,omitempty"`
-}
-
-// ModelAIPolicies contains provider-specific AI policies.
-// +kubebuilder:validation:AtLeastOneFieldSet
-type ModelAIPolicies struct {
-	// Guardrails for requests and responses.
+	// Guardrails for requests and responses sent to this model provider.
 	// +optional
 	PromptGuard *AIPromptGuard `json:"promptGuard,omitempty"`
 

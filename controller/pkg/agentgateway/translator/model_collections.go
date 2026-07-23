@@ -429,10 +429,10 @@ func translateModelUpstreamPolicies(ctx RouteContext, namespace string, model *a
 	backend.BackendSimple.TLS = policies.TLS
 	backend.BackendSimple.Tunnel = policies.Tunnel
 	backend.Health = policies.Health
-	if policies.AI != nil {
+	if policies.PromptGuard != nil || policies.PromptCaching != nil {
 		backend.AI = &agentgateway.BackendAI{
-			PromptGuard:   policies.AI.PromptGuard,
-			PromptCaching: policies.AI.PromptCaching,
+			PromptGuard:   policies.PromptGuard,
+			PromptCaching: policies.PromptCaching,
 		}
 	}
 	translated, err := translateInlineModelBackendPolicy(ctx, namespace, backend)

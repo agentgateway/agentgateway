@@ -51,17 +51,16 @@ spec:
         add:
         - name: x-model-response-policy
           value: enabled
-    ai:
-      promptCaching:
-        cacheMessages: true
-        cacheSystem: true
-        minTokens: 1024
-      promptGuard:
-        request:
-        - regex:
-            matches:
-            - blocked
-            action: Reject
+    promptCaching:
+      cacheMessages: true
+      cacheSystem: true
+      minTokens: 1024
+    promptGuard:
+      request:
+      - regex:
+          matches:
+          - blocked
+          action: Reject
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
