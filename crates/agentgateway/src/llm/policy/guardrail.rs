@@ -16,7 +16,7 @@
 use agent_core::prelude::Strng;
 use agent_core::strng;
 
-use crate::http::auth::{AwsAuth, AzureAuth, BackendAuth, GcpAuth};
+use crate::http::auth::{AwsAuth, AzureAuth, BackendAuth, BackendAuthKind, GcpAuth};
 use crate::store::BackendPolicies;
 use crate::types::agent::Target;
 use crate::*;
@@ -138,15 +138,19 @@ impl GuardrailBackend {
 	/// auth. These are fallbacks; policies attached to the backend take precedence.
 	pub fn default_policies(&self) -> BackendPolicies {
 		let backend_auth = match self {
-			GuardrailBackend::Bedrock(_) => Some(BackendAuth::Aws(AwsAuth::Implicit {
+			GuardrailBackend::Bedrock(_) => Some(BackendAuth::new(BackendAuthKind::Aws(AwsAuth::Implicit {
 				service_name: None,
 				region: None,
 				assume_role: None,
 				source_credentials_cache: Default::default(),
 				assume_role_cache: Default::default(),
-			})),
-			GuardrailBackend::GoogleModelArmor(_) => Some(BackendAuth::Gcp(GcpAuth::default())),
-			GuardrailBackend::AzureContentSafety(a) => Some(BackendAuth::Azure(a.cached_auth.clone())),
+			}))),
+			GuardrailBackend::GoogleModelArmor(_) => {
+				Some(BackendAuth::new(BackendAuthKind::Gcp(GcpAuth::default())))
+			},
+			GuardrailBackend::AzureContentSafety(a) => {
+				Some(BackendAuth::new(BackendAuthKind::Azure(a.cached_auth.clone())))
+			},
 			// No implicit auth for OpenAI; the user must attach an auth policy.
 			GuardrailBackend::OpenAIModeration(_) => None,
 		};

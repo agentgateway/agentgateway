@@ -1381,10 +1381,7 @@ func isOAuthReservedAdditionalParam(key string) bool {
 	return false
 }
 
-// translateBackendAuthCredentials resolves each entry in the BackendAuth.Credentials
-// list and returns the api.BackendAuthCredential slice. On any per-entry failure,
-// it returns an empty slice along with the joined errors (fail-closed: never
-// ship a partial credential set to the runtime).
+// translateBackendAuthCredentials resolves BackendAuth credential entries.
 func translateBackendAuthCredentials(ctx PolicyCtx, creds []agentgateway.BackendAuthCredential, namespace string) ([]*api.BackendAuthCredential, []error) {
 	if len(creds) == 0 {
 		return nil, nil
@@ -1397,11 +1394,11 @@ func translateBackendAuthCredentials(ctx PolicyCtx, creds []agentgateway.Backend
 		data, secretKey, err := ctx.ResolveCredentialKeyRef(c.SecretRef, namespace, wellknown.Authorization)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("backendAuth credential %q: %w", locName, err))
-		} else if val, ok := data[secretKey]; !ok {
+		} else if resolvedValue, ok := kubeutils.GetSecretDataValue(data, secretKey); !ok {
 			errs = append(errs, fmt.Errorf("backendAuth credential %q: secret %s/%s missing key %q",
 				locName, namespace, c.SecretRef.Name, secretKey))
 		} else {
-			value = string(val)
+			value = resolvedValue
 		}
 		translated = append(translated, &api.BackendAuthCredential{
 			Location: translateAuthorizationLocation(&c.Location),

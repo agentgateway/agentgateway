@@ -4503,7 +4503,7 @@ type BackendAuthCredential struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Where the credential is inserted. Required; `expression` locations are not valid here.
 	Location *AuthorizationLocation `protobuf:"bytes,1,opt,name=location,proto3" json:"location,omitempty"`
-	// Credential value, resolved controller-side (the runtime sees the value, not the ref).
+	// Credential value.
 	Value         string `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

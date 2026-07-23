@@ -4190,7 +4190,8 @@ spec:
                                           - location
                                           - secretRef
                                           type: object
-                                        maxItems: 16
+                                        maxItems: 8
+                                        minItems: 1
                                         type: array
                                         x-kubernetes-list-type: atomic
                                       crossAppAccess:
@@ -6986,7 +6987,8 @@ spec:
                                         - location
                                         - secretRef
                                         type: object
-                                      maxItems: 16
+                                      maxItems: 8
+                                      minItems: 1
                                       type: array
                                       x-kubernetes-list-type: atomic
                                     crossAppAccess:
@@ -11793,7 +11795,8 @@ spec:
                           - location
                           - secretRef
                           type: object
-                        maxItems: 16
+                        maxItems: 8
+                        minItems: 1
                         type: array
                         x-kubernetes-list-type: atomic
                       crossAppAccess:

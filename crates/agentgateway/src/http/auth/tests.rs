@@ -330,14 +330,10 @@ async fn test_backend_auth_passthrough_happy_path() {
 		},
 		inputs,
 	};
-	apply_backend_auth(
-		&backend_info,
-		Some(&BackendAuth::Passthrough { location: None }),
-		&[],
-		&mut req,
-	)
-	.await
-	.expect("apply backend auth");
+	let auth = BackendAuth::new(BackendAuthKind::Passthrough { location: None });
+	apply_backend_auth(&backend_info, &auth, &mut req)
+		.await
+		.expect("apply backend auth");
 
 	// Assert Authorization header added with Bearer <jwt>
 	let auth = req
@@ -367,11 +363,11 @@ async fn test_backend_auth_key() {
 		inputs,
 	};
 
-	let key_auth = BackendAuth::Key {
+	let key_auth = BackendAuth::new(BackendAuthKind::Key {
 		value: SecretString::new("my-secret-key".into()),
 		location: None,
-	};
-	apply_backend_auth(&backend_info, Some(&key_auth), &[], &mut req)
+	});
+	apply_backend_auth(&backend_info, &key_auth, &mut req)
 		.await
 		.expect("apply backend auth");
 
@@ -402,11 +398,11 @@ async fn test_backend_auth_key_query_parameter() {
 		inputs,
 	};
 
-	let key_auth = BackendAuth::Key {
+	let key_auth = BackendAuth::new(BackendAuthKind::Key {
 		value: SecretString::new("my-secret-key".into()),
 		location: Some(AuthorizationLocation::QueryParameter { name: "key".into() }),
-	};
-	apply_backend_auth(&backend_info, Some(&key_auth), &[], &mut req)
+	});
+	apply_backend_auth(&backend_info, &key_auth, &mut req)
 		.await
 		.expect("apply backend auth");
 
@@ -433,11 +429,11 @@ async fn test_backend_auth_key_default_sets_non_explicit_extension() {
 		inputs,
 	};
 
-	let key_auth = BackendAuth::Key {
+	let key_auth = BackendAuth::new(BackendAuthKind::Key {
 		value: SecretString::new("my-secret-key".into()),
 		location: None,
-	};
-	apply_backend_auth(&backend_info, Some(&key_auth), &[], &mut req)
+	});
+	apply_backend_auth(&backend_info, &key_auth, &mut req)
 		.await
 		.expect("apply backend auth");
 
@@ -468,11 +464,11 @@ async fn test_backend_auth_key_explicit_location_sets_explicit_extension() {
 		inputs,
 	};
 
-	let key_auth = BackendAuth::Key {
+	let key_auth = BackendAuth::new(BackendAuthKind::Key {
 		value: SecretString::new("my-secret-key".into()),
 		location: Some(AuthorizationLocation::bearer_header()),
-	};
-	apply_backend_auth(&backend_info, Some(&key_auth), &[], &mut req)
+	});
+	apply_backend_auth(&backend_info, &key_auth, &mut req)
 		.await
 		.expect("apply backend auth");
 
@@ -860,7 +856,11 @@ async fn test_backend_auth_credentials_only_injects_all() {
 		credential("dd-application-key", "application-key", None),
 	];
 
-	apply_backend_auth(&backend_info, None, &credentials, &mut req)
+	let auth = BackendAuth {
+		kind: None,
+		credentials,
+	};
+	apply_backend_auth(&backend_info, &auth, &mut req)
 		.await
 		.expect("apply backend auth");
 
@@ -896,7 +896,11 @@ async fn test_backend_auth_credential_with_prefix() {
 
 	let credentials = vec![credential("x-auth-token", "token-value", Some("Bearer "))];
 
-	apply_backend_auth(&backend_info, None, &credentials, &mut req)
+	let auth = BackendAuth {
+		kind: None,
+		credentials,
+	};
+	apply_backend_auth(&backend_info, &auth, &mut req)
 		.await
 		.expect("apply backend auth");
 
@@ -929,7 +933,11 @@ async fn test_backend_auth_credential_query_parameter() {
 		key: SecretString::new("my-secret-key".into()),
 	}];
 
-	apply_backend_auth(&backend_info, None, &credentials, &mut req)
+	let auth = BackendAuth {
+		kind: None,
+		credentials,
+	};
+	apply_backend_auth(&backend_info, &auth, &mut req)
 		.await
 		.expect("apply backend auth");
 
@@ -954,13 +962,15 @@ async fn test_backend_auth_combined_key_and_credentials() {
 		inputs,
 	};
 
-	let key_auth = BackendAuth::Key {
-		value: SecretString::new("primary".into()),
-		location: None,
+	let auth = BackendAuth {
+		kind: Some(BackendAuthKind::Key {
+			value: SecretString::new("primary".into()),
+			location: None,
+		}),
+		credentials: vec![credential("x-auth-email", "user@example.com", None)],
 	};
-	let credentials = vec![credential("x-auth-email", "user@example.com", None)];
 
-	apply_backend_auth(&backend_info, Some(&key_auth), &credentials, &mut req)
+	apply_backend_auth(&backend_info, &auth, &mut req)
 		.await
 		.expect("apply backend auth");
 
@@ -991,19 +1001,24 @@ async fn test_backend_auth_credentials_invalid_value_errors() {
 	};
 
 	// Newlines are invalid in HTTP header values.
-	let credentials = vec![credential("x-bad", "value\nwith\nnewlines", None)];
-	let err = apply_backend_auth(&backend_info, None, &credentials, &mut req).await;
+	let auth = BackendAuth {
+		kind: None,
+		credentials: vec![credential("x-bad", "value\nwith\nnewlines", None)],
+	};
+	let err = apply_backend_auth(&backend_info, &auth, &mut req).await;
 	assert!(err.is_err(), "invalid header value must error");
 }
 
 #[test]
 fn test_apply_tunnel_auth_rejects_credentials() {
-	let key_auth = BackendAuth::Key {
-		value: SecretString::new("primary".into()),
-		location: None,
+	let auth = BackendAuth {
+		kind: Some(BackendAuthKind::Key {
+			value: SecretString::new("primary".into()),
+			location: None,
+		}),
+		credentials: vec![credential("x-extra", "v", None)],
 	};
-	let credentials = vec![credential("x-extra", "v", None)];
-	let err = apply_tunnel_auth(&key_auth, &credentials).expect_err("tunnel must reject credentials");
+	let err = apply_tunnel_auth(&auth).expect_err("tunnel must reject credentials");
 	let msg = format!("{err}");
 	assert!(
 		msg.contains("backendAuth.credentials"),
@@ -1015,7 +1030,7 @@ fn test_apply_tunnel_auth_rejects_credentials() {
 fn test_backend_auth_serde_backward_compat_no_credentials() {
 	use crate::types::agent::BackendTrafficPolicy;
 
-	let policy = BackendTrafficPolicy::backend_auth(BackendAuth::Key {
+	let policy = BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
 		value: SecretString::new("primary".into()),
 		location: None,
 	});
@@ -1033,13 +1048,13 @@ fn test_backend_auth_serde_backward_compat_no_credentials() {
 fn test_backend_auth_serde_with_credentials_includes_field() {
 	use crate::types::agent::BackendTrafficPolicy;
 
-	let policy = BackendTrafficPolicy::BackendAuth {
-		auth: Some(BackendAuth::Key {
+	let policy = BackendTrafficPolicy::BackendAuth(BackendAuth {
+		kind: Some(BackendAuthKind::Key {
 			value: SecretString::new("primary".into()),
 			location: None,
 		}),
 		credentials: vec![credential("x-extra", "v", None)],
-	};
+	});
 	let yaml = serde_yaml::to_string(&policy).expect("serialize");
 	assert!(
 		yaml.contains("credentials:") && yaml.contains("x-extra"),
@@ -1064,7 +1079,11 @@ async fn test_backend_auth_credential_authorization_marks_explicit() {
 
 	let credentials = vec![credential("authorization", "jwt-token", Some("Bearer "))];
 
-	apply_backend_auth(&backend_info, None, &credentials, &mut req)
+	let auth = BackendAuth {
+		kind: None,
+		credentials,
+	};
+	apply_backend_auth(&backend_info, &auth, &mut req)
 		.await
 		.expect("apply backend auth");
 
@@ -1090,13 +1109,15 @@ async fn test_backend_auth_credential_other_header_keeps_primary_marker() {
 		inputs,
 	};
 
-	let key_auth = BackendAuth::Key {
-		value: SecretString::new("primary".into()),
-		location: None,
+	let auth = BackendAuth {
+		kind: Some(BackendAuthKind::Key {
+			value: SecretString::new("primary".into()),
+			location: None,
+		}),
+		credentials: vec![credential("x-api-key", "v", None)],
 	};
-	let credentials = vec![credential("x-api-key", "v", None)];
 
-	apply_backend_auth(&backend_info, Some(&key_auth), &credentials, &mut req)
+	apply_backend_auth(&backend_info, &auth, &mut req)
 		.await
 		.expect("apply backend auth");
 

@@ -12,7 +12,7 @@ use tokio::sync::watch;
 use tracing::{Level, instrument, warn};
 
 use crate::cel::ContextBuilder;
-use crate::http::auth::{BackendAuth, BackendAuthCredential};
+use crate::http::auth::{BackendAuth, BackendAuthKind};
 use crate::http::authorization::{HTTPAuthorizationSet, NetworkAuthorizationSet};
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::InferenceRouting;
@@ -233,8 +233,6 @@ impl FrontendPolices {
 pub struct BackendPolicies {
 	pub backend_tls: Option<BackendTLS>,
 	pub backend_auth: Option<BackendAuth>,
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub backend_auth_credentials: Vec<BackendAuthCredential>,
 	pub a2a: Option<A2aPolicy>,
 	pub llm_provider: Option<Arc<llm::NamedAIProvider>>,
 	pub llm: Option<Arc<llm::Policy>>,
@@ -272,11 +270,6 @@ impl BackendPolicies {
 		Self {
 			backend_tls: other.backend_tls.or(self.backend_tls),
 			backend_auth: other.backend_auth.or(self.backend_auth),
-			backend_auth_credentials: if other.backend_auth_credentials.is_empty() {
-				self.backend_auth_credentials
-			} else {
-				other.backend_auth_credentials
-			},
 			a2a: other.a2a.or(self.a2a),
 			llm_provider: other.llm_provider.or(self.llm_provider),
 			llm: other.llm.or(self.llm),
@@ -335,7 +328,11 @@ impl BackendPolicies {
 		self.authorization.register_expressions(ctx);
 		self.ext_authz.register_expressions(ctx);
 		self.transformation.register_expressions(ctx);
-		if let Some(crate::http::auth::BackendAuth::Aws(aws)) = self.backend_auth.as_ref() {
+		if let Some(BackendAuth {
+			kind: Some(BackendAuthKind::Aws(aws)),
+			..
+		}) = self.backend_auth.as_ref()
+		{
 			for expr in aws.cel_expressions() {
 				ctx.register_expression(expr);
 			}
@@ -1167,13 +1164,8 @@ impl Store {
 				BackendTrafficPolicy::BackendTLS(p) => {
 					pol.backend_tls.get_or_insert_with(|| p.clone());
 				},
-				BackendTrafficPolicy::BackendAuth { auth, credentials } => {
-					if let Some(a) = auth {
-						pol.backend_auth.get_or_insert_with(|| a.clone());
-					}
-					if pol.backend_auth_credentials.is_empty() && !credentials.is_empty() {
-						pol.backend_auth_credentials = credentials.clone();
-					}
+				BackendTrafficPolicy::BackendAuth(auth) => {
+					pol.backend_auth.get_or_insert_with(|| auth.clone());
 				},
 				BackendTrafficPolicy::InferenceRouting(p) => {
 					pol.inference_routing.get_or_insert_with(|| p.clone());

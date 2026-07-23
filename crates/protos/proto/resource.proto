@@ -360,7 +360,7 @@ message BackendAuthPolicy {
 message BackendAuthCredential {
   // Where the credential is inserted. Required; `expression` locations are not valid here.
   AuthorizationLocation location = 1;
-  // Credential value, resolved controller-side (the runtime sees the value, not the ref).
+  // Credential value.
   string value = 2;
 }
 

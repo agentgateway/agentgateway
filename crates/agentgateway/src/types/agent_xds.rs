@@ -25,7 +25,7 @@ use itertools::Itertools;
 use llm::{AIBackend, AIProvider, NamedAIProvider};
 
 use super::agent::*;
-use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
+use crate::http::auth::{AwsAuth, BackendAuth, BackendAuthKind, GcpAuth};
 use crate::http::buffer::BufferBody;
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
 use crate::http::{HeaderOrPseudo, Scheme, auth, authorization, health};
@@ -983,17 +983,17 @@ fn backend_auth_credentials_from_proto(
 		.collect()
 }
 
-fn backend_auth_from_proto(
+fn backend_auth_kind_from_proto(
 	s: proto::agent::BackendAuthPolicy,
 	diagnostics: &mut Diagnostics,
-) -> Result<Option<BackendAuth>, ProtoError> {
+) -> Result<Option<BackendAuthKind>, ProtoError> {
 	use proto::agent::azure_managed_identity_credential::user_assigned_identity;
 	use proto::agent::{azure_explicit_config, gcp};
 	Ok(Some(match s.kind {
-		Some(proto::agent::backend_auth_policy::Kind::Passthrough(p)) => BackendAuth::Passthrough {
+		Some(proto::agent::backend_auth_policy::Kind::Passthrough(p)) => BackendAuthKind::Passthrough {
 			location: optional_authorization_location(p.authorization_location.as_ref())?,
 		},
-		Some(proto::agent::backend_auth_policy::Kind::Key(k)) => BackendAuth::Key {
+		Some(proto::agent::backend_auth_policy::Kind::Key(k)) => BackendAuthKind::Key {
 			value: k.secret.into(),
 			location: optional_authorization_location(k.authorization_location.as_ref())?,
 		},
@@ -1003,7 +1003,7 @@ fn backend_auth_from_proto(
 				.map(|credential| auth::gcp::GcpCredential::new(credential.into()))
 				.transpose()
 				.map_err(|e| ProtoError::Generic(e.to_string()))?;
-			BackendAuth::Gcp(match g.token_type {
+			BackendAuthKind::Gcp(match g.token_type {
 				None | Some(gcp::TokenType::AccessToken(gcp::AccessToken {})) => GcpAuth::AccessToken {
 					r#type: Some(auth::gcp::AccessToken),
 					credential,
@@ -1121,7 +1121,7 @@ fn backend_auth_from_proto(
 				},
 				None => return Err(ProtoError::MissingRequiredField),
 			};
-			BackendAuth::Aws(aws_auth)
+			BackendAuthKind::Aws(aws_auth)
 		},
 		Some(proto::agent::backend_auth_policy::Kind::Azure(a)) => {
 			let azure_auth = match a.kind {
@@ -1173,16 +1173,15 @@ fn backend_auth_from_proto(
 				},
 				None => return Err(ProtoError::MissingRequiredField),
 			};
-			BackendAuth::Azure(azure_auth)
+			BackendAuthKind::Azure(azure_auth)
 		},
 		Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(s)) => {
-			BackendAuth::OAuthTokenExchange(Box::new(auth::oauth::OAuthTokenExchangeAuth::from_proto(
-				s,
-				diagnostics,
-			)?))
+			BackendAuthKind::OAuthTokenExchange(Box::new(
+				auth::oauth::OAuthTokenExchangeAuth::from_proto(s, diagnostics)?,
+			))
 		},
 		Some(proto::agent::backend_auth_policy::Kind::CrossAppAccess(s)) => {
-			BackendAuth::CrossAppAccess(Box::new(auth::oauth::CrossAppAccessAuth::from_proto(
+			BackendAuthKind::CrossAppAccess(Box::new(auth::oauth::CrossAppAccessAuth::from_proto(
 				s,
 				diagnostics,
 			)?))
@@ -1845,14 +1844,14 @@ fn backend_policy_from_proto(
 		},
 		Some(bps::Kind::Auth(auth)) => {
 			let credentials = backend_auth_credentials_from_proto(auth.credentials.clone())?;
-			let auth_kind = backend_auth_from_proto(auth.clone(), diagnostics)?;
+			let auth_kind = backend_auth_kind_from_proto(auth.clone(), diagnostics)?;
 			if auth_kind.is_none() && credentials.is_empty() {
 				return Err(ProtoError::MissingRequiredField);
 			}
-			BackendTrafficPolicy::BackendAuth {
-				auth: auth_kind,
+			BackendTrafficPolicy::BackendAuth(BackendAuth {
+				kind: auth_kind,
 				credentials,
-			}
+			})
 		},
 		Some(bps::Kind::McpAuthorization(rbac)) => {
 			BackendTrafficPolicy::McpAuthorization(mcp_authorization_from_proto(rbac, diagnostics))
@@ -4217,7 +4216,7 @@ mod tests {
 
 	#[test]
 	fn test_backend_auth_aws_region_conversion() -> Result<(), ProtoError> {
-		let auth = backend_auth_from_proto(
+		let auth = backend_auth_kind_from_proto(
 			proto::agent::BackendAuthPolicy {
 				kind: Some(proto::agent::backend_auth_policy::Kind::Aws(
 					proto::agent::Aws {
@@ -4233,7 +4232,7 @@ mod tests {
 			},
 			&mut Diagnostics::default(),
 		)?;
-		let Some(BackendAuth::Aws(AwsAuth::Implicit {
+		let Some(BackendAuthKind::Aws(AwsAuth::Implicit {
 			service_name,
 			region,
 			..

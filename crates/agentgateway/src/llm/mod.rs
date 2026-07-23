@@ -19,7 +19,9 @@ pub use policy::Policy;
 use rand::RngExt;
 use serde::de::DeserializeOwned;
 
-use crate::http::auth::{AppliedBackendAuthLocation, AwsAuth, AzureAuth, BackendAuth, GcpAuth};
+use crate::http::auth::{
+	AppliedBackendAuthLocation, AwsAuth, AzureAuth, BackendAuth, BackendAuthKind, GcpAuth,
+};
 use crate::http::jwt::Claims;
 use crate::http::{Body, Request, Response};
 use crate::proxy::httpproxy::PolicyClient;
@@ -887,27 +889,29 @@ impl AIProvider {
 		Some(match self {
 			AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::Anthropic(_) => btls,
 			AIProvider::Copilot(_) => BackendPolicies {
-				backend_auth: Some(BackendAuth::Copilot),
+				backend_auth: Some(BackendAuth::new(BackendAuthKind::Copilot)),
 				..btls
 			},
 			AIProvider::Vertex(_) => BackendPolicies {
-				backend_auth: Some(BackendAuth::Gcp(GcpAuth::default())),
+				backend_auth: Some(BackendAuth::new(BackendAuthKind::Gcp(GcpAuth::default()))),
 				..btls
 			},
 			AIProvider::Bedrock(p) => BackendPolicies {
-				backend_auth: Some(BackendAuth::Aws(AwsAuth::Implicit {
+				backend_auth: Some(BackendAuth::new(BackendAuthKind::Aws(AwsAuth::Implicit {
 					service_name: None,
 					region: None,
 					assume_role: None,
 					source_credentials_cache: p.source_credentials_cache.clone(),
 					assume_role_cache: p.assume_role_cache.clone(),
-				})),
+				}))),
 				..btls
 			},
 			AIProvider::Azure(p) => BackendPolicies {
-				backend_auth: Some(BackendAuth::Azure(AzureAuth::Implicit {
-					cached_cred: p.cached_cred.clone(),
-				})),
+				backend_auth: Some(BackendAuth::new(BackendAuthKind::Azure(
+					AzureAuth::Implicit {
+						cached_cred: p.cached_cred.clone(),
+					},
+				))),
 				..btls
 			},
 			AIProvider::Custom(_) => return None,

@@ -1494,7 +1494,8 @@ type BackendAuth struct {
 	// alongside it.
 	//
 	// +optional
-	// +kubebuilder:validation:MaxItems=16
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=8
 	// +listType=atomic
 	Credentials []BackendAuthCredential `json:"credentials,omitempty"`
 }

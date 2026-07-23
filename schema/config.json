@@ -1771,7 +1771,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "localRateLimit": {
           "description": "Local rate limits for incoming requests.",
@@ -2635,7 +2636,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "http": {
           "description": "HTTP protocol settings for this backend.",
@@ -4060,7 +4062,7 @@
       "additionalProperties": false
     },
     "BackendAuthCredential": {
-      "description": "A single additional credential to inject on the backend request.",
+      "description": "An additional credential to inject on the backend request.",
       "type": "object",
       "properties": {
         "location": {
@@ -4068,7 +4070,7 @@
           "$ref": "#/$defs/AuthorizationLocation"
         },
         "key": {
-          "description": "Credential value (resolved controller-side; runtime sees the value, not the ref).",
+          "description": "Credential value.",
           "$ref": "#/$defs/FileOrInline"
         }
       },
@@ -8183,7 +8185,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "http": {
           "description": "HTTP protocol settings for this backend.",
@@ -10750,7 +10753,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "health": {
           "description": "Outlier detection and health checking for this provider backend.",
@@ -10928,7 +10932,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "default": null
         },
         "health": {
           "description": "health configures outlier detection for this model backend.",

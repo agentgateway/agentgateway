@@ -15,7 +15,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use secrecy::SecretString;
 
-use crate::http::auth::BackendAuth;
+use crate::http::auth::{BackendAuth, BackendAuthKind};
 use crate::http::backendtls::{LocalBackendTLS, ResolvedBackendTLS};
 use crate::http::transformation_cel::{LocalTransformationConfig, Transformation};
 use crate::http::{filters, health, retry, timeout, transformation_cel};
@@ -444,7 +444,7 @@ pub struct LocalLLMProviderDefaults {
 	/// Authentication configuration for connecting to the LLM provider.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	auth: Option<LocalBackendAuth>,
+	auth: Option<BackendAuth>,
 	/// Outlier detection and health checking for this provider backend.
 	#[serde(default)]
 	health: Option<health::LocalHealthPolicy>,
@@ -784,7 +784,7 @@ pub struct LocalLLMModels {
 	/// auth configures authentication when connecting to the LLM provider.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	auth: Option<LocalBackendAuth>,
+	auth: Option<BackendAuth>,
 	/// health configures outlier detection for this model backend.
 	#[serde(default)]
 	health: Option<health::LocalHealthPolicy>,
@@ -2194,23 +2194,23 @@ where
 		.map_err(serde::de::Error::custom)
 }
 
-pub fn de_backend_auth<'de, D>(deserializer: D) -> Result<Option<LocalBackendAuth>, D::Error>
+pub fn de_backend_auth<'de, D>(deserializer: D) -> Result<Option<BackendAuth>, D::Error>
 where
 	D: Deserializer<'de>,
 {
-	fn validate_auth<E: serde::de::Error>(auth: BackendAuth) -> Result<BackendAuth, E> {
+	fn validate_auth<E: serde::de::Error>(auth: BackendAuthKind) -> Result<BackendAuthKind, E> {
 		match auth {
-			BackendAuth::OAuthTokenExchange(auth) => {
+			BackendAuthKind::OAuthTokenExchange(auth) => {
 				// OAuth has a few cross-field checks serde won't catch on its own.
 				// Keep them here so untagged compat parsing still returns the real error.
 				auth.validate_load().map_err(serde::de::Error::custom)?;
-				Ok(BackendAuth::OAuthTokenExchange(auth))
+				Ok(BackendAuthKind::OAuthTokenExchange(auth))
 			},
-			BackendAuth::CrossAppAccess(auth) => {
+			BackendAuthKind::CrossAppAccess(auth) => {
 				// The derived exchange is built on deserialize; validate here so untagged
 				// compat parsing still returns the real cross-field error.
 				auth.validate_load().map_err(serde::de::Error::custom)?;
-				Ok(BackendAuth::CrossAppAccess(auth))
+				Ok(BackendAuthKind::CrossAppAccess(auth))
 			},
 			auth => Ok(auth),
 		}
@@ -2218,33 +2218,27 @@ where
 
 	Option::<BackendAuthCompat>::deserialize(deserializer)?
 		.map(|auth| match auth {
-			BackendAuthCompat::PlainKey { key } => Ok(LocalBackendAuth {
-				auth: Some(BackendAuth::Key {
+			BackendAuthCompat::PlainKey { key } => Ok(BackendAuth {
+				kind: Some(BackendAuthKind::Key {
 					value: key,
 					location: None,
 				}),
 				credentials: Vec::new(),
 			}),
-			BackendAuthCompat::FullWithCredentials { auth, credentials } => Ok(LocalBackendAuth {
-				auth: Some(validate_auth::<D::Error>(auth)?),
+			BackendAuthCompat::FullWithCredentials { auth, credentials } => Ok(BackendAuth {
+				kind: Some(validate_auth::<D::Error>(auth)?),
 				credentials,
 			}),
-			BackendAuthCompat::CredentialsOnly { credentials } => Ok(LocalBackendAuth {
-				auth: None,
+			BackendAuthCompat::CredentialsOnly { credentials } => Ok(BackendAuth {
+				kind: None,
 				credentials,
 			}),
-			BackendAuthCompat::Full(auth) => Ok(LocalBackendAuth {
-				auth: Some(validate_auth::<D::Error>(auth)?),
+			BackendAuthCompat::Full(auth) => Ok(BackendAuth {
+				kind: Some(validate_auth::<D::Error>(auth)?),
 				credentials: Vec::new(),
 			}),
 		})
 		.transpose()
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct LocalBackendAuth {
-	pub auth: Option<BackendAuth>,
-	pub credentials: Vec<crate::http::auth::BackendAuthCredential>,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -2258,13 +2252,13 @@ enum BackendAuthCompat {
 	},
 	FullWithCredentials {
 		#[serde(flatten)]
-		auth: BackendAuth,
+		auth: BackendAuthKind,
 		credentials: Vec<crate::http::auth::BackendAuthCredential>,
 	},
 	CredentialsOnly {
 		credentials: Vec<crate::http::auth::BackendAuthCredential>,
 	},
-	Full(BackendAuth),
+	Full(BackendAuthKind),
 }
 
 #[apply(schema_de!)]
@@ -2439,7 +2433,7 @@ pub struct SimpleLocalBackendPolicies {
 	/// Authentication credentials sent to this backend.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	pub backend_auth: Option<LocalBackendAuth>,
+	pub backend_auth: Option<BackendAuth>,
 
 	/// HTTP protocol settings for this backend.
 	#[serde(default)]
@@ -2595,10 +2589,7 @@ impl LocalBackendPolicies {
 			))
 		}
 		if let Some(p) = backend_auth {
-			pols.push(BackendTrafficPolicy::BackendAuth {
-				auth: p.auth,
-				credentials: p.credentials,
-			})
+			pols.push(BackendTrafficPolicy::BackendAuth(p))
 		}
 		if let Some(p) = ext_authz {
 			pols.push(BackendTrafficPolicy::ExtAuthz(Arc::new(
@@ -2744,7 +2735,7 @@ pub struct FilterOrPolicy {
 	/// Authentication credentials sent to the backend.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	backend_auth: Option<LocalBackendAuth>,
+	backend_auth: Option<BackendAuth>,
 	/// Local rate limits for incoming requests.
 	#[serde(default)]
 	local_rate_limit: Option<LocalRateLimitPolicy>,
@@ -4398,7 +4389,7 @@ async fn convert_llm_config(
 		// Create backend auth policy
 		let mut pols = vec![];
 		if let Some(key) = p.api_key.as_ref() {
-			let backend_auth = BackendAuth::Key {
+			let backend_auth = BackendAuthKind::Key {
 				value: key.0.clone(),
 				location: None,
 			};
@@ -4432,10 +4423,7 @@ async fn convert_llm_config(
 			));
 		}
 		if let Some(p) = model_config.auth.clone() {
-			pols.push(BackendTrafficPolicy::BackendAuth {
-				auth: p.auth,
-				credentials: p.credentials,
-			});
+			pols.push(BackendTrafficPolicy::BackendAuth(p));
 		}
 		if let Some(p) = model_config.backend_tunnel.clone() {
 			pols.push(BackendTrafficPolicy::Tunnel(p));
@@ -5257,10 +5245,7 @@ pub(crate) async fn split_policies_for_target(
 		backend_policies.push(BackendTrafficPolicy::Tunnel(p))
 	}
 	if let Some(p) = backend_auth {
-		backend_policies.push(BackendTrafficPolicy::BackendAuth {
-			auth: p.auth,
-			credentials: p.credentials,
-		})
+		backend_policies.push(BackendTrafficPolicy::BackendAuth(p))
 	}
 
 	// Route policies (AI is dual-role when targeting a backend)

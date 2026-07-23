@@ -297,7 +297,6 @@ async fn apply_backend_policies(
 	let BackendPolicies {
 		backend_tls: _,
 		backend_auth,
-		backend_auth_credentials,
 		a2a,
 		http,
 		// Doesn't currently have any options to set, todo
@@ -348,14 +347,8 @@ async fn apply_backend_policies(
 		.apply("backend ext authz", &client, log, req, rp.headers())
 		.await?;
 
-	if backend_auth.is_some() || !backend_auth_credentials.is_empty() {
-		auth::apply_backend_auth(
-			&backend_info,
-			backend_auth.as_ref(),
-			backend_auth_credentials,
-			req,
-		)
-		.await?;
+	if let Some(auth) = backend_auth {
+		auth::apply_backend_auth(&backend_info, auth, req).await?;
 		dtrace::snapshot!(Request, "backend auth", &req);
 	}
 	rp.backend_transformation = transformation
@@ -1600,7 +1593,6 @@ pub async fn build_transport(
 		let call = TCPProxy::build_backend_call(&mut None, None, inputs, &backend.backend, pols, None)?;
 		let tunnel_backend_tls = call.backend_policies.backend_tls.clone();
 		let tunnel_auth = call.backend_policies.backend_auth.clone();
-		let tunnel_auth_credentials = call.backend_policies.backend_auth_credentials.clone();
 		// This is a bounded recursion; this code is only called when backend_tunnel is set, and in this call
 		// we never set it.
 		let transport = Box::pin(build_transport(
@@ -1615,11 +1607,7 @@ pub async fn build_transport(
 		.await?;
 		trace!("built tunnel to {:?}", call.target);
 		let token = if let Some(auth) = tunnel_auth {
-			Some(auth::apply_tunnel_auth(&auth, &tunnel_auth_credentials)?)
-		} else if !tunnel_auth_credentials.is_empty() {
-			return Err(ProxyError::ProcessingString(
-				"backendAuth.credentials is not supported on tunnel-bound backends".to_string(),
-			));
+			Some(auth::apply_tunnel_auth(&auth)?)
 		} else {
 			None
 		};
@@ -1930,13 +1918,15 @@ async fn build_simple_backend_call(
 
 			let default_policies = BackendPolicies {
 				backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
-				backend_auth: Some(auth::BackendAuth::Aws(auth::AwsAuth::Implicit {
-					service_name: Some(config.service_name().to_string()),
-					region: None,
-					assume_role: None,
-					source_credentials_cache: Default::default(),
-					assume_role_cache: Default::default(),
-				})),
+				backend_auth: Some(auth::BackendAuth::new(auth::BackendAuthKind::Aws(
+					auth::AwsAuth::Implicit {
+						service_name: Some(config.service_name().to_string()),
+						region: None,
+						assume_role: None,
+						source_credentials_cache: Default::default(),
+						assume_role_cache: Default::default(),
+					},
+				))),
 				..Default::default()
 			};
 			BackendCall::new(
