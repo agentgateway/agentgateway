@@ -404,6 +404,7 @@ backends:
         target:
           models:
             - name: llama-3.1-8b-instant
+              created: 0
               visibility: public
               headerMatches: []
               backend:
@@ -428,6 +429,7 @@ backends:
                 authorization: ~
               backendPolicies: []
             - name: fireworks-llama
+              created: 0
               visibility: public
               headerMatches: []
               backend:
@@ -452,6 +454,7 @@ backends:
                 authorization: ~
               backendPolicies: []
             - name: claude-3-haiku
+              created: 0
               visibility: public
               headerMatches:
                 - - name: x-org
@@ -479,6 +482,7 @@ backends:
                 authorization: ~
               backendPolicies: []
             - name: gpt-3.5-turbo
+              created: 0
               visibility: public
               headerMatches: []
               backend:
@@ -503,6 +507,7 @@ backends:
                 authorization: ~
               backendPolicies: []
             - name: gpt-7-max
+              created: 0
               visibility: public
               headerMatches: []
               backend:
@@ -527,6 +532,7 @@ backends:
                 authorization: ~
               backendPolicies: []
             - name: "*"
+              created: 0
               visibility: public
               headerMatches: []
               backend:
@@ -551,7 +557,6 @@ backends:
                 authorization: ~
               backendPolicies: []
           virtualModels: []
-          created: 0
 route_groups: []
 workloads: []
 services: []

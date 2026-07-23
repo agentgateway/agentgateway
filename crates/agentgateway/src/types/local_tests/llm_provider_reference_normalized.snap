@@ -84,6 +84,7 @@ backends:
         target:
           models:
             - name: anthropic/*
+              created: 0
               visibility: public
               headerMatches: []
               backend:
@@ -108,7 +109,6 @@ backends:
                 authorization: ~
               backendPolicies: []
           virtualModels: []
-          created: 0
 route_groups: []
 workloads: []
 services: []
