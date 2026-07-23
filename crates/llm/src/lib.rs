@@ -166,6 +166,9 @@ pub enum ProviderState {
 	Bedrock {
 		tool_names: Arc<conversion::bedrock::BedrockToolNameMap>,
 	},
+	ResponsesToMessages {
+		state: Arc<conversion::messages::from_responses::State>,
+	},
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

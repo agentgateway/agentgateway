@@ -32,7 +32,7 @@ use crate::http::{
 	merge_in_headers, retry,
 };
 use crate::llm::{
-	InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType, model_router,
+	AIError, InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType, model_router,
 };
 use crate::proxy::tcpproxy::TCPProxy;
 use crate::proxy::{
@@ -1939,6 +1939,25 @@ async fn build_simple_backend_call(
 	Ok((backend_call, maybe_inference))
 }
 
+// AIError::UnsupportedConversion, MissingField, and RequestParsing all mean conversion-time
+// validation rejected the client's own request shape (e.g. an unsupported Responses field, an
+// absent required field, or malformed JSON) -- a permanent, deterministic condition, not a
+// transient one. RequestTooLarge and UnsupportedEncoding are the same kind of deterministic
+// client-side condition with their own standard status codes (413, 415). Map them all to a
+// 4xx-producing ProxyError instead of the generic ProxyError::Processing, which reports as 503
+// and would otherwise invite pointless client retries of a request that can never succeed as
+// sent.
+fn ai_error_to_proxy_error(e: AIError) -> ProxyError {
+	match &e {
+		AIError::UnsupportedConversion(_) | AIError::MissingField(_) | AIError::RequestParsing(_) => {
+			ProxyError::InvalidRequestString(e.to_string())
+		},
+		AIError::RequestTooLarge => ProxyError::PayloadTooLarge(e.to_string()),
+		AIError::UnsupportedEncoding(_) => ProxyError::UnsupportedMediaType(e.to_string()),
+		_ => ProxyError::Processing(e.into()),
+	}
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn make_backend_call(
 	inputs: Arc<ProxyInputs>,
@@ -2277,7 +2296,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ai_error_to_proxy_error)?,
 						RouteType::Messages => Box::pin(llm.provider.process_messages_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2286,7 +2305,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ai_error_to_proxy_error)?,
 						RouteType::Responses => Box::pin(llm.provider.process_responses_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2295,7 +2314,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ai_error_to_proxy_error)?,
 						RouteType::Embeddings => Box::pin(llm.provider.process_embeddings_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2304,7 +2323,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ai_error_to_proxy_error)?,
 						RouteType::Rerank => Box::pin(llm.provider.process_rerank_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2313,7 +2332,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ai_error_to_proxy_error)?,
 						RouteType::AnthropicTokenCount => Box::pin(llm.provider.process_count_tokens_request(
 							&backend_info,
 							req,
@@ -2321,7 +2340,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ai_error_to_proxy_error)?,
 						RouteType::Detect => Box::pin(llm.provider.process_detect_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2329,7 +2348,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ai_error_to_proxy_error)?,
 						_ => unreachable!(),
 					};
 					let (mut req, llm_request, upstream_route_type) = match r {
@@ -3089,24 +3108,26 @@ mod tests {
 	use std::sync::Arc;
 
 	use ::http::Method;
+	use agent_core::strng;
 	use serde_json::json;
 	use wiremock::{Mock, ResponseTemplate};
 
 	use super::{
-		apply_auto_hostname, apply_llm_request_policies, hop_by_hop_headers,
+		ai_error_to_proxy_error, apply_auto_hostname, apply_llm_request_policies, hop_by_hop_headers,
 		resolved_workload_target_hostname, select_service_target_port,
 	};
+	use crate::http;
 	use crate::http::filters::AutoHostname;
 	use crate::llm::policy::{
 		PromptGuard, PromptGuardStreamingMode, RegexRule, RegexRules, RequestRejection, ResponseGuard,
 		ResponseGuardKind,
 	};
+	use crate::llm::{self, AIError};
 	use crate::store::LLMRequestPolicies;
 	use crate::test_helpers::proxymock;
 	use crate::types::agent::{Backend, ResourceName, Target};
 	use crate::types::discovery::{AppProtocol, Endpoint, HealthStatus, Service};
 	use crate::types::local::LocalAIBackend;
-	use crate::{http, llm};
 
 	fn retry_policy(codes: &[u16], condition: Option<&str>) -> crate::http::retry::Policy {
 		crate::http::retry::Policy {
@@ -3120,6 +3141,68 @@ mod tests {
 			condition: condition
 				.map(|e| std::sync::Arc::new(crate::cel::Expression::new_strict(e).unwrap())),
 		}
+	}
+
+	#[test]
+	fn unsupported_conversion_maps_to_a_client_error_not_service_unavailable() {
+		// AIError::UnsupportedConversion means the client's own request shape is rejected by
+		// conversion-time validation (e.g. an unsupported Responses field) -- a permanent, 4xx
+		// condition. It must not surface as a transient-sounding 503, which invites pointless
+		// client retries and misclassifies a deterministic validation failure as server trouble.
+		let err = ai_error_to_proxy_error(AIError::UnsupportedConversion(strng::literal!(
+			"Responses configuration is unsupported"
+		)));
+		let response = err.into_response_with_grpc(false);
+		assert_eq!(response.status(), ::http::StatusCode::BAD_REQUEST);
+	}
+
+	#[test]
+	fn missing_field_and_request_parsing_map_to_a_client_error_not_service_unavailable() {
+		// MissingField (e.g. an absent required "model") and RequestParsing (malformed request
+		// JSON) are just as deterministically client-caused as UnsupportedConversion -- they must
+		// not surface as a transient-sounding 503 either.
+		let missing = ai_error_to_proxy_error(AIError::MissingField(strng::literal!(
+			"model not specified"
+		)));
+		assert_eq!(
+			missing.into_response_with_grpc(false).status(),
+			::http::StatusCode::BAD_REQUEST
+		);
+
+		let parse_err = serde_json::from_str::<serde_json::Value>("{").unwrap_err();
+		let parsing = ai_error_to_proxy_error(AIError::RequestParsing(parse_err));
+		assert_eq!(
+			parsing.into_response_with_grpc(false).status(),
+			::http::StatusCode::BAD_REQUEST
+		);
+	}
+
+	#[test]
+	fn request_too_large_and_unsupported_encoding_map_to_their_standard_status_codes() {
+		// Same client-caused, deterministic-condition reasoning as the other AIError mappings
+		// above, but these two already have precise standard codes (413, 415) rather than a
+		// generic 400.
+		let too_large = ai_error_to_proxy_error(AIError::RequestTooLarge);
+		assert_eq!(
+			too_large.into_response_with_grpc(false).status(),
+			::http::StatusCode::PAYLOAD_TOO_LARGE
+		);
+
+		let unsupported_encoding =
+			ai_error_to_proxy_error(AIError::UnsupportedEncoding(strng::literal!("br")));
+		assert_eq!(
+			unsupported_encoding.into_response_with_grpc(false).status(),
+			::http::StatusCode::UNSUPPORTED_MEDIA_TYPE
+		);
+	}
+
+	#[test]
+	fn other_ai_errors_still_map_to_service_unavailable() {
+		// Only UnsupportedConversion, MissingField, and RequestParsing change; other AIError
+		// variants keep their existing, pre-this-change status mapping via ProxyError::Processing.
+		let err = ai_error_to_proxy_error(AIError::ModelNotFound);
+		let response = err.into_response_with_grpc(false);
+		assert_eq!(response.status(), ::http::StatusCode::SERVICE_UNAVAILABLE);
 	}
 
 	fn response_regex_guard() -> ResponseGuard {

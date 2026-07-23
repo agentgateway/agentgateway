@@ -3996,6 +3996,10 @@ fn llm_route_types(
 			strng::new("/v1/chat/completions"),
 			crate::llm::RouteType::Completions,
 		),
+		(
+			strng::new("/v1/messages/count_tokens"),
+			crate::llm::RouteType::AnthropicTokenCount,
+		),
 		(strng::new("/v1/messages"), crate::llm::RouteType::Messages),
 		// TODO: we could do this to support vertex calls. But we would need to extract the model name from the URL
 		(strng::new(":rawPredict"), crate::llm::RouteType::Messages),

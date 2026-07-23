@@ -96,6 +96,7 @@ fn test_response(
 			".response.id" => "[id]",
 			".response.output.*.id" => "[id]",
 			".response.created" => "[date]",
+			".response.created_at" => "[date]",
 		});
 	});
 }
@@ -235,6 +236,9 @@ fn request_conversion_golden() {
 			conversion::openai_compat::from_responses::translate(&i)
 		});
 	}
+	test_request("messages", "requests/responses/messages-rich.json", |i| {
+		conversion::messages::from_responses::translate(&i).map(|(body, _)| body)
+	});
 
 	for name in ["basic", "array"] {
 		let path = format!("requests/embeddings/{name}.json");
@@ -341,6 +345,30 @@ fn response_conversion_golden() {
 			conversion::messages::from_completions::translate_response(&i)
 		});
 	}
+	test_response(
+		"messages-responses",
+		"response/anthropic/responses-complete.json",
+		|i| {
+			let request: types::responses::Request = serde_json::from_value(json!({
+				"model": "claude-sonnet-4-5",
+				"input": "check inventory",
+				"store": false,
+				"tools": [{
+					"type": "function",
+					"name": "weather",
+					"parameters": {"type": "object"}
+				}]
+			}))
+			.map_err(AIError::RequestParsing)?;
+			let (_, state) = conversion::messages::from_responses::translate(&request)?;
+			conversion::messages::from_responses::translate_response(
+				&i,
+				"claude-sonnet-4-5",
+				&state,
+				1024 * 1024,
+			)
+		},
+	);
 
 	for name in [
 		"basic",

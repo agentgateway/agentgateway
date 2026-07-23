@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::io;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll};
 
 use ::http::HeaderMap;
 use axum_core::body::Body;
 use bytes::{Bytes, BytesMut};
+use http_body::Body as _;
 use http_body_util::BodyExt;
 use serde::{Deserialize, Serialize};
 use tokio_sse_codec::{Event, Frame, SseDecoder};
@@ -310,4 +313,71 @@ async fn test_sse_json_transform_multi_parse_error_path() {
 		result.contains("event: done"),
 		"missing done event after parse error:\n{result}"
 	);
+}
+
+#[tokio::test]
+async fn test_sse_strict_named_json_frame_then_physical_eof_once() {
+	let body = Body::from("event: content_block_delta\ndata: {\"msg\": 1}\n\n");
+	let events = Arc::new(Mutex::new(vec![]));
+	let events_clone = events.clone();
+
+	let transformed =
+		sse::json_transform_strict_with_eof::<Test, serde_json::Value>(body, 1024, move |event| {
+			let seen = match event {
+				sse::StrictSseJsonEvent::Data { event_name, data } => {
+					assert_eq!(data.unwrap(), Test { msg: 1 });
+					format!("data:{}", event_name.unwrap())
+				},
+				sse::StrictSseJsonEvent::Done => "done".to_string(),
+				sse::StrictSseJsonEvent::Eof => "eof".to_string(),
+				sse::StrictSseJsonEvent::TransportError => "error".to_string(),
+			};
+			events_clone.lock().unwrap().push(seen);
+			(Vec::<(&'static str, serde_json::Value)>::new(), false)
+		});
+
+	transformed.collect().await.unwrap();
+	assert_eq!(
+		events.lock().unwrap().as_slice(),
+		["data:content_block_delta", "eof"]
+	);
+}
+
+#[test]
+fn test_sse_strict_yields_after_one_nonempty_handler_batch_per_poll() {
+	let body = Body::from(
+		[
+			"event: delta\ndata: {\"msg\": 1}\n\n",
+			"event: delta\ndata: {\"msg\": 2}\n\n",
+			"event: delta\ndata: {\"msg\": 3}\n\n",
+		]
+		.concat(),
+	);
+	let handled = Arc::new(Mutex::new(0));
+	let handled_clone = handled.clone();
+	let mut transformed =
+		sse::json_transform_strict_with_eof::<Test, serde_json::Value>(body, 1024, move |event| {
+			match event {
+				sse::StrictSseJsonEvent::Data { data, .. } => {
+					*handled_clone.lock().unwrap() += 1;
+					(
+						vec![("delta", serde_json::json!({"msg": data.unwrap().msg}))],
+						false,
+					)
+				},
+				_ => (Vec::new(), false),
+			}
+		});
+	let waker = futures_util::task::noop_waker();
+	let mut cx = Context::from_waker(&waker);
+	assert!(matches!(
+		Pin::new(&mut transformed).poll_frame(&mut cx),
+		Poll::Pending
+	));
+	assert_eq!(*handled.lock().unwrap(), 0);
+	let Poll::Ready(Some(Ok(frame))) = Pin::new(&mut transformed).poll_frame(&mut cx) else {
+		panic!("second poll should yield translated data")
+	};
+	assert!(frame.data_ref().is_some_and(|data| !data.is_empty()));
+	assert_eq!(*handled.lock().unwrap(), 1);
 }

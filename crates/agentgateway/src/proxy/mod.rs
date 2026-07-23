@@ -51,6 +51,9 @@ impl ProxyResponse {
 			| ProxyError::BackendDoesNotExist => ProxyResponseReason::NoHealthyBackend,
 			ProxyError::UpgradeFailed(_, _)
 			| ProxyError::InvalidRequest
+			| ProxyError::InvalidRequestString(_)
+			| ProxyError::PayloadTooLarge(_)
+			| ProxyError::UnsupportedMediaType(_)
 			| ProxyError::MethodNotAllowed
 			| ProxyError::ProcessingString(_)
 			| ProxyError::Processing(_)
@@ -201,6 +204,12 @@ pub enum ProxyError {
 	ExtProc(#[from] ext_proc::Error),
 	#[error("processing failed: {0}")]
 	ProcessingString(String),
+	#[error("invalid request: {0}")]
+	InvalidRequestString(String),
+	#[error("payload too large: {0}")]
+	PayloadTooLarge(String),
+	#[error("unsupported media type: {0}")]
+	UnsupportedMediaType(String),
 	#[error("rate limit exceeded")]
 	RateLimitExceeded {
 		limit: u64,
@@ -293,6 +302,9 @@ impl ProxyError {
 			ProxyError::Http(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::Body(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::ProcessingString(_) => StatusCode::SERVICE_UNAVAILABLE,
+			ProxyError::InvalidRequestString(_) => StatusCode::BAD_REQUEST,
+			ProxyError::PayloadTooLarge(_) => StatusCode::PAYLOAD_TOO_LARGE,
+			ProxyError::UnsupportedMediaType(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
 			ProxyError::RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
 			// Rate limit service communication failure is a server error (500), not a rate limit (429).
 			// This matches Envoy's behavior (status_on_error defaults to 500).
