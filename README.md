@@ -118,16 +118,6 @@ Thanks to all contributors who are helping to make agentgateway better.
   <img src="https://contrib.rocks/image?repo=agentgateway/agentgateway" />
 </a>
 
-### Star History
-
-<a href="https://www.star-history.com/#agentgateway/agentgateway&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=agentgateway/agentgateway&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=agentgateway/agentgateway&type=Date" />
-   <img alt="Star history of agentgateway/agentgateway over time" src="https://api.star-history.com/svg?repos=agentgateway/agentgateway&type=Date" />
- </picture>
-</a>
-
 ---
 
 <div align="center">
