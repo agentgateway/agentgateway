@@ -176,7 +176,8 @@ func runHTTPProbe(t *testing.T, label string, p *HTTPProbe) {
 
 func runMCPProbe(t *testing.T, label string, p *MCPProbe) {
 	// Generous deadline: the first call may spawn a stdio server (npx download).
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	// From t.Context() so a canceled test aborts an in-flight connect.
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Minute)
 	defer cancel()
 
 	client := mcp.NewClient(&mcp.Implementation{Name: "smoke", Version: "0"}, nil)

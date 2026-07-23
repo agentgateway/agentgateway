@@ -17,7 +17,6 @@ package examples
 
 import (
 	"bytes"
-	"context"
 	"net"
 	"net/http"
 	"os"
@@ -82,8 +81,9 @@ func startGateway(t *testing.T, configPath, readyURL string, env ...string) {
 	t.Helper()
 	bin := gatewayBin(t)
 
-	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, bin, "-f", configPath)
+	// t.Context() is canceled just before cleanup, which SIGTERMs the gateway via
+	// cmd.Cancel; Wait then reaps it (WaitDelay forces a kill if it hangs).
+	cmd := exec.CommandContext(t.Context(), bin, "-f", configPath)
 	cmd.Env = append(os.Environ(), env...)
 	cmd.Cancel = func() error { return cmd.Process.Signal(syscall.SIGTERM) }
 	cmd.WaitDelay = 5 * time.Second
@@ -94,32 +94,34 @@ func startGateway(t *testing.T, configPath, readyURL string, env ...string) {
 
 	require.NoError(t, cmd.Start(), "start gateway")
 	t.Cleanup(func() {
-		cancel()
 		_ = cmd.Wait()
 		if t.Failed() {
 			t.Logf("gateway log for %s:\n%s", filepath.Base(configPath), logBuf.String())
 		}
 	})
 
-	waitReady(t, readyURL, 90*time.Second, logBuf)
+	waitReady(t, readyURL, 90*time.Second)
 	t.Logf("gateway ready (%s)", readyURL)
 }
 
-// waitReady polls url until it returns 200 or the timeout elapses.
-func waitReady(t *testing.T, url string, timeout time.Duration, logBuf *syncBuffer) {
+// waitReady polls url until it returns 200. Each request is bounded so a hung
+// connection can't outlast the deadline; the gateway log is dumped by
+// startGateway's cleanup on failure.
+func waitReady(t *testing.T, url string, timeout time.Duration) {
 	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for time.Now().Before(deadline) {
-		resp, err := http.Get(url) //nolint:noctx // simple readiness poll
-		if err == nil {
-			_ = resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				return
-			}
+	client := &http.Client{Timeout: 5 * time.Second}
+	require.Eventuallyf(t, func() bool {
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, url, nil)
+		if err != nil {
+			return false
 		}
-		time.Sleep(500 * time.Millisecond)
-	}
-	t.Fatalf("gateway not ready at %s within %s\ngateway log:\n%s", url, timeout, logBuf.String())
+		resp, err := client.Do(req)
+		if err != nil {
+			return false
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode == http.StatusOK
+	}, timeout, 500*time.Millisecond, "gateway not ready at %s within %s", url, timeout)
 }
 
 // startHTTPUpstream serves 200 "ok" on a fixed address, standing in for the
