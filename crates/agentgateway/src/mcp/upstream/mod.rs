@@ -304,9 +304,6 @@ impl Upstream {
 					StreamableHttpPostResponse::Accepted
 					| StreamableHttpPostResponse::Json(_, _)
 					| StreamableHttpPostResponse::Sse(_, _) => Ok(()),
-					_ => Err(UpstreamError::InvalidRequest(
-						"unexpected response for client JSON-RPC reply".into(),
-					)),
 				}
 			},
 			Upstream::OpenAPI(_) => Err(UpstreamError::InvalidRequest(
