@@ -1,4 +1,4 @@
-use ::http::{HeaderMap, StatusCode};
+use ::http::{HeaderMap, HeaderValue, StatusCode};
 use itertools::Itertools;
 
 use crate::cel::{Executor, Expression};
@@ -435,24 +435,41 @@ impl RemoteRateLimit {
 	}
 
 	fn apply(req: &mut Request, cr: proto::RateLimitResponse) -> Result<PolicyResponse, ProxyError> {
+		let proto::RateLimitResponse {
+			overall_code,
+			statuses,
+			response_headers_to_add,
+			request_headers_to_add,
+			raw_body,
+			..
+		} = cr;
 		let mut res = PolicyResponse::default();
 		// if not OK, we directly respond
-		if cr.overall_code != (proto::rate_limit_response::Code::Ok as i32) {
+		if overall_code != (proto::rate_limit_response::Code::Ok as i32) {
 			let mut rb = ::http::response::Builder::new().status(StatusCode::TOO_MANY_REQUESTS);
 			if let Some(hm) = rb.headers_mut() {
-				process_headers(hm, cr.response_headers_to_add)
+				process_headers(hm, response_headers_to_add);
+				process_ratelimit_status_headers(hm, &statuses);
+				if !hm.contains_key(http::x_headers::X_ENVOY_RATELIMITED) {
+					hm.insert(
+						http::x_headers::X_ENVOY_RATELIMITED,
+						HeaderValue::from_static("true"),
+					);
+				}
 			}
 			let resp = rb
-				.body(http::Body::from(cr.raw_body))
+				.body(http::Body::from(raw_body))
 				.map_err(|e| ProxyError::Processing(e.into()))?;
 			res.direct_response = Some(resp);
 			return Ok(res);
 		}
 
-		process_headers(req.headers_mut(), cr.request_headers_to_add);
-		if !cr.response_headers_to_add.is_empty() {
-			let mut hm = HeaderMap::new();
-			process_headers(&mut hm, cr.response_headers_to_add);
+		process_headers(req.headers_mut(), request_headers_to_add);
+		// Surface the standard x-ratelimit-* headers on allowed responses so clients can self-throttle.
+		let mut hm = HeaderMap::new();
+		process_headers(&mut hm, response_headers_to_add);
+		process_ratelimit_status_headers(&mut hm, &statuses);
+		if !hm.is_empty() {
 			res.response_headers = Some(hm);
 		}
 		Ok(res)
@@ -547,6 +564,36 @@ fn process_headers(hm: &mut HeaderMap, headers: Vec<proto::HeaderValue>) {
 	for h in headers {
 		let _ = envoy_proto_common::apply_header_value(hm, &h);
 	}
+}
+
+/// Derives the standard `x-ratelimit-*` headers from the rate limit service's per-descriptor
+/// statuses. When multiple descriptors apply, the most-constrained one (fewest requests
+/// remaining) is reported, matching the limit a client is most likely to hit next.
+fn process_ratelimit_status_headers(
+	hm: &mut HeaderMap,
+	statuses: &[proto::rate_limit_response::DescriptorStatus],
+) {
+	let Some(best) = statuses
+		.iter()
+		.filter(|status| status.current_limit.is_some())
+		.min_by_key(|status| status.limit_remaining)
+	else {
+		return;
+	};
+	let Some(limit) = best.current_limit.as_ref() else {
+		return;
+	};
+	let reset_seconds = best
+		.duration_until_reset
+		.as_ref()
+		.map(|d| d.seconds.max(0) as u64)
+		.unwrap_or(0);
+	http::x_headers::set_ratelimit_headers(
+		hm,
+		limit.requests_per_unit as u64,
+		best.limit_remaining as u64,
+		reset_seconds,
+	);
 }
 
 fn eval_cost(

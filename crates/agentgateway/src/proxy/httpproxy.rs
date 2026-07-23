@@ -482,8 +482,20 @@ async fn apply_llm_request_policies(
 		.filter(|rate_limit| rate_limit.spec.limit_type == http::localratelimit::RateLimitType::Tokens)
 		.cloned()
 		.collect::<Vec<_>>();
+	let mut local_status: Option<http::localratelimit::RateLimitStatus> = None;
 	for lrl in &local_rate_limit {
-		lrl.check_llm_request(llm_req)?;
+		local_status = http::localratelimit::RateLimitStatus::most_constrained(
+			local_status,
+			lrl.check_llm_request(llm_req)?,
+		);
+	}
+	if let Some(status) = local_status {
+		http::x_headers::set_ratelimit_headers(
+			response_headers,
+			status.limit,
+			status.remaining,
+			status.reset_seconds,
+		);
 	}
 	let (rl_resp, response) = if let Some(rrl) = &policies.remote_rate_limit {
 		// For the LLM request side, request either the count of the input tokens (if tokenization was done)
