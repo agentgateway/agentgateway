@@ -179,6 +179,8 @@ pub struct BackendTLSInfo {
 	pub insecure_host: bool,
 	#[serde(default, skip_serializing_if = "is_false")]
 	pub system_roots: bool,
+	#[serde(default, skip_serializing_if = "is_false")]
+	pub spiffe: bool,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub alpn: Option<Vec<String>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -195,7 +197,8 @@ impl BackendTLSInfo {
 			hostname: tls.hostname.clone(),
 			insecure: tls.insecure,
 			insecure_host: tls.insecure_host,
-			system_roots: tls.root.is_none(),
+			system_roots: tls.root.is_none() && !tls.spiffe,
+			spiffe: tls.spiffe,
 			alpn: tls.alpn.clone(),
 			subject_alt_names: tls.subject_alt_names.clone(),
 			key_exchange_groups: tls.key_exchange_groups.clone(),

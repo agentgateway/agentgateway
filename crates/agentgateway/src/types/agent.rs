@@ -593,7 +593,16 @@ impl serde::Serialize for ServerTLSConfig {
 		S: Serializer,
 	{
 		// TODO: store raw pem
-		serializer.serialize_none()
+		use serde::ser::SerializeStruct;
+		let source = match &self.source {
+			ServerTlsCertificateSource::Static => "Static",
+			ServerTlsCertificateSource::DynamicCa => "DynamicCa",
+			ServerTlsCertificateSource::IstioWorkload { .. } => "IstioWorkload",
+			ServerTlsCertificateSource::Spiffe { .. } => "SPIFFE",
+		};
+		let mut st = serializer.serialize_struct("ServerTLSConfig", 1)?;
+		st.serialize_field("certificateSource", source)?;
+		st.end()
 	}
 }
 
@@ -604,7 +613,13 @@ impl JsonSchema for ServerTLSConfig {
 	}
 
 	fn json_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
-		schemars::json_schema!({ "type": "null" })
+		// Serialize-only dump view: the cert material isn't stored, only the source
+		// discriminant is emitted. Typed as a plain string so the allowed values live
+		// solely in the `Serialize` impl above rather than being duplicated here.
+		schemars::json_schema!({
+			"type": "object",
+			"properties": { "certificateSource": { "type": "string" } }
+		})
 	}
 }
 
