@@ -8,6 +8,10 @@ publish = { workspace = true }
 [lib]
 path = "src/lib.rs"
 
+[features]
+# Fake spiffe socket server for testing. Enabled via agentgateway's dev-dependencies; not for production.
+spiffe-test-server = []
+
 [dependencies]
 prost.workspace = true
 prost-types.workspace = true

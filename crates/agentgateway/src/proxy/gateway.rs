@@ -1080,7 +1080,11 @@ impl Gateway {
 			let best = listeners
 				.best_match_tls(sni)
 				.ok_or(anyhow!("no TLS listener match for {sni}"))?;
-			match best.protocol.tls(tls_pol, inp.ca.as_ref()).await {
+			match best
+				.protocol
+				.tls(tls_pol, inp.ca.as_ref(), inp.spiffe.as_ref())
+				.await
+			{
 				Some(Err(e)) => {
 					// There is a TLS config for this listener, but its invalid. Reject the connection
 					Err(e)
@@ -1156,6 +1160,10 @@ impl Gateway {
 		if let Some(identity) = pp_info.peer_identity {
 			raw_stream.ext_mut().insert(TLSConnectionInfo {
 				src_identity: Some(TlsInfo {
+					// Populate the generic `spiffe_id` alongside the parsed Istio `identity` so CEL policies keyed
+					// on `spiffe_id` behave the same whether the peer arrived via direct mTLS or via a
+					// ztunnel/waypoint PROXY-protocol TLV.
+					spiffe_id: Some(identity.to_string().into()),
 					identity: Some(identity),
 					subject_alt_names: vec![],
 					issuer: crate::strng::EMPTY,

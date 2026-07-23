@@ -35,4 +35,5 @@ This directory contains examples of how to use agentgateway. Each example is nam
 * [traffic-ratelimiting-local](traffic-ratelimiting-local/README.md): apply local rate limiting to HTTP traffic.
 * [traffic-ratelimiting-global](traffic-ratelimiting-global/README.md): apply global rate limiting with Envoy's ratelimit service.
 * [traffic-tailscale-auth](traffic-tailscale-auth/README.md): authenticate HTTP requests with Tailscale identity headers.
+* [traffic-spiffe](traffic-spiffe/README.md): source the gateway's mTLS identity from the local SPIFFE Workload API, for both serving and upstream connections.
 * [traffic-unified-gateway](traffic-unified-gateway/README.md): expose LLM, MCP, and the UI on one shared gateway listener.

@@ -62,17 +62,17 @@ fn setup() {
 	});
 }
 
-fn test_config() -> agentgateway::Config {
+fn test_config(yaml: &str) -> Result<agentgateway::Config, String> {
+	let mut config = agentgateway::config::parse_config(yaml.to_string(), None)
+		.map_err(|e| format!("failed to parse config: {e}"))?;
 	// Supply a deterministic OIDC cookie secret so configs that enable browser
 	// auth (e.g. oidc/) can be compiled without errors, matching the behaviour of
 	// validate-configs.sh which exports OIDC_COOKIE_SECRET.
-	let mut config =
-		agentgateway::config::parse_config("{}".to_string(), None).expect("parse empty config");
 	config.oidc_cookie_encoder = Some(
 		agentgateway::http::sessionpersistence::Encoder::aes(TEST_OIDC_COOKIE_SECRET)
 			.expect("AES encoder"),
 	);
-	config
+	Ok(config)
 }
 
 fn test_client(config: &agentgateway::Config) -> client::Client {
@@ -82,7 +82,7 @@ fn test_client(config: &agentgateway::Config) -> client::Client {
 async fn validate_example(path: &str) -> Result<(), String> {
 	setup();
 	let yaml = std::fs::read_to_string(path).map_err(|e| format!("failed to read {path}: {e}"))?;
-	let config = test_config();
+	let config = test_config(&yaml).map_err(|e| format!("{path}: {e}"))?;
 	let client = test_client(&config);
 	let resources = agentgateway::resource_manager::ResourceFetcher::direct(client);
 	NormalizedLocalConfig::from(

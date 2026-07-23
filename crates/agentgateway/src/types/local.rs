@@ -1281,14 +1281,21 @@ enum LocalListenerProtocol {
 pub struct LocalTLSServerConfig {
 	/// Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA
 	/// mode uses cert/key as a CA for on-demand SNI leaf certificate issuance.
+	/// Required unless `spiffe` is set.
 	#[serde(default)]
 	pub mode: LocalTLSServerMode,
 	/// Path to the TLS certificate file (leaf certificate, or CA certificate in dynamic CA mode).
-	pub cert: PathBuf,
+	/// Required unless `spiffe` is set.
+	pub cert: Option<PathBuf>,
 	/// Path to the TLS private key file.
-	pub key: PathBuf,
-	/// Path to a root CA certificate file used to validate client certificates.
+	pub key: Option<PathBuf>,
+	/// Path to a root CA certificate file used to validate client certificates (mTLS).
+	/// Omit for one-way server TLS. Not used when `spiffe` is set.
 	pub root: Option<PathBuf>,
+	/// Source the serving identity from the SPIFFE Workload API.
+	/// Mutually exclusive with `cert`/`key`/`root`.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub spiffe: Option<LocalSpiffeConfig>,
 	/// Optional cipher suite allowlist (order is preserved).
 	#[cfg_attr(feature = "schema", schemars(with = "Option<Vec<String>>"))]
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1322,6 +1329,9 @@ pub enum LocalTLSServerMode {
 	Static,
 	DynamicCa,
 }
+
+#[apply(schema_de!)]
+pub struct LocalSpiffeConfig {}
 
 #[apply(schema_de!)]
 pub struct LocalRouteName {
@@ -3114,6 +3124,7 @@ async fn convert(
 		workloads,
 		services,
 	};
+	validate_spiffe_enabled(config, &normalized)?;
 	Ok(normalized)
 }
 
@@ -3172,6 +3183,63 @@ fn gateway_config_has_route_kind(gateway: &LocalGateway, kind: GatewayRouteKind)
 			.map(|protocol| gateway_route_kind(protocol) == kind)
 			.unwrap_or(false)
 	})
+}
+
+/// Fail fast if any listener or backend sources its TLS identity from SPIFFE while SPIFFE is not
+/// enabled. Without this, the misconfiguration surfaces only later — per TLS handshake for
+/// listeners and per request for backends — with the gateway otherwise reporting healthy.
+fn validate_spiffe_enabled(
+	config: &Config,
+	normalized: &NormalizedLocalConfig,
+) -> anyhow::Result<()> {
+	if config.spiffe.is_some() {
+		return Ok(());
+	}
+	let listener_uses_spiffe = normalized
+		.binds
+		.iter()
+		.flat_map(|b| b.listeners.iter())
+		.any(|l| match &l.protocol {
+			ListenerProtocol::HTTPS(t) => t.is_spiffe(),
+			ListenerProtocol::TLS(Some(t)) => t.is_spiffe(),
+			_ => false,
+		});
+	// Backend TLS may attach to a standalone backend, to a route's backend reference (HTTP and
+	// TCP alike), or arrive embedded in a policy that itself dials an auxiliary service
+	// (ext_authz, guardrails, telemetry exporters, ...). Scan all of them.
+	let route_backend_policies = normalized
+		.listener_routes
+		.iter()
+		.chain(normalized.route_groups.iter())
+		.flat_map(|(_, routes)| routes.iter())
+		.flat_map(|r| r.backends.iter().flat_map(|b| b.inline_policies.iter()));
+	let tcp_route_backend_policies = normalized
+		.listener_tcp_routes
+		.iter()
+		.flat_map(|(_, routes)| routes.iter())
+		.flat_map(|r| r.backends.iter().flat_map(|b| b.inline_policies.iter()));
+	let backend_uses_spiffe = normalized
+		.backends
+		.iter()
+		.flat_map(|b| b.inline_policies.iter())
+		.chain(route_backend_policies)
+		.chain(tcp_route_backend_policies)
+		.any(backend_policy_is_spiffe);
+	let targeted_policy_uses_spiffe = normalized
+		.policies
+		.iter()
+		.any(|p| matches!(&p.policy, PolicyType::Backend(b) if backend_policy_is_spiffe(b)));
+	if listener_uses_spiffe || backend_uses_spiffe || targeted_policy_uses_spiffe {
+		bail!(
+			"TLS is configured to source identity from SPIFFE (tls.spiffe / backendTLS.spiffe), but SPIFFE is not enabled; set config.spiffeEndpoint"
+		);
+	}
+	Ok(())
+}
+
+/// Whether this backend policy is a SPIFFE-sourced `BackendTLS` policy.
+fn backend_policy_is_spiffe(p: &BackendTrafficPolicy) -> bool {
+	matches!(p, BackendTrafficPolicy::BackendTLS(bt) if bt.is_spiffe())
 }
 
 fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
@@ -5429,12 +5497,47 @@ impl LocalTLSServerConfig {
 		dynamic_ca_cert_cache: crate::DynamicCaCertCacheConfig,
 		resources: &crate::resource_manager::ResourceFetcher,
 	) -> anyhow::Result<ServerTLSConfig> {
+		// SPIFFE sources its identity from the Workload API, so it carries no cert/key/root files
+		// and is selected by the `spiffe` field rather than `mode`.
+		if self.spiffe.is_some() {
+			if self.cert.is_some() || self.key.is_some() || self.root.is_some() {
+				anyhow::bail!("'spiffe' is mutually exclusive with 'cert'/'key'/'root'");
+			}
+			if self.mode != LocalTLSServerMode::Static {
+				anyhow::bail!(
+					"'spiffe' cannot be combined with tls.mode (SPIFFE sources its own identity)"
+				);
+			}
+			// SPIFFE-sourced TLS uses its own negotiation profile; these knobs are not threaded into
+			// the SPIFFE config builders, so reject them rather than silently ignoring them.
+			if self.cipher_suites.is_some()
+				|| self.min_tls_version.is_some()
+				|| self.max_tls_version.is_some()
+				|| self.key_exchange_groups.is_some()
+			{
+				anyhow::bail!(
+					"'spiffe' cannot be combined with tls cipherSuites/minTLSVersion/maxTLSVersion/keyExchangeGroups"
+				);
+			}
+			return Ok(ServerTLSConfig::spiffe(vec![
+				b"h2".to_vec(),
+				b"http/1.1".to_vec(),
+			]));
+		}
 		let cert_pem = resources
-			.fetch(crate::resource_manager::ResourceRef::File(self.cert))
+			.fetch(crate::resource_manager::ResourceRef::File(
+				self
+					.cert
+					.ok_or_else(|| anyhow::anyhow!("tls requires 'cert' (or 'spiffe')"))?,
+			))
 			.await?
 			.to_vec();
 		let key_pem = resources
-			.fetch(crate::resource_manager::ResourceRef::File(self.key))
+			.fetch(crate::resource_manager::ResourceRef::File(
+				self
+					.key
+					.ok_or_else(|| anyhow::anyhow!("tls requires 'key' (or 'spiffe')"))?,
+			))
 			.await?
 			.to_vec();
 		let root_pem = match self.root {

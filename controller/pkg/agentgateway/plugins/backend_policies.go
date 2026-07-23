@@ -401,52 +401,57 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 
 	p := &api.BackendPolicySpec_BackendTLS{}
 
-	if len(tls.MtlsCertificateRef) > 0 {
-		// Currently we only support one, and enforce this in the API
-		mtls := tls.MtlsCertificateRef[0]
-		nn := types.NamespacedName{
-			Namespace: policy.Namespace,
-			Name:      string(mtls.Name),
-		}
-		data, err := ctx.ResolveCredentialRef(mtls, policy.Namespace)
-		if err != nil {
-			errs = append(errs, err)
-		} else {
-			if _, err := ValidateTlsSecretData(nn.Name, nn.Namespace, data); err != nil {
-				errs = append(errs, fmt.Errorf("secret %v contains invalid certificate: %v", nn, err))
+	// SPIFFE gets the client identity at connection time, so there's nothing to resolve from Secrets or ConfigMaps
+	if tls.CertificateSource != nil && *tls.CertificateSource == agentgateway.BackendTLSCertificateSourceSPIFFE {
+		p.CertificateSource = api.BackendPolicySpec_BackendTLS_SPIFFE
+	} else {
+		if len(tls.MtlsCertificateRef) > 0 {
+			// Currently we only support one, and enforce this in the API
+			mtls := tls.MtlsCertificateRef[0]
+			nn := types.NamespacedName{
+				Namespace: policy.Namespace,
+				Name:      string(mtls.Name),
 			}
-			p.Cert = data[corev1.TLSCertKey]
-			p.Key = data[corev1.TLSPrivateKeyKey]
-			if ca, f := data[corev1.ServiceAccountRootCAKey]; f {
-				p.Root = ca
-			}
-		}
-	}
-
-	// Build CA bundle from referenced ConfigMaps, if provided
-	// If we were using mTLS, we may be overriding the previously set p.Root -- this is intended
-	if len(tls.CACertificateRefs) > 0 {
-		var sb strings.Builder
-		for _, ref := range tls.CACertificateRefs {
-			nn := types.NamespacedName{Namespace: policy.Namespace, Name: ref.Name}
-			cfgmap := krt.FetchOne(ctx.Krt, ctx.Collections.ConfigMaps, krt.FilterObjectName(nn))
-			if cfgmap == nil {
-				errs = append(errs, fmt.Errorf("ConfigMap %s not found", nn))
-				continue
-			}
-			pem, err := GetCACertFromConfigMap(ptr.Flatten(cfgmap))
+			data, err := ctx.ResolveCredentialRef(mtls, policy.Namespace)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("error extracting CA cert from ConfigMap %s: %w", nn, err))
-				continue
+				errs = append(errs, err)
+			} else {
+				if _, err := ValidateTlsSecretData(nn.Name, nn.Namespace, data); err != nil {
+					errs = append(errs, fmt.Errorf("secret %v contains invalid certificate: %v", nn, err))
+				}
+				p.Cert = data[corev1.TLSCertKey]
+				p.Key = data[corev1.TLSPrivateKeyKey]
+				if ca, f := data[corev1.ServiceAccountRootCAKey]; f {
+					p.Root = ca
+				}
 			}
-			if sb.Len() > 0 {
-				sb.WriteString("\n")
-			}
-			sb.WriteString(pem)
 		}
-		// If we have a root set here, set it
-		// This may send an empty root, so that we trust nothing rather than system certs.
-		p.Root = []byte(sb.String())
+
+		// Build CA bundle from referenced ConfigMaps, if provided
+		// If we were using mTLS, we may be overriding the previously set p.Root -- this is intended
+		if len(tls.CACertificateRefs) > 0 {
+			var sb strings.Builder
+			for _, ref := range tls.CACertificateRefs {
+				nn := types.NamespacedName{Namespace: policy.Namespace, Name: ref.Name}
+				cfgmap := krt.FetchOne(ctx.Krt, ctx.Collections.ConfigMaps, krt.FilterObjectName(nn))
+				if cfgmap == nil {
+					errs = append(errs, fmt.Errorf("ConfigMap %s not found", nn))
+					continue
+				}
+				pem, err := GetCACertFromConfigMap(ptr.Flatten(cfgmap))
+				if err != nil {
+					errs = append(errs, fmt.Errorf("error extracting CA cert from ConfigMap %s: %w", nn, err))
+					continue
+				}
+				if sb.Len() > 0 {
+					sb.WriteString("\n")
+				}
+				sb.WriteString(pem)
+			}
+			// If we have a root set here, set it
+			// This may send an empty root, so that we trust nothing rather than system certs.
+			p.Root = []byte(sb.String())
+		}
 	}
 
 	if len(tls.VerifySubjectAltNames) > 0 {
