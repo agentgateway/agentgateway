@@ -171,13 +171,13 @@ func convertAgentgatewayModel(ctx RouteContext, model *agentgateway.Agentgateway
 		Created:     uint64(created),
 	}
 	var resources []*api.Resource
-	aiPolicy, err := translateModelRouteAIPolicy(ctx, model.Namespace, model.Spec.Transformations)
+	aiPolicy, err := translateModelRouteAIPolicy(ctx, model.Namespace, model.Spec.Policies)
 	if err != nil {
 		return nil, err
 	}
 	route.AiPolicy = aiPolicy
-	if model.Spec.Authorization != nil {
-		authorization, err := plugins.TranslateAuthorization(model.Spec.Authorization)
+	if model.Spec.Policies != nil && model.Spec.Policies.Authorization != nil {
+		authorization, err := plugins.TranslateAuthorization(model.Spec.Policies.Authorization)
 		if err != nil {
 			return nil, err
 		}
@@ -294,7 +294,7 @@ func modelFailoverBackend(ctx RouteContext, model *agentgateway.AgentgatewayMode
 		if err != nil {
 			return nil, err
 		}
-		transformations, err := translateModelRouteAIPolicy(ctx, refModel.Namespace, refModel.Spec.Transformations)
+		transformations, err := translateModelRouteAIPolicy(ctx, refModel.Namespace, refModel.Spec.Policies)
 		if err != nil {
 			return nil, err
 		}
@@ -459,11 +459,11 @@ func translateModelPolicies(ctx RouteContext, namespace string, model *agentgate
 	return translated, nil
 }
 
-func translateModelRouteAIPolicy(ctx RouteContext, namespace string, transformations []agentgateway.FieldTransformation) (*api.BackendPolicySpec_Ai, error) {
-	if len(transformations) == 0 {
+func translateModelRouteAIPolicy(ctx RouteContext, namespace string, policies *agentgateway.ModelPolicies) (*api.BackendPolicySpec_Ai, error) {
+	if policies == nil || len(policies.Transformations) == 0 {
 		return nil, nil
 	}
-	translated, err := translateInlineModelBackendPolicy(ctx, namespace, &agentgateway.BackendFull{AI: &agentgateway.BackendAI{Transformations: transformations}})
+	translated, err := translateInlineModelBackendPolicy(ctx, namespace, &agentgateway.BackendFull{AI: &agentgateway.BackendAI{Transformations: policies.Transformations}})
 	if err != nil {
 		return nil, err
 	}

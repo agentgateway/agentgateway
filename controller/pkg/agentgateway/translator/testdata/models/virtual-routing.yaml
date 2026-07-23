@@ -44,9 +44,10 @@ spec:
     name: virtual-models
     sectionName: llm
   provider: OpenAI
-  transformations:
-  - field: model
-    expression: '"gpt-5-mini-transformed"'
+  policies:
+    transformations:
+    - field: model
+      expression: '"gpt-5-mini-transformed"'
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel

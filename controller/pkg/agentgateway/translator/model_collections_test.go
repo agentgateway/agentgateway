@@ -105,12 +105,12 @@ func TestModelProviderInlinePolicies(t *testing.T) {
 	providerType := agentgateway.ModelProviderOpenAI
 	apiKey := "test-api-key"
 	model := &agentgateway.AgentgatewayModelSpec{
-		Provider:        &providerType,
-		Transformations: []agentgateway.FieldTransformation{{Field: "temperature", Expression: "0.5"}},
+		Provider: &providerType,
 		Policies: &agentgateway.ModelPolicies{
-			Auth:   &agentgateway.BackendAuth{InlineKey: &apiKey},
-			Health: &agentgateway.Health{UnhealthyCondition: new(agentgateway.CELExpression("response.code >= 500"))},
-			TLS:    &agentgateway.BackendTLS{InsecureSkipVerify: new(agentgateway.InsecureTLSModeAll)},
+			Transformations: []agentgateway.FieldTransformation{{Field: "temperature", Expression: "0.5"}},
+			Auth:            &agentgateway.BackendAuth{InlineKey: &apiKey},
+			Health:          &agentgateway.Health{UnhealthyCondition: new(agentgateway.CELExpression("response.code >= 500"))},
+			TLS:             &agentgateway.BackendTLS{InsecureSkipVerify: new(agentgateway.InsecureTLSModeAll)},
 			Headers: &agentgateway.HeaderModifiers{
 				Request:  &gwv1.HTTPHeaderFilter{Add: []gwv1.HTTPHeader{{Name: "x-model-request-policy", Value: "enabled"}}},
 				Response: &gwv1.HTTPHeaderFilter{Add: []gwv1.HTTPHeader{{Name: "x-model-response-policy", Value: "enabled"}}},
@@ -140,7 +140,7 @@ func TestModelProviderInlinePolicies(t *testing.T) {
 	if provider.InlinePolicies[3].GetAuth() == nil {
 		t.Errorf("auth policy = %#v, want backend auth", provider.InlinePolicies[3])
 	}
-	routePolicy, err := translateModelRouteAIPolicy(RouteContext{}, "default", model.Transformations)
+	routePolicy, err := translateModelRouteAIPolicy(RouteContext{}, "default", model.Policies)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,8 +160,10 @@ func TestModelAuthorization(t *testing.T) {
 	model := &agentgateway.AgentgatewayModel{
 		Spec: agentgateway.AgentgatewayModelSpec{
 			Provider: &providerType,
-			Authorization: &agentgateway.Authorization{
-				Policy: agentgateway.AuthorizationPolicy{MatchExpressions: []agentgateway.CELExpression{"request.headers['x-model-access'] == 'allowed'"}},
+			Policies: &agentgateway.ModelPolicies{
+				Authorization: &agentgateway.Authorization{
+					Policy: agentgateway.AuthorizationPolicy{MatchExpressions: []agentgateway.CELExpression{"request.headers['x-model-access'] == 'allowed'"}},
+				},
 			},
 		},
 	}

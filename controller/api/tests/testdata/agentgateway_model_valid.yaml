@@ -26,12 +26,12 @@ spec:
   match:
     model: gpt-5-mini
   provider: OpenAI
-  authorization:
-    policy:
-      matchExpressions:
-      - 'request.headers["x-model-access"] == "allowed"'
   baseURL: https://api.openai.com
   policies:
+    authorization:
+      policy:
+        matchExpressions:
+        - 'request.headers["x-model-access"] == "allowed"'
     auth:
       key: example-api-key
     health:
@@ -82,9 +82,10 @@ spec:
     model: openai/*
   visibility: Internal
   provider: OpenAI
-  transformations:
-  - field: model
-    expression: 'llmRequest.model.stripPrefix("openai/")'
+  policies:
+    transformations:
+    - field: model
+      expression: 'llmRequest.model.stripPrefix("openai/")'
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
@@ -98,9 +99,10 @@ spec:
     model: anthropic/*
   visibility: Internal
   provider: Anthropic
-  transformations:
-  - field: model
-    expression: 'llmRequest.model.stripPrefix("anthropic/")'
+  policies:
+    transformations:
+    - field: model
+      expression: 'llmRequest.model.stripPrefix("anthropic/")'
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
@@ -113,9 +115,10 @@ spec:
   match:
     model: local/llama-3.3
   provider: Custom
-  transformations:
-  - field: model
-    expression: 'llmRequest.model.stripPrefix("local/")'
+  policies:
+    transformations:
+    - field: model
+      expression: 'llmRequest.model.stripPrefix("local/")'
   custom:
     backendRef:
       group: inference.networking.k8s.io

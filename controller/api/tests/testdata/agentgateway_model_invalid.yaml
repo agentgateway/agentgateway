@@ -126,45 +126,13 @@ spec:
   - name: ai-gateway
     sectionName: llm
   policies:
-    health:
-      unhealthyCondition: response.code >= 500
-  virtualModel:
-    weighted:
-      targets:
-      - modelRef:
-          name: concrete-model
----
-_err: transformations require provider
-apiVersion: agentgateway.dev/v1alpha1
-kind: AgentgatewayModel
-metadata:
-  name: virtual-model-with-transformations
-spec:
-  parentRefs:
-  - name: ai-gateway
-    sectionName: llm
-  transformations:
-  - field: model
-    expression: '"replacement"'
-  virtualModel:
-    weighted:
-      targets:
-      - modelRef:
-          name: concrete-model
----
-_err: authorization requires provider
-apiVersion: agentgateway.dev/v1alpha1
-kind: AgentgatewayModel
-metadata:
-  name: virtual-model-with-authorization
-spec:
-  parentRefs:
-  - name: ai-gateway
-    sectionName: llm
-  authorization:
-    policy:
-      matchExpressions:
-      - 'true'
+    transformations:
+    - field: model
+      expression: '"replacement"'
+    authorization:
+      policy:
+        matchExpressions:
+        - 'true'
   virtualModel:
     weighted:
       targets:

@@ -43,8 +43,6 @@ type AgentgatewayModelList struct {
 // +kubebuilder:validation:ExactlyOneOf=provider;virtualModel
 // +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.baseURL)",message="baseURL requires provider"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || !has(self.policies)",message="policies cannot be used with virtualModel"
-// +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.authorization)",message="authorization requires provider"
-// +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.transformations)",message="transformations require provider"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || self.visibility != 'Internal'",message="virtual models must be public"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || !has(self.match) || !has(self.match.model) || !self.match.model.contains('*')",message="virtual model match.model must be an exact name"
 // +kubebuilder:validation:XValidation:rule="!has(self.provider) || self.provider != 'Ollama' || has(self.baseURL)",message="ollama requires baseURL"
@@ -102,19 +100,7 @@ type AgentgatewayModelSpec struct {
 	// +optional
 	BaseURL *LongString `json:"baseURL,omitempty"`
 
-	// CEL transformations applied to fields in the provider request body.
-	// +kubebuilder:validation:MinItems=1
-	// +kubebuilder:validation:MaxItems=64
-	// +listType=map
-	// +listMapKey=field
-	// +optional
-	Transformations []FieldTransformation `json:"transformations,omitempty"`
-
-	// Authorization rules that clients must satisfy to use this concrete model.
-	// +optional
-	Authorization *Authorization `json:"authorization,omitempty"`
-
-	// Policies applied while communicating with this concrete model's provider.
+	// Policies applied to this concrete model.
 	// +optional
 	Policies *ModelPolicies `json:"policies,omitempty"`
 
@@ -123,9 +109,21 @@ type AgentgatewayModelSpec struct {
 	VirtualModel *VirtualModel `json:"virtualModel,omitempty"`
 }
 
-// ModelPolicies configures a concrete model's provider connection.
+// ModelPolicies configures a concrete model.
 // +kubebuilder:validation:AtLeastOneFieldSet
 type ModelPolicies struct {
+	// CEL transformations applied to fields in the provider request body.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
+	// +listType=map
+	// +listMapKey=field
+	// +optional
+	Transformations []FieldTransformation `json:"transformations,omitempty"`
+
+	// Authorization rules that clients must satisfy to use this model.
+	// +optional
+	Authorization *Authorization `json:"authorization,omitempty"`
+
 	// Credentials used to authenticate requests to this model provider.
 	// +optional
 	Auth *BackendAuth `json:"auth,omitempty"`

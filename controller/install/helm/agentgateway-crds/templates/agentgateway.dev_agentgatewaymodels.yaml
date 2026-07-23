@@ -54,52 +54,6 @@ spec:
           spec:
             description: Desired model configuration.
             properties:
-              authorization:
-                description: Authorization rules that clients must satisfy to use
-                  this concrete model.
-                properties:
-                  action:
-                    default: Allow
-                    description: |-
-                      The effect of this rule when it matches.
-                      If unspecified, defaults to `Allow`.
-                      `Require` rules are cumulative: all require rules must match.
-                    enum:
-                    - Allow
-                    - Deny
-                    - Require
-                    type: string
-                  policy:
-                    description: |-
-                      The authorization rule to evaluate.
-
-                      * `Allow`: any matching allow rule allows the request.
-                      * `Require`: every require rule must match for the request to be allowed.
-                      * `Deny`: any matching deny rule denies the request.
-
-                      A CEL expression that fails to evaluate does not match. Prefer `Require`
-                      for deny-by-default behavior.
-
-                      If at least one `Allow` rule is configured, requests are denied unless at
-                      least one allow rule matches.
-                    properties:
-                      matchExpressions:
-                        description: CEL expressions that must all evaluate to true
-                          for the rule to match.
-                        items:
-                          description: A Common Expression Language (CEL) expression.
-                          maxLength: 16384
-                          minLength: 1
-                          type: string
-                        maxItems: 256
-                        minItems: 1
-                        type: array
-                    required:
-                    - matchExpressions
-                    type: object
-                required:
-                - policy
-                type: object
               azure:
                 description: Provider-specific settings for Azure AI.
                 properties:
@@ -377,8 +331,7 @@ spec:
                 minItems: 1
                 type: array
               policies:
-                description: Policies applied while communicating with this concrete
-                  model's provider.
+                description: Policies applied to this concrete model.
                 properties:
                   auth:
                     description: Credentials used to authenticate requests to this
@@ -1653,6 +1606,52 @@ spec:
                         aws azure gcp oauthTokenExchange crossAppAccess] must be set
                       rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange),has(self.crossAppAccess)].filter(x,x==true).size()
                         == 1'
+                  authorization:
+                    description: Authorization rules that clients must satisfy to
+                      use this model.
+                    properties:
+                      action:
+                        default: Allow
+                        description: |-
+                          The effect of this rule when it matches.
+                          If unspecified, defaults to `Allow`.
+                          `Require` rules are cumulative: all require rules must match.
+                        enum:
+                        - Allow
+                        - Deny
+                        - Require
+                        type: string
+                      policy:
+                        description: |-
+                          The authorization rule to evaluate.
+
+                          * `Allow`: any matching allow rule allows the request.
+                          * `Require`: every require rule must match for the request to be allowed.
+                          * `Deny`: any matching deny rule denies the request.
+
+                          A CEL expression that fails to evaluate does not match. Prefer `Require`
+                          for deny-by-default behavior.
+
+                          If at least one `Allow` rule is configured, requests are denied unless at
+                          least one allow rule matches.
+                        properties:
+                          matchExpressions:
+                            description: CEL expressions that must all evaluate to
+                              true for the rule to match.
+                            items:
+                              description: A Common Expression Language (CEL) expression.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                            maxItems: 256
+                            minItems: 1
+                            type: array
+                        required:
+                        - matchExpressions
+                        type: object
+                    required:
+                    - policy
+                    type: object
                   headers:
                     description: Request and response header changes applied to provider
                       traffic.
@@ -4782,6 +4781,35 @@ spec:
                         insecureSkipVerify] may be set
                       rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
                         <= 1'
+                  transformations:
+                    description: CEL transformations applied to fields in the provider
+                      request body.
+                    items:
+                      description: |-
+                        Maps a request JSON field to a CEL expression.
+                        The expression is evaluated against the current request body and its result
+                        is assigned to the configured field.
+                      properties:
+                        expression:
+                          description: CEL expression used to compute the field value.
+                          maxLength: 16384
+                          minLength: 1
+                          type: string
+                        field:
+                          description: Name of the field to set.
+                          maxLength: 256
+                          minLength: 1
+                          type: string
+                      required:
+                      - expression
+                      - field
+                      type: object
+                    maxItems: 64
+                    minItems: 1
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - field
+                    x-kubernetes-list-type: map
                   tunnel:
                     description: Proxy tunnel used to reach this model provider.
                     properties:
@@ -4837,9 +4865,9 @@ spec:
                     type: object
                 type: object
                 x-kubernetes-validations:
-                - message: at least one of the fields in [auth headers health promptGuard
-                    tls tunnel] must be set
-                  rule: '[has(self.auth),has(self.headers),has(self.health),has(self.promptGuard),has(self.tls),has(self.tunnel)].filter(x,x==true).size()
+                - message: at least one of the fields in [auth authorization headers
+                    health promptGuard tls transformations tunnel] must be set
+                  rule: '[has(self.auth),has(self.authorization),has(self.headers),has(self.health),has(self.promptGuard),has(self.tls),has(self.transformations),has(self.tunnel)].filter(x,x==true).size()
                     >= 1'
               provider:
                 description: |-
@@ -4867,35 +4895,6 @@ spec:
                 - VertexAI
                 - XAI
                 type: string
-              transformations:
-                description: CEL transformations applied to fields in the provider
-                  request body.
-                items:
-                  description: |-
-                    Maps a request JSON field to a CEL expression.
-                    The expression is evaluated against the current request body and its result
-                    is assigned to the configured field.
-                  properties:
-                    expression:
-                      description: CEL expression used to compute the field value.
-                      maxLength: 16384
-                      minLength: 1
-                      type: string
-                    field:
-                      description: Name of the field to set.
-                      maxLength: 256
-                      minLength: 1
-                      type: string
-                  required:
-                  - expression
-                  - field
-                  type: object
-                maxItems: 64
-                minItems: 1
-                type: array
-                x-kubernetes-list-map-keys:
-                - field
-                x-kubernetes-list-type: map
               vertexai:
                 description: Provider-specific settings for Vertex AI.
                 properties:
@@ -5081,10 +5080,6 @@ spec:
               rule: has(self.provider) || !has(self.baseURL)
             - message: policies cannot be used with virtualModel
               rule: '!has(self.virtualModel) || !has(self.policies)'
-            - message: authorization requires provider
-              rule: has(self.provider) || !has(self.authorization)
-            - message: transformations require provider
-              rule: has(self.provider) || !has(self.transformations)
             - message: virtual models must be public
               rule: '!has(self.virtualModel) || self.visibility != ''Internal'''
             - message: virtual model match.model must be an exact name
