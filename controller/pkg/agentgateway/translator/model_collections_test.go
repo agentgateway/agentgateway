@@ -99,7 +99,6 @@ func TestModelLLMProvider(t *testing.T) {
 			t.Fatalf("error = %v, want missing Bedrock configuration error", err)
 		}
 	})
-
 }
 
 func TestModelProviderInlinePolicies(t *testing.T) {

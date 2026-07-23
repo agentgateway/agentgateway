@@ -42,7 +42,7 @@ type AgentgatewayModelList struct {
 
 // +kubebuilder:validation:ExactlyOneOf=provider;virtualModel
 // +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.upstreamOverrides)",message="upstreamOverrides requires provider"
-// +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.upstreamPolicies)",message="upstreamPolicies require provider"
+// +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || !has(self.upstreamPolicies)",message="upstreamPolicies cannot be used with virtualModel"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || self.visibility != 'Internal'",message="virtual models must be public"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || !has(self.match) || !has(self.match.model) || !self.match.model.contains('*')",message="virtual model match.model must be an exact name"
 // +kubebuilder:validation:XValidation:rule="!has(self.provider) || self.provider != 'Ollama' || (has(self.upstreamOverrides) && has(self.upstreamOverrides.baseURL))",message="ollama requires upstreamOverrides.baseURL"

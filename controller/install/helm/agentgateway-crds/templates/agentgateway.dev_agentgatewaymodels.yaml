@@ -3952,8 +3952,8 @@ spec:
             x-kubernetes-validations:
             - message: upstreamOverrides requires provider
               rule: has(self.provider) || !has(self.upstreamOverrides)
-            - message: upstreamPolicies require provider
-              rule: has(self.provider) || !has(self.upstreamPolicies)
+            - message: upstreamPolicies cannot be used with virtualModel
+              rule: '!has(self.virtualModel) || !has(self.upstreamPolicies)'
             - message: virtual models must be public
               rule: '!has(self.virtualModel) || self.visibility != ''Internal'''
             - message: virtual model match.model must be an exact name
