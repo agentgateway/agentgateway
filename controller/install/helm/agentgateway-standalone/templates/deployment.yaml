@@ -18,8 +18,8 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        {{- with include "agentgateway-standalone.podAnnotations" . }}
-        {{- . | nindent 8 }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
         {{- end }}
       labels:
         {{- include "agentgateway-standalone.selectorLabels" . | nindent 8 }}
@@ -72,7 +72,7 @@ spec:
           protocol: TCP
         {{- if .Values.monitoring.enabled }}
         - name: metrics
-          containerPort: {{ .Values.monitoring.port }}
+          containerPort: 15020
           protocol: TCP
         {{- end }}
         env:

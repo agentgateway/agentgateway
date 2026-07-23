@@ -150,7 +150,7 @@ trafficDistribution: {{ . }}
 config:
   adminAddr: 0.0.0.0:{{ .Values.admin.service.port }}
   {{- if .Values.monitoring.enabled }}
-  statsAddr: 0.0.0.0:{{ .Values.monitoring.port }}
+  statsAddr: 0.0.0.0:15020
   {{- end }}
   database:
     url: {{ include "agentgateway-standalone.databaseUrl" . }}
@@ -159,18 +159,6 @@ binds:
   listeners: []
 - port: 8443
   listeners: []
-{{- end -}}
-{{- end }}
-
-{{- define "agentgateway-standalone.podAnnotations" -}}
-{{- $annotations := deepCopy (.Values.podAnnotations | default dict) -}}
-{{- if .Values.monitoring.enabled -}}
-{{- if hasKey .Values.podAnnotations "prometheus.io/port" }}
-{{- $_ := set $annotations "prometheus.io/port" (.Values.monitoring.port | toString) -}}
-{{- end -}}
-{{- end -}}
-{{- if $annotations -}}
-{{ toYaml $annotations }}
 {{- end -}}
 {{- end }}
 

@@ -180,7 +180,6 @@ extraVolumeMounts:
 			name: "monitoring-full-config",
 			valuesYAML: `monitoring:
   enabled: true
-  port: 9090
   annotations:
     example.com/note: monitoring
   extraLabels:
@@ -731,7 +730,6 @@ func TestStandaloneChartMonitoringPodMonitorDisabled(t *testing.T) {
 func TestStandaloneChartMonitoringFullConfig(t *testing.T) {
 	out, stderr, err := renderStandaloneChart(t, `monitoring:
   enabled: true
-  port: 9090
   annotations:
     example.com/note: monitoring
   extraLabels:
@@ -743,9 +741,9 @@ func TestStandaloneChartMonitoringFullConfig(t *testing.T) {
 	require.NoError(t, err, "helm template failed: %s", stderr)
 	require.Contains(t, out, "plane: monitoring")
 	require.Contains(t, out, "example.com/note: monitoring")
-	require.Contains(t, out, "containerPort: 9090")
-	require.Contains(t, out, "statsAddr: 0.0.0.0:9090")
-	require.Contains(t, out, "prometheus.io/port: \"9090\"")
+	require.Contains(t, out, "containerPort: 15020")
+	require.Contains(t, out, "statsAddr: 0.0.0.0:15020")
+	require.Contains(t, out, "prometheus.io/port: \"15020\"")
 	require.Contains(t, out, "interval: 30s")
 }
 
@@ -754,12 +752,11 @@ func TestStandaloneChartPodAnnotationsMergeWithMonitoringPort(t *testing.T) {
   team: platform
 monitoring:
   enabled: true
-  port: 9091
 `)
 	require.NoError(t, err, "helm template failed: %s", stderr)
 	require.Contains(t, out, "team: platform")
 	require.Contains(t, out, "prometheus.io/path: /metrics")
-	require.Contains(t, out, "prometheus.io/port: \"9091\"")
+	require.Contains(t, out, "prometheus.io/port: \"15020\"")
 }
 
 func TestStandaloneChartPodAnnotationsOverridesMonitoringPort(t *testing.T) {
@@ -770,16 +767,6 @@ monitoring:
 `)
 	require.NoError(t, err, "helm template failed: %s", stderr)
 	require.Contains(t, out, "prometheus.io/port: \"9999\"")
-}
-
-func TestStandaloneChartMonitoringPortOverridesPodAnnotations(t *testing.T) {
-	out, stderr, err := renderStandaloneChart(t, `podAnnotations:
-  prometheus.io/port: "9999"
-monitoring:
-  enabled: true
-`)
-	require.NoError(t, err, "helm template failed: %s", stderr)
-	require.Contains(t, out, "prometheus.io/port: \"15020\"")
 }
 
 func TestStandaloneChartMonitoringRemovePrometheusAnnotations(t *testing.T) {

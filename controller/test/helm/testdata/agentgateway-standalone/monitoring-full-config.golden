@@ -31,7 +31,7 @@ data:
 
     config:
       adminAddr: 0.0.0.0:15000
-      statsAddr: 0.0.0.0:9090
+      statsAddr: 0.0.0.0:15020
       database:
         url: sqlite:///config/data.db
     binds:
@@ -147,9 +147,9 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 1a71af262c532ec524aece9fcf2ecf073c162db9f2d0d6bd94ede12633112986
+        checksum/config: f407752ce48572f7085dbb4850f694af29334d6615f36b3bdbb5aced25c8b66c
         prometheus.io/path: /metrics
-        prometheus.io/port: "9090"
+        prometheus.io/port: "15020"
         prometheus.io/scrape: "true"
       labels:
         app.kubernetes.io/name: agentgateway-standalone
@@ -200,7 +200,7 @@ spec:
           containerPort: 15000
           protocol: TCP
         - name: metrics
-          containerPort: 9090
+          containerPort: 15020
           protocol: TCP
         env:
         - name: RUST_BACKTRACE
