@@ -176,6 +176,24 @@ extraVolumeMounts:
   mountPath: /var/lib/agentgateway/plugins
 `,
 		},
+		{
+			name: "monitoring-full-config",
+			valuesYAML: `monitoring:
+  enabled: true
+  service:
+    type: ClusterIP
+    port: 9090
+    annotations:
+      prometheus.io/scrape: "true"
+    extraLabels:
+      plane: monitoring
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    extraLabels:
+      release: prometheus
+`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -675,4 +693,80 @@ func TestStandaloneChartExtraContainers(t *testing.T) {
 	require.Contains(t, out, "name: httpbin")
 	require.Contains(t, out, "image: kennethreitz/httpbin")
 	require.Contains(t, out, "containerPort: 80")
+}
+
+func TestStandaloneChartMonitoringDisabledByDefault(t *testing.T) {
+	out, stderr, err := renderStandaloneChart(t, "")
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.NotContains(t, out, "kind: ServiceMonitor")
+	require.NotContains(t, out, "name: agentgateway-standalone-metrics")
+	require.NotContains(t, out, "name: metrics")
+	require.NotContains(t, out, "statsAddr")
+	require.NotContains(t, out, "prometheus.io/scrape")
+}
+
+func TestStandaloneChartMonitoringEnabled(t *testing.T) {
+	out, stderr, err := renderStandaloneChart(t, `monitoring:
+  enabled: true
+`)
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.Contains(t, out, "kind: ServiceMonitor")
+	require.Contains(t, out, "name: agentgateway-standalone-metrics")
+	require.Contains(t, out, "- name: \"metrics\"\n    protocol: \"TCP\"\n    port: 15020\n    targetPort: metrics")
+	require.Contains(t, out, "- name: metrics\n          containerPort: 15020")
+	require.Contains(t, out, "statsAddr: 0.0.0.0:15020")
+	require.Contains(t, out, "prometheus.io/scrape: \"true\"")
+	require.Contains(t, out, "prometheus.io/port: \"15020\"")
+	require.Contains(t, out, "prometheus.io/path: \"/metrics\"")
+	require.Contains(t, out, "- port: metrics\n    path: /metrics\n    interval: 15s")
+}
+
+func TestStandaloneChartMonitoringServiceDisabled(t *testing.T) {
+	out, stderr, err := renderStandaloneChart(t, `monitoring:
+  enabled: true
+  service:
+    enabled: false
+`)
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.NotContains(t, out, "name: agentgateway-standalone-metrics")
+	require.NotContains(t, out, "statsAddr")
+	require.NotContains(t, out, "prometheus.io/scrape")
+	require.Contains(t, out, "- name: metrics\n          containerPort: 15020")
+}
+
+func TestStandaloneChartMonitoringServiceMonitorDisabled(t *testing.T) {
+	out, stderr, err := renderStandaloneChart(t, `monitoring:
+  enabled: true
+  serviceMonitor:
+    enabled: false
+`)
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.NotContains(t, out, "kind: ServiceMonitor")
+	require.Contains(t, out, "name: agentgateway-standalone-metrics")
+	require.Contains(t, out, "statsAddr: 0.0.0.0:15020")
+}
+
+func TestStandaloneChartMonitoringFullConfig(t *testing.T) {
+	out, stderr, err := renderStandaloneChart(t, `monitoring:
+  enabled: true
+  service:
+    type: ClusterIP
+    port: 9090
+    annotations:
+      prometheus.io/scrape: "true"
+    extraLabels:
+      plane: monitoring
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    extraLabels:
+      release: prometheus
+`)
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.Contains(t, out, "plane: monitoring")
+	require.Contains(t, out, "release: prometheus")
+	require.Contains(t, out, "port: 9090")
+	require.Contains(t, out, "statsAddr: 0.0.0.0:9090")
+	require.Contains(t, out, "prometheus.io/port: \"9090\"")
+	require.Contains(t, out, "interval: 30s")
 }

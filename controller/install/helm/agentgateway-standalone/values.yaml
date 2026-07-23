@@ -111,6 +111,36 @@ gateway:
       protocol: TCP
   extraServices: []
 
+monitoring:
+  enabled: false
+  service:
+    enabled: true
+    type: ClusterIP
+    port: 15020
+    annotations: {}
+    extraLabels: {}
+    clusterIP: ""
+    clusterIPs: []
+    externalIPs: []
+    externalName: ""
+    loadBalancerIP: ""
+    loadBalancerSourceRanges: []
+    loadBalancerClass: ""
+    externalTrafficPolicy: ""
+    internalTrafficPolicy: ""
+    healthCheckNodePort: null
+    sessionAffinity: ""
+    sessionAffinityConfig: {}
+    ipFamilies: []
+    ipFamilyPolicy: ""
+    publishNotReadyAddresses: false
+    allocateLoadBalancerNodePorts: null
+    trafficDistribution: ""
+  serviceMonitor:
+    enabled: true
+    interval: 15s
+    extraLabels: {}
+
 persistence:
   enabled: true
   existingClaim: ""

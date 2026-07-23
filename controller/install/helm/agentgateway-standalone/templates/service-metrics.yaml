@@ -1,0 +1,31 @@
+{{- if .Values.monitoring.enabled}}
+{{- if .Values.monitoring.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentgateway-standalone.fullname" . }}-metrics
+  namespace: {{ include "agentgateway-standalone.namespace" . }}
+  labels:
+    {{- include "agentgateway-standalone.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.service.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.monitoring.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.monitoring.service.type | quote }}
+{{- $serviceSpecFields := include "agentgateway-standalone.serviceSpecFields" .Values.monitoring.service }}
+{{- if $serviceSpecFields }}
+{{ $serviceSpecFields | trim | nindent 2 }}
+{{- end }}
+  ports:
+  - name: "metrics"
+    protocol: "TCP"
+    port: {{ .Values.monitoring.service.port }}
+    targetPort: metrics
+  selector:
+    {{- include "agentgateway-standalone.selectorLabels" . | nindent 4 }}
+{{- end }}
+{{- end }}

@@ -149,6 +149,11 @@ trafficDistribution: {{ . }}
 {{- else -}}
 config:
   adminAddr: 0.0.0.0:{{ .Values.admin.service.port }}
+  {{- if .Values.monitoring.enabled }}
+  {{- if .Values.monitoring.service.enabled }}
+  statsAddr: 0.0.0.0:{{ .Values.monitoring.service.port }}
+  {{- end}}
+  {{- end}}
   database:
     url: {{ include "agentgateway-standalone.databaseUrl" . }}
 binds:

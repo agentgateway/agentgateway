@@ -1,0 +1,25 @@
+{{- if .Values.monitoring.enabled }}
+{{- if .Values.monitoring.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "agentgateway-standalone.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agentgateway-standalone.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.serviceMonitor.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "agentgateway-standalone.selectorLabels" . | nindent 6 }}
+  namespaceSelector:
+    matchNames:
+    - {{ .Release.Namespace }}
+  endpoints:
+  - port: metrics
+    path: /metrics
+    interval: {{ .Values.monitoring.serviceMonitor.interval }}
+{{- end }}
+{{- end }}
