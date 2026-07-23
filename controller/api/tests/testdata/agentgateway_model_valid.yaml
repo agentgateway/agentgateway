@@ -26,10 +26,16 @@ spec:
   match:
     model: gpt-5-mini
   provider: OpenAI
+  authorization:
+    policy:
+      matchExpressions:
+      - 'request.headers["x-model-access"] == "allowed"'
   upstreamOverrides:
     baseURL: https://api.openai.com
     model: gpt-5-mini
   upstreamPolicies:
+    auth:
+      key: example-api-key
     health:
       unhealthyCondition: response.code >= 500
     tls:

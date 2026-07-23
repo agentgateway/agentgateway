@@ -2088,4 +2088,7 @@ message ModelRoute {
   // Unix timestamp when this model route was created. For AgentgatewayModel,
   // this is the Kubernetes object's creation timestamp.
   uint64 created = 7;
+
+  // Authorization rules that clients must satisfy to use a concrete model.
+  TrafficPolicySpec.RBAC authorization = 8;
 }

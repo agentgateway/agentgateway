@@ -294,6 +294,7 @@ impl ModelRouter {
 			(allow_internal || model.visibility == ModelVisibility::Public)
 				&& model_name_matches(&model.name, requested_model)
 				&& header_matches(&model.header_matches, req)
+				&& model_authorized(model, req)
 		})?;
 		Some(ResolvedBackend {
 			backend: model.backend.clone(),
@@ -657,6 +658,51 @@ async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
 mod tests {
 	use super::*;
 	use crate::transport::BufferLimit;
+	use crate::types::agent::RouteBackendTarget;
+
+	#[test]
+	fn concrete_model_authorization_filters_requests() {
+		let authorization = Authorization(Arc::new(crate::http::authorization::RuleSet::new(
+			crate::http::authorization::PolicySet::new(
+				vec![Arc::new(
+					cel::Expression::new_strict("request.headers['x-model-access'] == 'allowed'".to_string())
+						.expect("valid CEL expression"),
+				)],
+				vec![],
+				vec![],
+			),
+		)));
+		let model = ModelRoute {
+			id: None,
+			name: "gpt-5-mini".to_string(),
+			created: 0,
+			visibility: ModelVisibility::Public,
+			header_matches: vec![],
+			backend: RouteBackendReference {
+				weight: 1,
+				target: RouteBackendTarget::Invalid,
+				inline_policies: vec![],
+			},
+			policies: ModelRoutePolicies {
+				llm: default_route_types(),
+				authorization: Some(authorization),
+			},
+			backend_policies: vec![],
+		};
+
+		let allowed = ::http::Request::builder()
+			.uri("http://example.com/v1/chat/completions")
+			.header("x-model-access", "allowed")
+			.body(http::Body::empty())
+			.expect("valid request");
+		let denied = ::http::Request::builder()
+			.uri("http://example.com/v1/chat/completions")
+			.body(http::Body::empty())
+			.expect("valid request");
+
+		assert!(model_authorized(&model, &allowed));
+		assert!(!model_authorized(&model, &denied));
+	}
 
 	#[test]
 	fn rewrite_path_model_rewrites_bedrock_converse_and_preserves_suffix() {

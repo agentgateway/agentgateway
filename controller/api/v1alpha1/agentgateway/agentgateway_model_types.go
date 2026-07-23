@@ -43,6 +43,7 @@ type AgentgatewayModelList struct {
 // +kubebuilder:validation:ExactlyOneOf=provider;virtualModel
 // +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.upstreamOverrides)",message="upstreamOverrides requires provider"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || !has(self.upstreamPolicies)",message="upstreamPolicies cannot be used with virtualModel"
+// +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.authorization)",message="authorization requires provider"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || self.visibility != 'Internal'",message="virtual models must be public"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || !has(self.match) || !has(self.match.model) || !self.match.model.contains('*')",message="virtual model match.model must be an exact name"
 // +kubebuilder:validation:XValidation:rule="!has(self.provider) || self.provider != 'Ollama' || (has(self.upstreamOverrides) && has(self.upstreamOverrides.baseURL))",message="ollama requires upstreamOverrides.baseURL"
@@ -101,6 +102,10 @@ type AgentgatewayModelSpec struct {
 	// +optional
 	Transformations []FieldTransformation `json:"transformations,omitempty"`
 
+	// Authorization rules that clients must satisfy to use this concrete model.
+	// +optional
+	Authorization *Authorization `json:"authorization,omitempty"`
+
 	// Policies applied while communicating with this concrete model's provider.
 	// +optional
 	UpstreamPolicies *UpstreamPolicies `json:"upstreamPolicies,omitempty"`
@@ -113,6 +118,10 @@ type AgentgatewayModelSpec struct {
 // UpstreamPolicies configures a concrete model's provider connection.
 // +kubebuilder:validation:AtLeastOneFieldSet
 type UpstreamPolicies struct {
+	// Credentials used to authenticate requests to this model provider.
+	// +optional
+	Auth *BackendAuth `json:"auth,omitempty"`
+
 	// Health checking and eviction behavior for this model provider.
 	// +optional
 	Health *Health `json:"health,omitempty"`

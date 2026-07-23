@@ -1530,6 +1530,10 @@ impl ModelRoute {
 			.map(|policy| convert_backend_ai_policy(policy, diagnostics).map(Arc::new))
 			.transpose()?
 			.unwrap_or_else(llm::model_router::default_route_types);
+		let authorization = s
+			.authorization
+			.as_ref()
+			.map(|authorization| authorization_from_proto(authorization, diagnostics));
 		let kind = match &s.kind {
 			Some(model_route::Kind::ConcreteModel(concrete)) => {
 				let visibility = match concrete.model_visibility() {
@@ -1558,7 +1562,7 @@ impl ModelRoute {
 					backend,
 					policies: llm::model_router::ModelRoutePolicies {
 						llm: llm_policy.clone(),
-						authorization: None,
+						authorization,
 					},
 					backend_policies: vec![],
 				})
@@ -4573,6 +4577,11 @@ mod tests {
 				backend_policies: vec![],
 			})),
 			ai_policy: None,
+			authorization: Some(proto::agent::traffic_policy_spec::Rbac {
+				allow: vec!["request.headers['x-model-access'] == 'allowed'".to_string()],
+				deny: vec![],
+				require: vec![],
+			}),
 		};
 
 		let (route, listener) = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())?;
@@ -4595,6 +4604,7 @@ mod tests {
 				.routes
 				.contains_key("/v1/chat/completions")
 		);
+		assert!(model.policies.authorization.is_some());
 		assert_eq!(model.backend.weight, 1);
 		match model.backend.target {
 			RouteBackendTarget::Backend(key) => {
@@ -4616,6 +4626,7 @@ mod tests {
 			r#match: None,
 			kind: Some(Kind::ConcreteModel(ConcreteModel::default())),
 			ai_policy: None,
+			authorization: None,
 		};
 
 		let err = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())
@@ -4653,6 +4664,7 @@ mod tests {
 				})),
 			})),
 			ai_policy: None,
+			authorization: None,
 		};
 
 		let (route, listener) = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())?;
@@ -4701,6 +4713,7 @@ mod tests {
 				})),
 			})),
 			ai_policy: None,
+			authorization: None,
 		};
 
 		let (route, listener) = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())?;
@@ -4746,6 +4759,7 @@ mod tests {
 				})),
 			})),
 			ai_policy: None,
+			authorization: None,
 		};
 
 		let err = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())
@@ -4782,6 +4796,7 @@ mod tests {
 				})),
 			})),
 			ai_policy: None,
+			authorization: None,
 		};
 
 		let (route, _) = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())?;

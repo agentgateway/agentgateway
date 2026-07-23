@@ -178,6 +178,13 @@ func convertAgentgatewayModel(ctx RouteContext, model *agentgateway.Agentgateway
 		return nil, err
 	}
 	route.AiPolicy = aiPolicy
+	if model.Spec.Authorization != nil {
+		authorization, err := plugins.TranslateAuthorization(model.Spec.Authorization)
+		if err != nil {
+			return nil, err
+		}
+		route.Authorization = authorization
+	}
 
 	if model.Spec.Provider != nil {
 		backend, err := modelConcreteBackend(ctx, model, parent, nil)
@@ -448,6 +455,7 @@ func translateModelUpstreamPolicies(ctx RouteContext, namespace string, model *a
 
 	policies := model.UpstreamPolicies
 	backend := &agentgateway.BackendFull{}
+	backend.BackendSimple.Auth = policies.Auth
 	backend.BackendSimple.TLS = policies.TLS
 	backend.BackendSimple.Tunnel = policies.Tunnel
 	backend.Health = policies.Health

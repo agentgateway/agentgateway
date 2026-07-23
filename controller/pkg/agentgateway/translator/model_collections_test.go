@@ -103,10 +103,12 @@ func TestModelLLMProvider(t *testing.T) {
 
 func TestModelProviderInlinePolicies(t *testing.T) {
 	providerType := agentgateway.ModelProviderOpenAI
+	apiKey := "test-api-key"
 	model := &agentgateway.AgentgatewayModelSpec{
 		Provider:        &providerType,
 		Transformations: []agentgateway.FieldTransformation{{Field: "temperature", Expression: "0.5"}},
 		UpstreamPolicies: &agentgateway.UpstreamPolicies{
+			Auth:   &agentgateway.BackendAuth{InlineKey: &apiKey},
 			Health: &agentgateway.Health{UnhealthyCondition: new(agentgateway.CELExpression("response.code >= 500"))},
 			TLS:    &agentgateway.BackendTLS{InsecureSkipVerify: new(agentgateway.InsecureTLSModeAll)},
 			Headers: &agentgateway.HeaderModifiers{
@@ -126,8 +128,8 @@ func TestModelProviderInlinePolicies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(provider.InlinePolicies) != 5 {
-		t.Fatalf("inline policies = %d, want 5", len(provider.InlinePolicies))
+	if len(provider.InlinePolicies) != 6 {
+		t.Fatalf("inline policies = %d, want 6", len(provider.InlinePolicies))
 	}
 	if provider.InlinePolicies[0].GetBackendTls() == nil {
 		t.Errorf("TLS policy = %#v, want backend TLS", provider.InlinePolicies[0])
@@ -138,6 +140,9 @@ func TestModelProviderInlinePolicies(t *testing.T) {
 	if ai := provider.InlinePolicies[2].GetAi(); ai == nil || ai.GetPromptGuard() == nil || ai.GetPromptCaching() == nil {
 		t.Errorf("AI policy = %#v, want prompt guard and caching", provider.InlinePolicies[2])
 	}
+	if provider.InlinePolicies[3].GetAuth() == nil {
+		t.Errorf("auth policy = %#v, want backend auth", provider.InlinePolicies[3])
+	}
 	routePolicy, err := translateModelRouteAIPolicy(RouteContext{}, "default", model.Transformations)
 	if err != nil {
 		t.Fatal(err)
@@ -145,11 +150,38 @@ func TestModelProviderInlinePolicies(t *testing.T) {
 	if got := routePolicy.GetTransformations()["temperature"]; got != "0.5" {
 		t.Errorf("temperature transformation = %q, want %q", got, "0.5")
 	}
-	if provider.InlinePolicies[3].GetRequestHeaderModifier() == nil {
-		t.Errorf("request header policy = %#v, want request header modifier", provider.InlinePolicies[3])
+	if provider.InlinePolicies[4].GetRequestHeaderModifier() == nil {
+		t.Errorf("request header policy = %#v, want request header modifier", provider.InlinePolicies[4])
 	}
-	if provider.InlinePolicies[4].GetResponseHeaderModifier() == nil {
-		t.Errorf("response header policy = %#v, want response header modifier", provider.InlinePolicies[4])
+	if provider.InlinePolicies[5].GetResponseHeaderModifier() == nil {
+		t.Errorf("response header policy = %#v, want response header modifier", provider.InlinePolicies[5])
+	}
+}
+
+func TestModelAuthorization(t *testing.T) {
+	providerType := agentgateway.ModelProviderOpenAI
+	model := &agentgateway.AgentgatewayModel{
+		Spec: agentgateway.AgentgatewayModelSpec{
+			Provider: &providerType,
+			Authorization: &agentgateway.Authorization{
+				Policy: agentgateway.AuthorizationPolicy{MatchExpressions: []agentgateway.CELExpression{"request.headers['x-model-access'] == 'allowed'"}},
+			},
+		},
+	}
+	parent := RouteParentReference{ListenerKey: "default/gateway.llm"}
+	resources, err := convertAgentgatewayModel(RouteContext{}, model, parent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resources) != 2 {
+		t.Fatalf("resources = %d, want 2", len(resources))
+	}
+	route := resources[1].GetModelRoute()
+	if route == nil || route.GetAuthorization() == nil {
+		t.Fatalf("model route authorization = %#v, want RBAC policy", route)
+	}
+	if got := route.GetAuthorization().GetAllow(); len(got) != 1 || got[0] != "request.headers['x-model-access'] == 'allowed'" {
+		t.Errorf("authorization allow = %#v, want model access rule", got)
 	}
 }
 

@@ -1543,6 +1543,32 @@ func processAuthorizationPolicy(
 	basePolicyName string,
 	policy types.NamespacedName,
 ) (*api.Policy, error) {
+	rbac, err := TranslateAuthorization(auth)
+	if err != nil {
+		return nil, err
+	}
+
+	pol := &api.Policy{
+		Key:  basePolicyName + rbacPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Traffic{
+			Traffic: &api.TrafficPolicySpec{
+				Phase: phase(policyPhase),
+				Kind:  &api.TrafficPolicySpec_Authorization{Authorization: rbac},
+			},
+		},
+	}
+
+	logger.Debug("generated Authorization policy",
+		"policy", basePolicyName,
+		"agentgateway_policy", pol.Name)
+
+	return pol, nil
+}
+
+// TranslateAuthorization converts an Agentgateway authorization policy into
+// the data-plane RBAC representation.
+func TranslateAuthorization(auth *agentgateway.Authorization) (*api.TrafficPolicySpec_RBAC, error) {
 	var errs []error
 	var allowPolicies, denyPolicies, requirePolicies []string
 	policies := castCELSlice(auth.Policy.MatchExpressions, func(expr agentgateway.CELExpression) {
@@ -1556,28 +1582,11 @@ func processAuthorizationPolicy(
 		allowPolicies = append(allowPolicies, policies...)
 	}
 
-	pol := &api.Policy{
-		Key:  basePolicyName + rbacPolicySuffix,
-		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Kind: &api.Policy_Traffic{
-			Traffic: &api.TrafficPolicySpec{
-				Phase: phase(policyPhase),
-				Kind: &api.TrafficPolicySpec_Authorization{
-					Authorization: &api.TrafficPolicySpec_RBAC{
-						Allow:   allowPolicies,
-						Deny:    denyPolicies,
-						Require: requirePolicies,
-					},
-				},
-			},
-		},
-	}
-
-	logger.Debug("generated Authorization policy",
-		"policy", basePolicyName,
-		"agentgateway_policy", pol.Name)
-
-	return pol, errors.Join(errs...)
+	return &api.TrafficPolicySpec_RBAC{
+		Allow:   allowPolicies,
+		Deny:    denyPolicies,
+		Require: requirePolicies,
+	}, errors.Join(errs...)
 }
 
 func getFrontendPolicyName(trafficPolicyNs, trafficPolicyName string) string {

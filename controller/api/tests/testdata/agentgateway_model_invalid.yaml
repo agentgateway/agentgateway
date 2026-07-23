@@ -137,6 +137,25 @@ spec:
       - modelRef:
           name: concrete-model
 ---
+_err: authorization requires provider
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: virtual-model-with-authorization
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  authorization:
+    policy:
+      matchExpressions:
+      - 'true'
+  virtualModel:
+    weighted:
+      targets:
+      - modelRef:
+          name: concrete-model
+---
 _err: azure must be set if and only if provider is Azure
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
