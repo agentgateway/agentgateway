@@ -80,7 +80,7 @@ export function PoliciesPage() {
       schemaRoot="LocalLLMPolicy"
       resourceKind="llm.policy"
       sections={llmPolicySections}
-      yamlDescription="Read-only view of llm.policies."
+      yamlDescription="Read-only view of effective LLM policies, including database-backed resources in hybrid mode."
       policies={(config) =>
         config.data?.llm?.policies as Record<string, unknown> | null | undefined
       }
