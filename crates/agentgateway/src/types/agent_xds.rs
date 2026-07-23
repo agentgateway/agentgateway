@@ -1171,8 +1171,45 @@ fn backend_auth_from_proto(
 				diagnostics,
 			)?))
 		},
+		Some(proto::agent::backend_auth_policy::Kind::JwtSign(j)) => {
+			let location = optional_authorization_location(j.authorization_location.as_ref())?;
+			let claims = j
+				.claims
+				.into_iter()
+				.map(|(key, value)| {
+					let value = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
+					(key, value)
+				})
+				.collect();
+			BackendAuth::JwtSign(Box::new(
+				auth::jwt_sign::JwtSignAuth::try_new(
+					j.signing_key.trim(),
+					jwt_sign_alg_from_proto(j.alg)?,
+					j.kid,
+					claims,
+					j.ttl.map(convert_duration),
+					location,
+				)
+				.map_err(ProtoError::Generic)?,
+			))
+		},
 		None => return Err(ProtoError::MissingRequiredField),
 	})
+}
+
+fn jwt_sign_alg_from_proto(alg: i32) -> Result<auth::oauth::SigningAlg, ProtoError> {
+	use auth::oauth::SigningAlg;
+	use proto::agent::jwt_sign::SigningAlg as ProtoSigningAlg;
+
+	match ProtoSigningAlg::try_from(alg) {
+		Ok(ProtoSigningAlg::Unspecified) => Ok(SigningAlg::Rs256),
+		Ok(ProtoSigningAlg::Rs256) => Ok(SigningAlg::Rs256),
+		Ok(ProtoSigningAlg::Rs384) => Ok(SigningAlg::Rs384),
+		Ok(ProtoSigningAlg::Rs512) => Ok(SigningAlg::Rs512),
+		Ok(ProtoSigningAlg::Es256) => Ok(SigningAlg::Es256),
+		Ok(ProtoSigningAlg::Es384) => Ok(SigningAlg::Es384),
+		Err(_) => Err(ProtoError::EnumParse("unknown jwt_sign signing alg".into())),
+	}
 }
 
 fn listener_protocol_from_proto(
