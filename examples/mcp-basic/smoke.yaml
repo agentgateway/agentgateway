@@ -1,0 +1,14 @@
+# Smoke test spec for this example. Discovered and run by test/examples.
+env:
+  # Let the gateway's `npx` target install the MCP server non-interactively.
+  npm_config_yes: "true"
+probes:
+  - mcp:
+      endpoint: http://127.0.0.1:3000/mcp
+      # A single stdio target is exposed without a target-name prefix.
+      toolsContain: [echo]
+      call:
+        name: echo
+        arguments:
+          message: smoke-mcp-echo
+        expectResultContains: [smoke-mcp-echo]

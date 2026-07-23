@@ -140,3 +140,12 @@ stop-validation-deps:
 .PHONY: validate
 validate:
 	@tools/validate-configs.sh
+
+# Functionally smoke test examples end to end: start the gateway against each
+# example's shipped config, send real traffic through it, and assert on the
+# response. Coverage is opt-in per example via examples/<name>/smoke.yaml.
+# Requires a built gateway binary (see AGENTGATEWAY_BIN in test/examples).
+.PHONY: test-examples
+test-examples:
+	@AGENTGATEWAY_BIN="$${AGENTGATEWAY_BIN:-$(PWD)/target/release/agentgateway}" \
+		go test -tags examples -count=1 -timeout 10m ./test/examples/...

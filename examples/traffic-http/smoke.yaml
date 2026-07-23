@@ -1,0 +1,19 @@
+# Smoke test spec for this example. Discovered and run by test/examples.
+# Schema: test/examples/README.md
+mocks:
+  - listen: 127.0.0.1:8080 # primary backend the routes point at
+  - listen: 127.0.0.1:8081 # requestMirror target
+probes:
+  # match-example: GET /match?param=hello with x-header=test-0 matches and
+  # proxies to the upstream.
+  - http:
+      url: http://127.0.0.1:3000/match?param=hello
+      headers:
+        x-header: test-0
+      expectStatus: 200
+  # direct-response: returns a literal body without an upstream, which also
+  # proves this more specific route wins over the catch-all policy route.
+  - http:
+      url: http://127.0.0.1:3000/direct
+      expectStatus: 200
+      expectBody: "hello!"

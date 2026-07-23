@@ -1,0 +1,68 @@
+name: Examples
+
+# Runs the examples end to end against the latest nightly binary. Config/schema
+# validation already runs per-PR (validate_examples.rs); this is the functional
+# layer, scheduled so it also catches drift in external deps (npx MCP servers,
+# provider APIs). Examples needing paid APIs or cloud creds are out of scope.
+#
+# The nightly artifact is a static musl build, so no build step and no glibc
+# concerns on the runner.
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  CI: true
+  GO_VERSION: "1.26.4"
+
+jobs:
+  smoke:
+    if: github.repository == 'agentgateway/agentgateway'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+          cache-dependency-path: "**/*.sum"
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: 24
+      - name: Download latest nightly gateway binary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Nightly only builds on new commits, so the latest successful run may
+          # have no binary; walk back to the newest run that still has one.
+          run_id=""
+          for id in $(gh run list --repo "$GITHUB_REPOSITORY" --workflow nightly.yml \
+              --status success --limit 15 --json databaseId --jq '.[].databaseId'); do
+            if gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${id}/artifacts" \
+                --jq '.artifacts[] | select(.name=="release-binary-linux" and .expired==false) | .name' \
+                | grep -q .; then
+              run_id="$id"
+              break
+            fi
+          done
+          if [ -z "$run_id" ]; then
+            echo "No recent nightly run with a release-binary-linux artifact found" >&2
+            exit 1
+          fi
+          echo "Using gateway binary from nightly run ${run_id}"
+          mkdir -p target/release
+          gh run download "$run_id" --repo "$GITHUB_REPOSITORY" -n release-binary-linux -D target/release
+          chmod +x target/release/agentgateway
+          target/release/agentgateway --version
+      - name: Run example smoke tests
+        env:
+          AGENTGATEWAY_BIN: ${{ github.workspace }}/target/release/agentgateway
+        run: |
+          go test -tags examples -v -count=1 -timeout 10m ./test/examples/...
