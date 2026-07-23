@@ -92,10 +92,8 @@ pub mod from_completions {
 		req: &types::completions::Request,
 		configured_model: Option<&str>,
 	) -> Result<vg::GenerateContentRequest, AIError> {
-		let model = req
-			.model
-			.as_deref()
-			.or(configured_model)
+		let model = configured_model
+			.or(req.model.as_deref())
 			.unwrap_or_default()
 			.to_string();
 
@@ -697,12 +695,37 @@ pub mod from_completions {
 	fn rewrite_structural(map: &mut serde_json::Map<String, Value>) -> bool {
 		let mut changed = false;
 
-		// Flatten allOf into the parent (existing sibling keys win).
+		// Flatten allOf into the parent. `properties` is unioned by name (first definition wins on a
+		// duplicate key, no recursive merge of the colliding sub-schemas) and `required` is unioned,
+		// so a multi-member allOf with disjoint fields keeps them all. Every other key is first-wins:
+		// a member carrying its own anyOf/oneOf/allOf can't be merged into a single node, so only the
+		// first is kept (best-effort, since Gemini has no allOf). The value type is checked before
+		// touching the parent so a malformed member (e.g. `properties: null`) can't inject an empty
+		// container.
 		if let Some(Value::Array(members)) = map.remove("allOf") {
 			changed = true;
 			for m in members {
-				if let Value::Object(mm) = m {
-					for (k, v) in mm {
+				let Value::Object(mm) = m else { continue };
+				for (k, v) in mm {
+					if k == "properties"
+						&& let Value::Object(src) = v
+					{
+						if let Value::Object(dst) = map.entry("properties").or_insert_with(|| json!({})) {
+							for (pk, pv) in src {
+								dst.entry(pk).or_insert(pv);
+							}
+						}
+					} else if k == "required"
+						&& let Value::Array(src) = v
+					{
+						if let Value::Array(dst) = map.entry("required").or_insert_with(|| json!([])) {
+							for item in src {
+								if !dst.contains(&item) {
+									dst.push(item);
+								}
+							}
+						}
+					} else {
 						map.entry(k).or_insert(v);
 					}
 				}
@@ -958,7 +981,7 @@ pub mod to_completions {
 		};
 		for part in &content.parts {
 			match part {
-				vg::Part::Text(t) if is_thought(t) => out.reasoning.push_str(strip_thought_prefix(&t.text)),
+				vg::Part::Text(t) if t.thought == Some(true) => out.reasoning.push_str(&t.text),
 				vg::Part::Text(t) => out.content.push_str(&t.text),
 				vg::Part::FunctionCall(fc) => out.calls.push(DecodedCall {
 					id: fc.function_call.id.as_deref(),
@@ -991,6 +1014,9 @@ pub mod to_completions {
 			role: completions::Role::Assistant,
 			content,
 			reasoning_content,
+			// Known limitation: a Gemini-3 `thoughtSignature` on a reasoning-only turn (no tool call
+			// to carry it in a tool_call id) is dropped, since the OpenAI shape has no signature slot.
+			// Tool-call signatures still round-trip via the tool_call id.
 			reasoning_signature: None,
 			tool_calls,
 			#[allow(deprecated)]
@@ -1095,31 +1121,6 @@ pub mod to_completions {
 		}
 	}
 
-	/// Some Gemini configs surface reasoning as a leading `THOUGHT:` text marker rather than a
-	/// `thought: true` flag; both are routed to reasoning content.
-	const THOUGHT_PREFIX: &str = "THOUGHT:";
-
-	fn is_thought(t: &vg::TextPart) -> bool {
-		t.thought == Some(true) || starts_with_thought_prefix(&t.text)
-	}
-
-	fn starts_with_thought_prefix(text: &str) -> bool {
-		// Should be case sensitive to avoid accidentally treating "thought" in the middle of normal content as reasoning.
-		text
-			.trim_start()
-			.get(..THOUGHT_PREFIX.len())
-			.is_some_and(|prefix| prefix == THOUGHT_PREFIX)
-	}
-
-	fn strip_thought_prefix(text: &str) -> &str {
-		if starts_with_thought_prefix(text) {
-			let trimmed = text.trim_start();
-			trimmed[THOUGHT_PREFIX.len()..].trim_start()
-		} else {
-			text
-		}
-	}
-
 	fn map_finish_reason(reason: Option<&str>) -> completions::FinishReason {
 		use completions::FinishReason;
 		match reason {
@@ -1204,6 +1205,8 @@ pub mod to_completions {
 				delta.role = Some(completions::Role::Assistant);
 			}
 
+			// Use only the first answer; streaming multiple `candidates` is rare (most models return
+			// one, some reject asking for more) and unsupported here. Non-streaming returns all.
 			let cand = chunk.candidates.first();
 			let decoded = decode_parts(cand.and_then(|c| c.content.as_ref()));
 

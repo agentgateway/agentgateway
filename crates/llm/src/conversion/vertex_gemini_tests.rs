@@ -362,22 +362,6 @@ fn out_of_order_tool_results_reorder_to_call_order() {
 	assert!(responses[0].get("id").is_none());
 }
 
-#[test]
-#[ignore = "follow-up: text/thinking-part thoughtSignature must ride reasoning_signature, not the \
-            tool_call_id (no tool call to carry it); cf. litellm #25322"]
-fn text_part_thought_signature_round_trips() {
-	// A thinking turn with no tool call still carries a signature that must round-trip; the typed
-	// slot is ResponseMessage.reasoning_signature (currently hardcoded None). Out of scope here.
-	let sig = "TEXT_PART_THOUGHT_SIGNATURE_xyz789==";
-	let decoded = resp(json!({
-		"candidates": [{ "content": { "role": "model", "parts": [
-			{ "text": "reasoning", "thought": true, "thoughtSignature": sig },
-			{ "text": "the answer" }
-		]}, "finishReason": "STOP" }]
-	}));
-	assert_eq!(decoded["choices"][0]["message"]["reasoning_signature"], sig);
-}
-
 // ---------- Request: generationConfig / structured outputs / thinking ----------
 
 #[test]
@@ -677,6 +661,39 @@ fn gemini_schema_flattens_allof_single_ref() {
 	assert_eq!(
 		s["properties"]["inner"]["description"], "the inner object",
 		"sibling description must be preserved: {txt}"
+	);
+}
+
+// Case 3b: a multi-member allOf must merge every member's `properties` and `required` into the
+// parent, not keep only the first. JSON-Schema composition (`allOf: [A, B]`) commonly carries
+// disjoint property sets; first-wins insertion silently drops all but the first member.
+#[test]
+fn gemini_schema_merges_multi_member_allof() {
+	let s = response_schema(json!({
+		"type": "object",
+		"allOf": [
+			{ "properties": { "a": { "type": "string" } }, "required": ["a"] },
+			{ "properties": { "b": { "type": "integer" } }, "required": ["b"] }
+		]
+	}));
+	let txt = serde_json::to_string(&s).unwrap();
+	assert!(!txt.contains("allOf"), "allOf must be flattened: {txt}");
+	assert_eq!(
+		s["properties"]["a"]["type"], "string",
+		"first member's property must survive: {txt}"
+	);
+	assert_eq!(
+		s["properties"]["b"]["type"], "integer",
+		"second member's property must not be dropped: {txt}"
+	);
+	let required = s["required"].as_array().expect("required array");
+	assert!(
+		required.iter().any(|r| r == "a"),
+		"first member's required must survive: {txt}"
+	);
+	assert!(
+		required.iter().any(|r| r == "b"),
+		"second member's required must be unioned in, not dropped: {txt}"
 	);
 }
 
@@ -1054,18 +1071,20 @@ fn labels_pass_through_at_top_level() {
 // ---------- Response: content / reasoning / tool calls ----------
 
 #[test]
-fn response_thought_prefix_workaround() {
+fn response_reasoning_keys_off_thought_flag_only() {
+	// Reasoning is identified solely by `thought: true`. A plain text part is content even if it
+	// happens to start with "THOUGHT:" (no literal-prefix heuristic).
 	let r = resp(json!({
 		"candidates": [{ "content": { "role": "model", "parts": [
-			{ "text": "THOUGHT: reasoning here" },
-			{ "text": "the answer" }
+			{ "text": "the plan", "thought": true },
+			{ "text": "THOUGHT: not a marker" }
 		]}, "finishReason": "STOP" }]
 	}));
+	assert_eq!(r["choices"][0]["message"]["reasoning_content"], "the plan");
 	assert_eq!(
-		r["choices"][0]["message"]["reasoning_content"],
-		"reasoning here"
+		r["choices"][0]["message"]["content"], "THOUGHT: not a marker",
+		"a literal THOUGHT: prefix without the thought flag must stay as content"
 	);
-	assert_eq!(r["choices"][0]["message"]["content"], "the answer");
 }
 
 #[test]
