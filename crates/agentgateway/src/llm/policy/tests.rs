@@ -1389,7 +1389,7 @@ fn test_bedrock_guardrails_api_key_auth_takes_precedence() {
 		guardrail_identifier: strng::new("test-guardrail"),
 		guardrail_version: strng::new("1"),
 		region: strng::new("us-east-1"),
-		policies: vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Key {
+		policies: vec![BackendTrafficPolicy::backend_auth(BackendAuth::Key {
 			value: SecretString::new("bedrock-api-key".into()),
 			location: None,
 		})],
