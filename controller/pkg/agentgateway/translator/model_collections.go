@@ -323,7 +323,7 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 	if err := validateModelBaseURL(model); err != nil {
 		return nil, err
 	}
-	inlinePolicies, err := translateModelUpstreamPolicies(ctx, namespace, model)
+	inlinePolicies, err := translateModelPolicies(ctx, namespace, model)
 	if err != nil {
 		return nil, err
 	}
@@ -418,12 +418,12 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 	return provider, nil
 }
 
-func translateModelUpstreamPolicies(ctx RouteContext, namespace string, model *agentgateway.AgentgatewayModelSpec) ([]*api.BackendPolicySpec, error) {
-	if model.UpstreamPolicies == nil {
+func translateModelPolicies(ctx RouteContext, namespace string, model *agentgateway.AgentgatewayModelSpec) ([]*api.BackendPolicySpec, error) {
+	if model.Policies == nil {
 		return nil, nil
 	}
 
-	policies := model.UpstreamPolicies
+	policies := model.Policies
 	backend := &agentgateway.BackendFull{}
 	backend.BackendSimple.Auth = policies.Auth
 	backend.BackendSimple.TLS = policies.TLS

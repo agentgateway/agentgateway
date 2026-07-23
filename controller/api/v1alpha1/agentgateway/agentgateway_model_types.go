@@ -42,7 +42,7 @@ type AgentgatewayModelList struct {
 
 // +kubebuilder:validation:ExactlyOneOf=provider;virtualModel
 // +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.baseURL)",message="baseURL requires provider"
-// +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || !has(self.upstreamPolicies)",message="upstreamPolicies cannot be used with virtualModel"
+// +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || !has(self.policies)",message="policies cannot be used with virtualModel"
 // +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.authorization)",message="authorization requires provider"
 // +kubebuilder:validation:XValidation:rule="has(self.provider) || !has(self.transformations)",message="transformations require provider"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || self.visibility != 'Internal'",message="virtual models must be public"
@@ -116,16 +116,16 @@ type AgentgatewayModelSpec struct {
 
 	// Policies applied while communicating with this concrete model's provider.
 	// +optional
-	UpstreamPolicies *UpstreamPolicies `json:"upstreamPolicies,omitempty"`
+	Policies *ModelPolicies `json:"policies,omitempty"`
 
 	// Request-time routing among concrete AgentgatewayModel resources.
 	// +optional
 	VirtualModel *VirtualModel `json:"virtualModel,omitempty"`
 }
 
-// UpstreamPolicies configures a concrete model's provider connection.
+// ModelPolicies configures a concrete model's provider connection.
 // +kubebuilder:validation:AtLeastOneFieldSet
-type UpstreamPolicies struct {
+type ModelPolicies struct {
 	// Credentials used to authenticate requests to this model provider.
 	// +optional
 	Auth *BackendAuth `json:"auth,omitempty"`
@@ -249,7 +249,7 @@ type FailoverModelTarget struct {
 	// Priority of this target. Lower values are preferred. Targets at the same
 	// priority are selected using a score that considers health and latency. The
 	// next priority is used only when every target at this priority is degraded.
-	// Configure upstreamPolicies.health on concrete target models to customize
+	// Configure policies.health on concrete target models to customize
 	// degradation and eviction behavior.
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=1000000

@@ -31,7 +31,7 @@ spec:
       matchExpressions:
       - 'request.headers["x-model-access"] == "allowed"'
   baseURL: https://api.openai.com
-  upstreamPolicies:
+  policies:
     auth:
       key: example-api-key
     health:

@@ -107,7 +107,7 @@ func TestModelProviderInlinePolicies(t *testing.T) {
 	model := &agentgateway.AgentgatewayModelSpec{
 		Provider:        &providerType,
 		Transformations: []agentgateway.FieldTransformation{{Field: "temperature", Expression: "0.5"}},
-		UpstreamPolicies: &agentgateway.UpstreamPolicies{
+		Policies: &agentgateway.ModelPolicies{
 			Auth:   &agentgateway.BackendAuth{InlineKey: &apiKey},
 			Health: &agentgateway.Health{UnhealthyCondition: new(agentgateway.CELExpression("response.code >= 500"))},
 			TLS:    &agentgateway.BackendTLS{InsecureSkipVerify: new(agentgateway.InsecureTLSModeAll)},

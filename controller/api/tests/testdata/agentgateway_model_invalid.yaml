@@ -116,7 +116,7 @@ spec:
   provider: OpenAI
   baseURL: http://169.254.169.254/latest/meta-data
 ---
-_err: upstreamPolicies cannot be used with virtualModel
+_err: policies cannot be used with virtualModel
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
 metadata:
@@ -125,7 +125,7 @@ spec:
   parentRefs:
   - name: ai-gateway
     sectionName: llm
-  upstreamPolicies:
+  policies:
     health:
       unhealthyCondition: response.code >= 500
   virtualModel:

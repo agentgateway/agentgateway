@@ -376,62 +376,7 @@ spec:
                 maxItems: 16
                 minItems: 1
                 type: array
-              provider:
-                description: |-
-                  Provider serving this concrete model. Provider-specific configuration is
-                  set by the corresponding field below when needed.
-                enum:
-                - Anthropic
-                - Azure
-                - Baseten
-                - Bedrock
-                - Cerebras
-                - Cohere
-                - Custom
-                - Deepinfra
-                - Deepseek
-                - Fireworks
-                - Gemini
-                - Groq
-                - Huggingface
-                - Mistral
-                - Ollama
-                - OpenAI
-                - Openrouter
-                - TogetherAI
-                - VertexAI
-                - XAI
-                type: string
-              transformations:
-                description: CEL transformations applied to fields in the provider
-                  request body.
-                items:
-                  description: |-
-                    Maps a request JSON field to a CEL expression.
-                    The expression is evaluated against the current request body and its result
-                    is assigned to the configured field.
-                  properties:
-                    expression:
-                      description: CEL expression used to compute the field value.
-                      maxLength: 16384
-                      minLength: 1
-                      type: string
-                    field:
-                      description: Name of the field to set.
-                      maxLength: 256
-                      minLength: 1
-                      type: string
-                  required:
-                  - expression
-                  - field
-                  type: object
-                maxItems: 64
-                minItems: 1
-                type: array
-                x-kubernetes-list-map-keys:
-                - field
-                x-kubernetes-list-type: map
-              upstreamPolicies:
+              policies:
                 description: Policies applied while communicating with this concrete
                   model's provider.
                 properties:
@@ -4935,6 +4880,61 @@ spec:
                     promptGuard tls tunnel] must be set
                   rule: '[has(self.auth),has(self.headers),has(self.health),has(self.promptCaching),has(self.promptGuard),has(self.tls),has(self.tunnel)].filter(x,x==true).size()
                     >= 1'
+              provider:
+                description: |-
+                  Provider serving this concrete model. Provider-specific configuration is
+                  set by the corresponding field below when needed.
+                enum:
+                - Anthropic
+                - Azure
+                - Baseten
+                - Bedrock
+                - Cerebras
+                - Cohere
+                - Custom
+                - Deepinfra
+                - Deepseek
+                - Fireworks
+                - Gemini
+                - Groq
+                - Huggingface
+                - Mistral
+                - Ollama
+                - OpenAI
+                - Openrouter
+                - TogetherAI
+                - VertexAI
+                - XAI
+                type: string
+              transformations:
+                description: CEL transformations applied to fields in the provider
+                  request body.
+                items:
+                  description: |-
+                    Maps a request JSON field to a CEL expression.
+                    The expression is evaluated against the current request body and its result
+                    is assigned to the configured field.
+                  properties:
+                    expression:
+                      description: CEL expression used to compute the field value.
+                      maxLength: 16384
+                      minLength: 1
+                      type: string
+                    field:
+                      description: Name of the field to set.
+                      maxLength: 256
+                      minLength: 1
+                      type: string
+                  required:
+                  - expression
+                  - field
+                  type: object
+                maxItems: 64
+                minItems: 1
+                type: array
+                x-kubernetes-list-map-keys:
+                - field
+                x-kubernetes-list-type: map
               vertexai:
                 description: Provider-specific settings for Vertex AI.
                 properties:
@@ -5040,7 +5040,7 @@ spec:
                                 Priority of this target. Lower values are preferred. Targets at the same
                                 priority are selected using a score that considers health and latency. The
                                 next priority is used only when every target at this priority is degraded.
-                                Configure upstreamPolicies.health on concrete target models to customize
+                                Configure policies.health on concrete target models to customize
                                 degradation and eviction behavior.
                               format: int32
                               maximum: 1000000
@@ -5118,8 +5118,8 @@ spec:
             x-kubernetes-validations:
             - message: baseURL requires provider
               rule: has(self.provider) || !has(self.baseURL)
-            - message: upstreamPolicies cannot be used with virtualModel
-              rule: '!has(self.virtualModel) || !has(self.upstreamPolicies)'
+            - message: policies cannot be used with virtualModel
+              rule: '!has(self.virtualModel) || !has(self.policies)'
             - message: authorization requires provider
               rule: has(self.provider) || !has(self.authorization)
             - message: transformations require provider
