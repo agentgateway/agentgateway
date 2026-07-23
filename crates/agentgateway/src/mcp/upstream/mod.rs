@@ -12,7 +12,8 @@ pub(crate) use client::McpHttpClient;
 use itertools::Itertools;
 pub use openapi::ParseError as OpenAPIParseError;
 use rmcp::model::{
-	ClientNotification, ClientRequest, ExtensionCapabilities, GetMeta, JsonObject, JsonRpcRequest,
+	ClientJsonRpcMessage, ClientNotification, ClientRequest, ExtensionCapabilities, GetMeta,
+	JsonObject, JsonRpcRequest,
 };
 use rmcp::transport::TokioChildProcess;
 use rmcp::transport::common::http_header::HEADER_SESSION_ID;
@@ -287,6 +288,29 @@ impl Upstream {
 			Upstream::OpenAPI(_) => {},
 		}
 		Ok(())
+	}
+
+	pub(crate) async fn generic_client_message(
+		&self,
+		message: ClientJsonRpcMessage,
+		ctx: &IncomingRequestContext,
+	) -> Result<(), UpstreamError> {
+		match &self {
+			Upstream::McpStdio(c) => c.send_client_message(message, ctx).await,
+			Upstream::McpSSE(c) => c.send_client_message(message, ctx).await,
+			Upstream::McpStreamable(c) => {
+				let res = c.send_client_message(message, ctx).await?;
+				match res {
+					StreamableHttpPostResponse::Accepted => Ok(()),
+					_ => Err(UpstreamError::InvalidRequest(
+						"expected accepted response for client JSON-RPC reply".into(),
+					)),
+				}
+			},
+			Upstream::OpenAPI(_) => Err(UpstreamError::InvalidRequest(
+				"openapi upstream does not support server-to-client routing".into(),
+			)),
+		}
 	}
 }
 
