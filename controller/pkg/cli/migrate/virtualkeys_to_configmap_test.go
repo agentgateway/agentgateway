@@ -267,6 +267,69 @@ func TestVirtualkeysDryRunOutputStripsServerManagedFields(t *testing.T) {
 	}
 }
 
+// If agentgateway adds a new Kind to the group later, this migration must pick it up via
+// discovery alone: found automatically, unrelated fields preserved, output clean and appliable.
+func TestVirtualkeysMigratesNewlyAddedKind(t *testing.T) {
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: "api-key", Namespace: "ns"},
+		Data:       map[string][]byte{"client1": []byte("k-456")},
+	}
+	kube := k8sfake.NewSimpleClientset(secret)
+
+	gvr := schema.GroupVersionResource{Group: virtualkeysAPIGroup, Version: "v1alpha1", Resource: "widgets"}
+	kube.Resources = []*metav1.APIResourceList{
+		{
+			GroupVersion: gvr.GroupVersion().String(),
+			APIResources: []metav1.APIResource{{Name: gvr.Resource, Namespaced: true, Kind: "Widget"}},
+		},
+	}
+
+	obj := &unstructured.Unstructured{Object: map[string]any{
+		"apiVersion": gvr.GroupVersion().String(),
+		"kind":       "Widget",
+		"metadata": map[string]any{
+			"name": "my-widget", "namespace": "ns",
+			"resourceVersion": "999", "uid": "widget-uid-1", "generation": int64(2),
+		},
+		"spec": map[string]any{
+			"color": "blue",
+			"traffic": map[string]any{
+				"apiKeyAuthentication": map[string]any{
+					"secretRef": map[string]any{"name": "api-key"},
+				},
+			},
+		},
+	}}
+	// Seeding via Create (not the constructor) avoids the fake dynamic client's naive
+	// Kind->Resource pluralizer, which mishandles words already ending in "s".
+	dyn := dynamicfake.NewSimpleDynamicClientWithCustomListKinds(runtime.NewScheme(),
+		map[schema.GroupVersionResource]string{gvr: "WidgetList"})
+	if _, err := dyn.Resource(gvr).Namespace("ns").Create(context.Background(), obj, metav1.CreateOptions{}); err != nil {
+		t.Fatalf("seed create failed: %v", err)
+	}
+	client := fakeCLIClient{kube: kube, dyn: dyn}
+
+	var out, status bytes.Buffer
+	if err := runVirtualkeysToConfigMap(context.Background(), &out, &status, client, "ns", "", true); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !bytes.Contains(out.Bytes(), []byte("kind: Widget")) {
+		t.Errorf("expected the object's own Kind in the output, got:\n%s", out.String())
+	}
+	if !bytes.Contains(out.Bytes(), []byte("kind: ConfigMap")) {
+		t.Errorf("expected a ConfigMap document, got:\n%s", out.String())
+	}
+	if !bytes.Contains(out.Bytes(), []byte("color: blue")) {
+		t.Errorf("expected a field this migration doesn't touch to survive untouched, got:\n%s", out.String())
+	}
+	for _, field := range []string{"resourceVersion", "uid", "generation"} {
+		if bytes.Contains(out.Bytes(), []byte(field)) {
+			t.Errorf("expected %s to be stripped, got:\n%s", field, out.String())
+		}
+	}
+}
+
 func virtualkeysSHA256Hex(s string) string {
 	entry, err := virtualkeysToKeyHashEntry([]byte(s))
 	if err != nil {

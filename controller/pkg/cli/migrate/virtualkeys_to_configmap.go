@@ -23,8 +23,8 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/kubeutil"
 )
 
-// virtualkeysAPIGroup is discovered at runtime, so this migration works against any Kind in
-// the group - including ones this repo doesn't know about - not just AgentgatewayPolicy.
+// virtualkeysAPIGroup is discovered at runtime, so this migration keeps working if agentgateway
+// adds new Kinds to the group later, without needing code changes here.
 const virtualkeysAPIGroup = "agentgateway.dev"
 
 // virtualkeysMigratedLabelKey is the configMapSelector matchLabels key (no ref-by-name alternative exists).
