@@ -64,7 +64,7 @@ impl Session {
 			.send_internal(parts, message)
 			.assert_size::<{ 6 * 1024 }>()
 			.await;
-		Self::handle_error(req_id, res, false).await
+		Self::handle_error(req_id, res).await
 	}
 
 	/// Send a downstream message to upstream server(s) in gateway stateless mode.
@@ -110,7 +110,7 @@ impl Session {
 					};
 					let (service_name, _) = match self.relay.parse_resource_name(&name) {
 						Ok(target) => target,
-						Err(err) => return Self::handle_error(req_id.clone(), Err(err), false).await,
+						Err(err) => return Self::handle_error(req_id.clone(), Err(err)).await,
 					};
 					let res = self
 						.send_init_single(parts.clone(), init_request, service_name)
@@ -123,14 +123,13 @@ impl Session {
 							self.id = id.into();
 						}
 					}
-					Self::handle_error(Some(RequestId::Number(0)), res, false).await?;
+					Self::handle_error(Some(RequestId::Number(0)), res).await?;
 					// Now send the initialized notification
 					let _ = Self::handle_error(
 						None,
 						self
 							.send_initialized_notification_single(parts.clone(), service_name)
 							.await,
-						false,
 					)
 					.await?;
 				},
@@ -161,14 +160,7 @@ impl Session {
 			.send_internal(parts, message)
 			.assert_size::<{ 6 * 1024 }>()
 			.await;
-		match res {
-			// Modern requests are never part of a legacy session, so method-not-found can use its
-			// 404 status; on the legacy `send` path a 404 would signal session termination.
-			Err(UpstreamError::InvalidMethod(method)) if req_id.is_some() => {
-				Err(mcp::Error::MethodNotFound(req_id, method).into())
-			},
-			other => Self::handle_error(req_id, other, true).await,
-		}
+		Self::handle_error(req_id, res).await
 	}
 
 	pub fn with_inputs(mut self, inputs: RelayInputs) -> Self {
@@ -281,7 +273,7 @@ impl Session {
 			// NOTE: l.method_name keep None to respect the metrics logic: not handle GET, DELETE.
 			l.session_id = Some(session_id);
 		});
-		Self::handle_error(None, self.relay.send_fanout_deletion(ctx).await, false).await
+		Self::handle_error(None, self.relay.send_fanout_deletion(ctx).await).await
 	}
 
 	/// forward_legacy_sse takes an upstream Response and forwards all messages to the SSE data stream.
@@ -338,39 +330,74 @@ impl Session {
 			// NOTE: l.method_name keep None to respect the metrics logic: which do not want to handle GET, DELETE.
 			l.session_id = Some(session_id);
 		});
-		Self::handle_error(None, self.relay.send_fanout_get(ctx).await, false).await
+		Self::handle_error(None, self.relay.send_fanout_get(ctx).await).await
 	}
 
 	async fn handle_error(
 		req_id: Option<RequestId>,
 		d: Result<Response, UpstreamError>,
-		downstream_modern: bool,
 	) -> Result<Response, ProxyError> {
 		match d {
 			Ok(r) => Ok(r),
+			// Upstream returned a non-2xx HTTP response — forward it directly.
 			Err(UpstreamError::Http(ClientError::Status(resp))) => {
 				let resp = http::SendDirectResponse::new(*resp)
 					.await
 					.map_err(ProxyError::Body)?;
 				Err(mcp::Error::UpstreamError(Box::new(resp)).into())
 			},
+			// Policy-layer error — propagate as-is.
 			Err(UpstreamError::Proxy(p)) => Err(p),
+			// RBAC rejection — intentionally INVALID_PARAMS to hide resource existence.
 			Err(UpstreamError::Authorization {
 				resource_type,
 				resource_name,
-			}) if req_id.is_some() => {
-				Err(mcp::Error::Authorization(req_id.unwrap(), resource_type, resource_name).into())
+			}) => match req_id {
+				Some(id) => Err(mcp::Error::Authorization(id, resource_type, resource_name).into()),
+				None => {
+					// Should not happen today (notifications skip auth checks), but log for visibility.
+					tracing::warn!(
+						resource_type,
+						resource_name,
+						"authorization error on notification (no response sent)"
+					);
+					Err(mcp::Error::SendError(None, "authorization rejected".to_string()).into())
+				},
 			},
-			Err(UpstreamError::McpGuardrails(rej)) if req_id.is_some() => {
-				Err(mcp::Error::McpGuardrails(req_id.unwrap(), rej).into())
+			// MCP guardrails rejection.
+			Err(UpstreamError::McpGuardrails(rej)) => match req_id {
+				Some(id) => Err(mcp::Error::McpGuardrails(id, rej).into()),
+				None => {
+					tracing::warn!(message = %rej.message, "guardrails rejection on notification (no response sent)");
+					Err(mcp::Error::SendError(None, "guardrails rejected".to_string()).into())
+				},
 			},
-			Err(UpstreamError::InvalidRequest(message)) if req_id.is_some() && downstream_modern => {
-				Err(mcp::Error::InvalidParams(req_id, message).into())
+			// Unsupported / unknown method → METHOD_NOT_FOUND (for all protocol versions).
+			Err(UpstreamError::InvalidMethod(method)) => match req_id {
+				Some(id) => Err(mcp::Error::MethodNotFound(Some(id), method).into()),
+				None => Err(mcp::Error::SendError(None, format!("unsupported method: {method}")).into()),
 			},
-			Err(UpstreamError::Unavailable(message)) if req_id.is_some() && downstream_modern => {
-				Err(mcp::Error::Unavailable(req_id, message).into())
+			// Malformed request / bad resource name / invalid params → INVALID_PARAMS.
+			Err(UpstreamError::InvalidRequest(message)) => match req_id {
+				Some(id) => Err(mcp::Error::InvalidParams(Some(id), message).into()),
+				None => Err(mcp::Error::SendError(None, message).into()),
 			},
-			// TODO: this is too broad. We have a big tangle of errors to untangle though
+			// Upstream requires a capability the client did not declare → -32021.
+			Err(UpstreamError::MissingClientCapability(message)) => match req_id {
+				Some(id) => Err(mcp::Error::MissingClientCapability(Some(id), message).into()),
+				None => Err(mcp::Error::SendError(None, message).into()),
+			},
+			// Server-side availability / capability gap → INTERNAL_ERROR.
+			Err(UpstreamError::Unavailable(message)) => match req_id {
+				Some(id) => Err(mcp::Error::Unavailable(Some(id), message).into()),
+				None => Err(mcp::Error::SendError(None, message).into()),
+			},
+			// Transport-layer failures (stdio channel closed / process exited).
+			// Distinguished from server bugs by message; still INTERNAL_ERROR.
+			Err(UpstreamError::Send | UpstreamError::Recv | UpstreamError::StdioShutdown) => {
+				Err(mcp::Error::Unavailable(req_id, "upstream transport closed".to_string()).into())
+			},
+			// Catch-all for remaining variants (ServiceError, Http::General, OpenAPIError, Stdio io::Error).
 			Err(e) => Err(mcp::Error::SendError(req_id, e.to_string()).into()),
 		}
 	}
@@ -1026,4 +1053,156 @@ fn get_client_info() -> ClientInfo {
 	client_info.client_info =
 		Implementation::new("agentgateway", BuildInfo::new().version.to_string());
 	client_info
+}
+
+#[cfg(test)]
+mod tests {
+	use rmcp::model::RequestId;
+
+	use super::*;
+	use crate::mcp::upstream::UpstreamError;
+
+	/// Helper: assert that handle_error maps an UpstreamError variant to the
+	/// expected mcp::Error variant (by comparing Debug representations).
+	async fn assert_error_mapping(
+		req_id: Option<RequestId>,
+		upstream_err: UpstreamError,
+		expected_code: i64,
+	) {
+		let result = Session::handle_error(req_id, Err(upstream_err)).await;
+		let proxy_err = result.unwrap_err();
+		let (ProxyError::MCP(mcp::Error::SendError(_, _))
+		| ProxyError::MCP(mcp::Error::MethodNotFound(_, _))
+		| ProxyError::MCP(mcp::Error::InvalidParams(_, _))
+		| ProxyError::MCP(mcp::Error::Unavailable(_, _))
+		| ProxyError::MCP(mcp::Error::MissingClientCapability(_, _))) = proxy_err
+		else {
+			// Check via jsonrpc_error_body for the actual code
+			let body = match &proxy_err {
+				ProxyError::MCP(e) => e.jsonrpc_error_body(),
+				_ => panic!("expected ProxyError::MCP, got: {proxy_err:?}"),
+			};
+			let body: serde_json::Value = serde_json::from_str(&body.unwrap()).unwrap();
+			let code = body["error"]["code"].as_i64().unwrap();
+			assert_eq!(
+				code, expected_code,
+				"expected error code {expected_code}, got {code} for {proxy_err:?}"
+			);
+			return;
+		};
+		// For the matched variants, verify the code via jsonrpc_error_body
+		let body = match &proxy_err {
+			ProxyError::MCP(e) => e.jsonrpc_error_body(),
+			_ => unreachable!(),
+		};
+		let body: serde_json::Value = serde_json::from_str(&body.unwrap()).unwrap();
+		let code = body["error"]["code"].as_i64().unwrap();
+		assert_eq!(
+			code, expected_code,
+			"expected error code {expected_code}, got {code}"
+		);
+	}
+
+	#[tokio::test]
+	async fn handle_error_invalid_method_maps_to_method_not_found() {
+		assert_error_mapping(
+			Some(RequestId::Number(1)),
+			UpstreamError::InvalidMethod("tasks/list".to_string()),
+			-32601,
+		)
+		.await;
+	}
+
+	#[tokio::test]
+	async fn handle_error_invalid_request_maps_to_invalid_params() {
+		assert_error_mapping(
+			Some(RequestId::Number(2)),
+			UpstreamError::InvalidRequest("bad resource name".to_string()),
+			-32602,
+		)
+		.await;
+	}
+
+	#[tokio::test]
+	async fn handle_error_unavailable_maps_to_internal_error() {
+		assert_error_mapping(
+			Some(RequestId::Number(3)),
+			UpstreamError::Unavailable("not supported".to_string()),
+			-32603,
+		)
+		.await;
+	}
+
+	#[tokio::test]
+	async fn handle_error_missing_client_capability_maps_to_32021() {
+		assert_error_mapping(
+			Some(RequestId::Number(4)),
+			UpstreamError::MissingClientCapability("elicitation".to_string()),
+			-32021,
+		)
+		.await;
+	}
+
+	#[tokio::test]
+	async fn handle_error_transport_send_maps_to_unavailable() {
+		assert_error_mapping(
+			Some(RequestId::Number(5)),
+			UpstreamError::Send,
+			-32603, // Unavailable maps to INTERNAL_ERROR
+		)
+		.await;
+	}
+
+	#[tokio::test]
+	async fn handle_error_transport_recv_maps_to_unavailable() {
+		assert_error_mapping(Some(RequestId::Number(6)), UpstreamError::Recv, -32603).await;
+	}
+
+	#[tokio::test]
+	async fn handle_error_stdio_shutdown_maps_to_unavailable() {
+		assert_error_mapping(
+			Some(RequestId::Number(7)),
+			UpstreamError::StdioShutdown,
+			-32603,
+		)
+		.await;
+	}
+
+	#[tokio::test]
+	async fn handle_error_authorization_maps_to_invalid_params() {
+		assert_error_mapping(
+			Some(RequestId::Number(8)),
+			UpstreamError::Authorization {
+				resource_type: "tool".to_string(),
+				resource_name: "secret_tool".to_string(),
+			},
+			-32602, // Authorization intentionally maps to INVALID_PARAMS
+		)
+		.await;
+	}
+
+	#[tokio::test]
+	async fn handle_error_no_req_id_returns_send_error() {
+		// When req_id is None, errors that need a request ID fall back to SendError(None, _)
+		// which has no JSON-RPC body (returns None from jsonrpc_error_body).
+		let result =
+			Session::handle_error(None, Err(UpstreamError::InvalidMethod("foo".to_string()))).await;
+		let err = result.unwrap_err();
+		let ProxyError::MCP(mcp::Error::SendError(None, msg)) = err else {
+			panic!("expected SendError(None, _), got: {err:?}");
+		};
+		assert!(msg.contains("foo"));
+	}
+
+	#[tokio::test]
+	async fn handle_error_proxy_passes_through() {
+		let proxy_err = ProxyError::RouteNotFound;
+		let result = Session::handle_error(
+			Some(RequestId::Number(9)),
+			Err(UpstreamError::Proxy(proxy_err)),
+		)
+		.await;
+		let err = result.unwrap_err();
+		assert!(matches!(err, ProxyError::RouteNotFound));
+	}
 }

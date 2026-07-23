@@ -97,6 +97,10 @@ pub(crate) const REMOVED_METHODS_2026_07_28: &[&str] = &[
 	UnsubscribeRequestMethod::VALUE,
 ];
 
+/// SEP-2575 error code: the request requires a client capability that was not declared.
+/// Maps to HTTP 400 Bad Request per the 2026-07-28 spec.
+pub(crate) const MISSING_REQUIRED_CLIENT_CAPABILITY: ErrorCode = ErrorCode(-32021);
+
 #[cfg(test)]
 #[path = "mcp_tests.rs"]
 mod tests;
@@ -143,6 +147,8 @@ pub enum Error {
 	MethodNotFound(Option<RequestId>, String),
 	#[error("invalid request parameters: {1}")]
 	InvalidParams(Option<RequestId>, String),
+	#[error("request requires a client capability that was not declared: {1}")]
+	MissingClientCapability(Option<RequestId>, String),
 	#[error("failed to start stdio server: {0}")]
 	Stdio(io::Error),
 	#[error("upstream error: {}", .0.status())]
@@ -208,6 +214,9 @@ impl Error {
 					| Error::InvalidRoutingHeader(Some(id), _) => (id.clone(), ErrorCode::HEADER_MISMATCH),
 					Error::MethodNotFound(Some(id), _) => (id.clone(), ErrorCode::METHOD_NOT_FOUND),
 					Error::InvalidParams(Some(id), _) => (id.clone(), ErrorCode::INVALID_PARAMS),
+					Error::MissingClientCapability(Some(id), _) => {
+						(id.clone(), MISSING_REQUIRED_CLIENT_CAPABILITY)
+					},
 					_ => return None,
 				};
 				(

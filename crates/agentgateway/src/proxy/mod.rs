@@ -321,6 +321,7 @@ impl ProxyError {
 			ProxyError::MCP(mcp::Error::InvalidRoutingHeader(_, _)) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::MethodNotFound(_, _)) => StatusCode::NOT_FOUND,
 			ProxyError::MCP(mcp::Error::InvalidParams(_, _)) => StatusCode::BAD_REQUEST,
+			ProxyError::MCP(mcp::Error::MissingClientCapability(_, _)) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::CreateSseUrl(_)) => StatusCode::BAD_REQUEST,
 			ProxyError::MCP(mcp::Error::EstablishGetStream(_)) => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MCP(mcp::Error::ForwardLegacySse(_)) => StatusCode::INTERNAL_SERVER_ERROR,
