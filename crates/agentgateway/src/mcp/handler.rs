@@ -222,6 +222,10 @@ pub(crate) struct PendingServerRequest {
 
 pub(crate) type PendingServerRequestMap = Arc<Mutex<HashMap<RequestId, PendingServerRequest>>>;
 
+/// Cap unanswered server-initiated requests (e.g. heartbeat pings) so a session cannot grow
+/// the pending map without bound when clients never reply.
+const MAX_PENDING_SERVER_REQUESTS: usize = 256;
+
 #[derive(Debug, Clone)]
 pub struct Relay {
 	pub(crate) upstreams: Arc<upstream::UpstreamGroup>,
@@ -1147,10 +1151,11 @@ impl Relay {
 			Box::pin(us.generic_stream(r, &ctx).assert_size::<{ 3 * 1024 }>()).await?,
 			cel,
 		);
-		let stream = track_outbound_server_requests(
+		let stream = track_outbound_server_requests_for_downstream(
 			service_name.into(),
 			stream,
 			self.pending_server_requests.clone(),
+			ctx_downstream_modern(&ctx),
 		);
 
 		respond_with_guardrails(id, stream, guardrails, mcp_log, &ctx)
@@ -1210,8 +1215,12 @@ impl Relay {
 			match result {
 				Ok(s) => {
 					let s = self.rewrite_outbound_server_messages(name.as_str(), s, cel.clone());
-					let s =
-						track_outbound_server_requests(name.clone(), s, self.pending_server_requests.clone());
+					let s = track_outbound_server_requests_for_downstream(
+						name.clone(),
+						s,
+						self.pending_server_requests.clone(),
+						ctx_downstream_modern(&ctx),
+					);
 					streams.push((name, s));
 				},
 				Err(e) => {
@@ -1286,8 +1295,12 @@ impl Relay {
 			.into_iter()
 			.map(|(name, s)| {
 				let s = self.rewrite_outbound_server_messages(name.as_str(), s, cel.clone());
-				let s =
-					track_outbound_server_requests(name.clone(), s, self.pending_server_requests.clone());
+				let s = track_outbound_server_requests_for_downstream(
+					name.clone(),
+					s,
+					self.pending_server_requests.clone(),
+					ctx_downstream_modern(&ctx),
+				);
 				(name, s)
 			})
 			.collect::<Vec<_>>();
@@ -1851,6 +1864,37 @@ fn downstream_server_request_id(upstream: &str, original: &RequestId) -> Request
 	}
 }
 
+fn insert_pending_server_request(
+	pending_server_requests: &PendingServerRequestMap,
+	downstream_id: RequestId,
+	entry: PendingServerRequest,
+) {
+	let mut map = pending_server_requests
+		.lock()
+		.expect("pending_server_requests lock poisoned");
+	while map.len() >= MAX_PENDING_SERVER_REQUESTS {
+		let Some(evict) = map.keys().next().cloned() else {
+			break;
+		};
+		map.remove(&evict);
+	}
+	map.insert(downstream_id, entry);
+}
+
+/// Remap and track server-initiated requests only when the downstream client can reply
+/// (legacy protocol). Modern downstreams reject direct server→client requests in SSE.
+fn track_outbound_server_requests_for_downstream(
+	upstream: Strng,
+	stream: Messages,
+	pending_server_requests: PendingServerRequestMap,
+	downstream_modern: bool,
+) -> Messages {
+	if downstream_modern {
+		return stream;
+	}
+	track_outbound_server_requests(upstream, stream, pending_server_requests)
+}
+
 fn track_outbound_server_requests(
 	upstream: Strng,
 	stream: Messages,
@@ -1860,16 +1904,14 @@ fn track_outbound_server_requests(
 		ServerJsonRpcMessage::Request(mut req) => {
 			let original_id = req.id.clone();
 			let downstream_id = downstream_server_request_id(upstream.as_str(), &original_id);
-			pending_server_requests
-				.lock()
-				.expect("pending_server_requests lock poisoned")
-				.insert(
-					downstream_id.clone(),
-					PendingServerRequest {
-						upstream: upstream.clone(),
-						original_id,
-					},
-				);
+			insert_pending_server_request(
+				&pending_server_requests,
+				downstream_id.clone(),
+				PendingServerRequest {
+					upstream: upstream.clone(),
+					original_id,
+				},
+			);
 			req.id = downstream_id;
 			ServerJsonRpcMessage::Request(req)
 		},
@@ -2234,5 +2276,62 @@ mod tests {
 			other => panic!("expected response, got {other:?}"),
 		}
 		assert!(pending.lock().expect("lock").contains_key(&remapped));
+	}
+
+	#[tokio::test]
+	async fn track_outbound_server_requests_skipped_for_modern_downstream() {
+		use futures_util::StreamExt;
+		use rmcp::model::{PingRequest, ServerRequest};
+
+		let pending = Arc::new(Mutex::new(HashMap::new()));
+		let upstream: Strng = "backend".into();
+		let original_id = RequestId::Number(7);
+		let ping = ServerJsonRpcMessage::request(
+			ServerRequest::PingRequest(PingRequest::default()),
+			original_id.clone(),
+		);
+		let mut tracked = track_outbound_server_requests_for_downstream(
+			upstream,
+			Messages::from(ping),
+			pending.clone(),
+			true,
+		);
+		let forwarded = tracked.next().await.expect("message").expect("ok");
+		match forwarded {
+			ServerJsonRpcMessage::Request(req) => assert_eq!(req.id, original_id),
+			other => panic!("expected request, got {other:?}"),
+		}
+		assert!(pending.lock().expect("lock").is_empty());
+	}
+
+	#[tokio::test]
+	async fn insert_pending_server_request_evicts_when_at_capacity() {
+		let pending: PendingServerRequestMap = Arc::new(Mutex::new(HashMap::new()));
+		let upstream: Strng = "backend".into();
+		for n in 0..MAX_PENDING_SERVER_REQUESTS {
+			insert_pending_server_request(
+				&pending,
+				RequestId::Number(n as i64),
+				PendingServerRequest {
+					upstream: upstream.clone(),
+					original_id: RequestId::Number(n as i64),
+				},
+			);
+		}
+		assert_eq!(
+			pending.lock().expect("lock").len(),
+			MAX_PENDING_SERVER_REQUESTS
+		);
+		insert_pending_server_request(
+			&pending,
+			RequestId::Number(9999),
+			PendingServerRequest {
+				upstream: upstream.clone(),
+				original_id: RequestId::Number(9999),
+			},
+		);
+		let map = pending.lock().expect("lock");
+		assert_eq!(map.len(), MAX_PENDING_SERVER_REQUESTS);
+		assert!(map.contains_key(&RequestId::Number(9999)));
 	}
 }
