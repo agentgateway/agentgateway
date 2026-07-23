@@ -160,6 +160,16 @@
             "$ref": "#/$defs/ModelCatalogSource"
           }
         },
+        "bedrockMantleModelCatalog": {
+          "description": "Bedrock Mantle allow-list sources (model IDs that route to Mantle); merged over the embedded default.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/$defs/ModelCatalogSource"
+          }
+        },
         "database": {
           "description": "Primary database used by local runtime features.",
           "anyOf": [
@@ -7823,11 +7833,36 @@
             "string",
             "null"
           ]
+        },
+        "providerPreference": {
+          "description": "Which endpoint to prefer (Runtime vs Mantle).",
+          "$ref": "#/$defs/BedrockProviderPreference",
+          "default": "runtimePreferred"
         }
       },
       "additionalProperties": false,
       "required": [
         "region"
+      ]
+    },
+    "BedrockProviderPreference": {
+      "description": "Which Bedrock endpoint to prefer when a model is not explicitly known to be Runtime.",
+      "oneOf": [
+        {
+          "description": "Prefer Runtime; fall through to Mantle only for chat models on the allow-list.",
+          "type": "string",
+          "const": "runtimePreferred"
+        },
+        {
+          "description": "Always use Mantle for chat routes.",
+          "type": "string",
+          "const": "mantleOnly"
+        },
+        {
+          "description": "Always use Runtime for chat routes.",
+          "type": "string",
+          "const": "runtimeOnly"
+        }
       ]
     },
     "AzureProvider": {
@@ -10349,6 +10384,11 @@
             "string",
             "null"
           ]
+        },
+        "bedrockProviderPreference": {
+          "description": "For Bedrock: which endpoint to prefer (Runtime vs Mantle).",
+          "$ref": "#/$defs/BedrockProviderPreference",
+          "default": "runtimePreferred"
         },
         "vertexRegion": {
           "description": "Google Cloud region to use for the Vertex AI provider.",

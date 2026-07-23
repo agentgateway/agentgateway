@@ -107,6 +107,9 @@ pub async fn run(
 	};
 	model_catalog_sources.extend(config.model_catalog.sources.clone());
 	let model_catalog = crate::llm::cost::ModelCatalog::new(model_catalog_sources)?;
+	crate::llm::bedrock_mantle_catalog::initialize(
+		config.bedrock_mantle_model_catalog.sources.clone(),
+	)?;
 
 	let mut xds_rx_for_task = xds_rx.clone();
 	tokio::spawn(async move {

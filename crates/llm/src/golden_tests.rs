@@ -149,24 +149,28 @@ fn request_conversion_golden() {
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 	};
 	let bedrock_titan = bedrock::Provider {
 		model: Some(strng::new("amazon.titan-embed-text-v2:0")),
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 	};
 	let bedrock_cohere = bedrock::Provider {
 		model: Some(strng::new("cohere.embed-english-v3")),
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 	};
 	let bedrock_rerank = bedrock::Provider {
 		model: Some(strng::new("cohere.rerank-v3-5:0")),
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 	};
 	let vertex_anthropic = vertex::Provider {
 		model: Some(strng::new("anthropic/claude-sonnet-4-5")),
