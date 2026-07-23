@@ -789,5 +789,4 @@ monitoring:
 `)
 	require.NoError(t, err, "helm template failed: %s", stderr)
 	require.NotContains(t, out, "prometheus.io:")
-
 }
