@@ -47,6 +47,7 @@ import {
 } from "../policies/AuthorizationLocation";
 import { AdvancedSettingRow } from "../policies/PolicyLayout";
 import { KeyValueEditor } from "../policies/PolicyFormControls";
+import { randomUuid } from "../randomUuid";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import type { GatewayConfig, LlmApiKeyPolicy, VirtualApiKey } from "../types";
 
@@ -906,18 +907,5 @@ function stringMetadata(value: Record<string, unknown>) {
       key,
       typeof item === "string" ? item : String(item),
     ]),
-  );
-}
-
-function randomUuid() {
-  return (
-    crypto.randomUUID?.() ??
-    [
-      randomKey(8),
-      randomKey(4),
-      randomKey(4),
-      randomKey(4),
-      randomKey(12),
-    ].join("-")
   );
 }

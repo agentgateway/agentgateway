@@ -56,6 +56,7 @@ import { CollapsiblePolicySection } from "../policies/PolicyLayout";
 import { ResultingYaml } from "../policies/ResultingYaml";
 import { cleanEmpty, parseYamlText, toYamlText } from "../policies/policyUtils";
 import type { AuthorizationDraft } from "../policies/types";
+import { randomUuid } from "../randomUuid";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import {
   concreteModelName,
@@ -283,7 +284,7 @@ export function ModelsPage() {
       (!previousId ||
         isDatabaseConfigResource(resources, "llm.model", previousId))
     ) {
-      model.id ??= crypto.randomUUID();
+      model.id ??= randomUuid();
       upsertResource.mutate(
         { kind: "llm.model", value: model, previousId },
         { onSuccess: closeModelEditor },
