@@ -122,34 +122,6 @@ spec:
     app.kubernetes.io/instance: test-release
     app.kubernetes.io/component: standalone
 ---
-# Source: agentgateway-standalone/templates/service-metrics.yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: agentgateway-standalone-metrics
-  namespace: agentgateway-system
-  labels:
-    helm.sh/chart: agentgateway-standalone-0.0.1
-    app.kubernetes.io/name: agentgateway-standalone
-    app.kubernetes.io/instance: test-release
-    app.kubernetes.io/component: standalone
-    app.kubernetes.io/version: "0.0.0-dev"
-    app.kubernetes.io/managed-by: Helm
-    plane: monitoring
-  annotations:
-    prometheus.io/scrape: "true"
-spec:
-  type: "ClusterIP"
-  ports:
-  - name: "metrics"
-    protocol: "TCP"
-    port: 9090
-    targetPort: metrics
-  selector:
-    app.kubernetes.io/name: agentgateway-standalone
-    app.kubernetes.io/instance: test-release
-    app.kubernetes.io/component: standalone
----
 # Source: agentgateway-standalone/templates/deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
@@ -176,9 +148,9 @@ spec:
     metadata:
       annotations:
         checksum/config: 1a71af262c532ec524aece9fcf2ecf073c162db9f2d0d6bd94ede12633112986
-        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
         prometheus.io/port: "9090"
-        prometheus.io/path: "/metrics"
+        prometheus.io/scrape: "true"
       labels:
         app.kubernetes.io/name: agentgateway-standalone
         app.kubernetes.io/instance: test-release
@@ -254,7 +226,7 @@ spec:
 ---
 # Source: agentgateway-standalone/templates/monitoring.yaml
 apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
+kind: PodMonitor
 metadata:
   name: agentgateway-standalone
   namespace: default
@@ -265,17 +237,16 @@ metadata:
     app.kubernetes.io/component: standalone
     app.kubernetes.io/version: "0.0.0-dev"
     app.kubernetes.io/managed-by: Helm
-    release: prometheus
+    plane: monitoring
+  annotations:
+    example.com/note: monitoring
 spec:
   selector:
     matchLabels:
       app.kubernetes.io/name: agentgateway-standalone
       app.kubernetes.io/instance: test-release
       app.kubernetes.io/component: standalone
-  namespaceSelector:
-    matchNames:
-    - default
-  endpoints:
+  podMetricsEndpoints:
   - port: metrics
     path: /metrics
     interval: 30s

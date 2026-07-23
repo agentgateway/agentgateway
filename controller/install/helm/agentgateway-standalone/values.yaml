@@ -25,7 +25,11 @@ serviceAccount:
   annotations: {}
   name: ""
 
-podAnnotations: {}
+podAnnotations: 
+  prometheus.io/path: "/metrics"
+  prometheus.io/port: "15020"
+  prometheus.io/scrape: "true"
+
 podSecurityContext: {}
 securityContext:
   allowPrivilegeEscalation: false
@@ -113,33 +117,12 @@ gateway:
 
 monitoring:
   enabled: false
-  service:
-    enabled: true
-    type: ClusterIP
-    port: 15020
-    annotations: {}
-    extraLabels: {}
-    clusterIP: ""
-    clusterIPs: []
-    externalIPs: []
-    externalName: ""
-    loadBalancerIP: ""
-    loadBalancerSourceRanges: []
-    loadBalancerClass: ""
-    externalTrafficPolicy: ""
-    internalTrafficPolicy: ""
-    healthCheckNodePort: null
-    sessionAffinity: ""
-    sessionAffinityConfig: {}
-    ipFamilies: []
-    ipFamilyPolicy: ""
-    publishNotReadyAddresses: false
-    allocateLoadBalancerNodePorts: null
-    trafficDistribution: ""
-  serviceMonitor:
+  port: 15020
+  annotations: {}
+  extraLabels: {}
+  podMonitor:
     enabled: true
     interval: 15s
-    extraLabels: {}
 
 persistence:
   enabled: true

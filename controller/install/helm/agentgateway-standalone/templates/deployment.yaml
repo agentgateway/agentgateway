@@ -18,15 +18,8 @@ spec:
     metadata:
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        {{- if .Values.monitoring.enabled }}
-        {{- if .Values.monitoring.service.enabled}}
-        prometheus.io/scrape: "true"
-        prometheus.io/port: {{ .Values.monitoring.service.port | quote }}
-        prometheus.io/path: "/metrics"
-        {{- end}}
-        {{- end }}
-        {{- with .Values.podAnnotations }}
-        {{- toYaml . | nindent 8 }}
+        {{- with include "agentgateway-standalone.podAnnotations" . }}
+        {{- . | nindent 8 }}
         {{- end }}
       labels:
         {{- include "agentgateway-standalone.selectorLabels" . | nindent 8 }}
@@ -77,11 +70,11 @@ spec:
         - name: admin
           containerPort: {{ .Values.admin.service.port }}
           protocol: TCP
-        {{- if .Values.monitoring.enabled}}
+        {{- if .Values.monitoring.enabled }}
         - name: metrics
-          containerPort: {{ .Values.monitoring.service.port }}
+          containerPort: {{ .Values.monitoring.port }}
           protocol: TCP
-        {{- end}}
+        {{- end }}
         env:
         - name: RUST_BACKTRACE
           value: "1"
