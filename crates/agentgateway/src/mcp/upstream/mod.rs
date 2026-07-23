@@ -138,6 +138,10 @@ pub enum UpstreamError {
 	McpGuardrails(rmcp::ErrorData),
 	#[error("invalid request: {0}")]
 	InvalidRequest(String),
+	/// The upstream requires a client capability that was not declared.
+	/// Maps to JSON-RPC error code -32021 per SEP-2575.
+	#[error("missing required client capability: {0}")]
+	MissingClientCapability(String),
 	/// A server-side availability/capability gap. Distinct from `InvalidRequest`,
 	/// so client-visible errors do not blame the request for a backend condition.
 	#[error("{0}")]

@@ -425,6 +425,11 @@ impl Relay {
 					if err.error.code == rmcp::model::ErrorCode::METHOD_NOT_FOUND {
 						return Ok(None);
 					}
+					if err.error.code == mcp::MISSING_REQUIRED_CLIENT_CAPABILITY {
+						return Err(UpstreamError::MissingClientCapability(
+							err.error.message.to_string(),
+						));
+					}
 					return Err(UpstreamError::InvalidRequest(err.error.message.to_string()));
 				},
 				Ok(_) => {},

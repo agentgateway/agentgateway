@@ -1243,7 +1243,7 @@ async fn legacy_meta_client_capabilities_are_stripped() {
 }
 
 #[tokio::test]
-async fn legacy_multiplex_invalid_target_keeps_internal_error() {
+async fn legacy_multiplex_invalid_target_maps_to_invalid_params() {
 	let first = mock_streamable_http_server(true).await;
 	let second = mock_streamable_http_server(true).await;
 	let t = setup_proxy_test("{}")
@@ -1295,14 +1295,11 @@ async fn legacy_multiplex_invalid_target_keeps_internal_error() {
 		.send()
 		.await
 		.unwrap();
-	assert_eq!(
-		response.status(),
-		reqwest::StatusCode::INTERNAL_SERVER_ERROR
-	);
+	assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
 	let json: serde_json::Value = response.json().await.unwrap();
 	assert!(
 		is_json_subset(
-			&serde_json::json!({"jsonrpc": "2.0", "id": 2, "error": {"code": -32603}}),
+			&serde_json::json!({"jsonrpc": "2.0", "id": 2, "error": {"code": -32602}}),
 			&json
 		),
 		"unexpected body: {json}"
@@ -1573,10 +1570,10 @@ async fn modern_body_only_removed_method_is_invalid_protocol_not_404() {
 }
 
 #[tokio::test]
-async fn legacy_session_keeps_ping_and_unknown_methods_do_not_return_404() {
-	// Legacy (2025-06-18) sessions keep pre-SEP-2575 behavior: `ping` is removed only for
-	// modern requests, and unknown methods must not 404 because streamable HTTP clients
-	// treat 404-with-session-id as session-expired and would tear down a live session.
+async fn legacy_session_unknown_method_returns_method_not_found() {
+	// After the explicit error-mapping refactor, unknown methods on legacy sessions
+	// are mapped to MethodNotFound (HTTP 404, JSON-RPC -32601) just like modern sessions,
+	// replacing the prior catch-all SendError (HTTP 500) behavior.
 	let mock = mock_streamable_http_server(true).await;
 	let (_bind, io) = setup_proxy(&mock, true, false).await;
 	let client = reqwest::Client::new();
@@ -1631,9 +1628,14 @@ async fn legacy_session_keeps_ping_and_unknown_methods_do_not_return_404() {
 		.send()
 		.await
 		.unwrap();
-	assert_eq!(
-		response.status(),
-		reqwest::StatusCode::INTERNAL_SERVER_ERROR
+	assert_eq!(response.status(), reqwest::StatusCode::NOT_FOUND);
+	let json: serde_json::Value = response.json().await.unwrap();
+	assert!(
+		is_json_subset(
+			&serde_json::json!({"jsonrpc": "2.0", "id": 3, "error": {"code": -32601}}),
+			&json
+		),
+		"unexpected body: {json}"
 	);
 }
 
