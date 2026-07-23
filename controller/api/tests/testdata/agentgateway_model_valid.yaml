@@ -29,6 +29,35 @@ spec:
   upstreamOverrides:
     baseURL: https://api.openai.com
     model: gpt-5-mini
+  upstreamPolicies:
+    health:
+      unhealthyCondition: response.code >= 500
+    tls:
+      insecureSkipVerify: All
+    tunnel:
+      backendRef:
+        name: egress-proxy
+        port: 8080
+    headers:
+      request:
+        add:
+        - name: x-model-request-policy
+          value: enabled
+      response:
+        add:
+        - name: x-model-response-policy
+          value: enabled
+    ai:
+      promptCaching:
+        cacheMessages: true
+        cacheSystem: true
+        minTokens: 1024
+      promptGuard:
+        request:
+        - regex:
+            matches:
+            - blocked
+            action: Reject
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel

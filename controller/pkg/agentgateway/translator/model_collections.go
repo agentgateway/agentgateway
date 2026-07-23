@@ -165,10 +165,15 @@ func modelParentKey(parent RouteParentReference) string {
 
 func convertAgentgatewayModel(ctx RouteContext, model *agentgateway.AgentgatewayModel, parent RouteParentReference) ([]*api.Resource, error) {
 	key := modelRouteKey(model, parent)
+	created := model.CreationTimestamp.Unix()
+	if created < 0 {
+		created = 0
+	}
 	route := &api.ModelRoute{
 		Key:         key,
 		ListenerKey: parent.ListenerKey,
 		Match:       &api.ModelRoute_Match{Model: effectiveModelName(model)},
+		Created:     uint64(created),
 	}
 	var resources []*api.Resource
 	aiPolicy, err := translateModelRouteAIPolicy(ctx, model.Namespace, model.Spec.Transformations)

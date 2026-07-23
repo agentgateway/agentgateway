@@ -1,7 +1,6 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::net::TcpListener as StdTcpListener;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use ::http::HeaderValue;
 use agent_xds::{RejectedConfig, XdsUpdate};
@@ -739,16 +738,45 @@ impl Store {
 		strng::format!("llm:request:{listener}")
 	}
 
+	fn model_router_matches() -> Vec<RouteMatch> {
+		let mut matches = [
+			"/v1/models",
+			"/models",
+			"/v1/chat/completions",
+			"/v1/messages",
+			"/v1/responses",
+			"/v1/responses/compact",
+			"/v1/images/generations",
+			"/v1/images/edits",
+			"/v1/images/variations",
+			"/v1/embeddings",
+			"/v1/rerank",
+			"/v2/rerank",
+		]
+		.into_iter()
+		.map(|path| RouteMatch {
+			path: agent::PathMatch::Exact(strng::new(path)),
+			method: None,
+			headers: vec![],
+			query: vec![],
+		})
+		.collect::<Vec<_>>();
+		matches.push(RouteMatch {
+			path: agent::PathMatch::Regex(
+				regex::Regex::new(r"^/v(?:[0-9]+|[0-9]+beta[0-9]+)/projects/[^/]+/locations/[^/]+/publishers/[^/]+/models/[^/]+:(?:rawPredict|streamRawPredict)$")
+					.expect("valid Vertex model route regex"),
+			),
+			method: None,
+			headers: vec![],
+			query: vec![],
+		});
+		matches
+	}
+
 	fn rebuild_model_router(&mut self, listener: &ListenerKey) {
 		let route_key = Self::model_router_route_key(listener);
 		let backend_name = Self::model_router_backend_name(listener);
 		let backend_key = Self::model_router_backend_key(listener);
-		let previous_created = self
-			.backend(&backend_key)
-			.and_then(|backend| match &backend.backend {
-				Backend::LLMRouter(_, router) => Some(router.created()),
-				_ => None,
-			});
 		self.remove_http_route(&route_key);
 		self.remove_backend(backend_key.clone());
 
@@ -770,12 +798,6 @@ impl Store {
 			return;
 		}
 
-		let created = previous_created.unwrap_or_else(|| {
-			SystemTime::now()
-				.duration_since(UNIX_EPOCH)
-				.map(|d| d.as_secs())
-				.unwrap_or_default()
-		});
 		self.insert_backend(
 			backend_key.clone(),
 			BackendWithPolicies {
@@ -784,7 +806,6 @@ impl Store {
 					Arc::new(crate::llm::model_router::ModelRouter::new(
 						models,
 						virtual_models,
-						created,
 					)),
 				),
 				inline_policies: vec![],
@@ -803,12 +824,7 @@ impl Store {
 					kind: None,
 				},
 				hostnames: vec![],
-				matches: vec![RouteMatch {
-					path: agent::PathMatch::PathPrefix(strng::new("/")),
-					method: None,
-					headers: vec![],
-					query: vec![],
-				}],
+				matches: Self::model_router_matches(),
 				backends: vec![RouteBackendReference {
 					weight: 1,
 					target: agent::BackendReference::Backend(backend_key).into(),
@@ -2267,9 +2283,34 @@ mod tests {
 	}
 
 	#[test]
-	fn xds_model_route_builds_listener_llm_router() {
-		use std::time::Duration;
+	fn model_router_matches_only_standard_endpoints() {
+		let matches = Store::model_router_matches();
+		assert!(matches.iter().any(|route_match| {
+			matches!(
+				route_match.path,
+				agent::PathMatch::Exact(ref path) if path == "/v1/chat/completions"
+			)
+		}));
+		assert!(
+			matches
+				.iter()
+				.all(|route_match| { !matches!(route_match.path, agent::PathMatch::PathPrefix(_)) })
+		);
+		let vertex = matches
+			.iter()
+			.find_map(|route_match| match &route_match.path {
+				agent::PathMatch::Regex(regex) => Some(regex),
+				_ => None,
+			})
+			.expect("Vertex raw-predict route match");
+		assert!(vertex.is_match(
+			"/v1/projects/project/locations/us-central1/publishers/google/models/gemini:rawPredict"
+		));
+		assert!(!vertex.is_match("/arbitrary/v1/chat/completions"));
+	}
 
+	#[test]
+	fn xds_model_route_builds_listener_llm_router() {
 		use agent_xds::{Handler, XdsResource};
 
 		use crate::types::proto::agent::backend_reference;
@@ -2281,6 +2322,7 @@ mod tests {
 		let model_route = crate::types::proto::agent::ModelRoute {
 			key: "default/gpt-5-mini".to_string(),
 			listener_key: listener_key.to_string(),
+			created: 0,
 			r#match: Some(crate::types::proto::agent::model_route::Match {
 				model: "gpt-5-mini".to_string(),
 			}),
@@ -2319,16 +2361,15 @@ mod tests {
 			.backends
 			.get(&backend_key)
 			.expect("model route should synthesize router backend");
-		let Backend::LLMRouter(_, router) = &backend.backend else {
+		let Backend::LLMRouter(_, _) = &backend.backend else {
 			panic!("expected model route to synthesize router backend");
 		};
-		let created = router.created();
 		drop(store);
 
-		std::thread::sleep(Duration::from_secs(1));
 		let second_model_route = crate::types::proto::agent::ModelRoute {
 			key: "default/claude-haiku".to_string(),
 			listener_key: listener_key.to_string(),
+			created: 0,
 			r#match: Some(crate::types::proto::agent::model_route::Match {
 				model: "claude-haiku".to_string(),
 			}),
@@ -2359,14 +2400,9 @@ mod tests {
 			.backends
 			.get(&backend_key)
 			.expect("model route should keep synthetic router backend");
-		let Backend::LLMRouter(_, router) = &backend.backend else {
+		let Backend::LLMRouter(_, _) = &backend.backend else {
 			panic!("expected model route to keep synthetic router backend");
 		};
-		assert_eq!(
-			router.created(),
-			created,
-			"model router rebuilds should preserve model list creation timestamps"
-		);
 		drop(store);
 
 		let mut removals = vec![
@@ -2404,6 +2440,7 @@ mod tests {
 			crate::types::proto::agent::ModelRoute {
 				key: key.to_string(),
 				listener_key: listener_key.to_string(),
+				created: 0,
 				r#match: Some(crate::types::proto::agent::model_route::Match {
 					model: name.to_string(),
 				}),

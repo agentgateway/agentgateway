@@ -21,6 +21,7 @@ pub struct ModelRoute {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub id: Option<String>,
 	pub name: String,
+	pub created: u64,
 	pub visibility: ModelVisibility,
 	pub header_matches: Vec<Vec<HeaderMatch>>,
 	pub backend: RouteBackendReference,
@@ -81,6 +82,7 @@ pub fn default_route_types() -> Arc<llm::Policy> {
 #[serde(rename_all = "camelCase")]
 pub struct VirtualModelRoute {
 	pub name: String,
+	pub created: u64,
 	pub llm_policy: Arc<llm::Policy>,
 	pub routing: VirtualModelRouting,
 }
@@ -112,7 +114,6 @@ pub struct ConditionalTarget {
 pub struct ModelRouter {
 	models: Vec<ModelRoute>,
 	virtual_models: Vec<VirtualModelRoute>,
-	created: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -140,20 +141,11 @@ enum RequestedModelLocation {
 }
 
 impl ModelRouter {
-	pub fn new(
-		models: Vec<ModelRoute>,
-		virtual_models: Vec<VirtualModelRoute>,
-		created: u64,
-	) -> Self {
+	pub fn new(models: Vec<ModelRoute>, virtual_models: Vec<VirtualModelRoute>) -> Self {
 		Self {
 			models,
 			virtual_models,
-			created,
 		}
-	}
-
-	pub fn created(&self) -> u64 {
-		self.created
 	}
 
 	pub async fn resolve(&self, req: &mut Request) -> ResolveResult {
@@ -199,12 +191,12 @@ impl ModelRouter {
 			.iter()
 			.filter(|model| model.visibility == ModelVisibility::Public)
 			.filter(|model| model_authorized(model, req))
-			.map(|model| model_list_entry(&model.name, self.created))
+			.map(|model| model_list_entry(&model.name, model.created))
 			.chain(
 				self
 					.virtual_models
 					.iter()
-					.map(|model| model_list_entry(&model.name, self.created)),
+					.map(|model| model_list_entry(&model.name, model.created)),
 			)
 			.collect::<Vec<_>>();
 		let body = serde_json::json!({

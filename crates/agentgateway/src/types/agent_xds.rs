@@ -1552,6 +1552,7 @@ impl ModelRoute {
 				ModelRouteKind::Concrete(llm::model_router::ModelRoute {
 					id: None,
 					name: model_match.model.clone(),
+					created: s.created,
 					visibility,
 					header_matches: vec![],
 					backend,
@@ -1625,6 +1626,7 @@ impl ModelRoute {
 				};
 				ModelRouteKind::Virtual(llm::model_router::VirtualModelRoute {
 					name: model_match.model.clone(),
+					created: s.created,
 					llm_policy,
 					routing,
 				})
@@ -4556,6 +4558,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/gpt-5-mini".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			created: 1_704_067_200,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "gpt-5-mini".to_string(),
 			}),
@@ -4580,6 +4583,7 @@ mod tests {
 			panic!("expected concrete model route");
 		};
 		assert_eq!(model.name, "gpt-5-mini");
+		assert_eq!(model.created, 1_704_067_200);
 		assert_eq!(
 			model.visibility,
 			llm::model_router::ModelVisibility::Internal
@@ -4608,6 +4612,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/gpt-5-mini".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			created: 0,
 			r#match: None,
 			kind: Some(Kind::ConcreteModel(ConcreteModel::default())),
 			ai_policy: None,
@@ -4629,6 +4634,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/fast".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			created: 1_704_153_600,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "fast".to_string(),
 			}),
@@ -4655,6 +4661,7 @@ mod tests {
 			panic!("expected virtual model route");
 		};
 		assert_eq!(model.name, "fast");
+		assert_eq!(model.created, 1_704_153_600);
 		assert!(model.llm_policy.routes.contains_key("/v1/chat/completions"));
 		let llm::model_router::VirtualModelRouting::Weighted(targets) = model.routing else {
 			panic!("expected weighted routing");
@@ -4675,6 +4682,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/smart".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			created: 0,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "smart".to_string(),
 			}),
@@ -4719,6 +4727,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/smart".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			created: 0,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "smart".to_string(),
 			}),
@@ -4758,6 +4767,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/resilient".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			created: 0,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "resilient".to_string(),
 			}),

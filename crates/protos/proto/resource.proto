@@ -2084,4 +2084,8 @@ message ModelRoute {
   // by concrete and virtual models; provider transport policies remain on the
   // selected backend or provider.
   BackendPolicySpec.Ai ai_policy = 6;
+
+  // Unix timestamp when this model route was created. For AgentgatewayModel,
+  // this is the Kubernetes object's creation timestamp.
+  uint64 created = 7;
 }

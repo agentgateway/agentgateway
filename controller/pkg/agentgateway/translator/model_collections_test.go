@@ -108,13 +108,16 @@ func TestModelProviderInlinePolicies(t *testing.T) {
 		Transformations: []agentgateway.FieldTransformation{{Field: "temperature", Expression: "0.5"}},
 		UpstreamPolicies: &agentgateway.UpstreamPolicies{
 			Health: &agentgateway.Health{UnhealthyCondition: new(agentgateway.CELExpression("response.code >= 500"))},
+			TLS:    &agentgateway.BackendTLS{InsecureSkipVerify: new(agentgateway.InsecureTLSModeAll)},
 			Headers: &agentgateway.HeaderModifiers{
-				Request: &gwv1.HTTPHeaderFilter{Add: []gwv1.HTTPHeader{{Name: "x-model-policy", Value: "enabled"}}},
+				Request:  &gwv1.HTTPHeaderFilter{Add: []gwv1.HTTPHeader{{Name: "x-model-request-policy", Value: "enabled"}}},
+				Response: &gwv1.HTTPHeaderFilter{Add: []gwv1.HTTPHeader{{Name: "x-model-response-policy", Value: "enabled"}}},
 			},
 			AI: &agentgateway.ModelAIPolicies{
 				PromptGuard: &agentgateway.AIPromptGuard{Request: []agentgateway.PromptguardRequest{{
 					Regex: &agentgateway.Regex{Action: new(agentgateway.Action(agentgateway.REJECT)), Matches: []agentgateway.LongString{"blocked"}},
 				}}},
+				PromptCaching: &agentgateway.PromptCachingConfig{CacheMessages: true, CacheSystem: true, CacheTools: true, MinTokens: 1024},
 			},
 		},
 	}
@@ -123,14 +126,17 @@ func TestModelProviderInlinePolicies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(provider.InlinePolicies) != 3 {
-		t.Fatalf("inline policies = %d, want 3", len(provider.InlinePolicies))
+	if len(provider.InlinePolicies) != 5 {
+		t.Fatalf("inline policies = %d, want 5", len(provider.InlinePolicies))
 	}
-	if provider.InlinePolicies[0].GetHealth() == nil {
-		t.Errorf("health policy = %#v, want health", provider.InlinePolicies[0])
+	if provider.InlinePolicies[0].GetBackendTls() == nil {
+		t.Errorf("TLS policy = %#v, want backend TLS", provider.InlinePolicies[0])
 	}
-	if provider.InlinePolicies[1].GetAi() == nil || provider.InlinePolicies[1].GetAi().GetPromptGuard() == nil {
-		t.Errorf("AI policy = %#v, want prompt guard", provider.InlinePolicies[1])
+	if provider.InlinePolicies[1].GetHealth() == nil {
+		t.Errorf("health policy = %#v, want health", provider.InlinePolicies[1])
+	}
+	if ai := provider.InlinePolicies[2].GetAi(); ai == nil || ai.GetPromptGuard() == nil || ai.GetPromptCaching() == nil {
+		t.Errorf("AI policy = %#v, want prompt guard and caching", provider.InlinePolicies[2])
 	}
 	routePolicy, err := translateModelRouteAIPolicy(RouteContext{}, "default", model.Transformations)
 	if err != nil {
@@ -139,8 +145,11 @@ func TestModelProviderInlinePolicies(t *testing.T) {
 	if got := routePolicy.GetTransformations()["temperature"]; got != "0.5" {
 		t.Errorf("temperature transformation = %q, want %q", got, "0.5")
 	}
-	if provider.InlinePolicies[2].GetRequestHeaderModifier() == nil {
-		t.Errorf("header policy = %#v, want request header modifier", provider.InlinePolicies[2])
+	if provider.InlinePolicies[3].GetRequestHeaderModifier() == nil {
+		t.Errorf("request header policy = %#v, want request header modifier", provider.InlinePolicies[3])
+	}
+	if provider.InlinePolicies[4].GetResponseHeaderModifier() == nil {
+		t.Errorf("response header policy = %#v, want response header modifier", provider.InlinePolicies[4])
 	}
 }
 

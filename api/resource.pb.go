@@ -8901,7 +8901,10 @@ type ModelRoute struct {
 	// AI request policy applied after this model route is selected. This is shared
 	// by concrete and virtual models; provider transport policies remain on the
 	// selected backend or provider.
-	AiPolicy      *BackendPolicySpec_Ai `protobuf:"bytes,6,opt,name=ai_policy,json=aiPolicy,proto3" json:"ai_policy,omitempty"`
+	AiPolicy *BackendPolicySpec_Ai `protobuf:"bytes,6,opt,name=ai_policy,json=aiPolicy,proto3" json:"ai_policy,omitempty"`
+	// Unix timestamp when this model route was created. For AgentgatewayModel,
+	// this is the Kubernetes object's creation timestamp.
+	Created       uint64 `protobuf:"varint,7,opt,name=created,proto3" json:"created,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -8987,6 +8990,13 @@ func (x *ModelRoute) GetAiPolicy() *BackendPolicySpec_Ai {
 		return x.AiPolicy
 	}
 	return nil
+}
+
+func (x *ModelRoute) GetCreated() uint64 {
+	if x != nil {
+		return x.Created
+	}
+	return 0
 }
 
 type isModelRoute_Kind interface {
@@ -18012,7 +18022,7 @@ const file_resource_proto_rawDesc = "" +
 	"clientAuthB\x16\n" +
 	"\x14_token_endpoint_path\x1aX\n" +
 	"\fSubjectToken\x12H\n" +
-	"\x06source\x18\x01 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x06source\"\xe0\v\n" +
+	"\x06source\x18\x01 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x06source\"\xfa\v\n" +
 	"\n" +
 	"ModelRoute\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12!\n" +
@@ -18020,7 +18030,8 @@ const file_resource_proto_rawDesc = "" +
 	"\x05match\x18\x03 \x01(\v2+.agentgateway.dev.resource.ModelRoute.MatchR\x05match\x12Y\n" +
 	"\rvirtual_model\x18\x04 \x01(\v22.agentgateway.dev.resource.ModelRoute.VirtualModelH\x00R\fvirtualModel\x12\\\n" +
 	"\x0econcrete_model\x18\x05 \x01(\v23.agentgateway.dev.resource.ModelRoute.ConcreteModelH\x00R\rconcreteModel\x12L\n" +
-	"\tai_policy\x18\x06 \x01(\v2/.agentgateway.dev.resource.BackendPolicySpec.AiR\baiPolicy\x1a\x1d\n" +
+	"\tai_policy\x18\x06 \x01(\v2/.agentgateway.dev.resource.BackendPolicySpec.AiR\baiPolicy\x12\x18\n" +
+	"\acreated\x18\a \x01(\x04R\acreated\x1a\x1d\n" +
 	"\x05Match\x12\x14\n" +
 	"\x05model\x18\x01 \x01(\tR\x05model\x1a\xdc\x05\n" +
 	"\fVirtualModel\x12Y\n" +

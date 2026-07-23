@@ -4249,6 +4249,7 @@ async fn convert_llm_config(
 		router_models.push(llm::model_router::ModelRoute {
 			id: model_config.id.clone(),
 			name: model_config.name.clone(),
+			created: startup_timestamp,
 			visibility: model_config.visibility,
 			header_matches: model_config
 				.matches
@@ -4352,6 +4353,7 @@ async fn convert_llm_config(
 		};
 		router_virtual_models.push(llm::model_router::VirtualModelRoute {
 			name: virtual_model.name,
+			created: startup_timestamp,
 			llm_policy,
 			routing,
 		});
@@ -4364,7 +4366,6 @@ async fn convert_llm_config(
 			Arc::new(llm::model_router::ModelRouter::new(
 				router_models,
 				router_virtual_models,
-				startup_timestamp,
 			)),
 		),
 		inline_policies: vec![],
