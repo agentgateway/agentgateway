@@ -336,6 +336,12 @@ message Retry {
   string condition = 5;
 }
 
+message Delay {
+  // CEL expression evaluating to the artificial latency, in milliseconds, injected before the
+  // request is forwarded to the backend. A non-positive result injects no delay.
+  string duration = 1;
+}
+
 message BackendAuthPolicy {
   oneof kind {
     Passthrough passthrough = 1;
@@ -346,6 +352,16 @@ message BackendAuthPolicy {
     OAuthTokenExchange oauth_token_exchange = 6;
     CrossAppAccessAuth cross_app_access = 7;
   }
+
+  // Additional credentials to inject on the backend request, independent of `kind`.
+  repeated BackendAuthCredential credentials = 8;
+}
+
+message BackendAuthCredential {
+  // Where the credential is inserted. Required; `expression` locations are not valid here.
+  AuthorizationLocation location = 1;
+  // Credential value.
+  string value = 2;
 }
 
 message AuthorizationLocation {
@@ -410,6 +426,10 @@ message Aws {
   string service_name = 3;
   // Optional STS role to assume before signing requests.
   AwsAssumeRole assume_role = 4;
+  // AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS
+  // backends may provide this automatically; otherwise the ambient AWS region
+  // is used.
+  string region = 5;
 }
 
 // Azure-specific backend authentication.
@@ -974,6 +994,9 @@ message TrafficPolicySpec {
       BackendPolicySpec.McpAuthentication.McpIDP provider = 1;
       BackendPolicySpec.McpAuthentication.ResourceMetadata resource_metadata = 2;
       optional string client_id = 3;
+      // OAuth client secret injected into proxied token requests for confidential clients
+      // (used by the ENTRA provider).
+      optional string client_secret = 4;
     }
 
     // Validation mode for JWT authentication
@@ -1163,6 +1186,7 @@ message TrafficPolicySpec {
     APIKey api_key_auth = 20;
     HostRewrite host_rewrite = 21;
     Buffer buffer = 22;
+    Delay delay = 23;
   }
 }
 
@@ -1487,6 +1511,7 @@ message BackendPolicySpec {
       OKTA = 3;
       DESCOPE = 4;
       AUTHENTIK = 5;
+      ENTRA = 6;
     }
 
     // Validation mode for JWT authentication
@@ -1510,6 +1535,9 @@ message BackendPolicySpec {
     JWTValidationOptions jwt_validation_options = 7;
     AuthorizationLocation authorization_location = 8;
     optional string client_id = 9;
+    // OAuth client secret injected into proxied token requests for confidential clients
+    // (used by the ENTRA provider).
+    optional string client_secret = 10;
   }
 
   // McpGuardrails is a backend-phase policy for MCP traffic: an ordered chain of
@@ -1918,6 +1946,11 @@ message CrossAppAccessAuth {
     OAuthClientAuth client_auth = 3;
   }
 
+  message SubjectToken {
+    // Where to read the subject token. Defaults to the Authorization Bearer header.
+    AuthorizationLocation source = 1;
+  }
+
   // User identity provider authorization server, used for the RFC 8693 ID-JAG exchange.
   Endpoint identity_provider = 1;
   // Resource authorization server, used for the RFC 7523 jwt-bearer exchange.
@@ -1930,4 +1963,7 @@ message CrossAppAccessAuth {
   repeated string scopes = 5;
   // Response cache configuration. When unset uses InMemory cache with defaults.
   OAuthTokenExchange.TokenCache cache = 6;
+  // Subject token sent to the identity provider. Its type is fixed to an
+  // OpenID Connect ID token until other subject token types are supported.
+  SubjectToken subject_token = 7;
 }

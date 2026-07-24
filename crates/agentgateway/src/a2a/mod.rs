@@ -2,9 +2,9 @@ use agent_core::strng::Strng;
 use http::{Request, Uri, header};
 use serde::Deserialize;
 use serde_json::Value;
-use tracing::warn;
+use tracing::{debug, warn};
 
-use crate::http::{Body, Response, filters};
+use crate::http::{Body, BodyInspection, Response, filters};
 use crate::json;
 use crate::types::agent::A2aPolicy;
 
@@ -62,13 +62,70 @@ pub enum RequestType {
 	Call(Strng),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResponseInfo {
+	pub outcome: ResponseOutcome,
+	pub error_code: Option<i64>,
+	pub result_kind: Option<Strng>,
+	pub task_state: Option<Strng>,
+}
+
+impl ResponseInfo {
+	fn from_json(value: &Value) -> Self {
+		let error = value.get("error").filter(|e| !e.is_null());
+		let result = value.get("result").filter(|r| !r.is_null());
+		let outcome = if error.is_some() {
+			ResponseOutcome::Error
+		} else if result.is_some() {
+			ResponseOutcome::Success
+		} else {
+			ResponseOutcome::Unknown
+		};
+		let error_code = error
+			.and_then(|e| e.get("code"))
+			.and_then(serde_json::Value::as_i64);
+		let result_kind = result
+			.and_then(|r| r.get("kind"))
+			.and_then(serde_json::Value::as_str)
+			.map(Strng::from);
+		let task_state = result
+			.and_then(|r| r.get("status"))
+			.and_then(|status| status.get("state"))
+			.and_then(serde_json::Value::as_str)
+			.map(Strng::from);
+		Self {
+			outcome,
+			error_code,
+			result_kind,
+			task_state,
+		}
+	}
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResponseOutcome {
+	Success,
+	Error,
+	Unknown,
+}
+
+impl ResponseOutcome {
+	pub fn as_str(self) -> &'static str {
+		match self {
+			ResponseOutcome::Success => "success",
+			ResponseOutcome::Error => "error",
+			ResponseOutcome::Unknown => "unknown",
+		}
+	}
+}
+
 pub async fn apply_to_response(
 	pol: Option<&A2aPolicy>,
 	a2a_type: RequestType,
 	resp: &mut Response,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Option<ResponseInfo>> {
 	if pol.is_none() {
-		return Ok(());
+		return Ok(None);
 	};
 	match a2a_type {
 		RequestType::AgentCard(uri) => {
@@ -107,13 +164,35 @@ pub async fn apply_to_response(
 
 			resp.headers_mut().remove(header::CONTENT_LENGTH);
 			*resp.body_mut() = json::to_body(agent_card)?;
-			Ok(())
+			Ok(None)
 		},
-		RequestType::Call(_) => {
-			// We don't currently inspect A2A responses.
-			Ok(())
+		RequestType::Call(_) => Ok(inspect_call_response(resp).await),
+		RequestType::Unknown => Ok(None),
+	}
+}
+
+async fn inspect_call_response(resp: &mut Response) -> Option<ResponseInfo> {
+	if !matches!(
+		crate::http::classify_content_type(resp.headers()),
+		crate::http::WellKnownContentTypes::Json
+	) {
+		return None;
+	}
+
+	let body = match crate::http::inspect_response_body(resp).await {
+		Ok(BodyInspection::Complete(body)) => body,
+		Ok(BodyInspection::Partial(_)) => return None,
+		Err(err) => {
+			debug!("failed to inspect a2a response: {err}");
+			return None;
 		},
-		RequestType::Unknown => Ok(()),
+	};
+	match serde_json::from_slice::<Value>(&body) {
+		Ok(value) => Some(ResponseInfo::from_json(&value)),
+		Err(err) => {
+			debug!("failed to parse a2a response JSON: {err}");
+			None
+		},
 	}
 }
 

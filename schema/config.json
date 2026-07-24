@@ -171,6 +171,17 @@
             }
           ]
         },
+        "configStore": {
+          "description": "Controls whether UI-managed configuration is written to the config file or a DB overlay.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawConfigStoreConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "caAddress": {
           "description": "Address of the Certificate Authority used to issue SPIFFE certificates.",
           "type": [
@@ -660,6 +671,30 @@
       "additionalProperties": false,
       "required": [
         "url"
+      ]
+    },
+    "RawConfigStoreConfig": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/ConfigStoreMode",
+          "default": "file"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ConfigStoreMode": {
+      "oneOf": [
+        {
+          "description": "Store all UI-managed configuration in the local config file.",
+          "type": "string",
+          "const": "file"
+        },
+        {
+          "description": "Read a file baseline and store UI-managed overlay resources in the configured database.",
+          "type": "string",
+          "const": "hybrid"
+        }
       ]
     },
     "RawStandardAttributes": {
@@ -1885,6 +1920,18 @@
             }
           ],
           "default": null
+        },
+        "delay": {
+          "description": "Inject artificial latency before forwarding requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DelayPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "additionalProperties": false
@@ -2686,6 +2733,14 @@
           },
           "default": []
         },
+        "replace": {
+          "description": "CEL expression that computes the full set of headers, replacing all existing headers.\nThe expression must evaluate to a map of header name to value (a string, or a list of\nstrings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;\nset those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,\nso those still operate on top of the replaced headers.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
         "body": {
           "description": "CEL expression that computes a replacement body.",
           "type": [
@@ -2805,6 +2860,160 @@
           ]
         },
         {
+          "type": "object",
+          "properties": {
+            "credentials": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/BackendAuthCredential"
+              }
+            }
+          },
+          "oneOf": [
+            {
+              "description": "Forward the validated incoming JWT to the backend.",
+              "type": "object",
+              "properties": {
+                "passthrough": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "description": "Where to place the forwarded credential in the backend request.",
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/AuthorizationLocation"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "passthrough"
+              ]
+            },
+            {
+              "description": "Send a configured secret value to the backend.",
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "description": "Secret value to send to the backend.",
+                      "$ref": "#/$defs/FileOrInline"
+                    },
+                    "location": {
+                      "description": "Where to place the secret in the backend request.",
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/AuthorizationLocation"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "value"
+                  ]
+                }
+              },
+              "required": [
+                "key"
+              ]
+            },
+            {
+              "description": "Authenticate to Google Cloud services.",
+              "type": "object",
+              "properties": {
+                "gcp": {
+                  "$ref": "#/$defs/GcpAuth"
+                }
+              },
+              "required": [
+                "gcp"
+              ]
+            },
+            {
+              "description": "Sign backend requests with AWS credentials.",
+              "type": "object",
+              "properties": {
+                "aws": {
+                  "$ref": "#/$defs/AwsAuth"
+                }
+              },
+              "required": [
+                "aws"
+              ]
+            },
+            {
+              "description": "Authenticate to Azure services.",
+              "type": "object",
+              "properties": {
+                "azure": {
+                  "$ref": "#/$defs/AzureAuth"
+                }
+              },
+              "required": [
+                "azure"
+              ]
+            },
+            {
+              "description": "Authenticate to GitHub Copilot.",
+              "type": "string",
+              "const": "copilot"
+            },
+            {
+              "description": "Use OAuth token exchange flows to obtain a backend access token.",
+              "type": "object",
+              "properties": {
+                "oauthTokenExchange": {
+                  "$ref": "#/$defs/OAuthTokenExchangeAuth"
+                }
+              },
+              "required": [
+                "oauthTokenExchange"
+              ]
+            },
+            {
+              "description": "Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.",
+              "type": "object",
+              "properties": {
+                "crossAppAccess": {
+                  "$ref": "#/$defs/CrossAppAccessAuth"
+                }
+              },
+              "required": [
+                "crossAppAccess"
+              ]
+            }
+          ],
+          "required": [
+            "credentials"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "credentials": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/BackendAuthCredential"
+              }
+            }
+          },
+          "required": [
+            "credentials"
+          ]
+        },
+        {
           "$ref": "#/$defs/BackendAuth"
         }
       ]
@@ -2825,141 +3034,6 @@
         },
         {
           "type": "string"
-        }
-      ]
-    },
-    "BackendAuth": {
-      "oneOf": [
-        {
-          "description": "Forward the validated incoming JWT to the backend.",
-          "type": "object",
-          "properties": {
-            "passthrough": {
-              "type": "object",
-              "properties": {
-                "location": {
-                  "description": "Where to place the forwarded credential in the backend request.",
-                  "anyOf": [
-                    {
-                      "$ref": "#/$defs/AuthorizationLocation"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              },
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "passthrough"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "description": "Send a configured secret value to the backend.",
-          "type": "object",
-          "properties": {
-            "key": {
-              "type": "object",
-              "properties": {
-                "value": {
-                  "description": "Secret value to send to the backend.",
-                  "$ref": "#/$defs/FileOrInline"
-                },
-                "location": {
-                  "description": "Where to place the secret in the backend request.",
-                  "anyOf": [
-                    {
-                      "$ref": "#/$defs/AuthorizationLocation"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "value"
-              ]
-            }
-          },
-          "required": [
-            "key"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "description": "Authenticate to Google Cloud services.",
-          "type": "object",
-          "properties": {
-            "gcp": {
-              "$ref": "#/$defs/GcpAuth"
-            }
-          },
-          "required": [
-            "gcp"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "description": "Sign backend requests with AWS credentials.",
-          "type": "object",
-          "properties": {
-            "aws": {
-              "$ref": "#/$defs/AwsAuth"
-            }
-          },
-          "required": [
-            "aws"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "description": "Authenticate to Azure services.",
-          "type": "object",
-          "properties": {
-            "azure": {
-              "$ref": "#/$defs/AzureAuth"
-            }
-          },
-          "required": [
-            "azure"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "description": "Authenticate to GitHub Copilot.",
-          "type": "string",
-          "const": "copilot"
-        },
-        {
-          "description": "Use OAuth token exchange flows to obtain a backend access token.",
-          "type": "object",
-          "properties": {
-            "oauthTokenExchange": {
-              "$ref": "#/$defs/OAuthTokenExchangeAuth"
-            }
-          },
-          "required": [
-            "oauthTokenExchange"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "description": "Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.",
-          "type": "object",
-          "properties": {
-            "crossAppAccess": {
-              "$ref": "#/$defs/CrossAppAccessAuth"
-            }
-          },
-          "required": [
-            "crossAppAccess"
-          ],
-          "additionalProperties": false
         }
       ]
     },
@@ -3174,6 +3248,13 @@
           "properties": {
             "serviceName": {
               "description": "AWS SigV4 signing service name (for example, \"bedrock\", \"bedrock-agentcore\", or \"execute-api\").",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "region": {
+              "description": "AWS SigV4 signing region (for example, \"us-east-1\"). If unset, typed AWS\nbackends may provide this automatically; otherwise the ambient AWS region\nis used.",
               "type": [
                 "string",
                 "null"
@@ -3848,6 +3929,17 @@
             "type": "string"
           }
         },
+        "subjectToken": {
+          "description": "Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read\nfrom the Authorization Bearer header.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CrossAppAccessSubjectToken"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "cache": {
           "description": "Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s\nTTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.",
           "anyOf": [
@@ -3951,6 +4043,176 @@
       ],
       "required": [
         "clientAuth"
+      ]
+    },
+    "CrossAppAccessSubjectToken": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Where to read the subject token. Defaults to the Authorization Bearer header.",
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Bearer "
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "BackendAuthCredential": {
+      "description": "An additional credential to inject on the backend request.",
+      "type": "object",
+      "properties": {
+        "location": {
+          "description": "Where the credential is inserted on the backend request.",
+          "$ref": "#/$defs/AuthorizationLocation"
+        },
+        "key": {
+          "description": "Credential value.",
+          "$ref": "#/$defs/FileOrInline"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "location",
+        "key"
+      ]
+    },
+    "BackendAuth": {
+      "oneOf": [
+        {
+          "description": "Forward the validated incoming JWT to the backend.",
+          "type": "object",
+          "properties": {
+            "passthrough": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "description": "Where to place the forwarded credential in the backend request.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/AuthorizationLocation"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "passthrough"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Send a configured secret value to the backend.",
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "description": "Secret value to send to the backend.",
+                  "$ref": "#/$defs/FileOrInline"
+                },
+                "location": {
+                  "description": "Where to place the secret in the backend request.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/AuthorizationLocation"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "value"
+              ]
+            }
+          },
+          "required": [
+            "key"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Authenticate to Google Cloud services.",
+          "type": "object",
+          "properties": {
+            "gcp": {
+              "$ref": "#/$defs/GcpAuth"
+            }
+          },
+          "required": [
+            "gcp"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Sign backend requests with AWS credentials.",
+          "type": "object",
+          "properties": {
+            "aws": {
+              "$ref": "#/$defs/AwsAuth"
+            }
+          },
+          "required": [
+            "aws"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Authenticate to Azure services.",
+          "type": "object",
+          "properties": {
+            "azure": {
+              "$ref": "#/$defs/AzureAuth"
+            }
+          },
+          "required": [
+            "azure"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Authenticate to GitHub Copilot.",
+          "type": "string",
+          "const": "copilot"
+        },
+        {
+          "description": "Use OAuth token exchange flows to obtain a backend access token.",
+          "type": "object",
+          "properties": {
+            "oauthTokenExchange": {
+              "$ref": "#/$defs/OAuthTokenExchangeAuth"
+            }
+          },
+          "required": [
+            "oauthTokenExchange"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.",
+          "type": "object",
+          "properties": {
+            "crossAppAccess": {
+              "$ref": "#/$defs/CrossAppAccessAuth"
+            }
+          },
+          "required": [
+            "crossAppAccess"
+          ],
+          "additionalProperties": false
+        }
       ]
     },
     "HTTP": {
@@ -4104,6 +4366,13 @@
             "string",
             "null"
           ]
+        },
+        "clientSecret": {
+          "description": "OAuth client secret injected into proxied token requests for confidential clients.\nCurrently used by the `entra` provider, whose Web-platform app registrations require a\nclient secret at the token endpoint.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,
@@ -4177,6 +4446,19 @@
           },
           "required": [
             "authentik"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "entra": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "entra"
           ],
           "additionalProperties": false
         }
@@ -4594,6 +4876,13 @@
         "target": {
           "description": "Backend that receives guardrail webhook requests.",
           "$ref": "#/$defs/SimpleLocalBackendSerde"
+        },
+        "headers": {
+          "description": "Headers to set on the webhook request, computed from CEL expressions.\nKeys may be header names or the `:path`, `:method`, and `:authority` pseudo-headers;\nsetting `:path` replaces the default `/request` / `/response` path.\nExpressions are evaluated against the original incoming request (like the\n`transformation` policy), so `request.*` and `jwt.*` refer to the client's request.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
         },
         "forwardHeaderMatches": {
           "description": "Incoming request headers to forward to the webhook.",
@@ -6893,6 +7182,19 @@
       "additionalProperties": false,
       "required": [
         "codes"
+      ]
+    },
+    "DelayPolicy": {
+      "type": "object",
+      "properties": {
+        "duration": {
+          "description": "Artificial latency injected before the request is forwarded to the backend. Either a duration\nstring such as `2s`, or a CEL expression evaluated against the request that returns a duration\n(e.g. `duration(\"500ms\")`) or a number interpreted as milliseconds (e.g.\n`random() < 0.1 ? 500 : 0` for probabilistic delay, or `int(random() * 500)` for jitter). A\nnon-positive result injects no delay.",
+          "$ref": "#/$defs/Expression"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "duration"
       ]
     },
     "LocalRouteBackend": {
@@ -10504,6 +10806,13 @@
     "LocalLLMModels": {
       "type": "object",
       "properties": {
+        "id": {
+          "description": "id is a stable identity for this model config entry. The name field remains the model match pattern.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "name": {
           "description": "name is the name of the model we are matching from a users request. If params.model is set, that\nwill be used in the request to the LLM provider. If not, the incoming model is used.",
           "type": "string"

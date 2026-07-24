@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -15,7 +15,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use secrecy::SecretString;
 
-use crate::http::auth::BackendAuth;
+use crate::http::auth::{BackendAuth, BackendAuthKind};
 use crate::http::backendtls::{LocalBackendTLS, ResolvedBackendTLS};
 use crate::http::transformation_cel::{LocalTransformationConfig, Transformation};
 use crate::http::{filters, health, retry, timeout, transformation_cel};
@@ -734,6 +734,9 @@ impl LocalRateLimitPolicy {
 
 #[apply(schema_de!)]
 pub struct LocalLLMModels {
+	/// id is a stable identity for this model config entry. The name field remains the model match pattern.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	id: Option<String>,
 	/// name is the name of the model we are matching from a users request. If params.model is set, that
 	/// will be used in the request to the LLM provider. If not, the incoming model is used.
 	name: String,
@@ -2195,24 +2198,44 @@ pub fn de_backend_auth<'de, D>(deserializer: D) -> Result<Option<BackendAuth>, D
 where
 	D: Deserializer<'de>,
 {
-	Option::<BackendAuthCompat>::deserialize(deserializer)?
-		.map(|auth| match auth {
-			BackendAuthCompat::Full(BackendAuth::OAuthTokenExchange(auth)) => {
+	fn validate_auth<E: serde::de::Error>(auth: BackendAuthKind) -> Result<BackendAuthKind, E> {
+		match auth {
+			BackendAuthKind::OAuthTokenExchange(auth) => {
 				// OAuth has a few cross-field checks serde won't catch on its own.
 				// Keep them here so untagged compat parsing still returns the real error.
 				auth.validate_load().map_err(serde::de::Error::custom)?;
-				Ok(BackendAuth::OAuthTokenExchange(auth))
+				Ok(BackendAuthKind::OAuthTokenExchange(auth))
 			},
-			BackendAuthCompat::Full(BackendAuth::CrossAppAccess(auth)) => {
+			BackendAuthKind::CrossAppAccess(auth) => {
 				// The derived exchange is built on deserialize; validate here so untagged
 				// compat parsing still returns the real cross-field error.
 				auth.validate_load().map_err(serde::de::Error::custom)?;
-				Ok(BackendAuth::CrossAppAccess(auth))
+				Ok(BackendAuthKind::CrossAppAccess(auth))
 			},
-			BackendAuthCompat::Full(auth) => Ok(auth),
-			BackendAuthCompat::PlainKey { key } => Ok(BackendAuth::Key {
-				value: key,
-				location: None,
+			auth => Ok(auth),
+		}
+	}
+
+	Option::<BackendAuthCompat>::deserialize(deserializer)?
+		.map(|auth| match auth {
+			BackendAuthCompat::PlainKey { key } => Ok(BackendAuth {
+				kind: Some(BackendAuthKind::Key {
+					value: key,
+					location: None,
+				}),
+				credentials: Vec::new(),
+			}),
+			BackendAuthCompat::FullWithCredentials { auth, credentials } => Ok(BackendAuth {
+				kind: Some(validate_auth::<D::Error>(auth)?),
+				credentials,
+			}),
+			BackendAuthCompat::CredentialsOnly { credentials } => Ok(BackendAuth {
+				kind: None,
+				credentials,
+			}),
+			BackendAuthCompat::Full(auth) => Ok(BackendAuth {
+				kind: Some(validate_auth::<D::Error>(auth)?),
+				credentials: Vec::new(),
 			}),
 		})
 		.transpose()
@@ -2227,7 +2250,15 @@ enum BackendAuthCompat {
 		#[serde(deserialize_with = "deser_key_from_file")]
 		key: SecretString,
 	},
-	Full(BackendAuth),
+	FullWithCredentials {
+		#[serde(flatten)]
+		auth: BackendAuthKind,
+		credentials: Vec<crate::http::auth::BackendAuthCredential>,
+	},
+	CredentialsOnly {
+		credentials: Vec<crate::http::auth::BackendAuthCredential>,
+	},
+	Full(BackendAuthKind),
 }
 
 #[apply(schema_de!)]
@@ -2751,6 +2782,9 @@ pub struct FilterOrPolicy {
 	/// Retry matching failed upstream requests.
 	#[serde(default)]
 	retry: Option<retry::Policy>,
+	/// Inject artificial latency before forwarding requests.
+	#[serde(default)]
+	delay: Option<crate::http::delay::Policy>,
 }
 
 #[apply(schema_de!)]
@@ -3905,8 +3939,17 @@ impl LocalLLMModelRegistry {
 	}
 
 	fn validate_model_patterns(&self) -> anyhow::Result<()> {
+		let mut ids = HashSet::new();
 		for model in &self.models {
 			validate_llm_model_pattern(&model.name)?;
+			if let Some(id) = model.id.as_ref() {
+				if id.is_empty() {
+					bail!("llm.models model id cannot be empty");
+				}
+				if !ids.insert(id) {
+					bail!("llm.models contains duplicate model id: {id}");
+				}
+			}
 		}
 		Ok(())
 	}
@@ -4152,8 +4195,11 @@ async fn convert_llm_config(
 		model_config.apply_provider_defaults();
 		model_config.apply_base_url()?;
 		let model_name = strng::new(&model_config.name);
-		// Index is needed because the same name can be used with different match criteria
-		let backend_key = strng::format!("llm:model:{}:{idx}", model_config.name);
+		// Index is needed when the same model pattern without an ID has different match criteria.
+		let backend_key = match &model_config.id {
+			Some(id) => strng::format!("llm:model:{id}"),
+			None => strng::format!("llm:model:{}:{idx}", model_config.name),
+		};
 		let p = model_config.params.clone();
 		let model = p.model;
 		let llm_routes = llm_route_types(model_config.passthrough.as_ref());
@@ -4343,11 +4389,11 @@ async fn convert_llm_config(
 		// Create backend auth policy
 		let mut pols = vec![];
 		if let Some(key) = p.api_key.as_ref() {
-			let backend_auth = BackendAuth::Key {
+			let backend_auth = BackendAuthKind::Key {
 				value: key.0.clone(),
 				location: None,
 			};
-			pols.push(BackendTrafficPolicy::BackendAuth(backend_auth));
+			pols.push(BackendTrafficPolicy::backend_auth(backend_auth));
 		}
 
 		// Create AI backend
@@ -4422,6 +4468,7 @@ async fn convert_llm_config(
 		});
 
 		router_models.push(llm::model_router::ModelRoute {
+			id: model_config.id.clone(),
 			name: model_config.name.clone(),
 			visibility: model_config.visibility,
 			header_matches: model_config
@@ -5121,6 +5168,7 @@ pub(crate) async fn split_policies_for_target(
 		buffer,
 		timeout,
 		retry,
+		delay,
 	} = pol;
 	if let Some(p) = request_header_modifier {
 		if backend_target {
@@ -5303,6 +5351,9 @@ pub(crate) async fn split_policies_for_target(
 	}
 	if let Some(p) = retry {
 		route_policies.push(TrafficPolicy::Retry(p));
+	}
+	if let Some(p) = delay {
+		route_policies.push(TrafficPolicy::Delay(p));
 	}
 	if let Some(oidc) = compiled_oidc {
 		route_policies.push(oidc);

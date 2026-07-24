@@ -656,6 +656,18 @@ func translateMCPAuthenticationSpec(
 		Mode:       mode,
 		ClientId:   authnPolicy.ClientID,
 	}
+
+	if authnPolicy.ClientSecretRef != nil {
+		data, key, err := ctx.ResolveCredentialKeyRef(*authnPolicy.ClientSecretRef, policy.Namespace, wellknown.ClientSecret)
+		if err != nil {
+			errs = append(errs, err)
+		} else if value, exists := kubeutils.GetSecretDataValue(data, key); !exists || value == "" {
+			errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", policy.Namespace, authnPolicy.ClientSecretRef.Name, key))
+		} else {
+			mcpAuthn.ClientSecret = &value
+		}
+	}
+
 	return mcpAuthn, errors.Join(errs...)
 }
 
@@ -692,6 +704,9 @@ func translateMcpIDP(provider *agentgateway.McpIDP) api.BackendPolicySpec_McpAut
 	}
 	if *provider == agentgateway.Authentik {
 		return api.BackendPolicySpec_McpAuthentication_AUTHENTIK
+	}
+	if *provider == agentgateway.Entra {
+		return api.BackendPolicySpec_McpAuthentication_ENTRA
 	}
 	return api.BackendPolicySpec_McpAuthentication_UNSPECIFIED
 }
@@ -930,6 +945,16 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 			},
 		}
 	}
+
+	translatedCredentials, credErrs := translateBackendAuthCredentials(ctx, auth.Credentials, policy.Namespace)
+	errs = append(errs, credErrs...)
+	if len(translatedCredentials) > 0 {
+		if translatedAuth == nil {
+			translatedAuth = &api.BackendAuthPolicy{}
+		}
+		translatedAuth.Credentials = translatedCredentials
+	}
+
 	if translatedAuth == nil {
 		return nil, errors.Join(append(errs, kindErrs...)...)
 	}
@@ -997,14 +1022,30 @@ func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, n
 		errs = append(errs, err)
 	}
 
+	if auth.SubjectToken != nil {
+		if err := validateExtractionAuthorizationLocation(auth.SubjectToken.Source, "crossAppAccess subjectToken source"); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
 	return &api.CrossAppAccessAuth{
 		IdentityProvider:            identityProvider,
 		ResourceAuthorizationServer: resourceAuthorizationServer,
 		Audience:                    auth.Audience,
 		Resources:                   auth.Resources,
 		Scopes:                      auth.Scopes,
+		SubjectToken:                translateCrossAppAccessSubjectToken(auth.SubjectToken),
 		Cache:                       translateOAuthTokenCache(auth.Cache),
 	}, errors.Join(errs...)
+}
+
+func translateCrossAppAccessSubjectToken(spec *agentgateway.CrossAppAccessSubjectToken) *api.CrossAppAccessAuth_SubjectToken {
+	if spec == nil {
+		return nil
+	}
+	return &api.CrossAppAccessAuth_SubjectToken{
+		Source: translateAuthorizationExtractionLocation(spec.Source),
+	}
 }
 
 func buildCrossAppAccessPolicy(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, namespace string) (*api.BackendAuthPolicy, error) {
@@ -1340,6 +1381,48 @@ func isOAuthReservedAdditionalParam(key string) bool {
 	return false
 }
 
+// translateBackendAuthCredentials resolves BackendAuth credential entries.
+func translateBackendAuthCredentials(ctx PolicyCtx, creds []agentgateway.BackendAuthCredential, namespace string) ([]*api.BackendAuthCredential, []error) {
+	if len(creds) == 0 {
+		return nil, nil
+	}
+	var errs []error
+	translated := make([]*api.BackendAuthCredential, 0, len(creds))
+	for _, c := range creds {
+		locName := credentialLocationName(c.Location)
+		var value string
+		data, secretKey, err := ctx.ResolveCredentialKeyRef(c.SecretRef, namespace, wellknown.Authorization)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("backendAuth credential %q: %w", locName, err))
+		} else if resolvedValue, ok := kubeutils.GetSecretDataValue(data, secretKey); !ok {
+			errs = append(errs, fmt.Errorf("backendAuth credential %q: secret %s/%s missing key %q",
+				locName, namespace, c.SecretRef.Name, secretKey))
+		} else {
+			value = resolvedValue
+		}
+		translated = append(translated, &api.BackendAuthCredential{
+			Location: translateAuthorizationLocation(&c.Location),
+			Value:    value,
+		})
+	}
+	return translated, errs
+}
+
+// credentialLocationName returns the name field of whichever location variant is set.
+// AuthorizationLocation is guaranteed by CEL to have exactly one of header/queryParameter/cookie set.
+func credentialLocationName(loc agentgateway.AuthorizationLocation) string {
+	if loc.Header != nil {
+		return string(loc.Header.Name)
+	}
+	if loc.QueryParameter != nil {
+		return loc.QueryParameter.Name
+	}
+	if loc.Cookie != nil {
+		return loc.Cookie.Name
+	}
+	return ""
+}
+
 // translateRouteType converts RouteType to agentgateway proto RouteType
 func translateRouteType(rt agentgateway.RouteType) api.BackendPolicySpec_Ai_RouteType {
 	switch rt {
@@ -1378,6 +1461,10 @@ func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace str
 	if auth.ServiceName != nil {
 		serviceName = string(*auth.ServiceName)
 	}
+	var region string
+	if auth.Region != nil {
+		region = string(*auth.Region)
+	}
 	var assumeRole *api.AwsAssumeRole
 	if auth.AssumeRole != nil {
 		assumeRole = &api.AwsAssumeRole{
@@ -1398,6 +1485,7 @@ func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace str
 		},
 		ServiceName: serviceName,
 		AssumeRole:  assumeRole,
+		Region:      region,
 	}
 	if auth.SecretRef != nil && auth.SecretRef.Name != "" {
 		if auth.AssumeRole != nil {

@@ -16,6 +16,7 @@ use secrecy::{ExposeSecret, SecretString};
 use tokio::sync::{Mutex, OnceCell};
 
 use crate::llm::bedrock::AwsRegion;
+use crate::util::ErrorContext;
 use crate::*;
 
 #[derive(Clone, Debug)]
@@ -47,6 +48,11 @@ pub enum AwsAuth {
 		/// AWS SigV4 signing service name (for example, "bedrock", "bedrock-agentcore", or "execute-api").
 		#[serde(skip_serializing_if = "Option::is_none")]
 		service_name: Option<String>,
+		/// AWS SigV4 signing region (for example, "us-east-1"). If unset, typed AWS
+		/// backends may provide this automatically; otherwise the ambient AWS region
+		/// is used.
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		region: Option<String>,
 		/// Optional AWS STS role to assume before signing requests.
 		#[serde(skip_serializing_if = "Option::is_none")]
 		assume_role: Option<AwsAssumeRole>,
@@ -570,8 +576,12 @@ pub(super) async fn sign_request(
 		AwsAuth::ExplicitConfig {
 			region: Some(region),
 			..
+		}
+		| AwsAuth::Implicit {
+			region: Some(region),
+			..
 		} => region.as_str(),
-		AwsAuth::ExplicitConfig { region: None, .. } | AwsAuth::Implicit { .. } => {
+		AwsAuth::ExplicitConfig { region: None, .. } | AwsAuth::Implicit { region: None, .. } => {
 			// Try to get region from request extensions first, then fall back to AWS config
 			if let Some(aws_region) = req.extensions().get::<AwsRegion>() {
 				aws_region.region.as_str()
@@ -584,13 +594,17 @@ pub(super) async fn sign_request(
 			}
 		},
 	};
-	let creds = Box::pin(load_credentials(
-		aws_auth,
-		region,
-		resolved_tags,
-		resolved_session_name,
-	))
-	.await?
+	let creds = tokio::time::timeout(
+		super::CLOUD_AUTH_TIMEOUT,
+		Box::pin(load_credentials(
+			aws_auth,
+			region,
+			resolved_tags,
+			resolved_session_name,
+		)),
+	)
+	.await
+	.ctx("AWS credential fetch timed out after 5s")??
 	.into();
 
 	let service = signing_service_name(req, aws_auth);
@@ -1063,6 +1077,7 @@ mod resolve_tags_tests {
 	async fn sign_request_fails_closed_when_dynamic_tag_cannot_resolve() {
 		let auth = AwsAuth::Implicit {
 			service_name: None,
+			region: None,
 			assume_role: Some(AwsAssumeRole {
 				role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
 				session_name: None,
@@ -1090,6 +1105,7 @@ mod resolve_tags_tests {
 		assert!(err.is_some(), "expression should fail to compile");
 		let auth = AwsAuth::Implicit {
 			service_name: None,
+			region: None,
 			assume_role: Some(AwsAssumeRole {
 				role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
 				session_name: None,
@@ -1220,6 +1236,7 @@ mod resolve_session_name_tests {
 	async fn sign_request_fails_closed_when_session_name_cannot_resolve() {
 		let auth = AwsAuth::Implicit {
 			service_name: None,
+			region: None,
 			assume_role: Some(AwsAssumeRole {
 				role_arn: "arn:aws:iam::123456789012:role/backend".to_string(),
 				session_name: Some(dynamic(r#"request.headers["x-team"]"#)),

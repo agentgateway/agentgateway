@@ -285,7 +285,10 @@ where
 					state.is_completed = true;
 					return Poll::Ready(Some(Ok(Frame::trailers(trailers))));
 				},
-				None => return Poll::Ready(None),
+				None => {
+					state.is_completed = true;
+					return Poll::Ready(None);
+				},
 			}
 		};
 
@@ -317,10 +320,9 @@ where
 
 		// if this body has data or trailers remaining to play back, it
 		// is not EOS
-		let eos = !self.replay_body && !self.replay_trailers
-          // if we have replayed everything, the initial body may
-          // still have data remaining, so ask it
-          && state.rest.is_end_stream();
+		let eos = !self.replay_body
+			&& !self.replay_trailers
+			&& (state.is_completed || state.rest.is_end_stream());
 		tracing::trace!(%eos, "Checked replay body end-of-stream");
 		eos
 	}
@@ -330,7 +332,7 @@ where
 		// If this clone isn't holding the body, return the original size hint.
 		let state = match self.state.as_ref() {
 			Some(state) => state,
-			None => return self.shared.orig_size_hint.clone(),
+			None => return self.shared.orig_size_hint,
 		};
 
 		// Otherwise, if we're holding the state but have dropped the inner

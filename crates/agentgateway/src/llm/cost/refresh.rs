@@ -6,19 +6,33 @@ use anyhow::{Context, bail};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::llm::cost::{CatalogSnapshot, ModelCatalog, catalog};
+use crate::llm::cost::{ModelCatalog, catalog};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RefreshBaseCatalogResponse {
 	pub providers: usize,
 	pub models: usize,
+	#[serde(skip_serializing)]
+	pub catalog: catalog::Catalog,
 }
 
 pub async fn refresh_models_dev_base_catalog(
 	file: &Path,
 	model_catalog: &ModelCatalog,
 ) -> anyhow::Result<RefreshBaseCatalogResponse> {
+	let refreshed = fetch_models_dev_base_catalog().await?;
+	let catalog = refreshed.catalog.clone();
+	let json = serde_json::to_vec_pretty(&catalog).context("marshal models.dev catalog")?;
+	if let Some(parent) = file.parent() {
+		fs_err::tokio::create_dir_all(parent).await?;
+	}
+	fs_err::tokio::write(file, &json).await?;
+	model_catalog.reload().await?;
+	Ok(refreshed)
+}
+
+pub async fn fetch_models_dev_base_catalog() -> anyhow::Result<RefreshBaseCatalogResponse> {
 	let catalog = fetch_models_dev_catalog().await?;
 	let providers = catalog.providers.len();
 	let models = catalog
@@ -26,15 +40,11 @@ pub async fn refresh_models_dev_base_catalog(
 		.values()
 		.map(|provider| provider.models.len())
 		.sum();
-	let json = serde_json::to_vec_pretty(&catalog).context("marshal models.dev catalog")?;
-	if let Some(parent) = file.parent() {
-		fs_err::tokio::create_dir_all(parent).await?;
-	}
-	fs_err::tokio::write(file, &json).await?;
-	model_catalog.replace(CatalogSnapshot {
-		catalog: Some(catalog),
-	});
-	Ok(RefreshBaseCatalogResponse { providers, models })
+	Ok(RefreshBaseCatalogResponse {
+		providers,
+		models,
+		catalog,
+	})
 }
 
 async fn fetch_models_dev_catalog() -> anyhow::Result<crate::llm::cost::catalog::Catalog> {

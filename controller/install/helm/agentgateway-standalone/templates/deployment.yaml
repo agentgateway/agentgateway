@@ -70,6 +70,11 @@ spec:
         - name: admin
           containerPort: {{ .Values.admin.service.port }}
           protocol: TCP
+        {{- if .Values.monitoring.enabled }}
+        - name: metrics
+          containerPort: 15020
+          protocol: TCP
+        {{- end }}
         env:
         - name: RUST_BACKTRACE
           value: "1"

@@ -9,9 +9,12 @@ use tokio::task::JoinSet;
 
 use crate::control::caclient;
 use crate::telemetry::trc;
-use crate::{Config, ProxyInputs, client, mcp, proxy, state_manager};
+use crate::{Config, ProxyInputs, client, config_store, mcp, proxy, state_manager};
 
-pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
+pub async fn run(
+	config: Arc<Config>,
+	config_resource_store: Option<config_store::ConfigResourceStore>,
+) -> anyhow::Result<Bound> {
 	crate::transport::tls::warn_if_key_log_enabled();
 	let (data_plane_handle, data_plane_pool) = new_data_plane_pool(config.num_worker_threads);
 
@@ -85,6 +88,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 		control_client.clone(),
 		Arc::new(xds_metrics),
 		xds_tx,
+		config_resource_store.clone(),
 	)
 	.await?;
 	let stores = state_mgr.stores();
@@ -92,7 +96,17 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 
 	state_manager::start_self_workload_resolution(&config, stores.clone(), &ready);
 
-	let model_catalog = crate::llm::cost::ModelCatalog::new(config.model_catalog.sources.clone())?;
+	let mut model_catalog_sources = if let Some(store) = &config_resource_store {
+		config_store::model_catalog_sources(
+			&store
+				.list(Some(config_store::ConfigResourceKind::ModelCatalog))
+				.await?,
+		)?
+	} else {
+		Vec::new()
+	};
+	model_catalog_sources.extend(config.model_catalog.sources.clone());
+	let model_catalog = crate::llm::cost::ModelCatalog::new(model_catalog_sources)?;
 
 	let mut xds_rx_for_task = xds_rx.clone();
 	tokio::spawn(async move {
@@ -106,6 +120,7 @@ pub async fn run(config: Arc<Config>) -> anyhow::Result<Bound> {
 	let admin_server = crate::management::admin::Service::new(
 		config.clone(),
 		model_catalog.clone(),
+		config_resource_store,
 		stores.clone(),
 		resource_manager,
 		shutdown.trigger(),

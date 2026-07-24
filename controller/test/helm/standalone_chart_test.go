@@ -176,6 +176,19 @@ extraVolumeMounts:
   mountPath: /var/lib/agentgateway/plugins
 `,
 		},
+		{
+			name: "monitoring-full-config",
+			valuesYAML: `monitoring:
+  enabled: true
+  annotations:
+    example.com/note: monitoring
+  extraLabels:
+    plane: monitoring
+  podMonitor:
+    enabled: true
+    interval: 30s
+`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -675,4 +688,88 @@ func TestStandaloneChartExtraContainers(t *testing.T) {
 	require.Contains(t, out, "name: httpbin")
 	require.Contains(t, out, "image: kennethreitz/httpbin")
 	require.Contains(t, out, "containerPort: 80")
+}
+
+func TestStandaloneChartMonitoringDisabledByDefault(t *testing.T) {
+	out, stderr, err := renderStandaloneChart(t, "")
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.NotContains(t, out, "kind: PodMonitor")
+	require.NotContains(t, out, "name: metrics")
+	require.Contains(t, out, "prometheus.io/scrape")
+}
+
+func TestStandaloneChartMonitoringEnabled(t *testing.T) {
+	out, stderr, err := renderStandaloneChart(t, `monitoring:
+  enabled: true
+`)
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.Contains(t, out, "prometheus.io/scrape:")
+	require.Contains(t, out, "kind: PodMonitor")
+	require.Contains(t, out, "name: agentgateway-standalone")
+	require.Contains(t, out, "- name: metrics\n          containerPort: 15020")
+	require.Contains(t, out, "prometheus.io/port: \"15020\"")
+	require.Contains(t, out, "prometheus.io/path: /metrics")
+	require.Contains(t, out, "- port: metrics\n    path: /metrics\n    interval: 15s")
+}
+
+func TestStandaloneChartMonitoringPodMonitorDisabled(t *testing.T) {
+	out, stderr, err := renderStandaloneChart(t, `monitoring:
+  enabled: true
+  podMonitor:
+    enabled: false
+`)
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.NotContains(t, out, "kind: PodMonitor")
+	require.Contains(t, out, "prometheus.io/scrape:")
+	require.Contains(t, out, "- name: metrics\n          containerPort: 15020")
+}
+
+func TestStandaloneChartMonitoringFullConfig(t *testing.T) {
+	out, stderr, err := renderStandaloneChart(t, `monitoring:
+  enabled: true
+  annotations:
+    example.com/note: monitoring
+  extraLabels:
+    plane: monitoring
+  podMonitor:
+    enabled: true
+    interval: 30s
+`)
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.Contains(t, out, "plane: monitoring")
+	require.Contains(t, out, "example.com/note: monitoring")
+	require.Contains(t, out, "containerPort: 15020")
+	require.Contains(t, out, "prometheus.io/port: \"15020\"")
+	require.Contains(t, out, "interval: 30s")
+}
+
+func TestStandaloneChartPodAnnotationsMergeWithMonitoringPort(t *testing.T) {
+	out, stderr, err := renderStandaloneChart(t, `podAnnotations:
+  team: platform
+monitoring:
+  enabled: true
+`)
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.Contains(t, out, "team: platform")
+	require.Contains(t, out, "prometheus.io/path: /metrics")
+	require.Contains(t, out, "prometheus.io/port: \"15020\"")
+}
+
+func TestStandaloneChartPodAnnotationsOverridesMonitoringPort(t *testing.T) {
+	out, stderr, err := renderStandaloneChart(t, `podAnnotations:
+  prometheus.io/port: "9999"
+monitoring:
+  enabled: false
+`)
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.Contains(t, out, "prometheus.io/port: \"9999\"")
+}
+
+func TestStandaloneChartMonitoringRemovePrometheusAnnotations(t *testing.T) {
+	out, stderr, err := renderStandaloneChart(t, `podAnnotations: {}
+monitoring:
+  enabled: true
+`)
+	require.NoError(t, err, "helm template failed: %s", stderr)
+	require.NotContains(t, out, "prometheus.io:")
 }

@@ -34,6 +34,25 @@ async fn test_append_done_on_success_omits_done_after_error() {
 	);
 }
 
+#[tokio::test]
+async fn test_append_done_on_success_does_not_repoll_after_eof() {
+	let mut body =
+		super::from_completions::append_done_on_success(futures_util::stream::iter(vec![Ok::<
+			_,
+			axum_core::Error,
+		>(
+			Bytes::from_static(b"data: chunk\n\n"),
+		)]));
+
+	assert!(body.frame().await.is_some(), "data frame should be present");
+	assert!(
+		body.frame().await.is_some(),
+		"[DONE] frame should be present"
+	);
+	assert!(body.frame().await.is_none(), "stream should report EOF");
+	assert!(body.frame().await.is_none(), "stream must remain at EOF");
+}
+
 #[test]
 fn test_extract_beta_headers_variants() {
 	let headers = HeaderMap::new();

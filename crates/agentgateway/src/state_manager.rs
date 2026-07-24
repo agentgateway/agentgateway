@@ -10,7 +10,7 @@ use crate::types::agent::ListenerTarget;
 use crate::types::discovery::SelfIdentitySource;
 use crate::types::proto::agent::Resource as ADPResource;
 use crate::types::proto::workload::Address as XdsAddress;
-use crate::{ConfigSource, client, control, store};
+use crate::{ConfigSource, ConfigStoreMode, client, config_store, control, store};
 
 #[derive(serde::Serialize)]
 pub struct StateManager {
@@ -36,6 +36,7 @@ impl StateManager {
 		client: client::Client,
 		config_metrics: Arc<agent_xds::Metrics>,
 		awaiting_ready: tokio::sync::watch::Sender<()>,
+		config_resource_store: Option<config_store::ConfigResourceStore>,
 	) -> anyhow::Result<Self> {
 		let xds = &config.xds;
 		let stores = Stores::new_with_dynamic_ca_cert_cache(
@@ -72,6 +73,7 @@ impl StateManager {
 				config: config.clone(),
 				stores: stores.clone(),
 				cfg: cfg.clone(),
+				config_resource_store: config_resource_store.clone(),
 				client,
 				resource_manager: resource_manager.clone(),
 				gateway: ListenerTarget {
@@ -112,6 +114,7 @@ impl StateManager {
 pub struct LocalClient {
 	config: Arc<crate::Config>,
 	pub cfg: ConfigSource,
+	pub config_resource_store: Option<config_store::ConfigResourceStore>,
 	pub stores: Stores,
 	pub client: Client,
 	pub resource_manager: crate::resource_manager::ResourceManager,
@@ -144,6 +147,10 @@ impl LocalClient {
 		let lc: LocalClient = self.to_owned();
 		let path = path.to_path_buf();
 		let mut resource_changes = lc.resource_manager.subscribe_changes();
+		let mut config_store_changes = lc
+			.config_resource_store
+			.as_ref()
+			.map(config_store::ConfigResourceStore::subscribe_changes);
 		tokio::task::spawn(async move {
 			loop {
 				tokio::select! {
@@ -170,6 +177,18 @@ impl LocalClient {
 						info!(resource, "resource changed, reloading");
 						next_state = lc.reload_config_after_change(next_state).await;
 					}
+					changed = async {
+						match &mut config_store_changes {
+							Some(changes) => changes.changed().await,
+							None => std::future::pending().await,
+						}
+					} => {
+						if changed.is_err() {
+							break;
+						}
+						info!("config resource changed, reloading");
+						next_state = lc.reload_config_after_change(next_state).await;
+					}
 				}
 			}
 		});
@@ -180,17 +199,40 @@ impl LocalClient {
 	fn watch_resource_changes(&self, mut next_state: PreviousState) {
 		let lc = self.clone();
 		let mut resource_changes = self.resource_manager.subscribe_changes();
+		let mut config_store_changes = self
+			.config_resource_store
+			.as_ref()
+			.map(config_store::ConfigResourceStore::subscribe_changes);
 		tokio::task::spawn(async move {
-			while resource_changes.changed().await.is_ok() {
-				let resource = resource_changes.borrow().resource.clone();
-				info!(resource, "resource changed, reloading");
-				next_state = lc.reload_config_after_change(next_state).await;
+			loop {
+				tokio::select! {
+					changed = resource_changes.changed() => {
+						if changed.is_err() {
+							break;
+						}
+						let resource = resource_changes.borrow().resource.clone();
+						info!(resource, "resource changed, reloading");
+						next_state = lc.reload_config_after_change(next_state).await;
+					}
+					changed = async {
+						match &mut config_store_changes {
+							Some(changes) => changes.changed().await,
+							None => std::future::pending().await,
+						}
+					} => {
+						if changed.is_err() {
+							break;
+						}
+						info!("config resource changed, reloading");
+						next_state = lc.reload_config_after_change(next_state).await;
+					}
+				}
 			}
 		});
 	}
 
 	async fn reload_config(&self, prev: PreviousState) -> anyhow::Result<PreviousState> {
-		let config_content = self.cfg.read_to_string().await?;
+		let config_content = self.config_content().await?;
 		let resources =
 			crate::resource_manager::ResourceFetcher::managed(self.resource_manager.clone());
 		let config = crate::types::local::NormalizedLocalConfig::from(
@@ -222,6 +264,15 @@ impl LocalClient {
 			binds: next_binds,
 			discovery: next_discovery,
 		})
+	}
+
+	async fn config_content(&self) -> anyhow::Result<String> {
+		if self.config.config_store.mode == ConfigStoreMode::Hybrid
+			&& let Some(store) = &self.config_resource_store
+		{
+			return config_store::materialize_hybrid_config(&self.cfg, store).await;
+		}
+		self.cfg.read_to_string().await
 	}
 
 	async fn reload_config_after_change(&self, prev: PreviousState) -> PreviousState {
@@ -512,6 +563,7 @@ frontendPolicies:
 		let local_client = LocalClient {
 			config: config.clone(),
 			cfg: ConfigSource::File(path.clone()),
+			config_resource_store: None,
 			stores: stores.clone(),
 			client,
 			resource_manager,

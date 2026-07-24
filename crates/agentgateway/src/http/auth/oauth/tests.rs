@@ -10,7 +10,9 @@ use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use super::client_auth::RawPrivateKeyJwt;
-use super::cross_app_access::{CrossAppAccessAuthConfig, CrossAppAccessEndpoint};
+use super::cross_app_access::{
+	CrossAppAccessAuthConfig, CrossAppAccessEndpoint, CrossAppAccessSubjectToken,
+};
 use super::*;
 use crate::http::Body;
 use crate::http::oauth::{
@@ -108,6 +110,7 @@ fn cross_app_access_config(
 		audience: "https://resource-as.example".into(),
 		resources: vec![],
 		scopes: vec!["read".into()],
+		subject_token: None,
 		cache: Some(InMemoryTokenCache::default()),
 	}
 }
@@ -788,6 +791,9 @@ fn cross_app_access_local_config() -> CrossAppAccessAuth {
 				"audience": "https://chat.example.com/",
 				"resources": ["https://api.chat.example.com/"],
 				"scopes": ["chat.read", "chat.history"],
+				"subjectToken": {
+					"source": { "expression": "jwt.the_id_token" }
+				},
 				"cache": {
 					"defaultTtl": "1h"
 				}
@@ -803,12 +809,49 @@ fn deserializes_cross_app_access_local_config_shape() {
 	let auth = cross_app_access_local_config();
 	let oauth = auth.oauth_token_exchange();
 	assert_eq!(oauth.requested_token_type, Some(OAuthTokenType::IdJag));
+	assert!(matches!(
+		&oauth.subject_token.source,
+		AuthorizationLocation::Expression(expression)
+			if expression.original_expression == "jwt.the_id_token"
+	));
 	// The IdP token-exchange leg carries the configured resource (draft requires it there).
 	assert_eq!(oauth.resources, ["https://api.chat.example.com/"]);
 	// The jwt-bearer leg carries `scope` (selects access-token scopes) but not `resource`.
 	let chained_exchange = oauth.chained_exchange.as_ref().expect("chained exchange");
 	assert!(chained_exchange.resources.is_empty());
 	assert_eq!(chained_exchange.scopes, ["chat.read", "chat.history"]);
+}
+
+#[test]
+fn cross_app_access_subject_token_source_override() {
+	let mut config = cross_app_access_config(
+		Arc::new(SimpleBackendReference::Invalid),
+		Arc::new(SimpleBackendReference::Invalid),
+	);
+
+	// Unset: the id_token is read from the Authorization Bearer header.
+	let auth = CrossAppAccessAuth::from(config.clone());
+	let subject_token = &auth.oauth_token_exchange().subject_token;
+	assert!(matches!(
+		&subject_token.source,
+		AuthorizationLocation::Header { name, .. } if name == ::http::header::AUTHORIZATION
+	));
+	assert_eq!(subject_token.token_type, OAuthTokenType::IdToken);
+
+	// Overridden source; the exchange still declares an id_token subject.
+	config.subject_token = Some(CrossAppAccessSubjectToken {
+		source: serde_json::from_str(r#"{"expression": "jwt.the_id_token"}"#).unwrap(),
+	});
+	let auth = CrossAppAccessAuth::from(config);
+	let subject_token = &auth.oauth_token_exchange().subject_token;
+	let AuthorizationLocation::Expression(expr) = &subject_token.source else {
+		panic!(
+			"expected an expression source, got {:?}",
+			subject_token.source
+		);
+	};
+	assert_eq!(expr.original_expression, "jwt.the_id_token");
+	assert_eq!(subject_token.token_type, OAuthTokenType::IdToken);
 }
 
 #[test]
@@ -824,6 +867,10 @@ fn serializes_cross_app_access_local_config_shape() {
 	assert_eq!(serialized["scopes"], json!(["chat.read", "chat.history"]));
 	assert_eq!(serialized["identityProvider"]["path"], "/oauth2/token");
 	assert_eq!(
+		serialized["subjectToken"]["source"],
+		json!({ "expression": "jwt.the_id_token" })
+	);
+	assert_eq!(
 		serialized["identityProvider"]["clientAuth"]["clientId"],
 		"gateway-at-idp"
 	);
@@ -833,6 +880,67 @@ fn serializes_cross_app_access_local_config_shape() {
 	);
 	assert!(serialized.get("oauthTokenExchange").is_none());
 	assert!(serialized.get("cache").is_none());
+}
+
+#[test]
+fn serializes_cross_app_access_subject_token() {
+	let backend = || {
+		Arc::new(SimpleBackendReference::InlineBackend(Target::Hostname(
+			crate::strng::new("idp.example.com"),
+			443,
+		)))
+	};
+	let mut config = cross_app_access_config(backend(), backend());
+
+	// The default Bearer-header source is spelled out on the way back to config.
+	let serialized = serde_json::to_value(CrossAppAccessAuth::from(config.clone())).unwrap();
+	assert_eq!(
+		serialized["subjectToken"]["source"],
+		json!({ "header": { "name": "authorization", "prefix": "Bearer " } })
+	);
+
+	// A configured source is preserved on the way back to config.
+	config.subject_token = Some(CrossAppAccessSubjectToken {
+		source: serde_json::from_str(r#"{"expression": "jwt.the_id_token"}"#).unwrap(),
+	});
+	let serialized = serde_json::to_value(CrossAppAccessAuth::from(config)).unwrap();
+	assert_eq!(
+		serialized["subjectToken"],
+		json!({ "source": { "expression": "jwt.the_id_token" } })
+	);
+}
+
+#[test]
+fn round_trips_cross_app_access_header_subject_token() {
+	let backend = || {
+		Arc::new(SimpleBackendReference::InlineBackend(Target::Hostname(
+			crate::strng::new("idp.example.com"),
+			443,
+		)))
+	};
+	let mut config = cross_app_access_config(backend(), backend());
+	config.subject_token = Some(CrossAppAccessSubjectToken {
+		source: serde_json::from_value(json!({
+			"header": { "name": "x-subject-token", "prefix": "Token " }
+		}))
+		.unwrap(),
+	});
+
+	let serialized = serde_json::to_value(CrossAppAccessAuth::from(config)).unwrap();
+	assert_eq!(
+		serialized["subjectToken"]["source"],
+		json!({ "header": { "name": "x-subject-token", "prefix": "Token " } })
+	);
+
+	let mut round_trip_config = cross_app_access_config(backend(), backend());
+	round_trip_config.subject_token =
+		Some(serde_json::from_value(serialized["subjectToken"].clone()).unwrap());
+	let round_tripped = CrossAppAccessAuth::from(round_trip_config);
+	assert!(matches!(
+		&round_tripped.oauth_token_exchange().subject_token.source,
+		AuthorizationLocation::Header { name, prefix }
+			if name.as_str() == "x-subject-token" && prefix.as_deref() == Some("Token ")
+	));
 }
 
 #[test]
@@ -853,45 +961,60 @@ fn cross_app_access_validate_load_preserves_path_prefix() {
 
 #[test]
 fn cross_app_access_from_proto_derives_oauth_chain() {
-	let auth = CrossAppAccessAuth::from_proto(proto::CrossAppAccessAuth {
-		identity_provider: Some(proto::cross_app_access_auth::Endpoint {
-			token_endpoint: Some(proto::BackendReference {
-				kind: Some(proto::backend_reference::Kind::Backend(
-					"default/idp".to_string(),
-				)),
-				..Default::default()
+	let auth = CrossAppAccessAuth::from_proto(
+		proto::CrossAppAccessAuth {
+			identity_provider: Some(proto::cross_app_access_auth::Endpoint {
+				token_endpoint: Some(proto::BackendReference {
+					kind: Some(proto::backend_reference::Kind::Backend(
+						"default/idp".to_string(),
+					)),
+					..Default::default()
+				}),
+				token_endpoint_path: Some("/idp/token".to_string()),
+				client_auth: Some(proto::OAuthClientAuth {
+					client_id: "gateway-at-idp".to_string(),
+					method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
+					..Default::default()
+				}),
 			}),
-			token_endpoint_path: Some("/idp/token".to_string()),
-			client_auth: Some(proto::OAuthClientAuth {
-				client_id: "gateway-at-idp".to_string(),
-				method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
-				..Default::default()
+			resource_authorization_server: Some(proto::cross_app_access_auth::Endpoint {
+				token_endpoint: Some(proto::BackendReference {
+					kind: Some(proto::backend_reference::Kind::Backend(
+						"default/resource-as".to_string(),
+					)),
+					..Default::default()
+				}),
+				token_endpoint_path: Some("/resource/token".to_string()),
+				client_auth: Some(proto::OAuthClientAuth {
+					client_id: "gateway-at-resource".to_string(),
+					method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
+					..Default::default()
+				}),
 			}),
-		}),
-		resource_authorization_server: Some(proto::cross_app_access_auth::Endpoint {
-			token_endpoint: Some(proto::BackendReference {
-				kind: Some(proto::backend_reference::Kind::Backend(
-					"default/resource-as".to_string(),
-				)),
-				..Default::default()
+			audience: "https://resource.example.com".to_string(),
+			resources: vec!["https://api.example.com".to_string()],
+			scopes: vec!["read".to_string()],
+			subject_token: Some(proto::cross_app_access_auth::SubjectToken {
+				source: Some(proto::AuthorizationLocation {
+					kind: Some(proto::authorization_location::Kind::Expression(
+						"jwt.the_id_token".to_string(),
+					)),
+				}),
 			}),
-			token_endpoint_path: Some("/resource/token".to_string()),
-			client_auth: Some(proto::OAuthClientAuth {
-				client_id: "gateway-at-resource".to_string(),
-				method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
-				..Default::default()
-			}),
-		}),
-		audience: "https://resource.example.com".to_string(),
-		resources: vec!["https://api.example.com".to_string()],
-		scopes: vec!["read".to_string()],
-		cache: None,
-	})
+			cache: None,
+		},
+		&mut Diagnostics::default(),
+	)
 	.unwrap();
 
 	let oauth = auth.oauth_token_exchange();
 	assert_eq!(oauth.requested_token_type, Some(OAuthTokenType::IdJag));
 	assert_eq!(oauth.subject_token.token_type, OAuthTokenType::IdToken);
+	assert!(matches!(
+		&oauth.subject_token.source,
+		AuthorizationLocation::Expression(expression)
+			if expression.original_expression == "jwt.the_id_token"
+	));
 	assert_eq!(oauth.audiences, ["https://resource.example.com"]);
 	assert_eq!(oauth.resources, ["https://api.example.com"]);
 	let chained_exchange = oauth.chained_exchange.as_ref().expect("chained exchange");
@@ -901,31 +1024,34 @@ fn cross_app_access_from_proto_derives_oauth_chain() {
 
 #[test]
 fn cross_app_access_from_proto_requires_token_endpoint() {
-	let err = CrossAppAccessAuth::from_proto(proto::CrossAppAccessAuth {
-		identity_provider: Some(proto::cross_app_access_auth::Endpoint {
-			client_auth: Some(proto::OAuthClientAuth {
-				client_id: "gateway-at-idp".to_string(),
-				method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
+	let err = CrossAppAccessAuth::from_proto(
+		proto::CrossAppAccessAuth {
+			identity_provider: Some(proto::cross_app_access_auth::Endpoint {
+				client_auth: Some(proto::OAuthClientAuth {
+					client_id: "gateway-at-idp".to_string(),
+					method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
+					..Default::default()
+				}),
+				..Default::default()
+			}),
+			resource_authorization_server: Some(proto::cross_app_access_auth::Endpoint {
+				token_endpoint: Some(proto::BackendReference {
+					kind: Some(proto::backend_reference::Kind::Backend(
+						"default/resource-as".to_string(),
+					)),
+					..Default::default()
+				}),
+				client_auth: Some(proto::OAuthClientAuth {
+					client_id: "gateway-at-resource".to_string(),
+					method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
+					..Default::default()
+				}),
 				..Default::default()
 			}),
 			..Default::default()
-		}),
-		resource_authorization_server: Some(proto::cross_app_access_auth::Endpoint {
-			token_endpoint: Some(proto::BackendReference {
-				kind: Some(proto::backend_reference::Kind::Backend(
-					"default/resource-as".to_string(),
-				)),
-				..Default::default()
-			}),
-			client_auth: Some(proto::OAuthClientAuth {
-				client_id: "gateway-at-resource".to_string(),
-				method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
-				..Default::default()
-			}),
-			..Default::default()
-		}),
-		..Default::default()
-	})
+		},
+		&mut Diagnostics::default(),
+	)
 	.unwrap_err();
 
 	assert!(matches!(err, ProtoError::MissingRequiredField));
@@ -1607,7 +1733,9 @@ fn backend_auth_requiring_may_act(mock: &MockServer) -> crate::http::auth::Backe
 		actor_token: Some(actor_token_with_header(true)),
 		..auth(endpoint(mock))
 	};
-	crate::http::auth::BackendAuth::OAuthTokenExchange(Box::new(a))
+	crate::http::auth::BackendAuth::new(crate::http::auth::BackendAuthKind::OAuthTokenExchange(
+		Box::new(a),
+	))
 }
 
 #[test]
@@ -1784,8 +1912,9 @@ fn query_parameter_authorization_location_from_proto() {
 #[tokio::test]
 async fn dispatch_inserts_default_bearer_and_marks_explicit() {
 	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
-	let backend_auth =
-		crate::http::auth::BackendAuth::OAuthTokenExchange(Box::new(auth(endpoint(&mock))));
+	let backend_auth = crate::http::auth::BackendAuth::new(
+		crate::http::auth::BackendAuthKind::OAuthTokenExchange(Box::new(auth(endpoint(&mock)))),
+	);
 	let mut req = incoming_request();
 
 	crate::http::auth::apply_backend_auth(&backend_info(), &backend_auth, &mut req)
@@ -1816,7 +1945,9 @@ async fn dispatch_uses_configured_output_location_and_marks_explicit() {
 		},
 		..auth(endpoint(&mock))
 	};
-	let backend_auth = crate::http::auth::BackendAuth::OAuthTokenExchange(Box::new(a));
+	let backend_auth = crate::http::auth::BackendAuth::new(
+		crate::http::auth::BackendAuthKind::OAuthTokenExchange(Box::new(a)),
+	);
 	let mut req = incoming_request();
 
 	crate::http::auth::apply_backend_auth(&backend_info(), &backend_auth, &mut req)
@@ -1849,7 +1980,9 @@ async fn dispatch_supports_query_parameter_output_location() {
 		},
 		..auth(endpoint(&mock))
 	};
-	let backend_auth = crate::http::auth::BackendAuth::OAuthTokenExchange(Box::new(a));
+	let backend_auth = crate::http::auth::BackendAuth::new(
+		crate::http::auth::BackendAuthKind::OAuthTokenExchange(Box::new(a)),
+	);
 	let mut req = incoming_request();
 
 	crate::http::auth::apply_backend_auth(&backend_info(), &backend_auth, &mut req)
@@ -1883,7 +2016,9 @@ async fn dispatch_removes_input_token_locations_before_inserting_output() {
 		},
 		..auth(endpoint(&mock))
 	};
-	let backend_auth = crate::http::auth::BackendAuth::OAuthTokenExchange(Box::new(a));
+	let backend_auth = crate::http::auth::BackendAuth::new(
+		crate::http::auth::BackendAuthKind::OAuthTokenExchange(Box::new(a)),
+	);
 	let mut req = ::http::Request::builder()
 		.method(::http::Method::GET)
 		.uri("http://upstream/")

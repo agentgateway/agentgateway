@@ -2,8 +2,15 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import type { ComponentType, ReactNode } from "react";
 import { Shield } from "lucide-react";
-import { ensureLlm, ensureMcp } from "../config";
-import { useGatewayConfig, useUpdateConfig } from "../hooks";
+import { ensureLlm, ensureMcp, policyResources } from "../config";
+import {
+  useConfigResources,
+  useDeleteConfigResource,
+  useGatewayConfig,
+  useRuntimeInfo,
+  useUpdateConfig,
+  useUpsertPolicyResource,
+} from "../hooks";
 import { useSchemaHelp } from "../schemaHelp";
 import {
   PageHeader,
@@ -20,6 +27,7 @@ import {
   titleFromKey,
 } from "../policies/policyUtils";
 import type { GatewayConfig } from "../types";
+import type { PolicyResourceKind } from "../api/configResourcesApi";
 
 const llmPolicySections: Array<{ title: string; keys: PolicyKey[] }> = [
   {
@@ -70,8 +78,9 @@ export function PoliciesPage() {
       title="LLM Policies"
       description="Configure top-level behavior that applies before model-specific routing."
       schemaRoot="LocalLLMPolicy"
+      resourceKind="llm.policy"
       sections={llmPolicySections}
-      yamlDescription="Read-only view of llm.policies."
+      yamlDescription="Read-only view of effective LLM policies, including database-backed resources in hybrid mode."
       policies={(config) =>
         config.data?.llm?.policies as Record<string, unknown> | null | undefined
       }
@@ -125,6 +134,7 @@ export function PolicyCatalogPage(props: {
   actions?: ReactNode;
   beforePolicies?: ReactNode;
   schemaRoot: string;
+  resourceKind?: PolicyResourceKind;
   sections: Array<{ title: string; keys: PolicyKey[] }>;
   policyKeys?: PolicyKey[];
   yamlDescription: string;
@@ -138,8 +148,30 @@ export function PolicyCatalogPage(props: {
   onDisablePolicy: (config: GatewayConfig, key: PolicyKey) => void;
 }) {
   const config = useGatewayConfig();
+  const runtime = useRuntimeInfo();
+  const hybrid = runtime.data?.ui.configStoreMode === "hybrid";
+  const configResources = useConfigResources({
+    enabled: hybrid && Boolean(props.resourceKind),
+  });
   const update = useUpdateConfig();
-  const policies = props.policies(config);
+  const upsertPolicy = useUpsertPolicyResource();
+  const deleteResource = useDeleteConfigResource();
+  const filePolicies = props.policies(config);
+  const databasePolicies = props.resourceKind
+    ? policyResources(configResources.data?.resources, props.resourceKind)
+    : {};
+  const policies = hybrid
+    ? { ...(filePolicies ?? {}), ...databasePolicies }
+    : filePolicies;
+  const policyDataLoading =
+    config.isLoading ||
+    runtime.isLoading ||
+    Boolean(hybrid && props.resourceKind && configResources.isLoading);
+  const policyDataUnavailable =
+    policyDataLoading ||
+    config.isError ||
+    runtime.isError ||
+    Boolean(hybrid && props.resourceKind && configResources.isError);
   const policiesDisabled = props.policiesDisabled?.(config) ?? false;
   const [selected, setSelected] = useState<PolicyKey | null>(() =>
     policyKeyFromHash(),
@@ -174,6 +206,22 @@ export function PolicyCatalogPage(props: {
     });
   }, [help, props.policyKeys, props.schemaRoot]);
   const selectedMeta = policyCatalog.find((policy) => policy.key === selected);
+  const selectedFileOwned = Boolean(
+    selected &&
+    filePolicies &&
+    Object.prototype.hasOwnProperty.call(filePolicies, selected),
+  );
+  const selectedDatabaseOwned = Boolean(
+    selected &&
+    Object.prototype.hasOwnProperty.call(databasePolicies, selected),
+  );
+  const saving =
+    update.isPending || upsertPolicy.isPending || deleteResource.isPending;
+  const saveError =
+    update.error?.message ??
+    upsertPolicy.error?.message ??
+    deleteResource.error?.message ??
+    null;
 
   const policyItems = useMemo(() => {
     return policyCatalog.map((meta) => ({
@@ -252,14 +300,21 @@ export function PolicyCatalogPage(props: {
         description={props.description}
         actions={props.actions}
       />
-      {config.isError ? (
+      {config.isError ||
+      runtime.isError ||
+      (hybrid && configResources.isError) ? (
         <StatusBanner state="bad" title="Configuration API unavailable">
-          {config.error.message}
+          {config.error?.message ??
+            runtime.error?.message ??
+            configResources.error?.message}
         </StatusBanner>
       ) : null}
-      {update.isError && !selected ? (
+      {policyDataLoading ? (
+        <StatusBanner state="loading" title="Loading policies" />
+      ) : null}
+      {saveError && !selected ? (
         <StatusBanner state="bad" title="Save failed">
-          {update.error.message}
+          {saveError}
         </StatusBanner>
       ) : null}
       {props.beforePolicies}
@@ -280,7 +335,7 @@ export function PolicyCatalogPage(props: {
                   key={policy.key}
                   policy={policy}
                   managedLink={props.managedLinks?.[policy.key]}
-                  disabled={policiesDisabled}
+                  disabled={policiesDisabled || policyDataUnavailable}
                   onOpen={openPolicy}
                 />
               ))}
@@ -299,7 +354,10 @@ export function PolicyCatalogPage(props: {
         </Panel>
       </details>
 
-      {selected && selectedMeta && !policiesDisabled ? (
+      {selected &&
+      selectedMeta &&
+      !policiesDisabled &&
+      !policyDataUnavailable ? (
         <PolicyDrawer
           key={selected}
           policyKey={selected}
@@ -309,32 +367,40 @@ export function PolicyCatalogPage(props: {
           policies={policies as Record<string, unknown> | null | undefined}
           help={help}
           schemaRoot={props.schemaRoot}
-          saving={update.isPending}
-          saveError={update.isError ? update.error.message : null}
+          saving={saving}
+          saveError={saveError}
           config={config.data}
+          databaseBacked={
+            hybrid && Boolean(props.resourceKind) && !selectedFileOwned
+          }
           onClose={closePolicy}
           applySaveDiff={(next, value) => {
             props.onSavePolicy(next, selected, value);
           }}
-          applyDisableDiff={(next) => {
-            props.onDisablePolicy(next, selected);
+          onSave={(value) => {
+            if (hybrid && props.resourceKind && !selectedFileOwned) {
+              upsertPolicy.mutate(
+                { kind: props.resourceKind, id: selected, value },
+                { onSuccess: closePolicy },
+              );
+              return;
+            }
+            update.mutate((next) => props.onSavePolicy(next, selected, value), {
+              onSuccess: closePolicy,
+            });
           }}
-          onSave={(value) =>
-            update.mutate(
-              (next) => {
-                props.onSavePolicy(next, selected, value);
-              },
-              { onSuccess: closePolicy },
-            )
-          }
-          onDisable={() =>
-            update.mutate(
-              (next) => {
-                props.onDisablePolicy(next, selected);
-              },
-              { onSuccess: closePolicy },
-            )
-          }
+          onDisable={() => {
+            if (hybrid && props.resourceKind && selectedDatabaseOwned) {
+              deleteResource.mutate(
+                { kind: props.resourceKind, id: selected },
+                { onSuccess: closePolicy },
+              );
+              return;
+            }
+            update.mutate((next) => props.onDisablePolicy(next, selected), {
+              onSuccess: closePolicy,
+            });
+          }}
         />
       ) : null}
     </div>

@@ -201,6 +201,89 @@ type BackendSimple struct {
 	Auth *BackendAuth `json:"auth,omitempty"`
 }
 
+// BackendConnectionPolicy configures common connection behavior for auxiliary backend calls.
+type BackendConnectionPolicy struct {
+	// Settings for managing TCP connections to the backend
+	// +optional
+	TCP *BackendTCP `json:"tcp,omitempty"`
+
+	// Settings for managing TLS connections to the backend
+	//
+	// When set, TLS is originated to the backend using the system trusted CA
+	// certificates, and SNI is inferred from the destination.
+	// +optional
+	TLS *BackendTLS `json:"tls,omitempty"`
+
+	// Settings for managing HTTP requests to the backend
+	// +optional
+	HTTP *BackendHTTP `json:"http,omitempty"`
+
+	// Settings for managing tunnel connections to the backend, like `HTTPS_PROXY`
+	// +optional
+	Tunnel *BackendTunnel `json:"tunnel,omitempty"`
+}
+
+func (p BackendConnectionPolicy) backendSimple(auth *BackendAuth) *BackendSimple {
+	return &BackendSimple{
+		TCP:    p.TCP,
+		TLS:    p.TLS,
+		HTTP:   p.HTTP,
+		Tunnel: p.Tunnel,
+		Auth:   auth,
+	}
+}
+
+// OpenAIModerationPolicy configures calls to the OpenAI Moderation API.
+// +kubebuilder:validation:AtLeastOneFieldSet
+type OpenAIModerationPolicy struct {
+	BackendConnectionPolicy `json:",inline"`
+
+	// Settings for authenticating to OpenAI.
+	// +optional
+	Auth *OpenAIModerationAuth `json:"auth,omitempty"`
+}
+
+func (p *OpenAIModerationPolicy) BackendSimple() *BackendSimple {
+	if p == nil {
+		return nil
+	}
+	return p.BackendConnectionPolicy.backendSimple(p.Auth.BackendAuth())
+}
+
+// BedrockGuardrailsPolicy configures calls to AWS Bedrock Guardrails.
+// +kubebuilder:validation:AtLeastOneFieldSet
+type BedrockGuardrailsPolicy struct {
+	BackendConnectionPolicy `json:",inline"`
+
+	// Settings for authenticating to AWS Bedrock Guardrails.
+	// +optional
+	Auth *BedrockGuardrailsAuth `json:"auth,omitempty"`
+}
+
+func (p *BedrockGuardrailsPolicy) BackendSimple() *BackendSimple {
+	if p == nil {
+		return nil
+	}
+	return p.BackendConnectionPolicy.backendSimple(p.Auth.BackendAuth())
+}
+
+// GoogleModelArmorPolicy configures calls to Google Model Armor.
+// +kubebuilder:validation:AtLeastOneFieldSet
+type GoogleModelArmorPolicy struct {
+	BackendConnectionPolicy `json:",inline"`
+
+	// Settings for authenticating to Google Model Armor.
+	// +optional
+	Auth *GoogleModelArmorAuth `json:"auth,omitempty"`
+}
+
+func (p *GoogleModelArmorPolicy) BackendSimple() *BackendSimple {
+	if p == nil {
+		return nil
+	}
+	return p.BackendConnectionPolicy.backendSimple(p.Auth.BackendAuth())
+}
+
 type Health struct {
 	// CEL expression that determines whether a response indicates an unhealthy backend.
 	// When the expression evaluates to true, the backend is considered unhealthy and may be evicted.
@@ -863,6 +946,11 @@ type Traffic struct {
 	//
 	// +optional
 	Buffer *Buffer `json:"buffer,omitempty"`
+
+	// Injects artificial latency before forwarding requests, for
+	// fault-injection testing.
+	// +optional
+	Delay *Delay `json:"delay,omitempty"`
 }
 
 // Direct response policy.
@@ -1344,8 +1432,9 @@ const (
 	HostnameRewriteModeNone HostnameRewriteMode = "None"
 )
 
-// +kubebuilder:validation:ExactlyOneOf=key;secretRef;passthrough;aws;azure;gcp;oauthTokenExchange;crossAppAccess
-// +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) || has(self.passthrough) : true",message="location may only be set for key or passthrough auth"
+// +kubebuilder:validation:AtMostOneOf=key;secretRef;passthrough;aws;azure;gcp;oauthTokenExchange;crossAppAccess
+// +kubebuilder:validation:XValidation:rule="has(self.credentials) || has(self.key) || has(self.secretRef) || has(self.passthrough) || has(self.aws) || has(self.azure) || has(self.gcp) || has(self.oauthTokenExchange) || has(self.crossAppAccess)",message="must specify credentials, or at most one of key/secretRef/passthrough/aws/azure/gcp/oauthTokenExchange/crossAppAccess (credentials may be combined with a primary auth kind)"
+// +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) || has(self.passthrough) : true",message="location may only be set for key, secretRef, or passthrough auth"
 type BackendAuth struct {
 	// Inline key to use as the value of the
 	// `Authorization` header. This option is the least secure; usage of a
@@ -1392,11 +1481,130 @@ type BackendAuth struct {
 	// +optional
 	CrossAppAccess *CrossAppAccessAuth `json:"crossAppAccess,omitempty"`
 
-	// Where backend credentials are inserted. Defaults to the `Authorization`
-	// header with the `Bearer ` prefix. Applies to `key`, `secretRef`, and
-	// `passthrough`.
+	// Where backend credentials are inserted.
+	// If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
+	// This applies to `key`, `secretRef`, and `passthrough`. Entries in `credentials` carry their own location.
 	// +optional
 	Location *AuthorizationLocation `json:"location,omitempty"`
+
+	// Credentials is a list of additional credentials to inject on the
+	// backend request. Each entry resolves a Secret key and writes its value
+	// to the entry's location. `credentials` is independent of the primary
+	// `key`/`secretRef`/`passthrough` mechanism and may be set on its own or
+	// alongside it.
+	//
+	// +optional
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=8
+	// +listType=atomic
+	Credentials []BackendAuthCredential `json:"credentials,omitempty"`
+}
+
+// BackendAuthCredential specifies one additional credential to inject on the
+// backend request.
+type BackendAuthCredential struct {
+	// Where the credential is inserted on the backend request.
+	// +required
+	Location AuthorizationLocation `json:"location"`
+
+	// SecretRef references a Kubernetes Secret holding the credential value, and
+	// optionally overrides the key read from it. Defaults to `Authorization`,
+	// matching the key convention used by the top-level `secretRef`.
+	// +required
+	SecretRef LocalSecretKeyRef `json:"secretRef"`
+}
+
+// OpenAIModerationAuth configures credentials for OpenAI Moderation requests.
+// +kubebuilder:validation:ExactlyOneOf=key;secretRef
+type OpenAIModerationAuth struct {
+	// Inline key to use as the value of the
+	// `Authorization` header. This option is the least secure; usage of a
+	// `Secret` is preferred.
+	// +kubebuilder:validation:MaxLength=2048
+	// +optional
+	InlineKey *string `json:"key,omitempty"`
+
+	// Credential source for the authorization value, defaulting to a Kubernetes
+	// `Secret`. By default, the value is read from the `Authorization` key; set
+	// `secretRef.key` to override it. A `Bearer ` prefix is stripped only from
+	// the default `Authorization` key.
+	// +optional
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
+
+	// Where backend credentials are inserted. Defaults to the `Authorization`
+	// header with the `Bearer ` prefix. Applies to `key` and `secretRef`.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
+}
+
+func (a *OpenAIModerationAuth) BackendAuth() *BackendAuth {
+	if a == nil {
+		return nil
+	}
+	return &BackendAuth{
+		InlineKey: a.InlineKey,
+		SecretRef: a.SecretRef,
+		Location:  a.Location,
+	}
+}
+
+// BedrockGuardrailsAuth configures credentials for AWS Bedrock Guardrails requests.
+// +kubebuilder:validation:ExactlyOneOf=key;secretRef;aws
+// +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) : true",message="location may only be set for key or secretRef auth"
+type BedrockGuardrailsAuth struct {
+	// AWS authentication method for Bedrock Guardrails. Use `aws: {}` for
+	// default AWS SDK credential discovery.
+	// +optional
+	AWS *AwsAuth `json:"aws,omitempty"`
+
+	// Inline API key to use as the value of the `Authorization` header.
+	// This option is the least secure; usage of a `Secret` is preferred.
+	// +kubebuilder:validation:MaxLength=2048
+	// +optional
+	InlineKey *string `json:"key,omitempty"`
+
+	// Credential source for the API key, defaulting to a Kubernetes `Secret`.
+	// By default, the value is read from the `Authorization` key; set
+	// `secretRef.key` to override it. A `Bearer ` prefix is stripped only from
+	// the default `Authorization` key.
+	// +optional
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
+
+	// Where API keys are inserted. Defaults to the `Authorization` header with
+	// the `Bearer ` prefix. Applies to `key` and `secretRef`.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
+}
+
+func (a *BedrockGuardrailsAuth) BackendAuth() *BackendAuth {
+	if a == nil {
+		return nil
+	}
+	return &BackendAuth{
+		InlineKey: a.InlineKey,
+		SecretRef: a.SecretRef,
+		AWS:       a.AWS,
+		Location:  a.Location,
+	}
+}
+
+// GoogleModelArmorAuth configures credentials for Google Model Armor requests.
+// +kubebuilder:validation:ExactlyOneOf=gcp
+type GoogleModelArmorAuth struct {
+	// Google authentication method for Model Armor. Use `gcp: {}` for default
+	// Google credential discovery.
+	//
+	// +optional
+	GCP *GcpAuth `json:"gcp,omitempty"`
+}
+
+func (a *GoogleModelArmorAuth) BackendAuth() *BackendAuth {
+	if a == nil {
+		return nil
+	}
+	return &BackendAuth{
+		GCP: a.GCP,
+	}
 }
 
 // Cross App Access settings for backend authentication.
@@ -1425,9 +1633,20 @@ type CrossAppAccessAuth struct {
 	// +optional
 	Scopes []string `json:"scopes,omitempty"`
 
+	// Subject token sent to the identity provider. Defaults to an OpenID Connect
+	// ID token read from the Authorization Bearer header.
+	// +optional
+	SubjectToken *CrossAppAccessSubjectToken `json:"subjectToken,omitempty"`
+
 	// Response cache configuration.
 	// +optional
 	Cache *OAuthTokenCache `json:"cache,omitempty"`
+}
+
+type CrossAppAccessSubjectToken struct {
+	// Where to read the subject token. Defaults to the Authorization Bearer header.
+	// +optional
+	Source *AuthorizationExtractionLocation `json:"source,omitempty"`
 }
 
 type CrossAppAccessEndpoint struct {
@@ -1707,6 +1926,14 @@ type AwsAuth struct {
 	//
 	// +optional
 	ServiceName *ShortString `json:"serviceName,omitempty"`
+
+	// AWS SigV4 signing region, for example `us-east-1`. Set this when the
+	// target AWS service is in a different region than the gateway. If unset,
+	// typed AWS backends may provide this automatically; otherwise the ambient
+	// AWS region is used.
+	//
+	// +optional
+	Region *ShortString `json:"region,omitempty"`
 }
 
 // AWS STS AssumeRole settings for backend authentication.
@@ -2048,6 +2275,14 @@ type MCPAuthentication struct {
 	// If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
 	// +optional
 	ClientID *string `json:"clientId,omitempty"`
+
+	// Reference to a Kubernetes Secret holding the OAuth client secret of the app
+	// registration identified by `clientId` (for example Entra ID confidential clients,
+	// which require the secret at the token endpoint). The gateway injects it into the
+	// token requests it proxies to the provider. Defaults to the `clientSecret` key;
+	// override via `clientSecretRef.key`.
+	// +optional
+	ClientSecretRef *LocalSecretKeyRef `json:"clientSecretRef,omitempty"`
 }
 
 // +k8s:enum
@@ -2059,6 +2294,7 @@ const (
 	Okta      McpIDP = "Okta"
 	Descope   McpIDP = "Descope"
 	Authentik McpIDP = "Authentik"
+	Entra     McpIDP = "Entra"
 )
 
 type BackendTunnel struct {
@@ -2845,6 +3081,19 @@ type Timeouts struct {
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('100ms')",message="request must be at least 1ms"
 	// +optional
 	Request *metav1.Duration `json:"request,omitempty"`
+}
+
+// Artificial latency injection for fault-injection testing.
+type Delay struct {
+	// Latency to inject before forwarding the request to the backend. Either a duration string such
+	// as `2s`, or a CEL expression evaluated against the request that returns a duration (e.g.
+	// `duration("500ms")`) or a number interpreted as milliseconds (e.g. `random() < 0.1 ? 500 : 0`
+	// for probabilistic delay, or `int(random() * 500)` for jitter). A non-positive result injects
+	// no delay.
+	//
+	// The injected delay counts against the request timeout.
+	// +required
+	Duration CELExpression `json:"duration"`
 }
 
 // Retry policy.

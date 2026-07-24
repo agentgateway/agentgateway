@@ -362,3 +362,29 @@ spec:
             requests:
               cpu: 100m
               memory: 128Mi
+
+---
+# Source: agentgateway/templates/monitoring.yaml
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: test-release-agentgateway-proxy
+  namespace: default
+  labels:
+    helm.sh/chart: agentgateway-0.0.2
+    agentgateway: agentgateway
+    app.kubernetes.io/name: agentgateway
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/version: "0.0.0-dev"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  selector:
+    matchExpressions:
+    - key: gateway.networking.k8s.io/gateway-class-name
+      operator: In
+      values:
+      - "agentgateway"
+  podMetricsEndpoints:
+  - port: metrics
+    path: /metrics
+    interval: 15s

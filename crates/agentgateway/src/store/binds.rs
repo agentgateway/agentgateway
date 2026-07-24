@@ -12,7 +12,7 @@ use tokio::sync::watch;
 use tracing::{Level, instrument, warn};
 
 use crate::cel::ContextBuilder;
-use crate::http::auth::BackendAuth;
+use crate::http::auth::{BackendAuth, BackendAuthKind};
 use crate::http::authorization::{HTTPAuthorizationSet, NetworkAuthorizationSet};
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::InferenceRouting;
@@ -328,7 +328,11 @@ impl BackendPolicies {
 		self.authorization.register_expressions(ctx);
 		self.ext_authz.register_expressions(ctx);
 		self.transformation.register_expressions(ctx);
-		if let Some(crate::http::auth::BackendAuth::Aws(aws)) = self.backend_auth.as_ref() {
+		if let Some(BackendAuth {
+			kind: Some(BackendAuthKind::Aws(aws)),
+			..
+		}) = self.backend_auth.as_ref()
+		{
 			for expr in aws.cel_expressions() {
 				ctx.register_expression(expr);
 			}
@@ -364,6 +368,7 @@ pub struct RoutePolicies {
 	pub llm: RequestPolicy<llm::Policy>,
 	pub timeout: RequestPolicy<timeout::Policy>,
 	pub retry: RequestPolicy<retry::Policy>,
+	pub delay: RequestPolicy<http::delay::Policy>,
 
 	pub request_header_modifier: RequestPolicy<filters::HeaderModifier>,
 	pub response_header_modifier: RequestPolicy<filters::HeaderModifier>,
@@ -431,6 +436,7 @@ impl RoutePolicies {
 			&self.llm as &dyn PolicyExpressions,
 			&self.request_header_modifier as &dyn PolicyExpressions,
 			&self.retry as &dyn PolicyExpressions,
+			&self.delay as &dyn PolicyExpressions,
 			&self.request_redirect as &dyn PolicyExpressions,
 			&self.url_rewrite as &dyn PolicyExpressions,
 			&self.cors as &dyn PolicyExpressions,
@@ -904,6 +910,11 @@ impl Store {
 						.retry
 						.merge_with_inheritance(&RequestPolicy::single(p.clone()), lock_inheritance);
 				},
+				TrafficPolicy::Delay(p) => {
+					pol
+						.delay
+						.merge_with_inheritance(&RequestPolicy::single(p.clone()), lock_inheritance);
+				},
 				TrafficPolicy::RequestHeaderModifier(p) => {
 					pol
 						.request_header_modifier
@@ -1153,8 +1164,8 @@ impl Store {
 				BackendTrafficPolicy::BackendTLS(p) => {
 					pol.backend_tls.get_or_insert_with(|| p.clone());
 				},
-				BackendTrafficPolicy::BackendAuth(p) => {
-					pol.backend_auth.get_or_insert_with(|| p.clone());
+				BackendTrafficPolicy::BackendAuth(auth) => {
+					pol.backend_auth.get_or_insert_with(|| auth.clone());
 				},
 				BackendTrafficPolicy::InferenceRouting(p) => {
 					pol.inference_routing.get_or_insert_with(|| p.clone());

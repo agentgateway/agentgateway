@@ -158,6 +158,11 @@ func TestBuildCrossAppAccess(t *testing.T) {
 		Audience:  "https://resource.example.com",
 		Resources: []string{"https://api.example.com"},
 		Scopes:    []string{"read", "write"},
+		SubjectToken: &agentgateway.CrossAppAccessSubjectToken{
+			Source: &agentgateway.AuthorizationExtractionLocation{
+				Expression: ptr.Of(agentgateway.CELExpression("jwt.the_id_token")),
+			},
+		},
 	}, "default")
 	if err != nil {
 		t.Fatalf("BuildCrossAppAccess() error = %v, want nil", err)
@@ -184,6 +189,9 @@ func TestBuildCrossAppAccess(t *testing.T) {
 	if got := crossAppAccess.GetScopes(); len(got) != 2 || got[0] != "read" || got[1] != "write" {
 		t.Fatalf("scopes = %v, want read/write", got)
 	}
+	if got := crossAppAccess.GetSubjectToken().GetSource().GetExpression(); got != "jwt.the_id_token" {
+		t.Fatalf("subject token expression = %q, want jwt.the_id_token", got)
+	}
 }
 
 func TestBuildCrossAppAccessRejectsInvalidConfig(t *testing.T) {
@@ -200,6 +208,11 @@ func TestBuildCrossAppAccessRejectsInvalidConfig(t *testing.T) {
 			},
 		},
 		ResourceAuthorizationServer: crossAppAccessEndpoint("resource-as"),
+		SubjectToken: &agentgateway.CrossAppAccessSubjectToken{
+			Source: &agentgateway.AuthorizationExtractionLocation{
+				Expression: ptr.Of(agentgateway.CELExpression("((")),
+			},
+		},
 	}, "default")
 	if err == nil {
 		t.Fatal("BuildCrossAppAccess() error = nil, want validation errors")
@@ -207,6 +220,7 @@ func TestBuildCrossAppAccessRejectsInvalidConfig(t *testing.T) {
 	for _, want := range []string{
 		"crossAppAccess audience must not be empty",
 		"crossAppAccess.identityProvider.path",
+		"crossAppAccess subjectToken source expression is not a valid CEL expression",
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("BuildCrossAppAccess() error = %v, want containing %q", err, want)

@@ -277,13 +277,16 @@ async fn multiple_requests() {
 #[tokio::test]
 async fn debug_trace_only_captures_one_request_on_keepalive_connection() {
 	let (_mock, _bind, io) = basic_setup().await;
-	let mut trace_rx = agentgateway::proxy::dtrace::track_expression(None);
+	// Watchers are process-global, so use a path disjoint from concurrent debug trace tests.
+	let mut trace_rx = agentgateway::proxy::dtrace::track_expression(Some(
+		agentgateway::cel::Expression::new_strict("request.path == '/keepalive'").unwrap(),
+	));
 
-	let res = send_request(io.clone(), Method::GET, "http://lo").await;
+	let res = send_request(io.clone(), Method::GET, "http://lo/keepalive").await;
 	assert_eq!(res.status(), 200);
 	read_body_raw(res.into_body()).await;
 
-	let res = send_request(io.clone(), Method::GET, "http://lo").await;
+	let res = send_request(io.clone(), Method::GET, "http://lo/keepalive").await;
 	assert_eq!(res.status(), 200);
 	read_body_raw(res.into_body()).await;
 

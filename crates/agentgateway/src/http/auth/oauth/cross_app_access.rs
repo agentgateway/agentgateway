@@ -9,7 +9,7 @@ use super::{
 };
 use crate::http::auth::AuthorizationLocation;
 use crate::types::agent::SimpleBackendReferenceWithPolicies;
-use crate::types::agent_xds::resolve_simple_reference;
+use crate::types::agent_xds::{Diagnostics, authorization_location, resolve_simple_reference};
 use crate::types::proto::{ProtoError, agent};
 use crate::{apply, schema};
 
@@ -58,6 +58,10 @@ pub(super) struct CrossAppAccessAuthConfig {
 	/// `scope` values for the requested token, sent space-delimited.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub(super) scopes: Vec<String>,
+	/// Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read
+	/// from the Authorization Bearer header.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub(super) subject_token: Option<CrossAppAccessSubjectToken>,
 	/// Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s
 	/// TTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.
 	#[serde(
@@ -67,6 +71,13 @@ pub(super) struct CrossAppAccessAuthConfig {
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<TokenCacheConfig>"))]
 	pub(super) cache: Option<InMemoryTokenCache>,
+}
+
+#[apply(schema!)]
+pub(super) struct CrossAppAccessSubjectToken {
+	/// Where to read the subject token. Defaults to the Authorization Bearer header.
+	#[serde(default)]
+	pub(super) source: AuthorizationLocation,
 }
 
 impl From<CrossAppAccessAuthConfig> for CrossAppAccessAuth {
@@ -79,6 +90,7 @@ impl From<CrossAppAccessAuthConfig> for CrossAppAccessAuth {
 			audience,
 			resources,
 			scopes,
+			subject_token,
 			cache,
 		} = config;
 		let CrossAppAccessEndpoint {
@@ -92,7 +104,10 @@ impl From<CrossAppAccessAuthConfig> for CrossAppAccessAuth {
 			path,
 			grant_type: OAuthGrantType::TokenExchange,
 			subject_token: TokenSpec {
-				source: AuthorizationLocation::default(),
+				source: match subject_token {
+					Some(CrossAppAccessSubjectToken { source }) => source,
+					None => AuthorizationLocation::default(),
+				},
 				token_type: OAuthTokenType::IdToken,
 			},
 			actor_token: None,
@@ -172,6 +187,9 @@ impl CrossAppAccessAuth {
 				client_auth: chained_client_auth.clone(),
 			},
 			audience,
+			subject_token: Some(CrossAppAccessSubjectToken {
+				source: self.oauth.subject_token.source.clone(),
+			}),
 			resources: self.oauth.resources.clone(),
 			scopes: self.oauth.scopes.clone(),
 			cache: self.oauth.cache.clone(),
@@ -199,7 +217,21 @@ impl CrossAppAccessAuth {
 		Ok(())
 	}
 
-	pub(crate) fn from_proto(t: agent::CrossAppAccessAuth) -> Result<Self, ProtoError> {
+	pub(crate) fn from_proto(
+		t: agent::CrossAppAccessAuth,
+		diagnostics: &mut Diagnostics,
+	) -> Result<Self, ProtoError> {
+		let subject_token = match t.subject_token.as_ref() {
+			Some(subject_token) => Some(CrossAppAccessSubjectToken {
+				source: authorization_location(
+					diagnostics,
+					"crossAppAccess.subjectToken.source",
+					subject_token.source.as_ref(),
+					AuthorizationLocation::default(),
+				)?,
+			}),
+			None => None,
+		};
 		let config = CrossAppAccessAuthConfig {
 			identity_provider: CrossAppAccessEndpoint::from_proto(t.identity_provider)?,
 			resource_authorization_server: CrossAppAccessEndpoint::from_proto(
@@ -208,6 +240,7 @@ impl CrossAppAccessAuth {
 			audience: t.audience,
 			resources: t.resources,
 			scopes: t.scopes,
+			subject_token,
 			cache: token_cache_from_proto(t.cache)?,
 		};
 		let auth = Self::from(config);

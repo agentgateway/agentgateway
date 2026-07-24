@@ -1,12 +1,64 @@
 import "../monacoWorkers";
 import { DiffEditor } from "@monaco-editor/react";
 import { FileText, Save } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { configureConfigYamlMonaco } from "../configMonaco";
 import { cloneConfig } from "../config";
+import {
+  allowNextHybridFileWrite,
+  useHybridFileWriteOverrideKeys,
+  useRuntimeInfo,
+} from "../hooks";
 import { toYamlText } from "../policies/policyUtils";
 import type { GatewayConfig } from "../types";
-import { Drawer } from "./Primitives";
+import { Drawer, Tooltip } from "./Primitives";
+
+const hybridFileWriteMessage =
+  "File configuration is read-only in hybrid mode. Copy this diff and update the configuration file directly.";
+const hybridFileWriteOverrideMessage =
+  "Override active. Click to write this change to the configuration file.";
+
+export function ConfigSaveButton(props: {
+  children: ReactNode;
+  disabled?: boolean;
+  allowHybridWrite?: boolean;
+  hybridFileWriteMessage?: string;
+  onClick: () => void;
+}) {
+  const runtime = useRuntimeInfo();
+  const overrideKeysActive = useHybridFileWriteOverrideKeys();
+  const fileWriteDisabled =
+    runtime.data?.ui.configStoreMode === "hybrid" && !props.allowHybridWrite;
+  const button = (
+    <button
+      className={`button primary${fileWriteDisabled ? " hybrid-write-disabled" : ""}${fileWriteDisabled && overrideKeysActive ? " hybrid-write-override" : ""}`}
+      type="button"
+      disabled={props.disabled}
+      aria-disabled={fileWriteDisabled}
+      onClick={(event) => {
+        if (fileWriteDisabled) {
+          if (!event.ctrlKey || !event.shiftKey) return;
+          allowNextHybridFileWrite();
+        }
+        props.onClick();
+      }}
+    >
+      {props.children}
+    </button>
+  );
+  if (!fileWriteDisabled) return button;
+  return (
+    <Tooltip
+      content={
+        overrideKeysActive
+          ? hybridFileWriteOverrideMessage
+          : (props.hybridFileWriteMessage ?? hybridFileWriteMessage)
+      }
+    >
+      {button}
+    </Tooltip>
+  );
+}
 
 const configTopLevelOrder = [
   "config",
@@ -29,9 +81,20 @@ export function ConfigDiffDrawer(props: {
   original: string;
   modified: string;
   saving?: boolean;
+  allowHybridWrite?: boolean;
   onClose: () => void;
   onSave?: () => void;
 }) {
+  const saveButton = props.onSave ? (
+    <ConfigSaveButton
+      disabled={props.saving}
+      allowHybridWrite={props.allowHybridWrite}
+      onClick={props.onSave}
+    >
+      <Save size={16} />
+      Save
+    </ConfigSaveButton>
+  ) : null;
   return (
     <Drawer
       title={props.title}
@@ -42,17 +105,7 @@ export function ConfigDiffDrawer(props: {
           <button className="button" type="button" onClick={props.onClose}>
             Close
           </button>
-          {props.onSave ? (
-            <button
-              className="button primary"
-              type="button"
-              disabled={props.saving}
-              onClick={props.onSave}
-            >
-              <Save size={16} />
-              Save
-            </button>
-          ) : null}
+          {saveButton}
         </div>
       }
     >
@@ -62,6 +115,10 @@ export function ConfigDiffDrawer(props: {
           language="yaml"
           original={props.original}
           modified={props.modified}
+          originalModelPath={`inmemory://config-diff/${encodeURIComponent(props.title)}/original.yaml`}
+          modifiedModelPath={`inmemory://config-diff/${encodeURIComponent(props.title)}/modified.yaml`}
+          keepCurrentOriginalModel
+          keepCurrentModifiedModel
           theme={
             document.documentElement.dataset.theme === "dark"
               ? "vs-dark"
@@ -95,6 +152,9 @@ export function ConfigDiffDrawer(props: {
 
 export function ConfigDiffSaveActions(props: {
   config?: GatewayConfig | null;
+  resourceDiff?:
+    | { original: unknown; modified: unknown }
+    | (() => { original: unknown; modified: unknown });
   diffTitle: string;
   saveLabel: string;
   saving?: boolean;
@@ -111,12 +171,46 @@ export function ConfigDiffSaveActions(props: {
   } | null>(null);
 
   function viewDiff() {
-    if (!props.config || props.diffDisabled || props.saveDisabled) return;
+    if (
+      (!props.config && !props.resourceDiff) ||
+      props.diffDisabled ||
+      props.saveDisabled
+    )
+      return;
     if (props.beforeDiff && !props.beforeDiff()) return;
+    if (props.resourceDiff) {
+      const resourceDiff =
+        typeof props.resourceDiff === "function"
+          ? props.resourceDiff()
+          : props.resourceDiff;
+      setDiff({
+        original: toYamlText(resourceDiff.original),
+        modified: toYamlText(resourceDiff.modified),
+      });
+      return;
+    }
+    if (!props.config) return;
     const modified = cloneConfig(props.config);
     props.applyDiff(modified);
     setDiff(configDiffText(props.config, modified));
   }
+
+  const diffButton = (
+    <button
+      className="button"
+      type="button"
+      disabled={
+        props.saving ||
+        (!props.config && !props.resourceDiff) ||
+        props.diffDisabled ||
+        props.saveDisabled
+      }
+      onClick={viewDiff}
+    >
+      <FileText size={16} />
+      View diff
+    </button>
+  );
 
   return (
     <>
@@ -126,29 +220,19 @@ export function ConfigDiffSaveActions(props: {
             Cancel
           </button>
         ) : null}
-        <button
-          className="button"
-          type="button"
-          disabled={
-            props.saving ||
-            !props.config ||
-            props.diffDisabled ||
-            props.saveDisabled
-          }
-          onClick={viewDiff}
-        >
-          <FileText size={16} />
-          View diff
-        </button>
-        <button
-          className="button primary"
-          type="button"
+        {props.diffDisabled ? (
+          <Tooltip content="No diff">{diffButton}</Tooltip>
+        ) : (
+          diffButton
+        )}
+        <ConfigSaveButton
           disabled={props.saving || props.saveDisabled}
+          allowHybridWrite={Boolean(props.resourceDiff)}
           onClick={props.onSave}
         >
           <Save size={16} />
           {props.saveLabel}
-        </button>
+        </ConfigSaveButton>
       </div>
       {diff ? (
         <ConfigDiffDrawer
@@ -156,8 +240,12 @@ export function ConfigDiffSaveActions(props: {
           original={diff.original}
           modified={diff.modified}
           saving={props.saving}
+          allowHybridWrite={Boolean(props.resourceDiff)}
           onClose={() => setDiff(null)}
-          onSave={props.onSave}
+          onSave={() => {
+            setDiff(null);
+            props.onSave();
+          }}
         />
       ) : null}
     </>

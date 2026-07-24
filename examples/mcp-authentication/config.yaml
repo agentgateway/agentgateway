@@ -308,5 +308,58 @@ binds:
             #         - header
             #         resourceDocumentation: http://localhost:3000/authentik/docs
             #         resourcePolicyUri: http://localhost:3000/authentik/policies
+            # Example configuration for Microsoft Entra ID (Azure AD):
+            # Note the pathPrefix match on the authorization-server path: the gateway serves
+            # /authorize, /token, and /client-registration endpoints beneath it to adapt
+            # Entra (strip the RFC 8707 `resource` param, short-circuit DCR).
+            # - backends:
+            #   - mcp:
+            #       targets:
+            #       - name: everything
+            #         stdio:
+            #           args:
+            #           - '@modelcontextprotocol/server-everything'
+            #           cmd: npx
+            #   matches:
+            #   - path:
+            #       exact: /entra/mcp
+            #   - path:
+            #       exact: /.well-known/oauth-protected-resource/entra/mcp
+            #   - path:
+            #       pathPrefix: /.well-known/oauth-authorization-server/entra/mcp
+            #   policies:
+            #     cors:
+            #       allowHeaders:
+            #       - mcp-protocol-version
+            #       - content-type
+            #       # authorization is needed on the proxied token endpoint for clients
+            #       # authenticating with client_secret_basic
+            #       - authorization
+            #       allowOrigins:
+            #       - '*'
+            #     mcpAuthentication:
+            #       # v2 issuer form; the v1 form https://sts.windows.net/<tenant-id>/ is also
+            #       # supported (use it when the app registration mints v1 access tokens).
+            #       issuer: https://login.microsoftonline.com/<tenant-id>/v2.0
+            #       audiences:
+            #       - api://<client-id>
+            #       - <client-id>
+            #       # jwks defaults to https://login.microsoftonline.com/<tenant-id>/discovery/v2.0/keys
+            #       provider:
+            #         entra: {}
+            #       # Entra has no Dynamic Client Registration; the gateway answers registration
+            #       # requests with this pre-registered app registration (client) id.
+            #       clientId: <client-id>
+            #       # Required for confidential clients (Web platform app registrations);
+            #       # injected into token requests the gateway proxies to Entra.
+            #       clientSecret: <client-secret>
+            #       resourceMetadata:
+            #         resource: http://localhost:3000/entra/mcp
+            #         scopesSupported:
+            #         - api://<client-id>/mcp_access
+            #         - openid
+            #         - offline_access
+            #         bearerMethodsSupported:
+            #         - header
   # Public port to listen on
   port: 3000

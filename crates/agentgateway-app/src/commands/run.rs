@@ -4,7 +4,7 @@ use std::sync::Arc;
 use agent_core::{strng, telemetry, version};
 use agentgateway::app::Bound;
 use agentgateway::types::agent::ListenerTarget;
-use agentgateway::{BackendConfig, Config, LoggingFormat, client, serdes};
+use agentgateway::{BackendConfig, Config, ConfigStoreMode, LoggingFormat, client, serdes};
 use tracing::{error, info};
 
 use crate::{RunArgs, read_config_contents};
@@ -51,17 +51,29 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 				"running with config: {}",
 				serdes::yamlviajson::to_string(&config)?
 			);
+			let config_resource_store = if config.config_store.mode == ConfigStoreMode::Hybrid {
+				let database = config
+					.database
+					.as_ref()
+					.expect("hybrid config store requires config.database");
+				Some(agentgateway::config_store::setup(database).await?)
+			} else {
+				None
+			};
 			let request_log_store = match config.database.as_ref() {
-				Some(cfg) => match agentgateway::telemetry::log_store::setup(cfg).await {
-					Ok(store) => Some(store),
-					Err(err) => {
-						error!(?err, "failed to initialize request log database");
-						return Err(err);
-					},
+				Some(cfg) => {
+					let pool = config_resource_store.as_ref().map(|store| store.pool());
+					match agentgateway::telemetry::log_store::setup_with_pool(cfg, pool).await {
+						Ok(store) => Some(store),
+						Err(err) => {
+							error!(?err, "failed to initialize request log database");
+							return Err(err);
+						},
+					}
 				},
 				None => None,
 			};
-			let result = proxy(Arc::new(config)).await;
+			let result = proxy(Arc::new(config), config_resource_store).await;
 			if let Some(request_log_store) = request_log_store {
 				request_log_store.shutdown_and_wait().await;
 			}
@@ -149,8 +161,11 @@ fn spawn_readiness(bound: &Bound) {
 	}
 }
 
-async fn proxy(cfg: Arc<Config>) -> anyhow::Result<()> {
-	let bound = agentgateway::app::run(cfg).await?;
+async fn proxy(
+	cfg: Arc<Config>,
+	config_resource_store: Option<agentgateway::config_store::ConfigResourceStore>,
+) -> anyhow::Result<()> {
+	let bound = agentgateway::app::run(cfg, config_resource_store).await?;
 	spawn_readiness(&bound);
 	bound.wait_termination().await
 }

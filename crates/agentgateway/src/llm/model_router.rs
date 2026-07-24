@@ -4,6 +4,7 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 use bytes::Bytes;
 use futures_util::stream;
+use headers::{ContentEncoding, HeaderMapExt};
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use rand::seq::IndexedRandom;
 use serde_json::Value;
@@ -18,6 +19,8 @@ use crate::{apply, cel, llm, schema_enum};
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelRoute {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub id: Option<String>,
 	pub name: String,
 	pub visibility: ModelVisibility,
 	pub header_matches: Vec<Vec<HeaderMatch>>,
@@ -572,16 +575,50 @@ async fn multipart_model(body: &Bytes, boundary: &str) -> RouterResult<String> {
 
 async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
 	let limit = http::buffer_limit(req);
-	if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
-		if body.0.len() < limit {
-			return Ok(body.0.clone());
+	let content_encoding = req.headers().typed_get::<ContentEncoding>();
+	if content_encoding.is_some() {
+		let body = if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
+			http::Body::from(
+				body
+					.bytes()
+					.cloned()
+					.ok_or_else(|| Box::new(request_body_too_large_response()))?,
+			)
+		} else {
+			std::mem::take(req.body_mut())
+		};
+		let (encoding, body) =
+			http::compression::to_bytes_with_decompression(body, content_encoding.as_ref(), limit)
+				.await
+				.map_err(|err| match err {
+					http::compression::Error::LimitExceeded => Box::new(request_body_too_large_response()),
+					err => {
+						tracing::debug!(%err, "failed to decode LLM request body");
+						Box::new(llm_error_response(
+							::http::StatusCode::BAD_REQUEST,
+							"Failed to decode LLM request body",
+							"request_body_decode_failed",
+						))
+					},
+				})?;
+		*req.body_mut() = http::Body::from(body.clone());
+		if encoding.is_some() {
+			req.headers_mut().remove(::http::header::CONTENT_ENCODING);
+			req.headers_mut().remove(::http::header::CONTENT_LENGTH);
+			req.headers_mut().remove(::http::header::TRANSFER_ENCODING);
 		}
-		if body.0.len() > limit {
-			return Err(Box::new(request_body_too_large_response()));
-		}
+		req
+			.extensions_mut()
+			.insert(cel::BufferedBody::complete(body.clone()));
+		return Ok(body);
 	}
-	let inspect_limit = limit.saturating_add(1);
-	let mut body = http::inspect_body_with_limit(req.body_mut(), inspect_limit)
+	if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
+		return body
+			.bytes()
+			.cloned()
+			.ok_or_else(|| Box::new(request_body_too_large_response()));
+	}
+	let inspection = http::inspect_body_with_limit(req.body_mut(), limit)
 		.await
 		.map_err(|err| {
 			tracing::debug!(%err, "failed to read LLM request body");
@@ -591,13 +628,15 @@ async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
 				"request_body_read_failed",
 			))
 		})?;
-	if body.len() > limit {
-		return Err(Box::new(request_body_too_large_response()));
-	}
-	if body.len() == inspect_limit {
-		body.truncate(limit);
-	}
-	req.extensions_mut().insert(cel::BufferedBody(body.clone()));
+	let body = match inspection {
+		http::BodyInspection::Complete(body) => body,
+		http::BodyInspection::Partial(_) => {
+			return Err(Box::new(request_body_too_large_response()));
+		},
+	};
+	req
+		.extensions_mut()
+		.insert(cel::BufferedBody::complete(body.clone()));
 	Ok(body)
 }
 
@@ -700,5 +739,32 @@ mod tests {
 			.await
 			.expect("restored request body");
 		assert_eq!(restored, Bytes::from_static(request_body));
+	}
+
+	#[tokio::test]
+	async fn requested_model_decodes_gzip_body() {
+		let body = br#"{"model":"claude-opus-4-8","messages":[]}"#;
+		let compressed = http::compression::encode_body(body, "gzip")
+			.await
+			.expect("gzip encode");
+		let mut req = ::http::Request::builder()
+			.uri("http://example.com/v1/messages")
+			.header(::http::header::CONTENT_ENCODING, "gzip")
+			.header(::http::header::CONTENT_LENGTH, compressed.len())
+			.body(http::Body::from(compressed))
+			.unwrap();
+
+		let requested = requested_model(&mut req)
+			.await
+			.expect("gzip request body should decode");
+		assert_eq!(requested.model, "claude-opus-4-8");
+		assert!(!req.headers().contains_key(::http::header::CONTENT_ENCODING));
+		assert!(!req.headers().contains_key(::http::header::CONTENT_LENGTH));
+		assert_eq!(
+			http::read_body_with_limit(req.into_body(), 1024)
+				.await
+				.expect("decompressed request body"),
+			Bytes::from_static(body)
+		);
 	}
 }

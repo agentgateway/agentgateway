@@ -19,7 +19,9 @@ pub use policy::Policy;
 use rand::RngExt;
 use serde::de::DeserializeOwned;
 
-use crate::http::auth::{AppliedBackendAuthLocation, AwsAuth, AzureAuth, BackendAuth, GcpAuth};
+use crate::http::auth::{
+	AppliedBackendAuthLocation, AwsAuth, AzureAuth, BackendAuth, BackendAuthKind, GcpAuth,
+};
 use crate::http::jwt::Claims;
 use crate::http::{Body, Request, Response};
 use crate::proxy::httpproxy::PolicyClient;
@@ -887,26 +889,29 @@ impl AIProvider {
 		Some(match self {
 			AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::Anthropic(_) => btls,
 			AIProvider::Copilot(_) => BackendPolicies {
-				backend_auth: Some(BackendAuth::Copilot),
+				backend_auth: Some(BackendAuth::new(BackendAuthKind::Copilot)),
 				..btls
 			},
 			AIProvider::Vertex(_) => BackendPolicies {
-				backend_auth: Some(BackendAuth::Gcp(GcpAuth::default())),
+				backend_auth: Some(BackendAuth::new(BackendAuthKind::Gcp(GcpAuth::default()))),
 				..btls
 			},
 			AIProvider::Bedrock(p) => BackendPolicies {
-				backend_auth: Some(BackendAuth::Aws(AwsAuth::Implicit {
+				backend_auth: Some(BackendAuth::new(BackendAuthKind::Aws(AwsAuth::Implicit {
 					service_name: None,
+					region: None,
 					assume_role: None,
 					source_credentials_cache: p.source_credentials_cache.clone(),
 					assume_role_cache: p.assume_role_cache.clone(),
-				})),
+				}))),
 				..btls
 			},
 			AIProvider::Azure(p) => BackendPolicies {
-				backend_auth: Some(BackendAuth::Azure(AzureAuth::Implicit {
-					cached_cred: p.cached_cred.clone(),
-				})),
+				backend_auth: Some(BackendAuth::new(BackendAuthKind::Azure(
+					AzureAuth::Implicit {
+						cached_cred: p.cached_cred.clone(),
+					},
+				))),
 				..btls
 			},
 			AIProvider::Custom(_) => return None,
@@ -1606,8 +1611,9 @@ impl AIProvider {
 			if original_format.supports_prompt_guard() {
 				let http_headers = &parts.headers;
 				let claims = parts.extensions.get::<Claims>().cloned();
+				let original = log.as_ref().and_then(|l| l.request_snapshot.clone());
 				if let Some((response, guardrail)) = p
-					.apply_prompt_guard(backend_info, req, http_headers, claims)
+					.apply_prompt_guard(backend_info, req, http_headers, claims, original.as_deref())
 					.await
 					.map_err(|e| {
 						warn!("failed to call prompt guard webhook: {e}");
@@ -1864,6 +1870,7 @@ impl AIProvider {
 				resp.as_mut(),
 				&prompt_guard_headers,
 				&rate_limit.prompt_guard,
+				req_snapshot.as_deref(),
 			)
 			.await
 			.map_err(|e| {
@@ -1925,7 +1932,7 @@ impl AIProvider {
 		if encoding.is_some() {
 			parts
 				.extensions
-				.insert(crate::cel::BufferedBody(bytes.clone()));
+				.insert(crate::cel::BufferedBody::complete(bytes.clone()));
 			parts.headers.remove(header::CONTENT_ENCODING);
 			parts.headers.remove(header::TRANSFER_ENCODING);
 		}
@@ -2221,7 +2228,11 @@ impl AIProvider {
 				request: vec![],
 				response: response_policies.prompt_guard.clone(),
 			};
-			temp_guard.begin_streaming_response_guard(&client, &prompt_guard_headers)
+			temp_guard.begin_streaming_response_guard(
+				&client,
+				&prompt_guard_headers,
+				req_snapshot.clone(),
+			)
 		} else {
 			vec![]
 		};

@@ -10,7 +10,7 @@ use rmcp::service::RunningService;
 use rmcp::transport::StreamableHttpServerConfig;
 use secrecy::SecretString;
 
-use crate::http::auth::BackendAuth;
+use crate::http::auth::BackendAuthKind;
 use crate::http::authorization::{PolicySet, RuleSet};
 use crate::http::sessionpersistence::MCPSession;
 use crate::mcp::handler::Relay;
@@ -1439,6 +1439,64 @@ fn mcp_json_post<'a>(
 		.json(body)
 }
 
+#[tokio::test]
+async fn streamable_http_downstream_sse_frames_include_message_event() {
+	use wiremock::{Mock, ResponseTemplate};
+
+	let upstream = wiremock::MockServer::start().await;
+	let upstream_frame = concat!(
+		"data: {\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{",
+		"\"protocolVersion\":\"2025-06-18\",",
+		"\"capabilities\":{\"tools\":{}},",
+		"\"serverInfo\":{\"name\":\"mock\",\"version\":\"0.0.1\"}",
+		"}}\n\n",
+	);
+	Mock::given(wiremock::matchers::method("POST"))
+		.respond_with(ResponseTemplate::new(200).set_body_raw(upstream_frame, "text/event-stream"))
+		.mount(&upstream)
+		.await;
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(*upstream.address(), true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(*upstream.address()));
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let initialize = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {
+				"name": "test-client",
+				"version": "0.0.1"
+			}
+		}
+	});
+
+	let response = mcp_json_post(&client, &url, &initialize)
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	assert!(
+		response
+			.headers()
+			.get(reqwest::header::CONTENT_TYPE)
+			.and_then(|v| v.to_str().ok())
+			.is_some_and(|ct| ct.starts_with("text/event-stream"))
+	);
+	let text = response.text().await.unwrap();
+	assert!(
+		text.contains("event: message\ndata:"),
+		"expected explicit SSE message event, got: {text}"
+	);
+}
+
 // Forwarded modern responses may come back as a single JSON object or as an SSE stream.
 // Validation-layer errors are always plain JSON.
 async fn read_response_message(response: reqwest::Response) -> serde_json::Value {
@@ -1970,7 +2028,7 @@ async fn stream_to_stream_single_tls() {
 		&mock,
 		true,
 		false,
-		vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Key {
+		vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
 			value: SecretString::new("my-key".into()),
 			location: None,
 		})],
@@ -2651,6 +2709,7 @@ async fn mcp_authentication_early_response_transformation_has_request_context() 
 		)),
 		mode: crate::types::agent::McpAuthenticationMode::Strict,
 		client_id: None,
+		client_secret: None,
 	};
 
 	let mut t = setup_proxy_test("{}")

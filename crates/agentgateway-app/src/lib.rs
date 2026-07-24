@@ -225,15 +225,10 @@ fn ensure_default_config_file(path: &std::path::Path) -> anyhow::Result<()> {
 
 fn default_config_contents(dir: &std::path::Path) -> String {
 	let db = dir.join("data.db");
-	let admin = if running_in_official_container() {
-		"  adminAddr: 0.0.0.0:15000\n"
-	} else {
-		""
-	};
 	format!(
 		r#"# yaml-language-server: $schema=https://agentgateway.dev/schema/config
 config:
-{}  database:
+  database:
     url: sqlite://{}
 gateways:
   default:
@@ -241,7 +236,6 @@ gateways:
 ui:
   gateways: default
 "#,
-		admin,
 		db.display()
 	)
 }

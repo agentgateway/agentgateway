@@ -36,8 +36,9 @@ export function RawSettingsPage() {
       title="UI Settings"
       description="Expose the UI on a traffic gateway and configure policies that protect the UI."
       schemaRoot="LocalUIPolicy"
+      resourceKind="ui.policy"
       sections={uiPolicySections}
-      yamlDescription="Read-only view of UI policies from ui.policies."
+      yamlDescription="Read-only view of effective UI policies, including database-backed resources in hybrid mode."
       policies={(config) =>
         config.data?.ui?.policies as Record<string, unknown> | null | undefined
       }

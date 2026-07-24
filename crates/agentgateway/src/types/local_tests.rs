@@ -17,7 +17,7 @@ use crate::*;
 const TEST_OIDC_JWKS: &str = r#"{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}"#;
 
 struct ClearTracingEnv {
-	_guard: std::sync::MutexGuard<'static, ()>,
+	_guard: tokio::sync::MutexGuard<'static, ()>,
 	values: Vec<(&'static str, Option<std::ffi::OsString>)>,
 }
 
@@ -455,6 +455,11 @@ async fn test_llm_virtual_model_conditional_config() {
 }
 
 #[tokio::test]
+async fn test_backend_auth_credentials_config() {
+	test_config_parsing("backend_auth_credentials").await;
+}
+
+#[tokio::test]
 async fn test_llm_conditional_virtual_model_requires_fallback_last() {
 	let err = normalize_test_config(
 		r#"
@@ -577,6 +582,66 @@ llm:
 		err
 			.to_string()
 			.contains("model name wildcard must be either at the beginning or the end: 'foo*bar'"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_llm_model_accepts_stable_id() {
+	normalize_test_config(
+		r#"
+llm:
+  models:
+  - id: 4f8572ff-20c4-49c1-b7c3-d1519ad1e860
+    name: ollama/*
+    provider: ollama
+"#,
+	)
+	.await
+	.expect("model id should be accepted");
+}
+
+#[tokio::test]
+async fn test_llm_model_rejects_duplicate_id() {
+	let err = normalize_test_config(
+		r#"
+llm:
+  models:
+  - id: shared
+    name: ollama/*
+    provider: ollama
+  - id: shared
+    name: openai/*
+    provider: openAI
+"#,
+	)
+	.await
+	.expect_err("duplicate model id should fail");
+	assert!(
+		err
+			.to_string()
+			.contains("llm.models contains duplicate model id: shared"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_llm_model_rejects_empty_id() {
+	let err = normalize_test_config(
+		r#"
+llm:
+  models:
+  - id: ""
+    name: ollama/*
+    provider: ollama
+"#,
+	)
+	.await
+	.expect_err("empty model id should fail");
+	assert!(
+		err
+			.to_string()
+			.contains("llm.models model id cannot be empty"),
 		"{err:?}"
 	);
 }
@@ -1565,6 +1630,51 @@ binds:
 }
 
 #[tokio::test]
+async fn test_delay_policy() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        delay:
+          duration: 2s
+      backends:
+      - host: 127.0.0.1:8000
+    - policies:
+        delay:
+          duration: 'request.headers["x-chaos"] == "1" ? 500 : 0'
+      backends:
+      - host: 127.0.0.1:8000
+"#;
+
+	let normalized = normalize_test_yaml(input).await.unwrap();
+	let routes = &normalized.listener_routes[0].1;
+
+	let delay_of = |i: usize| {
+		routes[i]
+			.inline_policies
+			.iter()
+			.find_map(|p| match p {
+				TrafficPolicy::Delay(p) => Some(p),
+				_ => None,
+			})
+			.expect("expected delay policy")
+	};
+
+	// A bare duration literal is wrapped into a CEL `duration(...)` call.
+	assert_eq!(
+		delay_of(0).duration.original_expression,
+		r#"duration("2s")"#
+	);
+	// A CEL expression is preserved as-is.
+	assert_eq!(
+		delay_of(1).duration.original_expression,
+		r#"request.headers["x-chaos"] == "1" ? 500 : 0"#
+	);
+}
+
+#[tokio::test]
 async fn test_inference_routing_rejects_failure_mode() {
 	let input = r#"
 binds:
@@ -2073,4 +2183,51 @@ binds:
 		err.to_string().contains("client_secret"),
 		"returned unexpected error: {err}"
 	);
+}
+
+#[test]
+fn test_de_backend_auth_accepts_each_shape() {
+	use serde::de::IntoDeserializer;
+
+	use crate::http::auth::BackendAuthKind;
+
+	let parse = |v: serde_json::Value| -> crate::http::auth::BackendAuth {
+		super::de_backend_auth::<serde_json::Value>(v.into_deserializer())
+			.unwrap()
+			.unwrap()
+	};
+
+	let copilot_scalar = parse(serde_json::json!("copilot"));
+	assert!(matches!(
+		copilot_scalar.kind,
+		Some(BackendAuthKind::Copilot)
+	));
+	assert!(copilot_scalar.credentials.is_empty());
+
+	let plain_key = parse(serde_json::json!({"key": "plain-secret"}));
+	assert!(matches!(
+		plain_key.kind,
+		Some(BackendAuthKind::Key { location: None, .. })
+	));
+	assert!(plain_key.credentials.is_empty());
+
+	let full_key = parse(serde_json::json!({"key": {"value": "explicit-secret"}}));
+	assert!(matches!(full_key.kind, Some(BackendAuthKind::Key { .. })));
+	assert!(full_key.credentials.is_empty());
+
+	let full_with_credentials = parse(serde_json::json!({
+		"key": {"value": "explicit-secret"},
+		"credentials": [{"location": {"header": {"name": "x-token"}}, "key": "tok"}],
+	}));
+	assert!(matches!(
+		full_with_credentials.kind,
+		Some(BackendAuthKind::Key { .. })
+	));
+	assert_eq!(full_with_credentials.credentials.len(), 1);
+
+	let credentials_only = parse(serde_json::json!({
+		"credentials": [{"location": {"header": {"name": "x-token"}}, "key": "tok"}],
+	}));
+	assert!(credentials_only.kind.is_none());
+	assert_eq!(credentials_only.credentials.len(), 1);
 }

@@ -27,7 +27,9 @@ pub mod aws;
 pub mod cel;
 pub mod client;
 pub mod config;
+pub mod config_store;
 pub mod control;
+pub mod database;
 pub mod http;
 pub mod json;
 pub mod llm;
@@ -158,6 +160,8 @@ pub struct RawConfig {
 	model_catalog: Option<Vec<ModelCatalogSource>>,
 	/// Primary database used by local runtime features.
 	database: Option<telemetry::log_store::Config>,
+	/// Controls whether UI-managed configuration is written to the config file or a DB overlay.
+	config_store: Option<RawConfigStoreConfig>,
 
 	/// Address of the Certificate Authority used to issue SPIFFE certificates.
 	ca_address: Option<String>,
@@ -405,6 +409,23 @@ pub struct RawLogging {
 }
 
 #[apply(schema_de!)]
+#[derive(Default)]
+pub struct RawConfigStoreConfig {
+	#[serde(default)]
+	mode: ConfigStoreMode,
+}
+
+#[apply(schema!)]
+#[derive(Default, Eq, PartialEq, Copy)]
+pub enum ConfigStoreMode {
+	/// Store all UI-managed configuration in the local config file.
+	#[default]
+	File,
+	/// Read a file baseline and store UI-managed overlay resources in the configured database.
+	Hybrid,
+}
+
+#[apply(schema_de!)]
 #[serde(untagged)]
 pub enum RawLoggingLevel {
 	Single(String),
@@ -594,6 +615,7 @@ pub struct Config {
 	pub metrics: crate::telemetry::log::MetricsConfig,
 	pub logging: crate::telemetry::log::Config,
 	pub database: Option<telemetry::log_store::Config>,
+	pub config_store: ConfigStoreConfig,
 
 	pub dns: client::Config,
 	pub proxy_metadata: ProxyMetadata,
@@ -615,6 +637,12 @@ pub struct Config {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ModelCatalogConfig {
 	pub sources: Vec<ModelCatalogSource>,
+}
+
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ConfigStoreConfig {
+	pub mode: ConfigStoreMode,
 }
 
 /// A source of model cost catalog data.

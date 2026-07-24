@@ -67,6 +67,8 @@ struct AdminState {
 	config: Arc<Config>,
 	#[cfg_attr(not(feature = "ui"), allow(dead_code))]
 	model_catalog: Arc<crate::llm::cost::ModelCatalog>,
+	#[cfg_attr(not(feature = "ui"), allow(dead_code))]
+	config_resource_store: Option<crate::config_store::ConfigResourceStore>,
 	shutdown_trigger: signal::ShutdownTrigger,
 	#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 	dataplane_handle: Handle,
@@ -111,9 +113,11 @@ pub struct CertsDump {
 }
 
 impl Service {
+	#[allow(clippy::too_many_arguments)]
 	pub async fn new(
 		config: Arc<Config>,
 		model_catalog: Arc<crate::llm::cost::ModelCatalog>,
+		config_resource_store: Option<crate::config_store::ConfigResourceStore>,
 		stores: crate::store::Stores,
 		resource_manager: crate::resource_manager::ResourceManager,
 		shutdown_trigger: signal::ShutdownTrigger,
@@ -123,6 +127,7 @@ impl Service {
 		let state = Arc::new(AdminState {
 			config,
 			model_catalog,
+			config_resource_store,
 			stores,
 			resource_manager,
 			shutdown_trigger,
@@ -186,6 +191,7 @@ fn admin_router(state: Arc<AdminState>) -> Router {
 	let router = router.merge(crate::ui::router(
 		state.config.clone(),
 		state.model_catalog.clone(),
+		state.config_resource_store.clone(),
 		state.resource_manager.clone(),
 	));
 	#[cfg(not(feature = "ui"))]
@@ -378,6 +384,7 @@ fn trace_sse_stream(
 				},
 			}
 		});
+	let events = events.fuse();
 	futures_util::stream::once(async { Ok(Bytes::from_static(b": ready\n\n")) }).chain(events)
 }
 

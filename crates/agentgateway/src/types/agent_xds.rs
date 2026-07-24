@@ -25,7 +25,7 @@ use itertools::Itertools;
 use llm::{AIBackend, AIProvider, NamedAIProvider};
 
 use super::agent::*;
-use crate::http::auth::{AwsAuth, BackendAuth, GcpAuth};
+use crate::http::auth::{AwsAuth, BackendAuth, BackendAuthKind, GcpAuth};
 use crate::http::buffer::BufferBody;
 use crate::http::transformation_cel::{LocalTransform, LocalTransformationConfig, Transformation};
 use crate::http::{HeaderOrPseudo, Scheme, auth, authorization, health};
@@ -452,6 +452,7 @@ fn mcp_authentication_from_proto(
 		std::sync::Arc::new(jwt_validator),
 		mode,
 		m.client_id.clone(),
+		m.client_secret.clone().map(Into::into),
 	))
 }
 
@@ -492,6 +493,7 @@ fn convert_mcp_provider(provider: i32) -> Option<McpIDP> {
 		x if x == McpIdp::Okta as i32 => Some(McpIDP::Okta {}),
 		x if x == McpIdp::Descope as i32 => Some(McpIDP::Descope {}),
 		x if x == McpIdp::Authentik as i32 => Some(McpIDP::Authentik {}),
+		x if x == McpIdp::Entra as i32 => Some(McpIDP::Entra {}),
 		_ => None,
 	}
 }
@@ -515,6 +517,7 @@ where
 	ResourceMetadata { extra }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_mcp_authentication(
 	issuer: String,
 	audiences: Vec<String>,
@@ -523,6 +526,7 @@ fn build_mcp_authentication(
 	jwt_validator: Arc<http::jwt::Jwt>,
 	mode: McpAuthenticationMode,
 	client_id: Option<String>,
+	client_secret: Option<secrecy::SecretString>,
 ) -> McpAuthentication {
 	McpAuthentication {
 		issuer,
@@ -532,6 +536,7 @@ fn build_mcp_authentication(
 		jwt_validator,
 		mode,
 		client_id,
+		client_secret,
 	}
 }
 
@@ -962,17 +967,33 @@ fn convert_backend_ai_policy(
 	Ok(policy)
 }
 
-fn backend_auth_from_proto(
+fn backend_auth_credentials_from_proto(
+	credentials: Vec<proto::agent::BackendAuthCredential>,
+) -> Result<Vec<crate::http::auth::BackendAuthCredential>, ProtoError> {
+	credentials
+		.into_iter()
+		.map(|c| {
+			let location = optional_authorization_location(c.location.as_ref())?
+				.ok_or(ProtoError::MissingRequiredField)?;
+			Ok(crate::http::auth::BackendAuthCredential {
+				location,
+				key: c.value.into(),
+			})
+		})
+		.collect()
+}
+
+fn backend_auth_kind_from_proto(
 	s: proto::agent::BackendAuthPolicy,
 	diagnostics: &mut Diagnostics,
-) -> Result<BackendAuth, ProtoError> {
+) -> Result<Option<BackendAuthKind>, ProtoError> {
 	use proto::agent::azure_managed_identity_credential::user_assigned_identity;
 	use proto::agent::{azure_explicit_config, gcp};
-	Ok(match s.kind {
-		Some(proto::agent::backend_auth_policy::Kind::Passthrough(p)) => BackendAuth::Passthrough {
+	Ok(Some(match s.kind {
+		Some(proto::agent::backend_auth_policy::Kind::Passthrough(p)) => BackendAuthKind::Passthrough {
 			location: optional_authorization_location(p.authorization_location.as_ref())?,
 		},
-		Some(proto::agent::backend_auth_policy::Kind::Key(k)) => BackendAuth::Key {
+		Some(proto::agent::backend_auth_policy::Kind::Key(k)) => BackendAuthKind::Key {
 			value: k.secret.into(),
 			location: optional_authorization_location(k.authorization_location.as_ref())?,
 		},
@@ -982,7 +1003,7 @@ fn backend_auth_from_proto(
 				.map(|credential| auth::gcp::GcpCredential::new(credential.into()))
 				.transpose()
 				.map_err(|e| ProtoError::Generic(e.to_string()))?;
-			BackendAuth::Gcp(match g.token_type {
+			BackendAuthKind::Gcp(match g.token_type {
 				None | Some(gcp::TokenType::AccessToken(gcp::AccessToken {})) => GcpAuth::AccessToken {
 					r#type: Some(auth::gcp::AccessToken),
 					credential,
@@ -999,6 +1020,11 @@ fn backend_auth_from_proto(
 				None
 			} else {
 				Some(a.service_name.clone())
+			};
+			let region = if a.region.is_empty() {
+				None
+			} else {
+				Some(a.region.clone())
 			};
 			let assume_role = a
 				.assume_role
@@ -1078,7 +1104,7 @@ fn backend_auth_from_proto(
 						access_key_id: config.access_key_id.into(),
 						secret_access_key: config.secret_access_key.into(),
 						region: if config.region.is_empty() {
-							None
+							region.clone()
 						} else {
 							Some(config.region.clone())
 						},
@@ -1088,13 +1114,14 @@ fn backend_auth_from_proto(
 				},
 				Some(proto::agent::aws::Kind::Implicit(_)) => AwsAuth::Implicit {
 					service_name,
+					region,
 					assume_role,
 					source_credentials_cache: Default::default(),
 					assume_role_cache: Default::default(),
 				},
 				None => return Err(ProtoError::MissingRequiredField),
 			};
-			BackendAuth::Aws(aws_auth)
+			BackendAuthKind::Aws(aws_auth)
 		},
 		Some(proto::agent::backend_auth_policy::Kind::Azure(a)) => {
 			let azure_auth = match a.kind {
@@ -1146,19 +1173,21 @@ fn backend_auth_from_proto(
 				},
 				None => return Err(ProtoError::MissingRequiredField),
 			};
-			BackendAuth::Azure(azure_auth)
+			BackendAuthKind::Azure(azure_auth)
 		},
 		Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(s)) => {
-			BackendAuth::OAuthTokenExchange(Box::new(auth::oauth::OAuthTokenExchangeAuth::from_proto(
+			BackendAuthKind::OAuthTokenExchange(Box::new(
+				auth::oauth::OAuthTokenExchangeAuth::from_proto(s, diagnostics)?,
+			))
+		},
+		Some(proto::agent::backend_auth_policy::Kind::CrossAppAccess(s)) => {
+			BackendAuthKind::CrossAppAccess(Box::new(auth::oauth::CrossAppAccessAuth::from_proto(
 				s,
 				diagnostics,
 			)?))
 		},
-		Some(proto::agent::backend_auth_policy::Kind::CrossAppAccess(s)) => {
-			BackendAuth::CrossAppAccess(Box::new(auth::oauth::CrossAppAccessAuth::from_proto(s)?))
-		},
-		None => return Err(ProtoError::MissingRequiredField),
-	})
+		None => return Ok(None),
+	}))
 }
 
 fn listener_protocol_from_proto(
@@ -1726,6 +1755,9 @@ fn transformation_from_proto(
 			add,
 			set,
 			remove,
+			// `replace` is only available via local file config today; the XDS proto does not
+			// carry it yet, so dynamic configs leave it unset.
+			replace: None,
 			body,
 			metadata,
 		}
@@ -1811,7 +1843,15 @@ fn backend_policy_from_proto(
 			BackendTrafficPolicy::BackendTLS(tls)
 		},
 		Some(bps::Kind::Auth(auth)) => {
-			BackendTrafficPolicy::BackendAuth(backend_auth_from_proto(auth.clone(), diagnostics)?)
+			let credentials = backend_auth_credentials_from_proto(auth.credentials.clone())?;
+			let auth_kind = backend_auth_kind_from_proto(auth.clone(), diagnostics)?;
+			if auth_kind.is_none() && credentials.is_empty() {
+				return Err(ProtoError::MissingRequiredField);
+			}
+			BackendTrafficPolicy::BackendAuth(BackendAuth {
+				kind: auth_kind,
+				credentials,
+			})
 		},
 		Some(bps::Kind::McpAuthorization(rbac)) => {
 			BackendTrafficPolicy::McpAuthorization(mcp_authorization_from_proto(rbac, diagnostics))
@@ -1990,6 +2030,9 @@ fn traffic_policy_from_proto(
 				condition,
 			})
 		},
+		Some(tps::Kind::Delay(d)) => TrafficPolicy::Delay(http::delay::Policy {
+			duration: permissive_cel_expression_arc(diagnostics, "delay.duration", &d.duration),
+		}),
 		Some(tps::Kind::LocalRateLimit(lrl)) => {
 			let t = tps::local_rate_limit::Type::try_from(lrl.r#type)?;
 			let spec = http::localratelimit::RateLimitSpec {
@@ -2098,6 +2141,7 @@ fn traffic_policy_from_proto(
 							tps::jwt::Mode::Permissive => McpAuthenticationMode::Permissive,
 						},
 						mcp.client_id.clone(),
+						mcp.client_secret.clone().map(Into::into),
 					))
 				},
 				None => None,
@@ -3274,6 +3318,7 @@ fn traffic_policy_kind_name(policy: &TrafficPolicy) -> &'static str {
 	match policy {
 		TrafficPolicy::Timeout(_) => "timeout",
 		TrafficPolicy::Retry(_) => "retry",
+		TrafficPolicy::Delay(_) => "delay",
 		TrafficPolicy::AI(_) => "ai",
 		TrafficPolicy::Authorization(_) => "authorization",
 		TrafficPolicy::LocalRateLimit(_) => "localRateLimit",
@@ -3416,6 +3461,8 @@ fn convert_webhook(
 
 	Ok(llm::policy::Webhook {
 		target,
+		// CEL header expressions are not yet exposed via the XDS API.
+		headers: Default::default(),
 		forward_header_matches,
 		failure_mode,
 	})
@@ -4164,6 +4211,37 @@ mod tests {
 			panic!("Expected Transformation policy variant");
 		};
 		assert_eq!(transformation.expressions().count(), 2);
+		Ok(())
+	}
+
+	#[test]
+	fn test_backend_auth_aws_region_conversion() -> Result<(), ProtoError> {
+		let auth = backend_auth_kind_from_proto(
+			proto::agent::BackendAuthPolicy {
+				kind: Some(proto::agent::backend_auth_policy::Kind::Aws(
+					proto::agent::Aws {
+						kind: Some(proto::agent::aws::Kind::Implicit(
+							proto::agent::AwsImplicit {},
+						)),
+						service_name: "bedrock-agentcore".to_string(),
+						assume_role: None,
+						region: "us-east-1".to_string(),
+					},
+				)),
+				credentials: vec![],
+			},
+			&mut Diagnostics::default(),
+		)?;
+		let Some(BackendAuthKind::Aws(AwsAuth::Implicit {
+			service_name,
+			region,
+			..
+		})) = auth
+		else {
+			panic!("Expected implicit AWS auth, got {auth:?}");
+		};
+		assert_eq!(service_name.as_deref(), Some("bedrock-agentcore"));
+		assert_eq!(region.as_deref(), Some("us-east-1"));
 		Ok(())
 	}
 

@@ -11,6 +11,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -20,6 +21,7 @@ import (
 	gatewayapiclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/flag"
+	agentgatewayclient "github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned"
 )
 
 const defaultLocalAddress = "localhost"
@@ -27,6 +29,8 @@ const defaultLocalAddress = "localhost"
 type CLIClient interface {
 	Kube() kubernetes.Interface
 	GatewayAPI() gatewayapiclient.Interface
+	Agentgateway() agentgatewayclient.Interface
+	Dynamic() dynamic.Interface
 	AgentgatewayRequest(ctx context.Context, podName, podNamespace, method, path string, port int) ([]byte, error)
 	NewPortForwarder(podName, namespace, localAddress string, localPort, podPort int) (PortForwarder, error)
 }
@@ -40,10 +44,12 @@ type PortForwarder interface {
 }
 
 type client struct {
-	restConfig *rest.Config
-	kube       kubernetes.Interface
-	gatewayAPI gatewayapiclient.Interface
-	http       *http.Client
+	restConfig   *rest.Config
+	kube         kubernetes.Interface
+	gatewayAPI   gatewayapiclient.Interface
+	agentgateway agentgatewayclient.Interface
+	dynamic      dynamic.Interface
+	http         *http.Client
 }
 
 func NewCLIClient() (CLIClient, error) {
@@ -67,12 +73,22 @@ func NewCLIClient() (CLIClient, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to build Gateway API client: %w", err)
 	}
+	agentgatewayClient, err := agentgatewayclient.NewForConfig(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build Agentgateway client: %w", err)
+	}
+	dynamicClient, err := dynamic.NewForConfig(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build dynamic client: %w", err)
+	}
 
 	return &client{
-		restConfig: restConfig,
-		kube:       kubeClient,
-		gatewayAPI: gatewayClient,
-		http:       http.DefaultClient,
+		restConfig:   restConfig,
+		kube:         kubeClient,
+		gatewayAPI:   gatewayClient,
+		agentgateway: agentgatewayClient,
+		dynamic:      dynamicClient,
+		http:         http.DefaultClient,
 	}, nil
 }
 
@@ -82,6 +98,14 @@ func (c *client) Kube() kubernetes.Interface {
 
 func (c *client) GatewayAPI() gatewayapiclient.Interface {
 	return c.gatewayAPI
+}
+
+func (c *client) Agentgateway() agentgatewayclient.Interface {
+	return c.agentgateway
+}
+
+func (c *client) Dynamic() dynamic.Interface {
+	return c.dynamic
 }
 
 func (c *client) AgentgatewayRequest(ctx context.Context, podName, podNamespace, method, path string, port int) ([]byte, error) {

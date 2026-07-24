@@ -18,11 +18,12 @@ use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::server::danger::ClientCertVerifier;
 use rustls_pki_types::pem::{PemObject, SectionKind};
+use secrecy::SecretString;
 use serde::{Serialize, Serializer};
 use serde_json::Value;
 
 use crate::control::caclient::CaClient;
-use crate::http::auth::BackendAuth;
+use crate::http::auth::{BackendAuth, BackendAuthCredential, BackendAuthKind};
 use crate::http::authorization::RuleSet;
 use crate::http::backendtls::ResolvedBackendTLS;
 use crate::http::ext_proc::GrpcReferenceChannel;
@@ -2643,6 +2644,7 @@ pub enum FrontendPolicy {
 pub enum TrafficPolicy {
 	Timeout(timeout::Policy),
 	Retry(retry::Policy),
+	Delay(http::delay::Policy),
 	#[serde(rename = "ai")]
 	AI(Arc<llm::Policy>),
 	Authorization(Authorization),
@@ -2697,6 +2699,18 @@ pub enum BackendTrafficPolicy {
 	ResponseHeaderModifier(Arc<filters::HeaderModifier>),
 	RequestRedirect(filters::RequestRedirect),
 	RequestMirror(Vec<filters::RequestMirror>),
+}
+
+impl BackendTrafficPolicy {
+	pub fn backend_auth(auth: BackendAuthKind) -> Self {
+		Self::BackendAuth(BackendAuth::new(auth))
+	}
+	pub fn backend_auth_credentials(credentials: Vec<BackendAuthCredential>) -> Self {
+		Self::BackendAuth(BackendAuth {
+			kind: None,
+			credentials,
+		})
+	}
 }
 
 #[apply(schema!)]
@@ -2803,6 +2817,11 @@ pub struct McpAuthentication {
 	pub jwt_validator: Arc<crate::http::jwt::Jwt>,
 	pub mode: McpAuthenticationMode,
 	pub client_id: Option<String>,
+	#[serde(
+		skip_serializing_if = "Option::is_none",
+		serialize_with = "crate::serdes::ser_redact"
+	)]
+	pub client_secret: Option<SecretString>,
 }
 
 #[apply(schema_enum!)]
@@ -2858,6 +2877,11 @@ pub struct LocalMcpAuthentication {
 	pub jwt_validation_options: http::jwt::JWTValidationOptions,
 	/// OAuth client ID advertised to MCP clients when needed.
 	pub client_id: Option<String>,
+	/// OAuth client secret injected into proxied token requests for confidential clients.
+	/// Currently used by the `entra` provider, whose Web-platform app registrations require a
+	/// client secret at the token endpoint.
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub client_secret: Option<SecretString>,
 }
 
 impl LocalMcpAuthentication {
@@ -2897,6 +2921,10 @@ impl LocalMcpAuthentication {
 				// (note the trailing slash) and serve JWKS at {issuer}/jwks/.
 				format!("{}/jwks/", self.issuer.trim_end_matches('/')).parse()?
 			},
+			Some(McpIDP::Entra { .. }) => http::oauth::entra_endpoints(&self.issuer)
+				.map_err(|e| anyhow!(e))?
+				.jwks_uri
+				.parse()?,
 		})
 	}
 
@@ -2942,6 +2970,7 @@ impl LocalMcpAuthentication {
 			jwt_validator: Arc::new(jwt),
 			mode: self.mode,
 			client_id: self.client_id.clone(),
+			client_secret: self.client_secret.clone(),
 		})
 	}
 }
@@ -2953,6 +2982,7 @@ pub enum McpIDP {
 	Okta {},
 	Descope {},
 	Authentik {},
+	Entra {},
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -3467,6 +3497,27 @@ InvalidKeyData
 			.get_hostname(&HostnameMatchRef::None)
 			.expect("route should be present");
 		assert_eq!(got.key, strng::new("1781085600/default/alpha-route.00.tcp"));
+	}
+
+	#[test]
+	fn test_local_mcp_authentication_entra_provider() {
+		let yaml = r#"
+issuer: "https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/v2.0"
+audiences: ["api://client-id-guid", "client-id-guid"]
+jwks: '{"keys":[]}'
+provider:
+  entra: {}
+clientId: "client-id-guid"
+clientSecret: "s3cret"
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+"#;
+		// Parse via yamlviajson, matching how config files are loaded (map-style enum variants).
+		let auth: LocalMcpAuthentication = serdes::yamlviajson::from_str(yaml).unwrap();
+		assert!(matches!(auth.provider, Some(McpIDP::Entra {})));
+		assert_eq!(auth.client_id.as_deref(), Some("client-id-guid"));
+		assert!(auth.client_secret.is_some());
+		assert!(auth.as_jwt().is_ok());
 	}
 
 	#[test]

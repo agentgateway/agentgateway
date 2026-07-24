@@ -248,6 +248,17 @@ func (this *Retry) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for Delay
+func (this *Delay) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for Delay
+func (this *Delay) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for BackendAuthPolicy
 func (this *BackendAuthPolicy) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
@@ -256,6 +267,17 @@ func (this *BackendAuthPolicy) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON is a custom unmarshaler for BackendAuthPolicy
 func (this *BackendAuthPolicy) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for BackendAuthCredential
+func (this *BackendAuthCredential) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for BackendAuthCredential
+func (this *BackendAuthCredential) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
@@ -1906,6 +1928,17 @@ func (this *CrossAppAccessAuth_Endpoint) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON is a custom unmarshaler for CrossAppAccessAuth_Endpoint
 func (this *CrossAppAccessAuth_Endpoint) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for CrossAppAccessAuth_SubjectToken
+func (this *CrossAppAccessAuth_SubjectToken) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for CrossAppAccessAuth_SubjectToken
+func (this *CrossAppAccessAuth_SubjectToken) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 

@@ -1,0 +1,40 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+binds:
+- port: 3000
+  listeners:
+  - protocol: HTTP
+    routes:
+    # Delay 10% of requests by 2 seconds. The duration is a CEL expression
+    # evaluating to milliseconds; a non-positive result injects no delay.
+    - name: delay-probability
+      matches:
+      - path:
+          pathPrefix: /random
+      policies:
+        delay:
+          duration: "random() < 0.1 ? 2000 : 0"
+      backends:
+      - host: 127.0.0.1:8080
+    # Delay only requests that opt in via a header, e.g. from a chaos test client.
+    - name: delay-header
+      matches:
+      - path:
+          pathPrefix: /header
+      policies:
+        delay:
+          duration: 'request.headers["x-chaos"] == "1" ? 500 : 0'
+      backends:
+      - host: 127.0.0.1:8080
+    # Abort 10% of requests with a 503 instead of reaching the backend.
+    - name: abort-probability
+      matches:
+      - path:
+          pathPrefix: /abort
+      policies:
+        directResponse:
+          conditional:
+          - condition: random() < 0.1
+            status: 503
+            body: "injected fault"
+      backends:
+      - host: 127.0.0.1:8080

@@ -54,6 +54,7 @@ const (
 	hostnameRewritePolicySuffix    = ":hostname-rewrite"
 	retryPolicySuffix              = ":retry"
 	timeoutPolicySuffix            = ":timeout"
+	delayPolicySuffix              = ":delay"
 	jwtPolicySuffix                = ":jwt"
 	basicAuthPolicySuffix          = ":basicauth"
 	apiKeyPolicySuffix             = ":apikeyauth" //nolint:gosec
@@ -553,6 +554,10 @@ func translateTrafficPolicyToAgw(
 		appendPolicy("retry")(processRetriesPolicy(traffic.Retry, basePolicyName, policyName))
 	}
 
+	if traffic.Delay != nil {
+		appendPolicy("delay")(processDelayPolicy(traffic.Delay, basePolicyName, policyName))
+	}
+
 	if traffic.DirectResponse != nil {
 		appendPolicy("directResponse")(processConditional(
 			traffic.DirectResponse,
@@ -1030,6 +1035,40 @@ func processTimeoutPolicy(timeout *agentgateway.Timeouts, basePolicyName string,
 	return timeoutPolicy
 }
 
+func processDelayPolicy(delay *agentgateway.Delay, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
+	if delay.Duration == "" {
+		return nil, fmt.Errorf("failed to build delay: duration is required")
+	}
+	var errs []error
+	duration := castDurationOrCEL(delay.Duration, func(expr agentgateway.CELExpression) {
+		errs = append(errs, fmt.Errorf("delay duration is not a valid duration or CEL expression: %s", expr))
+	})
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
+	}
+	return &api.Policy{
+		Key:  basePolicyName + delayPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Traffic{
+			Traffic: &api.TrafficPolicySpec{
+				Kind: &api.TrafficPolicySpec_Delay{Delay: &api.Delay{
+					Duration: duration,
+				}},
+			},
+		},
+	}, nil
+}
+
+// castDurationOrCEL accepts an ergonomic duration string (e.g. "5m") by wrapping it as a CEL
+// duration(...) call, otherwise treats the value as a CEL expression.
+func castDurationOrCEL(item agentgateway.CELExpression, invalid func(agentgateway.CELExpression)) string {
+	raw := string(item)
+	if _, err := time.ParseDuration(raw); err == nil {
+		return "duration(" + strconv.Quote(raw) + ")"
+	}
+	return castCEL(item, invalid)
+}
+
 func processHostnameRewritePolicy(hnrw *agentgateway.HostnameRewrite, basePolicyName string, policy types.NamespacedName) *api.Policy {
 	r := &api.TrafficPolicySpec_HostRewrite{}
 	switch hnrw.Mode {
@@ -1306,7 +1345,7 @@ func buildExtAuthSpec(
 		key := castCELSlice(cache.Key, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth cache key is not a valid CEL expression: %s", expr))
 		})
-		ttl := castExtAuthCacheTTL(cache.TTL, func(expr agentgateway.CELExpression) {
+		ttl := castDurationOrCEL(cache.TTL, func(expr agentgateway.CELExpression) {
 			errs = append(errs, fmt.Errorf("extAuth cache ttl is not a valid CEL expression: %s", expr))
 		})
 		spec.Cache = &api.TrafficPolicySpec_ExternalAuth_Cache{
@@ -1491,14 +1530,6 @@ func castCEL(item agentgateway.CELExpression, invalid func(agentgateway.CELExpre
 		invalid(item)
 	}
 	return string(item)
-}
-
-func castExtAuthCacheTTL(item agentgateway.CELExpression, invalid func(agentgateway.CELExpression)) string {
-	raw := string(item)
-	if _, err := time.ParseDuration(raw); err == nil {
-		return "duration(" + strconv.Quote(raw) + ")"
-	}
-	return castCEL(item, invalid)
 }
 
 // processAuthorizationPolicy processes Authorization configuration and creates corresponding Agw policies
@@ -2221,6 +2252,11 @@ func BackendReferencesFromBackendPolicy(s *agentgateway.BackendFull, app func(re
 			app(backend.Tunnel.BackendRef)
 		}
 	}
+	appAuxiliaryTunnel := func(backend interface {
+		BackendSimple() *agentgateway.BackendSimple
+	}) {
+		appTunnel(backend.BackendSimple())
+	}
 	appTunnel(&s.BackendSimple)
 	if s.ExtAuth != nil && s.ExtAuth.BackendRef != nil {
 		app(*s.ExtAuth.BackendRef)
@@ -2248,13 +2284,13 @@ func BackendReferencesFromBackendPolicy(s *agentgateway.BackendFull, app func(re
 				app(p.Webhook.BackendRef)
 			}
 			if p.OpenAIModeration != nil {
-				appTunnel(p.OpenAIModeration.Policies)
+				appAuxiliaryTunnel(p.OpenAIModeration.Policies)
 			}
 			if p.GoogleModelArmor != nil {
-				appTunnel(p.GoogleModelArmor.Policies)
+				appAuxiliaryTunnel(p.GoogleModelArmor.Policies)
 			}
 			if p.BedrockGuardrails != nil {
-				appTunnel(p.BedrockGuardrails.Policies)
+				appAuxiliaryTunnel(p.BedrockGuardrails.Policies)
 			}
 		}
 		for _, p := range s.AI.PromptGuard.Response {
@@ -2262,10 +2298,10 @@ func BackendReferencesFromBackendPolicy(s *agentgateway.BackendFull, app func(re
 				app(p.Webhook.BackendRef)
 			}
 			if p.GoogleModelArmor != nil {
-				appTunnel(p.GoogleModelArmor.Policies)
+				appAuxiliaryTunnel(p.GoogleModelArmor.Policies)
 			}
 			if p.BedrockGuardrails != nil {
-				appTunnel(p.BedrockGuardrails.Policies)
+				appAuxiliaryTunnel(p.BedrockGuardrails.Policies)
 			}
 		}
 	}

@@ -366,7 +366,7 @@ spec:
 ---
 # Source: agentgateway/templates/monitoring.yaml
 apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
+kind: PodMonitor
 metadata:
   name: test-release-agentgateway-proxy
   namespace: default
@@ -379,9 +379,12 @@ metadata:
     app.kubernetes.io/managed-by: Helm
 spec:
   selector:
-    matchLabels:
-      gateway.networking.k8s.io/gateway-class-name: agentgateway
-  endpoints:
+    matchExpressions:
+    - key: gateway.networking.k8s.io/gateway-class-name
+      operator: In
+      values:
+      - "agentgateway"
+  podMetricsEndpoints:
   - port: metrics
     path: /metrics
     interval: 15s

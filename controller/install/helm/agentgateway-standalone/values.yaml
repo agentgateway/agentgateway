@@ -25,7 +25,11 @@ serviceAccount:
   annotations: {}
   name: ""
 
-podAnnotations: {}
+podAnnotations: 
+  prometheus.io/path: "/metrics"
+  prometheus.io/port: "15020"
+  prometheus.io/scrape: "true"
+
 podSecurityContext: {}
 securityContext:
   allowPrivilegeEscalation: false
@@ -110,6 +114,14 @@ gateway:
       targetPort: 4000
       protocol: TCP
   extraServices: []
+
+monitoring:
+  enabled: false
+  annotations: {}
+  extraLabels: {}
+  podMonitor:
+    enabled: true
+    interval: 15s
 
 persistence:
   enabled: true

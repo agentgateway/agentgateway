@@ -388,6 +388,9 @@ function GatewayEditor(props: {
   onSave: (draft: GatewayEditorState) => void;
 }) {
   const [name, setName] = useState(props.initial.name);
+  const [defaultGateway, setDefaultGateway] = useState(
+    props.initial.name === "default",
+  );
   const [gateway, setGateway] = useState<TrafficGateway>(
     structuredClone(props.initial.gateway),
   );
@@ -400,6 +403,16 @@ function GatewayEditor(props: {
   const protocol = effectiveGatewayProtocol(gateway);
   const hasTls = protocol === "HTTPS" || protocol === "TLS";
   const canEnableMultipleListeners = !hasTls && policyCount === 0;
+  const anotherDefaultGateway = Boolean(
+    props.config?.gateways?.default && props.initial.previousName !== "default",
+  );
+  const defaultTraffic = defaultGatewayTraffic(props.config);
+  const invalidDefaultName = !defaultGateway && name.trim() === "default";
+  const duplicateName = Boolean(
+    name.trim() &&
+    name.trim() !== props.initial.previousName &&
+    props.config?.gateways?.[name.trim()],
+  );
   const preview: TrafficGateway = cleanGateway({
     ...(multipleListeners ? withoutGatewayPolicies(gateway) : gateway),
     listeners: multipleListeners
@@ -425,7 +438,7 @@ function GatewayEditor(props: {
           diffTitle="Gateway config diff"
           saveLabel="Save gateway"
           saving={props.saving}
-          saveDisabled={!name.trim()}
+          saveDisabled={!name.trim() || invalidDefaultName || duplicateName}
           onCancel={props.onCancel}
           onSave={() =>
             props.onSave({
@@ -447,13 +460,14 @@ function GatewayEditor(props: {
         />
       }
     >
-      <div className="form-grid">
+      <div className="form-grid gateway-identity-grid">
         <Field
           label="Name"
           tooltip="Features and routes reference this gateway by name."
         >
           <input
             value={name}
+            disabled={defaultGateway}
             onChange={(event) => setName(event.target.value)}
             placeholder="public"
           />
@@ -473,7 +487,58 @@ function GatewayEditor(props: {
             placeholder="443"
           />
         </Field>
-        {!multipleListeners ? (
+      </div>
+
+      <div className="gateway-default-option">
+        <label className="config-option-row">
+          <input
+            type="checkbox"
+            checked={defaultGateway}
+            disabled={anotherDefaultGateway}
+            onChange={(event) => {
+              const checked = event.target.checked;
+              setDefaultGateway(checked);
+              setName(
+                checked
+                  ? "default"
+                  : availableGatewayName(
+                      props.config?.gateways,
+                      props.initial.previousName,
+                    ),
+              );
+            }}
+          />
+          <span>
+            <strong>Default gateway</strong>
+            <small>
+              {anotherDefaultGateway
+                ? "Another gateway is already the default gateway."
+                : "Use this gateway for enabled traffic without an explicit gateway selection."}
+            </small>
+          </span>
+        </label>
+
+        {invalidDefaultName ? (
+          <StatusBanner state="bad" title="Default name is reserved">
+            Select Default gateway to use the name <code>default</code>.
+          </StatusBanner>
+        ) : duplicateName ? (
+          <StatusBanner state="bad" title="Gateway name already exists">
+            Choose a unique gateway name.
+          </StatusBanner>
+        ) : null}
+
+        {defaultGateway ? (
+          <StatusBanner state="warn" title="Default gateway">
+            This will make the gateway the default gateway. This will impact{" "}
+            {defaultTraffic.length ? defaultTraffic.join(", ") : "no enabled"}{" "}
+            traffic.
+          </StatusBanner>
+        ) : null}
+      </div>
+
+      {!multipleListeners ? (
+        <div className="form-grid">
           <Field
             label="Protocol"
             tooltip={props.help.field<TrafficGateway>(
@@ -502,8 +567,8 @@ function GatewayEditor(props: {
               }}
             />
           </Field>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       <div className="form-grid">
         <label className="config-option-row">
@@ -570,6 +635,28 @@ function GatewayEditor(props: {
       </details>
     </Drawer>
   );
+}
+
+function defaultGatewayTraffic(config: GatewayConfig | undefined) {
+  const traffic: string[] = [];
+  if (config?.llm) traffic.push("LLM");
+  if (config && Object.prototype.hasOwnProperty.call(config, "ui")) {
+    traffic.push("UI");
+  }
+  if (config?.mcp) traffic.push("MCP");
+  return traffic;
+}
+
+function availableGatewayName(
+  gateways: Record<string, TrafficGateway> | undefined,
+  currentName: string | undefined,
+) {
+  const names = new Set(Object.keys(gateways ?? {}));
+  if (currentName) names.delete(currentName);
+  if (!names.has("public")) return "public";
+  let suffix = 2;
+  while (names.has(`public-${suffix}`)) suffix += 1;
+  return `public-${suffix}`;
 }
 
 function GatewayTLSFields(props: {

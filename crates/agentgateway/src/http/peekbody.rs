@@ -15,6 +15,8 @@ pin_project! {
 	struct PartiallyBufferedBody {
 		buffer: BufList,
 		trailers: Option<HeaderMap>,
+		// Some streams panic if polled again after returning `None`.
+		inner_eof: bool,
 		#[pin]
 		inner: Body,
 	}
@@ -34,12 +36,17 @@ impl http_body::Body for PartiallyBufferedBody {
 		if let Some(br) = self.trailers.take() {
 			return Poll::Ready(Some(Ok(Frame::trailers(br))));
 		}
+		if self.inner_eof {
+			return Poll::Ready(None);
+		}
 		let this = self.project();
 		this.inner.poll_frame(cx)
 	}
 
 	fn is_end_stream(&self) -> bool {
-		!self.buffer.has_remaining() && self.inner.is_end_stream() && self.trailers.is_none()
+		!self.buffer.has_remaining()
+			&& (self.inner_eof || self.inner.is_end_stream())
+			&& self.trailers.is_none()
 	}
 
 	/// Returns the bounds on the remaining length of the stream.
@@ -63,6 +70,7 @@ pub async fn inspect_body(body: &mut Body, limit: usize) -> anyhow::Result<Bytes
 	let mut orig = std::mem::replace(body, Body::empty());
 	let mut buffer = BufList::default();
 	let mut trailers: Option<HeaderMap> = None;
+	let mut inner_eof = false;
 	let mut want = limit;
 	loop {
 		match orig.frame().await {
@@ -84,7 +92,10 @@ pub async fn inspect_body(body: &mut Body, limit: usize) -> anyhow::Result<Bytes
 			Some(Err(err)) => {
 				return Err(err.into());
 			},
-			None => break,
+			None => {
+				inner_eof = true;
+				break;
+			},
 		}
 	}
 
@@ -95,6 +106,7 @@ pub async fn inspect_body(body: &mut Body, limit: usize) -> anyhow::Result<Bytes
 	let nb = PartiallyBufferedBody {
 		buffer,
 		trailers,
+		inner_eof,
 		inner: orig,
 	};
 	*body = Body::new(nb);
@@ -143,6 +155,26 @@ mod tests {
 		assert_eq!(hint.upper(), original.size_hint().upper());
 
 		assert_eq!(read(original).await, Bytes::from_static(payload));
+	}
+
+	#[tokio::test]
+	async fn inspect_to_eof_does_not_repoll_non_fused_stream() {
+		let stream = futures_util::stream::unfold(false, |emitted| async move {
+			if emitted {
+				None
+			} else {
+				Some((
+					Ok::<_, std::convert::Infallible>(http_body::Frame::data(Bytes::from_static(b"hello"))),
+					true,
+				))
+			}
+		});
+		let mut original = Body::new(http_body_util::StreamBody::new(stream));
+
+		let inspected = inspect_body(&mut original, 100).await.unwrap();
+
+		assert_eq!(inspected, Bytes::from_static(b"hello"));
+		assert_eq!(read(original).await, Bytes::from_static(b"hello"));
 	}
 
 	#[tokio::test]

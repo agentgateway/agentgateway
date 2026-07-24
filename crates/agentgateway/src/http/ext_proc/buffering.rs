@@ -188,6 +188,7 @@ pin_project! {
 	// original body for the rest of the stream.
 	struct RemainderBody {
 		prefix: Option<Bytes>,
+		eof: bool,
 		#[pin]
 		inner: http::Body,
 	}
@@ -195,7 +196,11 @@ pin_project! {
 
 impl RemainderBody {
 	fn new(prefix: Option<Bytes>, inner: http::Body) -> Self {
-		Self { prefix, inner }
+		Self {
+			prefix,
+			eof: false,
+			inner,
+		}
 	}
 }
 
@@ -213,11 +218,19 @@ impl Body for RemainderBody {
 		{
 			return Poll::Ready(Some(Ok(Frame::data(prefix))));
 		}
-		this.inner.poll_frame(cx)
+		if *this.eof {
+			return Poll::Ready(None);
+		}
+		let frame = this.inner.poll_frame(cx);
+		if matches!(&frame, Poll::Ready(None)) {
+			*this.eof = true;
+		}
+		frame
 	}
 
 	fn is_end_stream(&self) -> bool {
-		self.prefix.as_ref().map(Bytes::is_empty).unwrap_or(true) && self.inner.is_end_stream()
+		self.prefix.as_ref().map(Bytes::is_empty).unwrap_or(true)
+			&& (self.eof || self.inner.is_end_stream())
 	}
 
 	fn size_hint(&self) -> SizeHint {
@@ -409,4 +422,42 @@ pub(super) fn start_buffered_response_body(
 		max_response_bytes,
 		"failed to read response body for buffering",
 	))
+}
+
+#[cfg(test)]
+mod tests {
+	use http_body_util::BodyExt;
+
+	use super::*;
+
+	#[tokio::test]
+	async fn remainder_body_does_not_repoll_inner_after_eof() {
+		let inner = http::Body::new(http_body_util::StreamBody::new(
+			futures_util::stream::unfold(false, |emitted| async move {
+				if emitted {
+					None
+				} else {
+					Some((
+						Ok::<_, axum_core::Error>(Frame::data(Bytes::from_static(b"body"))),
+						true,
+					))
+				}
+			}),
+		));
+		let mut body = http::Body::new(RemainderBody::new(
+			Some(Bytes::from_static(b"prefix")),
+			inner,
+		));
+
+		assert!(
+			body.frame().await.is_some(),
+			"prefix frame should be present"
+		);
+		assert!(
+			body.frame().await.is_some(),
+			"inner data frame should be present"
+		);
+		assert!(body.frame().await.is_none(), "stream should report EOF");
+		assert!(body.frame().await.is_none(), "stream must remain at EOF");
+	}
 }

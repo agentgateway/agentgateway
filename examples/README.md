@@ -31,6 +31,7 @@ This directory contains examples of how to use agentgateway. Each example is nam
 * [traffic-cross-app-access](traffic-cross-app-access/README.md): use Cross App Access (OAuth Identity Assertion Authorization Grant / ID-JAG) to exchange an authenticated user's identity for a backend-scoped access token — with local Keycloak, xaa.dev, or Okta+Auth0 demos.
 * [traffic-oidc](traffic-oidc/README.md): use the built-in `oidc` browser auth flow with a local Keycloak issuer.
 * [traffic-oauth2-proxy](traffic-oauth2-proxy/README.md): integrate with an external `oauth2-proxy` deployment.
+* [fault-injection](fault-injection/README.md): inject synthetic latency and aborts into a subset of traffic for fault-injection testing.
 * [traffic-ratelimiting-local](traffic-ratelimiting-local/README.md): apply local rate limiting to HTTP traffic.
 * [traffic-ratelimiting-global](traffic-ratelimiting-global/README.md): apply global rate limiting with Envoy's ratelimit service.
 * [traffic-tailscale-auth](traffic-tailscale-auth/README.md): authenticate HTTP requests with Tailscale identity headers.

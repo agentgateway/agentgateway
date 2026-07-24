@@ -22,13 +22,19 @@ pub mod refresh;
 const TRACE_POLICY_KIND: &str = "llm_cost";
 
 pub struct ModelCatalog {
-	snapshot: ArcSwap<CatalogSnapshot>,
+	state: ArcSwap<ModelCatalogState>,
+}
+
+struct ModelCatalogState {
+	snapshot: Arc<CatalogSnapshot>,
+	sources: Vec<ModelCatalogSource>,
 }
 
 impl fmt::Debug for ModelCatalog {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let state = self.state.load();
 		f.debug_struct("ModelCatalog")
-			.field("snapshot", &*self.snapshot.load())
+			.field("snapshot", &state.snapshot)
 			.finish()
 	}
 }
@@ -36,7 +42,10 @@ impl fmt::Debug for ModelCatalog {
 impl Default for ModelCatalog {
 	fn default() -> Self {
 		Self {
-			snapshot: ArcSwap::from_pointee(CatalogSnapshot::empty()),
+			state: ArcSwap::from_pointee(ModelCatalogState {
+				snapshot: Arc::new(CatalogSnapshot::empty()),
+				sources: Vec::new(),
+			}),
 		}
 	}
 }
@@ -55,23 +64,20 @@ impl ModelCatalog {
 				ModelCatalogSource::InlineCatalog { .. } => None,
 			})
 			.collect();
+		catalog.state.store(Arc::new(ModelCatalogState {
+			snapshot: Arc::new(CatalogSnapshot::empty()),
+			sources,
+		}));
 		tokio::spawn({
-			let sources = sources.clone();
 			let catalog = catalog.clone();
 			async move {
-				match load_sources(&sources).await {
-					Ok(loaded) => {
-						log_loaded_catalog("loaded model catalog", &loaded);
-						catalog.snapshot.store(Arc::new(loaded.snapshot));
-					},
-					Err(e) => {
-						warn!("model catalog load failed; will load when the files become valid: {e:#}")
-					},
+				if let Err(e) = catalog.reload().await {
+					warn!("model catalog load failed; will load when the files become valid: {e:#}")
 				}
 			}
 		});
 		if !file_paths.is_empty() {
-			watch_catalog_files(file_paths, sources, catalog.clone())?;
+			watch_catalog_files(file_paths, catalog.clone())?;
 		}
 		Ok(catalog)
 	}
@@ -81,20 +87,50 @@ impl ModelCatalog {
 	}
 
 	pub fn snapshot(&self) -> Arc<CatalogSnapshot> {
-		self.snapshot.load_full()
+		self.state.load().snapshot.clone()
 	}
 
 	pub fn list_models(&self) -> ModelCatalogModels {
-		self.snapshot.load().list_models()
+		self.state.load().snapshot.list_models()
 	}
 
-	pub fn replace(&self, snapshot: CatalogSnapshot) {
-		self.snapshot.store(Arc::new(snapshot));
+	pub async fn replace_sources(&self, sources: Vec<ModelCatalogSource>) -> anyhow::Result<()> {
+		if sources.is_empty() {
+			self.state.store(Arc::new(ModelCatalogState {
+				snapshot: Arc::new(CatalogSnapshot::empty()),
+				sources,
+			}));
+			return Ok(());
+		}
+		let loaded = load_sources(&sources).await?;
+		log_loaded_catalog("model catalog reloaded", &loaded.snapshot, &loaded.missing);
+		self.state.store(Arc::new(ModelCatalogState {
+			snapshot: Arc::new(loaded.snapshot),
+			sources,
+		}));
+		Ok(())
+	}
+
+	pub(super) async fn reload(&self) -> anyhow::Result<()> {
+		loop {
+			let current = self.state.load_full();
+			let loaded = load_sources(&current.sources).await?;
+			let next = Arc::new(ModelCatalogState {
+				snapshot: Arc::new(loaded.snapshot),
+				sources: current.sources.clone(),
+			});
+			let previous = self.state.compare_and_swap(&current, next.clone());
+			if Arc::ptr_eq(&previous, &current) {
+				log_loaded_catalog("model catalog loaded", &next.snapshot, &loaded.missing);
+				return Ok(());
+			}
+		}
 	}
 
 	pub fn project(&self, info: &LLMInfo) -> CostProjection {
 		let provider = info.request.provider.as_str();
-		let snapshot = self.snapshot.load();
+		let state = self.state.load();
+		let snapshot = &state.snapshot;
 		if let Some(provider_model) = &info.response.provider_model {
 			let projection = snapshot.project_with_missing_trace(
 				provider,
@@ -506,23 +542,19 @@ async fn load_sources(sources: &[ModelCatalogSource]) -> anyhow::Result<LoadedCa
 	})
 }
 
-fn log_loaded_catalog(message: &'static str, loaded: &LoadedCatalog) {
-	let catalog = loaded.snapshot.catalog.as_ref();
+fn log_loaded_catalog(message: &'static str, snapshot: &CatalogSnapshot, missing: &[PathBuf]) {
+	let catalog = snapshot.catalog.as_ref();
 	let providers = catalog.map_or(0, |catalog| catalog.providers.len());
 	let models = catalog.map_or(0, |catalog| {
 		catalog.providers.values().map(|p| p.models.len()).sum()
 	});
 	info!(providers, models, "{}", message);
-	if !loaded.missing.is_empty() {
-		debug!(files = ?loaded.missing, "{} configured but missing", message);
+	if !missing.is_empty() {
+		debug!(files = ?missing, "{} configured but missing", message);
 	}
 }
 
-fn watch_catalog_files(
-	file_paths: Vec<PathBuf>,
-	all_sources: Vec<ModelCatalogSource>,
-	catalog: Arc<ModelCatalog>,
-) -> anyhow::Result<()> {
+fn watch_catalog_files(file_paths: Vec<PathBuf>, catalog: Arc<ModelCatalog>) -> anyhow::Result<()> {
 	let mut watched = crate::util::watch_files_with_options(
 		file_paths,
 		crate::util::WatchFilesOptions::default().reload_on_disappearance(true),
@@ -533,14 +565,8 @@ fn watch_catalog_files(
 	);
 	tokio::task::spawn(async move {
 		while watched.changed().await {
-			match load_sources(&all_sources).await {
-				Ok(loaded) => {
-					log_loaded_catalog("model catalog reloaded", &loaded);
-					catalog.snapshot.store(Arc::new(loaded.snapshot));
-				},
-				Err(e) => {
-					error!("failed to reload model catalog; keeping last valid catalog: {e:#}")
-				},
+			if let Err(e) = catalog.reload().await {
+				error!("failed to reload model catalog; keeping last valid catalog: {e:#}")
 			}
 		}
 	});
@@ -656,7 +682,10 @@ mod tests {
 
 	fn model_catalog(json: &str) -> ModelCatalog {
 		ModelCatalog {
-			snapshot: ArcSwap::from_pointee(CatalogSnapshot::parse(json).unwrap()),
+			state: ArcSwap::from_pointee(ModelCatalogState {
+				snapshot: Arc::new(CatalogSnapshot::parse(json).unwrap()),
+				sources: Vec::new(),
+			}),
 		}
 	}
 

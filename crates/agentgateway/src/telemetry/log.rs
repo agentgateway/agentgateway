@@ -47,7 +47,7 @@ use crate::telemetry::{log_store, trc};
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{BackendInfo, BindKey, ListenerName, RouteName, Target};
 use crate::types::loadbalancer::ActiveHandle;
-use crate::{cel, llm, mcp};
+use crate::{a2a, cel, llm, mcp};
 
 fn u64_to_i64(value: Option<u64>) -> Option<i64> {
 	value.map(|value| value.min(i64::MAX as u64) as i64)
@@ -934,6 +934,7 @@ impl RequestLog {
 			llm_request: None,
 			llm_response: Default::default(),
 			a2a_method: None,
+			a2a_response: None,
 			inference_pool: None,
 			request_handle: None,
 			request_snapshot: None,
@@ -1087,6 +1088,7 @@ pub struct RequestLog {
 	pub llm_response: AsyncLog<llm::LLMInfo>,
 
 	pub a2a_method: Option<Strng>,
+	pub a2a_response: Option<a2a::ResponseInfo>,
 
 	pub inference_pool: Option<SocketAddr>,
 
@@ -1395,6 +1397,34 @@ impl Drop for DropOnLog {
 				("jwt.sub", log.jwt_sub.display()),
 				("protocol", log.backend_protocol.as_ref().map(debug)),
 				("a2a.method", log.a2a_method.display()),
+				(
+					"a2a.response.outcome",
+					log.a2a_response.as_ref().map(|r| r.outcome.as_str().into()),
+				),
+				(
+					"a2a.response.error_code",
+					log
+						.a2a_response
+						.as_ref()
+						.and_then(|r| r.error_code)
+						.map(Into::into),
+				),
+				(
+					"a2a.result.kind",
+					log
+						.a2a_response
+						.as_ref()
+						.and_then(|r| r.result_kind.as_ref())
+						.map(display),
+				),
+				(
+					"a2a.task.state",
+					log
+						.a2a_response
+						.as_ref()
+						.and_then(|r| r.task_state.as_ref())
+						.map(display),
+				),
 				(
 					"mcp.method.name",
 					mcp
@@ -2380,5 +2410,41 @@ mod tests {
 				.all(|attr| attr.key.as_str() != "agw.usage.cost"),
 			"cost should use the AGW AI usage namespace"
 		);
+	}
+
+	#[test]
+	fn a2a_response_span_attributes() {
+		let (tracer, exporter) = test_tracer();
+		let mut log = test_request_log();
+		log.tracer = Some(tracer.clone());
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		log.outgoing_span = Some(outgoing);
+		log.backend_protocol = Some(cel::BackendProtocol::a2a);
+		log.a2a_method = Some(strng::literal!("tasks/send"));
+		log.a2a_response = Some(a2a::ResponseInfo {
+			outcome: a2a::ResponseOutcome::Error,
+			error_code: Some(-32602),
+			result_kind: Some(strng::literal!("task")),
+			task_state: Some(strng::literal!("failed")),
+		});
+
+		drop(DropOnLog::from(log));
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		let span = spans
+			.iter()
+			.find(|span| span.name.as_ref() == "unknown")
+			.expect("request span should be exported");
+		let has = |key: &str| span.attributes.iter().any(|attr| attr.key.as_str() == key);
+		for expected in [
+			"a2a.response.outcome",
+			"a2a.response.error_code",
+			"a2a.result.kind",
+			"a2a.task.state",
+		] {
+			assert!(has(expected), "expected {expected} span attribute");
+		}
 	}
 }

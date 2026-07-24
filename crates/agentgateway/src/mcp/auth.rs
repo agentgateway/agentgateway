@@ -4,10 +4,13 @@ use axum_core::response::IntoResponse;
 use bytes::Bytes;
 use http::Method;
 use http::uri::PathAndQuery;
+use secrecy::ExposeSecret;
 use tracing::{debug, warn};
 
 use crate::http::jwt::Claims;
-use crate::http::oauth::{authorization_server_metadata_url, openid_configuration_metadata_url};
+use crate::http::oauth::{
+	authorization_server_metadata_url, entra_endpoints, openid_configuration_metadata_url,
+};
 use crate::http::*;
 use crate::json;
 use crate::json::from_body_with_limit;
@@ -87,6 +90,38 @@ pub(crate) async fn handle_mcp_request(
 		{
 			Ok(Some(
 				protected_resource_metadata(req, auth).await.into_response(),
+			))
+		},
+		// Entra rejects the RFC 8707 `resource` parameter (AADSTS9010010), so the gateway
+		// advertises proxied authorization/token endpoints (under the served AS metadata path)
+		// that strip it before forwarding to Entra.
+		path
+			if matches!(auth.provider, Some(McpIDP::Entra {}))
+				&& path.starts_with("/.well-known/oauth-authorization-server/")
+				&& path.ends_with("/authorize") =>
+		{
+			Ok(Some(
+				entra_authorize(req, auth)
+					.map_err(|e| {
+						warn!("entra authorize error: {}", e);
+						StatusCode::INTERNAL_SERVER_ERROR
+					})
+					.into_response(),
+			))
+		},
+		path
+			if matches!(auth.provider, Some(McpIDP::Entra {}))
+				&& path.starts_with("/.well-known/oauth-authorization-server/")
+				&& path.ends_with("/token") =>
+		{
+			Ok(Some(
+				entra_token(req, auth, client.clone())
+					.await
+					.map_err(|e| {
+						warn!("entra token error: {}", e);
+						StatusCode::INTERNAL_SERVER_ERROR
+					})
+					.into_response(),
 			))
 		},
 		path
@@ -241,6 +276,15 @@ pub(super) async fn authorization_server_metadata(
 		| Some(McpIDP::Okta {})
 		| Some(McpIDP::Descope {})
 		| Some(McpIDP::Authentik {}) => openid_configuration_metadata_url(&auth.issuer),
+		// Entra does not implement RFC 8414 either; it only serves OIDC Discovery documents.
+		// Always fetch the v2.0 document (derived from the tenant in the issuer) so the
+		// advertised endpoints support the scope/PKCE flows MCP clients use, even when the
+		// configured issuer is the v1 form (sts.windows.net) used for token validation.
+		Some(McpIDP::Entra {}) => {
+			entra_endpoints(&auth.issuer)
+				.map_err(ProxyError::ProcessingString)?
+				.openid_configuration
+		},
 		_ => authorization_server_metadata_url(&auth.issuer),
 	};
 	let ureq = ::http::Request::builder()
@@ -339,6 +383,42 @@ pub(super) async fn authorization_server_metadata(
 				);
 			}
 		},
+		Some(McpIDP::Entra {}) => {
+			let current_uri = request_uri_for_oauth_metadata(req);
+
+			// Entra rejects the RFC 8707 `resource` parameter (AADSTS9010010). Advertise
+			// gateway-proxied authorization/token endpoints that strip it before forwarding.
+			let Some(serde_json::Value::String(ae)) =
+				json::traverse_mut(&mut resp, &["authorization_endpoint"])
+			else {
+				return Err(ProxyError::ProcessingString(
+					"authorization_endpoint missing".to_string(),
+				));
+			};
+			*ae = format!("{current_uri}/authorize");
+			let Some(serde_json::Value::String(te)) = json::traverse_mut(&mut resp, &["token_endpoint"])
+			else {
+				return Err(ProxyError::ProcessingString(
+					"token_endpoint missing".to_string(),
+				));
+			};
+			*te = format!("{current_uri}/token");
+
+			if let Some(obj) = resp.as_object_mut() {
+				// Entra does not implement RFC 7591 (no registration_endpoint in its metadata);
+				// advertise the gateway's registration endpoint, which short-circuits with the
+				// configured clientId.
+				obj.insert(
+					"registration_endpoint".to_string(),
+					serde_json::Value::String(format!("{current_uri}/client-registration")),
+				);
+				// Entra supports PKCE (S256) but omits it from its discovery document; MCP
+				// clients require it to be advertised.
+				obj
+					.entry("code_challenge_methods_supported")
+					.or_insert_with(|| serde_json::json!(["S256"]));
+			}
+		},
 		_ => {},
 	}
 
@@ -368,6 +448,13 @@ pub(super) async fn client_registration(
 	let issuer = auth.issuer.trim_end_matches('/');
 	let body = std::mem::take(req.body_mut());
 	let registration_uri = match &auth.provider {
+		Some(McpIDP::Entra {}) => {
+			// Entra has no Dynamic Client Registration endpoint to proxy to; registration only
+			// works via the clientId short-circuit above.
+			return Err(ProxyError::ProcessingString(
+				"Entra ID does not support Dynamic Client Registration (RFC 7591); set `clientId` on mcpAuthentication to a pre-registered app registration".to_string(),
+			));
+		},
 		Some(McpIDP::Okta {}) => {
 			// Okta's DCR endpoint is relative to the org URL, not the issuer.
 			// Issuer: https://trial-xxx.okta.com/oauth2/default
@@ -433,6 +520,147 @@ pub(super) async fn client_registration(
 	);
 
 	Ok(upstream)
+}
+
+/// Proxy an OAuth authorization request to Entra, stripping the RFC 8707 `resource` parameter.
+///
+/// Entra's v2.0 endpoint rejects requests carrying `resource` alongside v2-style `scope`
+/// values with `AADSTS9010010: invalid_target`, but MCP clients are required by the MCP
+/// authorization spec to send it. The gateway advertises this endpoint in the served AS
+/// metadata and redirects the user agent to the real Entra authorize endpoint without it.
+pub(super) fn entra_authorize(
+	req: &Request,
+	auth: &McpAuthentication,
+) -> Result<Response, ProxyError> {
+	let endpoints = entra_endpoints(&auth.issuer).map_err(ProxyError::ProcessingString)?;
+	let mut location: Uri = match req.uri().query() {
+		Some(query) => format!("{}?{}", endpoints.authorization_endpoint, query),
+		None => endpoints.authorization_endpoint,
+	}
+	.parse()
+	.map_err(|e| ProxyError::ProcessingString(format!("invalid authorize URL: {e}")))?;
+	crate::http::modify_query_parameters(
+		&mut location,
+		std::iter::empty::<(&str, &str)>(),
+		["resource"],
+	)
+	.map_err(|e| ProxyError::ProcessingString(e.to_string()))?;
+	Ok(
+		Response::builder()
+			.status(StatusCode::FOUND)
+			.header(::http::header::LOCATION, location.to_string())
+			.body(axum::body::Body::empty())?,
+	)
+}
+
+/// Proxy an OAuth token request to Entra, stripping the RFC 8707 `resource` parameter
+/// (see [`entra_authorize`]) and injecting the configured client secret when the client did
+/// not supply one. Entra app registrations under the Web platform are confidential clients
+/// and require the secret at the token endpoint, while public clients (PKCE-only) do not.
+///
+/// The secret is only attached when the request is for the configured `clientId` (the app
+/// registration the secret belongs to) and uses a user-delegated grant (`authorization_code`,
+/// `refresh_token`). This endpoint is reachable pre-authentication, so injecting the secret
+/// into other grant types — notably `client_credentials` — would let any caller mint
+/// app-level tokens with the gateway's credential.
+pub(super) async fn entra_token(
+	req: &mut Request,
+	auth: &McpAuthentication,
+	client: PolicyClient,
+) -> Result<Response, ProxyError> {
+	// CORS (including preflight) is the responsibility of the route's cors policy.
+	if req.method() != Method::POST {
+		return Ok(
+			Response::builder()
+				.status(StatusCode::METHOD_NOT_ALLOWED)
+				.header(::http::header::ALLOW, "POST")
+				.body(axum::body::Body::empty())?,
+		);
+	}
+
+	let endpoints = entra_endpoints(&auth.issuer).map_err(ProxyError::ProcessingString)?;
+	// Clients using client_secret_basic carry their credentials in the Authorization header;
+	// forward it and don't inject a second credential.
+	let authorization = req.headers().get(::http::header::AUTHORIZATION).cloned();
+	let limit = crate::http::buffer_limit(req);
+	let body = std::mem::take(req.body_mut());
+	let bytes = crate::http::read_body_with_limit(body, limit)
+		.await
+		.map_err(ProxyError::Body)?;
+
+	let parsed = parse_entra_token_form(&bytes);
+	// The configured secret belongs to the app registration identified by the configured
+	// clientId (the one the DCR short-circuit hands out); never attach it to a request for
+	// any other client_id.
+	let client_id_matches = auth.client_id.is_some() && parsed.client_id == auth.client_id;
+	let mut form = parsed.form;
+	if authorization.is_none()
+		&& !parsed.has_client_secret
+		&& client_id_matches
+		&& entra_grant_may_use_client_secret(parsed.grant_type.as_deref())
+		&& let Some(secret) = &auth.client_secret
+	{
+		form = url::form_urlencoded::Serializer::new(form)
+			.append_pair("client_secret", secret.expose_secret())
+			.finish();
+	}
+
+	let mut builder = ::http::Request::builder()
+		.uri(endpoints.token_endpoint)
+		.method(Method::POST)
+		.header(
+			::http::header::CONTENT_TYPE,
+			"application/x-www-form-urlencoded",
+		);
+	if let Some(authorization) = authorization {
+		builder = builder.header(::http::header::AUTHORIZATION, authorization);
+	}
+	let ureq = builder.body(Body::from(form))?;
+	let upstream = client
+		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Oidc)
+		.simple_call(ureq)
+		.await?;
+
+	Ok(upstream)
+}
+
+/// An OAuth token request form re-encoded without any `resource` parameters, plus the fields
+/// needed to decide whether the configured client secret may be attached.
+struct EntraTokenForm {
+	form: String,
+	has_client_secret: bool,
+	grant_type: Option<String>,
+	client_id: Option<String>,
+}
+
+/// Only user-delegated grants may have the gateway's client secret attached; see
+/// [`entra_token`].
+fn entra_grant_may_use_client_secret(grant_type: Option<&str>) -> bool {
+	matches!(grant_type, Some("authorization_code" | "refresh_token"))
+}
+
+fn parse_entra_token_form(input: &[u8]) -> EntraTokenForm {
+	let mut has_client_secret = false;
+	let mut grant_type = None;
+	let mut client_id = None;
+	let mut serializer = url::form_urlencoded::Serializer::new(String::new());
+	for (k, v) in url::form_urlencoded::parse(input) {
+		match k.as_ref() {
+			"client_secret" => has_client_secret = true,
+			"grant_type" => grant_type = Some(v.to_string()),
+			"client_id" => client_id = Some(v.to_string()),
+			_ => {},
+		}
+		if k != "resource" {
+			serializer.append_pair(&k, &v);
+		}
+	}
+	EntraTokenForm {
+		form: serializer.finish(),
+		has_client_secret,
+		grant_type,
+		client_id,
+	}
 }
 
 const MOCK_DCR_CLIENT_ID_ISSUED_AT: u64 = 0;
@@ -570,6 +798,7 @@ mod tests {
 				)),
 				mode: crate::types::agent::McpAuthenticationMode::Strict,
 				client_id: None,
+				client_secret: None,
 			},
 		);
 
@@ -603,6 +832,7 @@ mod tests {
 			)),
 			mode: crate::types::agent::McpAuthenticationMode::Strict,
 			client_id: None,
+			client_secret: None,
 		}
 	}
 
@@ -727,5 +957,140 @@ mod tests {
 		assert_eq!(json["client_id"], "operator-id");
 		assert!(json.is_object());
 		assert_eq!(json["redirect_uris"], serde_json::json!([]));
+	}
+
+	fn entra_auth() -> McpAuthentication {
+		McpAuthentication {
+			issuer: "https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/v2.0"
+				.to_string(),
+			audiences: vec!["api://client-id-guid".to_string()],
+			provider: Some(McpIDP::Entra {}),
+			resource_metadata: crate::types::agent::ResourceMetadata {
+				extra: Default::default(),
+			},
+			jwt_validator: Arc::new(crate::http::jwt::Jwt::from_providers(
+				vec![],
+				crate::http::jwt::Mode::Strict,
+				crate::http::auth::AuthorizationLocation::bearer_header(),
+			)),
+			mode: crate::types::agent::McpAuthenticationMode::Strict,
+			client_id: Some("client-id-guid".to_string()),
+			client_secret: None,
+		}
+	}
+
+	#[test]
+	fn entra_authorize_strips_resource_param() {
+		// Entra rejects RFC 8707 `resource` with AADSTS9010010; everything else must be preserved.
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/authorize?client_id=abc&resource=https%3A%2F%2Fgateway.example.com%2Fmcp&state=xyz&code_challenge=ccc&code_challenge_method=S256")
+			.body(Body::empty())
+			.expect("request should build");
+
+		let resp = entra_authorize(&req, &entra_auth()).expect("authorize should redirect");
+
+		assert_eq!(resp.status(), StatusCode::FOUND);
+		let location = resp
+			.headers()
+			.get(::http::header::LOCATION)
+			.expect("location header")
+			.to_str()
+			.expect("location should be a string");
+		assert!(
+			location.starts_with(
+				"https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/oauth2/v2.0/authorize?"
+			),
+			"unexpected location: {location}"
+		);
+		assert!(
+			!location.contains("resource="),
+			"unexpected location: {location}"
+		);
+		assert!(
+			location.contains("client_id=abc"),
+			"unexpected location: {location}"
+		);
+		assert!(
+			location.contains("state=xyz"),
+			"unexpected location: {location}"
+		);
+		assert!(
+			location.contains("code_challenge_method=S256"),
+			"unexpected location: {location}"
+		);
+	}
+
+	#[test]
+	fn entra_authorize_without_query_redirects_to_bare_endpoint() {
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/authorize")
+			.body(Body::empty())
+			.expect("request should build");
+
+		let resp = entra_authorize(&req, &entra_auth()).expect("authorize should redirect");
+
+		assert_eq!(resp.status(), StatusCode::FOUND);
+		assert_eq!(
+			resp
+				.headers()
+				.get(::http::header::LOCATION)
+				.expect("location header"),
+			"https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/oauth2/v2.0/authorize"
+		);
+	}
+
+	#[tokio::test]
+	async fn entra_token_rejects_non_post_methods() {
+		let client = crate::test_helpers::policy_client();
+		let mut req = ::http::Request::builder()
+			.method(Method::GET)
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/mcp/token")
+			.body(Body::empty())
+			.expect("request should build");
+
+		let resp = entra_token(&mut req, &entra_auth(), client)
+			.await
+			.expect("non-POST should get a response");
+
+		assert_eq!(resp.status(), StatusCode::METHOD_NOT_ALLOWED);
+		assert_eq!(
+			resp.headers().get(::http::header::ALLOW).expect("allow"),
+			"POST"
+		);
+	}
+
+	#[test]
+	fn parse_entra_token_form_removes_resource_and_detects_client_secret() {
+		let parsed = parse_entra_token_form(
+			b"grant_type=authorization_code&client_id=abc-123&code=abc&resource=https%3A%2F%2Fgw%2Fmcp&code_verifier=v",
+		);
+		assert!(!parsed.has_client_secret);
+		assert_eq!(parsed.grant_type.as_deref(), Some("authorization_code"));
+		assert_eq!(parsed.client_id.as_deref(), Some("abc-123"));
+		assert!(!parsed.form.contains("resource"));
+		assert!(parsed.form.contains("grant_type=authorization_code"));
+		assert!(parsed.form.contains("code=abc"));
+		assert!(parsed.form.contains("code_verifier=v"));
+
+		let parsed = parse_entra_token_form(b"grant_type=refresh_token&client_secret=s3cret");
+		assert!(parsed.has_client_secret);
+		assert_eq!(parsed.grant_type.as_deref(), Some("refresh_token"));
+		assert!(parsed.form.contains("client_secret=s3cret"));
+	}
+
+	#[test]
+	fn entra_client_secret_only_attaches_to_user_delegated_grants() {
+		assert!(entra_grant_may_use_client_secret(Some(
+			"authorization_code"
+		)));
+		assert!(entra_grant_may_use_client_secret(Some("refresh_token")));
+		// A hostile page could POST these pre-auth; the gateway must never attach its secret.
+		assert!(!entra_grant_may_use_client_secret(Some(
+			"client_credentials"
+		)));
+		assert!(!entra_grant_may_use_client_secret(Some(
+			"urn:ietf:params:oauth:grant-type:jwt-bearer"
+		)));
+		assert!(!entra_grant_may_use_client_secret(None));
 	}
 }

@@ -2,7 +2,7 @@ use agent_core::strng;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::http::auth::{AwsAuth, BackendAuth};
+use crate::http::auth::{AwsAuth, BackendAuthKind};
 use crate::http::jwt::Claims;
 use crate::llm::RequestType;
 use crate::llm::bedrock::AwsRegion;
@@ -119,9 +119,10 @@ impl BedrockGuardrails {
 		pols.push(BackendTrafficPolicy::BackendTLS(
 			crate::http::backendtls::SYSTEM_TRUST.clone(),
 		));
-		pols.push(BackendTrafficPolicy::BackendAuth(BackendAuth::Aws(
+		pols.push(BackendTrafficPolicy::backend_auth(BackendAuthKind::Aws(
 			AwsAuth::Implicit {
 				service_name: None,
+				region: None,
 				assume_role: None,
 				source_credentials_cache: Default::default(),
 				assume_role_cache: Default::default(),

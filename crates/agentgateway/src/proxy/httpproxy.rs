@@ -134,7 +134,17 @@ pub fn apply_logging_policy_to_log(log: &mut RequestLog, lp: &frontend::LoggingP
 	if let Some(database) = &lp.database
 		&& !database.add.is_empty()
 	{
-		log.cel.database_fields.add = database.add.clone();
+		log.cel.database_fields.add = Arc::new(
+			log
+				.cel
+				.database_fields
+				.add
+				.iter()
+				.filter(|(key, _)| !database.add.contains_key(key))
+				.chain(database.add.iter())
+				.map(|(key, value)| (key.clone(), value.clone()))
+				.collect(),
+		);
 	}
 }
 
@@ -145,6 +155,14 @@ async fn apply_request_policies(
 	req: &mut Request,
 	rp: &mut ResponsePolicies,
 ) -> Result<(), ProxyResponse> {
+	// TODO we only need allow policies to be timeout-aware because we odn't have
+	// a unified timeout guard that applies during policy evalutation
+	if let Some(timeout) = rp.timeout.as_ref().and_then(|t| t.request_timeout) {
+		req.extensions_mut().insert(http::filters::RequestDeadline(
+			l.start.as_instant() + timeout,
+		));
+	}
+
 	// CORS must run before authentication, authorization and rate limiting so that:
 	// 1. Preflight OPTIONS requests short-circuit without requiring credentials
 	// 2. CORS response headers are queued even if the request is later rejected,
@@ -252,6 +270,12 @@ async fn apply_request_policies(
 	pol
 		.request_redirect
 		.apply_without_response("request redirect", c, l, req, rp.headers())
+		.await?;
+
+	// delay should happen after auth but before direct response
+	pol
+		.delay
+		.apply_without_response("delay", c, l, req, rp.headers())
 		.await?;
 	pol
 		.direct_response
@@ -1361,6 +1385,7 @@ impl HTTPProxy {
 					prompt_guard,
 					policy_client: self.policy_client(),
 					req_headers: upgrade_req_headers,
+					request_snapshot: log.request_snapshot.clone(),
 				});
 			}
 		}
@@ -1440,6 +1465,7 @@ async fn handle_upgrade(
 					guard_context.policy_client,
 					llm,
 					guard_context.req_headers,
+					guard_context.request_snapshot,
 				)
 				.await;
 				return;
@@ -1892,12 +1918,15 @@ async fn build_simple_backend_call(
 
 			let default_policies = BackendPolicies {
 				backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
-				backend_auth: Some(auth::BackendAuth::Aws(auth::AwsAuth::Implicit {
-					service_name: Some(config.service_name().to_string()),
-					assume_role: None,
-					source_credentials_cache: Default::default(),
-					assume_role_cache: Default::default(),
-				})),
+				backend_auth: Some(auth::BackendAuth::new(auth::BackendAuthKind::Aws(
+					auth::AwsAuth::Implicit {
+						service_name: Some(config.service_name().to_string()),
+						region: None,
+						assume_role: None,
+						source_credentials_cache: Default::default(),
+						assume_role_cache: Default::default(),
+					},
+				))),
 				..Default::default()
 			};
 			BackendCall::new(
@@ -2545,13 +2574,18 @@ async fn make_backend_call(
 			));
 		dtrace::snapshot!(Response, "raw response", log, &resp);
 	}
-	a2a::apply_to_response(
+	if let Some(a2a_response) = a2a::apply_to_response(
 		backend_call.backend_policies.a2a.as_ref(),
 		a2a_type,
 		&mut resp,
 	)
 	.await
-	.map_err(ProxyError::Processing)?;
+	.map_err(ProxyError::Processing)?
+	{
+		log.add(|l| {
+			l.a2a_response = Some(a2a_response);
+		});
+	}
 	let mut resp = if let (Some(llm), Some(llm_request)) = (
 		backend_call.backend_policies.llm_provider.clone(),
 		llm_request,
@@ -3597,6 +3631,7 @@ struct RealtimeGuardContext {
 	prompt_guard: crate::llm::policy::PromptGuard,
 	policy_client: PolicyClient,
 	req_headers: ::http::HeaderMap,
+	request_snapshot: Option<Arc<cel::RequestSnapshot>>,
 }
 
 fn hop_by_hop_headers(req: &mut Request) -> Option<RequestUpgrade> {
