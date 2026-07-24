@@ -512,6 +512,32 @@
             "type": "string"
           }
         },
+        "toolCalls": {
+          "description": "The tool calls from the LLM. Warning: accessing this has some performance impacts for large responses.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "description": "ToolCall represents a single tool/function invocation surfaced for observability.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "arguments": true
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "name",
+              "arguments"
+            ]
+          }
+        },
         "params": {
           "description": "The parameters for the LLM request.",
           "type": "object",

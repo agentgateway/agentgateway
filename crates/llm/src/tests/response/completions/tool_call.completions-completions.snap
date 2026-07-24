@@ -1,0 +1,124 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/tool_call.json
+info:
+  id: chatcmpl-tool-call-test
+  object: chat.completion
+  created: 1772656915
+  model: gpt-4-turbo
+  choices:
+    - index: 0
+      message:
+        role: assistant
+        content: ~
+        tool_calls:
+          - id: call_abc123
+            type: function
+            function:
+              name: get_weather
+              arguments: "{\"location\": \"San Francisco\", \"unit\": \"celsius\"}"
+          - id: call_xyz789
+            type: function
+            function:
+              name: search_web
+              arguments: "{\"query\": \"Claude AI\"}"
+      finish_reason: tool_calls
+  usage:
+    prompt_tokens: 25
+    completion_tokens: 18
+    total_tokens: 43
+    prompt_tokens_details:
+      cached_tokens: 0
+      audio_tokens: 0
+    completion_tokens_details:
+      reasoning_tokens: 0
+      audio_tokens: 0
+  service_tier: default
+  system_fingerprint: ~
+---
+{
+  "response": {
+    "model": "gpt-4-turbo",
+    "service_tier": "default",
+    "usage": {
+      "prompt_tokens": 25,
+      "completion_tokens": 18,
+      "total_tokens": 43,
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "audio_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "audio_tokens": 0
+      }
+    },
+    "choices": [
+      {
+        "message": {
+          "role": "assistant",
+          "tool_calls": [
+            {
+              "id": "call_abc123",
+              "type": "function",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"location\": \"San Francisco\", \"unit\": \"celsius\"}"
+              }
+            },
+            {
+              "id": "call_xyz789",
+              "type": "function",
+              "function": {
+                "name": "search_web",
+                "arguments": "{\"query\": \"Claude AI\"}"
+              }
+            }
+          ]
+        },
+        "index": 0,
+        "finish_reason": "tool_calls"
+      }
+    ],
+    "id": "[id]",
+    "object": "chat.completion",
+    "created": "[date]",
+    "system_fingerprint": null
+  },
+  "parsed": {
+    "input_tokens": 25,
+    "input_audio_tokens": 0,
+    "output_tokens": 18,
+    "output_audio_tokens": 0,
+    "total_tokens": 43,
+    "reasoning_tokens": 0,
+    "cached_input_tokens": 0,
+    "service_tier": "default",
+    "provider_model": "gpt-4-turbo",
+    "output_messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_call",
+            "id": "call_abc123",
+            "name": "get_weather",
+            "arguments": {
+              "location": "San Francisco",
+              "unit": "celsius"
+            }
+          },
+          {
+            "type": "tool_call",
+            "id": "call_xyz789",
+            "name": "search_web",
+            "arguments": {
+              "query": "Claude AI"
+            }
+          }
+        ],
+        "finish_reason": "tool_calls"
+      }
+    ]
+  }
+}

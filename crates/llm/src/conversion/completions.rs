@@ -4,6 +4,7 @@ use agent_core::strng;
 use axum_core::body::Body;
 use bytes::Bytes;
 use http::Response;
+use itertools::Itertools;
 use tracing::debug;
 
 use crate::{StreamingUsageGuard, logged_response_parsing, parse, types};
@@ -239,12 +240,18 @@ pub mod from_messages {
 		})
 	}
 
-	pub fn translate_stream(b: Body, buffer_limit: usize, log: StreamingUsageGuard) -> Body {
+	pub fn translate_stream(
+		b: Body,
+		buffer_limit: usize,
+		log: StreamingUsageGuard,
+		log_content: crate::LogContentFields,
+	) -> Body {
 		#[derive(Debug)]
 		struct PendingToolCall {
 			id: Option<String>,
 			name: Option<String>,
 			pending_json: String,
+			arguments: String,
 		}
 
 		#[derive(Debug, Default)]
@@ -381,6 +388,7 @@ pub mod from_messages {
 			events: &mut Vec<(&'static str, messages::MessagesStreamEvent)>,
 			log: &StreamingUsageGuard,
 			force: bool,
+			log_tool_calls: bool,
 		) {
 			if state.sent_message_stop {
 				return;
@@ -398,6 +406,7 @@ pub mod from_messages {
 					return;
 				},
 			};
+			let finish_reason = crate::types::serialize_str(&stop_reason);
 
 			close_text_block(state, events);
 			close_all_tool_blocks(state, events);
@@ -432,6 +441,20 @@ pub mod from_messages {
 					r.response.total_tokens = Some(usage.total_tokens as u64);
 				});
 			}
+
+			if log_tool_calls
+				&& let Some(tool_parts) = super::finalize_streaming_tool_calls(
+					state
+						.pending_tool_calls
+						.drain()
+						.map(|(idx, call)| (idx, call.id, call.name, call.arguments)),
+				) {
+				let mut tool_parts = Some(tool_parts);
+				let mut finish_reason = finish_reason;
+				log.update(|r| {
+					super::build_output_messages(&mut r.response, tool_parts.take(), finish_reason.take());
+				});
+			}
 		}
 
 		let mut state = StreamState::default();
@@ -444,7 +467,7 @@ pub mod from_messages {
 			let mut events: Vec<(&'static str, messages::MessagesStreamEvent)> = Vec::new();
 			match evt {
 				SseJsonEvent::Done => {
-					flush_message_end(&mut state, &mut events, &log, true);
+					flush_message_end(&mut state, &mut events, &log, true, log_content.tool_calls);
 					return events;
 				},
 				SseJsonEvent::Data(Err(e)) => {
@@ -515,6 +538,7 @@ pub mod from_messages {
 												id: None,
 												name: None,
 												pending_json: String::new(),
+												arguments: String::new(),
 											});
 									if let Some(id) = &tool_call.id {
 										entry.id = Some(id.clone());
@@ -525,6 +549,7 @@ pub mod from_messages {
 										}
 										if let Some(args) = &function.arguments {
 											entry.pending_json.push_str(args);
+											entry.arguments.push_str(args);
 										}
 									}
 
@@ -571,7 +596,7 @@ pub mod from_messages {
 					}
 
 					if state.pending_stop_reason.is_some() && state.pending_usage.is_some() {
-						flush_message_end(&mut state, &mut events, &log, false);
+						flush_message_end(&mut state, &mut events, &log, false, log_content.tool_calls);
 					}
 				},
 			}
@@ -956,12 +981,69 @@ pub mod from_messages {
 	}
 }
 
+/// Build the observability tool-call content parts from accumulated streaming deltas,
+/// keyed by tool-call index. Synthesizes an id when the provider omitted one,
+/// and returns `None` when there are no tool calls.
+fn finalize_streaming_tool_calls(
+	entries: impl IntoIterator<Item = (u32, Option<String>, Option<String>, String)>,
+) -> Option<Vec<crate::OutputMessagePart>> {
+	let parts: Vec<crate::OutputMessagePart> = entries
+		.into_iter()
+		.sorted_by_key(|(idx, ..)| *idx)
+		.map(|(idx, id, name, arguments)| {
+			let arguments =
+				serde_json::from_str(&arguments).unwrap_or(serde_json::Value::Object(Default::default()));
+			crate::OutputMessagePart::ToolCall {
+				id: id.unwrap_or_else(|| format!("tool_call_{idx}")).into(),
+				name: name.unwrap_or_default().into(),
+				arguments,
+			}
+		})
+		.collect();
+	(!parts.is_empty()).then_some(parts)
+}
+
+/// Builds `output_messages` on `LLMResponse` from accumulated tool call parts.
+pub(crate) fn build_output_messages(
+	response: &mut crate::LLMResponse,
+	tool_parts: Option<Vec<crate::OutputMessagePart>>,
+	finish_reason: Option<agent_core::strng::Strng>,
+) {
+	if let Some(content) = tool_parts.filter(|parts| !parts.is_empty()) {
+		response.output_messages = Some(vec![crate::OutputMessage {
+			role: agent_core::strng::literal!("assistant"),
+			content,
+			finish_reason,
+		}]);
+	}
+}
+
 pub fn passthrough_stream(
 	mut log: StreamingUsageGuard,
-	include_completion_in_log: bool,
+	log_content: crate::LogContentFields,
 	resp: Response<Body>,
 ) -> Response<Body> {
-	let mut completion = include_completion_in_log.then(String::new);
+	#[derive(Default)]
+	struct PendingPassthroughToolCall {
+		id: Option<String>,
+		name: Option<String>,
+		arguments: String,
+	}
+
+	fn finalize_tool_calls(
+		pending: &mut std::collections::HashMap<u32, PendingPassthroughToolCall>,
+	) -> Option<Vec<crate::OutputMessagePart>> {
+		finalize_streaming_tool_calls(
+			pending
+				.drain()
+				.map(|(idx, call)| (idx, call.id, call.name, call.arguments)),
+		)
+	}
+
+	let mut completion = log_content.completion.then(String::new);
+	let mut finish_reason = None;
+	let mut pending_tool_calls: Option<std::collections::HashMap<u32, PendingPassthroughToolCall>> =
+		log_content.tool_calls.then(std::collections::HashMap::new);
 	let buffer_limit = agent_http::response_buffer_limit(&resp);
 	resp.map(|b| {
 		let mut seen_provider = false;
@@ -972,10 +1054,35 @@ pub fn passthrough_stream(
 			move |f| {
 				match f {
 					Some(Ok(f)) => {
+						if let Some(reason) = f
+							.choices
+							.first()
+							.and_then(|choice| choice.finish_reason.as_ref())
+						{
+							finish_reason = crate::types::serialize_str(reason);
+						}
 						if let Some(c) = completion.as_mut()
 							&& let Some(delta) = f.choices.first().and_then(|c| c.delta.content.as_deref())
 						{
 							c.push_str(delta);
+						}
+						if let Some(pending) = pending_tool_calls.as_mut()
+							&& let Some(deltas) = f.choices.first().and_then(|c| c.delta.tool_calls.as_ref())
+						{
+							for chunk in deltas {
+								let entry = pending.entry(chunk.index).or_default();
+								if let Some(id) = &chunk.id {
+									entry.id = Some(id.clone());
+								}
+								if let Some(function) = &chunk.function {
+									if let Some(name) = &function.name {
+										entry.name = Some(name.clone());
+									}
+									if let Some(args) = &function.arguments {
+										entry.arguments.push_str(args);
+									}
+								}
+							}
 						}
 						if !saw_token {
 							saw_token = true;
@@ -1015,6 +1122,8 @@ pub fn passthrough_stream(
 								if let Some(c) = completion.take() {
 									r.response.completion = Some(vec![c]);
 								}
+								let tool_parts = pending_tool_calls.as_mut().and_then(finalize_tool_calls);
+								build_output_messages(&mut r.response, tool_parts, finish_reason.take());
 							});
 
 							log.report_usage();
@@ -1030,6 +1139,8 @@ pub fn passthrough_stream(
 							if let Some(c) = completion.take() {
 								r.response.completion = Some(vec![c]);
 							}
+							let tool_parts = pending_tool_calls.as_mut().and_then(finalize_tool_calls);
+							build_output_messages(&mut r.response, tool_parts, finish_reason.take());
 						});
 					},
 				}

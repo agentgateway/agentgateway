@@ -75,7 +75,10 @@ fn test_response(
 
 	let resp = xlate(Bytes::copy_from_slice(&provider_bytes))
 		.expect("failed to translate provider response to expected format");
-	let llm_response = resp.to_llm_response(false);
+	let llm_response = resp.to_llm_response(crate::LogContentFields {
+		completion: false,
+		tool_calls: true,
+	});
 	let raw = resp.serialize().expect("failed to serialize response");
 	let resp_val = serde_json::from_slice::<Value>(&raw)
 		.unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&raw).to_string()));
@@ -348,6 +351,7 @@ fn response_conversion_golden() {
 		"openrouter_reasoning",
 		"gemini_zero_completion_tokens",
 		"gemini_with_completion_tokens",
+		"tool_call",
 	] {
 		let path = format!("response/completions/{name}.json");
 		test_response("completions-completions", &path, |i| {

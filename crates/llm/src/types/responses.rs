@@ -379,8 +379,55 @@ impl RequestType for Request {
 	}
 }
 
+fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {
+	let mut content = Vec::new();
+
+	for item in &resp.output {
+		match item {
+			OutputItem::FunctionCall(_) => {
+				content.extend(output_item_tool_call_part(item));
+			},
+			_ => {},
+		}
+	}
+
+	if content.is_empty() {
+		return None;
+	}
+
+	Some(vec![OutputMessage {
+		role: strng::literal!("assistant"),
+		content,
+		finish_reason: Some(strng::new(&resp.status)),
+	}])
+}
+
+pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMessagePart> {
+	let OutputItem::FunctionCall(call) = item else {
+		return None;
+	};
+	let id = call
+		.id
+		.as_deref()
+		.filter(|id| !id.is_empty())
+		.unwrap_or(call.call_id.as_str());
+	let arguments =
+		serde_json::from_str(&call.arguments).unwrap_or(serde_json::Value::Object(Default::default()));
+	Some(OutputMessagePart::ToolCall {
+		id: strng::new(id),
+		name: strng::new(&call.name),
+		arguments,
+	})
+}
+
 impl ResponseType for Response {
-	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
+	fn to_llm_response(&self, log_content: crate::LogContentFields) -> LLMResponse {
+		let output_messages = if log_content.tool_calls {
+			extract_output_messages(self)
+		} else {
+			None
+		};
+
 		LLMResponse {
 			input_tokens: self.usage.as_ref().map(|u| u.input_tokens),
 			input_image_tokens: None,
@@ -411,7 +458,7 @@ impl ResponseType for Response {
 			cache_creation_input_tokens: None,
 			service_tier: self.service_tier.as_deref().map(Into::into),
 			provider_model: Some(strng::new(&self.model)),
-			completion: if include_completion_in_log {
+			completion: if log_content.completion {
 				Some(
 					self
 						.output
@@ -431,6 +478,7 @@ impl ResponseType for Response {
 			} else {
 				None
 			},
+			output_messages,
 			first_token: Default::default(),
 		}
 	}
@@ -557,5 +605,68 @@ pub mod typed {
 		/// Emitted when an error occurs.
 		#[serde(rename = "error")]
 		ResponseError(openai_responses::ResponseErrorEvent),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::typed::{FunctionToolCall, OutputStatus};
+	use super::*;
+
+	fn response_with_output(output: Vec<OutputItem>) -> Response {
+		Response {
+			id: "resp_123".to_string(),
+			status: "completed".to_string(),
+			output,
+			model: "gpt-4.1".to_string(),
+			service_tier: None,
+			usage: None,
+			rest: serde_json::Value::Null,
+		}
+	}
+
+	#[test]
+	fn test_response_tool_calls_populated_when_flag_true() {
+		let response = response_with_output(vec![OutputItem::FunctionCall(FunctionToolCall {
+			arguments: r#"{"location":"San Francisco"}"#.to_string(),
+			call_id: "call_123".to_string(),
+			namespace: None,
+			name: "get_weather".to_string(),
+			id: Some("fc_123".to_string()),
+			status: Some(OutputStatus::Completed),
+		})]);
+
+		let llm_response = response.to_llm_response(crate::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		});
+		let messages = llm_response
+			.output_messages
+			.expect("output_messages should be present");
+		let tool_calls = messages[0].tool_calls();
+
+		assert_eq!(tool_calls.len(), 1);
+		assert_eq!(tool_calls[0].id.as_str(), "fc_123");
+		assert_eq!(tool_calls[0].name.as_str(), "get_weather");
+		assert_eq!(
+			tool_calls[0].arguments,
+			serde_json::json!({"location":"San Francisco"})
+		);
+	}
+
+	#[test]
+	fn test_response_output_messages_omitted_when_flag_false() {
+		let response = response_with_output(vec![OutputItem::FunctionCall(FunctionToolCall {
+			arguments: "{}".to_string(),
+			call_id: "call_123".to_string(),
+			namespace: None,
+			name: "get_weather".to_string(),
+			id: Some("fc_123".to_string()),
+			status: Some(OutputStatus::Completed),
+		})]);
+
+		let llm_response = response.to_llm_response(crate::LogContentFields::default());
+
+		assert!(llm_response.output_messages.is_none());
 	}
 }

@@ -69,6 +69,10 @@
 |`llm.prompt[].role`|string|Message role, such as "system", "user", or "assistant".|
 |`llm.prompt[].content`|string|Message text content.|
 |`llm.completion`|[]string|The completion from the LLM. Warning: accessing this has some performance impacts for large responses.|
+|`llm.toolCalls`|[]object|The tool calls from the LLM. Warning: accessing this has some performance impacts for large responses.|
+|`llm.toolCalls[].id`|string||
+|`llm.toolCalls[].name`|string||
+|`llm.toolCalls[].arguments`|any||
 |`llm.params`|object|The parameters for the LLM request.|
 |`llm.params.temperature`|number||
 |`llm.params.top_p`|number||

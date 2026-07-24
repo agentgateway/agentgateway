@@ -1,6 +1,7 @@
+use std::collections::BTreeMap;
 use std::time::Instant;
 
-use agent_core::strng;
+use agent_core::strng::{self, Strng};
 use axum_core::body::Body;
 use bytes::Bytes;
 
@@ -745,14 +746,86 @@ fn translate_stop_reason(resp: &messages::StopReason) -> completions::FinishReas
 	}
 }
 
+struct PendingStreamingToolCall {
+	id: Strng,
+	name: Strng,
+	arguments: String,
+}
+
+pub(crate) struct StreamingToolCalls {
+	calls: Option<BTreeMap<usize, PendingStreamingToolCall>>,
+}
+
+impl StreamingToolCalls {
+	pub(crate) fn new(enabled: bool) -> Self {
+		Self {
+			calls: enabled.then(BTreeMap::new),
+		}
+	}
+
+	pub(crate) fn start(
+		&mut self,
+		index: usize,
+		id: impl Into<Strng>,
+		name: impl Into<Strng>,
+		input: &serde_json::Value,
+	) {
+		let Some(calls) = self.calls.as_mut() else {
+			return;
+		};
+		let arguments = match input {
+			serde_json::Value::Null => String::new(),
+			serde_json::Value::Object(input) if input.is_empty() => String::new(),
+			input => input.to_string(),
+		};
+		calls.insert(
+			index,
+			PendingStreamingToolCall {
+				id: id.into(),
+				name: name.into(),
+				arguments,
+			},
+		);
+	}
+
+	pub(crate) fn append_arguments(&mut self, index: usize, arguments: &str) {
+		if let Some(call) = self.calls.as_mut().and_then(|calls| calls.get_mut(&index)) {
+			call.arguments.push_str(arguments);
+		}
+	}
+
+	pub(crate) fn take_output_messages(
+		&mut self,
+		finish_reason: Option<Strng>,
+	) -> Option<Vec<crate::OutputMessage>> {
+		let content: Vec<_> = std::mem::take(self.calls.as_mut()?)
+			.into_values()
+			.map(|call| crate::OutputMessagePart::ToolCall {
+				id: call.id,
+				name: call.name,
+				arguments: serde_json::from_str(&call.arguments)
+					.unwrap_or(serde_json::Value::Object(Default::default())),
+			})
+			.collect();
+		(!content.is_empty()).then(|| {
+			vec![crate::OutputMessage {
+				role: strng::literal!("assistant"),
+				content,
+				finish_reason,
+			}]
+		})
+	}
+}
+
 pub fn passthrough_stream(
 	b: Body,
 	buffer_limit: usize,
 	log: StreamingUsageGuard,
-	include_completion_in_log: bool,
+	log_content: crate::LogContentFields,
 ) -> Body {
 	let mut saw_token = false;
-	let mut completion = include_completion_in_log.then(String::new);
+	let mut completion = log_content.completion.then(String::new);
+	let mut tool_calls = StreamingToolCalls::new(log_content.tool_calls);
 	// https://platform.claude.com/docs/en/build-with-claude/streaming
 	parse::sse::json_passthrough::<messages::MessagesStreamEvent>(b, buffer_limit, move |f| {
 		// ignore errors... what else can we do?
@@ -762,6 +835,9 @@ pub fn passthrough_stream(
 				log.update(|r| {
 					if let Some(c) = completion.take() {
 						r.response.completion = Some(vec![c]);
+					}
+					if r.response.output_messages.is_none() {
+						r.response.output_messages = tool_calls.take_output_messages(None);
 					}
 				});
 			}
@@ -781,7 +857,19 @@ pub fn passthrough_stream(
 					r.response.provider_model = Some(strng::new(&message.model))
 				});
 			},
-			messages::MessagesStreamEvent::ContentBlockDelta { delta, .. } => {
+			messages::MessagesStreamEvent::ContentBlockStart {
+				index,
+				content_block,
+			} => match &content_block {
+				messages::ContentBlock::ToolUse {
+					id, name, input, ..
+				}
+				| messages::ContentBlock::ServerToolUse {
+					id, name, input, ..
+				} => tool_calls.start(index, id.as_str(), name.as_str(), input),
+				_ => {},
+			},
+			messages::MessagesStreamEvent::ContentBlockDelta { index, delta } => {
 				if !saw_token {
 					saw_token = true;
 					log.update(|r| {
@@ -793,8 +881,15 @@ pub fn passthrough_stream(
 				{
 					c.push_str(text);
 				}
+				if let messages::ContentBlockDelta::InputJsonDelta { partial_json } = &delta {
+					tool_calls.append_arguments(index, partial_json);
+				}
 			},
-			messages::MessagesStreamEvent::MessageDelta { usage, delta: _ } => {
+			messages::MessagesStreamEvent::MessageDelta { usage, delta } => {
+				let finish_reason = delta
+					.stop_reason
+					.as_ref()
+					.and_then(crate::types::serialize_str);
 				log.update(|r| {
 					if let Some(o) = usage.output_tokens {
 						r.response.output_tokens = Some(o as u64);
@@ -813,11 +908,17 @@ pub fn passthrough_stream(
 					if let Some(c) = completion.take() {
 						r.response.completion = Some(vec![c]);
 					}
+					r.response.output_messages = tool_calls.take_output_messages(finish_reason.clone());
 				});
 			},
-			messages::MessagesStreamEvent::ContentBlockStart { .. }
-			| messages::MessagesStreamEvent::ContentBlockStop { .. }
-			| messages::MessagesStreamEvent::MessageStop
+			messages::MessagesStreamEvent::MessageStop => {
+				log.update(|r| {
+					if r.response.output_messages.is_none() {
+						r.response.output_messages = tool_calls.take_output_messages(None);
+					}
+				});
+			},
+			messages::MessagesStreamEvent::ContentBlockStop { .. }
 			| messages::MessagesStreamEvent::Ping => {},
 		}
 	})

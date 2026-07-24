@@ -1708,14 +1708,16 @@ pub mod from_messages {
 		log: StreamingUsageGuard,
 		model: &str,
 		_message_id: &str,
-		include_completion_in_log: bool,
+		log_content: crate::LogContentFields,
 		tool_name_map: Option<super::BedrockToolNameMap>,
 	) -> Body {
 		let mut saw_token = false;
 		let mut seen_blocks: HashSet<i32> = HashSet::new();
 		let mut pending_stop_reason: Option<bedrock::StopReason> = None;
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
-		let mut completion = include_completion_in_log.then(String::new);
+		let mut completion = log_content.completion.then(String::new);
+		let mut tool_calls =
+			crate::conversion::messages::StreamingToolCalls::new(log_content.tool_calls);
 		let model = model.to_string();
 		parse::aws_sse::transform_multi(b, buffer_limit, move |aws_event| {
 			let event = match bedrock::ConverseStreamOutput::deserialize(aws_event) {
@@ -1763,11 +1765,21 @@ pub mod from_messages {
 				bedrock::ConverseStreamOutput::ContentBlockStart(start) => {
 					seen_blocks.insert(start.content_block_index);
 					let content_block = match start.start {
-						Some(bedrock::ContentBlockStart::ToolUse(s)) => messages::ContentBlock::ToolUse {
-							id: s.tool_use_id,
-							name: super::restore_tool_name(tool_name_map.as_ref(), &s.name),
-							input: serde_json::json!({}),
-							cache_control: None,
+						Some(bedrock::ContentBlockStart::ToolUse(s)) => {
+							let name = super::restore_tool_name(tool_name_map.as_ref(), &s.name);
+							let input = serde_json::json!({});
+							tool_calls.start(
+								start.content_block_index as usize,
+								s.tool_use_id.as_str(),
+								name.as_str(),
+								&input,
+							);
+							messages::ContentBlock::ToolUse {
+								id: s.tool_use_id,
+								name,
+								input,
+								cache_control: None,
+							}
 						},
 						Some(bedrock::ContentBlockStart::ReasoningContent) => {
 							messages::ContentBlock::Thinking {
@@ -1860,6 +1872,7 @@ pub mod from_messages {
 								},
 							},
 							bedrock::ContentBlockDelta::ToolUse(tu) => {
+								tool_calls.append_arguments(delta.content_block_index as usize, &tu.input);
 								messages::ContentBlockDelta::InputJsonDelta {
 									partial_json: tu.input,
 								}
@@ -1907,6 +1920,17 @@ pub mod from_messages {
 					let mut out = Vec::new();
 					let stop = pending_stop_reason.take();
 					let usage = pending_usage.take();
+					let finish_reason = stop
+						.as_ref()
+						.map(|stop_reason| translate_stop_reason(*stop_reason))
+						.as_ref()
+						.and_then(crate::types::serialize_str);
+					let mut output_messages = tool_calls.take_output_messages(finish_reason);
+					log.update(|r| {
+						if let Some(output_messages) = output_messages.take() {
+							r.response.output_messages = Some(output_messages);
+						}
+					});
 
 					if let (Some(stop_reason), Some(usage_data)) = (stop, usage) {
 						let event = messages::MessagesStreamEvent::MessageDelta {

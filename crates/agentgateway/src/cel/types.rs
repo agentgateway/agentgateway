@@ -1399,6 +1399,10 @@ pub struct LLMContext {
 	/// The completion from the LLM. Warning: accessing this has some performance impacts for large responses.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub completion: Option<Vec<String>>,
+	/// The tool calls from the LLM. Warning: accessing this has some performance impacts for large responses.
+	#[dynamic(rename = "toolCalls")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub tool_calls: Option<Vec<llm::ToolCall>>,
 	/// The parameters for the LLM request.
 	pub params: llm::LLMRequestParams,
 	/// The realized USD cost of the request from the model cost catalog.
@@ -1440,6 +1444,10 @@ impl LLMContext {
 			response_model: resp.provider_model.clone(),
 			// Not always set
 			completion: resp.completion.clone(),
+			tool_calls: resp
+				.output_messages
+				.as_ref()
+				.map(|msgs| msgs.iter().flat_map(|m| m.tool_calls()).collect()),
 			..LLMContext::from(value.request)
 		};
 
@@ -1511,6 +1519,7 @@ impl From<llm::LLMRequest> for LLMContext {
 			output_audio_tokens: None,
 			total_tokens: None,
 			completion: None,
+			tool_calls: None,
 			reasoning_tokens: None,
 			input_image_tokens: None,
 			input_text_tokens: None,
@@ -2203,6 +2212,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 
 			prompt: None,
 			completion: Some(vec!["Hello".to_string()]),
+			tool_calls: None,
 			params: llm::LLMRequestParams {
 				temperature: Some(0.7),
 				top_p: Some(1.0),
