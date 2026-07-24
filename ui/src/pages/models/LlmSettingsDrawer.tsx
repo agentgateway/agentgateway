@@ -30,8 +30,11 @@ export function LlmSettingsDrawer(props: {
     port: props.llm?.port ?? null,
   });
   const patch: LlmSettingsPatch = {
-    gateways: binding.gateways ?? null,
-    port: binding.gateways ? null : (binding.port ?? null),
+    gateways: binding.gateways ?? [],
+    port:
+      binding.gateways != null && binding.gateways.length > 0
+        ? null
+        : binding.port,
   };
 
   return (

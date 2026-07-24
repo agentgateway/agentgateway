@@ -407,7 +407,7 @@ function surfaceEndpointLabel(
   gateways: string | string[] | undefined,
   port: number,
 ) {
-  if (!gateways) return `Port ${port}`;
+  if (gateways == null || gateways.length === 0) return `Port ${port}`;
   return `Gateway ${Array.isArray(gateways) ? gateways.join(", ") : gateways}`;
 }
 
