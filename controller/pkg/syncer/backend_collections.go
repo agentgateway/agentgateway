@@ -16,6 +16,9 @@ func AgwBackendReferencesCollection(agwPlugins plugins.AgwPlugin, krtopts krtuti
 	var allReferences []krt.Collection[*plugins.PolicyAttachment]
 
 	for _, plugin := range agwPlugins.ContributesBackends {
+		if plugin.BuildReferences == nil {
+			continue
+		}
 		refs := plugin.BuildReferences()
 		if refs != nil {
 			allReferences = append(allReferences, refs)
@@ -26,14 +29,14 @@ func AgwBackendReferencesCollection(agwPlugins plugins.AgwPlugin, krtopts krtuti
 	return allRefsCol
 }
 
-func AgwBackendCollection(agwPlugins plugins.AgwPlugin, references plugins.ReferenceIndex, krtopts krtutil.KrtOptions) (krt.Collection[ir.AgwResource], BackendStatusCollections) {
+func AgwBackendCollection(agwPlugins plugins.AgwPlugin, references plugins.ReferenceIndex, grants plugins.ReferenceGrantChecker, krtopts krtutil.KrtOptions) (krt.Collection[ir.AgwResource], BackendStatusCollections) {
 	var allBackends []krt.Collection[ir.AgwResource]
 	policyStatusMap := PolicyStatusCollections{}
 	// Collect all policies from registered plugins.
 	// Note: Only one plugin should be used per source GVK.
 	// Avoid joining collections per-GVK before passing them to a plugin.
 	for gvk, plugin := range agwPlugins.ContributesBackends {
-		policyStatus, policy := plugin.Build(plugins.PolicyPluginInput{References: references})
+		policyStatus, policy := plugin.Build(plugins.PolicyPluginInput{References: references, Grants: grants})
 		allBackends = append(allBackends, policy)
 		if policyStatus != nil {
 			// some plugins may not have a status collection

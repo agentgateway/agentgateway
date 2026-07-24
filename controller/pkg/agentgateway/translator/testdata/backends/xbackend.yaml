@@ -1,0 +1,59 @@
+apiVersion: gateway.networking.x-k8s.io/v1alpha1
+kind: XBackend
+metadata:
+  name: external-api
+  namespace: default
+spec:
+  type: ExternalHostname
+  port:
+    port: 443
+  externalHostname:
+    hostname: api.example.com
+  protocol: HTTP2
+  tls:
+    mode: ServerOnly
+    validation:
+      hostname: api.example.com
+      wellKnownCACertificates: System
+
+---
+# Output
+output:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      inlinePolicies:
+      - backendHttp:
+          version: HTTP2
+      - backendTls:
+          hostname: api.example.com
+      key: default/external-api
+      name:
+        name: external-api
+        namespace: default
+      static:
+        host: api.example.com
+        port: 443
+status:
+- apiVersion: gateway.networking.x-k8s.io/v1alpha1
+  kind: XBackend
+  metadata:
+    name: external-api
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Backend successfully accepted
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: basic
+        namespace: default

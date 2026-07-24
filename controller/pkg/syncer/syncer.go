@@ -541,7 +541,7 @@ func (s *Syncer) buildAgwResources(
 	}
 
 	// Build the backend collection with backend+route references
-	agwBackends, agwBackendStatus := AgwBackendCollection(s.agwPlugins, referenceIndex, krtopts)
+	agwBackends, agwBackendStatus := AgwBackendCollection(s.agwPlugins, referenceIndex, refGrants, krtopts)
 	for _, col := range agwBackendStatus {
 		status.RegisterStatus(s.statusCollections, col, translator.GetStatus)
 	}

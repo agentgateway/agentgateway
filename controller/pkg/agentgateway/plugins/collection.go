@@ -14,6 +14,7 @@ import (
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
+	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -65,6 +66,8 @@ type AgwCollections struct {
 	BackendTLSPolicies      krt.Collection[*gwv1.BackendTLSPolicy]
 	ListenerSets            krt.Collection[*gwv1.ListenerSet]
 	ListenerSetsByNamespace krt.Index[string, *gwv1.ListenerSet]
+	XBackends               krt.Collection[*gwxv1a1.XBackend]
+	XBackendsByNamespace    krt.Index[string, *gwxv1a1.XBackend]
 
 	// Extended resources
 	InferencePools            krt.Collection[*inf.InferencePool]
@@ -109,6 +112,8 @@ func NewAgwCollections(
 		client, wellknown.GatewayClassGVR, filter), krtOptions.ToOptions("informer/GatewayClasses")...)
 	listenerSets := krt.WrapClient(kclient.NewDelayedInformer[*gwv1.ListenerSet](
 		client, wellknown.ListenerSetGVR, kubetypes.StandardInformer, filter), krtOptions.ToOptions("informer/ListenerSets")...)
+	xBackends := krt.WrapClient(kclient.NewDelayedInformer[*gwxv1a1.XBackend](
+		client, wellknown.XBackendGVR, kubetypes.StandardInformer, filter), krtOptions.ToOptions("informer/XBackends")...)
 
 	byParentRefIndex := krtpkg.UnnamedIndex(listenerSets, func(in *gwv1.ListenerSet) []collections.TargetRefIndexKey {
 		pRef := in.Spec.ParentRef
@@ -198,6 +203,7 @@ func NewAgwCollections(
 		TLSRoutes:          krt.WrapClient(kclient.NewDelayedInformer[*gwv1.TLSRoute](client, gvr.TLSRoute, kubetypes.StandardInformer, kubetypes.Filter{ObjectFilter: client.ObjectFilter()}), krtOptions.ToOptions("informer/TLSRoutes")...),
 		BackendTLSPolicies: krt.WrapClient(kclient.NewDelayedInformer[*gwv1.BackendTLSPolicy](client, gvr.BackendTLSPolicy, kubetypes.StandardInformer, kubetypes.Filter{ObjectFilter: client.ObjectFilter()}), krtOptions.ToOptions("informer/BackendTLSPolicies")...),
 		ListenerSets:       listenerSets,
+		XBackends:          xBackends,
 
 		TCPRoutes:       krt.WrapClient(kclient.NewDelayedInformer[*gwv1.TCPRoute](client, wellknown.TCPRouteGVR, kubetypes.StandardInformer, kubetypes.Filter{ObjectFilter: client.ObjectFilter()}), krtOptions.ToOptions("informer/TCPRoutes")...),
 		ReferenceGrants: krt.WrapClient(kclient.NewFilteredDelayed[*gwv1b1.ReferenceGrant](client, wellknown.ReferenceGrantGVR, kubetypes.Filter{ObjectFilter: client.ObjectFilter()}), krtOptions.ToOptions("informer/ReferenceGrants")...),
@@ -229,6 +235,7 @@ func (c *AgwCollections) SetupIndexes() {
 	c.HTTPRoutesByNamespace = krt.NewNamespaceIndex(c.HTTPRoutes)
 	c.GRPCRoutesByNamespace = krt.NewNamespaceIndex(c.GRPCRoutes)
 	c.ListenerSetsByNamespace = krt.NewNamespaceIndex(c.ListenerSets)
+	c.XBackendsByNamespace = krt.NewNamespaceIndex(c.XBackends)
 	c.BackendsByNamespace = krt.NewNamespaceIndex(c.Backends)
 	c.InferencePoolsByNamespace = krt.NewNamespaceIndex(c.InferencePools)
 }

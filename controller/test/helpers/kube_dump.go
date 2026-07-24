@@ -98,6 +98,7 @@ func recordKubeState(ctx context.Context, kubeClient client.Client, f *os.File, 
 		{Name: "tlsroutes.gateway.networking.k8s.io", GVK: schema.GroupVersionKind{Group: "gateway.networking.k8s.io", Version: "v1", Kind: "TLSRoute"}, Namespaced: true},
 		{Name: "udproutes.gateway.networking.k8s.io", GVK: schema.GroupVersionKind{Group: "gateway.networking.k8s.io", Version: "v1", Kind: "UDPRoute"}, Namespaced: true},
 		{Name: "listenersets.gateway.networking.k8s.io", GVK: schema.GroupVersionKind{Group: "gateway.networking.k8s.io", Version: "v1alpha1", Kind: "ListenerSet"}, Namespaced: true},
+		{Name: "xbackends.gateway.networking.x-k8s.io", GVK: schema.GroupVersionKind{Group: "gateway.networking.x-k8s.io", Version: "v1alpha1", Kind: "XBackend"}, Namespaced: true},
 		{Name: "xbackendtrafficpolicies.gateway.networking.x-k8s.io", GVK: schema.GroupVersionKind{Group: "gateway.networking.x-k8s.io", Version: "v1alpha1", Kind: "XBackendTrafficPolicy"}, Namespaced: true},
 		{Name: "xmeshes.gateway.networking.x-k8s.io", GVK: schema.GroupVersionKind{Group: "gateway.networking.x-k8s.io", Version: "v1alpha1", Kind: "XMesh"}, Namespaced: true},
 		// GIE
