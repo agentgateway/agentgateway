@@ -607,7 +607,9 @@ test("hybrid model edits use the resource's owning store", async ({ page }) => {
     diffDrawer.getByRole("heading", { name: "Model config diff" }),
   ).toBeVisible();
   await diffDrawer.getByRole("button", { name: "Close" }).first().click();
-  await page.getByRole("button", { name: "Save model" }).click();
+  await page
+    .getByRole("button", { name: "Save model" })
+    .dispatchEvent("click", { ctrlKey: true, shiftKey: true });
 
   await expect.poll(() => gateway.postedConfigs.length).toBe(1);
   expect(resourceWrites).toHaveLength(0);

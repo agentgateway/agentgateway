@@ -3,7 +3,6 @@ import { Bot, Pencil, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import {
   invalidProviderApiKey,
-  isDatabaseConfigResource,
   makeEmptyLlmProvider,
   providerDisplayName,
   providerLabel,
@@ -24,12 +23,7 @@ import {
 } from "../components/Primitives";
 import { useStickyQueryParam } from "../drawerRouteState";
 import { ProviderIcon } from "../components/ProviderIcon";
-import {
-  useDeleteConfigResource,
-  useLlmConfigData,
-  useUpdateConfig,
-  useUpsertConfigResource,
-} from "../hooks";
+import { useLlmConfigPersistence } from "../hooks";
 import { cleanEmpty } from "../policies/policyUtils";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import type {
@@ -41,11 +35,8 @@ import type {
 import { ProviderConfigEditor } from "./models/ProviderConfigEditor";
 
 export function ProvidersPage() {
-  const { config, hybrid, configResources, resources, models, providers } =
-    useLlmConfigData();
-  const update = useUpdateConfig();
-  const upsertResource = useUpsertConfigResource();
-  const deleteResource = useDeleteConfigResource();
+  const persistence = useLlmConfigPersistence();
+  const { config, hybrid, configResources, models, providers } = persistence;
   const help = useSchemaHelp();
   const [editing, setEditing] = useState<{
     previousName?: string;
@@ -68,14 +59,11 @@ export function ProvidersPage() {
           }
         : null);
   const editingDatabaseProvider = Boolean(
-    hybrid &&
     activeEditing &&
-    (!activeEditing.previousName ||
-      isDatabaseConfigResource(
-        resources,
-        "llm.provider",
-        activeEditing.previousName,
-      )),
+    persistence.willSaveResourceToDatabase(
+      "llm.provider",
+      activeEditing.previousName,
+    ),
   );
 
   function openNewProvider() {
@@ -96,50 +84,35 @@ export function ProvidersPage() {
     setProviderDrawer(null, "replace");
   }
 
-  const saving =
-    update.isPending || upsertResource.isPending || deleteResource.isPending;
-  const saveError =
-    update.error?.message ??
-    upsertResource.error?.message ??
-    deleteResource.error?.message ??
-    null;
-  const saved =
-    update.isSuccess || upsertResource.isSuccess || deleteResource.isSuccess;
+  const saving = persistence.isPending;
+  const saveError = persistence.mutationError?.message ?? null;
+  const saved = persistence.isSuccess;
 
   function resetSaves() {
-    update.reset();
-    upsertResource.reset();
-    deleteResource.reset();
+    persistence.reset();
   }
 
   function saveProvider(provider: LlmProvider, previousName?: string) {
-    if (
-      hybrid &&
-      (!previousName ||
-        isDatabaseConfigResource(resources, "llm.provider", previousName))
-    ) {
-      upsertResource.mutate(
-        { kind: "llm.provider", value: provider, previousId: previousName },
-        { onSuccess: closeProviderEditor },
-      );
-      return;
-    }
-    update.mutate((next) => upsertLlmProvider(next, provider, previousName), {
-      onSuccess: closeProviderEditor,
-    });
+    persistence.saveResource(
+      {
+        kind: "llm.provider",
+        value: provider,
+        previousId: previousName,
+        updateFile: (next) => upsertLlmProvider(next, provider, previousName),
+      },
+      { onSuccess: closeProviderEditor },
+    );
   }
 
   function deleteProvider(name: string) {
-    if (hybrid && isDatabaseConfigResource(resources, "llm.provider", name)) {
-      deleteResource.mutate(
-        { kind: "llm.provider", id: name },
-        { onSuccess: () => setDeletingProvider(null) },
-      );
-      return;
-    }
-    update.mutate((next) => removeLlmProvider(next, name), {
-      onSuccess: () => setDeletingProvider(null),
-    });
+    persistence.removeResource(
+      {
+        kind: "llm.provider",
+        id: name,
+        updateFile: (next) => removeLlmProvider(next, name),
+      },
+      { onSuccess: () => setDeletingProvider(null) },
+    );
   }
 
   return (
@@ -210,8 +183,7 @@ export function ProvidersPage() {
                       {hybrid ? (
                         <td>
                           <span className="badge">
-                            {isDatabaseConfigResource(
-                              resources,
+                            {persistence.isDatabaseResource(
                               "llm.provider",
                               provider.name,
                             )

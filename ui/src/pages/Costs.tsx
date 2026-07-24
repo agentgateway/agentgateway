@@ -14,9 +14,8 @@ import {
 import { ConfigSaveButton } from "../components/ConfigDiffDrawer";
 import {
   takeHybridFileWriteOverride,
-  useLlmConfigData,
+  useLlmConfigPersistence,
   useUpdateConfig,
-  useUpsertConfigResource,
 } from "../hooks";
 import type { ConfigResource } from "../api/configResourcesApi";
 import type { GatewayConfig } from "../types";
@@ -37,9 +36,9 @@ type DisplayCostSource = CostCatalogSource & {
 };
 
 export function CostsPage() {
-  const { config, hybrid, resources, configResources } = useLlmConfigData();
+  const persistence = useLlmConfigPersistence();
+  const { config, hybrid, resources, configResources } = persistence;
   const updateConfig = useUpdateConfig();
-  const upsertResource = useUpsertConfigResource();
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -70,7 +69,7 @@ export function CostsPage() {
       ),
     [databaseCatalog, hybrid, sources],
   );
-  const saving = updateConfig.isPending || upsertResource.isPending;
+  const saving = updateConfig.isPending || persistence.isPending;
   const [editingCustom, setEditingCustom] = useState(false);
   const [customDraft, setCustomDraft] = useState<CustomCostRow[]>(customRows);
   const [customError, setCustomError] = useState<string | null>(null);
@@ -391,19 +390,14 @@ export function CostsPage() {
       return;
     }
     try {
-      if (hybrid) {
-        await upsertResource.mutateAsync({
-          kind: "modelCatalog",
-          value: {
-            ...databaseCatalog,
-            custom: inlineCatalog(customDraft),
-          },
-        });
-      } else {
-        await updateConfig.mutateAsync((next) =>
-          setInlineCostRows(next, customDraft),
-        );
-      }
+      await persistence.saveResourceAsync({
+        kind: "modelCatalog",
+        value: {
+          ...databaseCatalog,
+          custom: inlineCatalog(customDraft),
+        },
+        updateFile: (next) => setInlineCostRows(next, customDraft),
+      });
       setEditingCustom(false);
     } catch (err) {
       setCustomError(

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import {
@@ -14,7 +14,6 @@ import {
 } from "lucide-react";
 import {
   invalidProviderApiKey,
-  isDatabaseConfigResource,
   makeEmptyModel,
   makeEmptyVirtualModel,
   modelIdentity,
@@ -27,12 +26,7 @@ import {
   upsertModel,
   upsertVirtualModel,
 } from "../config";
-import {
-  useDeleteConfigResource,
-  useLlmConfigData,
-  useUpdateConfig,
-  useUpsertConfigResource,
-} from "../hooks";
+import { useLlmConfigPersistence } from "../hooks";
 import { MiniMonacoEditor } from "../components/MiniMonacoEditor";
 import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { CatalogModelSelector } from "../components/CatalogModelSelector";
@@ -117,18 +111,9 @@ type ConditionalVirtualTarget = NonNullable<
 >["targets"][number];
 
 export function ModelsPage() {
-  const {
-    config,
-    hybrid,
-    configResources,
-    resources,
-    models,
-    virtualModels,
-    providers,
-  } = useLlmConfigData();
-  const update = useUpdateConfig();
-  const upsertResource = useUpsertConfigResource();
-  const deleteResource = useDeleteConfigResource();
+  const persistence = useLlmConfigPersistence();
+  const { config, hybrid, configResources, models, virtualModels, providers } =
+    persistence;
   const help = useSchemaHelp();
   const [editing, setEditing] = useState<{
     previousId?: string;
@@ -172,24 +157,18 @@ export function ModelsPage() {
       ? { model: makeEmptyVirtualModel() }
       : null);
   const editingDatabaseModel = Boolean(
-    hybrid &&
     activeEditing &&
-    (!activeEditing.previousId ||
-      isDatabaseConfigResource(
-        resources,
-        "llm.model",
-        activeEditing.previousId,
-      )),
+    persistence.willSaveResourceToDatabase(
+      "llm.model",
+      activeEditing.previousId,
+    ),
   );
   const editingDatabaseVirtualModel = Boolean(
-    hybrid &&
     activeVirtualEditing &&
-    (!activeVirtualEditing.previousName ||
-      isDatabaseConfigResource(
-        resources,
-        "llm.virtualModel",
-        activeVirtualEditing.previousName,
-      )),
+    persistence.willSaveResourceToDatabase(
+      "llm.virtualModel",
+      activeVirtualEditing.previousName,
+    ),
   );
   const modelRows = useMemo(
     () => [
@@ -198,12 +177,11 @@ export function ModelsPage() {
     ],
     [models, virtualModels],
   );
+  const resetPersistence = useEffectEvent(() => persistence.reset());
 
   useEffect(() => {
     function syncSelectedFromUrl() {
-      update.reset();
-      upsertResource.reset();
-      deleteResource.reset();
+      resetPersistence();
       setEditing(null);
       setEditingVirtual(null);
       setModelHashState(modelHashFromUrl());
@@ -214,17 +192,11 @@ export function ModelsPage() {
       window.removeEventListener("hashchange", syncSelectedFromUrl);
       window.removeEventListener("popstate", syncSelectedFromUrl);
     };
-  }, [deleteResource, update, upsertResource]);
+  }, []);
 
-  const saving =
-    update.isPending || upsertResource.isPending || deleteResource.isPending;
-  const saveError =
-    update.error?.message ??
-    upsertResource.error?.message ??
-    deleteResource.error?.message ??
-    null;
-  const saved =
-    update.isSuccess || upsertResource.isSuccess || deleteResource.isSuccess;
+  const saving = persistence.isPending;
+  const saveError = persistence.mutationError?.message ?? null;
+  const saved = persistence.isSuccess;
 
   function openModelEditor(model: LlmModel) {
     resetSaves();
@@ -273,73 +245,56 @@ export function ModelsPage() {
   }
 
   function resetSaves() {
-    update.reset();
-    upsertResource.reset();
-    deleteResource.reset();
+    persistence.reset();
   }
 
   function saveModel(model: LlmModel, previousId?: string) {
-    if (
-      hybrid &&
-      (!previousId ||
-        isDatabaseConfigResource(resources, "llm.model", previousId))
-    ) {
+    if (persistence.willSaveResourceToDatabase("llm.model", previousId)) {
       model.id ??= randomUuid();
-      upsertResource.mutate(
-        { kind: "llm.model", value: model, previousId },
-        { onSuccess: closeModelEditor },
-      );
-      return;
     }
-    update.mutate((next) => upsertModel(next, model, previousId), {
-      onSuccess: closeModelEditor,
-    });
+    persistence.saveResource(
+      {
+        kind: "llm.model",
+        value: model,
+        previousId,
+        updateFile: (next) => upsertModel(next, model, previousId),
+      },
+      { onSuccess: closeModelEditor },
+    );
   }
 
   function deleteModel(id: string) {
-    if (hybrid && isDatabaseConfigResource(resources, "llm.model", id)) {
-      deleteResource.mutate(
-        { kind: "llm.model", id },
-        { onSuccess: () => setDeleting(null) },
-      );
-      return;
-    }
-    update.mutate((next) => removeModel(next, id), {
-      onSuccess: () => setDeleting(null),
-    });
+    persistence.removeResource(
+      {
+        kind: "llm.model",
+        id,
+        updateFile: (next) => removeModel(next, id),
+      },
+      { onSuccess: () => setDeleting(null) },
+    );
   }
 
   function saveVirtualModel(model: LlmVirtualModel, previousName?: string) {
-    if (
-      hybrid &&
-      (!previousName ||
-        isDatabaseConfigResource(resources, "llm.virtualModel", previousName))
-    ) {
-      upsertResource.mutate(
-        { kind: "llm.virtualModel", value: model, previousId: previousName },
-        { onSuccess: closeVirtualModelEditor },
-      );
-      return;
-    }
-    update.mutate((next) => upsertVirtualModel(next, model, previousName), {
-      onSuccess: closeVirtualModelEditor,
-    });
+    persistence.saveResource(
+      {
+        kind: "llm.virtualModel",
+        value: model,
+        previousId: previousName,
+        updateFile: (next) => upsertVirtualModel(next, model, previousName),
+      },
+      { onSuccess: closeVirtualModelEditor },
+    );
   }
 
   function deleteVirtualModel(name: string) {
-    if (
-      hybrid &&
-      isDatabaseConfigResource(resources, "llm.virtualModel", name)
-    ) {
-      deleteResource.mutate(
-        { kind: "llm.virtualModel", id: name },
-        { onSuccess: () => setDeleting(null) },
-      );
-      return;
-    }
-    update.mutate((next) => removeVirtualModel(next, name), {
-      onSuccess: () => setDeleting(null),
-    });
+    persistence.removeResource(
+      {
+        kind: "llm.virtualModel",
+        id: name,
+        updateFile: (next) => removeVirtualModel(next, name),
+      },
+      { onSuccess: () => setDeleting(null) },
+    );
   }
 
   return (
@@ -431,8 +386,7 @@ export function ModelsPage() {
                         {hybrid ? (
                           <td>
                             <span className="badge">
-                              {isDatabaseConfigResource(
-                                resources,
+                              {persistence.isDatabaseResource(
                                 "llm.virtualModel",
                                 model.name,
                               )
@@ -507,8 +461,7 @@ export function ModelsPage() {
                       {hybrid ? (
                         <td>
                           <span className="badge">
-                            {isDatabaseConfigResource(
-                              resources,
+                            {persistence.isDatabaseResource(
                               "llm.model",
                               modelIdentity(model),
                             )

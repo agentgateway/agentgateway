@@ -14,6 +14,7 @@ import { getConfigDump } from "./api/configDumpApi";
 import { getRuntimeInfo } from "./api/runtimeApi";
 import {
   cloneConfig,
+  isDatabaseConfigResource,
   llmApiKeyResources,
   llmModelResources,
   llmProviderResources,
@@ -140,6 +141,186 @@ export function useLlmConfigData(options?: { enabled?: boolean }) {
       (hybrid && configResources.isLoading),
     error:
       config.error ?? runtime.error ?? (hybrid ? configResources.error : null),
+  };
+}
+
+type ResourceMutationOptions = {
+  onSuccess?: () => void;
+};
+
+type SaveConfigResourceInput<K extends ConfigResourceKind> = {
+  kind: K;
+  value: ConfigResourceValue<K>;
+  previousId?: string;
+  updateFile: (config: GatewayConfig) => GatewayConfig | void;
+};
+
+type DeleteConfigResourceInput = {
+  kind: ConfigResourceKind;
+  id: string;
+  updateFile: (config: GatewayConfig) => GatewayConfig | void;
+};
+
+type SavePolicyResourceInput = {
+  kind: PolicyResourceKind;
+  id: string;
+  value: unknown;
+  updateFile: (config: GatewayConfig) => GatewayConfig | void;
+};
+
+type DeletePolicyResourceInput = Omit<DeleteConfigResourceInput, "kind"> & {
+  kind: PolicyResourceKind;
+};
+
+export function useLlmConfigPersistence(options?: { enabled?: boolean }) {
+  const data = useLlmConfigData(options);
+  const updateFile = useUpdateConfig();
+  const upsertResource = useUpsertConfigResource();
+  const deleteResource = useDeleteConfigResource();
+  const upsertPolicy = useUpsertPolicyResource();
+
+  function isDatabaseResource(kind: ConfigResourceKind, id: string) {
+    return Boolean(
+      data.hybrid && isDatabaseConfigResource(data.resources, kind, id),
+    );
+  }
+
+  function willSaveResourceToDatabase(
+    kind: ConfigResourceKind,
+    previousId?: string,
+  ) {
+    return Boolean(
+      data.hybrid && (!previousId || isDatabaseResource(kind, previousId)),
+    );
+  }
+
+  function isFilePolicy(kind: PolicyResourceKind, id: string) {
+    const policies =
+      kind === "llm.policy"
+        ? data.config.data?.llm?.policies
+        : data.config.data?.ui?.policies;
+    return Boolean(
+      policies && Object.prototype.hasOwnProperty.call(policies, id),
+    );
+  }
+
+  function isDatabasePolicy(kind: PolicyResourceKind, id: string) {
+    return isDatabaseResource(kind, id);
+  }
+
+  function willSavePolicyToDatabase(kind: PolicyResourceKind, id: string) {
+    return Boolean(data.hybrid && !isFilePolicy(kind, id));
+  }
+
+  function saveResource<K extends ConfigResourceKind>(
+    input: SaveConfigResourceInput<K>,
+    mutationOptions?: ResourceMutationOptions,
+  ) {
+    if (willSaveResourceToDatabase(input.kind, input.previousId)) {
+      upsertResource.mutate(
+        {
+          kind: input.kind,
+          value: input.value,
+          previousId: input.previousId,
+        } as UpsertConfigResourceInput,
+        mutationOptions,
+      );
+      return;
+    }
+    updateFile.mutate(input.updateFile, mutationOptions);
+  }
+
+  async function saveResourceAsync<K extends ConfigResourceKind>(
+    input: SaveConfigResourceInput<K>,
+  ) {
+    if (willSaveResourceToDatabase(input.kind, input.previousId)) {
+      await upsertResource.mutateAsync({
+        kind: input.kind,
+        value: input.value,
+        previousId: input.previousId,
+      } as UpsertConfigResourceInput);
+      return;
+    }
+    await updateFile.mutateAsync(input.updateFile);
+  }
+
+  function removeResource(
+    input: DeleteConfigResourceInput,
+    mutationOptions?: ResourceMutationOptions,
+  ) {
+    if (isDatabaseResource(input.kind, input.id)) {
+      deleteResource.mutate(
+        { kind: input.kind, id: input.id },
+        mutationOptions,
+      );
+      return;
+    }
+    updateFile.mutate(input.updateFile, mutationOptions);
+  }
+
+  function savePolicy(
+    input: SavePolicyResourceInput,
+    mutationOptions?: ResourceMutationOptions,
+  ) {
+    if (willSavePolicyToDatabase(input.kind, input.id)) {
+      upsertPolicy.mutate(
+        { kind: input.kind, id: input.id, value: input.value },
+        mutationOptions,
+      );
+      return;
+    }
+    updateFile.mutate(input.updateFile, mutationOptions);
+  }
+
+  function removePolicy(
+    input: DeletePolicyResourceInput,
+    mutationOptions?: ResourceMutationOptions,
+  ) {
+    if (isDatabasePolicy(input.kind, input.id)) {
+      deleteResource.mutate(
+        { kind: input.kind, id: input.id },
+        mutationOptions,
+      );
+      return;
+    }
+    updateFile.mutate(input.updateFile, mutationOptions);
+  }
+
+  function reset() {
+    updateFile.reset();
+    upsertResource.reset();
+    deleteResource.reset();
+    upsertPolicy.reset();
+  }
+
+  return {
+    ...data,
+    isDatabaseResource,
+    willSaveResourceToDatabase,
+    isFilePolicy,
+    isDatabasePolicy,
+    willSavePolicyToDatabase,
+    saveResource,
+    saveResourceAsync,
+    removeResource,
+    savePolicy,
+    removePolicy,
+    reset,
+    isPending:
+      updateFile.isPending ||
+      upsertResource.isPending ||
+      deleteResource.isPending ||
+      upsertPolicy.isPending,
+    mutationError:
+      updateFile.error ??
+      upsertResource.error ??
+      deleteResource.error ??
+      upsertPolicy.error,
+    isSuccess:
+      updateFile.isSuccess ||
+      upsertResource.isSuccess ||
+      deleteResource.isSuccess ||
+      upsertPolicy.isSuccess,
   };
 }
 
