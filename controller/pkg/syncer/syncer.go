@@ -640,7 +640,7 @@ func (s *Syncer) buildListenerFromGateway(obj *translator.GatewayListener) *agwi
 	return new(translator.ToResourceForGateway(types.NamespacedName{
 		Namespace: obj.ParentGateway.Namespace,
 		Name:      obj.ParentGateway.Name,
-	}, translator.AgwListener{l}))
+	}, translator.AgwListener{Listener: l}))
 }
 
 // getProtocolAndTLSConfig extracts protocol and TLS configuration from a gateway

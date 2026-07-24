@@ -584,9 +584,16 @@ func (s *Service) HasAddressOrAssigned(id cluster.ID) bool {
 
 // DeepCopy creates a clone of Service.
 func (s *Service) DeepCopy() *Service {
-	// nolint: govet
-	out := *s
-	out.Attributes = s.Attributes.DeepCopy()
+	out := &Service{
+		Attributes:               s.Attributes.DeepCopy(),
+		CreationTime:             s.CreationTime,
+		Hostname:                 s.Hostname,
+		DefaultAddress:           s.DefaultAddress,
+		AutoAllocatedIPv4Address: s.AutoAllocatedIPv4Address,
+		AutoAllocatedIPv6Address: s.AutoAllocatedIPv6Address,
+		Resolution:               s.Resolution,
+		ResourceVersion:          s.ResourceVersion,
+	}
 	if s.Ports != nil {
 		out.Ports = make(PortList, len(s.Ports))
 		for i, port := range s.Ports {
@@ -604,7 +611,7 @@ func (s *Service) DeepCopy() *Service {
 
 	out.ServiceAccounts = slices.Clone(s.ServiceAccounts)
 	out.ClusterVIPs = *s.ClusterVIPs.DeepCopy()
-	return &out
+	return out
 }
 
 // Equals compares two service objects.
