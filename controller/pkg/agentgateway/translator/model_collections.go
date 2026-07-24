@@ -549,7 +549,7 @@ func validateModelBaseURL(model *agentgateway.AgentgatewayModelSpec) error {
 		return fmt.Errorf("baseURL must include a host")
 	}
 	if strings.EqualFold(host, "localhost") || strings.HasSuffix(strings.ToLower(host), ".localhost") {
-		return fmt.Errorf("baseURL cannot target localhost, loopback, or link-local addresses")
+		return fmt.Errorf("baseURL cannot target localhost, loopback, link-local, or unspecified addresses")
 	}
 	if addr, err := netip.ParseAddr(host); err == nil {
 		addr = addr.Unmap()

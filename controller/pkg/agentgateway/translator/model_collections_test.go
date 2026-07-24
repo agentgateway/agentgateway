@@ -182,7 +182,6 @@ func TestModelAuthorization(t *testing.T) {
 	if got := route.GetAuthorization().GetAllow(); len(got) != 1 || got[0] != "request.headers['x-model-access'] == 'allowed'" {
 		t.Errorf("authorization allow = %#v, want model access rule", got)
 	}
-
 }
 
 func TestValidateModelBaseURL(t *testing.T) {
