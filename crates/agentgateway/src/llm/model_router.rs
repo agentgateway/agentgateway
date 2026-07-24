@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use agent_core::prelude::Strng;
 use agent_core::strng;
 use bytes::Bytes;
 use futures_util::stream;
@@ -12,7 +11,7 @@ use serde_json::Value;
 use crate::http::transformation_cel::TransformationMetadata;
 use crate::http::{self, Request, Response};
 use crate::types::agent::{
-	Authorization, BackendReference, BackendTrafficPolicy, HeaderMatch, RouteBackendReference,
+	Authorization, BackendTrafficPolicy, HeaderMatch, RouteBackendReference,
 };
 use crate::{apply, cel, llm, schema_enum};
 
@@ -22,9 +21,10 @@ pub struct ModelRoute {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub id: Option<String>,
 	pub name: String,
+	pub created: u64,
 	pub visibility: ModelVisibility,
 	pub header_matches: Vec<Vec<HeaderMatch>>,
-	pub backend_key: Strng,
+	pub backend: RouteBackendReference,
 	pub policies: ModelRoutePolicies,
 	pub backend_policies: Vec<BackendTrafficPolicy>,
 }
@@ -52,10 +52,37 @@ impl ModelVisibility {
 	}
 }
 
+pub fn default_route_types() -> Arc<llm::Policy> {
+	Arc::new(llm::Policy {
+		routes: [
+			(
+				strng::new("/v1/chat/completions"),
+				llm::RouteType::Completions,
+			),
+			(strng::new("/v1/messages"), llm::RouteType::Messages),
+			(strng::new(":rawPredict"), llm::RouteType::Messages),
+			(strng::new(":streamRawPredict"), llm::RouteType::Messages),
+			(strng::new("/v1/responses"), llm::RouteType::Responses),
+			(strng::new("/v1/images/generations"), llm::RouteType::Detect),
+			(strng::new("/v1/images/edits"), llm::RouteType::Detect),
+			(strng::new("/v1/images/variations"), llm::RouteType::Detect),
+			(strng::new("/v1/responses/compact"), llm::RouteType::Detect),
+			(strng::new("/v1/embeddings"), llm::RouteType::Embeddings),
+			(strng::new("/v1/rerank"), llm::RouteType::Rerank),
+			(strng::new("/v2/rerank"), llm::RouteType::Rerank),
+			(strng::new("*"), llm::RouteType::Passthrough),
+		]
+		.into_iter()
+		.collect(),
+		..Default::default()
+	})
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VirtualModelRoute {
 	pub name: String,
+	pub created: u64,
 	pub llm_policy: Arc<llm::Policy>,
 	pub routing: VirtualModelRouting,
 }
@@ -64,7 +91,7 @@ pub struct VirtualModelRoute {
 #[serde(rename_all = "camelCase")]
 pub enum VirtualModelRouting {
 	Weighted(Vec<WeightedTarget>),
-	Failover { backend_key: Strng },
+	Failover { backend: RouteBackendReference },
 	Conditional(Vec<ConditionalTarget>),
 }
 
@@ -87,7 +114,6 @@ pub struct ConditionalTarget {
 pub struct ModelRouter {
 	models: Vec<ModelRoute>,
 	virtual_models: Vec<VirtualModelRoute>,
-	created: u64,
 }
 
 #[derive(Debug, Clone)]
@@ -115,15 +141,10 @@ enum RequestedModelLocation {
 }
 
 impl ModelRouter {
-	pub fn new(
-		models: Vec<ModelRoute>,
-		virtual_models: Vec<VirtualModelRoute>,
-		created: u64,
-	) -> Self {
+	pub fn new(models: Vec<ModelRoute>, virtual_models: Vec<VirtualModelRoute>) -> Self {
 		Self {
 			models,
 			virtual_models,
-			created,
 		}
 	}
 
@@ -159,8 +180,9 @@ impl ModelRouter {
 		);
 
 		match self.resolve_concrete_model(&requested_model.model, false, req) {
-			Some(route) => ResolveResult::Backend(route),
-			None => ResolveResult::DirectResponse(model_not_found_response()),
+			Ok(Some(route)) => ResolveResult::Backend(route),
+			Ok(None) => ResolveResult::DirectResponse(model_not_found_response()),
+			Err(()) => ResolveResult::DirectResponse(model_authorization_denied_response()),
 		}
 	}
 
@@ -170,12 +192,12 @@ impl ModelRouter {
 			.iter()
 			.filter(|model| model.visibility == ModelVisibility::Public)
 			.filter(|model| model_authorized(model, req))
-			.map(|model| model_list_entry(&model.name, self.created))
+			.map(|model| model_list_entry(&model.name, model.created))
 			.chain(
 				self
 					.virtual_models
 					.iter()
-					.map(|model| model_list_entry(&model.name, self.created)),
+					.map(|model| model_list_entry(&model.name, model.created)),
 			)
 			.collect::<Vec<_>>();
 		let body = serde_json::json!({
@@ -210,13 +232,9 @@ impl ModelRouter {
 					},
 				}
 			},
-			VirtualModelRouting::Failover { backend_key } => {
+			VirtualModelRouting::Failover { backend } => {
 				return ResolveResult::Backend(ResolvedBackend {
-					backend: RouteBackendReference {
-						weight: 1,
-						target: BackendReference::Backend(strng::format!("/{}", backend_key)).into(),
-						inline_policies: vec![],
-					},
+					backend: backend.clone(),
 					llm_policy: virtual_model.llm_policy.clone(),
 				});
 			},
@@ -247,8 +265,8 @@ impl ModelRouter {
 			return ResolveResult::DirectResponse(*resp);
 		}
 		match self.resolve_concrete_model(&target, true, req) {
-			Some(route) => ResolveResult::Backend(route),
-			None => {
+			Ok(Some(route)) => ResolveResult::Backend(route),
+			Ok(None) => {
 				tracing::debug!(
 					virtual_model = %virtual_model.name,
 					target_model = %target,
@@ -263,6 +281,7 @@ impl ModelRouter {
 					"virtual_model_target_not_found",
 				))
 			},
+			Err(()) => ResolveResult::DirectResponse(model_authorization_denied_response()),
 		}
 	}
 
@@ -271,21 +290,28 @@ impl ModelRouter {
 		requested_model: &str,
 		allow_internal: bool,
 		req: &Request,
-	) -> Option<ResolvedBackend> {
+	) -> Result<Option<ResolvedBackend>, ()> {
 		// `models` can store things like `provider/*`. The concrete `requested_model` will be like `provider/real-model`.
-		let model = self.models.iter().find(|model| {
+		let matches = |model: &ModelRoute| {
 			(allow_internal || model.visibility == ModelVisibility::Public)
 				&& model_name_matches(&model.name, requested_model)
 				&& header_matches(&model.header_matches, req)
-		})?;
-		Some(ResolvedBackend {
-			backend: RouteBackendReference {
-				weight: 1,
-				target: BackendReference::Backend(strng::format!("/{}", model.backend_key)).into(),
-				inline_policies: model.backend_policies.clone(),
-			},
+		};
+		let Some(model) = self
+			.models
+			.iter()
+			.find(|model| matches(model) && model_authorized(model, req))
+		else {
+			return if self.models.iter().any(matches) {
+				Err(())
+			} else {
+				Ok(None)
+			};
+		};
+		Ok(Some(ResolvedBackend {
+			backend: model.backend.clone(),
 			llm_policy: model.policies.llm.clone(),
-		})
+		}))
 	}
 }
 
@@ -294,6 +320,14 @@ fn model_not_found_response() -> Response {
 		::http::StatusCode::NOT_FOUND,
 		"Model not found",
 		"model_not_found",
+	)
+}
+
+fn model_authorization_denied_response() -> Response {
+	llm_error_response(
+		::http::StatusCode::FORBIDDEN,
+		"Model authorization denied",
+		"model_authorization_denied",
 	)
 }
 
@@ -644,6 +678,51 @@ async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
 mod tests {
 	use super::*;
 	use crate::transport::BufferLimit;
+	use crate::types::agent::RouteBackendTarget;
+
+	#[test]
+	fn concrete_model_authorization_filters_requests() {
+		let authorization = Authorization(Arc::new(crate::http::authorization::RuleSet::new(
+			crate::http::authorization::PolicySet::new(
+				vec![Arc::new(
+					cel::Expression::new_strict("request.headers['x-model-access'] == 'allowed'".to_string())
+						.expect("valid CEL expression"),
+				)],
+				vec![],
+				vec![],
+			),
+		)));
+		let model = ModelRoute {
+			id: None,
+			name: "gpt-5-mini".to_string(),
+			created: 0,
+			visibility: ModelVisibility::Public,
+			header_matches: vec![],
+			backend: RouteBackendReference {
+				weight: 1,
+				target: RouteBackendTarget::Invalid,
+				inline_policies: vec![],
+			},
+			policies: ModelRoutePolicies {
+				llm: default_route_types(),
+				authorization: Some(authorization),
+			},
+			backend_policies: vec![],
+		};
+
+		let allowed = ::http::Request::builder()
+			.uri("http://example.com/v1/chat/completions")
+			.header("x-model-access", "allowed")
+			.body(http::Body::empty())
+			.expect("valid request");
+		let denied = ::http::Request::builder()
+			.uri("http://example.com/v1/chat/completions")
+			.body(http::Body::empty())
+			.expect("valid request");
+
+		assert!(model_authorized(&model, &allowed));
+		assert!(!model_authorized(&model, &denied));
+	}
 
 	#[test]
 	fn rewrite_path_model_rewrites_bedrock_converse_and_preserves_suffix() {

@@ -213,6 +213,11 @@ inferenceExtension:
   # -- Enable Inference Extension support in the agentgateway controller.
   enabled: false
 
+# -- Configure the experimental AgentgatewayModel API.
+agentgatewayModels:
+  # -- Enable AgentgatewayModel support in the agentgateway controller.
+  enabled: false
+
 # -- List of namespace selectors (OR'ed): each entry can use 'matchLabels' or 'matchExpressions' (AND'ed within each entry if used together). Agentgateway includes the selected namespaces in config discovery. For more information, see the docs https://agentgateway.dev/docs/kubernetes/latest/install/advanced/#namespace-discovery.
 discoveryNamespaceSelectors: []
 

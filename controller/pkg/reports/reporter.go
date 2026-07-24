@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
@@ -19,6 +20,7 @@ type ReportMap struct {
 	GRPCRoutes map[types.NamespacedName]*RouteReport
 	TCPRoutes  map[types.NamespacedName]*RouteReport
 	TLSRoutes  map[types.NamespacedName]*RouteReport
+	Models     map[types.NamespacedName]*RouteReport
 }
 
 type GatewayReport struct {
@@ -54,6 +56,7 @@ func NewReportMap() ReportMap {
 		GRPCRoutes: make(map[types.NamespacedName]*RouteReport),
 		TCPRoutes:  make(map[types.NamespacedName]*RouteReport),
 		TLSRoutes:  make(map[types.NamespacedName]*RouteReport),
+		Models:     make(map[types.NamespacedName]*RouteReport),
 	}
 }
 
@@ -87,6 +90,7 @@ func (r *ReportMap) newGatewayReport(gateway *gwv1.Gateway) *GatewayReport {
 // * TCPRoute
 // * TLSRoute
 // * GRPCRoute
+// * AgentgatewayModel
 func (r *ReportMap) route(obj metav1.Object) *RouteReport {
 	key := key(obj)
 
@@ -99,6 +103,8 @@ func (r *ReportMap) route(obj metav1.Object) *RouteReport {
 		return r.TLSRoutes[key]
 	case *gwv1.GRPCRoute:
 		return r.GRPCRoutes[key]
+	case *agentgateway.AgentgatewayModel:
+		return r.Models[key]
 	default:
 		slog.Warn("unsupported route type", "route_type", fmt.Sprintf("%T", obj))
 		return nil
@@ -121,6 +127,8 @@ func (r *ReportMap) newRouteReport(obj metav1.Object) *RouteReport {
 		r.TLSRoutes[key] = rr
 	case *gwv1.GRPCRoute:
 		r.GRPCRoutes[key] = rr
+	case *agentgateway.AgentgatewayModel:
+		r.Models[key] = rr
 	default:
 		slog.Warn("unsupported route type", "route_type", fmt.Sprintf("%T", obj))
 		return nil

@@ -84,9 +84,12 @@ backends:
         target:
           models:
             - name: anthropic/*
+              created: 0
               visibility: public
               headerMatches: []
-              backendKey: "llm:model:anthropic/*:0"
+              backend:
+                backend: "/llm:model:anthropic/*:0"
+                weight: 1
               policies:
                 llm:
                   routes:
@@ -106,7 +109,6 @@ backends:
                 authorization: ~
               backendPolicies: []
           virtualModels: []
-          created: 0
 route_groups: []
 workloads: []
 services: []

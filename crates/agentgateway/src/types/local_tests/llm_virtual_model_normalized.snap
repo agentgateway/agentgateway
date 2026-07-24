@@ -138,9 +138,12 @@ backends:
         target:
           models:
             - name: openai/gpt-5-mini
+              created: 0
               visibility: internal
               headerMatches: []
-              backendKey: "llm:model:openai/gpt-5-mini:0"
+              backend:
+                backend: "/llm:model:openai/gpt-5-mini:0"
+                weight: 1
               policies:
                 llm:
                   routes:
@@ -160,9 +163,12 @@ backends:
                 authorization: ~
               backendPolicies: []
             - name: anthropic/*
+              created: 0
               visibility: internal
               headerMatches: []
-              backendKey: "llm:model:anthropic/*:1"
+              backend:
+                backend: "/llm:model:anthropic/*:1"
+                weight: 1
               policies:
                 llm:
                   routes:
@@ -182,9 +188,12 @@ backends:
                 authorization: ~
               backendPolicies: []
             - name: "*"
+              created: 0
               visibility: internal
               headerMatches: []
-              backendKey: "llm:model:*:2"
+              backend:
+                backend: "/llm:model:*:2"
+                weight: 1
               policies:
                 llm:
                   routes:
@@ -205,6 +214,7 @@ backends:
               backendPolicies: []
           virtualModels:
             - name: fast
+              created: 0
               llmPolicy:
                 routes:
                   "*": passthrough
@@ -228,7 +238,6 @@ backends:
                     weight: 30
                   - model: fallback-small
                     weight: 10
-          created: 0
 route_groups: []
 workloads: []
 services: []

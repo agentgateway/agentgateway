@@ -20,6 +20,7 @@ message Resource {
     // Service represents a service - a group of workloads that can be accessed together.
     istio.workload.Service service = 8;
     RouteGroup route_group = 9;
+    ModelRoute model_route = 10;
   }
 }
 
@@ -1709,12 +1710,43 @@ message AIBackend {
     optional string model = 2;
     optional string provider_override = 3;
   }
+  // A named provider configuration implemented by the data plane. Its API
+  // formats and default endpoint stay aligned between standalone and xDS
+  // configuration. Use Custom when those settings must be configured
+  // explicitly.
+  enum ProviderPreset {
+    PROVIDER_PRESET_UNSPECIFIED = 0;
+    PROVIDER_PRESET_COHERE = 1;
+    PROVIDER_PRESET_OLLAMA = 2;
+    PROVIDER_PRESET_BASETEN = 3;
+    PROVIDER_PRESET_CEREBRAS = 4;
+    PROVIDER_PRESET_DEEPINFRA = 5;
+    PROVIDER_PRESET_DEEPSEEK = 6;
+    PROVIDER_PRESET_GROQ = 7;
+    PROVIDER_PRESET_HUGGINGFACE = 8;
+    PROVIDER_PRESET_MISTRAL = 9;
+    PROVIDER_PRESET_OPENROUTER = 10;
+    PROVIDER_PRESET_TOGETHERAI = 11;
+    PROVIDER_PRESET_XAI = 12;
+    PROVIDER_PRESET_FIREWORKS = 13;
+  }
 
   message Provider {
     string name = 1;
+    // Used by the AgentgatewayBackend API. Prefer base_url for AgentgatewayModel.
     HostOverride host_override = 2;
+    // Used by the AgentgatewayBackend API to replace the provider request path.
     optional string path_override = 3;
+    // Used by the AgentgatewayBackend API. Prefer base_url for AgentgatewayModel.
     optional string path_prefix = 12;
+    // An explicit provider endpoint. Its scheme, host, port, and base path are
+    // resolved by the data plane. Used by AgentgatewayModel. It may not be
+    // combined with host_override, path_prefix, or provider_backend.
+    optional string base_url = 17;
+    // Overrides the model configured by the selected provider. This is used by
+    // provider presets, whose enum value does not carry provider configuration.
+    optional string model_override = 18;
+    // Used by the AgentgatewayBackend API. It may not be combined with endpoint overrides.
     BackendReference provider_backend = 14;
     oneof provider {
       OpenAI openai = 4;
@@ -1725,6 +1757,7 @@ message AIBackend {
       AzureOpenAI azureopenai = 11;
       Azure azure = 13;
       Custom custom = 15;
+      ProviderPreset provider_preset = 16;
     }
     repeated BackendPolicySpec inline_policies = 10;
   }
@@ -1966,4 +1999,96 @@ message CrossAppAccessAuth {
   // Subject token sent to the identity provider. Its type is fixed to an
   // OpenID Connect ID token until other subject token types are supported.
   SubjectToken subject_token = 7;
+}
+
+message ModelRoute {
+  message Match {
+    // User-facing model name or wildcard pattern for this model route.
+    string model = 1;
+  }
+
+  message VirtualModel {
+    message Weighted {
+      message Target {
+        // Concrete model name selected by this virtual model target.
+        //
+        // This is not a ModelRoute resource key. The data plane rewrites the
+        // incoming request model to this value, then resolves it against the
+        // concrete ModelRoute.match.model values/patterns in the same listener's model
+        // table. For Kubernetes AgentgatewayModel ModelTargetReference, the
+        // control plane sets this to target.model when specified; otherwise it
+        // uses the referenced model's effective match.model, defaulting to the
+        // referenced resource name when match.model is omitted.
+        string model = 1;
+        uint32 weight = 2;
+      }
+      repeated Target targets = 1;
+    }
+
+    message Conditional {
+      message Target {
+        // Concrete model name selected by this virtual model target.
+        //
+        // This has the same contract as Weighted.Target.model: it is the model
+        // name used for request rewriting and concrete model-pattern resolution,
+        // not a ModelRoute resource key.
+        string model = 1;
+        optional string when = 2;
+      }
+      repeated Target targets = 1;
+    }
+
+    message Failover {
+      // Backend containing the pre-lowered failover provider groups for this
+      // virtual model. Failover routing is resolved by the control plane into an
+      // AI backend because the runtime failover path selects provider groups
+      // directly rather than recursively resolving concrete model names.
+      BackendReference backend = 1;
+    }
+
+    oneof routing {
+      Weighted weighted = 1;
+      Conditional conditional = 2;
+      Failover failover = 3;
+    }
+  }
+
+  message ConcreteModel {
+    enum ModelVisibility {
+      PUBLIC = 0;
+      INTERNAL = 1;
+    }
+    // Whether this model is accessible directly through its listener
+    // vs. just an internal building block for a virtual model
+    ModelVisibility model_visibility = 1;
+    BackendReference backend = 2;
+    repeated BackendPolicySpec backend_policies = 3;
+  }
+  // Unique resource key for this model route. This is used for xDS resource
+  // identity/update/delete, not for virtual model target selection.
+  string key = 1;
+
+  // Key for the listener this model is part of.
+  string listener_key = 2;
+
+  // Conditions used to select this model route. Headers and other request
+  // matchers may be added to this message in a future API revision.
+  Match match = 3;
+
+  oneof kind {
+    VirtualModel virtual_model = 4;
+    ConcreteModel concrete_model = 5;
+  }
+
+  // AI request policy applied after this model route is selected. This is shared
+  // by concrete and virtual models; provider transport policies remain on the
+  // selected backend or provider.
+  BackendPolicySpec.Ai ai_policy = 6;
+
+  // Unix timestamp when this model route was created. For AgentgatewayModel,
+  // this is the Kubernetes object's creation timestamp.
+  uint64 created = 7;
+
+  // Authorization rules that clients must satisfy to use a concrete model.
+  TrafficPolicySpec.RBAC authorization = 8;
 }

@@ -30,6 +30,7 @@ import (
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	"github.com/agentgateway/agentgateway/api"
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
@@ -781,57 +782,62 @@ func ReferenceAllowed(
 			}
 		}
 
-		// Next check the hostnames are a match. This is a bi-directional wildcard match. Only one route
-		// hostname must match for it to be allowed (but the others will be filtered at runtime)
-		// If either is empty its treated as a wildcard which always matches
+		// AgentgatewayModels attach to listeners, but have no hostname matching
+		// surface. Their attachment is therefore independent of the listener's
+		// hostname; section, port, and allowedRoutes still apply below.
+		if routeKind != wellknown.AgentgatewayModelGVK {
+			// This is a bi-directional wildcard match. Only one route hostname must
+			// match for it to be allowed (but the others will be filtered at runtime).
+			// If either is empty it is treated as a wildcard which always matches.
+			if len(hostnames) == 0 {
+				hostnames = []gwv1.Hostname{"*"}
+			}
+			if len(parent.Hostnames) > 0 {
+				matched := false
+				hostMatched := false
+			out:
+				for _, routeHostname := range hostnames {
+					for _, parentHostNamespace := range parent.Hostnames {
+						var parentNamespace, parentHostname string
+						if strings.Contains(parentHostNamespace, "/") {
+							spl := strings.Split(parentHostNamespace, "/")
+							parentNamespace, parentHostname = spl[0], spl[1]
+						} else {
+							parentNamespace, parentHostname = "*", parentHostNamespace
+						}
 
-		if len(hostnames) == 0 {
-			hostnames = []gwv1.Hostname{"*"}
-		}
-		if len(parent.Hostnames) > 0 {
-			matched := false
-			hostMatched := false
-		out:
-			for _, routeHostname := range hostnames {
-				for _, parentHostNamespace := range parent.Hostnames {
-					var parentNamespace, parentHostname string
-					if strings.Contains(parentHostNamespace, "/") {
-						spl := strings.Split(parentHostNamespace, "/")
-						parentNamespace, parentHostname = spl[0], spl[1]
-					} else {
-						parentNamespace, parentHostname = "*", parentHostNamespace
-					}
+						hostnameMatch := host.Name(parentHostname).Matches(host.Name(routeHostname))
+						namespaceMatch := parentNamespace == "*" || parentNamespace == localNamespace
 
-					hostnameMatch := host.Name(parentHostname).Matches(host.Name(routeHostname))
-					namespaceMatch := parentNamespace == "*" || parentNamespace == localNamespace
-
-					hostMatched = hostMatched || hostnameMatch
-					if hostnameMatch && namespaceMatch {
-						matched = true
-						break out
+						hostMatched = hostMatched || hostnameMatch
+						if hostnameMatch && namespaceMatch {
+							matched = true
+							break out
+						}
 					}
 				}
-			}
-			if !matched {
-				if hostMatched {
+				if !matched {
+					if hostMatched {
+						return &ParentError{
+							Reason: ParentErrorNotAllowed,
+							Message: fmt.Sprintf(
+								"hostnames matched parent hostname %q, but namespace %q is not allowed by the parent",
+								parent.OriginalHostname, localNamespace,
+							),
+						}
+					}
 					return &ParentError{
-						Reason: ParentErrorNotAllowed,
+						Reason: ParentErrorNoHostname,
 						Message: fmt.Sprintf(
-							"hostnames matched parent hostname %q, but namespace %q is not allowed by the parent",
-							parent.OriginalHostname, localNamespace,
+							"no hostnames matched parent hostname %q",
+							parent.OriginalHostname,
 						),
 					}
-				}
-				return &ParentError{
-					Reason: ParentErrorNoHostname,
-					Message: fmt.Sprintf(
-						"no hostnames matched parent hostname %q",
-						parent.OriginalHostname,
-					),
 				}
 			}
 		}
 	}
+
 	// Also make sure this route kind is allowed
 	matched := false
 	for _, ak := range parent.AllowedKinds {
@@ -1070,6 +1076,7 @@ func BuildListener(
 	listenerIndex int,
 	portErr error,
 	forListenerSet bool,
+	enableAgentgatewayModels bool,
 ) ([]string, *TLSInfo, []gwv1.ListenerStatus, bool) {
 	listenerConditions := map[string]*Condition{
 		string(gwv1.ListenerConditionAccepted): {
@@ -1159,7 +1166,7 @@ func BuildListener(
 		ok = false
 	}
 
-	updatedStatus := reportListenerCondition(listenerIndex, l, obj, status, listenerConditions)
+	updatedStatus := reportListenerCondition(listenerIndex, l, obj, status, listenerConditions, enableAgentgatewayModels)
 	return hostnames, tlsInfo, updatedStatus, ok
 }
 
@@ -1630,6 +1637,8 @@ func GetCommonRouteInfo(spec any) ([]gwv1.ParentReference, []gwv1.Hostname, sche
 		return t.Spec.ParentRefs, t.Spec.Hostnames, wellknown.HTTPRouteGVK
 	case *gwv1.GRPCRoute:
 		return t.Spec.ParentRefs, t.Spec.Hostnames, wellknown.GRPCRouteGVK
+	case *agentgateway.AgentgatewayModel:
+		return t.Spec.ParentRefs, nil, wellknown.AgentgatewayModelGVK
 	default:
 		log.Fatalf("unknown type %T", t)
 		return nil, nil, schema.GroupVersionKind{}

@@ -85,6 +85,7 @@ func recordKubeState(ctx context.Context, kubeClient client.Client, f *os.File, 
 		{Name: "events", GVK: corev1.SchemeGroupVersion.WithKind("Event"), Namespaced: true},
 		// Agentgateway
 		{Name: "agentgatewaybackends.agentgateway.dev", GVK: schema.GroupVersionKind{Group: "agentgateway.dev", Version: "v1alpha1", Kind: "AgentgatewayBackend"}, Namespaced: true},
+		{Name: "agentgatewaymodels.agentgateway.dev", GVK: schema.GroupVersionKind{Group: "agentgateway.dev", Version: "v1alpha1", Kind: "AgentgatewayModel"}, Namespaced: true},
 		{Name: "agentgatewayparameters.agentgateway.dev", GVK: schema.GroupVersionKind{Group: "agentgateway.dev", Version: "v1alpha1", Kind: "AgentgatewayParameters"}, Namespaced: true},
 		{Name: "agentgatewaypolicies.agentgateway.dev", GVK: schema.GroupVersionKind{Group: "agentgateway.dev", Version: "v1alpha1", Kind: "AgentgatewayPolicy"}, Namespaced: true},
 		// Kube GW API resources

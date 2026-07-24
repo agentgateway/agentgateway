@@ -1,0 +1,212 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: llm-only
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: llm
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      kinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+      namespaces:
+        from: Same
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: egress-proxy
+  namespace: default
+spec:
+  ports:
+  - port: 8080
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: gpt-5-mini
+  namespace: default
+  creationTimestamp: "2024-01-02T03:04:05Z"
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: llm-only
+    sectionName: llm
+  provider: OpenAI
+  policies:
+    health:
+      unhealthyCondition: response.code >= 500
+    tls:
+      insecureSkipVerify: All
+    tunnel:
+      backendRef:
+        name: egress-proxy
+        port: 8080
+    headers:
+      request:
+        add:
+        - name: x-model-request-policy
+          value: enabled
+      response:
+        add:
+        - name: x-model-response-policy
+          value: enabled
+    promptGuard:
+      request:
+      - regex:
+          matches:
+          - blocked
+          action: Reject
+---
+# Output
+output:
+- gateway:
+    Name: llm-only
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - inlinePolicies:
+            - backendTunnel:
+                proxy:
+                  port: 8080
+                  service:
+                    hostname: egress-proxy.default.svc.cluster.local
+                    namespace: default
+            - backendTls:
+                verification: INSECURE_ALL
+            - health:
+                unhealthyCondition: response.code >= 500
+            - ai:
+                promptGuard:
+                  request:
+                  - regex:
+                      action: REJECT
+                      rules:
+                      - regex: blocked
+            - requestHeaderModifier:
+                add:
+                - name: x-model-request-policy
+                  value: enabled
+            - responseHeaderModifier:
+                add:
+                - name: x-model-response-policy
+                  value: enabled
+            name: backend
+            openai: {}
+      key: default/gpt-5-mini/backend.llm
+      name:
+        name: gpt-5-mini
+        namespace: default
+- gateway:
+    Name: llm-only
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/llm-only
+      port: 80
+- gateway:
+    Name: llm-only
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/llm-only
+      key: default/llm-only.llm
+      name:
+        gatewayName: llm-only
+        gatewayNamespace: default
+        listenerName: llm
+      protocol: HTTP
+- gateway:
+    Name: llm-only
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/gpt-5-mini/backend.llm
+      created: "1704164645"
+      key: default/gpt-5-mini.llm
+      listenerKey: default/llm-only.llm
+      match:
+        model: gpt-5-mini
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: gpt-5-mini
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: llm-only
+        namespace: default
+        sectionName: llm
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: llm-only
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 1
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: llm
+      supportedKinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel

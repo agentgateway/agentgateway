@@ -45,7 +45,7 @@ export const providerNames: ProviderName[] = [
   "mistral",
   "openrouter",
   "togetherai",
-  "xai",
+  "xAI",
   "fireworks",
   "custom",
 ];
@@ -98,7 +98,7 @@ export function providerDisplayName(provider: ProviderName | string): string {
     mistral: "Mistral AI",
     openrouter: "OpenRouter",
     togetherai: "Together AI",
-    xai: "xAI",
+    xAI: "xAI",
     fireworks: "Fireworks AI",
     custom: "Custom",
   };

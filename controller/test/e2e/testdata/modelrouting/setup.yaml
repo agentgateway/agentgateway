@@ -1,0 +1,225 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-routing-primary
+  namespace: default
+spec:
+  selector:
+    app.kubernetes.io/name: testbox
+  ports:
+  - port: 9235
+    targetPort: 9235
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: model-routing
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - protocol: HTTP
+    port: 80
+    name: llm
+    allowedRoutes:
+      namespaces:
+        from: Same
+      kinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: model-routing-observe
+  namespace: default
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+  traffic:
+    transformation:
+      response:
+        add:
+        - name: x-agw-request-model
+          value: 'default(llm.requestModel, "not-set")'
+        - name: x-agw-response-model
+          value: 'default(llm.responseModel, "not-set")'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: public-direct
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  provider: OpenAI
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  policies:
+    transformations:
+    - field: model
+      expression: '"agw-public-direct"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: internal-fast
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  visibility: Internal
+  provider: OpenAI
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  policies:
+    transformations:
+    - field: model
+      expression: '"agw-internal-fast"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: internal-premium
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  visibility: Internal
+  provider: OpenAI
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  policies:
+    transformations:
+    - field: model
+      expression: '"agw-internal-premium"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: internal-wildcard
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  match:
+    model: internal/*
+  visibility: Internal
+  provider: OpenAI
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  policies:
+    transformations:
+    - field: model
+      expression: 'llmRequest.model.stripPrefix("internal/")'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: primary-down
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  visibility: Internal
+  provider: OpenAI
+  baseURL: http://model-routing-primary.default.svc.cluster.local:9235
+  policies:
+    health:
+      eviction:
+        consecutiveFailures: 1
+    transformations:
+    - field: model
+      expression: '"agw-primary-down"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: weighted-fast
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  virtualModel:
+    weighted:
+      targets:
+      - modelRef:
+          name: internal-fast
+        weight: 1
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: smart
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  virtualModel:
+    conditional:
+      targets:
+      - when: 'request.headers["x-model-tier"] == "premium"'
+        modelRef:
+          name: internal-premium
+      - modelRef:
+          name: internal-fast
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: wildcard-virtual
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  virtualModel:
+    weighted:
+      targets:
+      - modelRef:
+          name: internal-wildcard
+        model: internal/agw-wildcard-selected
+        weight: 1
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: resilient
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  virtualModel:
+    failover:
+      targets:
+      - modelRef:
+          name: primary-down
+        priority: 0
+      - modelRef:
+          name: internal-fast
+        priority: 1

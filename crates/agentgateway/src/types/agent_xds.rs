@@ -96,6 +96,140 @@ impl From<XdsHeaderTrailerSendMode> for http::ext_proc::TrailerSendMode {
 	}
 }
 
+fn provider_preset_from_proto(
+	preset: proto::agent::ai_backend::ProviderPreset,
+	provider_idx: usize,
+) -> Result<llm::custom::ProviderPreset, ProtoError> {
+	use proto::agent::ai_backend::ProviderPreset;
+
+	match preset {
+		ProviderPreset::Cohere => Ok(llm::custom::ProviderPreset::Cohere),
+		ProviderPreset::Ollama => Ok(llm::custom::ProviderPreset::Ollama),
+		ProviderPreset::Baseten => Ok(llm::custom::ProviderPreset::Baseten),
+		ProviderPreset::Cerebras => Ok(llm::custom::ProviderPreset::Cerebras),
+		ProviderPreset::Deepinfra => Ok(llm::custom::ProviderPreset::Deepinfra),
+		ProviderPreset::Deepseek => Ok(llm::custom::ProviderPreset::Deepseek),
+		ProviderPreset::Groq => Ok(llm::custom::ProviderPreset::Groq),
+		ProviderPreset::Huggingface => Ok(llm::custom::ProviderPreset::Huggingface),
+		ProviderPreset::Mistral => Ok(llm::custom::ProviderPreset::Mistral),
+		ProviderPreset::Openrouter => Ok(llm::custom::ProviderPreset::Openrouter),
+		ProviderPreset::Togetherai => Ok(llm::custom::ProviderPreset::Togetherai),
+		ProviderPreset::Xai => Ok(llm::custom::ProviderPreset::XAI),
+		ProviderPreset::Fireworks => Ok(llm::custom::ProviderPreset::Fireworks),
+		ProviderPreset::Unspecified => Err(ProtoError::Generic(format!(
+			"AI backend provider at index {provider_idx} requires a provider preset"
+		))),
+	}
+}
+
+fn override_ai_provider_model(provider: &mut AIProvider, model: &str) {
+	let model = Some(strng::new(model));
+	match provider {
+		AIProvider::Anthropic(provider) => provider.model = model,
+		AIProvider::OpenAI(provider) => provider.model = model,
+		AIProvider::Copilot(provider) => provider.model = model,
+		AIProvider::Gemini(provider) => provider.model = model,
+		AIProvider::Custom(provider) => provider.model = model,
+		AIProvider::Vertex(provider) => provider.model = model,
+		AIProvider::Bedrock(provider) => provider.model = model,
+		AIProvider::Azure(provider) => provider.model = model,
+	}
+}
+
+struct ProviderConnection {
+	host_override: Option<Target>,
+	path_prefix: Option<Strng>,
+	use_tls: bool,
+}
+
+fn resolve_provider_connection(
+	preset: Option<llm::custom::ProviderPreset>,
+	base_url: Option<&str>,
+	host_override: Option<Target>,
+	path_prefix: Option<Strng>,
+	has_provider_backend: bool,
+	provider_idx: usize,
+) -> Result<ProviderConnection, ProtoError> {
+	if preset.is_some() && has_provider_backend {
+		return Err(ProtoError::Generic(format!(
+			"AI backend provider preset at index {provider_idx} cannot set providerBackend"
+		)));
+	}
+	if has_provider_backend
+		&& (base_url.is_some() || host_override.is_some() || path_prefix.is_some())
+	{
+		return Err(ProtoError::Generic(format!(
+			"AI backend provider at index {provider_idx} cannot combine providerBackend with an endpoint override"
+		)));
+	}
+	if let Some(base_url) = base_url {
+		if host_override.is_some() || path_prefix.is_some() {
+			return Err(ProtoError::Generic(format!(
+				"AI backend provider at index {provider_idx} cannot combine baseUrl with hostOverride or pathPrefix"
+			)));
+		}
+		return provider_connection_from_url(base_url, provider_idx);
+	}
+	if let Some(host_override) = host_override {
+		return Ok(ProviderConnection {
+			host_override: Some(host_override),
+			path_prefix,
+			use_tls: false,
+		});
+	}
+	if let Some(preset) = preset {
+		return provider_connection_from_url(preset.base_url(), provider_idx);
+	}
+	Ok(ProviderConnection {
+		host_override: None,
+		path_prefix,
+		use_tls: false,
+	})
+}
+
+fn provider_connection_from_url(
+	base_url: &str,
+	provider_idx: usize,
+) -> Result<ProviderConnection, ProtoError> {
+	let url = url::Url::parse(base_url).map_err(|err| {
+		ProtoError::Generic(format!(
+			"AI backend provider at index {provider_idx} has an invalid baseUrl: {err}"
+		))
+	})?;
+	if url.scheme() != "http" && url.scheme() != "https" {
+		return Err(ProtoError::Generic(format!(
+			"AI backend provider at index {provider_idx} baseUrl must use http or https"
+		)));
+	}
+	if !url.username().is_empty()
+		|| url.password().is_some()
+		|| url.query().is_some()
+		|| url.fragment().is_some()
+	{
+		return Err(ProtoError::Generic(format!(
+			"AI backend provider at index {provider_idx} baseUrl cannot include user info, query parameters, or a fragment"
+		)));
+	}
+	let host = url.host_str().ok_or_else(|| {
+		ProtoError::Generic(format!(
+			"AI backend provider at index {provider_idx} baseUrl must include a host"
+		))
+	})?;
+	let port = url.port_or_known_default().ok_or_else(|| {
+		ProtoError::Generic(format!(
+			"AI backend provider at index {provider_idx} baseUrl must include a port"
+		))
+	})?;
+	Ok(ProviderConnection {
+		host_override: Some(Target::from((host, port))),
+		path_prefix: {
+			let path = url.path().trim_end_matches('/');
+			(!path.is_empty()).then(|| strng::new(path))
+		},
+		use_tls: url.scheme() == "https",
+	})
+}
+
 fn permissive_cel_expression(
 	diagnostics: &mut Diagnostics,
 	context: impl AsRef<str>,
@@ -1372,6 +1506,153 @@ impl Route {
 	}
 }
 
+impl ModelRoute {
+	pub fn from_xds(
+		s: &proto::agent::ModelRoute,
+		diagnostics: &mut Diagnostics,
+	) -> Result<(Self, ListenerKey), ProtoError> {
+		use proto::agent::model_route;
+		use proto::agent::model_route::virtual_model;
+
+		let model_match = s
+			.r#match
+			.as_ref()
+			.ok_or_else(|| ProtoError::Generic("model route match is required".to_string()))?;
+		if model_match.model.is_empty() {
+			return Err(ProtoError::Generic(
+				"model route match.model must not be empty".to_string(),
+			));
+		}
+		let name = strng::new(&model_match.model);
+		let llm_policy = s
+			.ai_policy
+			.as_ref()
+			.map(|policy| convert_backend_ai_policy(policy, diagnostics).map(Arc::new))
+			.transpose()?
+			.unwrap_or_else(llm::model_router::default_route_types);
+		let authorization = s
+			.authorization
+			.as_ref()
+			.map(|authorization| authorization_from_proto(authorization, diagnostics));
+		let kind = match &s.kind {
+			Some(model_route::Kind::ConcreteModel(concrete)) => {
+				let visibility = match concrete.model_visibility() {
+					model_route::concrete_model::ModelVisibility::Public => {
+						llm::model_router::ModelVisibility::Public
+					},
+					model_route::concrete_model::ModelVisibility::Internal => {
+						llm::model_router::ModelVisibility::Internal
+					},
+				};
+				let backend = RouteBackendReference {
+					weight: 1,
+					target: resolve_reference(concrete.backend.as_ref()).into(),
+					inline_policies: concrete
+						.backend_policies
+						.iter()
+						.map(|policy| backend_policy_from_proto(policy, diagnostics))
+						.collect::<Result<Vec<_>, _>>()?,
+				};
+				ModelRouteKind::Concrete(llm::model_router::ModelRoute {
+					id: None,
+					name: model_match.model.clone(),
+					created: s.created,
+					visibility,
+					header_matches: vec![],
+					backend,
+					policies: llm::model_router::ModelRoutePolicies {
+						llm: llm_policy.clone(),
+						authorization,
+					},
+					backend_policies: vec![],
+				})
+			},
+			Some(model_route::Kind::VirtualModel(virtual_model)) => {
+				let routing = match &virtual_model.routing {
+					Some(virtual_model::Routing::Weighted(weighted)) => {
+						if weighted.targets.is_empty() {
+							return Err(ProtoError::Generic(
+								"model route weighted virtual model must have at least one target".to_string(),
+							));
+						}
+						llm::model_router::VirtualModelRouting::Weighted(
+							weighted
+								.targets
+								.iter()
+								.map(|target| llm::model_router::WeightedTarget {
+									model: target.model.clone(),
+									weight: target.weight as usize,
+								})
+								.collect(),
+						)
+					},
+					Some(virtual_model::Routing::Conditional(conditional)) => {
+						if conditional.targets.is_empty() {
+							return Err(ProtoError::Generic(
+								"model route conditional virtual model must have at least one target".to_string(),
+							));
+						}
+						let mut targets = Vec::with_capacity(conditional.targets.len());
+						for (idx, target) in conditional.targets.iter().enumerate() {
+							let when = target.when.as_ref().filter(|when| !when.is_empty());
+							if when.is_none() && idx + 1 != conditional.targets.len() {
+								return Err(ProtoError::Generic(
+									"model route conditional fallback target must be last".to_string(),
+								));
+							}
+							targets.push(llm::model_router::ConditionalTarget {
+								model: target.model.clone(),
+								when: when.map(|expr| {
+									permissive_cel_expression_arc(
+										diagnostics,
+										format!("modelRoute.{}.conditional.when", model_match.model),
+										expr.clone(),
+									)
+								}),
+							});
+						}
+						llm::model_router::VirtualModelRouting::Conditional(targets)
+					},
+					Some(virtual_model::Routing::Failover(failover)) => {
+						llm::model_router::VirtualModelRouting::Failover {
+							backend: RouteBackendReference {
+								weight: 1,
+								target: resolve_reference(failover.backend.as_ref()).into(),
+								inline_policies: vec![],
+							},
+						}
+					},
+					None => {
+						return Err(ProtoError::Generic(
+							"model route virtual model must specify routing".to_string(),
+						));
+					},
+				};
+				ModelRouteKind::Virtual(llm::model_router::VirtualModelRoute {
+					name: model_match.model.clone(),
+					created: s.created,
+					llm_policy,
+					routing,
+				})
+			},
+			None => {
+				return Err(ProtoError::Generic(
+					"model route kind is required".to_string(),
+				));
+			},
+		};
+
+		Ok((
+			ModelRoute {
+				key: strng::new(&s.key),
+				name,
+				kind,
+			},
+			strng::new(&s.listener_key),
+		))
+	}
+}
+
 pub(crate) fn backend_with_policies_from_proto(
 	s: &proto::agent::Backend,
 	diagnostics: &mut Diagnostics,
@@ -1426,12 +1707,13 @@ pub(crate) fn backend_with_policies_from_proto(
 			for group in &a.provider_groups {
 				let mut local_provider_group = Vec::new();
 				for (provider_idx, provider_config) in group.providers.iter().enumerate() {
-					let pols = provider_config
+					let mut pols = provider_config
 						.inline_policies
 						.iter()
 						.map(|policy| backend_policy_from_proto(policy, diagnostics))
 						.collect::<Result<Vec<_>, _>>()?;
-					let provider = match &provider_config.provider {
+					let mut preset = None;
+					let mut provider = match &provider_config.provider {
 						Some(provider::Provider::Openai(openai)) => AIProvider::OpenAI(llm::openai::Provider {
 							model: openai.model.as_deref().map(strng::new),
 						}),
@@ -1493,12 +1775,24 @@ pub(crate) fn backend_with_policies_from_proto(
 								formats,
 							})
 						},
+						Some(provider::Provider::ProviderPreset(provider_preset)) => {
+							let provider_preset = proto::agent::ai_backend::ProviderPreset::try_from(*provider_preset)
+								.map_err(|_| ProtoError::Generic(format!(
+									"AI backend provider at index {provider_idx} has an unknown provider preset {provider_preset}"
+								)))?;
+							let provider_preset = provider_preset_from_proto(provider_preset, provider_idx)?;
+							preset = Some(provider_preset);
+							AIProvider::Custom(provider_preset.provider(None))
+						},
 						None => {
 							return Err(ProtoError::Generic(format!(
 								"AI backend provider at index {provider_idx} is required"
 							)));
 						},
 					};
+					if let Some(model_override) = provider_config.model_override.as_deref() {
+						override_ai_provider_model(&mut provider, model_override);
+					}
 
 					let provider_name = if provider_config.name.is_empty() {
 						strng::literal!("default")
@@ -1513,9 +1807,23 @@ pub(crate) fn backend_with_policies_from_proto(
 						.r#host_override
 						.as_ref()
 						.map(|o| Target::from((o.host.as_str(), o.port as u16)));
+					let path_prefix = provider_config.path_prefix.as_ref().map(strng::new);
+					let connection = resolve_provider_connection(
+						preset,
+						provider_config.base_url.as_deref(),
+						host_override,
+						path_prefix,
+						provider_backend.is_some(),
+						provider_idx,
+					)?;
+					if connection.use_tls {
+						pols.push(BackendTrafficPolicy::BackendTLS(
+							crate::http::backendtls::SYSTEM_TRUST.clone(),
+						));
+					}
 					if matches!(provider, AIProvider::Custom(_))
 						&& provider_backend.is_none()
-						&& host_override.is_none()
+						&& connection.host_override.is_none()
 					{
 						return Err(ProtoError::Generic(format!(
 							"AI backend custom provider at index {provider_idx} requires providerBackend or hostOverride"
@@ -1527,9 +1835,9 @@ pub(crate) fn backend_with_policies_from_proto(
 						provider,
 						tokenize: false,
 						provider_backend,
-						host_override,
+						host_override: connection.host_override,
 						path_override: provider_config.path_override.as_ref().map(strng::new),
-						path_prefix: provider_config.path_prefix.as_ref().map(strng::new),
+						path_prefix: connection.path_prefix,
 						inline_policies: pols,
 					};
 					local_provider_group.push((provider_name, np));
@@ -4246,6 +4554,270 @@ mod tests {
 	}
 
 	#[test]
+	fn test_concrete_model_route_from_xds() -> Result<(), ProtoError> {
+		use proto::agent::backend_reference;
+		use proto::agent::model_route::concrete_model::ModelVisibility;
+		use proto::agent::model_route::{ConcreteModel, Kind};
+
+		let proto_route = proto::agent::ModelRoute {
+			key: "default/gpt-5-mini".to_string(),
+			listener_key: "default/gw.http".to_string(),
+			created: 1_704_067_200,
+			r#match: Some(proto::agent::model_route::Match {
+				model: "gpt-5-mini".to_string(),
+			}),
+			kind: Some(Kind::ConcreteModel(ConcreteModel {
+				model_visibility: ModelVisibility::Internal as i32,
+				backend: Some(proto::agent::BackendReference {
+					port: 0,
+					kind: Some(backend_reference::Kind::Backend(
+						"default/openai".to_string(),
+					)),
+				}),
+				backend_policies: vec![],
+			})),
+			ai_policy: None,
+			authorization: Some(proto::agent::traffic_policy_spec::Rbac {
+				allow: vec!["request.headers['x-model-access'] == 'allowed'".to_string()],
+				deny: vec![],
+				require: vec![],
+			}),
+		};
+
+		let (route, listener) = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())?;
+		assert_eq!(listener.as_str(), "default/gw.http");
+		assert_eq!(route.key.as_str(), "default/gpt-5-mini");
+		assert_eq!(route.name.as_str(), "gpt-5-mini");
+		let ModelRouteKind::Concrete(model) = route.kind else {
+			panic!("expected concrete model route");
+		};
+		assert_eq!(model.name, "gpt-5-mini");
+		assert_eq!(model.created, 1_704_067_200);
+		assert_eq!(
+			model.visibility,
+			llm::model_router::ModelVisibility::Internal
+		);
+		assert!(
+			model
+				.policies
+				.llm
+				.routes
+				.contains_key("/v1/chat/completions")
+		);
+		assert!(model.policies.authorization.is_some());
+		assert_eq!(model.backend.weight, 1);
+		match model.backend.target {
+			RouteBackendTarget::Backend(key) => {
+				assert_eq!(key.as_str(), "default/openai");
+			},
+			other => panic!("expected backend target, got {other:?}"),
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn test_model_route_rejects_missing_match() {
+		use proto::agent::model_route::{ConcreteModel, Kind};
+
+		let proto_route = proto::agent::ModelRoute {
+			key: "default/gpt-5-mini".to_string(),
+			listener_key: "default/gw.http".to_string(),
+			created: 0,
+			r#match: None,
+			kind: Some(Kind::ConcreteModel(ConcreteModel::default())),
+			ai_policy: None,
+			authorization: None,
+		};
+
+		let err = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())
+			.expect_err("missing match should be rejected");
+		assert!(
+			err.to_string().contains("model route match is required"),
+			"{err}"
+		);
+	}
+
+	#[test]
+	fn test_virtual_model_route_from_xds() -> Result<(), ProtoError> {
+		use proto::agent::model_route::virtual_model::{Routing, Weighted, weighted};
+		use proto::agent::model_route::{Kind, VirtualModel};
+
+		let proto_route = proto::agent::ModelRoute {
+			key: "default/fast".to_string(),
+			listener_key: "default/gw.http".to_string(),
+			created: 1_704_153_600,
+			r#match: Some(proto::agent::model_route::Match {
+				model: "fast".to_string(),
+			}),
+			kind: Some(Kind::VirtualModel(VirtualModel {
+				routing: Some(Routing::Weighted(Weighted {
+					targets: vec![
+						weighted::Target {
+							model: "openai/gpt-5-mini".to_string(),
+							weight: 40,
+						},
+						weighted::Target {
+							model: "anthropic/claude-haiku-4-5".to_string(),
+							weight: 60,
+						},
+					],
+				})),
+			})),
+			ai_policy: None,
+			authorization: None,
+		};
+
+		let (route, listener) = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())?;
+		assert_eq!(listener.as_str(), "default/gw.http");
+		let ModelRouteKind::Virtual(model) = route.kind else {
+			panic!("expected virtual model route");
+		};
+		assert_eq!(model.name, "fast");
+		assert_eq!(model.created, 1_704_153_600);
+		assert!(model.llm_policy.routes.contains_key("/v1/chat/completions"));
+		let llm::model_router::VirtualModelRouting::Weighted(targets) = model.routing else {
+			panic!("expected weighted routing");
+		};
+		assert_eq!(targets.len(), 2);
+		assert_eq!(targets[0].model, "openai/gpt-5-mini");
+		assert_eq!(targets[0].weight, 40);
+		assert_eq!(targets[1].model, "anthropic/claude-haiku-4-5");
+		assert_eq!(targets[1].weight, 60);
+		Ok(())
+	}
+
+	#[test]
+	fn test_conditional_model_route_from_xds() -> Result<(), ProtoError> {
+		use proto::agent::model_route::virtual_model::{Conditional, Routing, conditional};
+		use proto::agent::model_route::{Kind, VirtualModel};
+
+		let proto_route = proto::agent::ModelRoute {
+			key: "default/smart".to_string(),
+			listener_key: "default/gw.http".to_string(),
+			created: 0,
+			r#match: Some(proto::agent::model_route::Match {
+				model: "smart".to_string(),
+			}),
+			kind: Some(Kind::VirtualModel(VirtualModel {
+				routing: Some(Routing::Conditional(Conditional {
+					targets: vec![
+						conditional::Target {
+							model: "gpt-5-large".to_string(),
+							when: Some(r#"request.headers["x-tier"] == "premium""#.to_string()),
+						},
+						conditional::Target {
+							model: "gpt-5-mini".to_string(),
+							when: None,
+						},
+					],
+				})),
+			})),
+			ai_policy: None,
+			authorization: None,
+		};
+
+		let (route, listener) = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())?;
+		assert_eq!(listener.as_str(), "default/gw.http");
+		let ModelRouteKind::Virtual(model) = route.kind else {
+			panic!("expected virtual model route");
+		};
+		let llm::model_router::VirtualModelRouting::Conditional(targets) = model.routing else {
+			panic!("expected conditional routing");
+		};
+		assert_eq!(targets.len(), 2);
+		assert_eq!(targets[0].model, "gpt-5-large");
+		assert!(targets[0].when.is_some());
+		assert_eq!(targets[1].model, "gpt-5-mini");
+		assert!(targets[1].when.is_none());
+		Ok(())
+	}
+
+	#[test]
+	fn test_conditional_model_route_rejects_fallback_before_last() {
+		use proto::agent::model_route::virtual_model::{Conditional, Routing, conditional};
+		use proto::agent::model_route::{Kind, VirtualModel};
+
+		let proto_route = proto::agent::ModelRoute {
+			key: "default/smart".to_string(),
+			listener_key: "default/gw.http".to_string(),
+			created: 0,
+			r#match: Some(proto::agent::model_route::Match {
+				model: "smart".to_string(),
+			}),
+			kind: Some(Kind::VirtualModel(VirtualModel {
+				routing: Some(Routing::Conditional(Conditional {
+					targets: vec![
+						conditional::Target {
+							model: "gpt-5-mini".to_string(),
+							when: None,
+						},
+						conditional::Target {
+							model: "gpt-5-large".to_string(),
+							when: Some("true".to_string()),
+						},
+					],
+				})),
+			})),
+			ai_policy: None,
+			authorization: None,
+		};
+
+		let err = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())
+			.expect_err("fallback before last should be rejected");
+		assert!(
+			err
+				.to_string()
+				.contains("model route conditional fallback target must be last"),
+			"{err}"
+		);
+	}
+
+	#[test]
+	fn test_failover_model_route_from_xds() -> Result<(), ProtoError> {
+		use proto::agent::backend_reference;
+		use proto::agent::model_route::virtual_model::{Failover, Routing};
+		use proto::agent::model_route::{Kind, VirtualModel};
+
+		let proto_route = proto::agent::ModelRoute {
+			key: "default/resilient".to_string(),
+			listener_key: "default/gw.http".to_string(),
+			created: 0,
+			r#match: Some(proto::agent::model_route::Match {
+				model: "resilient".to_string(),
+			}),
+			kind: Some(Kind::VirtualModel(VirtualModel {
+				routing: Some(Routing::Failover(Failover {
+					backend: Some(proto::agent::BackendReference {
+						port: 0,
+						kind: Some(backend_reference::Kind::Backend(
+							"default/resilient/failover.http".to_string(),
+						)),
+					}),
+				})),
+			})),
+			ai_policy: None,
+			authorization: None,
+		};
+
+		let (route, _) = ModelRoute::from_xds(&proto_route, &mut Diagnostics::default())?;
+		let ModelRouteKind::Virtual(model) = route.kind else {
+			panic!("expected virtual model route");
+		};
+		let llm::model_router::VirtualModelRouting::Failover { backend } = model.routing else {
+			panic!("expected failover routing");
+		};
+		assert_eq!(backend.weight, 1);
+		assert!(backend.inline_policies.is_empty());
+		match backend.target {
+			RouteBackendTarget::Backend(key) => {
+				assert_eq!(key.as_str(), "default/resilient/failover.http");
+			},
+			other => panic!("expected backend target, got {other:?}"),
+		}
+		Ok(())
+	}
+
+	#[test]
 	fn test_backend_kind_aws_conversion() -> Result<(), ProtoError> {
 		use proto::agent::aws_backend::Service;
 
@@ -4301,6 +4873,8 @@ mod tests {
 						host_override: None,
 						path_override: None,
 						path_prefix: None,
+						base_url: None,
+						model_override: None,
 						provider_backend: None,
 						provider: Some(Provider::Vertex(Vertex {
 							model: None,
@@ -4345,6 +4919,8 @@ mod tests {
 						host_override: None,
 						path_override: None,
 						path_prefix: None,
+						base_url: None,
+						model_override: None,
 						provider_backend: None,
 						provider: Some(Provider::Vertex(Vertex {
 							model: None,
@@ -4390,6 +4966,8 @@ mod tests {
 						host_override: None,
 						path_override: None,
 						path_prefix: None,
+						base_url: None,
+						model_override: None,
 						provider_backend: Some(proto::agent::BackendReference {
 							port: 8000,
 							kind: Some(backend_reference::Kind::Service(
@@ -4449,6 +5027,117 @@ mod tests {
 			"llm-pool.test-ns.inference.cluster.local"
 		);
 		assert_eq!(*port, 8000);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_provider_preset_from_xds() -> Result<(), ProtoError> {
+		use proto::agent::ai_backend::ProviderPreset;
+		use proto::agent::ai_backend::provider::Provider;
+
+		let proto_backend = proto::agent::Backend {
+			key: "test-ns/ollama-backend".to_string(),
+			name: Some(proto::agent::ResourceName {
+				name: "ollama-backend".to_string(),
+				namespace: "test-ns".to_string(),
+			}),
+			kind: Some(proto::agent::backend::Kind::Ai(proto::agent::AiBackend {
+				provider_groups: vec![proto::agent::ai_backend::ProviderGroup {
+					providers: vec![proto::agent::ai_backend::Provider {
+						name: "ollama".to_string(),
+						host_override: None,
+						path_override: None,
+						path_prefix: None,
+						base_url: Some("https://ollama.example/v2".to_string()),
+						model_override: Some("llama3.3".to_string()),
+						provider_backend: None,
+						provider: Some(Provider::ProviderPreset(ProviderPreset::Ollama as i32)),
+						inline_policies: vec![],
+					}],
+				}],
+			})),
+			inline_policies: vec![],
+		};
+
+		let bw = backend_with_policies_from_proto(&proto_backend, &mut Diagnostics::default())?;
+		let Backend::AI(_, ai_backend) = &bw.backend else {
+			panic!("Expected Backend::AI, got {:?}", bw.backend);
+		};
+		let providers = ai_backend.providers.iter();
+		let (provider, _) = providers.iter().next().unwrap();
+		let AIProvider::Custom(custom) = &provider.provider else {
+			panic!("Expected AIProvider::Custom");
+		};
+		assert_eq!(custom.provider_override.as_deref(), Some("ollama"));
+		assert_eq!(custom.model.as_deref(), Some("llama3.3"));
+		assert!(custom.supports(llm::custom::ProviderFormat::Responses));
+		assert_eq!(
+			provider.host_override,
+			Some(Target::from(("ollama.example", 443)))
+		);
+		assert_eq!(provider.path_prefix.as_deref(), Some("/v2"));
+		assert_eq!(provider.inline_policies.len(), 1);
+		Ok(())
+	}
+
+	#[test]
+	fn test_provider_connection_precedence() -> Result<(), ProtoError> {
+		let explicit = resolve_provider_connection(
+			Some(llm::custom::ProviderPreset::Ollama),
+			Some("https://override.example/v2/"),
+			None,
+			None,
+			false,
+			0,
+		)?;
+		assert_eq!(
+			explicit.host_override,
+			Some(Target::from(("override.example", 443)))
+		);
+		assert_eq!(explicit.path_prefix.as_deref(), Some("/v2"));
+		assert!(explicit.use_tls);
+
+		let default = resolve_provider_connection(
+			Some(llm::custom::ProviderPreset::Ollama),
+			None,
+			None,
+			None,
+			false,
+			0,
+		)?;
+		assert_eq!(
+			default.host_override,
+			Some(Target::from(("localhost", 11434)))
+		);
+		assert_eq!(default.path_prefix.as_deref(), Some("/v1"));
+		assert!(!default.use_tls);
+
+		assert!(
+			resolve_provider_connection(
+				Some(llm::custom::ProviderPreset::Ollama),
+				None,
+				None,
+				None,
+				true,
+				0,
+			)
+			.is_err()
+		);
+		assert!(
+			resolve_provider_connection(None, Some("ftp://provider.example"), None, None, false, 0)
+				.is_err()
+		);
+		assert!(
+			resolve_provider_connection(
+				None,
+				Some("https://provider.example?query=value"),
+				None,
+				None,
+				false,
+				0
+			)
+			.is_err()
+		);
 		Ok(())
 	}
 

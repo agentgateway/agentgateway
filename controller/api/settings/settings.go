@@ -223,6 +223,9 @@ type Settings struct {
 	// is deprecated in v2.1 and will not be supported in v2.2.
 	EnableInferExt bool `split_words:"true"`
 
+	// EnableAgentgatewayModels enables the experimental AgentgatewayModel API.
+	EnableAgentgatewayModels bool `split_words:"true" default:"false"`
+
 	// ProxyImageRegistry is the default image registry to use for the proxy image.
 	ProxyImageRegistry string `split_words:"true" default:"cr.agentgateway.dev"`
 	// ProxyImageRepository is the default image repository to use for the proxy image.

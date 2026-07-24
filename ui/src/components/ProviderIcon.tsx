@@ -42,7 +42,7 @@ const providerIcons: Record<string, string> = {
   mistral: mistralIcon,
   openrouter: openrouterIcon,
   togetherai: togetheraiIcon,
-  xai: xaiIcon,
+  xAI: xaiIcon,
   fireworks: fireworksIcon,
   custom: agwIcon,
 };
@@ -56,7 +56,7 @@ const monochromeProviders = new Set<string>([
   "ollama",
   "openrouter",
   "togetherai",
-  "xai",
+  "xAI",
 ]);
 
 export function ProviderIcon(props: { provider: ProviderName | string }) {
