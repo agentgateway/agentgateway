@@ -60,9 +60,10 @@ spec:
     sectionName: llm
   provider: OpenAI
   baseURL: http://ai-testbox.default.svc.cluster.local:9234
-  transformations:
-  - field: model
-    expression: '"agw-public-direct"'
+  policies:
+    transformations:
+    - field: model
+      expression: '"agw-public-direct"'
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
@@ -78,9 +79,10 @@ spec:
   visibility: Internal
   provider: OpenAI
   baseURL: http://ai-testbox.default.svc.cluster.local:9234
-  transformations:
-  - field: model
-    expression: '"agw-internal-fast"'
+  policies:
+    transformations:
+    - field: model
+      expression: '"agw-internal-fast"'
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
@@ -96,9 +98,10 @@ spec:
   visibility: Internal
   provider: OpenAI
   baseURL: http://ai-testbox.default.svc.cluster.local:9234
-  transformations:
-  - field: model
-    expression: '"agw-internal-premium"'
+  policies:
+    transformations:
+    - field: model
+      expression: '"agw-internal-premium"'
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
@@ -116,9 +119,10 @@ spec:
   visibility: Internal
   provider: OpenAI
   baseURL: http://ai-testbox.default.svc.cluster.local:9234
-  transformations:
-  - field: model
-    expression: 'llmRequest.model.stripPrefix("internal/")'
+  policies:
+    transformations:
+    - field: model
+      expression: 'llmRequest.model.stripPrefix("internal/")'
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
@@ -138,9 +142,9 @@ spec:
     health:
       eviction:
         consecutiveFailures: 1
-  transformations:
-  - field: model
-    expression: '"agw-primary-down"'
+    transformations:
+    - field: model
+      expression: '"agw-primary-down"'
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
