@@ -77,6 +77,35 @@ async fn test_classify_request_extracts_method_and_preserves_body() {
 }
 
 #[tokio::test]
+async fn test_classify_request_extracts_rest_send_method_and_preserves_body() {
+	for content_type in ["application/json", "application/a2a+json"] {
+		let payload = json!({
+			"message": {
+				"messageId": "msg-123",
+				"role": "ROLE_USER",
+				"parts": [{ "text": "hello" }],
+			},
+			"configuration": { "returnImmediately": true },
+		});
+		let body = serde_json::to_vec(&payload).unwrap();
+		let mut req = ::http::Request::builder()
+			.method(Method::POST)
+			.uri("https://example.com/a2a/reviewer/message:send")
+			.header(header::CONTENT_TYPE, content_type)
+			.body(http::Body::from(body.clone()))
+			.unwrap();
+
+		let ty = classify_request(&mut req).await;
+
+		match ty {
+			RequestType::Call(method) => assert_eq!(method.as_str(), "message:send"),
+			other => panic!("expected call request, got {other:?}"),
+		}
+		assert_eq!(http::read_req_body(req).await.unwrap(), body);
+	}
+}
+
+#[tokio::test]
 async fn test_classify_request_uses_original_url_for_agent_card() {
 	let original: Uri = "https://example.com/api/.well-known/agent-card.json"
 		.parse()

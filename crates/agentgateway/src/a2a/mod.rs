@@ -15,9 +15,11 @@ pub async fn apply_to_request(_: &A2aPolicy, req: &mut Request<Body>) -> Request
 }
 
 async fn classify_request(req: &mut Request<Body>) -> RequestType {
-	// Possible options are POST a JSON-RPC message or GET /.well-known/agent.json
+	// Possible options are POST a JSON-RPC or HTTP+JSON A2A message, or GET /.well-known/agent.json
 	// For agent card, we will process only on the response
-	match (req.method(), req.uri().path()) {
+	let method = req.method().clone();
+	let path = req.uri().path().to_string();
+	match (method, path.as_str()) {
 		// agent-card.json: v0.3.0+
 		// agent.json: older versions
 		(m, path)
@@ -34,9 +36,9 @@ async fn classify_request(req: &mut Request<Body>) -> RequestType {
 			let uri = crate::http::x_headers::apply_forwarded_scheme(uri, req.headers());
 			RequestType::AgentCard(uri)
 		},
-		(m, _) if m == http::Method::POST => {
+		(http::Method::POST, path) => {
 			let method = match crate::http::classify_content_type(req.headers()) {
-				crate::http::WellKnownContentTypes::Json => match inspect_method(req).await {
+				crate::http::WellKnownContentTypes::Json => match inspect_method(req, path).await {
 					Ok(method) => method,
 					Err(e) => {
 						warn!("failed to read a2a request: {e}");
@@ -119,11 +121,35 @@ pub async fn apply_to_response(
 
 #[derive(Deserialize)]
 struct JsonRpcMethod {
-	method: Strng,
+	method: Option<Strng>,
+	message: Option<Value>,
 }
 
-async fn inspect_method(req: &mut Request<Body>) -> anyhow::Result<Strng> {
-	Ok(json::inspect_body::<JsonRpcMethod>(req).await?.method)
+/// Determine the A2A method for a POST request.
+///
+/// A2A defines two wire formats for the same operations (see the A2A
+/// specification, Section 11 "HTTP+JSON (REST) binding"):
+///   - JSON-RPC: `{"jsonrpc": "2.0", "method": "message/send", "params": {...}}`
+///   - HTTP+JSON (REST): `{"message": {...}, "configuration": {...}}` POSTed to
+///     a method-specific path such as `/message:send` or `/message:stream`.
+///
+/// The REST binding has no `method` field in the body — the method is
+/// conveyed by the URL path instead — so JSON-RPC's plain `body.method`
+/// extraction alone misclassifies every REST call as `unknown`.
+async fn inspect_method(req: &mut Request<Body>, path: &str) -> anyhow::Result<Strng> {
+	let body = json::inspect_body::<JsonRpcMethod>(req).await?;
+	if let Some(method) = body.method {
+		return Ok(method);
+	}
+	if body.message.is_some() {
+		if path.ends_with("/message:send") {
+			return Ok(Strng::from("message:send"));
+		}
+		if path.ends_with("/message:stream") || path.ends_with("/message/stream") {
+			return Ok(Strng::from("message:stream"));
+		}
+	}
+	Ok(Strng::from("unknown"))
 }
 
 fn build_agent_path(uri: Uri) -> String {

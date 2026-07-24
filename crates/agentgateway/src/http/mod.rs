@@ -660,7 +660,7 @@ where
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum WellKnownContentTypes {
 	Json,
 	Sse,
@@ -672,12 +672,18 @@ pub fn classify_content_type(h: &HeaderMap) -> WellKnownContentTypes {
 		&& let Ok(content_type_str) = content_type.to_str()
 		&& let Ok(mime) = content_type_str.parse::<mime::Mime>()
 	{
-		match (mime.type_(), mime.subtype()) {
-			(mime::APPLICATION, mime::JSON) => return WellKnownContentTypes::Json,
-			(mime::TEXT, mime::EVENT_STREAM) => {
-				return WellKnownContentTypes::Sse;
-			},
-			_ => {},
+		// Accept `+json` structured-syntax suffixes (RFC 6839) such as
+		// `application/a2a+json`, not just the exact `application/json`.
+		// The A2A HTTP+JSON (REST) binding uses `application/a2a+json` per
+		// the A2A specification, which the strict equality check below
+		// would otherwise misclassify as Unknown.
+		if mime.type_() == mime::APPLICATION
+			&& (mime.subtype() == mime::JSON || mime.suffix() == Some(mime::JSON))
+		{
+			return WellKnownContentTypes::Json;
+		}
+		if (mime.type_(), mime.subtype()) == (mime::TEXT, mime::EVENT_STREAM) {
+			return WellKnownContentTypes::Sse;
 		}
 	}
 	WellKnownContentTypes::Unknown
@@ -1014,5 +1020,42 @@ mod tests {
 
 			assert!(!is_grpc_request(&req), "{content_type}");
 		}
+	}
+
+	#[test]
+	fn classify_content_type_accepts_json_suffix_mime_types() {
+		// RFC 6839 structured-syntax suffixes: `application/<subtype>+json` is
+		// still JSON. The A2A HTTP+JSON (REST) binding uses
+		// `application/a2a+json` specifically (A2A specification, Section 11),
+		// which a strict `application/json` equality check misclassifies.
+		for content_type in [
+			"application/json",
+			"application/a2a+json",
+			"application/vnd.api+json",
+		] {
+			let mut headers = HeaderMap::new();
+			headers.insert(header::CONTENT_TYPE, content_type.parse().unwrap());
+			assert_eq!(
+				classify_content_type(&headers),
+				WellKnownContentTypes::Json,
+				"{content_type}"
+			);
+		}
+	}
+
+	#[test]
+	fn classify_content_type_rejects_unrelated_json_prefixed_subtype() {
+		// Guard against overly broad matching: `application/jsonlines` is not
+		// JSON despite starting with "json" — the suffix check must only match
+		// the `+json` structured-syntax suffix, not any subtype prefix.
+		let mut headers = HeaderMap::new();
+		headers.insert(
+			header::CONTENT_TYPE,
+			"application/jsonlines".parse().unwrap(),
+		);
+		assert_eq!(
+			classify_content_type(&headers),
+			WellKnownContentTypes::Unknown
+		);
 	}
 }
