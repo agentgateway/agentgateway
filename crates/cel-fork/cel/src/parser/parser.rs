@@ -19,21 +19,21 @@ use antlr4rust::{InputStream, Parser as AntlrParser};
 
 use crate::common::ast;
 use crate::common::ast::{
-	CallExpr, EntryExpr, Expr, IdedEntryExpr, IdedExpr, ListExpr, MapEntryExpr, MapExpr, SelectExpr,
-	SourceInfo, StructExpr, StructFieldExpr, operators,
+	CallExpr, ComprehensionExpr, EntryExpr, Expr, IdedEntryExpr, IdedExpr, ListExpr, MapEntryExpr,
+	MapExpr, SelectExpr, SourceInfo, StructExpr, StructFieldExpr, operators,
 };
-use crate::common::value::CelVal;
+use crate::common::value::CelVal::{self, Boolean, Int};
 use crate::parser::r#gen::{
 	BoolFalseContext, BoolTrueContext, BytesContext, CELListener, CELParserContextType, CalcContext,
 	CalcContextAttrs, ConditionalAndContext, ConditionalOrContext, ConstantLiteralContext,
 	ConstantLiteralContextAttrs, CreateListContext, CreateMessageContext, CreateStructContext,
 	DoubleContext, ExprContext, Field_initializer_listContext, GlobalCallContext, IdentContext,
 	IndexContext, IndexContextAttrs, IntContext, ListInitContextAll, LogicalNotContext,
-	LogicalNotContextAttrs, MapInitializerListContextAll, MemberCallContext, MemberCallContextAttrs,
-	MemberExprContext, MemberExprContextAttrs, NegateContext, NegateContextAttrs, NestedContext,
-	NullContext, OptFieldContextAttrs, PrimaryExprContext, PrimaryExprContextAttrs, RelationContext,
-	RelationContextAttrs, SelectContext, SelectContextAttrs, StartContext, StartContextAttrs,
-	StringContext, UintContext,
+	LogicalNotContextAttrs, MapInitializerListContextAll, MatchContext, MemberCallContext,
+	MemberCallContextAttrs, MemberExprContext, MemberExprContextAttrs, NegateContext,
+	NegateContextAttrs, NestedContext, NullContext, OptFieldContextAttrs, PrimaryExprContext,
+	PrimaryExprContextAttrs, RelationContext, RelationContextAttrs, SelectContext,
+	SelectContextAttrs, StartContext, StartContextAttrs, StringContext, UintContext,
 };
 use crate::parser::{r#gen, macros, parse};
 
@@ -106,6 +106,12 @@ pub struct Parser {
 	errors: Vec<ParseError>,
 	max_recursion_depth: u16,
 	enable_optional_syntax: bool,
+}
+
+struct LoweredMatchArm {
+	wildcard: bool,
+	pattern: IdedExpr,
+	result: IdedExpr,
 }
 
 impl Parser {
@@ -201,7 +207,7 @@ impl Parser {
 		}));
 
 		// todo! might want to avoid this cloning here...
-		self.helper.source_info.source = source.into();
+		self.helper.source_info.source = source.to_string();
 
 		let mut prsr = r#gen::CELParser::new(CommonTokenStream::new(lexer));
 		prsr.remove_error_listeners();
@@ -785,6 +791,45 @@ impl r#gen::CELVisitorCompat<'_> for Parser {
 		}
 	}
 
+	fn visit_Match(&mut self, ctx: &MatchContext<'_>) -> Self::Return {
+		let subject = match &ctx.subject {
+			Some(subject) => self.visit(subject.as_ref()),
+			None => match ctx.op.as_deref() {
+				Some(op) => self.helper.next_expr(op, Expr::Literal(Boolean(true))),
+				None => {
+					return self.report_error::<ParseError, _>(
+						&ctx.start(),
+						None,
+						"Incomplete `MatchContext`!",
+					);
+				},
+			},
+		};
+
+		let arms = ctx
+			.arms
+			.iter()
+			.flat_map(|arms| &arms.arms)
+			.filter_map(|arm| {
+				let (Some(pattern), Some(result)) = (&arm.pattern, &arm.result) else {
+					self.report_error::<ParseError, _>(&arm.start(), None, "Incomplete `MatchArmContext`!");
+					return None;
+				};
+
+				let pattern = self.visit(pattern.as_ref());
+				let wildcard = matches!(&pattern.expr, Expr::Ident(name) if name == "_");
+				let result = self.visit(result.as_ref());
+				Some(LoweredMatchArm {
+					wildcard,
+					pattern,
+					result,
+				})
+			})
+			.collect();
+
+		lower_match_to_map(subject, arms)
+	}
+
 	fn visit_Nested(&mut self, ctx: &NestedContext<'_>) -> Self::Return {
 		match &ctx.e {
 			None => {
@@ -968,6 +1013,76 @@ impl r#gen::CELVisitorCompat<'_> for Parser {
 			None => self.report_error::<ParseError, _>(&ctx.start(), None, "Incomplete null!"),
 		}
 	}
+}
+
+fn lower_match_to_map(subject: IdedExpr, arms: Vec<LoweredMatchArm>) -> IdedExpr {
+	let subject_binding = "@match_subject".to_string();
+	let result_binding = "@result".to_string();
+	let subject_ident = || IdedExpr {
+		id: 0,
+		expr: Expr::Ident(subject_binding.clone()),
+	};
+	let result_ident = || IdedExpr {
+		id: 0,
+		expr: Expr::Ident(result_binding.clone()),
+	};
+	let call = |func_name: &str, args: Vec<IdedExpr>| IdedExpr {
+		id: 0,
+		expr: Expr::Call(CallExpr {
+			func_name: func_name.to_string(),
+			target: None,
+			args,
+		}),
+	};
+
+	let mut result = IdedExpr {
+		id: 0,
+		expr: Expr::Literal(CelVal::Null),
+	};
+	for arm in arms.into_iter().rev() {
+		if arm.wildcard {
+			result = arm.result;
+			continue;
+		}
+		let condition = call(operators::EQUALS, vec![subject_ident(), arm.pattern]);
+		result = call(operators::CONDITIONAL, vec![condition, arm.result, result]);
+	}
+
+	let iter_range = IdedExpr {
+		id: 0,
+		expr: Expr::List(ListExpr::new(vec![subject])),
+	};
+	let accu_init = IdedExpr {
+		id: 0,
+		expr: Expr::List(ListExpr::new(Vec::default())),
+	};
+	let loop_cond = IdedExpr {
+		id: 0,
+		expr: Expr::Literal(Boolean(true)),
+	};
+	let result_list = IdedExpr {
+		id: 0,
+		expr: Expr::List(ListExpr::new(vec![result])),
+	};
+	let loop_step = call(operators::ADD, vec![result_ident(), result_list]);
+	let mapped = IdedExpr {
+		id: 0,
+		expr: Expr::Comprehension(Box::new(ComprehensionExpr {
+			iter_range,
+			iter_var: subject_binding,
+			iter_var2: None,
+			accu_var: result_binding.clone(),
+			accu_init,
+			loop_cond,
+			loop_step,
+			result: result_ident(),
+		})),
+	};
+	let zero = IdedExpr {
+		id: 0,
+		expr: Expr::Literal(Int(0)),
+	};
+	call(operators::INDEX, vec![mapped, zero])
 }
 
 pub struct ParserHelper {
@@ -1831,7 +1946,7 @@ _?_:_(
             TestInfo {
                 i: "{",
                 p: "",
-                e: "ERROR: <input>:1:2: Syntax error: mismatched input '<EOF>' expecting {'[', '{', '}', '(', '.', ',', '-', '!', '?', 'true', 'false', 'null', NUM_FLOAT, NUM_INT, NUM_UINT, STRING, BYTES, IDENTIFIER}
+                e: "ERROR: <input>:1:2: Syntax error: mismatched input '<EOF>' expecting {'match', '[', '{', '}', '(', '.', ',', '-', '!', '?', 'true', 'false', 'null', NUM_FLOAT, NUM_INT, NUM_UINT, STRING, BYTES, IDENTIFIER}
 | {
 | .^",
                 ..Default::default()
@@ -1839,7 +1954,7 @@ _?_:_(
             TestInfo {
                 i: "*@a | b",
                 p: "",
-                e: "ERROR: <input>:1:1: Syntax error: extraneous input '*' expecting {'[', '{', '(', '.', '-', '!', 'true', 'false', 'null', NUM_FLOAT, NUM_INT, NUM_UINT, STRING, BYTES, IDENTIFIER}
+                e: "ERROR: <input>:1:1: Syntax error: extraneous input '*' expecting {'match', '[', '{', '(', '.', '-', '!', 'true', 'false', 'null', NUM_FLOAT, NUM_INT, NUM_UINT, STRING, BYTES, IDENTIFIER}
 | *@a | b
 | ^
 ERROR: <input>:1:2: Syntax error: token recognition error at: '@'
