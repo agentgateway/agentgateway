@@ -40,7 +40,10 @@ fn import_database_url(output: Option<&Path>) -> String {
 		.filter(|parent| !parent.as_os_str().is_empty())
 		.map(|parent| parent.join("data.db"))
 		.unwrap_or_else(|| PathBuf::from("data.db"));
-	format!("sqlite://{}", database_path.display())
+	let database_path = database_path
+		.to_string_lossy()
+		.replace(std::path::MAIN_SEPARATOR, "/");
+	format!("sqlite://{database_path}")
 }
 
 fn read_input(path: &Path) -> anyhow::Result<String> {
