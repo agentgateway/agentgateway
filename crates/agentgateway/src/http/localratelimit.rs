@@ -92,7 +92,11 @@ impl RateLimit {
 	fn status(&self) -> RateLimitStatus {
 		let now = clocksource::precise::Instant::now();
 		let next = self.ratelimit.next_refill();
-		let reset_seconds = if next > now { (next - now).as_secs() } else { 0 };
+		let reset_seconds = if next > now {
+			(next - now).as_secs()
+		} else {
+			0
+		};
 		RateLimitStatus {
 			limit: self.ratelimit.max_tokens(),
 			remaining: self.ratelimit.available(),
@@ -233,7 +237,9 @@ mod policy_tests {
 		assert_eq!(best.remaining, 2);
 		assert_eq!(best.limit, 5);
 		assert_eq!(
-			RateLimitStatus::most_constrained(None, Some(a)).unwrap().remaining,
+			RateLimitStatus::most_constrained(None, Some(a))
+				.unwrap()
+				.remaining,
 			9
 		);
 		assert!(RateLimitStatus::most_constrained(None, None).is_none());

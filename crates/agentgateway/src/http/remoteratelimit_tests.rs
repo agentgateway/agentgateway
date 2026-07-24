@@ -757,7 +757,10 @@ fn apply_over_limit_preserves_service_provided_x_envoy_ratelimited() {
 	let result = RemoteRateLimit::apply(&mut req, response).unwrap();
 	let direct = result.direct_response.unwrap();
 	assert_eq!(direct.status(), StatusCode::TOO_MANY_REQUESTS);
-	assert_eq!(direct.headers().get("x-envoy-ratelimited").unwrap(), "custom");
+	assert_eq!(
+		direct.headers().get("x-envoy-ratelimited").unwrap(),
+		"custom"
+	);
 }
 
 #[test]
