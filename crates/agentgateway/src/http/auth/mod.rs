@@ -2,6 +2,7 @@ pub mod aws;
 pub mod azure;
 mod copilot;
 pub mod gcp;
+pub mod jwt_sign;
 pub mod oauth;
 
 use std::borrow::Cow;
@@ -12,6 +13,7 @@ pub use aws::{AwsAssumeRole, AwsAuth};
 pub use azure::AzureAuth;
 use cookie::Cookie;
 pub use gcp::GcpAuth;
+pub use jwt_sign::JwtSignAuth;
 pub use oauth::{
 	CrossAppAccessAuth, OAuthClientAuth, OAuthClientAuthMethod, OAuthGrantType,
 	OAuthTokenExchangeAuth, PrivateKeyJwt,
@@ -63,6 +65,9 @@ pub enum BackendAuthKind {
 	/// Authenticate to GitHub Copilot.
 	#[serde(rename = "copilot")]
 	Copilot,
+	/// Sign a short-lived JWT with a private key on each request.
+	#[serde(rename = "jwtSign")]
+	JwtSign(Box<jwt_sign::JwtSignAuth>),
 	/// Use OAuth token exchange flows to obtain a backend access token.
 	#[serde(rename = "oauthTokenExchange")]
 	OAuthTokenExchange(Box<OAuthTokenExchangeAuth>),
@@ -85,6 +90,19 @@ impl BackendAuth {
 		Self {
 			kind: Some(kind),
 			credentials: Vec::new(),
+		}
+	}
+
+	/// Resolves deferred file-based resources through the resource manager so
+	/// they are watched for changes. Must be called when converting local
+	/// config; XDS-delivered config carries material inline and is a no-op.
+	pub async fn resolve(
+		&mut self,
+		resources: &crate::resource_manager::ResourceFetcher,
+	) -> anyhow::Result<()> {
+		match &mut self.kind {
+			Some(BackendAuthKind::JwtSign(cfg)) => cfg.resolve(resources).await,
+			_ => Ok(()),
 		}
 	}
 }
@@ -234,6 +252,24 @@ async fn apply_backend_auth_kind(
 			copilot::insert_headers(req)
 				.await
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
+		},
+		BackendAuthKind::JwtSign(cfg) => {
+			let explicit = cfg.location.is_some();
+			let token = cfg
+				.sign()
+				.map_err(ProxyError::BackendAuthenticationFailed)?;
+			let resolved = cfg
+				.location
+				.as_ref()
+				.unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
+			// jwtSign fully replaces backend auth; strip any client-supplied
+			// Authorization header instead of letting it ride through
+			// alongside (or instead of, if `location` differs) the signed JWT.
+			DEFAULT_AUTHORIZATION_LOCATION.remove(req)?;
+			resolved.insert(req, &token)?;
+			req
+				.extensions_mut()
+				.insert(AppliedBackendAuthLocation { explicit });
 		},
 		BackendAuthKind::OAuthTokenExchange(te_auth) => {
 			let explicit = oauth::apply_token_exchange(&backend_info.inputs, te_auth, req).await?;

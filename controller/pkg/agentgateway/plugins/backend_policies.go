@@ -640,7 +640,7 @@ func translateMCPAuthenticationSpec(
 		errs = append(errs, err)
 	}
 
-	extraResourceMetadata, metadataErr := translateMCPResourceMetadata(authnPolicy.ResourceMetadata)
+	extraResourceMetadata, metadataErr := translateJSONValueMap(authnPolicy.ResourceMetadata)
 	if metadataErr != nil {
 		errs = append(errs, metadataErr)
 	}
@@ -672,7 +672,7 @@ func translateMCPAuthenticationSpec(
 }
 
 func translateJWTMCPConfig(mcp *agentgateway.JWTMCPConfig) (*api.TrafficPolicySpec_JWT_MCP, error) {
-	extraResourceMetadata, err := translateMCPResourceMetadata(mcp.ResourceMetadata)
+	extraResourceMetadata, err := translateJSONValueMap(mcp.ResourceMetadata)
 	if err != nil {
 		return nil, err
 	}
@@ -711,25 +711,25 @@ func translateMcpIDP(provider *agentgateway.McpIDP) api.BackendPolicySpec_McpAut
 	return api.BackendPolicySpec_McpAuthentication_UNSPECIFIED
 }
 
-func translateMCPResourceMetadata(resourceMetadata map[string]apiextensionsv1.JSON) (map[string]*structpb.Value, error) {
+func translateJSONValueMap(values map[string]apiextensionsv1.JSON) (map[string]*structpb.Value, error) {
 	var errs []error
-	var extraResourceMetadata map[string]*structpb.Value
-	for k, v := range resourceMetadata {
-		if extraResourceMetadata == nil {
-			extraResourceMetadata = make(map[string]*structpb.Value)
+	var translated map[string]*structpb.Value
+	for k, v := range values {
+		if translated == nil {
+			translated = make(map[string]*structpb.Value)
 		}
 
 		proto := &structpb.Value{}
 		err := jsonpb.Unmarshal(v.Raw, proto)
 		if err != nil {
-			logger.Error("error converting resource metadata", "key", k, "error", err)
+			logger.Error("error converting json value", "key", k, "error", err)
 			errs = append(errs, err)
 			continue
 		}
 
-		extraResourceMetadata[k] = proto
+		translated[k] = proto
 	}
-	return extraResourceMetadata, errors.Join(errs...)
+	return translated, errors.Join(errs...)
 }
 
 // translateBackendAI processes AI configuration and creates corresponding Agw policies
@@ -933,6 +933,12 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 	} else if auth.CrossAppAccess != nil {
 		crossAppAccessAuth, err := buildCrossAppAccessPolicy(ctx, auth.CrossAppAccess, policy.Namespace)
 		translatedAuth = crossAppAccessAuth
+		if err != nil {
+			errs = append(errs, err)
+		}
+	} else if auth.JwtSign != nil {
+		jwtSignAuth, err := buildJwtSignAuthPolicy(ctx, auth.JwtSign, policy.Namespace)
+		translatedAuth = jwtSignAuth
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -1685,4 +1691,75 @@ func buildGcpAuthPolicy(ctx PolicyCtx, auth *agentgateway.GcpAuth, namespace str
 			Gcp: gcp,
 		},
 	}, errors.Join(errs...)
+}
+
+func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, namespace string) (*api.BackendAuthPolicy, error) {
+	// translateJwtSignSigningAlg rejects unrecognized alg values rather than
+	// falling back to a default, so an error here must not fall through to
+	// building a policy that silently signs with RS256 instead.
+	alg, err := translateJwtSignSigningAlg(auth.Alg)
+	if err != nil {
+		return nil, err
+	}
+	var errs []error
+	// CEL admission validation cannot inspect map[string]JSON fields, so the
+	// signer-reserved claims are enforced here instead.
+	for _, reserved := range []string{"iat", "exp", "nbf"} {
+		if _, ok := auth.Claims[reserved]; ok {
+			return nil, fmt.Errorf("jwtSign claim %q is reserved for the signer and cannot be configured", reserved)
+		}
+	}
+	claims, err := translateJSONValueMap(auth.Claims)
+	if err != nil {
+		errs = append(errs, err)
+	}
+	jwtSign := &api.JwtSign{
+		Alg:                   alg,
+		Kid:                   auth.KeyID,
+		Claims:                claims,
+		AuthorizationLocation: translateAuthorizationLocation(auth.Location),
+	}
+
+	if auth.TTL != nil {
+		jwtSign.Ttl = durationpb.New(auth.TTL.Duration)
+	}
+
+	data, err := ctx.ResolveCredentialRef(auth.SigningKeyRef, namespace)
+	if err != nil {
+		errs = append(errs, err)
+	} else if value, exists := kubeutils.GetSecretDataValue(data, wellknown.SigningKey); !exists || value == "" {
+		errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SigningKeyRef.Name, wellknown.SigningKey))
+	} else {
+		jwtSign.SigningKey = value
+	}
+
+	return &api.BackendAuthPolicy{
+		Kind: &api.BackendAuthPolicy_JwtSign{
+			JwtSign: jwtSign,
+		},
+	}, errors.Join(errs...)
+}
+
+// translateJwtSignSigningAlg maps a nil alg to UNSPECIFIED so the data plane
+// applies its RS256 default, but rejects unrecognized values instead of
+// silently signing with the wrong algorithm. Unrecognized values are normally
+// unreachable behind the CRD enum validation; this guards against version skew.
+func translateJwtSignSigningAlg(alg *agentgateway.OAuthPrivateKeyJWTSigningAlgorithm) (api.JwtSign_SigningAlg, error) {
+	if alg == nil {
+		return api.JwtSign_SIGNING_ALG_UNSPECIFIED, nil
+	}
+	switch *alg {
+	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS256:
+		return api.JwtSign_RS256, nil
+	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS384:
+		return api.JwtSign_RS384, nil
+	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS512:
+		return api.JwtSign_RS512, nil
+	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256:
+		return api.JwtSign_ES256, nil
+	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES384:
+		return api.JwtSign_ES384, nil
+	default:
+		return api.JwtSign_SIGNING_ALG_UNSPECIFIED, fmt.Errorf("unsupported jwtSign signing algorithm %q", *alg)
+	}
 }

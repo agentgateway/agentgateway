@@ -1,0 +1,78 @@
+package plugins
+
+import (
+	"strings"
+	"testing"
+
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+)
+
+// translateJwtSignSigningAlg is documented to reject unrecognized alg values
+// (guarding against version skew, since the CRD enum otherwise prevents this)
+// rather than falling back to a default. buildJwtSignAuthPolicy must honor
+// that rejection instead of still emitting a policy with the wrong alg.
+func TestJwtSignRejectsUnsupportedSigningAlg(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t)
+	badAlg := agentgateway.OAuthPrivateKeyJWTSigningAlgorithm("HS256")
+	policy := &agentgateway.AgentgatewayPolicy{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "default"},
+		Spec: agentgateway.AgentgatewayPolicySpec{
+			Backend: &agentgateway.BackendFull{
+				BackendSimple: agentgateway.BackendSimple{
+					Auth: &agentgateway.BackendAuth{
+						JwtSign: &agentgateway.JwtSignAuth{
+							SigningKeyRef: agentgateway.LocalSecretObjectRef{Name: "jwt-sign-secret"},
+							Alg:           &badAlg,
+							Claims:        map[string]apiextensionsv1.JSON{"iss": {Raw: []byte(`"acct.user"`)}},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	p, err := translateBackendAuth(ctx, policy, "default/jwt-sign")
+	if err == nil || !strings.Contains(err.Error(), "unsupported jwtSign signing algorithm") {
+		t.Fatalf("translateBackendAuth() error = %v, want unsupported signing algorithm error", err)
+	}
+	if p != nil {
+		t.Fatalf("translateBackendAuth() policy = %v, want nil policy on unsupported alg", p)
+	}
+}
+
+// CEL admission validation cannot inspect map[string]JSON fields, so the
+// controller must reject signer-reserved claims during translation instead.
+func TestJwtSignRejectsReservedClaims(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t)
+	for _, reserved := range []string{"iat", "exp", "nbf"} {
+		policy := &agentgateway.AgentgatewayPolicy{
+			ObjectMeta: metav1.ObjectMeta{Namespace: "default"},
+			Spec: agentgateway.AgentgatewayPolicySpec{
+				Backend: &agentgateway.BackendFull{
+					BackendSimple: agentgateway.BackendSimple{
+						Auth: &agentgateway.BackendAuth{
+							JwtSign: &agentgateway.JwtSignAuth{
+								SigningKeyRef: agentgateway.LocalSecretObjectRef{Name: "jwt-sign-secret"},
+								Claims: map[string]apiextensionsv1.JSON{
+									"iss":    {Raw: []byte(`"acct.user"`)},
+									reserved: {Raw: []byte(`123`)},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		p, err := translateBackendAuth(ctx, policy, "default/jwt-sign")
+		if err == nil || !strings.Contains(err.Error(), "reserved for the signer") {
+			t.Fatalf("translateBackendAuth() error = %v, want reserved claim error for %q", err, reserved)
+		}
+		if p != nil {
+			t.Fatalf("translateBackendAuth() policy = %v, want nil policy on reserved claim %q", p, reserved)
+		}
+	}
+}

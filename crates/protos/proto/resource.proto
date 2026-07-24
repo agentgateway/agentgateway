@@ -351,6 +351,7 @@ message BackendAuthPolicy {
     Azure azure = 5;
     OAuthTokenExchange oauth_token_exchange = 6;
     CrossAppAccessAuth cross_app_access = 7;
+    JwtSign jwt_sign = 9;
   }
 
   // Additional credentials to inject on the backend request, independent of `kind`.
@@ -394,6 +395,36 @@ message Passthrough {
 message Key {
   string secret = 1;
   AuthorizationLocation authorization_location = 2;
+}
+
+// Signs a short-lived JWT with a private key on each request and sends it to
+// the backend. For upstreams that require per-request keypair JWTs (e.g. the
+// Snowflake SQL API) rather than a static credential.
+message JwtSign {
+  enum SigningAlg {
+    SIGNING_ALG_UNSPECIFIED = 0; // defaults to RS256
+    RS256                   = 1;
+    RS384                   = 2;
+    RS512                   = 3;
+    ES256                   = 4;
+    ES384                   = 5;
+  }
+
+  // PEM-encoded private signing key. RSA keys are used with RS* algorithms;
+  // EC keys are used with ES* algorithms.
+  string signing_key = 1;
+  // JWS signing algorithm. Defaults to RS256.
+  SigningAlg alg = 2;
+  // Optional JWS key ID header.
+  optional string kid = 3;
+  // Static claims added to every token (e.g. iss, sub, aud). iat, exp, and
+  // nbf are reserved for the signer and cannot be overridden here.
+  map<string, google.protobuf.Value> claims = 4;
+  // Token lifetime used for exp. Defaults to 300s.
+  optional google.protobuf.Duration ttl = 5;
+  // Where the signed token is written. Defaults to the Authorization header
+  // with a "Bearer " prefix.
+  AuthorizationLocation authorization_location = 6;
 }
 
 // GCP-specific backend authentication.

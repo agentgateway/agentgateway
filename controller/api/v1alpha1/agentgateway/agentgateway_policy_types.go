@@ -1432,8 +1432,8 @@ const (
 	HostnameRewriteModeNone HostnameRewriteMode = "None"
 )
 
-// +kubebuilder:validation:AtMostOneOf=key;secretRef;passthrough;aws;azure;gcp;oauthTokenExchange;crossAppAccess
-// +kubebuilder:validation:XValidation:rule="has(self.credentials) || has(self.key) || has(self.secretRef) || has(self.passthrough) || has(self.aws) || has(self.azure) || has(self.gcp) || has(self.oauthTokenExchange) || has(self.crossAppAccess)",message="must specify credentials, or at most one of key/secretRef/passthrough/aws/azure/gcp/oauthTokenExchange/crossAppAccess (credentials may be combined with a primary auth kind)"
+// +kubebuilder:validation:AtMostOneOf=key;secretRef;passthrough;aws;azure;gcp;oauthTokenExchange;crossAppAccess;jwtSign
+// +kubebuilder:validation:XValidation:rule="has(self.credentials) || has(self.key) || has(self.secretRef) || has(self.passthrough) || has(self.aws) || has(self.azure) || has(self.gcp) || has(self.oauthTokenExchange) || has(self.crossAppAccess) || has(self.jwtSign)",message="must specify credentials, or at most one of key/secretRef/passthrough/aws/azure/gcp/oauthTokenExchange/crossAppAccess/jwtSign (credentials may be combined with a primary auth kind)"
 // +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) || has(self.passthrough) : true",message="location may only be set for key, secretRef, or passthrough auth"
 type BackendAuth struct {
 	// Inline key to use as the value of the
@@ -1480,6 +1480,12 @@ type BackendAuth struct {
 	// Cross App Access (Identity Assertion / ID-JAG) authentication.
 	// +optional
 	CrossAppAccess *CrossAppAccessAuth `json:"crossAppAccess,omitempty"`
+
+	// Signs a short-lived JWT with a private key on each request and sends it
+	// to the backend, for upstreams that require per-request keypair JWTs
+	// (e.g. the Snowflake SQL API) rather than a static credential.
+	// +optional
+	JwtSign *JwtSignAuth `json:"jwtSign,omitempty"`
 
 	// Where backend credentials are inserted.
 	// If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
@@ -1856,6 +1862,44 @@ const (
 	OAuthPrivateKeyJWTSigningAlgorithmES256 OAuthPrivateKeyJWTSigningAlgorithm = "ES256"
 	OAuthPrivateKeyJWTSigningAlgorithmES384 OAuthPrivateKeyJWTSigningAlgorithm = "ES384"
 )
+
+// JwtSignAuth signs a short-lived JWT with a private key on each request and
+// sends it to the backend, for upstreams that require per-request keypair
+// JWTs (e.g. the Snowflake SQL API) rather than a static credential.
+type JwtSignAuth struct {
+	// Secret providing the `signingKey` key with a PEM-encoded RSA or EC private key.
+	// +required
+	SigningKeyRef LocalSecretObjectRef `json:"signingKeyRef"`
+
+	// JWS signing algorithm. Defaults to RS256.
+	// +optional
+	Alg *OAuthPrivateKeyJWTSigningAlgorithm `json:"alg,omitempty"`
+
+	// Optional JWS key ID header.
+	// +optional
+	KeyID *string `json:"kid,omitempty"`
+
+	// Static claims added to every token (e.g. iss, sub, aud). Values may be
+	// any JSON value (e.g. a string, number, bool, or array). iat, exp, and
+	// nbf are reserved for the signer and cannot be configured here; the
+	// controller rejects them at translation time. (CEL admission validation
+	// cannot inspect this map: JSON-valued fields are excluded from CEL type
+	// declarations.)
+	// +kubebuilder:validation:MinProperties=1
+	// +required
+	Claims map[string]apiextensionsv1.JSON `json:"claims"`
+
+	// Token lifetime used for exp. Defaults to 300s.
+	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="ttl must be at least 1 second"
+	// +optional
+	TTL *metav1.Duration `json:"ttl,omitempty"`
+
+	// Where the signed token is written on the backend request.
+	// Defaults to the Authorization header with a "Bearer " prefix.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
+}
 
 type OAuthTokenCache struct {
 	// +optional
