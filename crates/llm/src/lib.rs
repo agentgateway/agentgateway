@@ -11,6 +11,7 @@ define_schema_aliases!();
 pub mod anthropic;
 pub mod azure;
 pub mod bedrock;
+pub mod bedrock_model_table;
 pub mod conversion;
 pub mod copilot;
 pub mod custom;

@@ -1665,6 +1665,12 @@ message AIBackend {
     string region = 2;
     optional string guardrail_identifier = 3;
     optional string guardrail_version = 4;
+    BedrockProviderPreference provider_preference = 5;
+  }
+  enum BedrockProviderPreference {
+    BEDROCK_PROVIDER_PREFERENCE_RUNTIME_PREFERRED = 0;
+    BEDROCK_PROVIDER_PREFERENCE_MANTLE_ONLY = 1;
+    BEDROCK_PROVIDER_PREFERENCE_RUNTIME_ONLY = 2;
   }
   message AzureOpenAI {
     optional string model = 1;

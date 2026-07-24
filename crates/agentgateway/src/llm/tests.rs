@@ -801,6 +801,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 	});
 
 	let error_json = r#"{"message":"Expected toolResult blocks at messages.2.content for the following Ids: tooluse_abc123"}"#;
@@ -936,6 +937,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 	});
 
 	let body = Body::from(
@@ -1162,11 +1164,125 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 			region: strng::new("us-east-1"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			provider_preference: Default::default(),
 		}),
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
 		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
 		Some("trace=repro"),
 	);
+}
+
+/// Runs `setup_request` (no host override) and returns the built upstream request,
+/// so tests can inspect the resolved Bedrock host, path, and signing-service extension.
+fn setup_bedrock_request(
+	provider: &AIProvider,
+	route_type: RouteType,
+	input_format: InputFormat,
+	model: &str,
+) -> crate::http::Request {
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: model.into(),
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: None,
+	};
+	let mut req =
+		crate::http::tests_common::request("https://proxy.example.com/in", http::Method::POST, &[]);
+	provider
+		.setup_request(&mut req, route_type, Some(&llm_request), None, None, false)
+		.expect("setup_request should succeed");
+	req
+}
+
+fn bedrock_signing_service(req: &crate::http::Request) -> Option<String> {
+	req
+		.extensions()
+		.get::<crate::http::auth::aws::DefaultAwsServiceName>()
+		.map(|d| d.0.clone())
+}
+
+#[test]
+fn setup_request_bedrock_mantle_only_targets_native_host_path_and_signing() {
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		provider_preference: bedrock::BedrockProviderPreference::MantleOnly,
+	});
+
+	// Completions -> native OpenAI chat path on the Mantle host, signed as bedrock-mantle.
+	let req = setup_bedrock_request(
+		&provider,
+		RouteType::Completions,
+		InputFormat::Completions,
+		"some.model",
+	);
+	assert_eq!(
+		req.uri().authority().map(|a| a.host()),
+		Some("bedrock-mantle.us-east-1.api.aws")
+	);
+	assert_eq!(req.uri().path(), "/v1/chat/completions");
+	assert_eq!(
+		bedrock_signing_service(&req).as_deref(),
+		Some("bedrock-mantle")
+	);
+
+	// Messages -> Anthropic native path, still on the Mantle host.
+	let req = setup_bedrock_request(
+		&provider,
+		RouteType::Messages,
+		InputFormat::Messages,
+		"some.model",
+	);
+	assert_eq!(
+		req.uri().authority().map(|a| a.host()),
+		Some("bedrock-mantle.us-east-1.api.aws")
+	);
+	assert_eq!(req.uri().path(), "/anthropic/v1/messages");
+
+	// Responses -> native responses path.
+	let req = setup_bedrock_request(
+		&provider,
+		RouteType::Responses,
+		InputFormat::Responses,
+		"some.model",
+	);
+	assert_eq!(req.uri().path(), "/v1/responses");
+}
+
+#[test]
+fn setup_request_bedrock_runtime_default_targets_converse_without_signing_override() {
+	// Default preference + the empty Mantle allow-list keeps chat on the Runtime
+	// Converse endpoint with the default (bedrock) signing service.
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		provider_preference: bedrock::BedrockProviderPreference::default(),
+	});
+
+	let req = setup_bedrock_request(
+		&provider,
+		RouteType::Completions,
+		InputFormat::Completions,
+		"anthropic.claude-sonnet-4-20250514-v1:0",
+	);
+	assert_eq!(
+		req.uri().authority().map(|a| a.host()),
+		Some("bedrock-runtime.us-east-1.amazonaws.com")
+	);
+	assert_eq!(
+		req.uri().path(),
+		"/model/anthropic.claude-sonnet-4-20250514-v1:0/converse"
+	);
+	assert_eq!(bedrock_signing_service(&req), None);
 }
 
 #[test]

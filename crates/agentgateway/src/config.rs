@@ -360,6 +360,18 @@ pub fn parse_config(
 		})
 		.or(raw.model_catalog)
 		.unwrap_or_default();
+
+	let bedrock_mantle_model_catalog_sources = parse::<String>("BEDROCK_MANTLE_MODEL_CATALOG_PATHS")?
+		.map(|s| {
+			s.split(',')
+				.map(|p| PathBuf::from(p.trim()))
+				.filter(|p| !p.as_os_str().is_empty())
+				.map(|file| crate::MantleCatalogSource::File { file })
+				.collect::<Vec<_>>()
+		})
+		.or(raw.bedrock_mantle_model_catalog)
+		.unwrap_or_default();
+
 	let shared_database = raw.database.clone();
 	let database = shared_database
 		.clone()
@@ -555,6 +567,9 @@ pub fn parse_config(
 		dynamic_ca_cert_cache,
 		model_catalog: crate::ModelCatalogConfig {
 			sources: model_catalog_sources,
+		},
+		bedrock_mantle_model_catalog: crate::BedrockMantleModelCatalogConfig {
+			sources: bedrock_mantle_model_catalog_sources,
 		},
 		database,
 		config_store,

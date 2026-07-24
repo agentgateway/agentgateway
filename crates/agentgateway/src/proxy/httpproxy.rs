@@ -2468,6 +2468,25 @@ async fn make_backend_call(
 				None,
 			)
 		};
+	// Bedrock's Mantle-vs-Runtime host is model-dependent, so align the connection target
+	// with the model-aware `:authority` set by setup_request (mirrors Backend::Dynamic).
+	let reresolve_bedrock_target = backend_call
+		.backend_policies
+		.llm_provider
+		.as_ref()
+		.is_some_and(|llm| {
+			llm.host_override.is_none() && matches!(llm.provider, llm::AIProvider::Bedrock(_))
+		});
+	if reresolve_bedrock_target {
+		let existing_port = match &backend_call.target {
+			Target::Hostname(_, port) => Some(*port),
+			_ => None,
+		};
+		if let Some(port) = existing_port {
+			let host = strng::new(http::get_host(&req)?);
+			backend_call.target = Target::Hostname(host, port);
+		}
+	}
 	if let Some(llm) = &backend_call.backend_policies.llm_provider {
 		llm.provider.strip_browser_cors_headers(&mut req);
 		apply_auto_hostname(&mut req, &backend_call.target)?;

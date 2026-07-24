@@ -126,6 +126,7 @@ dependencies = [
  "agent-core",
  "agent-http",
  "anyhow",
+ "arc-swap",
  "async-openai",
  "aws-credential-types",
  "aws-smithy-eventstream",
