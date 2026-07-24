@@ -1,0 +1,58 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "inference-perf.fullname" . }}-job
+  labels:
+    {{- include "inference-perf.labels" . | nindent 4 }}
+    app: inference-perf
+spec:
+  template:
+    metadata:
+      labels:
+        {{- include "inference-perf.selectorLabels" . | nindent 8 }}
+        app: inference-perf
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ .Values.job.serviceAccountName | default "default" }}
+      {{- with .Values.job.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: inference-perf-container
+          image: "{{ .Values.job.image.repository }}:{{ .Values.job.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: IfNotPresent
+          command: ["inference-perf"]
+          args:
+            - "--config_file"
+            - "{{ include "inference-perf.configMount" . }}/config.yml"
+            - "--log-level"
+            - {{ .Values.logLevel | default "INFO" }}
+          env:
+{{- if and .Values.token .Values.token.hfSecret .Values.token.hfSecret.name }}
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.token.hfSecret.name }}
+                  key: {{ .Values.token.hfSecret.key }}
+{{- else if and .Values.token .Values.token.hfToken }}
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "inference-perf.hfSecret" . }}
+                  key: {{ include "inference-perf.hfKey" . }}
+{{- end }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: {{ include "inference-perf.configMount" . }}
+              readOnly: true
+            - name: reports-volume
+              mountPath: /reports
+          resources:
+            {{- toYaml .Values.job.resources | nindent 12 }}
+      volumes:
+        - name: config-volume
+          configMap:
+            name: {{ include "inference-perf.fullname" . }}-config
+        - name: reports-volume
+          emptyDir: {}
