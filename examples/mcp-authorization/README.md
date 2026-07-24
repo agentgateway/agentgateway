@@ -83,3 +83,37 @@ This is because our third policy allows access when `jwt.nested.key == "value"`,
 
 When the policy doesn't allow the connecting user to access a tool, it is automatically filtered from the tools list.
 If the user does still attempt to call the tool, it is also denied.
+
+### External agent authority checks
+
+Some deployments also need an agent-specific authority contract in addition to
+JWT authentication and CEL authorization. For example, a team may want to allow
+a support agent to read a customer record, but require human approval and a
+short-lived grant before the same agent can update that record during a
+particular support case.
+
+One way to model that is to run an external authorization service before
+forwarding selected MCP `tools/call` requests:
+
+```text
+MCP client -> agentgateway -> external authorization check -> MCP server
+```
+
+The external check should complement, not replace, agentgateway's existing
+authorization policy. A typical request includes the authenticated user or
+agent identity, MCP tool name, action, resource, job or case identifier, and any
+approval or just-in-time grant metadata. The service returns an allow or deny
+decision, and the gateway forwards the call only when both the local
+`mcpAuthorization` policy and the external check allow it.
+
+AgentID is one open-source example of this pattern. It defines a manifest for
+agent tool-call authority and exposes an `/authorize` endpoint that can be used
+as an external pre-tool-call check:
+
+- AgentID: <https://github.com/dinpd/AgentID>
+- Reference MCP gateway adapter: <https://github.com/dinpd/AgentID/tree/main/mcp-gateway-adapter>
+- Demo walkthrough: <https://github.com/dinpd/AgentID/blob/main/docs/mcp-gateway-demo.md>
+
+This pattern keeps downstream MCP servers unchanged while giving platform teams
+a place to enforce job boundaries, approval requirements, just-in-time grants,
+and structured decision logging for sensitive agent tool calls.
