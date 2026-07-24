@@ -1,0 +1,54 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/vertex-gemini/reasoning.json
+info:
+  candidates:
+    - content:
+        role: model
+        parts:
+          - text: Let me think about the weather.
+            thought: true
+          - text: It is sunny.
+      finishReason: STOP
+      index: 0
+  usageMetadata:
+    promptTokenCount: 10
+    candidatesTokenCount: 12
+    thoughtsTokenCount: 5
+    totalTokenCount: 27
+  modelVersion: gemini-2.5-pro
+---
+{
+  "response": {
+    "model": "gemini-2.5-pro",
+    "usage": {
+      "prompt_tokens": 10,
+      "completion_tokens": 12,
+      "total_tokens": 27,
+      "completion_tokens_details": {
+        "reasoning_tokens": 5
+      }
+    },
+    "choices": [
+      {
+        "message": {
+          "content": "It is sunny.",
+          "role": "assistant",
+          "reasoning_content": "Let me think about the weather."
+        },
+        "index": 0,
+        "finish_reason": "stop"
+      }
+    ],
+    "id": "[id]",
+    "created": "[date]",
+    "object": "chat.completion"
+  },
+  "parsed": {
+    "input_tokens": 10,
+    "output_tokens": 12,
+    "total_tokens": 27,
+    "reasoning_tokens": 5,
+    "provider_model": "gemini-2.5-pro"
+  }
+}

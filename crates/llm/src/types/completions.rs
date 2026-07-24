@@ -251,7 +251,6 @@ impl super::RequestType for Request {
 			.messages
 			.extend(prompts.into_iter().map(convert_message));
 	}
-
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		let input_tokens = if tokenize {

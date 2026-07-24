@@ -1,0 +1,67 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/completions/structured-output.json
+info:
+  model: gemini-2.5-pro
+  messages:
+    - role: user
+      content: "Extract the person from: Ada Lovelace, age 36."
+  response_format:
+    type: json_schema
+    json_schema:
+      name: person
+      schema:
+        type: object
+        properties:
+          person:
+            $ref: "#/$defs/Person"
+        required:
+          - person
+        $defs:
+          Person:
+            type: object
+            properties:
+              name:
+                type: string
+              age:
+                type: integer
+            required:
+              - name
+---
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "Extract the person from: Ada Lovelace, age 36."
+        }
+      ]
+    }
+  ],
+  "generationConfig": {
+    "responseMimeType": "application/json",
+    "responseSchema": {
+      "type": "object",
+      "properties": {
+        "person": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "age": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "name"
+          ]
+        }
+      },
+      "required": [
+        "person"
+      ]
+    }
+  }
+}

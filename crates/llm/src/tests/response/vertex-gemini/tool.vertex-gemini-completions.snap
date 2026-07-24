@@ -1,0 +1,59 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/vertex-gemini/tool.json
+info:
+  candidates:
+    - content:
+        role: model
+        parts:
+          - functionCall:
+              name: get_weather
+              id: fc_get_weather_1
+              args:
+                location: Columbus
+      finishReason: STOP
+      index: 0
+  usageMetadata:
+    promptTokenCount: 20
+    candidatesTokenCount: 8
+    totalTokenCount: 28
+  modelVersion: gemini-2.5-pro
+---
+{
+  "response": {
+    "model": "gemini-2.5-pro",
+    "usage": {
+      "prompt_tokens": 20,
+      "completion_tokens": 8,
+      "total_tokens": 28
+    },
+    "choices": [
+      {
+        "message": {
+          "role": "assistant",
+          "tool_calls": [
+            {
+              "type": "function",
+              "id": "fc_get_weather_1",
+              "function": {
+                "name": "get_weather",
+                "arguments": "{\"location\":\"Columbus\"}"
+              }
+            }
+          ]
+        },
+        "index": 0,
+        "finish_reason": "tool_calls"
+      }
+    ],
+    "id": "[id]",
+    "created": "[date]",
+    "object": "chat.completion"
+  },
+  "parsed": {
+    "input_tokens": 20,
+    "output_tokens": 8,
+    "total_tokens": 28,
+    "provider_model": "gemini-2.5-pro"
+  }
+}

@@ -141,6 +141,7 @@ const COMPLETIONS: &str = "completions";
 const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
 const COHERE: &str = "cohere";
+const VERTEX_GEMINI: &str = "vertex-gemini";
 
 #[test]
 fn request_conversion_golden() {
@@ -190,6 +191,11 @@ fn request_conversion_golden() {
 					.map(|r| r.body)
 			});
 		}
+		if name != "full" {
+			test_request(VERTEX_GEMINI, &path, |i| {
+				conversion::vertex_gemini::from_completions::translate(&i, Some("gemini-2.5-pro"))
+			});
+		}
 	}
 	for name in [
 		"parallel-tool-call",
@@ -200,6 +206,24 @@ fn request_conversion_golden() {
 		test_request(BEDROCK, &path, |i| {
 			conversion::bedrock::from_completions::translate(&i, &bedrock_claude, None, None)
 				.map(|r| r.body)
+		});
+		if name == "parallel-tool-call" {
+			test_request(VERTEX_GEMINI, &path, |i| {
+				conversion::vertex_gemini::from_completions::translate(&i, Some("gemini-2.5-pro"))
+			});
+		}
+	}
+	// `generation-config` stands in for `full`, whose remote http image the Gemini path rejects.
+	for name in [
+		"image-inline",
+		"image-file",
+		"structured-output",
+		"multi-turn-tools",
+		"generation-config",
+	] {
+		let path = format!("requests/completions/{name}.json");
+		test_request(VERTEX_GEMINI, &path, |i| {
+			conversion::vertex_gemini::from_completions::translate(&i, Some("gemini-2.5-pro"))
 		});
 	}
 
@@ -403,6 +427,15 @@ fn response_conversion_golden() {
 			.map(|e| Box::new(e) as Box<dyn ResponseType>)
 			.map_err(AIError::ResponseParsing)
 	});
+
+	// Native Vertex Gemini responses translated to the OpenAI completions shape.
+	// Streaming translation is covered by conversion::vertex_gemini unit tests.
+	for name in ["basic", "tool", "reasoning", "blocked"] {
+		let path = format!("response/vertex-gemini/{name}.json");
+		test_response("vertex-gemini-completions", &path, |i| {
+			conversion::vertex_gemini::to_completions::translate_response(&i)
+		});
+	}
 }
 
 #[test]

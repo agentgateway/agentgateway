@@ -7,6 +7,7 @@ pub mod messages;
 pub mod rerank;
 pub mod responses;
 pub mod vertex;
+pub mod vertex_gemini;
 
 use agent_core::prelude::Strng;
 use agent_core::strng;

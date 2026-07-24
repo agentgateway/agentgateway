@@ -146,6 +146,7 @@ pub enum ChatFormat {
 	OpenAIResponses,
 	AnthropicMessages,
 	BedrockConverse,
+	VertexGemini,
 }
 
 #[derive(Debug, Clone)]
