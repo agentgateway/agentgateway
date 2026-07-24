@@ -826,7 +826,6 @@ fn extract_subject_token_expression_falls_back_to_claims() {
 	assert_eq!(token.as_deref(), Some("claims-jwt"));
 }
 
-
 fn credential(name: &'static str, value: &str, prefix: Option<&str>) -> BackendAuthCredential {
 	BackendAuthCredential {
 		location: AuthorizationLocation::Header {
