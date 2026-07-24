@@ -69,15 +69,49 @@ impl TryFrom<RateLimitSpec> for RateLimit {
 	}
 }
 
-impl RateLimit {
-	pub fn check_request(&self) -> Result<(), ProxyError> {
-		if self.spec.limit_type != RateLimitType::Requests {
-			return Ok(());
+/// Snapshot of a local rate limit bucket, used to emit `x-ratelimit-*` headers on allowed responses.
+#[derive(Debug, Clone, Copy)]
+pub struct RateLimitStatus {
+	pub limit: u64,
+	pub remaining: u64,
+	pub reset_seconds: u64,
+}
+
+impl RateLimitStatus {
+	/// Returns the tighter of two limits (fewest tokens remaining), used to report the limit a
+	/// client is most likely to hit next when several rate limits apply.
+	pub fn most_constrained(a: Option<Self>, b: Option<Self>) -> Option<Self> {
+		match (a, b) {
+			(Some(a), Some(b)) => Some(if b.remaining < a.remaining { b } else { a }),
+			(a, b) => a.or(b),
 		}
-		// TODO: return headers on success, not just failure
+	}
+}
+
+impl RateLimit {
+	fn status(&self) -> RateLimitStatus {
+		let now = clocksource::precise::Instant::now();
+		let next = self.ratelimit.next_refill();
+		let reset_seconds = if next > now {
+			(next - now).as_secs()
+		} else {
+			0
+		};
+		RateLimitStatus {
+			limit: self.ratelimit.max_tokens(),
+			remaining: self.ratelimit.available(),
+			reset_seconds,
+		}
+	}
+
+	pub fn check_request(&self) -> Result<Option<RateLimitStatus>, ProxyError> {
+		if self.spec.limit_type != RateLimitType::Requests {
+			return Ok(None);
+		}
 		self
 			.ratelimit
 			.try_wait()
+			.map(|()| Some(self.status()))
 			.map_err(|(limit, remaining, reset)| ProxyError::RateLimitExceeded {
 				limit,
 				remaining,
@@ -85,9 +119,9 @@ impl RateLimit {
 			})
 	}
 
-	pub fn check_llm_request(&self, req: &LLMRequest) -> Result<(), ProxyError> {
+	pub fn check_llm_request(&self, req: &LLMRequest) -> Result<Option<RateLimitStatus>, ProxyError> {
 		if self.spec.limit_type != RateLimitType::Tokens {
-			return Ok(());
+			return Ok(None);
 		}
 		if let Some(it) = req.input_tokens {
 			// If we tokenized the request, check to make sure we permit that many tokens
@@ -95,6 +129,7 @@ impl RateLimit {
 			self
 				.ratelimit
 				.try_wait_n(it)
+				.map(|()| Some(self.status()))
 				.map_err(|(limit, remaining, reset)| ProxyError::RateLimitExceeded {
 					limit,
 					remaining,
@@ -105,7 +140,7 @@ impl RateLimit {
 			// Note this may lead to large over-allowance, especially with fast fill_intervals.
 			let avail = self.ratelimit.available_refill();
 			if avail > 0 {
-				Ok(())
+				Ok(Some(self.status()))
 			} else {
 				Err(ProxyError::RateLimitExceeded {
 					limit: self.ratelimit.max_tokens(),
@@ -134,10 +169,80 @@ impl crate::store::RequestPolicyTrait for Vec<RateLimit> {
 		_log: &mut crate::telemetry::log::RequestLog,
 		_req: &mut http::Request,
 	) -> Result<http::PolicyResponse, crate::proxy::ProxyResponse> {
+		let mut status: Option<RateLimitStatus> = None;
 		for rate_limit in self {
-			rate_limit.check_request()?;
+			status = RateLimitStatus::most_constrained(status, rate_limit.check_request()?);
 		}
-		Ok(http::PolicyResponse::default())
+		let mut res = http::PolicyResponse::default();
+		if let Some(status) = status {
+			let mut hm = http::HeaderMap::new();
+			http::x_headers::set_ratelimit_headers(
+				&mut hm,
+				status.limit,
+				status.remaining,
+				status.reset_seconds,
+			);
+			res.response_headers = Some(hm);
+		}
+		Ok(res)
+	}
+}
+
+#[cfg(test)]
+mod policy_tests {
+	use super::*;
+
+	fn requests_limit(max: u64) -> RateLimit {
+		RateLimit::try_from(RateLimitSpec {
+			max_tokens: max,
+			tokens_per_fill: max,
+			fill_interval: std::time::Duration::from_secs(60),
+			limit_type: RateLimitType::Requests,
+		})
+		.unwrap()
+	}
+
+	#[test]
+	fn check_request_returns_status_on_success() {
+		let rl = requests_limit(10);
+		let status = rl
+			.check_request()
+			.expect("request is allowed")
+			.expect("status is reported on success");
+		assert_eq!(status.limit, 10);
+		// One token was consumed by this request.
+		assert_eq!(status.remaining, 9);
+	}
+
+	#[test]
+	fn check_request_is_noop_for_token_limit() {
+		let mut rl = requests_limit(10);
+		rl.spec.limit_type = RateLimitType::Tokens;
+		assert!(rl.check_request().unwrap().is_none());
+	}
+
+	#[test]
+	fn most_constrained_prefers_fewest_remaining() {
+		let a = RateLimitStatus {
+			limit: 100,
+			remaining: 9,
+			reset_seconds: 10,
+		};
+		let b = RateLimitStatus {
+			limit: 5,
+			remaining: 2,
+			reset_seconds: 30,
+		};
+		let best = RateLimitStatus::most_constrained(Some(a), Some(b)).unwrap();
+		assert_eq!(best.remaining, 2);
+		assert_eq!(best.limit, 5);
+		assert_eq!(
+			RateLimitStatus::most_constrained(None, Some(a))
+				.unwrap()
+				.remaining,
+			9
+		);
+		assert!(RateLimitStatus::most_constrained(None, None).is_none());
 	}
 }
 

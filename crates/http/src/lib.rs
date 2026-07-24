@@ -43,6 +43,7 @@ pub mod x_headers {
 	pub const X_RATELIMIT_LIMIT: HeaderName = HeaderName::from_static("x-ratelimit-limit");
 	pub const X_RATELIMIT_REMAINING: HeaderName = HeaderName::from_static("x-ratelimit-remaining");
 	pub const X_RATELIMIT_RESET: HeaderName = HeaderName::from_static("x-ratelimit-reset");
+	pub const X_ENVOY_RATELIMITED: HeaderName = HeaderName::from_static("x-envoy-ratelimited");
 	pub const X_AMZN_REQUESTID: HeaderName = HeaderName::from_static("x-amzn-requestid");
 	pub const X_FORWARDED_PROTO: HeaderName = HeaderName::from_static("x-forwarded-proto");
 
@@ -84,5 +85,30 @@ pub mod x_headers {
 		let mut parts = uri.into_parts();
 		parts.scheme = Some(scheme);
 		Uri::from_parts(parts).unwrap_or(original)
+	}
+
+	/// Sets the standard `x-ratelimit-limit`, `x-ratelimit-remaining` and `x-ratelimit-reset`
+	/// response headers describing the most-constrained applicable limit.
+	///
+	/// Headers are only inserted if not already present, so an explicit value provided by an
+	/// upstream rate limit service (via `response_headers_to_add`) is preserved.
+	pub fn set_ratelimit_headers(
+		hm: &mut HeaderMap<HeaderValue>,
+		limit: u64,
+		remaining: u64,
+		reset_seconds: u64,
+	) {
+		insert_header_if_absent(hm, X_RATELIMIT_LIMIT, limit);
+		insert_header_if_absent(hm, X_RATELIMIT_REMAINING, remaining);
+		insert_header_if_absent(hm, X_RATELIMIT_RESET, reset_seconds);
+	}
+
+	fn insert_header_if_absent(hm: &mut HeaderMap<HeaderValue>, name: HeaderName, value: u64) {
+		if hm.contains_key(&name) {
+			return;
+		}
+		if let Ok(hv) = HeaderValue::try_from(value.to_string()) {
+			hm.insert(name, hv);
+		}
 	}
 }

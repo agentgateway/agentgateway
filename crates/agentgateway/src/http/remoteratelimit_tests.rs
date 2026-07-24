@@ -669,6 +669,179 @@ fn apply_over_limit_response_returns_429() {
 	assert_eq!(direct.headers().get("retry-after").unwrap(), "60");
 }
 
+#[test]
+fn apply_over_limit_response_sets_x_ratelimit_headers_from_most_constrained_status() {
+	use ::http::StatusCode;
+
+	use crate::http::tests_common::request_for_uri;
+
+	let mut req = request_for_uri("http://example.com/test");
+	let response = proto::RateLimitResponse {
+		overall_code: proto::rate_limit_response::Code::OverLimit as i32,
+		statuses: vec![
+			proto::rate_limit_response::DescriptorStatus {
+				code: proto::rate_limit_response::Code::Ok as i32,
+				current_limit: Some(proto::rate_limit_response::RateLimit {
+					name: "less constrained".to_string(),
+					requests_per_unit: 100,
+					unit: proto::rate_limit_response::rate_limit::Unit::Minute as i32,
+				}),
+				limit_remaining: 9,
+				duration_until_reset: Some(prost_types::Duration {
+					seconds: 10,
+					nanos: 0,
+				}),
+				quota: None,
+			},
+			proto::rate_limit_response::DescriptorStatus {
+				code: proto::rate_limit_response::Code::OverLimit as i32,
+				current_limit: Some(proto::rate_limit_response::RateLimit {
+					name: "most constrained".to_string(),
+					requests_per_unit: 1,
+					unit: proto::rate_limit_response::rate_limit::Unit::Minute as i32,
+				}),
+				limit_remaining: 0,
+				duration_until_reset: Some(prost_types::Duration {
+					seconds: 38,
+					nanos: 0,
+				}),
+				quota: None,
+			},
+		],
+		response_headers_to_add: vec![proto::HeaderValue {
+			key: "retry-after".to_string(),
+			value: "38".to_string(),
+			raw_value: vec![],
+		}],
+		request_headers_to_add: vec![],
+		raw_body: b"rate limit exceeded".to_vec(),
+		dynamic_metadata: None,
+		quota: None,
+	};
+
+	let result = RemoteRateLimit::apply(&mut req, response).unwrap();
+	let direct = result.direct_response.unwrap();
+
+	assert_eq!(direct.status(), StatusCode::TOO_MANY_REQUESTS);
+	assert_eq!(direct.headers().get("retry-after").unwrap(), "38");
+	// Headers come from the most-constrained descriptor (fewest remaining), not the first one.
+	assert_eq!(direct.headers().get("x-ratelimit-limit").unwrap(), "1");
+	assert_eq!(direct.headers().get("x-ratelimit-remaining").unwrap(), "0");
+	assert_eq!(direct.headers().get("x-ratelimit-reset").unwrap(), "38");
+	assert_eq!(direct.headers().get("x-envoy-ratelimited").unwrap(), "true");
+}
+
+#[test]
+fn apply_over_limit_preserves_service_provided_x_envoy_ratelimited() {
+	use ::http::StatusCode;
+
+	use crate::http::tests_common::request_for_uri;
+
+	let mut req = request_for_uri("http://example.com/test");
+	let response = proto::RateLimitResponse {
+		overall_code: proto::rate_limit_response::Code::OverLimit as i32,
+		statuses: vec![],
+		// The rate limit service explicitly set x-envoy-ratelimited; we must pass it through as-is
+		// rather than overwriting it with our synthesized default.
+		response_headers_to_add: vec![proto::HeaderValue {
+			key: "x-envoy-ratelimited".to_string(),
+			value: "custom".to_string(),
+			raw_value: vec![],
+		}],
+		request_headers_to_add: vec![],
+		raw_body: b"rate limit exceeded".to_vec(),
+		dynamic_metadata: None,
+		quota: None,
+	};
+
+	let result = RemoteRateLimit::apply(&mut req, response).unwrap();
+	let direct = result.direct_response.unwrap();
+	assert_eq!(direct.status(), StatusCode::TOO_MANY_REQUESTS);
+	assert_eq!(
+		direct.headers().get("x-envoy-ratelimited").unwrap(),
+		"custom"
+	);
+}
+
+#[test]
+fn apply_ok_response_sets_x_ratelimit_headers() {
+	use crate::http::tests_common::request_for_uri;
+
+	let mut req = request_for_uri("http://example.com/test");
+	let response = proto::RateLimitResponse {
+		overall_code: proto::rate_limit_response::Code::Ok as i32,
+		statuses: vec![proto::rate_limit_response::DescriptorStatus {
+			code: proto::rate_limit_response::Code::Ok as i32,
+			current_limit: Some(proto::rate_limit_response::RateLimit {
+				name: "limit".to_string(),
+				requests_per_unit: 100,
+				unit: proto::rate_limit_response::rate_limit::Unit::Minute as i32,
+			}),
+			limit_remaining: 42,
+			duration_until_reset: Some(prost_types::Duration {
+				seconds: 30,
+				nanos: 0,
+			}),
+			quota: None,
+		}],
+		response_headers_to_add: vec![],
+		request_headers_to_add: vec![],
+		raw_body: vec![],
+		dynamic_metadata: None,
+		quota: None,
+	};
+
+	let result = RemoteRateLimit::apply(&mut req, response).unwrap();
+	// Request is allowed, so no direct response...
+	assert!(result.direct_response.is_none());
+	// ...but the advisory x-ratelimit-* headers are surfaced on the 2xx response.
+	let headers = result
+		.response_headers
+		.expect("x-ratelimit headers on allowed response");
+	assert_eq!(headers.get("x-ratelimit-limit").unwrap(), "100");
+	assert_eq!(headers.get("x-ratelimit-remaining").unwrap(), "42");
+	assert_eq!(headers.get("x-ratelimit-reset").unwrap(), "30");
+}
+
+#[test]
+fn apply_ok_response_preserves_explicit_ratelimit_header() {
+	use crate::http::tests_common::request_for_uri;
+
+	let mut req = request_for_uri("http://example.com/test");
+	let response = proto::RateLimitResponse {
+		overall_code: proto::rate_limit_response::Code::Ok as i32,
+		statuses: vec![proto::rate_limit_response::DescriptorStatus {
+			code: proto::rate_limit_response::Code::Ok as i32,
+			current_limit: Some(proto::rate_limit_response::RateLimit {
+				name: "limit".to_string(),
+				requests_per_unit: 100,
+				unit: proto::rate_limit_response::rate_limit::Unit::Minute as i32,
+			}),
+			limit_remaining: 42,
+			duration_until_reset: None,
+			quota: None,
+		}],
+		// The rate limit service explicitly set its own remaining value; it must win over the
+		// value we would otherwise derive from the descriptor status.
+		response_headers_to_add: vec![proto::HeaderValue {
+			key: "x-ratelimit-remaining".to_string(),
+			value: "7".to_string(),
+			raw_value: vec![],
+		}],
+		request_headers_to_add: vec![],
+		raw_body: vec![],
+		dynamic_metadata: None,
+		quota: None,
+	};
+
+	let result = RemoteRateLimit::apply(&mut req, response).unwrap();
+	let headers = result
+		.response_headers
+		.expect("x-ratelimit headers on allowed response");
+	assert_eq!(headers.get("x-ratelimit-remaining").unwrap(), "7");
+	assert_eq!(headers.get("x-ratelimit-limit").unwrap(), "100");
+}
+
 // --- ProxyError mapping tests ---
 
 #[test]
