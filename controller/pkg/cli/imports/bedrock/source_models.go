@@ -85,12 +85,19 @@ func awsMDGetBody(ctx context.Context, client *http.Client, url string) (io.Read
 	return resp.Body, nil
 }
 
+// docScanner allows up to 1MB lines; bufio's 64K default can truncate long markdown rows.
+func docScanner(r io.Reader) *bufio.Scanner {
+	s := bufio.NewScanner(r)
+	s.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	return s
+}
+
 // awsMDParseAvailability returns model-card hrefs for Mantle-only models
 // (bedrock-mantle=yes, bedrock-runtime=no). Columns: name(1), runtime(2), mantle(3).
 func awsMDParseAvailability(r io.Reader) ([]string, []string) {
 	var hrefs []string
 	var warns []string
-	scanner := bufio.NewScanner(r)
+	scanner := docScanner(r)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if !strings.HasPrefix(line, "|") {
@@ -133,7 +140,7 @@ func awsMDParseAvailability(r io.Reader) ([]string, []string) {
 func awsMDParseModelCard(r io.Reader) []string {
 	var ids []string
 	seen := make(map[string]bool)
-	scanner := bufio.NewScanner(r)
+	scanner := docScanner(r)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if !strings.HasPrefix(line, "|") {

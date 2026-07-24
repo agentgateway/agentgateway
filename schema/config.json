@@ -167,7 +167,7 @@
             "null"
           ],
           "items": {
-            "$ref": "#/$defs/ModelCatalogSource"
+            "$ref": "#/$defs/MantleCatalogSource"
           }
         },
         "database": {
@@ -668,6 +668,35 @@
       "required": [
         "contextOver",
         "rates"
+      ]
+    },
+    "MantleCatalogSource": {
+      "description": "A source for the Bedrock Mantle allow-list: a JSON array of model IDs or a wrapped `{source, models}`.",
+      "anyOf": [
+        {
+          "description": "Path to a JSON file listing Mantle model IDs.",
+          "type": "object",
+          "properties": {
+            "file": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "file"
+          ]
+        },
+        {
+          "description": "Mantle model IDs provided inline as a JSON string.",
+          "type": "object",
+          "properties": {
+            "inline": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "inline"
+          ]
+        }
       ]
     },
     "Config": {

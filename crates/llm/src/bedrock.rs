@@ -223,6 +223,25 @@ mod tests {
 	}
 
 	#[test]
+	fn resolve_endpoint_runtime_preferred_uses_allow_list() {
+		let _lock = crate::bedrock_model_table::MODELS_LOCK.lock().unwrap();
+		let p = provider(BedrockProviderPreference::RuntimePreferred);
+		crate::bedrock_model_table::set_mantle_models(["openai.gpt-oss-120b".to_string()].into());
+		assert_eq!(
+			p.resolve_endpoint(RouteType::Completions, Some("openai.gpt-oss-120b")),
+			BedrockEndpoint::Mantle
+		);
+		assert_eq!(
+			p.resolve_endpoint(
+				RouteType::Completions,
+				Some("anthropic.claude-3-5-sonnet-20241022-v2:0")
+			),
+			BedrockEndpoint::Runtime
+		);
+		crate::bedrock_model_table::restore_default();
+	}
+
+	#[test]
 	fn mantle_endpoint_uses_correct_host_path_and_signing() {
 		let p = provider(BedrockProviderPreference::MantleOnly);
 		assert_eq!(

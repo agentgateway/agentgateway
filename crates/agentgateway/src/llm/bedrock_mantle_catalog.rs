@@ -1,5 +1,4 @@
-//! Startup loader for the Bedrock Mantle allow-list: reads `ModelCatalogSource`s,
-//! merges over the embedded default, installs them, and hot-reloads on change.
+//! Loads the Bedrock Mantle allow-list (embedded default + configured sources) and hot-reloads file sources.
 
 use std::collections::HashSet;
 use std::io::ErrorKind;
@@ -7,61 +6,50 @@ use std::path::PathBuf;
 
 use anyhow::Context as _;
 
-use crate::ModelCatalogSource;
+use crate::MantleCatalogSource;
 
-pub fn initialize(sources: Vec<ModelCatalogSource>) -> anyhow::Result<()> {
+// Load synchronously so early requests don't race an empty list, then watch files for changes.
+pub async fn initialize(sources: Vec<MantleCatalogSource>) -> anyhow::Result<()> {
 	if sources.is_empty() {
 		return Ok(());
 	}
+	match load_sources(&sources).await {
+		Ok(ids) => {
+			tracing::info!(models = ids.len(), "loaded Bedrock Mantle allow-list");
+			agent_llm::bedrock_model_table::set_mantle_models(ids);
+		},
+		Err(e) => {
+			tracing::warn!("Bedrock Mantle allow-list load failed; embedded defaults remain: {e:#}")
+		},
+	}
+
 	let file_paths: Vec<PathBuf> = sources
 		.iter()
 		.filter_map(|s| match s {
-			ModelCatalogSource::File { file } => Some(file.clone()),
-			ModelCatalogSource::Inline { .. } | ModelCatalogSource::InlineCatalog { .. } => None,
+			MantleCatalogSource::File { file } => Some(file.clone()),
+			MantleCatalogSource::Inline { .. } => None,
 		})
 		.collect();
-
-	let sources_for_task = sources.clone();
-	tokio::spawn(async move {
-		match load_sources(&sources_for_task).await {
-			Ok(ids) => {
-				tracing::info!(
-					models = ids.len(),
-					"loaded Bedrock Mantle allow-list (embedded default + user sources)"
-				);
-				agent_llm::bedrock_model_table::set_mantle_models(ids);
-			},
-			Err(e) => {
-				tracing::warn!("Bedrock Mantle allow-list load failed; embedded defaults remain: {e:#}")
-			},
-		}
-	});
-
 	if !file_paths.is_empty() {
 		watch_files(file_paths, sources)?;
 	}
 	Ok(())
 }
 
-async fn load_sources(sources: &[ModelCatalogSource]) -> anyhow::Result<HashSet<String>> {
+async fn load_sources(sources: &[MantleCatalogSource]) -> anyhow::Result<HashSet<String>> {
 	let mut merged = agent_llm::bedrock_model_table::embedded_default();
 	let mut any_loaded = false;
 	for source in sources {
 		let json = match source {
-			ModelCatalogSource::File { file } => match fs_err::tokio::read_to_string(file).await {
+			MantleCatalogSource::File { file } => match fs_err::tokio::read_to_string(file).await {
 				Ok(s) => s,
 				Err(e) if e.kind() == ErrorKind::NotFound => {
-					tracing::debug!(
-						path = %file.display(),
-						"Bedrock Mantle allow-list file not found, skipping"
-					);
+					tracing::debug!(path = %file.display(), "Bedrock Mantle allow-list file not found, skipping");
 					continue;
 				},
 				Err(e) => return Err(anyhow::Error::from(e)).context("reading Bedrock Mantle allow-list"),
 			},
-			ModelCatalogSource::Inline { inline } => inline.clone(),
-			// The priced cost catalog is not a model list; ignore it here.
-			ModelCatalogSource::InlineCatalog { .. } => continue,
+			MantleCatalogSource::Inline { inline } => inline.clone(),
 		};
 		merged.extend(agent_llm::bedrock_model_table::parse_model_list(&json)?);
 		any_loaded = true;
@@ -72,7 +60,7 @@ async fn load_sources(sources: &[ModelCatalogSource]) -> anyhow::Result<HashSet<
 	Ok(merged)
 }
 
-fn watch_files(file_paths: Vec<PathBuf>, sources: Vec<ModelCatalogSource>) -> anyhow::Result<()> {
+fn watch_files(file_paths: Vec<PathBuf>, sources: Vec<MantleCatalogSource>) -> anyhow::Result<()> {
 	let mut watched = crate::util::watch_files_with_options(
 		file_paths,
 		crate::util::WatchFilesOptions::default().reload_on_disappearance(true),

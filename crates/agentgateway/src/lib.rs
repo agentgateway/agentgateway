@@ -160,7 +160,7 @@ pub struct RawConfig {
 	model_catalog: Option<Vec<ModelCatalogSource>>,
 
 	/// Bedrock Mantle allow-list sources (model IDs that route to Mantle); merged over the embedded default.
-	bedrock_mantle_model_catalog: Option<Vec<ModelCatalogSource>>,
+	bedrock_mantle_model_catalog: Option<Vec<MantleCatalogSource>>,
 
 	/// Primary database used by local runtime features.
 	database: Option<telemetry::log_store::Config>,
@@ -647,7 +647,7 @@ pub struct ModelCatalogConfig {
 #[derive(serde::Serialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct BedrockMantleModelCatalogConfig {
-	pub sources: Vec<ModelCatalogSource>,
+	pub sources: Vec<MantleCatalogSource>,
 }
 
 #[derive(serde::Serialize, Clone, Debug)]
@@ -673,6 +673,17 @@ pub enum ModelCatalogSource {
 		/// Model cost catalog provided inline as structured data.
 		inline: llm::cost::Catalog,
 	},
+}
+
+/// A source for the Bedrock Mantle allow-list: a JSON array of model IDs or a wrapped `{source, models}`.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(untagged)]
+pub enum MantleCatalogSource {
+	/// Path to a JSON file listing Mantle model IDs.
+	File { file: PathBuf },
+	/// Mantle model IDs provided inline as a JSON string.
+	Inline { inline: String },
 }
 
 #[apply(schema!)]

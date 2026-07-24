@@ -366,7 +366,7 @@ pub fn parse_config(
 			s.split(',')
 				.map(|p| PathBuf::from(p.trim()))
 				.filter(|p| !p.as_os_str().is_empty())
-				.map(|file| crate::ModelCatalogSource::File { file })
+				.map(|file| crate::MantleCatalogSource::File { file })
 				.collect::<Vec<_>>()
 		})
 		.or(raw.bedrock_mantle_model_catalog)

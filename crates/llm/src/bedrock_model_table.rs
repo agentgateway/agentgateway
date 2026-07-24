@@ -45,16 +45,18 @@ pub fn is_mantle_only(model_id: &str) -> bool {
 	mantle_models().load().contains(model_id)
 }
 
+// Serializes tests across this crate that mutate the global MANTLE_MODELS.
+#[cfg(test)]
+pub(crate) static MODELS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[cfg(test)]
+pub(crate) fn restore_default() {
+	set_mantle_models(embedded_default());
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
-
-	// Tests that mutate the global MANTLE_MODELS must hold this lock to prevent data races.
-	static MODELS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-	fn restore_default() {
-		set_mantle_models(embedded_default());
-	}
 
 	#[test]
 	fn empty_default_keeps_everything_on_runtime() {

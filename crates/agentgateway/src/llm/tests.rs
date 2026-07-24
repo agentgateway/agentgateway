@@ -1286,54 +1286,6 @@ fn setup_request_bedrock_runtime_default_targets_converse_without_signing_overri
 }
 
 #[test]
-fn setup_request_bedrock_runtime_preferred_falls_through_to_mantle_for_allow_listed_model() {
-	// A known Mantle model on the allow-list falls through to Mantle under the default preference.
-	let mantle_model = "openai.gpt-oss-120b";
-	agent_llm::bedrock_model_table::set_mantle_models([mantle_model.to_string()].into());
-
-	let provider = AIProvider::bedrock(bedrock::Provider {
-		model: None,
-		region: strng::new("us-east-1"),
-		guardrail_identifier: None,
-		guardrail_version: None,
-		provider_preference: bedrock::BedrockProviderPreference::RuntimePreferred,
-	});
-
-	let req = setup_bedrock_request(
-		&provider,
-		RouteType::Completions,
-		InputFormat::Completions,
-		mantle_model,
-	);
-	assert_eq!(
-		req.uri().authority().map(|a| a.host()),
-		Some("bedrock-mantle.us-east-1.api.aws")
-	);
-	assert_eq!(req.uri().path(), "/v1/chat/completions");
-	assert_eq!(
-		bedrock_signing_service(&req).as_deref(),
-		Some("bedrock-mantle")
-	);
-
-	// A model not on the allow-list stays on Runtime under the same preference.
-	let req = setup_bedrock_request(
-		&provider,
-		RouteType::Completions,
-		InputFormat::Completions,
-		"anthropic.claude-sonnet-4-20250514-v1:0",
-	);
-	assert_eq!(
-		req.uri().authority().map(|a| a.host()),
-		Some("bedrock-runtime.us-east-1.amazonaws.com")
-	);
-
-	// Restore the empty default so other tests are unaffected.
-	agent_llm::bedrock_model_table::set_mantle_models(
-		agent_llm::bedrock_model_table::embedded_default(),
-	);
-}
-
-#[test]
 fn setup_request_azure_applies_path_prefix_with_host_override() {
 	assert_prefixed_host_override_path(
 		AIProvider::azure(azure::Provider {

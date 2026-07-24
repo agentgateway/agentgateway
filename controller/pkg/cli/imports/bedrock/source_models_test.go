@@ -3,6 +3,7 @@ package bedrock
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 )
@@ -87,8 +88,8 @@ func TestParseMDModelCardSkipsInvalidIDs(t *testing.T) {
 
 // TestAwsMDFetchLive calls the live AWS docs page. Run with go test (no -short).
 func TestAwsMDFetchLive(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping live AWS docs fetch")
+	if testing.Short() || os.Getenv("AGENTGATEWAY_E2E") == "" {
+		t.Skip("set AGENTGATEWAY_E2E=true to run the live AWS docs scrape")
 	}
 
 	table, warns, err := awsMDFetch(context.Background())
