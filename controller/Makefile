@@ -601,6 +601,8 @@ release-notes: ## Generate release notes (PREVIOUS_TAG required, CURRENT_TAG opt
 
 CLUSTER_NAME ?= kind
 INSTALL_NAMESPACE ?= agentgateway-system
+KIND_DOCKER_NETWORK ?= kind
+METALLB_IP_RANGE ?=
 
 # The version of the Node Docker image to use for booting the kind cluster: https://hub.docker.com/r/kindest/node/tags
 # This version should stay in sync with the default node version in (controller)`test/setup/setup-kind-ci.sh`.
@@ -645,10 +647,15 @@ istio-crds: ## Install Istio CRDs (WorkloadEntry, ServiceEntry, etc.) from the v
 	kubectl apply --server-side -f "$$(go mod download -json istio.io/istio | awk -F'"' '/"Dir":/ {print $$4; exit}')/manifests/charts/base/files/crd-all.gen.yaml"
 
 .PHONY: metallb
-metallb: ## Install the MetalLB load balancer
+metallb: ## Install and configure the MetalLB load balancer
 	kubectl apply -f ./test/setup/metallb.yaml
 	kubectl rollout status -n metallb-system deployment/controller --timeout=120s
 	kubectl rollout status -n metallb-system daemonset/speaker --timeout=120s
+	KIND_DOCKER_NETWORK=$(KIND_DOCKER_NETWORK) METALLB_IP_RANGE=$(METALLB_IP_RANGE) ./test/setup/configure-metallb.sh
+
+.PHONY: metallb-config
+metallb-config: ## Configure the MetalLB address pool
+	KIND_DOCKER_NETWORK=$(KIND_DOCKER_NETWORK) METALLB_IP_RANGE=$(METALLB_IP_RANGE) ./test/setup/configure-metallb.sh
 
 .PHONY: deploy-agentgateway
 deploy-agentgateway: package-agentgateway-charts deploy-agentgateway-crd-chart deploy-agentgateway-chart ## Deploy the agentgateway chart and CRDs
