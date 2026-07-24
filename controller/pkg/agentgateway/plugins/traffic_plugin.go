@@ -230,7 +230,11 @@ func TranslateAgentgatewayPolicy(
 
 			ancestorRefs, attachmentErr := resolvePolicyAncestorRefs(targetNamespace, targetObject, gatewayTargets, targetExists)
 			if attachmentErr != "" {
-				attachmentErrors = append(attachmentErrors, attachmentErr)
+				// Skip when another controller owns the parent Gateway; it reports status itself.
+				foreignOwned := targetExists && len(gatewayTargets) == 0 && hasForeignParentGateway(ctx, agw, targetObject)
+				if !foreignOwned {
+					attachmentErrors = append(attachmentErrors, attachmentErr)
+				}
 			}
 
 			for _, ar := range ancestorRefs {
@@ -388,6 +392,86 @@ func resolvePolicyAncestorRefs(
 		return strings.Compare(reports.ParentString(a), reports.ParentString(b))
 	})
 	return refs, ""
+}
+
+// hasForeignParentGateway reports whether the target's parent Gateway is managed by a different controller.
+func hasForeignParentGateway(ctx krt.HandlerContext, agw *AgwCollections, target utils.TypedNamespacedName) bool {
+	parents, ok := parentRefsForTarget(ctx, agw, target)
+	if !ok {
+		return false
+	}
+	for _, ref := range parents {
+		ns := target.Namespace
+		if ref.Namespace != nil {
+			ns = string(*ref.Namespace)
+		}
+		// Resolve a ListenerSet parent one hop to its underlying Gateway.
+		if ref.Kind != nil && string(*ref.Kind) == wellknown.ListenerSetKind {
+			lsKey := types.NamespacedName{Namespace: ns, Name: string(ref.Name)}.String()
+			ls := ptr.Flatten(krt.FetchOne(ctx, agw.ListenerSets, krt.FilterKey(lsKey)))
+			if ls == nil {
+				continue
+			}
+			p := ls.Spec.ParentRef
+			ns = string(ptr.OrDefault(p.Namespace, gwv1.Namespace(ls.Namespace)))
+			ref = gwv1.ParentReference{Name: p.Name}
+		}
+		// Only Gateway-kind parents indicate controller ownership.
+		if ref.Kind != nil && string(*ref.Kind) != wellknown.GatewayKind {
+			continue
+		}
+		gwKey := types.NamespacedName{Namespace: ns, Name: string(ref.Name)}.String()
+		gw := ptr.Flatten(krt.FetchOne(ctx, agw.Gateways, krt.FilterKey(gwKey)))
+		if gw == nil {
+			continue
+		}
+		gc := ptr.Flatten(krt.FetchOne(ctx, agw.GatewayClasses, krt.FilterKey(string(gw.Spec.GatewayClassName))))
+		if gc == nil {
+			continue
+		}
+		if string(gc.Spec.ControllerName) != agw.ControllerName {
+			return true
+		}
+	}
+	return false
+}
+
+func parentRefsForTarget(ctx krt.HandlerContext, agw *AgwCollections, target utils.TypedNamespacedName) ([]gwv1.ParentReference, bool) {
+	key := types.NamespacedName{Namespace: target.Namespace, Name: target.Name}.String()
+	switch target.Kind {
+	case wellknown.HTTPRouteKind:
+		r := ptr.Flatten(krt.FetchOne(ctx, agw.HTTPRoutes, krt.FilterKey(key)))
+		if r == nil {
+			return nil, false
+		}
+		return r.Spec.ParentRefs, true
+	case wellknown.GRPCRouteKind:
+		r := ptr.Flatten(krt.FetchOne(ctx, agw.GRPCRoutes, krt.FilterKey(key)))
+		if r == nil {
+			return nil, false
+		}
+		return r.Spec.ParentRefs, true
+	case wellknown.TCPRouteKind:
+		r := ptr.Flatten(krt.FetchOne(ctx, agw.TCPRoutes, krt.FilterKey(key)))
+		if r == nil {
+			return nil, false
+		}
+		return r.Spec.ParentRefs, true
+	case wellknown.TLSRouteKind:
+		r := ptr.Flatten(krt.FetchOne(ctx, agw.TLSRoutes, krt.FilterKey(key)))
+		if r == nil {
+			return nil, false
+		}
+		return r.Spec.ParentRefs, true
+	case wellknown.ListenerSetKind:
+		ls := ptr.Flatten(krt.FetchOne(ctx, agw.ListenerSets, krt.FilterKey(key)))
+		if ls == nil {
+			return nil, false
+		}
+		p := ls.Spec.ParentRef
+		return []gwv1.ParentReference{{Name: p.Name, Namespace: p.Namespace}}, true
+	}
+	return nil, false
 }
 
 // TranslatePolicyToAgw converts a TrafficPolicy to agentgateway Policy resources
