@@ -23,6 +23,30 @@ fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 }
 
 #[test]
+fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
+	let provider = AIProvider::Vertex(vertex::Provider {
+		project_id: strng::new("test-project"),
+		model: None,
+		region: None,
+	});
+	let model = Some("google/gemini-2.5-flash-lite");
+
+	assert_eq!(
+		provider
+			.chat_translation(InputFormat::Completions, model)
+			.unwrap()
+			.output,
+		ChatFormat::VertexGemini
+	);
+	for input in [InputFormat::Messages, InputFormat::Responses] {
+		assert_eq!(
+			provider.chat_translation(input, model).unwrap().output,
+			ChatFormat::OpenAICompletions
+		);
+	}
+}
+
+#[test]
 fn streaming_amend_on_drop_updates_local_rate_limit() {
 	let rate_limit =
 		crate::http::localratelimit::RateLimit::try_from(crate::http::localratelimit::RateLimitSpec {

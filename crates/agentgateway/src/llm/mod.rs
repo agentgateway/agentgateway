@@ -301,6 +301,10 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 	&[
 		// Direct passthrough
 		chat(InputFormat::Responses, ChatFormat::OpenAIResponses),
+		// Quirk: normally we prefer direct passthrough. However, for Gemini, we can do a better job of
+		// the conversion than Google's OpenAI compatible endpoint, so we put this first. This will
+		// only actually be used for Vertex + Gemini models.
+		chat(InputFormat::Completions, ChatFormat::VertexGemini),
 		chat(InputFormat::Completions, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Messages, ChatFormat::AnthropicMessages),
 		// Missing: Bedrock --> Bedrock
@@ -308,7 +312,6 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 		// Completions
 		chat(InputFormat::Completions, ChatFormat::AnthropicMessages),
 		chat(InputFormat::Completions, ChatFormat::BedrockConverse),
-		chat(InputFormat::Completions, ChatFormat::VertexGemini),
 		// Messages
 		chat(InputFormat::Messages, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Messages, ChatFormat::BedrockConverse),
@@ -440,7 +443,12 @@ impl ChatTranslation {
 			},
 			ChatFormat::AnthropicMessages => render_anthropic_messages(req),
 			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
-			ChatFormat::VertexGemini => render_vertex_gemini(req, ctx),
+			ChatFormat::VertexGemini => {
+				return Ok(RenderedChatRequest {
+					body: render_vertex_gemini(req, ctx)?,
+					provider_state: Some(ProviderState::VertexGemini),
+				});
+			},
 		}?;
 		Ok(RenderedChatRequest {
 			body,
@@ -836,7 +844,7 @@ impl AIProvider {
 				vec![ChatFormat::AnthropicMessages]
 			},
 			AIProvider::Vertex(p) if p.is_gemini_model(request_model) => {
-				vec![ChatFormat::VertexGemini]
+				vec![ChatFormat::VertexGemini, ChatFormat::OpenAICompletions]
 			},
 			AIProvider::Vertex(_) => vec![ChatFormat::OpenAICompletions],
 
@@ -1118,9 +1126,13 @@ impl AIProvider {
 			AIProvider::Vertex(provider) => {
 				let request_model = llm_request.map(|l| l.request_model.as_str());
 				let streaming = llm_request.map(|l| l.streaming).unwrap_or(false);
+				let native_gemini = llm_request
+					.and_then(|l| l.provider_state.as_ref())
+					.is_some_and(|s| matches!(s, ProviderState::VertexGemini));
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
-						let path = provider.get_path_for_model(route_type, request_model, streaming);
+						let path =
+							provider.get_path_for_model(route_type, request_model, streaming, native_gemini);
 						let path = Self::with_path_prefix(&path, path_prefix);
 						Self::set_path_and_query(uri, &path)?;
 						Ok(())

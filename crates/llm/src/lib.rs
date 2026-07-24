@@ -167,6 +167,7 @@ pub enum ProviderState {
 	Bedrock {
 		tool_names: Arc<conversion::bedrock::BedrockToolNameMap>,
 	},
+	VertexGemini,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

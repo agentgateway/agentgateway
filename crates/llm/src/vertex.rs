@@ -86,6 +86,7 @@ impl Provider {
 		route: RouteType,
 		request_model: Option<&str>,
 		streaming: bool,
+		native_gemini: bool,
 	) -> Strng {
 		let location = self
 			.region
@@ -136,7 +137,7 @@ impl Provider {
 
 			// `?alt=sse` is required on the streaming endpoint; without it Vertex returns a
 			// JSON array rather than an SSE stream.
-			(RouteType::Completions, None, Some(model)) => {
+			(RouteType::Completions, None, Some(model)) if native_gemini => {
 				let method = if streaming {
 					"streamGenerateContent?alt=sse"
 				} else {
@@ -434,24 +435,29 @@ mod tests {
 			model: None,
 			region: region.map(strng::new),
 		};
-		let got = p.get_path_for_model(RouteType::Completions, req_model, streaming);
+		let got = p.get_path_for_model(RouteType::Completions, req_model, streaming, true);
 		assert_eq!(got.as_str(), expected);
 	}
 
 	#[rstest::rstest]
 	#[case::non_streaming(false)]
 	#[case::streaming(true)]
-	fn test_gemini_messages_route_uses_compat_shim(#[case] streaming: bool) {
+	fn test_gemini_compat_translation_uses_compat_shim(#[case] streaming: bool) {
 		let p = Provider {
 			project_id: strng::new("p"),
 			model: None,
 			region: None,
 		};
-		let got = p.get_path_for_model(RouteType::Messages, Some("gemini-2.5-flash"), streaming);
+		let got = p.get_path_for_model(
+			RouteType::Completions,
+			Some("gemini-2.5-flash"),
+			streaming,
+			false,
+		);
 		assert_eq!(
 			got.as_str(),
 			"/v1/projects/p/locations/global/endpoints/openapi/chat/completions",
-			"Gemini on the Messages route uses the compat shim until messages translation exists"
+			"non-native Gemini translations use the compat shim"
 		);
 	}
 
@@ -481,7 +487,7 @@ mod tests {
 			model: None,
 			region: None,
 		};
-		let got = p.get_path_for_model(RouteType::Completions, req_model, streaming);
+		let got = p.get_path_for_model(RouteType::Completions, req_model, streaming, false);
 		assert_eq!(got.as_str(), expected);
 	}
 
@@ -492,7 +498,12 @@ mod tests {
 			model: None,
 			region: None,
 		};
-		let path = p.get_path_for_model(RouteType::Embeddings, Some("gemini-embedding-001"), false);
+		let path = p.get_path_for_model(
+			RouteType::Embeddings,
+			Some("gemini-embedding-001"),
+			false,
+			false,
+		);
 		assert!(
 			path.as_str().ends_with(":predict"),
 			"expected :predict, got {path}"
