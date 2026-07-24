@@ -772,6 +772,9 @@ impl AIProvider {
 
 	fn supported_chat_formats(&self, request_model: Option<&str>) -> Vec<ChatFormat> {
 		match self {
+			AIProvider::OpenAI(_) if openai::Provider::prefers_completions_only_for_model(request_model) => {
+				vec![ChatFormat::OpenAICompletions]
+			},
 			AIProvider::OpenAI(_) => {
 				vec![ChatFormat::OpenAIResponses, ChatFormat::OpenAICompletions]
 			},
