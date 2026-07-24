@@ -21,14 +21,7 @@ import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { EnumSelector } from "../components/EnumSelector";
 import { hasKeyValue, keyValue, maskKey } from "../credentialDisplay";
 import { useStickyQueryParam } from "../drawerRouteState";
-import {
-  useDeleteConfigResource,
-  useLlmConfigData,
-  useUpdateConfig,
-  useUpsertConfigResource,
-  useUpsertPolicyResource,
-} from "../hooks";
-import { isDatabaseConfigResource } from "../config";
+import { useLlmConfigPersistence } from "../hooks";
 import {
   ConfirmDialog,
   Drawer,
@@ -53,27 +46,18 @@ import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import type { GatewayConfig, LlmApiKeyPolicy, VirtualApiKey } from "../types";
 
 export function KeysPage() {
+  const persistence = useLlmConfigPersistence();
   const {
     config,
     hybrid,
-    resources,
     policies,
     apiKeys: keys,
     isLoading,
     error,
-  } = useLlmConfigData();
-  const update = useUpdateConfig();
-  const upsertResource = useUpsertConfigResource();
-  const upsertPolicy = useUpsertPolicyResource();
-  const deleteResource = useDeleteConfigResource();
+  } = persistence;
   const help = useSchemaHelp();
   const policy = (policies.apiKey ?? null) as LlmApiKeyPolicy | null;
-  const filePolicyOwned = Boolean(
-    config.data?.llm?.policies &&
-    Object.prototype.hasOwnProperty.call(config.data.llm.policies, "apiKey"),
-  );
-  const databasePolicyOwned =
-    hybrid && isDatabaseConfigResource(resources, "llm.policy", "apiKey");
+  const filePolicyOwned = persistence.isFilePolicy("llm.policy", "apiKey");
   const [editing, setEditing] = useState<{
     previousKey?: string;
     key: VirtualApiKey;
@@ -90,22 +74,13 @@ export function KeysPage() {
         ? { previousKey: keyValue(linkedKey), key: structuredClone(linkedKey) }
         : null);
   const advancedOpen = keyDrawer === "settings";
-  const saving =
-    update.isPending ||
-    upsertResource.isPending ||
-    upsertPolicy.isPending ||
-    deleteResource.isPending;
-  const saveError =
-    update.error?.message ??
-    upsertResource.error?.message ??
-    upsertPolicy.error?.message ??
-    deleteResource.error?.message ??
-    null;
-  const unavailable = isLoading || Boolean(error);
+  const saving = persistence.isPending;
+  const saveError = persistence.mutationError?.message ?? null;
+  const unavailable = isLoading || Boolean(persistence.error);
 
   function databaseKeyId(key: VirtualApiKey) {
     const id = keyId(key);
-    return hybrid && id && isDatabaseConfigResource(resources, "llm.apiKey", id)
+    return id && persistence.isDatabaseResource("llm.apiKey", id)
       ? id
       : undefined;
   }
@@ -115,34 +90,37 @@ export function KeysPage() {
       ? keys.find((item) => keyValue(item) === previousKey)
       : undefined;
     const previousId = previous ? databaseKeyId(previous) : undefined;
-    if (hybrid && (!previous || previousId)) {
-      const value = structuredClone(key);
+    const databaseBacked = persistence.willSaveResourceToDatabase(
+      "llm.apiKey",
+      previousId ?? (previous ? keyValue(previous) : undefined),
+    );
+    const value = structuredClone(key);
+    if (databaseBacked) {
       if (value.metadata && typeof value.metadata === "object") {
         delete value.metadata.id;
       }
-      upsertResource.mutate(
-        { kind: "llm.apiKey", value, previousId },
-        { onSuccess: closeKeyDrawer },
-      );
-      return;
     }
-    update.mutate((next) => upsertVirtualKey(next, key, previousKey), {
-      onSuccess: closeKeyDrawer,
-    });
+    persistence.saveResource(
+      {
+        kind: "llm.apiKey",
+        value,
+        previousId: previousId ?? (previous ? keyValue(previous) : undefined),
+        updateFile: (next) => upsertVirtualKey(next, key, previousKey),
+      },
+      { onSuccess: closeKeyDrawer },
+    );
   }
 
   function removeKey(key: VirtualApiKey) {
     const id = databaseKeyId(key);
-    if (id) {
-      deleteResource.mutate(
-        { kind: "llm.apiKey", id },
-        { onSuccess: () => setDeleteKey(null) },
-      );
-      return;
-    }
-    update.mutate((next) => removeVirtualKey(next, keyValue(key)), {
-      onSuccess: () => setDeleteKey(null),
-    });
+    persistence.removeResource(
+      {
+        kind: "llm.apiKey",
+        id: id ?? keyValue(key),
+        updateFile: (next) => removeVirtualKey(next, keyValue(key)),
+      },
+      { onSuccess: () => setDeleteKey(null) },
+    );
   }
 
   function openNewKey() {
@@ -165,16 +143,14 @@ export function KeysPage() {
       setDisablePolicyOpen(false);
       closeKeyDrawer();
     };
-    if (databasePolicyOwned) {
-      deleteResource.mutate(
-        { kind: "llm.policy", id: "apiKey" },
-        { onSuccess },
-      );
-      return;
-    }
-    update.mutate((next) => disableApiKeyPolicy(next), {
-      onSuccess,
-    });
+    persistence.removePolicy(
+      {
+        kind: "llm.policy",
+        id: "apiKey",
+        updateFile: (next) => disableApiKeyPolicy(next),
+      },
+      { onSuccess },
+    );
   }
 
   return (
@@ -404,20 +380,14 @@ export function KeysPage() {
           onClose={closeKeyDrawer}
           onDisable={disablePolicy}
           onSave={(nextPolicy) => {
-            if (hybrid && !filePolicyOwned) {
-              upsertPolicy.mutate(
-                {
-                  kind: "llm.policy",
-                  id: "apiKey",
-                  value: nextPolicy,
+            persistence.savePolicy(
+              {
+                kind: "llm.policy",
+                id: "apiKey",
+                value: nextPolicy,
+                updateFile: (next) => {
+                  Object.assign(getApiKeyPolicy(next), nextPolicy);
                 },
-                { onSuccess: closeKeyDrawer },
-              );
-              return;
-            }
-            update.mutate(
-              (next) => {
-                Object.assign(getApiKeyPolicy(next), nextPolicy);
               },
               { onSuccess: closeKeyDrawer },
             );

@@ -24,14 +24,9 @@ import {
   YamlBlock,
 } from "../components/Primitives";
 import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
-import { isDatabaseConfigResource, setLlmGuardrails } from "../config";
+import { setLlmGuardrails } from "../config";
 import { useStickyQueryParam } from "../drawerRouteState";
-import {
-  useDeleteConfigResource,
-  useLlmConfigData,
-  useUpdateConfig,
-  useUpsertPolicyResource,
-} from "../hooks";
+import { useLlmConfigPersistence } from "../hooks";
 import { cleanEmpty } from "../policies/policyUtils";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import type { GatewayConfig, LlmGuardrail } from "../types";
@@ -197,54 +192,33 @@ function GuardrailProviderIcon(props: { src: string; alt: string }) {
 }
 
 export function GuardrailsPage() {
-  const { config, hybrid, resources, policies, isLoading, error } =
-    useLlmConfigData();
-  const update = useUpdateConfig();
-  const upsertPolicy = useUpsertPolicyResource();
-  const deleteResource = useDeleteConfigResource();
+  const persistence = useLlmConfigPersistence();
+  const { config, hybrid, policies, isLoading, error } = persistence;
   const help = useSchemaHelp();
   const guardrails = (policies.guardrails ?? null) as LlmGuardrail | null;
-  const fileOwned = Boolean(
-    config.data?.llm?.policies &&
-    Object.prototype.hasOwnProperty.call(
-      config.data.llm.policies,
-      "guardrails",
-    ),
-  );
-  const databaseOwned =
-    hybrid && isDatabaseConfigResource(resources, "llm.policy", "guardrails");
-  const saving =
-    update.isPending || upsertPolicy.isPending || deleteResource.isPending;
-  const saveError =
-    update.error?.message ??
-    upsertPolicy.error?.message ??
-    deleteResource.error?.message ??
-    null;
+  const fileOwned = persistence.isFilePolicy("llm.policy", "guardrails");
+  const saving = persistence.isPending;
+  const saveError = persistence.mutationError?.message ?? null;
   const [removeAllOpen, setRemoveAllOpen] = useState(false);
 
   function save(nextGuardrails: LlmGuardrail) {
-    if (hybrid && !fileOwned) {
-      upsertPolicy.mutate({
-        kind: "llm.policy",
-        id: "guardrails",
-        value: nextGuardrails,
-      });
-      return;
-    }
-    update.mutate((next) => setLlmGuardrails(next, nextGuardrails));
+    persistence.savePolicy({
+      kind: "llm.policy",
+      id: "guardrails",
+      value: nextGuardrails,
+      updateFile: (next) => setLlmGuardrails(next, nextGuardrails),
+    });
   }
 
   function remove() {
-    if (databaseOwned) {
-      deleteResource.mutate(
-        { kind: "llm.policy", id: "guardrails" },
-        { onSuccess: () => setRemoveAllOpen(false) },
-      );
-      return;
-    }
-    update.mutate((next) => setLlmGuardrails(next, null), {
-      onSuccess: () => setRemoveAllOpen(false),
-    });
+    persistence.removePolicy(
+      {
+        kind: "llm.policy",
+        id: "guardrails",
+        updateFile: (next) => setLlmGuardrails(next, null),
+      },
+      { onSuccess: () => setRemoveAllOpen(false) },
+    );
   }
 
   return (
