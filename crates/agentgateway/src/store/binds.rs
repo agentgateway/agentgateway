@@ -16,7 +16,9 @@ use crate::http::auth::{BackendAuth, BackendAuthKind};
 use crate::http::authorization::{HTTPAuthorizationSet, NetworkAuthorizationSet};
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::InferenceRouting;
-use crate::http::{ext_authz, ext_proc, filters, health, oidc, remoteratelimit, retry, timeout};
+use crate::http::{
+	ext_authz, ext_proc, filters, health, oidc, remoteratelimit, retry, substrate, timeout,
+};
 use crate::llm::policy::ResponseGuard;
 use crate::mcp::McpAuthorizationSet;
 use crate::proxy::dtrace;
@@ -360,6 +362,8 @@ pub struct RoutePolicies {
 	pub basic_auth: RequestPolicy<http::basicauth::BasicAuthentication>,
 	pub api_key: RequestPolicy<http::apikey::APIKeyAuthentication>,
 	pub ext_authz: RequestPolicy<ext_authz::ExtAuthz>,
+	pub substrate_egress: RequestPolicy<substrate::SubstrateEgress>,
+	pub substrate_ingress: RequestPolicy<substrate::SubstrateIngress>,
 	pub ext_proc: RequestPolicy<ext_proc::ExtProc>,
 	pub transformation: RequestPolicy<http::transformation_cel::Transformation>,
 	pub csrf: RequestPolicy<http::csrf::Csrf>,
@@ -429,6 +433,8 @@ impl RoutePolicies {
 			&self.basic_auth as &dyn PolicyExpressions,
 			&self.api_key as &dyn PolicyExpressions,
 			&self.ext_authz as &dyn PolicyExpressions,
+			&self.substrate_egress as &dyn PolicyExpressions,
+			&self.substrate_ingress as &dyn PolicyExpressions,
 			&self.ext_proc as &dyn PolicyExpressions,
 			&self.transformation as &dyn PolicyExpressions,
 			&self.csrf as &dyn PolicyExpressions,
@@ -953,6 +959,16 @@ impl Store {
 				},
 				TrafficPolicy::Buffer(p) => {
 					pol.buffer.set_if_unset(p);
+				},
+				TrafficPolicy::SubstrateIngress(p) => {
+					pol
+						.substrate_ingress
+						.merge_with_inheritance(p, lock_inheritance);
+				},
+				TrafficPolicy::SubstrateEgress(p) => {
+					pol
+						.substrate_egress
+						.merge_with_inheritance(p, lock_inheritance);
 				},
 			}
 		}

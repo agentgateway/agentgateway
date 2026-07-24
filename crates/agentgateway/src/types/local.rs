@@ -2760,6 +2760,12 @@ pub struct FilterOrPolicy {
 	/// Send request and response data to an external processing service.
 	#[serde(default)]
 	ext_proc: Option<LocalExtProcPolicy>,
+	/// Resolve Substrate actor hostnames for dynamic route backends on ingress.
+	#[serde(default)]
+	substrate_ingress: Option<crate::http::substrate::SubstrateIngress>,
+	/// Authorize CONNECT egress using the originating actor's dynamic policy.
+	#[serde(default)]
+	substrate_egress: Option<crate::http::substrate::SubstrateEgress>,
 	/// Modify request and response headers, bodies, or metadata.
 	#[serde(default)]
 	#[cfg_attr(
@@ -5165,6 +5171,8 @@ pub(crate) async fn split_policies_for_target(
 		csrf,
 		ext_authz,
 		ext_proc,
+		substrate_ingress,
+		substrate_egress,
 		buffer,
 		timeout,
 		retry,
@@ -5332,6 +5340,12 @@ pub(crate) async fn split_policies_for_target(
 	}
 	if let Some(p) = ext_proc {
 		route_policies.push(TrafficPolicy::ExtProc(p.into_policy()?))
+	}
+	if let Some(p) = substrate_ingress {
+		route_policies.push(TrafficPolicy::SubstrateIngress(RequestPolicy::single(p)))
+	}
+	if let Some(p) = substrate_egress {
+		route_policies.push(TrafficPolicy::SubstrateEgress(RequestPolicy::single(p)))
 	}
 	if let Some(p) = local_rate_limit
 		&& !p.is_empty()

@@ -79,3 +79,9 @@ pub mod ext_mcp {
 pub mod workload {
 	pub use crate::istio::workload::*;
 }
+
+#[allow(warnings)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+pub mod ateapi {
+	tonic::include_proto!("ateapi");
+}
