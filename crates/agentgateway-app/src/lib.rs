@@ -94,12 +94,29 @@ pub(crate) struct MigrateArgs {
 	pub(crate) file: PathBuf,
 }
 
+#[derive(ClapArgs, Debug)]
+pub(crate) struct ImportArgs {
+	/// Source gateway configuration format.
+	#[arg(long, value_name = "source")]
+	pub(crate) from: String,
+
+	/// Read source configuration from a file.
+	#[arg(short, long, value_name = "file")]
+	pub(crate) file: PathBuf,
+
+	/// Write generated agentgateway configuration to a file instead of stdout.
+	#[arg(short, long, value_name = "file")]
+	pub(crate) output: Option<PathBuf>,
+}
+
 #[derive(Subcommand, Debug)]
 enum Commands {
 	/// Run agentgateway as a subprocess and exec a command when ready.
 	#[cfg(target_os = "linux")]
 	Oneshot(OneshotArgs),
-	/// Migrate deprecated local config fields to frontendPolicies.
+	/// Import standalone configuration from another gateway.
+	Import(ImportArgs),
+	/// Migrate deprecated fields in a local agentgateway configuration.
 	Migrate(MigrateArgs),
 }
 
@@ -130,6 +147,7 @@ pub fn run() -> anyhow::Result<()> {
 	match args.command {
 		#[cfg(target_os = "linux")]
 		Some(Commands::Oneshot(oneshot)) => commands::oneshot::execute(oneshot),
+		Some(Commands::Import(import)) => commands::import::execute(import),
 		Some(Commands::Migrate(migrate)) => commands::migrate::execute(migrate),
 		None => commands::run::execute(args.run),
 	}
@@ -219,25 +237,18 @@ fn ensure_default_config_file(path: &std::path::Path) -> anyhow::Result<()> {
 	let parent = path
 		.parent()
 		.ok_or_else(|| anyhow::anyhow!("config path has no parent: {}", path.display()))?;
-	fs_err::write(path, default_config_contents(parent))?;
+	fs_err::write(path, default_config_contents(parent)?)?;
 	Ok(())
 }
 
-fn default_config_contents(dir: &std::path::Path) -> String {
+fn default_config_contents(dir: &std::path::Path) -> anyhow::Result<String> {
 	let db = dir.join("data.db");
-	format!(
-		r#"# yaml-language-server: $schema=https://agentgateway.dev/schema/config
-config:
-  database:
-    url: sqlite://{}
-gateways:
-  default:
-    port: 4000
-ui:
-  gateways: default
-"#,
-		db.display()
-	)
+	let config =
+		agentgateway::types::local::default_standalone_config(&format!("sqlite://{}", db.display()));
+	let yaml = agentgateway::yamlviajson::to_string(&config)?;
+	Ok(format!(
+		"# yaml-language-server: $schema=https://agentgateway.dev/schema/config\n{yaml}"
+	))
 }
 
 fn existing_writable_dir(path: &std::path::Path) -> bool {

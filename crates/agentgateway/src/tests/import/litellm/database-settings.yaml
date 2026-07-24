@@ -1,0 +1,10 @@
+model_list:
+- model_name: chat
+  litellm_params:
+    model: openai/gpt-4o
+general_settings:
+  database_url: os.environ/GENERAL_DATABASE_URL
+litellm_settings:
+  database_url: os.environ/LITELLM_DATABASE_URL
+environment_variables:
+  DATABASE_URL: os.environ/ENVIRONMENT_DATABASE_URL

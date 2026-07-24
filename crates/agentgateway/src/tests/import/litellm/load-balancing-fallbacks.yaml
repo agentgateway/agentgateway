@@ -1,0 +1,26 @@
+model_list:
+- model_name: fast
+  litellm_params:
+    model: azure/gpt-4o-east
+    api_base: https://east.openai.azure.com
+    api_key: os.environ/AZURE_EAST_KEY
+    api_version: 2025-01-01
+    rpm: 60
+    temperature: 0.2
+- model_name: fast
+  litellm_params:
+    model: openai/gpt-4o
+    api_key: os.environ/OPENAI_API_KEY
+    rpm: 40
+- model_name: backup
+  litellm_params:
+    model: anthropic/claude-sonnet-4
+    api_key: os.environ/ANTHROPIC_API_KEY
+- model_name: backup
+  litellm_params:
+    model: anthropic/claude-haiku-4
+    api_key: os.environ/ANTHROPIC_API_KEY
+router_settings:
+  routing_strategy: simple-shuffle
+  fallbacks:
+  - fast: [backup]

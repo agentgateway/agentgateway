@@ -49,6 +49,25 @@ type LocalMcpGuardrails = crate::mcp::guardrails::McpGuardrails;
 const DEFAULT_LLM_PORT: u16 = 4000;
 const DEFAULT_MCP_PORT: u16 = 3000;
 
+/// Build the base configuration used by a standalone agentgateway instance.
+pub fn default_standalone_config(database_url: &str) -> serde_json::Value {
+	serde_json::json!({
+		"config": {
+			"database": {
+				"url": database_url,
+			},
+		},
+		"gateways": {
+			"default": {
+				"port": DEFAULT_LLM_PORT,
+			},
+		},
+		"ui": {
+			"gateways": "default",
+		},
+	})
+}
+
 // Windows has different output, for now easier to just not deal with it
 #[cfg(all(test, target_family = "unix"))]
 #[path = "local_tests.rs"]
