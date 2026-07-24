@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-tools/pkg/crd"
 	"sigs.k8s.io/controller-tools/pkg/loader"
 	"sigs.k8s.io/controller-tools/pkg/markers"
@@ -210,6 +211,76 @@ func TestOverrideXValidationErrorsWithoutExactSingleMatch(t *testing.T) {
 		})
 		require.EqualError(t, err, "OverrideXValidation matched 2 rules for messageContains \"phase PreRouting only\", expected exactly 1")
 	})
+}
+
+func TestInjectHelmCRDAnnotations(t *testing.T) {
+	in := `---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.0
+  labels:
+    app: agentgateway
+  name: agentgatewayparameters.agentgateway.dev
+spec:
+  group: agentgateway.dev
+`
+
+	out, err := injectHelmCRDAnnotations([]byte(in))
+	require.NoError(t, err)
+
+	want := `---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.20.0
+    {{- with .Values.crds.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  labels:
+    app: agentgateway
+  name: agentgatewayparameters.agentgateway.dev
+spec:
+  group: agentgateway.dev
+`
+	require.Equal(t, want, string(out))
+}
+
+func TestInjectHelmCRDAnnotationsErrorsWithoutAnchor(t *testing.T) {
+	_, err := injectHelmCRDAnnotations([]byte("metadata:\n  name: foo\n"))
+	require.Error(t, err)
+}
+
+// TestInjectHelmCRDAnnotationsOnMarshaledCRD guards the load-bearing invariant:
+// the anchor injectHelmCRDAnnotations relies on must actually appear, at the
+// expected 4-space indent, in real marshalCRD output. If a future controller-gen
+// or YAML-marshaling change moved or renamed the controller-gen annotation, this
+// fails at the root cause rather than silently producing broken templates.
+func TestInjectHelmCRDAnnotationsOnMarshaledCRD(t *testing.T) {
+	crdObj := &apiextensionsv1.CustomResourceDefinition{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apiextensions.k8s.io/v1",
+			Kind:       "CustomResourceDefinition",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "agentgatewayparameters.agentgateway.dev",
+		},
+	}
+	addAttribution(crdObj)
+
+	marshaled, err := marshalCRD(crdObj)
+	require.NoError(t, err)
+	require.Contains(t, string(marshaled), "\n    controller-gen.kubebuilder.io/version: "+controllerGenVersion+"\n")
+
+	out, err := injectHelmCRDAnnotations(marshaled)
+	require.NoError(t, err)
+	require.Contains(t, string(out),
+		"    controller-gen.kubebuilder.io/version: "+controllerGenVersion+"\n"+
+			"    {{- with .Values.crds.annotations }}\n"+
+			"    {{- toYaml . | nindent 4 }}\n"+
+			"    {{- end }}\n")
 }
 
 func TestApplyConditionalPolicyUsesVisibleSchemaFields(t *testing.T) {

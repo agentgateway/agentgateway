@@ -194,6 +194,11 @@ func generateCRDs(paths []string, outputDir string, maxDescLen int, crdVersion s
 			return fmt.Errorf("marshal CRD %s/%s: %w", groupKind.Group, groupKind.Kind, err)
 		}
 
+		out, err = injectHelmCRDAnnotations(out)
+		if err != nil {
+			return fmt.Errorf("inject Helm annotations into CRD %s/%s: %w", groupKind.Group, groupKind.Kind, err)
+		}
+
 		fileName := fmt.Sprintf("%s_%s.yaml", crdRaw.Spec.Group, crdRaw.Spec.Names.Plural)
 		filePath := filepath.Join(outputDir, fileName)
 		// nolint:gosec // G306: not relevant here
@@ -1171,6 +1176,41 @@ func addAttribution(crd *apiextensionsv1.CustomResourceDefinition) {
 		crd.ObjectMeta.Annotations = map[string]string{}
 	}
 	crd.ObjectMeta.Annotations["controller-gen.kubebuilder.io/version"] = controllerGenVersion
+}
+
+// helmAnnotationsBlock is a Helm templating snippet that merges the chart's
+// .Values.crds.annotations into a CRD's metadata.annotations. It is inserted as
+// raw lines into the already-marshaled YAML because typed YAML marshaling cannot
+// emit Helm directives. The indentation matches the annotations map (4 spaces),
+// and nindent 4 keeps the merged values aligned with the sibling keys.
+const helmAnnotationsBlock = "    {{- with .Values.crds.annotations }}\n" +
+	"    {{- toYaml . | nindent 4 }}\n" +
+	"    {{- end }}"
+
+// injectHelmCRDAnnotations rewrites the marshaled CRD YAML so chart consumers can
+// merge custom annotations (e.g. helm.sh/resource-policy: keep) onto every CRD via
+// .Values.crds.annotations. It anchors on the controller-gen version annotation,
+// which addAttribution guarantees is always present, and inserts the Helm block
+// immediately after it.
+func injectHelmCRDAnnotations(crdYAML []byte) ([]byte, error) {
+	anchor := []byte("    controller-gen.kubebuilder.io/version:")
+	idx := bytes.Index(crdYAML, anchor)
+	if idx < 0 {
+		return nil, fmt.Errorf("anchor %q not found in marshaled CRD", anchor)
+	}
+	rel := bytes.IndexByte(crdYAML[idx:], '\n')
+	if rel < 0 {
+		return nil, fmt.Errorf("no newline after anchor %q in marshaled CRD", anchor)
+	}
+	insertAt := idx + rel + 1
+
+	var buf bytes.Buffer
+	buf.Grow(len(crdYAML) + len(helmAnnotationsBlock) + 1)
+	buf.Write(crdYAML[:insertAt])
+	buf.WriteString(helmAnnotationsBlock)
+	buf.WriteByte('\n')
+	buf.Write(crdYAML[insertAt:])
+	return buf.Bytes(), nil
 }
 
 func removeDescriptionFromMetadata(crd *apiextensionsv1.CustomResourceDefinition) {
