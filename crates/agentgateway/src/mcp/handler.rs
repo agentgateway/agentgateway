@@ -2206,8 +2206,7 @@ mod tests {
 			ServerRequest::PingRequest(PingRequest::default()),
 			original_id.clone(),
 		);
-		let mut tracked =
-			track_outbound_server_requests(upstream.clone(), Messages::from(ping));
+		let mut tracked = track_outbound_server_requests(upstream.clone(), Messages::from(ping));
 		let forwarded = tracked.next().await.expect("message").expect("ok");
 		match forwarded {
 			ServerJsonRpcMessage::Request(req) => assert_eq!(req.id, remapped),
@@ -2235,10 +2234,8 @@ mod tests {
 			shared_id.clone(),
 		);
 
-		let mut tracked_a =
-			track_outbound_server_requests(a.clone(), Messages::from(ping_a));
-		let mut tracked_b =
-			track_outbound_server_requests(b.clone(), Messages::from(ping_b));
+		let mut tracked_a = track_outbound_server_requests(a.clone(), Messages::from(ping_a));
+		let mut tracked_b = track_outbound_server_requests(b.clone(), Messages::from(ping_b));
 		let fwd_a = tracked_a.next().await.expect("a").expect("ok");
 		let fwd_b = tracked_b.next().await.expect("b").expect("ok");
 
@@ -2292,8 +2289,7 @@ mod tests {
 		);
 
 		// Same wrapper sequence used by send_single after rewrite_outbound_server_messages.
-		let mut tracked =
-			track_outbound_server_requests(upstream.clone(), Messages::from(ping));
+		let mut tracked = track_outbound_server_requests(upstream.clone(), Messages::from(ping));
 		let forwarded = tracked.next().await.expect("message").expect("ok");
 		match forwarded {
 			ServerJsonRpcMessage::Request(req) => assert_eq!(req.id, remapped),
@@ -2325,11 +2321,8 @@ mod tests {
 			ServerRequest::PingRequest(PingRequest::default()),
 			original_id.clone(),
 		);
-		let mut tracked = track_outbound_server_requests_for_downstream(
-			upstream,
-			Messages::from(ping),
-			true,
-		);
+		let mut tracked =
+			track_outbound_server_requests_for_downstream(upstream, Messages::from(ping), true);
 		let forwarded = tracked.next().await.expect("message").expect("ok");
 		match forwarded {
 			ServerJsonRpcMessage::Request(req) => assert_eq!(req.id, original_id),
