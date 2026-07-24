@@ -8,6 +8,10 @@ use http_body::Body as HttpBody;
 use pin_project_lite::pin_project;
 use tokio_util::codec::{Decoder, Encoder};
 
+#[cfg(test)]
+#[path = "transform_tests.rs"]
+mod tests;
+
 pin_project! {
 	pub struct TransformedBody<D, E, F, T> {
 		#[pin]
@@ -253,6 +257,9 @@ where
 
 		// We need more input data - poll the underlying body
 		if *this.finished {
+			if let Some(trailer) = std::mem::take(this.buffered_trailers) {
+				return Poll::Ready(Some(Ok(http_body::Frame::trailers(trailer))));
+			}
 			return Poll::Ready(None);
 		}
 
