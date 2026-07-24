@@ -553,8 +553,8 @@ func validateModelBaseURL(model *agentgateway.AgentgatewayModelSpec) error {
 	}
 	if addr, err := netip.ParseAddr(host); err == nil {
 		addr = addr.Unmap()
-		if addr.IsLoopback() || addr.IsLinkLocalUnicast() {
-			return fmt.Errorf("baseURL cannot target localhost, loopback, or link-local addresses")
+		if addr.IsLoopback() || addr.IsLinkLocalUnicast() || addr.IsUnspecified() {
+			return fmt.Errorf("baseURL cannot target localhost, loopback, link-local, or unspecified addresses")
 		}
 	} else if strings.Trim(host, ".0123456789") == "" || strings.HasPrefix(strings.ToLower(host), "0x") {
 		return fmt.Errorf("baseURL cannot use an ambiguous IP address")

@@ -193,10 +193,11 @@ func TestValidateModelBaseURL(t *testing.T) {
 	}{
 		{name: "public address", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("https://api.example.com/v1"))},
 		{name: "ollama requires base URL", provider: agentgateway.ModelProviderOllama, wantErr: "ollama requires baseURL"},
-		{name: "localhost", provider: agentgateway.ModelProviderOllama, baseURL: new(agentgateway.LongString("http://localhost:11434/v1")), wantErr: "cannot target localhost, loopback, or link-local"},
-		{name: "loopback IPv4", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("https://127.0.0.1/v1")), wantErr: "cannot target localhost, loopback, or link-local"},
-		{name: "loopback IPv6", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("https://[::1]/v1")), wantErr: "cannot target localhost, loopback, or link-local"},
-		{name: "link local", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("http://169.254.169.254/latest/meta-data")), wantErr: "cannot target localhost, loopback, or link-local"},
+		{name: "localhost", provider: agentgateway.ModelProviderOllama, baseURL: new(agentgateway.LongString("http://localhost:11434/v1")), wantErr: "cannot target localhost, loopback, link-local, or unspecified"},
+		{name: "loopback IPv4", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("https://127.0.0.1/v1")), wantErr: "cannot target localhost, loopback, link-local, or unspecified"},
+		{name: "loopback IPv6", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("https://[::1]/v1")), wantErr: "cannot target localhost, loopback, link-local, or unspecified"},
+		{name: "link local", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("http://169.254.169.254/latest/meta-data")), wantErr: "cannot target localhost, loopback, link-local, or unspecified"},
+		{name: "unspecified", provider: agentgateway.ModelProviderOpenAI, baseURL: new(agentgateway.LongString("http://0.0.0.0")), wantErr: "cannot target localhost, loopback, link-local, or unspecified"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

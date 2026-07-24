@@ -46,7 +46,7 @@ type AgentgatewayModelList struct {
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || self.visibility != 'Internal'",message="virtual models must be public"
 // +kubebuilder:validation:XValidation:rule="!has(self.virtualModel) || !has(self.match) || !has(self.match.model) || !self.match.model.contains('*')",message="virtual model match.model must be an exact name"
 // +kubebuilder:validation:XValidation:rule="!has(self.provider) || self.provider != 'Ollama' || has(self.baseURL)",message="ollama requires baseURL"
-// +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || self.baseURL.startsWith('http://') || self.baseURL.startsWith('https://')",message="baseURL must use http or https"
+// +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || (isURL(self.baseURL) && (url(self.baseURL).getScheme() == 'http' || url(self.baseURL).getScheme() == 'https') && url(self.baseURL).getHostname() != \"\")",message="baseURL must be an absolute http or https URL with a host"
 // +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || !self.baseURL.matches(\"(?i)^https?://(localhost|[^/]+\\\\.localhost)(:[0-9]+)?(/|$)\")",message="baseURL cannot target localhost, loopback, or link-local addresses"
 // +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || !self.baseURL.matches(\"^https?://127(\\\\.[0-9]{1,3}){0,3}(:[0-9]+)?(/|$)\")",message="baseURL cannot target localhost, loopback, or link-local addresses"
 // +kubebuilder:validation:XValidation:rule="!has(self.baseURL) || !self.baseURL.matches(\"^https?://169\\\\.254\\\\.[0-9]{1,3}\\\\.[0-9]{1,3}(:[0-9]+)?(/|$)\")",message="baseURL cannot target localhost, loopback, or link-local addresses"

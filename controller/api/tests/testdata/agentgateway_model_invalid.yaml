@@ -65,7 +65,7 @@ spec:
     sectionName: llm
   provider: AzureOpenAI
 ---
-_err: baseURL must use http or https
+_err: baseURL must be an absolute http or https URL with a host
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
 metadata:
