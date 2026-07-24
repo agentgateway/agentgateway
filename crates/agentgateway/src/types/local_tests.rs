@@ -79,6 +79,19 @@ fn test_client() -> client::Client {
 	)
 }
 
+#[test]
+fn default_llm_routes_classify_anthropic_token_count() {
+	let policy = crate::llm::Policy {
+		routes: super::llm_route_types(None).into_iter().collect(),
+		..Default::default()
+	};
+
+	assert_eq!(
+		policy.resolve_route("/v1/messages/count_tokens"),
+		crate::llm::RouteType::AnthropicTokenCount
+	);
+}
+
 fn test_config() -> crate::Config {
 	let mut config = crate::config::parse_config("{}".to_string(), None).unwrap();
 	config.oidc_cookie_encoder = Some(

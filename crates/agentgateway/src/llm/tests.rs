@@ -74,6 +74,507 @@ fn fixture_path(relative_path: &str) -> PathBuf {
 }
 
 #[test]
+fn copilot_claude_formats_prefer_messages() {
+	for model in ["claude-sonnet-4", "Claude-Sonnet-4"] {
+		assert_eq!(
+			copilot::Provider::supported_formats_for_model(Some(model)),
+			vec![ChatFormat::AnthropicMessages],
+			"{model}"
+		);
+	}
+}
+
+#[test]
+fn copilot_non_claude_formats_are_unchanged() {
+	for (model, expected) in [
+		("gpt-4o", &[ChatFormat::OpenAICompletions][..]),
+		(
+			"gpt-5.4",
+			&[ChatFormat::OpenAICompletions, ChatFormat::OpenAIResponses][..],
+		),
+		("gpt-5", &[ChatFormat::OpenAIResponses][..]),
+		("gemini-2.5-pro", &[ChatFormat::OpenAICompletions][..]),
+		("mai-ds-r1", &[ChatFormat::OpenAIResponses][..]),
+		("unknown-model", &[ChatFormat::OpenAICompletions][..]),
+		("GPT-5", &[ChatFormat::OpenAICompletions][..]),
+	] {
+		assert_eq!(
+			copilot::Provider::supported_formats_for_model(Some(model)).as_slice(),
+			expected,
+			"{model}"
+		);
+	}
+}
+
+#[test]
+fn copilot_claude_surface_routes_stay_native() {
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let model = Some("Claude-Sonnet-4");
+
+	for input in [
+		InputFormat::Messages,
+		InputFormat::Responses,
+		InputFormat::Completions,
+	] {
+		assert_eq!(
+			provider.chat_translation(input, model).unwrap().output,
+			ChatFormat::AnthropicMessages,
+			"{input:?}"
+		);
+	}
+}
+
+#[test]
+fn responses_to_messages_routing_is_copilot_only() {
+	let providers = [
+		(
+			"Anthropic",
+			AIProvider::Anthropic(anthropic::Provider { model: None }),
+			"claude-sonnet-4-5",
+		),
+		(
+			"Azure Foundry",
+			AIProvider::azure(azure::Provider {
+				model: None,
+				resource_name: strng::new("example"),
+				resource_type: azure::AzureResourceType::Foundry,
+				api_version: None,
+				project_name: Some(strng::new("project")),
+			}),
+			"claude-sonnet-4-5",
+		),
+		(
+			"Vertex",
+			vertex_provider("anthropic/claude-sonnet-4-5"),
+			"anthropic/claude-sonnet-4-5",
+		),
+		(
+			"custom Messages",
+			custom_provider(custom::ProviderFormat::Messages),
+			"claude-sonnet-4-5",
+		),
+	];
+
+	for (name, provider, model) in providers {
+		assert!(
+			provider
+				.chat_translation(InputFormat::Responses, Some(model))
+				.is_err(),
+			"{name} unexpectedly enabled Responses-to-Messages routing"
+		);
+	}
+}
+
+#[test]
+fn copilot_claude_responses_buffered_renderer() {
+	let request: types::responses::Request = serde_json::from_value(json!({
+		"input": "run a command",
+		"model": "claude-sonnet-4-5",
+		"store": false,
+		"tools": [{"type": "shell", "environment": {"type": "local"}}]
+	}))
+	.expect("valid Responses request");
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let rendered = ChatTranslation {
+		input: InputFormat::Responses,
+		output: ChatFormat::AnthropicMessages,
+	}
+	.render_request(
+		types::ChatRequest::Responses(&request),
+		&ChatRequestContext {
+			provider: &provider,
+			headers: &HeaderMap::new(),
+			prompt_caching: None,
+		},
+	)
+	.expect("Responses request should render as Messages");
+	let Some(ProviderState::ResponsesToMessages { state }) = rendered.provider_state else {
+		panic!("expected Responses-to-Messages state");
+	};
+	let upstream = Bytes::from(
+		serde_json::to_vec(&json!({
+			"id":"msg_gateway",
+			"type":"message",
+			"role":"assistant",
+			"content":[{
+				"type":"tool_use",
+				"id":"call_shell",
+				"name":"agentgateway__responses__shell_0",
+				"input":{"action":{"commands":["pwd"]}}
+			}],
+			"model":"claude-upstream",
+			"stop_reason":"tool_use",
+			"stop_sequence":null,
+			"usage":{"input_tokens":2,"output_tokens":1}
+		}))
+		.expect("upstream fixture"),
+	);
+	let translated = ChatTranslation {
+		input: InputFormat::Responses,
+		output: ChatFormat::AnthropicMessages,
+	}
+	.render_response(
+		&upstream,
+		&ChatResponseContext {
+			model: "claude-sonnet-4-5",
+			buffer_limit: 1024 * 1024,
+			tool_name_map: None,
+			responses_to_messages_state: Some(state.as_ref()),
+		},
+	)
+	.expect("buffered response should translate");
+	let value: Value = serde_json::from_slice(
+		&translated
+			.serialize()
+			.expect("translated response should serialize"),
+	)
+	.expect("Responses response");
+
+	assert_eq!(value["model"], "claude-sonnet-4-5");
+	assert_eq!(value["output"][0]["type"], "shell_call");
+	assert_eq!(value["output"][0]["call_id"], "call_shell");
+	assert_eq!(value["output"][0]["action"]["commands"], json!(["pwd"]));
+}
+
+#[tokio::test]
+async fn copilot_claude_responses_request_uses_messages_route() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("api.githubcopilot.com", 443)),
+		inputs,
+	};
+	let req = ::http::Request::builder()
+		.uri("https://api.githubcopilot.com/v1/responses")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model":"Claude-Sonnet-4-5",
+				"input":"say hi",
+				"max_output_tokens":64,
+				"store":false
+			}"#
+				.to_vec(),
+		))
+		.expect("request");
+
+	let RequestResult::Success {
+		mut request,
+		llm_request,
+		upstream_route_type,
+	} = provider
+		.process_responses_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("Copilot Claude Responses request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	assert_eq!(upstream_route_type, RouteType::Messages);
+	assert_eq!(llm_request.request_model, "Claude-Sonnet-4-5");
+	assert!(matches!(
+		llm_request.provider_state,
+		Some(ProviderState::ResponsesToMessages { .. })
+	));
+	provider
+		.setup_request(
+			&mut request,
+			upstream_route_type,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+		)
+		.expect("Copilot request setup");
+	assert_eq!(request.uri().path(), "/v1/messages");
+	assert_eq!(request.headers()["anthropic-version"], "2023-06-01");
+
+	let forwarded = request.collect().await.expect("forwarded body").to_bytes();
+	let body: Value = serde_json::from_slice(&forwarded).expect("Messages JSON");
+	assert_eq!(body["model"], "Claude-Sonnet-4-5");
+	assert_eq!(body["max_tokens"], 64);
+	assert_eq!(body["messages"][0]["role"], "user");
+	assert_eq!(body["messages"][0]["content"][0]["text"], "say hi");
+}
+
+#[tokio::test]
+async fn copilot_claude_responses_route_rewrites_path_even_with_host_override() {
+	// A host override with no explicit pathPrefix normally means "trust the client's original
+	// path" -- but here the body has been converted to Anthropic Messages, so the client's
+	// original /v1/responses path is wrong regardless of host override; it must still become
+	// /v1/messages.
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("api.githubcopilot.com", 443)),
+		inputs,
+	};
+	let req = ::http::Request::builder()
+		.uri("https://api.githubcopilot.com/v1/responses")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model":"Claude-Sonnet-4-5",
+				"input":"say hi",
+				"max_output_tokens":64,
+				"store":false
+			}"#
+				.to_vec(),
+		))
+		.expect("request");
+
+	let RequestResult::Success {
+		mut request,
+		llm_request,
+		upstream_route_type,
+	} = provider
+		.process_responses_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("Copilot Claude Responses request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	assert_eq!(upstream_route_type, RouteType::Messages);
+	provider
+		.setup_request(
+			&mut request,
+			upstream_route_type,
+			Some(&llm_request),
+			None,
+			None,
+			true, // has_host_override = true, no path_prefix
+		)
+		.expect("Copilot request setup");
+	assert_eq!(request.uri().path(), "/v1/messages");
+}
+
+#[tokio::test]
+async fn copilot_claude_error_responses_route_preserves_status_and_redacts_provider_data() {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let mut req = llm_request_with_tokens(None);
+	req.input_format = InputFormat::Responses;
+	req.request_model = "claude-sonnet-4-5".into();
+	req.provider_state = Some(ProviderState::ResponsesToMessages {
+		state: Arc::new(conversion::messages::from_responses::State::default()),
+	});
+	let marker = "SENSITIVE_SIGNATURE_REDACTED_DATA_AND_TOOL_ARGUMENTS";
+	let upstream = Bytes::from(format!(
+		r#"{{"type":"error","error":{{"type":"rate_limit_error","message":"{marker}"}}}}"#
+	));
+
+	let mut upstream_response = Response::new(Body::from(upstream));
+	*upstream_response.status_mut() = ::http::StatusCode::TOO_MANY_REQUESTS;
+	upstream_response.headers_mut().insert(
+		::http::header::CONTENT_TYPE,
+		"application/json".parse().expect("content type"),
+	);
+	let translated = provider
+		.process_response(
+			PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+			req,
+			LLMResponsePolicies::default(),
+			None,
+			AsyncLog::default(),
+			false,
+			None,
+			upstream_response,
+		)
+		.await
+		.expect("Copilot Claude Responses error should translate");
+	assert_eq!(translated.status(), ::http::StatusCode::TOO_MANY_REQUESTS);
+	let translated = translated
+		.collect()
+		.await
+		.expect("translated body")
+		.to_bytes();
+	let body: Value = serde_json::from_slice(&translated).expect("Responses error JSON");
+	assert_eq!(body["error"]["type"], "rate_limit_error");
+	assert_eq!(
+		body["error"]["message"],
+		"Upstream Anthropic request failed with HTTP 429"
+	);
+	assert!(!String::from_utf8_lossy(&translated).contains(marker));
+}
+
+#[tokio::test]
+async fn copilot_claude_responses_stream_process_response_restores_wrapped_tool() {
+	use crate::http::auth::BackendInfo;
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("api.githubcopilot.com", 443)),
+		inputs,
+	};
+	let request = ::http::Request::builder()
+		.uri("https://api.githubcopilot.com/v1/responses")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+			"model":"claude-sonnet-4-5", "input":"run pwd", "stream":true, "store":false,
+			"stream_options":{"include_obfuscation":false},
+			"tools":[{"type":"shell","environment":{"type":"local"}}]
+		}"#
+				.to_vec(),
+		))
+		.unwrap();
+	let RequestResult::Success {
+		llm_request,
+		upstream_route_type,
+		..
+	} = provider
+		.process_responses_request(&backend_info, None, request, false, &mut None)
+		.await
+		.expect("request translation")
+	else {
+		panic!("expected forwarded request")
+	};
+	assert_eq!(upstream_route_type, RouteType::Messages);
+	assert!(matches!(
+		llm_request.provider_state,
+		Some(ProviderState::ResponsesToMessages { .. })
+	));
+
+	let upstream = [
+		"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_gateway\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"claude-upstream\",\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":1,\"output_tokens\":0}}}\n\n",
+		"event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"call_shell\",\"name\":\"agentgateway__responses__shell_0\",\"input\":{}}}\n\n",
+		"event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"action\\\":{\\\"commands\\\":[\\\"pwd\\\"]}}\"}}\n\n",
+		"event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+		"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":1}}\n\n",
+		"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+	]
+	.concat();
+	let mut response = Response::new(Body::from(upstream));
+	response.headers_mut().insert(
+		::http::header::CONTENT_TYPE,
+		"text/event-stream".parse().unwrap(),
+	);
+	let translated = provider
+		.process_response(
+			PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+			llm_request,
+			LLMResponsePolicies::default(),
+			None,
+			AsyncLog::default(),
+			false,
+			None,
+			response,
+		)
+		.await
+		.expect("composed streaming response");
+	let body = translated
+		.collect()
+		.await
+		.expect("translated stream")
+		.to_bytes();
+	let text = String::from_utf8(body.to_vec()).unwrap();
+	let terminal: Value = text
+		.split("\n\n")
+		.filter_map(|frame| frame.lines().find_map(|line| line.strip_prefix("data: ")))
+		.map(|data| serde_json::from_str::<Value>(data).unwrap())
+		.find(|event| event["type"] == "response.completed")
+		.expect("completed event");
+	assert_eq!(terminal["response"]["output"][0]["type"], "shell_call");
+	assert_eq!(terminal["response"]["output"][0]["call_id"], "call_shell");
+	assert_eq!(
+		terminal["response"]["output"][0]["action"]["commands"],
+		json!(["pwd"])
+	);
+}
+
+#[tokio::test]
+async fn copilot_claude_responses_stream_missing_state_returns_sanitized_error() {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let mut req = llm_request_with_tokens(None);
+	req.input_format = InputFormat::Responses;
+	req.request_model = "claude-sonnet-4-5".into();
+	req.provider_state = None;
+	let marker = "SENSITIVE_UPSTREAM_STREAM_BODY";
+	let mut response = Response::new(Body::from(marker));
+	response.headers_mut().insert(
+		::http::header::CONTENT_TYPE,
+		"text/event-stream".parse().expect("content type"),
+	);
+
+	let result = provider.process_streaming(
+		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+		req,
+		LLMResponsePolicies::default(),
+		None,
+		AsyncLog::default(),
+		false,
+		None,
+		response,
+	);
+	let Err(error) = result else {
+		panic!("missing conversion state must fail")
+	};
+	let message = error.to_string();
+	assert_eq!(
+		message,
+		"unsupported conversion: missing Responses-to-Messages state"
+	);
+	assert!(!message.contains(marker));
+}
+
+#[test]
+fn native_messages_errors_preserve_valid_bodies_and_normalize_invalid_bodies() {
+	let valid =
+		Bytes::from_static(br#"{"type":"error","error":{"type":"api_error","message":"upstream"}}"#);
+	let translation = ChatTranslation {
+		input: InputFormat::Messages,
+		output: ChatFormat::AnthropicMessages,
+	};
+	assert_eq!(
+		translation
+			.error(
+				&valid,
+				::http::StatusCode::BAD_GATEWAY,
+				ChatErrorFormat::Anthropic,
+			)
+			.expect("valid native Messages error"),
+		valid
+	);
+
+	let upstream = Bytes::from_static(b"native Messages provider body");
+	let translated = ChatTranslation {
+		input: InputFormat::Messages,
+		output: ChatFormat::AnthropicMessages,
+	}
+	.error(
+		&upstream,
+		::http::StatusCode::BAD_GATEWAY,
+		ChatErrorFormat::Anthropic,
+	)
+	.expect("invalid native Messages error should normalize");
+	let value: Value = serde_json::from_slice(&translated).expect("Anthropic error JSON");
+	assert_eq!(value["type"], "error");
+	assert_eq!(value["error"]["type"], "api_error");
+	assert_eq!(value["error"]["message"], "native Messages provider body");
+}
+
+#[test]
 fn response_prompt_guard_headers_copies_request_traceparent() {
 	let traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
 		.parse()
@@ -334,6 +835,46 @@ async fn count_tokens_resolves_model_alias_once_for_upstream_request() {
 
 	assert_eq!(forwarded_json["model"], json!("middle-name"));
 	assert_eq!(llm_request.request_model, "middle-name");
+}
+
+#[tokio::test]
+async fn copilot_count_tokens_uses_local_fallback() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("api.githubcopilot.com", 443)),
+		inputs,
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/messages/count_tokens")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "claude-sonnet-5",
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Rejected(response) = provider
+		.process_count_tokens_request(&backend_info, req, None, &mut None)
+		.await
+		.expect("Copilot count_tokens request should process")
+	else {
+		panic!("expected local response");
+	};
+
+	assert_eq!(response.status(), ::http::StatusCode::OK);
+	let body = response.into_body().collect().await.unwrap().to_bytes();
+	let response: types::count_tokens::Response =
+		serde_json::from_slice(&body).expect("valid count_tokens response");
+	assert!(response.input_tokens > 0);
 }
 
 #[tokio::test]
@@ -612,6 +1153,9 @@ async fn copilot_anthropic_model_uses_messages_route() {
 
 	let mut setup_req =
 		crate::http::tests_common::request("https://example.com/v1/messages", http::Method::POST, &[]);
+	setup_req
+		.headers_mut()
+		.insert("anthropic-version", HeaderValue::from_static("2022-01-01"));
 	provider
 		.setup_request(
 			&mut setup_req,
@@ -623,12 +1167,240 @@ async fn copilot_anthropic_model_uses_messages_route() {
 		)
 		.expect("setup_request should succeed");
 	assert_eq!(setup_req.uri().path(), "/v1/messages");
+	assert_eq!(setup_req.headers()["anthropic-version"], "2023-06-01");
 
 	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
 	let forwarded_json: Value =
 		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
 	assert_eq!(forwarded_json["model"], json!("claude-sonnet-4"));
 	assert_eq!(forwarded_json["max_tokens"], json!(64));
+}
+
+#[test]
+fn copilot_non_messages_preserves_anthropic_version() {
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/chat/completions",
+		http::Method::POST,
+		&[],
+	);
+	req
+		.headers_mut()
+		.insert("anthropic-version", HeaderValue::from_static("2022-01-01"));
+
+	provider
+		.set_required_fields(&mut req, RouteType::Completions, None)
+		.expect("set_required_fields should succeed");
+
+	assert_eq!(req.headers()["anthropic-version"], "2022-01-01");
+}
+
+// Captured verbatim from a real Claude Code 2.1.217 invocation against a Copilot-backed
+// Anthropic Messages alias (primary Sonnet 5 call). advisor-tool-2026-03-01 is the only entry
+// Copilot has confirmed it rejects; every other entry must survive untouched.
+const CLAUDE_CODE_2_1_217_BETA_HEADER: &str = "claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,advisor-tool-2026-03-01,effort-2025-11-24";
+
+#[test]
+fn copilot_messages_strips_context_management_and_unsupported_beta_header() {
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let mut req =
+		crate::http::tests_common::request("https://example.com/v1/messages", http::Method::POST, &[]);
+	req.headers_mut().insert(
+		"anthropic-beta",
+		HeaderValue::from_static(CLAUDE_CODE_2_1_217_BETA_HEADER),
+	);
+
+	provider
+		.set_required_fields(&mut req, RouteType::Messages, None)
+		.expect("set_required_fields should succeed");
+
+	assert_eq!(
+		req.headers()["anthropic-beta"],
+		"claude-code-20250219,interleaved-thinking-2025-05-14,thinking-token-count-2026-05-13,context-management-2025-06-27,prompt-caching-scope-2026-01-05,mid-conversation-system-2026-04-07,effort-2025-11-24"
+	);
+}
+
+#[test]
+fn copilot_messages_beta_header_filter_handles_repeated_headers() {
+	let mut headers = HeaderMap::new();
+	headers.append(
+		"anthropic-beta",
+		HeaderValue::from_static("advisor-tool-2026-03-01"),
+	);
+	headers.append(
+		"anthropic-beta",
+		HeaderValue::from_static("claude-code-20250219, effort-2025-11-24"),
+	);
+
+	filter_copilot_unsupported_beta_headers(&mut headers);
+
+	let values: Vec<_> = headers
+		.get_all("anthropic-beta")
+		.iter()
+		.map(|v| v.to_str().unwrap())
+		.collect();
+	assert_eq!(values, vec!["claude-code-20250219,effort-2025-11-24"]);
+}
+
+#[test]
+fn copilot_messages_beta_header_filter_removes_header_entirely_when_nothing_survives() {
+	let mut headers = HeaderMap::new();
+	headers.insert(
+		"anthropic-beta",
+		HeaderValue::from_static("advisor-tool-2026-03-01"),
+	);
+
+	filter_copilot_unsupported_beta_headers(&mut headers);
+
+	assert!(!headers.contains_key("anthropic-beta"));
+}
+
+#[tokio::test]
+async fn copilot_messages_request_body_omits_context_management_field() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("api.githubcopilot.com", 443)),
+		inputs,
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/messages")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.header("anthropic-beta", CLAUDE_CODE_2_1_217_BETA_HEADER)
+		.body(Body::from(
+			br#"{
+				"model": "claude-sonnet-4",
+				"max_tokens": 64,
+				"stream": true,
+				"messages": [{"role": "user", "content": "say hi"}],
+				"context_management": {"edits": [{"type": "clear_tool_uses_20250919"}]},
+				"some_future_anthropic_field": "should-remain"
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		llm_request,
+		upstream_route_type,
+	} = provider
+		.process_messages_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("Copilot Anthropic messages request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let mut setup_req =
+		crate::http::tests_common::request("https://example.com/v1/messages", http::Method::POST, &[]);
+	setup_req.headers_mut().insert(
+		"anthropic-beta",
+		HeaderValue::from_static(CLAUDE_CODE_2_1_217_BETA_HEADER),
+	);
+	provider
+		.setup_request(
+			&mut setup_req,
+			upstream_route_type,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+		)
+		.expect("setup_request should succeed");
+	assert!(
+		!setup_req.headers()["anthropic-beta"]
+			.to_str()
+			.unwrap()
+			.contains("advisor-tool-2026-03-01")
+	);
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+	assert!(forwarded_json.get("context_management").is_none());
+	assert_eq!(forwarded_json["model"], json!("claude-sonnet-4"));
+	assert_eq!(forwarded_json["max_tokens"], json!(64));
+	assert_eq!(forwarded_json["stream"], json!(true));
+	assert_eq!(
+		forwarded_json["some_future_anthropic_field"],
+		json!("should-remain")
+	);
+}
+
+#[tokio::test]
+async fn non_copilot_messages_request_preserves_context_management_field() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("api.anthropic.com", 443)),
+		inputs,
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/messages")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.header("anthropic-beta", CLAUDE_CODE_2_1_217_BETA_HEADER)
+		.body(Body::from(
+			br#"{
+				"model": "claude-sonnet-4",
+				"max_tokens": 64,
+				"messages": [{"role": "user", "content": "say hi"}],
+				"context_management": {"edits": [{"type": "clear_tool_uses_20250919"}]}
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		llm_request,
+		upstream_route_type,
+	} = provider
+		.process_messages_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("Anthropic messages request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let mut setup_req =
+		crate::http::tests_common::request("https://example.com/v1/messages", http::Method::POST, &[]);
+	setup_req.headers_mut().insert(
+		"anthropic-beta",
+		HeaderValue::from_static(CLAUDE_CODE_2_1_217_BETA_HEADER),
+	);
+	provider
+		.setup_request(
+			&mut setup_req,
+			upstream_route_type,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+		)
+		.expect("setup_request should succeed");
+	assert_eq!(
+		setup_req.headers()["anthropic-beta"],
+		CLAUDE_CODE_2_1_217_BETA_HEADER
+	);
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+	assert_eq!(
+		forwarded_json["context_management"],
+		json!({"edits": [{"type": "clear_tool_uses_20250919"}]})
+	);
 }
 
 #[test]
@@ -1131,6 +1903,32 @@ fn assert_prefixed_host_override_path(
 }
 
 #[test]
+fn native_copilot_messages_host_override_no_prefix_preserves_client_path() {
+	// A native (unconverted) Copilot Messages request under a host override with no explicit
+	// pathPrefix must keep trusting the client's own path, same as every other non-Custom
+	// provider -- only a request that actually underwent Responses-to-Messages conversion
+	// (ProviderState::ResponsesToMessages) needs its path forced to Copilot's canonical default.
+	let llm_request = llm_request_for_path("gpt-4o");
+	let mut req = crate::http::tests_common::request(
+		"https://proxy.example.com/tenant/v1/messages?trace=repro",
+		http::Method::POST,
+		&[],
+	);
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Messages,
+			Some(&llm_request),
+			None,
+			None,
+			true,
+		)
+		.expect("setup_request should succeed");
+	assert_eq!(req.uri().path(), "/tenant/v1/messages");
+}
+
+#[test]
 fn setup_request_gemini_applies_path_prefix_with_host_override() {
 	assert_prefixed_host_override_path(
 		AIProvider::Gemini(gemini::Provider { model: None }),
@@ -1326,7 +2124,8 @@ async fn bedrock_from_messages_stream_skips_completion_when_disabled() {
 #[tokio::test]
 async fn messages_passthrough_stream_captures_completion() {
 	let input_path = fixture_path("response/anthropic/stream_basic.json");
-	let input_bytes = fs::read(&input_path).expect("Failed to read fixture");
+	let mut input_bytes = fs::read(&input_path).expect("Failed to read fixture");
+	input_bytes.extend_from_slice(b"data: [DONE]\n\n");
 	let body = Body::from(input_bytes);
 	let log = AsyncLog::default();
 	let log2 = log.clone();
@@ -1347,9 +2146,14 @@ async fn messages_passthrough_stream_captures_completion() {
 	log.store(Some(llmresp));
 	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
 	let buffer_limit = 1024 * 1024;
-	let body = conversion::messages::passthrough_stream(body, buffer_limit, logger, true);
+	let body = conversion::messages::passthrough_stream(body, buffer_limit, logger, true, true);
 	// Consume the body to drive the stream to completion
-	let _ = body.collect().await.unwrap();
+	let output = body.collect().await.unwrap().to_bytes();
+	assert!(
+		!output
+			.windows(b"[DONE]".len())
+			.any(|value| value == b"[DONE]")
+	);
 	let info = log2
 		.take()
 		.expect("log should have LLMInfo after stream completes");
@@ -1361,6 +2165,190 @@ async fn messages_passthrough_stream_captures_completion() {
 		completion.join(""),
 		"Hi there! How are you doing today? Is there anything I can help you with?"
 	);
+}
+
+#[tokio::test]
+async fn messages_passthrough_stream_preserves_native_sse_bytes() {
+	let input_bytes =
+		fs::read(fixture_path("response/anthropic/stream_basic.json")).expect("Failed to read fixture");
+	let expected = input_bytes.clone();
+	let body = Body::from(input_bytes);
+	let log = AsyncLog::default();
+	log.store(Some(LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			cache_convention: CacheTokenConvention::pending(),
+			request_model: "claude-haiku-4-5-20251001".into(),
+			provider: "anthropic".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+			provider_state: None,
+		},
+		response: LLMResponse::default(),
+	}));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
+	let output = conversion::messages::passthrough_stream(body, 1024 * 1024, logger, false, false)
+		.collect()
+		.await
+		.expect("native Messages stream")
+		.to_bytes();
+
+	assert_eq!(output.as_ref(), expected);
+}
+
+#[tokio::test]
+async fn copilot_messages_done_stripping_forwards_other_sse_frames() {
+	fn decode_sse(bytes: &[u8]) -> Vec<tokio_sse_codec::Frame<bytes::Bytes>> {
+		let mut decoder = tokio_sse_codec::SseDecoder::<bytes::Bytes>::new();
+		let mut buffer = bytes::BytesMut::from(bytes);
+		let mut frames = Vec::new();
+		while let Some(frame) =
+			tokio_util::codec::Decoder::decode_eof(&mut decoder, &mut buffer).expect("valid SSE")
+		{
+			frames.push(frame);
+		}
+		frames
+	}
+
+	let expected = concat!(
+		": keep-this-comment\r\n",
+		"id: upstream-7\r\n",
+		"event: message_start\r\n",
+		"data:{\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"claude-upstream\",\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":1,\"output_tokens\":0}}}\r\n",
+		"\r\n",
+		"event: message_stop\r\n",
+		"data: {\"type\":\"message_stop\"}\r\n",
+		"\r\n",
+	);
+	let input = format!("{expected}data: [DONE]\r\n\r\n");
+	let output = conversion::messages::passthrough_stream(
+		Body::from(input),
+		1024 * 1024,
+		agent_llm::StreamingUsageGuard::default(),
+		false,
+		true,
+	)
+	.collect()
+	.await
+	.expect("Copilot Messages stream")
+	.to_bytes();
+
+	assert_eq!(decode_sse(&output), decode_sse(expected.as_bytes()));
+}
+
+#[tokio::test]
+async fn native_messages_stream_thinking_tokens_use_terminal_value() {
+	let input = [
+		"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"claude-upstream\",\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":3,\"output_tokens\":2,\"output_tokens_details\":{\"thinking_tokens\":2,\"future\":1}}}}\n\n",
+		"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":5,\"output_tokens_details\":{\"thinking_tokens\":5,\"future\":2}}}\n\n",
+		"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+	]
+	.concat();
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	log.store(Some(LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			cache_convention: CacheTokenConvention::pending(),
+			request_model: "claude-test".into(),
+			provider: "anthropic".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+			provider_state: None,
+		},
+		response: LLMResponse::default(),
+	}));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
+	let output = conversion::messages::passthrough_stream(
+		Body::from(input.clone()),
+		1024 * 1024,
+		logger,
+		false,
+		false,
+	)
+	.collect()
+	.await
+	.expect("native Messages stream")
+	.to_bytes();
+	assert_eq!(output.as_ref(), input.as_bytes());
+	let info = log2.take().expect("stream telemetry");
+	assert_eq!(info.response.output_tokens, Some(5));
+	assert_eq!(info.response.reasoning_tokens, Some(5));
+}
+
+#[tokio::test]
+async fn native_messages_stream_thinking_tokens_fall_back_to_initial_value() {
+	let input = [
+		"event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"claude-upstream\",\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":3,\"output_tokens\":2,\"output_tokens_details\":{\"thinking_tokens\":2,\"future\":1}}}}\n\n",
+		"event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":5}}\n\n",
+		"event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n",
+	]
+	.concat();
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	log.store(Some(LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			cache_convention: CacheTokenConvention::pending(),
+			request_model: "claude-test".into(),
+			provider: "anthropic".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+			provider_state: None,
+		},
+		response: LLMResponse::default(),
+	}));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
+	let output = conversion::messages::passthrough_stream(
+		Body::from(input.clone()),
+		1024 * 1024,
+		logger,
+		false,
+		false,
+	)
+	.collect()
+	.await
+	.expect("native Messages stream")
+	.to_bytes();
+	assert_eq!(output.as_ref(), input.as_bytes());
+	let info = log2.take().expect("stream telemetry");
+	assert_eq!(info.response.output_tokens, Some(5));
+	assert_eq!(info.response.reasoning_tokens, Some(2));
+}
+
+#[tokio::test]
+async fn messages_passthrough_stream_preserves_done_for_native_providers() {
+	let input = Bytes::from_static(b"data: [DONE]\n\n");
+	let body = Body::from(input.clone());
+	let log = AsyncLog::default();
+	log.store(Some(LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			cache_convention: CacheTokenConvention::pending(),
+			request_model: "claude-test".into(),
+			provider: "custom".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+			provider_state: None,
+		},
+		response: LLMResponse::default(),
+	}));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
+	let output = conversion::messages::passthrough_stream(body, 1024, logger, false, false)
+		.collect()
+		.await
+		.expect("native Messages done marker")
+		.to_bytes();
+
+	assert_eq!(output, input);
 }
 
 #[tokio::test]
@@ -1387,7 +2375,7 @@ async fn messages_passthrough_stream_skips_completion_when_disabled() {
 	log.store(Some(llmresp));
 	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
 	let buffer_limit = 1024 * 1024;
-	let body = conversion::messages::passthrough_stream(body, buffer_limit, logger, false);
+	let body = conversion::messages::passthrough_stream(body, buffer_limit, logger, false, false);
 	let _ = body.collect().await.unwrap();
 	let info = log2
 		.take()

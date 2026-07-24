@@ -1,0 +1,83 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/anthropic/responses-complete.json
+info:
+  id: msg_fixture_complete
+  type: message
+  role: assistant
+  content:
+    - type: text
+      text: Inventory checked.
+    - type: tool_use
+      id: call_weather
+      name: weather
+      input:
+        city: Seattle
+  model: claude-upstream-model
+  stop_reason: tool_use
+  stop_sequence: ~
+  usage:
+    input_tokens: 10
+    output_tokens: 5
+    cache_read_input_tokens: 4
+    cache_creation_input_tokens: 1
+    output_tokens_details:
+      thinking_tokens: 2
+    service_tier: standard
+---
+{
+  "response": {
+    "id": "[id]",
+    "status": "completed",
+    "output": [
+      {
+        "type": "message",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "logprobs": null,
+            "text": "Inventory checked."
+          }
+        ],
+        "id": "[id]",
+        "role": "assistant",
+        "phase": "final_answer",
+        "status": "completed"
+      },
+      {
+        "type": "function_call",
+        "arguments": "{\"city\":\"Seattle\"}",
+        "call_id": "call_weather",
+        "name": "weather",
+        "id": "[id]",
+        "status": "completed"
+      }
+    ],
+    "model": "claude-sonnet-4-5",
+    "service_tier": "default",
+    "usage": {
+      "input_tokens": 15,
+      "output_tokens": 5,
+      "input_tokens_details": {
+        "cached_tokens": 4
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 2
+      },
+      "total_tokens": 20
+    },
+    "object": "response",
+    "created_at": "[date]"
+  },
+  "parsed": {
+    "input_tokens": 10,
+    "output_tokens": 5,
+    "total_tokens": 15,
+    "reasoning_tokens": 2,
+    "cache_creation_input_tokens": 1,
+    "cached_input_tokens": 4,
+    "service_tier": "standard",
+    "provider_model": "claude-upstream-model"
+  }
+}

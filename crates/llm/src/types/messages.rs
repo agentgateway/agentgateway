@@ -104,6 +104,8 @@ pub struct Usage {
 	pub input_tokens: u64,
 	pub output_tokens: u64,
 	#[serde(skip_serializing_if = "Option::is_none")]
+	pub output_tokens_details: Option<typed::OutputTokensDetails>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cache_creation_input_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cache_read_input_tokens: Option<u64>,
@@ -347,7 +349,12 @@ impl ResponseType for Response {
 			total_tokens: Some(self.usage.output_tokens + self.usage.input_tokens),
 			provider_model: Some(strng::new(&self.model)),
 			count_tokens: None,
-			reasoning_tokens: None,
+			reasoning_tokens: self
+				.usage
+				.output_tokens_details
+				.as_ref()
+				.and_then(|details| details.thinking_tokens)
+				.map(|tokens| tokens as u64),
 			cache_creation_input_tokens: self.usage.cache_creation_input_tokens,
 			cached_input_tokens: self.usage.cache_read_input_tokens,
 			service_tier: self.usage.service_tier.as_deref().map(Into::into),
@@ -476,6 +483,8 @@ pub mod typed {
 			id: String,
 			name: String,
 			input: serde_json::Value,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			caller: Option<serde_json::Value>,
 			#[serde(skip_serializing_if = "Option::is_none")]
 			cache_control: Option<CacheControlEphemeral>,
 		},
@@ -840,6 +849,14 @@ pub mod typed {
 	}
 
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
+	pub struct OutputTokensDetails {
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		pub thinking_tokens: Option<usize>,
+		#[serde(flatten, default)]
+		pub rest: serde_json::Value,
+	}
+
+	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 	pub struct MessageDeltaUsage {
 		/// Cumulative input tokens
 		pub input_tokens: Option<usize>,
@@ -851,6 +868,8 @@ pub mod typed {
 		/// Cumulative cache read tokens
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub cache_read_input_tokens: Option<usize>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub output_tokens_details: Option<OutputTokensDetails>,
 	}
 
 	#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
@@ -925,6 +944,9 @@ pub mod typed {
 		/// The service tier used to serve the request.
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub service_tier: Option<String>,
+
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub output_tokens_details: Option<OutputTokensDetails>,
 	}
 
 	/// Tool definition
@@ -986,7 +1008,12 @@ pub mod typed {
 				output_text_tokens: None,
 				output_audio_tokens: self.output_audio_tokens.map(|i| i as u64),
 				total_tokens: Some((self.usage.input_tokens + self.usage.output_tokens) as u64),
-				reasoning_tokens: None,
+				reasoning_tokens: self
+					.usage
+					.output_tokens_details
+					.as_ref()
+					.and_then(|details| details.thinking_tokens)
+					.map(|tokens| tokens as u64),
 				cache_creation_input_tokens: self.usage.cache_creation_input_tokens.map(|i| i as u64),
 				cached_input_tokens: self.usage.cache_read_input_tokens.map(|i| i as u64),
 				service_tier: self.usage.service_tier.as_deref().map(Into::into),

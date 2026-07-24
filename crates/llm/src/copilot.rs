@@ -20,18 +20,15 @@ impl Provider {
 		request_model.is_some_and(|model| model.to_ascii_lowercase().starts_with("claude-"))
 	}
 	pub fn supported_formats_for_model(request_model: Option<&str>) -> Vec<ChatFormat> {
+		if Self::is_anthropic_model(request_model) {
+			return vec![ChatFormat::AnthropicMessages];
+		}
 		let Some(m) = request_model else {
 			// If we have no model not much we can do...
 			return vec![ChatFormat::OpenAICompletions];
 		};
 		// Truth table from `curl https://api.githubcopilot.com/models -H "Authorization: Bearer ghu_..." | '.data[] | {id,supported_endpoints}'`
 		match m {
-			m if m.starts_with("claude-") => {
-				// Copilot supports Completions even for Anthropic
-				// This is enabled so we can do Responses --> Completions [--> Anthropic, within copilot, presumably].
-				// If we add native Responses --> Anthropic we should drop this
-				vec![ChatFormat::AnthropicMessages, ChatFormat::OpenAICompletions]
-			},
 			m if m.starts_with("mai-") => {
 				vec![ChatFormat::OpenAIResponses]
 			},

@@ -676,7 +676,7 @@ async fn llm_custom_provider_rejects_unsupported_format_before_upstream_call() {
 		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Embeddings]);
 
 	let res = send_completions_with_model(io, "replaceme", &[]).await;
-	assert_eq!(res.status(), 503);
+	assert_eq!(res.status(), 400);
 	let body = res.into_body().collect().await.unwrap().to_bytes();
 	assert!(
 		String::from_utf8_lossy(&body)
