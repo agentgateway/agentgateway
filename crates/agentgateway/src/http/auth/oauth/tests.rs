@@ -1733,7 +1733,9 @@ fn backend_auth_requiring_may_act(mock: &MockServer) -> crate::http::auth::Backe
 		actor_token: Some(actor_token_with_header(true)),
 		..auth(endpoint(mock))
 	};
-	crate::http::auth::BackendAuth::OAuthTokenExchange(Box::new(a))
+	crate::http::auth::BackendAuth::new(crate::http::auth::BackendAuthKind::OAuthTokenExchange(
+		Box::new(a),
+	))
 }
 
 #[test]
@@ -1910,8 +1912,9 @@ fn query_parameter_authorization_location_from_proto() {
 #[tokio::test]
 async fn dispatch_inserts_default_bearer_and_marks_explicit() {
 	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(token_body())).await;
-	let backend_auth =
-		crate::http::auth::BackendAuth::OAuthTokenExchange(Box::new(auth(endpoint(&mock))));
+	let backend_auth = crate::http::auth::BackendAuth::new(
+		crate::http::auth::BackendAuthKind::OAuthTokenExchange(Box::new(auth(endpoint(&mock)))),
+	);
 	let mut req = incoming_request();
 
 	crate::http::auth::apply_backend_auth(&backend_info(), &backend_auth, &mut req)
@@ -1942,7 +1945,9 @@ async fn dispatch_uses_configured_output_location_and_marks_explicit() {
 		},
 		..auth(endpoint(&mock))
 	};
-	let backend_auth = crate::http::auth::BackendAuth::OAuthTokenExchange(Box::new(a));
+	let backend_auth = crate::http::auth::BackendAuth::new(
+		crate::http::auth::BackendAuthKind::OAuthTokenExchange(Box::new(a)),
+	);
 	let mut req = incoming_request();
 
 	crate::http::auth::apply_backend_auth(&backend_info(), &backend_auth, &mut req)
@@ -1975,7 +1980,9 @@ async fn dispatch_supports_query_parameter_output_location() {
 		},
 		..auth(endpoint(&mock))
 	};
-	let backend_auth = crate::http::auth::BackendAuth::OAuthTokenExchange(Box::new(a));
+	let backend_auth = crate::http::auth::BackendAuth::new(
+		crate::http::auth::BackendAuthKind::OAuthTokenExchange(Box::new(a)),
+	);
 	let mut req = incoming_request();
 
 	crate::http::auth::apply_backend_auth(&backend_info(), &backend_auth, &mut req)
@@ -2009,7 +2016,9 @@ async fn dispatch_removes_input_token_locations_before_inserting_output() {
 		},
 		..auth(endpoint(&mock))
 	};
-	let backend_auth = crate::http::auth::BackendAuth::OAuthTokenExchange(Box::new(a));
+	let backend_auth = crate::http::auth::BackendAuth::new(
+		crate::http::auth::BackendAuthKind::OAuthTokenExchange(Box::new(a)),
+	);
 	let mut req = ::http::Request::builder()
 		.method(::http::Method::GET)
 		.uri("http://upstream/")

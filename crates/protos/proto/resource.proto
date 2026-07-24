@@ -352,6 +352,16 @@ message BackendAuthPolicy {
     OAuthTokenExchange oauth_token_exchange = 6;
     CrossAppAccessAuth cross_app_access = 7;
   }
+
+  // Additional credentials to inject on the backend request, independent of `kind`.
+  repeated BackendAuthCredential credentials = 8;
+}
+
+message BackendAuthCredential {
+  // Where the credential is inserted. Required; `expression` locations are not valid here.
+  AuthorizationLocation location = 1;
+  // Credential value.
+  string value = 2;
 }
 
 message AuthorizationLocation {

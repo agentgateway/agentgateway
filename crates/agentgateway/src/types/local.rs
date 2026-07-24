@@ -15,7 +15,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use secrecy::SecretString;
 
-use crate::http::auth::BackendAuth;
+use crate::http::auth::{BackendAuth, BackendAuthKind};
 use crate::http::backendtls::{LocalBackendTLS, ResolvedBackendTLS};
 use crate::http::transformation_cel::{LocalTransformationConfig, Transformation};
 use crate::http::{filters, health, retry, timeout, transformation_cel};
@@ -2202,24 +2202,44 @@ pub fn de_backend_auth<'de, D>(deserializer: D) -> Result<Option<BackendAuth>, D
 where
 	D: Deserializer<'de>,
 {
-	Option::<BackendAuthCompat>::deserialize(deserializer)?
-		.map(|auth| match auth {
-			BackendAuthCompat::Full(BackendAuth::OAuthTokenExchange(auth)) => {
+	fn validate_auth<E: serde::de::Error>(auth: BackendAuthKind) -> Result<BackendAuthKind, E> {
+		match auth {
+			BackendAuthKind::OAuthTokenExchange(auth) => {
 				// OAuth has a few cross-field checks serde won't catch on its own.
 				// Keep them here so untagged compat parsing still returns the real error.
 				auth.validate_load().map_err(serde::de::Error::custom)?;
-				Ok(BackendAuth::OAuthTokenExchange(auth))
+				Ok(BackendAuthKind::OAuthTokenExchange(auth))
 			},
-			BackendAuthCompat::Full(BackendAuth::CrossAppAccess(auth)) => {
+			BackendAuthKind::CrossAppAccess(auth) => {
 				// The derived exchange is built on deserialize; validate here so untagged
 				// compat parsing still returns the real cross-field error.
 				auth.validate_load().map_err(serde::de::Error::custom)?;
-				Ok(BackendAuth::CrossAppAccess(auth))
+				Ok(BackendAuthKind::CrossAppAccess(auth))
 			},
-			BackendAuthCompat::Full(auth) => Ok(auth),
-			BackendAuthCompat::PlainKey { key } => Ok(BackendAuth::Key {
-				value: key,
-				location: None,
+			auth => Ok(auth),
+		}
+	}
+
+	Option::<BackendAuthCompat>::deserialize(deserializer)?
+		.map(|auth| match auth {
+			BackendAuthCompat::PlainKey { key } => Ok(BackendAuth {
+				kind: Some(BackendAuthKind::Key {
+					value: key,
+					location: None,
+				}),
+				credentials: Vec::new(),
+			}),
+			BackendAuthCompat::FullWithCredentials { auth, credentials } => Ok(BackendAuth {
+				kind: Some(validate_auth::<D::Error>(auth)?),
+				credentials,
+			}),
+			BackendAuthCompat::CredentialsOnly { credentials } => Ok(BackendAuth {
+				kind: None,
+				credentials,
+			}),
+			BackendAuthCompat::Full(auth) => Ok(BackendAuth {
+				kind: Some(validate_auth::<D::Error>(auth)?),
+				credentials: Vec::new(),
 			}),
 		})
 		.transpose()
@@ -2234,7 +2254,15 @@ enum BackendAuthCompat {
 		#[serde(deserialize_with = "deser_key_from_file")]
 		key: SecretString,
 	},
-	Full(BackendAuth),
+	FullWithCredentials {
+		#[serde(flatten)]
+		auth: BackendAuthKind,
+		credentials: Vec<crate::http::auth::BackendAuthCredential>,
+	},
+	CredentialsOnly {
+		credentials: Vec<crate::http::auth::BackendAuthCredential>,
+	},
+	Full(BackendAuthKind),
 }
 
 #[apply(schema_de!)]
@@ -4366,11 +4394,11 @@ async fn convert_llm_config(
 		// Create backend auth policy
 		let mut pols = vec![];
 		if let Some(key) = p.api_key.as_ref() {
-			let backend_auth = BackendAuth::Key {
+			let backend_auth = BackendAuthKind::Key {
 				value: key.0.clone(),
 				location: None,
 			};
-			pols.push(BackendTrafficPolicy::BackendAuth(backend_auth));
+			pols.push(BackendTrafficPolicy::backend_auth(backend_auth));
 		}
 
 		// Create AI backend

@@ -239,14 +239,14 @@ impl TCPProxy {
 			SimpleBackend::Aws(_, config) => {
 				let default_policies = BackendPolicies {
 					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
-					backend_auth: Some(http::auth::BackendAuth::Aws(
-						http::auth::AwsAuth::Implicit {
+					backend_auth: Some(http::auth::BackendAuth::new(
+						http::auth::BackendAuthKind::Aws(http::auth::AwsAuth::Implicit {
 							service_name: None,
 							region: None,
 							assume_role: None,
 							source_credentials_cache: Default::default(),
 							assume_role_cache: Default::default(),
-						},
+						}),
 					)),
 					..Default::default()
 				};
@@ -981,13 +981,16 @@ mod tests {
 		assert!(
 			matches!(
 				&result.backend_policies.backend_auth,
-				Some(crate::http::auth::BackendAuth::Aws(
-					crate::http::auth::AwsAuth::Implicit {
-						service_name: None,
-						assume_role: None,
-						..
-					}
-				))
+				Some(crate::http::auth::BackendAuth {
+					kind: Some(crate::http::auth::BackendAuthKind::Aws(
+						crate::http::auth::AwsAuth::Implicit {
+							service_name: None,
+							assume_role: None,
+							..
+						}
+					)),
+					..
+				})
 			),
 			"should default to AWS implicit auth"
 		);
@@ -1000,19 +1003,21 @@ mod tests {
 	fn test_build_backend_call_aws_user_policies_override() {
 		use secrecy::SecretString;
 
-		use crate::http::auth::{AwsAuth, BackendAuth};
+		use crate::http::auth::{AwsAuth, BackendAuth, BackendAuthKind};
 
 		let inputs = make_proxy_inputs();
 		let backend = make_aws_simple_backend();
 
 		let user_policies = BackendPolicies {
-			backend_auth: Some(BackendAuth::Aws(AwsAuth::ExplicitConfig {
-				access_key_id: SecretString::from("AKID"),
-				secret_access_key: SecretString::from("SECRET"),
-				region: Some("us-west-2".to_string()),
-				session_token: None,
-				service_name: None,
-			})),
+			backend_auth: Some(BackendAuth::new(BackendAuthKind::Aws(
+				AwsAuth::ExplicitConfig {
+					access_key_id: SecretString::from("AKID"),
+					secret_access_key: SecretString::from("SECRET"),
+					region: Some("us-west-2".to_string()),
+					session_token: None,
+					service_name: None,
+				},
+			))),
 			..Default::default()
 		};
 
@@ -1023,10 +1028,13 @@ mod tests {
 		assert!(
 			matches!(
 				&result.backend_policies.backend_auth,
-				Some(BackendAuth::Aws(AwsAuth::ExplicitConfig {
-					service_name: None,
+				Some(BackendAuth {
+					kind: Some(BackendAuthKind::Aws(AwsAuth::ExplicitConfig {
+						service_name: None,
+						..
+					})),
 					..
-				}))
+				})
 			),
 			"user-provided auth should override default implicit auth"
 		);

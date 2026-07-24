@@ -1432,8 +1432,9 @@ const (
 	HostnameRewriteModeNone HostnameRewriteMode = "None"
 )
 
-// +kubebuilder:validation:ExactlyOneOf=key;secretRef;passthrough;aws;azure;gcp;oauthTokenExchange;crossAppAccess
-// +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) || has(self.passthrough) : true",message="location may only be set for key or passthrough auth"
+// +kubebuilder:validation:AtMostOneOf=key;secretRef;passthrough;aws;azure;gcp;oauthTokenExchange;crossAppAccess
+// +kubebuilder:validation:XValidation:rule="has(self.credentials) || has(self.key) || has(self.secretRef) || has(self.passthrough) || has(self.aws) || has(self.azure) || has(self.gcp) || has(self.oauthTokenExchange) || has(self.crossAppAccess)",message="must specify credentials, or at most one of key/secretRef/passthrough/aws/azure/gcp/oauthTokenExchange/crossAppAccess (credentials may be combined with a primary auth kind)"
+// +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) || has(self.passthrough) : true",message="location may only be set for key, secretRef, or passthrough auth"
 type BackendAuth struct {
 	// Inline key to use as the value of the
 	// `Authorization` header. This option is the least secure; usage of a
@@ -1480,11 +1481,37 @@ type BackendAuth struct {
 	// +optional
 	CrossAppAccess *CrossAppAccessAuth `json:"crossAppAccess,omitempty"`
 
-	// Where backend credentials are inserted. Defaults to the `Authorization`
-	// header with the `Bearer ` prefix. Applies to `key`, `secretRef`, and
-	// `passthrough`.
+	// Where backend credentials are inserted.
+	// If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
+	// This applies to `key`, `secretRef`, and `passthrough`. Entries in `credentials` carry their own location.
 	// +optional
 	Location *AuthorizationLocation `json:"location,omitempty"`
+
+	// Credentials is a list of additional credentials to inject on the
+	// backend request. Each entry resolves a Secret key and writes its value
+	// to the entry's location. `credentials` is independent of the primary
+	// `key`/`secretRef`/`passthrough` mechanism and may be set on its own or
+	// alongside it.
+	//
+	// +optional
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=8
+	// +listType=atomic
+	Credentials []BackendAuthCredential `json:"credentials,omitempty"`
+}
+
+// BackendAuthCredential specifies one additional credential to inject on the
+// backend request.
+type BackendAuthCredential struct {
+	// Where the credential is inserted on the backend request.
+	// +required
+	Location AuthorizationLocation `json:"location"`
+
+	// SecretRef references a Kubernetes Secret holding the credential value, and
+	// optionally overrides the key read from it. Defaults to `Authorization`,
+	// matching the key convention used by the top-level `secretRef`.
+	// +required
+	SecretRef LocalSecretKeyRef `json:"secretRef"`
 }
 
 // OpenAIModerationAuth configures credentials for OpenAI Moderation requests.

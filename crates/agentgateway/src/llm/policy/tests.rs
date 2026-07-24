@@ -1341,7 +1341,7 @@ mod prompt_guard_config_tests {
 fn test_bedrock_guardrails_user_credentials_take_precedence() {
 	use secrecy::SecretString;
 
-	use crate::http::auth::{AwsAuth, BackendAuth};
+	use crate::http::auth::{AwsAuth, BackendAuth, BackendAuthKind};
 	use crate::store::BindStore;
 	use crate::types::agent::BackendTrafficPolicy;
 
@@ -1349,7 +1349,7 @@ fn test_bedrock_guardrails_user_credentials_take_precedence() {
 		guardrail_identifier: strng::new("test-guardrail"),
 		guardrail_version: strng::new("1"),
 		region: strng::new("us-east-1"),
-		policies: vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Aws(
+		policies: vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Aws(
 			AwsAuth::ExplicitConfig {
 				access_key_id: SecretString::new("AKIAIOSFODNN7EXAMPLE".into()),
 				secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
@@ -1369,7 +1369,10 @@ fn test_bedrock_guardrails_user_credentials_take_precedence() {
 	assert!(
 		matches!(
 			resolved.backend_auth,
-			Some(BackendAuth::Aws(AwsAuth::ExplicitConfig { .. }))
+			Some(BackendAuth {
+				kind: Some(BackendAuthKind::Aws(AwsAuth::ExplicitConfig { .. })),
+				..
+			})
 		),
 		"Expected user-provided explicit AWS credentials to take precedence over \
 		 the implicit fallback, but got: {:?}",
@@ -1381,7 +1384,7 @@ fn test_bedrock_guardrails_user_credentials_take_precedence() {
 fn test_bedrock_guardrails_api_key_auth_takes_precedence() {
 	use secrecy::SecretString;
 
-	use crate::http::auth::BackendAuth;
+	use crate::http::auth::{BackendAuth, BackendAuthKind};
 	use crate::store::BindStore;
 	use crate::types::agent::BackendTrafficPolicy;
 
@@ -1389,7 +1392,7 @@ fn test_bedrock_guardrails_api_key_auth_takes_precedence() {
 		guardrail_identifier: strng::new("test-guardrail"),
 		guardrail_version: strng::new("1"),
 		region: strng::new("us-east-1"),
-		policies: vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Key {
+		policies: vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
 			value: SecretString::new("bedrock-api-key".into()),
 			location: None,
 		})],
@@ -1403,9 +1406,12 @@ fn test_bedrock_guardrails_api_key_auth_takes_precedence() {
 	assert!(
 		matches!(
 			resolved.backend_auth,
-			Some(BackendAuth::Key {
-				value: _,
-				location: _
+			Some(BackendAuth {
+				kind: Some(BackendAuthKind::Key {
+					value: _,
+					location: _
+				}),
+				..
 			})
 		),
 		"Expected Bedrock API key auth to take precedence over \
@@ -1416,7 +1422,7 @@ fn test_bedrock_guardrails_api_key_auth_takes_precedence() {
 
 #[test]
 fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
-	use crate::http::auth::{AwsAuth, BackendAuth};
+	use crate::http::auth::{AwsAuth, BackendAuth, BackendAuthKind};
 	use crate::store::BindStore;
 
 	let guardrails = BedrockGuardrails {
@@ -1434,11 +1440,14 @@ fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
 	assert!(
 		matches!(
 			resolved.backend_auth,
-			Some(BackendAuth::Aws(AwsAuth::Implicit {
-				service_name: None,
-				assume_role: None,
+			Some(BackendAuth {
+				kind: Some(BackendAuthKind::Aws(AwsAuth::Implicit {
+					service_name: None,
+					assume_role: None,
+					..
+				})),
 				..
-			}))
+			})
 		),
 		"Expected implicit AWS auth when no user credentials are provided, but got: {:?}",
 		resolved.backend_auth
@@ -1449,7 +1458,7 @@ fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
 fn test_google_model_armor_user_credentials_take_precedence() {
 	use secrecy::SecretString;
 
-	use crate::http::auth::BackendAuth;
+	use crate::http::auth::{BackendAuth, BackendAuthKind};
 	use crate::store::BindStore;
 	use crate::types::agent::BackendTrafficPolicy;
 
@@ -1457,7 +1466,7 @@ fn test_google_model_armor_user_credentials_take_precedence() {
 		template_id: strng::new("test-template"),
 		project_id: strng::new("test-project"),
 		location: Some(strng::new("us-central1")),
-		policies: vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Key {
+		policies: vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
 			value: SecretString::new("user-provided-api-key".into()),
 			location: None,
 		})],
@@ -1471,9 +1480,12 @@ fn test_google_model_armor_user_credentials_take_precedence() {
 	assert!(
 		matches!(
 			resolved.backend_auth,
-			Some(BackendAuth::Key {
-				value: _,
-				location: _
+			Some(BackendAuth {
+				kind: Some(BackendAuthKind::Key {
+					value: _,
+					location: _
+				}),
+				..
 			})
 		),
 		"Expected user-provided Key auth to take precedence over \
@@ -1484,7 +1496,7 @@ fn test_google_model_armor_user_credentials_take_precedence() {
 
 #[test]
 fn test_google_model_armor_implicit_auth_used_when_no_user_credentials() {
-	use crate::http::auth::BackendAuth;
+	use crate::http::auth::{BackendAuth, BackendAuthKind};
 	use crate::store::BindStore;
 
 	let model_armor = GoogleModelArmor {
@@ -1500,7 +1512,13 @@ fn test_google_model_armor_implicit_auth_used_when_no_user_credentials() {
 	let resolved = store.inline_backend_policies(&pols);
 
 	assert!(
-		matches!(resolved.backend_auth, Some(BackendAuth::Gcp(_))),
+		matches!(
+			resolved.backend_auth,
+			Some(BackendAuth {
+				kind: Some(BackendAuthKind::Gcp(_)),
+				..
+			})
+		),
 		"Expected implicit GCP auth when no user credentials are provided, but got: {:?}",
 		resolved.backend_auth
 	);

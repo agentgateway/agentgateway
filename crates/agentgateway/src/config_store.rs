@@ -4,9 +4,11 @@ use std::str::FromStr;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sqlx::postgres::PgListener;
 use sqlx::types::Json;
-use sqlx::{PgPool, Row, SqlitePool};
+use sqlx::{PgPool, Postgres, Row, SqlitePool, Transaction};
 use tokio::sync::watch;
+use tracing::{error, warn};
 
 use crate::database::DatabasePool;
 use crate::telemetry::log_store;
@@ -15,6 +17,7 @@ use crate::telemetry::log_store;
 pub struct ConfigResourceStore {
 	pool: DatabasePool,
 	change_tx: watch::Sender<()>,
+	notification_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -124,16 +127,49 @@ impl ConfigResourceStore {
 	}
 
 	async fn from_pool(pool: DatabasePool) -> anyhow::Result<Self> {
+		let (change_tx, _) = watch::channel(());
 		match &pool {
 			DatabasePool::Sqlite(pool) => {
 				sqlx::raw_sql(SQLITE_SCHEMA).execute(pool).await?;
+				Ok(Self {
+					pool: DatabasePool::Sqlite(pool.clone()),
+					change_tx,
+					notification_id: None,
+				})
 			},
 			DatabasePool::Postgres(pool) => {
 				sqlx::raw_sql(POSTGRES_SCHEMA).execute(pool).await?;
+				let notification_id = uuid::Uuid::new_v4().to_string();
+				let mut listener = PgListener::connect_with(pool).await?;
+				listener.listen(POSTGRES_CHANGE_CHANNEL).await?;
+				let listener_change_tx = change_tx.clone();
+				let listener_notification_id = notification_id.clone();
+				tokio::spawn(async move {
+					loop {
+						match listener.try_recv().await {
+							Ok(Some(notification)) => {
+								if notification.payload() != listener_notification_id {
+									let _ = listener_change_tx.send(());
+								}
+							},
+							Ok(None) => {
+								warn!("postgres config change listener reconnected; reloading config");
+								let _ = listener_change_tx.send(());
+							},
+							Err(err) => {
+								error!(?err, "postgres config change listener failed");
+								tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+							},
+						}
+					}
+				});
+				Ok(Self {
+					pool: DatabasePool::Postgres(pool.clone()),
+					change_tx,
+					notification_id: Some(notification_id),
+				})
 			},
-		};
-		let (change_tx, _) = watch::channel(());
-		Ok(Self { pool, change_tx })
+		}
 	}
 
 	pub fn pool(&self) -> DatabasePool {
@@ -161,7 +197,17 @@ impl ConfigResourceStore {
 	) -> anyhow::Result<ConfigResourcesResponse> {
 		let resources = match &self.pool {
 			DatabasePool::Sqlite(pool) => upsert_sqlite(pool, prepared).await?,
-			DatabasePool::Postgres(pool) => upsert_postgres(pool, prepared).await?,
+			DatabasePool::Postgres(pool) => {
+				upsert_postgres(
+					pool,
+					prepared,
+					self
+						.notification_id
+						.as_deref()
+						.expect("postgres store has a notification ID"),
+				)
+				.await?
+			},
 		};
 		if !resources.is_empty() {
 			self.notify_changed();
@@ -173,7 +219,18 @@ impl ConfigResourceStore {
 		validate_id(id)?;
 		let deleted = match &self.pool {
 			DatabasePool::Sqlite(pool) => delete_sqlite(pool, kind, id).await?,
-			DatabasePool::Postgres(pool) => delete_postgres(pool, kind, id).await?,
+			DatabasePool::Postgres(pool) => {
+				delete_postgres(
+					pool,
+					kind,
+					id,
+					self
+						.notification_id
+						.as_deref()
+						.expect("postgres store has a notification ID"),
+				)
+				.await?
+			},
 		};
 		if !deleted {
 			return Err(
@@ -751,6 +808,7 @@ async fn upsert_sqlite(
 async fn upsert_postgres(
 	pool: &PgPool,
 	prepared: Vec<PreparedResource>,
+	notification_id: &str,
 ) -> anyhow::Result<Vec<ConfigResource>> {
 	let mut tx = pool.begin().await?;
 	let mut changed = Vec::with_capacity(prepared.len());
@@ -782,6 +840,9 @@ async fn upsert_postgres(
 			resources.push(resource);
 		}
 	}
+	if !resources.is_empty() {
+		notify_postgres(&mut tx, notification_id).await?;
+	}
 	tx.commit().await?;
 	Ok(resources)
 }
@@ -810,7 +871,9 @@ async fn delete_postgres(
 	pool: &PgPool,
 	kind: ConfigResourceKind,
 	id: &str,
+	notification_id: &str,
 ) -> anyhow::Result<bool> {
+	let mut tx = pool.begin().await?;
 	let now = Utc::now();
 	let result = sqlx::query(
 		"UPDATE agw_config_resources \
@@ -820,9 +883,26 @@ async fn delete_postgres(
 	.bind(now)
 	.bind(kind.as_str())
 	.bind(id)
-	.execute(pool)
+	.execute(&mut *tx)
 	.await?;
-	Ok(result.rows_affected() > 0)
+	let deleted = result.rows_affected() > 0;
+	if deleted {
+		notify_postgres(&mut tx, notification_id).await?;
+	}
+	tx.commit().await?;
+	Ok(deleted)
+}
+
+async fn notify_postgres(
+	tx: &mut Transaction<'_, Postgres>,
+	notification_id: &str,
+) -> anyhow::Result<()> {
+	sqlx::query("SELECT pg_notify($1, $2)")
+		.bind(POSTGRES_CHANGE_CHANNEL)
+		.bind(notification_id)
+		.execute(&mut **tx)
+		.await?;
+	Ok(())
 }
 
 #[cfg_attr(not(feature = "ui"), allow(dead_code))]
@@ -922,6 +1002,8 @@ CREATE TABLE IF NOT EXISTS agw_config_resources (
 CREATE INDEX IF NOT EXISTS idx_agw_config_resources_kind_updated
 	ON agw_config_resources(kind, updated_at);
 "#;
+
+const POSTGRES_CHANGE_CHANNEL: &str = "agentgateway_config_changed";
 
 #[cfg(test)]
 mod tests {

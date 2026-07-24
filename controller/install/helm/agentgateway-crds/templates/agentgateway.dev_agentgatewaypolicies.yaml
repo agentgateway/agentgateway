@@ -3261,6 +3261,107 @@ spec:
                             workloadIdentity] may be set
                           rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
                             <= 1'
+                      credentials:
+                        description: |-
+                          Credentials is a list of additional credentials to inject on the
+                          backend request. Each entry resolves a Secret key and writes its value
+                          to the entry's location. `credentials` is independent of the primary
+                          `key`/`secretRef`/`passthrough` mechanism and may be set on its own or
+                          alongside it.
+                        items:
+                          description: |-
+                            BackendAuthCredential specifies one additional credential to inject on the
+                            backend request.
+                          properties:
+                            location:
+                              description: Where the credential is inserted on the
+                                backend request.
+                              properties:
+                                cookie:
+                                  properties:
+                                    name:
+                                      maxLength: 256
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - name
+                                  type: object
+                                header:
+                                  properties:
+                                    name:
+                                      description: Name of an HTTP header. HTTP/2
+                                        pseudo-headers (names beginning with `:`)
+                                        are not supported
+                                      maxLength: 256
+                                      minLength: 1
+                                      pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                      type: string
+                                    prefix:
+                                      maxLength: 256
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - name
+                                  type: object
+                                queryParameter:
+                                  properties:
+                                    name:
+                                      maxLength: 256
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - name
+                                  type: object
+                              type: object
+                              x-kubernetes-validations:
+                              - message: exactly one of the fields in [header queryParameter
+                                  cookie] must be set
+                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                  == 1'
+                            secretRef:
+                              description: |-
+                                SecretRef references a Kubernetes Secret holding the credential value, and
+                                optionally overrides the key read from it. Defaults to `Authorization`,
+                                matching the key convention used by the top-level `secretRef`.
+                              properties:
+                                group:
+                                  description: API group of the referenced credential;
+                                    empty selects the core API group
+                                  type: string
+                                key:
+                                  description: Key in the referenced Secret. If omitted,
+                                    a location-specific default is used
+                                  maxLength: 253
+                                  minLength: 1
+                                  type: string
+                                kind:
+                                  description: Kind of the referenced credential;
+                                    empty defaults to `Secret`
+                                  type: string
+                                name:
+                                  description: Name of the referenced credential
+                                  maxLength: 253
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - name
+                              type: object
+                              x-kubernetes-map-type: atomic
+                              x-kubernetes-validations:
+                              - message: custom credential refs must set both group
+                                  and kind
+                                rule: '(!has(self.group) || size(self.group) == 0)
+                                  ? (!has(self.kind) || size(self.kind) == 0 || self.kind
+                                  == ''Secret'') : (has(self.kind) && size(self.kind)
+                                  > 0)'
+                          required:
+                          - location
+                          - secretRef
+                          type: object
+                        maxItems: 8
+                        minItems: 1
+                        type: array
+                        x-kubernetes-list-type: atomic
                       crossAppAccess:
                         description: Cross App Access (Identity Assertion / ID-JAG)
                           authentication.
@@ -3808,9 +3909,9 @@ spec:
                         type: string
                       location:
                         description: |-
-                          Where backend credentials are inserted. Defaults to the `Authorization`
-                          header with the `Bearer ` prefix. Applies to `key`, `secretRef`, and
-                          `passthrough`.
+                          Where backend credentials are inserted.
+                          If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
+                          This applies to `key`, `secretRef`, and `passthrough`. Entries in `credentials` carry their own location.
                         properties:
                           cookie:
                             properties:
@@ -4337,13 +4438,19 @@ spec:
                             (has(self.kind) && size(self.kind) > 0)'
                     type: object
                     x-kubernetes-validations:
-                    - message: location may only be set for key or passthrough auth
+                    - message: must specify credentials, or at most one of key/secretRef/passthrough/aws/azure/gcp/oauthTokenExchange/crossAppAccess
+                        (credentials may be combined with a primary auth kind)
+                      rule: has(self.credentials) || has(self.key) || has(self.secretRef)
+                        || has(self.passthrough) || has(self.aws) || has(self.azure)
+                        || has(self.gcp) || has(self.oauthTokenExchange) || has(self.crossAppAccess)
+                    - message: location may only be set for key, secretRef, or passthrough
+                        auth
                       rule: 'has(self.location) ? has(self.key) || has(self.secretRef)
                         || has(self.passthrough) : true'
-                    - message: exactly one of the fields in [key secretRef passthrough
-                        aws azure gcp oauthTokenExchange crossAppAccess] must be set
+                    - message: at most one of the fields in [key secretRef passthrough
+                        aws azure gcp oauthTokenExchange crossAppAccess] may be set
                       rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange),has(self.crossAppAccess)].filter(x,x==true).size()
-                        == 1'
+                        <= 1'
                   extAuth:
                     description: |-
                       External authentication configuration for requests

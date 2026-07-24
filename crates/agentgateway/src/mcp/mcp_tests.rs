@@ -10,7 +10,7 @@ use rmcp::service::RunningService;
 use rmcp::transport::StreamableHttpServerConfig;
 use secrecy::SecretString;
 
-use crate::http::auth::BackendAuth;
+use crate::http::auth::BackendAuthKind;
 use crate::http::authorization::{PolicySet, RuleSet};
 use crate::http::sessionpersistence::MCPSession;
 use crate::mcp::handler::Relay;
@@ -2028,7 +2028,7 @@ async fn stream_to_stream_single_tls() {
 		&mock,
 		true,
 		false,
-		vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Key {
+		vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
 			value: SecretString::new("my-key".into()),
 			location: None,
 		})],

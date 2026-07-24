@@ -945,6 +945,16 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 			},
 		}
 	}
+
+	translatedCredentials, credErrs := translateBackendAuthCredentials(ctx, auth.Credentials, policy.Namespace)
+	errs = append(errs, credErrs...)
+	if len(translatedCredentials) > 0 {
+		if translatedAuth == nil {
+			translatedAuth = &api.BackendAuthPolicy{}
+		}
+		translatedAuth.Credentials = translatedCredentials
+	}
+
 	if translatedAuth == nil {
 		return nil, errors.Join(append(errs, kindErrs...)...)
 	}
@@ -1369,6 +1379,48 @@ func isOAuthReservedAdditionalParam(key string) bool {
 		}
 	}
 	return false
+}
+
+// translateBackendAuthCredentials resolves BackendAuth credential entries.
+func translateBackendAuthCredentials(ctx PolicyCtx, creds []agentgateway.BackendAuthCredential, namespace string) ([]*api.BackendAuthCredential, []error) {
+	if len(creds) == 0 {
+		return nil, nil
+	}
+	var errs []error
+	translated := make([]*api.BackendAuthCredential, 0, len(creds))
+	for _, c := range creds {
+		locName := credentialLocationName(c.Location)
+		var value string
+		data, secretKey, err := ctx.ResolveCredentialKeyRef(c.SecretRef, namespace, wellknown.Authorization)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("backendAuth credential %q: %w", locName, err))
+		} else if resolvedValue, ok := kubeutils.GetSecretDataValue(data, secretKey); !ok {
+			errs = append(errs, fmt.Errorf("backendAuth credential %q: secret %s/%s missing key %q",
+				locName, namespace, c.SecretRef.Name, secretKey))
+		} else {
+			value = resolvedValue
+		}
+		translated = append(translated, &api.BackendAuthCredential{
+			Location: translateAuthorizationLocation(&c.Location),
+			Value:    value,
+		})
+	}
+	return translated, errs
+}
+
+// credentialLocationName returns the name field of whichever location variant is set.
+// AuthorizationLocation is guaranteed by CEL to have exactly one of header/queryParameter/cookie set.
+func credentialLocationName(loc agentgateway.AuthorizationLocation) string {
+	if loc.Header != nil {
+		return string(loc.Header.Name)
+	}
+	if loc.QueryParameter != nil {
+		return loc.QueryParameter.Name
+	}
+	if loc.Cookie != nil {
+		return loc.Cookie.Name
+	}
+	return ""
 }
 
 // translateRouteType converts RouteType to agentgateway proto RouteType

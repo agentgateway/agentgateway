@@ -23,7 +23,7 @@ use serde::{Serialize, Serializer};
 use serde_json::Value;
 
 use crate::control::caclient::CaClient;
-use crate::http::auth::BackendAuth;
+use crate::http::auth::{BackendAuth, BackendAuthCredential, BackendAuthKind};
 use crate::http::authorization::RuleSet;
 use crate::http::backendtls::ResolvedBackendTLS;
 use crate::http::ext_proc::GrpcReferenceChannel;
@@ -2699,6 +2699,18 @@ pub enum BackendTrafficPolicy {
 	ResponseHeaderModifier(Arc<filters::HeaderModifier>),
 	RequestRedirect(filters::RequestRedirect),
 	RequestMirror(Vec<filters::RequestMirror>),
+}
+
+impl BackendTrafficPolicy {
+	pub fn backend_auth(auth: BackendAuthKind) -> Self {
+		Self::BackendAuth(BackendAuth::new(auth))
+	}
+	pub fn backend_auth_credentials(credentials: Vec<BackendAuthCredential>) -> Self {
+		Self::BackendAuth(BackendAuth {
+			kind: None,
+			credentials,
+		})
+	}
 }
 
 #[apply(schema!)]
