@@ -12,8 +12,7 @@ spec:
   - name: ai-gateway
     sectionName: llm
   provider: Bedrock
-  bedrock:
-    region: us-east-1
+  bedrock: {}
 ---
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel

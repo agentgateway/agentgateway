@@ -131,13 +131,14 @@ spec:
                     - version
                     type: object
                   region:
-                    description: AWS region to use for the backend.
+                    default: us-east-1
+                    description: |-
+                      AWS region to use for the backend.
+                      Defaults to `us-east-1` if not specified.
                     maxLength: 63
                     minLength: 1
                     pattern: ^[a-z0-9-]+$
                     type: string
-                required:
-                - region
                 type: object
               custom:
                 description: Provider-specific settings for a custom provider.
