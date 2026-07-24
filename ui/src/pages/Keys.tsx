@@ -76,7 +76,7 @@ export function KeysPage() {
   const advancedOpen = keyDrawer === "settings";
   const saving = persistence.isPending;
   const saveError = persistence.mutationError?.message ?? null;
-  const unavailable = isLoading || Boolean(persistence.error);
+  const unavailable = isLoading || Boolean(error);
 
   function databaseKeyId(key: VirtualApiKey) {
     const id = keyId(key);
