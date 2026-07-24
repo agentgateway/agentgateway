@@ -17,7 +17,25 @@ spec:
 
 ---
 # Output
-output: []
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/authorization-require-invalid-cel:rbac:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: authorization-require-invalid-cel
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        authorization:
+          require:
+          - foolen_{{request.path}}
 status:
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayPolicy
@@ -35,12 +53,7 @@ status:
       conditions:
       - lastTransitionTime: fake
         message: 'authorization matchExpression is not a valid CEL expression: foolen_{{request.path}}'
-        reason: Invalid
-        status: "False"
+        reason: PartiallyValid
+        status: "True"
         type: Accepted
-      - lastTransitionTime: fake
-        message: Policy is not attached due to invalid status
-        reason: Pending
-        status: "False"
-        type: Attached
       controllerName: agentgateway.dev/agentgateway

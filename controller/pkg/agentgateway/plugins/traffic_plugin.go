@@ -1544,10 +1544,6 @@ func processAuthorizationPolicy(
 	policy types.NamespacedName,
 ) (*api.Policy, error) {
 	rbac, err := TranslateAuthorization(auth)
-	if err != nil {
-		return nil, err
-	}
-
 	pol := &api.Policy{
 		Key:  basePolicyName + rbacPolicySuffix,
 		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
@@ -1563,7 +1559,7 @@ func processAuthorizationPolicy(
 		"policy", basePolicyName,
 		"agentgateway_policy", pol.Name)
 
-	return pol, nil
+	return pol, err
 }
 
 // TranslateAuthorization converts an Agentgateway authorization policy into

@@ -434,7 +434,7 @@ func translateModelPolicies(ctx RouteContext, namespace string, model *agentgate
 
 	policies := model.Policies
 	backend := &agentgateway.BackendFull{}
-	backend.BackendSimple.Auth = policies.Auth
+	backend.BackendSimple.Auth = policies.Auth.BackendAuth()
 	backend.BackendSimple.TLS = policies.TLS
 	backend.BackendSimple.Tunnel = policies.Tunnel
 	backend.Health = policies.Health

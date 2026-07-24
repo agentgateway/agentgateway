@@ -61,6 +61,7 @@ pub enum ProviderPreset {
 	Mistral,
 	Openrouter,
 	Togetherai,
+	#[serde(rename = "xai")]
 	XAI,
 	Fireworks,
 }
@@ -280,6 +281,11 @@ mod tests {
 
 	#[test]
 	fn preset_supplies_endpoint_and_formats() {
+		assert_eq!(
+			serde_json::to_string(&ProviderPreset::XAI).unwrap(),
+			"\"xai\""
+		);
+
 		let provider = ProviderPreset::Cohere.provider(None);
 		assert_eq!(ProviderPreset::Cohere.base_url(), "https://api.cohere.ai");
 		assert_eq!(

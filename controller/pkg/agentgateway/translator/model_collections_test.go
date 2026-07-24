@@ -108,7 +108,7 @@ func TestModelProviderInlinePolicies(t *testing.T) {
 		Provider: &providerType,
 		Policies: &agentgateway.ModelPolicies{
 			Transformations: []agentgateway.FieldTransformation{{Field: "temperature", Expression: "0.5"}},
-			Auth:            &agentgateway.BackendAuth{InlineKey: &apiKey},
+			Auth:            &agentgateway.ModelBackendAuth{InlineKey: &apiKey},
 			Health:          &agentgateway.Health{UnhealthyCondition: new(agentgateway.CELExpression("response.code >= 500"))},
 			TLS:             &agentgateway.BackendTLS{InsecureSkipVerify: new(agentgateway.InsecureTLSModeAll)},
 			Headers: &agentgateway.HeaderModifiers{
@@ -182,6 +182,7 @@ func TestModelAuthorization(t *testing.T) {
 	if got := route.GetAuthorization().GetAllow(); len(got) != 1 || got[0] != "request.headers['x-model-access'] == 'allowed'" {
 		t.Errorf("authorization allow = %#v, want model access rule", got)
 	}
+
 }
 
 func TestValidateModelBaseURL(t *testing.T) {

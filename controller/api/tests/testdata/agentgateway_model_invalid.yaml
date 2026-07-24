@@ -152,3 +152,17 @@ spec:
   azure:
     resourceName: example
     resourceType: OpenAI
+---
+_err: unknown fields [spec.policies.auth.crossAppAccess]
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: model-cross-app-access
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: OpenAI
+  policies:
+    auth:
+      crossAppAccess: {}

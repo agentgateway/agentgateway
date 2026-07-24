@@ -126,7 +126,7 @@ type ModelPolicies struct {
 
 	// Credentials used to authenticate requests to this model provider.
 	// +optional
-	Auth *BackendAuth `json:"auth,omitempty"`
+	Auth *ModelBackendAuth `json:"auth,omitempty"`
 
 	// Health checking and eviction behavior for this model provider.
 	// +optional
@@ -143,6 +143,85 @@ type ModelPolicies struct {
 	// Guardrails for requests and responses sent to this model provider.
 	// +optional
 	PromptGuard *AIPromptGuard `json:"promptGuard,omitempty"`
+}
+
+// ModelBackendAuth configures credentials for a model provider.
+// +kubebuilder:validation:AtMostOneOf=key;secretRef;passthrough;aws;azure;gcp;oauthTokenExchange
+// +kubebuilder:validation:XValidation:rule="has(self.credentials) || has(self.key) || has(self.secretRef) || has(self.passthrough) || has(self.aws) || has(self.azure) || has(self.gcp) || has(self.oauthTokenExchange)",message="must specify credentials, or at most one of key/secretRef/passthrough/aws/azure/gcp/oauthTokenExchange (credentials may be combined with a primary auth kind)"
+// +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) || has(self.passthrough) : true",message="location may only be set for key, secretRef, or passthrough auth"
+type ModelBackendAuth struct {
+	// Inline key to use as the value of the `Authorization` header. This option
+	// is the least secure; usage of a `Secret` is preferred.
+	// +kubebuilder:validation:MaxLength=2048
+	// +optional
+	InlineKey *string `json:"key,omitempty"`
+
+	// Credential source for the authorization value, defaulting to a Kubernetes
+	// `Secret`. By default, the value is read from the `Authorization` key; set
+	// `secretRef.key` to override it. A `Bearer ` prefix is stripped only from
+	// the default `Authorization` key.
+	// +optional
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
+
+	// Reuses a client token already validated by another policy. Those policies
+	// may strip client credentials; passthrough adds the original token back to
+	// the backend request. Without client auth policies, this has no effect.
+	// +optional
+	Passthrough *BackendAuthPassthrough `json:"passthrough,omitempty"`
+
+	// Explicit AWS authentication method for the model provider. When omitted,
+	// default AWS SDK credential discovery is used.
+	// +optional
+	AWS *AwsAuth `json:"aws,omitempty"`
+
+	// Azure authentication method for the model provider.
+	// +optional
+	Azure *AzureAuth `json:"azure,omitempty"`
+
+	// Google authentication method for the model provider. When omitted,
+	// default Google credential discovery is used.
+	// +optional
+	GCP *GcpAuth `json:"gcp,omitempty"`
+
+	// OAuth 2.0 token exchange (RFC 8693) / jwt-bearer (RFC 7523)
+	// authentication.
+	// +optional
+	OAuthTokenExchange *OAuthTokenExchange `json:"oauthTokenExchange,omitempty"`
+
+	// Where backend credentials are inserted. If omitted, credentials are
+	// written to the `Authorization` header with the `Bearer ` prefix. This
+	// applies to `key`, `secretRef`, and `passthrough`. Entries in
+	// `credentials` carry their own location.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
+
+	// Credentials is a list of additional credentials to inject on the backend
+	// request. Each entry resolves a Secret key and writes its value to the
+	// entry's location. `credentials` is independent of the primary
+	// `key`/`secretRef`/`passthrough` mechanism and may be set on its own or
+	// alongside it.
+	// +optional
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=8
+	// +listType=atomic
+	Credentials []BackendAuthCredential `json:"credentials,omitempty"`
+}
+
+func (a *ModelBackendAuth) BackendAuth() *BackendAuth {
+	if a == nil {
+		return nil
+	}
+	return &BackendAuth{
+		InlineKey:          a.InlineKey,
+		SecretRef:          a.SecretRef,
+		Passthrough:        a.Passthrough,
+		AWS:                a.AWS,
+		Azure:              a.Azure,
+		GCP:                a.GCP,
+		OAuthTokenExchange: a.OAuthTokenExchange,
+		Location:           a.Location,
+		Credentials:        a.Credentials,
+	}
 }
 
 // ModelMatch contains conditions for selecting a model.
