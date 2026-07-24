@@ -326,7 +326,10 @@ function McpSettings(props: {
   );
   const patch: McpSettingsPatch = {
     gateways: binding.gateways ?? [],
-    port: binding.gateways != null && binding.gateways.length > 0 ? null : binding.port,
+    port:
+      binding.gateways != null && binding.gateways.length > 0
+        ? null
+        : binding.port,
     statefulMode,
     prefixMode: prefixMode === "none" ? null : prefixMode,
     failureMode,
