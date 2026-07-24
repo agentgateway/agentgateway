@@ -2242,7 +2242,14 @@ where
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
-#[serde(untagged)]
+// Untagged, so serde discards the inner variant's error and reports only that nothing
+// matched. Without `expecting`, a misspelled field in e.g. `aws` is indistinguishable
+// from that field being unsupported in this version, since both surface as the same
+// bare "did not match any variant" message.
+#[serde(
+	untagged,
+	expecting = "a backend auth policy: one of `passthrough`, `key`, `gcp`, `aws`, `azure`, `copilot`, `oauthTokenExchange`, `crossAppAccess`, or the `key: <secret>` shorthand. Field names are camelCase, and unknown fields are rejected"
+)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 enum BackendAuthCompat {
 	PlainKey {
