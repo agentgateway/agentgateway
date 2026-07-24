@@ -407,8 +407,9 @@ function surfaceEndpointLabel(
   gateways: string | string[] | undefined,
   port: number,
 ) {
-  if (!gateways) return `Port ${port}`;
-  return `Gateway ${Array.isArray(gateways) ? gateways.join(", ") : gateways}`;
+  const refs = Array.isArray(gateways) ? gateways : gateways ? [gateways] : [];
+  if (!refs.length) return `Port ${port}`;
+  return `Gateway ${refs.join(", ")}`;
 }
 
 function uiExposedWithoutAuth(config: GatewayConfig | null | undefined) {
