@@ -1,0 +1,27 @@
+# Smoke test spec for this example. Discovered and run by test/examples.
+# mockLLM points every model's baseUrl at a local mock that reflects the prompt
+# back, so the assertions below use strings the probe itself chose.
+readyAddr: 127.0.0.1:19001 # this example overrides readinessAddr
+mockLLM: true
+env:
+  OPENAI_API_KEY: dummy
+  ANTHROPIC_API_KEY: dummy
+probes:
+  # OpenAI-backed `smart` model.
+  - http:
+      method: POST
+      url: http://127.0.0.1:4000/v1/chat/completions
+      headers:
+        content-type: application/json
+      body: '{"model":"smart","messages":[{"role":"user","content":"smoke-openai-42"}]}'
+      expectStatus: 200
+      expectBodyContains: [smoke-openai-42]
+  # anthropic/* model, exercising the prefix transformation.
+  - http:
+      method: POST
+      url: http://127.0.0.1:4000/v1/messages
+      headers:
+        content-type: application/json
+      body: '{"model":"anthropic/claude-3-5-haiku-latest","max_tokens":64,"messages":[{"role":"user","content":"smoke-anthropic-42"}]}'
+      expectStatus: 200
+      expectBodyContains: [smoke-anthropic-42]
