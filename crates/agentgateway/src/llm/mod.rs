@@ -2164,8 +2164,9 @@ impl AIProvider {
 				resp
 					.entry("model".to_string())
 					.or_insert_with(|| serde_json::Value::String(req.request_model.to_string()));
+				let normalized = serde_json::to_vec(&resp).map_err(AIError::ResponseParsing)?;
 				let resp: types::embeddings::Response =
-					serde_json::from_value(resp.into()).map_err(logged_response_parsing(&bytes))?;
+					serde_json::from_slice(&normalized).map_err(logged_response_parsing(&normalized))?;
 				let llm_resp = resp.to_llm_response(LogContentFields::default());
 				let body = ResponseType::serialize(&resp).map_err(AIError::ResponseParsing)?;
 				Ok((llm_resp, Bytes::from(body)))
