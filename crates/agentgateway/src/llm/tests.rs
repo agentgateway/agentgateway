@@ -678,6 +678,23 @@ fn copilot_embeddings_response_adds_missing_openai_fields() {
 }
 
 #[test]
+fn copilot_embeddings_response_preserves_missing_usage() {
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let mut request = llm_request_with_tokens(None);
+	request.input_format = InputFormat::Embeddings;
+	request.request_model = "text-embedding-3-small".into();
+	let response =
+		Bytes::from_static(br#"{"data":[{"embedding":[0.5],"index":0,"object":"embedding"}]}"#);
+
+	let (_, body) = provider
+		.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
+		.expect("Copilot embeddings response should normalize");
+	let body: Value = serde_json::from_slice(&body).expect("normalized response should be JSON");
+
+	assert!(body.get("usage").is_none());
+}
+
+#[test]
 fn copilot_embeddings_response_preserves_explicit_openai_fields() {
 	let provider = AIProvider::Copilot(copilot::Provider { model: None });
 	let mut request = llm_request_with_tokens(None);

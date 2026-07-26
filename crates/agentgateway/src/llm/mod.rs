@@ -2168,8 +2168,7 @@ impl AIProvider {
 				let resp: types::embeddings::Response =
 					serde_json::from_slice(&normalized).map_err(logged_response_parsing(&normalized))?;
 				let llm_resp = resp.to_llm_response(LogContentFields::default());
-				let body = ResponseType::serialize(&resp).map_err(AIError::ResponseParsing)?;
-				Ok((llm_resp, Bytes::from(body)))
+				Ok((llm_resp, Bytes::from(normalized)))
 			},
 			AIProvider::Vertex(p) if !p.is_anthropic_model(Some(&req.request_model)) => {
 				let translated =
