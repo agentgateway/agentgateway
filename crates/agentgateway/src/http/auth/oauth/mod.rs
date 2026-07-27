@@ -759,18 +759,22 @@ pub(super) async fn apply_identity_assertion(
 	Ok(explicit)
 }
 
-/// Read a subject token for exchange. A JWT auth policy may have already stripped
-/// the configured credential after validation, so fall back to populated Claims.
+/// Extract the subject token, falling back to Claims only for the default source.
 pub(super) fn extract_subject_token(
 	source: &AuthorizationLocation,
 	req: &Request,
 ) -> Option<String> {
-	source
-		.extract(req)
-		.map(|token| token.into_owned())
-		.filter(|token| !token.trim().is_empty())
-		.or_else(|| extract_validated_claims_token(req))
-		.filter(|token| !token.trim().is_empty())
+	if let Some(token) = source.extract(req).filter(|token| !token.trim().is_empty()) {
+		return Some(token.into_owned());
+	}
+
+	if !source.is_bearer_header() {
+		return None;
+	}
+
+	// Claims has no source provenance. OIDC also populates it with the ID token
+	// from an encrypted session cookie, even when no Authorization header existed
+	extract_validated_claims_token(req).filter(|token| !token.trim().is_empty())
 }
 
 fn extract_validated_claims_token(req: &Request) -> Option<String> {

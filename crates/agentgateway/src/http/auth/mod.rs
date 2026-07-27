@@ -319,6 +319,18 @@ impl AuthorizationLocation {
 		}
 	}
 
+	/// Whether this is the default [`Self::bearer_header`] location. The prefix is compared
+	/// the same case-insensitive way [`Self::extract`] strips it, so configs differing only
+	/// in prefix casing are not treated as distinct locations.
+	pub(crate) fn is_bearer_header(&self) -> bool {
+		matches!(
+			self,
+			Self::Header { name, prefix }
+				if *name == http::header::AUTHORIZATION
+					&& prefix.as_deref().is_some_and(|p| p.eq_ignore_ascii_case("Bearer "))
+		)
+	}
+
 	pub fn extract<'a>(&self, req: &'a Request) -> Option<Cow<'a, str>> {
 		match self {
 			AuthorizationLocation::Header { name, prefix } => {
