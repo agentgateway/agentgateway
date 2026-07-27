@@ -450,7 +450,7 @@ pub(crate) fn parse_openapi_schema(
 									"final schema is not an object".to_string(),
 								))?
 								.clone();
-							let tool = Tool::new_with_raw(
+							let mut tool = Tool::new_with_raw(
 								Cow::Owned(name.clone()),
 								Some(Cow::Owned(
 									op.description
@@ -460,6 +460,10 @@ pub(crate) fn parse_openapi_schema(
 								)),
 								Arc::new(final_json),
 							);
+							if let Some(summary) = op.summary.as_ref().filter(|s| !s.is_empty()) {
+								let end = std::cmp::min(64, summary.len());
+								tool = tool.with_title(summary[..summary.floor_char_boundary(end)].to_string());
+							}
 							let upstream = UpstreamOpenAPICall {
 								// method: Method::from_bytes(method.as_ref()).expect("todo"),
 								method: method.to_string(),
