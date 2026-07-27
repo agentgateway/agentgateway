@@ -41,6 +41,7 @@ const BEDROCK_NOVA: &str = "bedrock-nova";
 const COHERE: &str = "cohere";
 const VERTEX_GEMINI: &str = "vertex-gemini";
 const GEMINI_NATIVE: &str = "gemini-native";
+const RESPONSES: &str = "responses";
 
 mod requests {
 	use super::*;
@@ -151,9 +152,9 @@ mod requests {
 		("generation-config", &[VERTEX_GEMINI]),
 	];
 	const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
+		("basic", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES]),
 		("system_message", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
-		("tools", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
+		("tools", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES]),
 		("server_tools", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
 		("reasoning", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
 		("metadata", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
@@ -165,6 +166,7 @@ mod requests {
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
 		("reasoning_replay", &[BEDROCK]),
 		("tool_history_without_tools", &[BEDROCK]),
+		("responses_agent_subset", &[RESPONSES]),
 	];
 	const RESPONSES_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[BEDROCK, GEMINI]),
@@ -261,6 +263,9 @@ mod requests {
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::messages::Request| {
 						let body = serde_json::to_vec(i).map_err(AIError::RequestMarshal)?;
 						vertex.prepare_anthropic_message_body(body)
+					}),
+					RESPONSES => test_request(RESPONSES, &path, |i| {
+						conversion::responses::from_messages::translate(i)
 					}),
 					other => panic!("unsupported provider in MESSAGES_REQUESTS: {other}"),
 				}
@@ -696,6 +701,7 @@ mod responses {
 	const BEDROCK_TO_DETECT: &str = "bedrock-detect";
 	const RESPONSES_TO_RESPONSES: &str = "responses-responses";
 	const RESPONSES_TO_DETECT: &str = "responses-detect";
+	const RESPONSES_TO_MESSAGES: &str = "responses-messages";
 	const VERTEX_GEMINI_TO_COMPLETIONS: &str = "vertex-gemini-completions";
 
 	const ALL_BEDROCK: &[&str] = &[
@@ -752,7 +758,11 @@ mod responses {
 		),
 	];
 	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[
-		("basic", &[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT]),
+		(
+			"basic",
+			&[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT, RESPONSES_TO_MESSAGES],
+		),
+		("tool", &[RESPONSES_TO_MESSAGES]),
 		("custom-tool", &[RESPONSES_TO_RESPONSES]),
 		("truncated_tool_call", &[RESPONSES_TO_RESPONSES]),
 	];
@@ -903,6 +913,9 @@ mod responses {
 							serde_json::from_slice::<types::detect::Response>(&bytes)
 								.unwrap_or_else(|_| types::detect::Response::new_raw(bytes)),
 						))
+					}),
+					RESPONSES_TO_MESSAGES => test_response(provider, &path, |i| {
+						conversion::responses::from_messages::translate_response(&i)
 					}),
 					other => panic!("unsupported provider in RESPONSES_RESPONSES: {other}"),
 				}
@@ -1321,6 +1334,83 @@ data: {"type":"message_stop"}
 				.input_tokens_details
 				.cache_write_tokens,
 			None
+		);
+	}
+}
+
+#[tokio::test]
+async fn responses_to_messages_stream_translates_text_tool_and_usage() {
+	use http_body_util::BodyExt;
+
+	let input = fs::read_to_string(fixture_path("response/responses/stream.json"))
+		.expect("failed to read input fixture");
+	let output = conversion::responses::from_messages::translate_stream(
+		axum_core::body::Body::from(input),
+		1024 * 1024,
+		StreamingUsageGuard::default(),
+		crate::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		},
+	)
+	.collect()
+	.await
+	.unwrap()
+	.to_bytes();
+
+	let events = String::from_utf8(output.to_vec())
+		.unwrap()
+		.lines()
+		.filter_map(|line| line.strip_prefix("data: "))
+		.filter(|data| *data != "[DONE]")
+		.filter_map(|data| serde_json::from_str::<Value>(data).ok())
+		.collect::<Vec<_>>();
+
+	assert!(
+		events.iter().any(|event| event["type"] == "message_start"),
+		"missing message_start: {events:#?}"
+	);
+	assert!(events.iter().any(|event| {
+		event["type"] == "content_block_delta"
+			&& event["delta"]["type"] == "text_delta"
+			&& event["delta"]["text"] == "Hello"
+	}));
+	assert!(events.iter().any(|event| {
+		event["type"] == "content_block_delta"
+			&& event["delta"]["type"] == "input_json_delta"
+			&& event["delta"]["partial_json"] == "{\"loc"
+	}));
+	let delta = events
+		.iter()
+		.find(|event| event["type"] == "message_delta")
+		.expect("missing message_delta");
+	assert_eq!(delta["delta"]["stop_reason"], "tool_use");
+	assert_eq!(
+		delta["usage"],
+		json!({
+			"input_tokens": 12,
+			"output_tokens": 8,
+		})
+	);
+	assert!(
+		events.iter().any(|event| event["type"] == "message_stop"),
+		"missing message_stop: {events:#?}"
+	);
+}
+
+#[test]
+fn messages_to_responses_rejects_unsupported_features() {
+	for path in [
+		"requests/messages/cache_control.json",
+		"requests/messages/reasoning_replay.json",
+	] {
+		let input_str = fs::read_to_string(fixture_path(path)).expect("failed to read fixture");
+		let input: types::messages::Request =
+			serde_json::from_str(&input_str).expect("failed to parse fixture");
+		let err = conversion::responses::from_messages::translate(&input).unwrap_err();
+		assert!(
+			matches!(err, AIError::UnsupportedConversion(_)),
+			"expected UnsupportedConversion for {path}, got {err:?}"
 		);
 	}
 }

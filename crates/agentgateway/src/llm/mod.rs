@@ -329,9 +329,8 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 		chat(InputFormat::Completions, ChatFormat::BedrockConverse),
 		// Messages
 		chat(InputFormat::Messages, ChatFormat::OpenAICompletions),
+		chat(InputFormat::Messages, ChatFormat::OpenAIResponses),
 		chat(InputFormat::Messages, ChatFormat::BedrockConverse),
-		// Missing: Messages --> Responses
-		//
 		// Responses
 		chat(InputFormat::Responses, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Responses, ChatFormat::BedrockConverse),
@@ -374,6 +373,7 @@ fn render_openai_responses(
 			apply_openai_moderation(&mut req.moderation, ctx)?;
 			serde_json::to_vec(&req).map_err(AIError::RequestMarshal)
 		},
+		types::ChatRequest::Messages(req) => conversion::responses::from_messages::translate(&req),
 		_ => Err(AIError::UnsupportedConversion(strng::literal!(
 			"expected responses request"
 		))),
@@ -536,6 +536,7 @@ impl ChatTranslation {
 			},
 			ChatFormat::OpenAIResponses => match self.input {
 				InputFormat::Responses => AIProvider::parse_response::<types::responses::Response>(bytes),
+				InputFormat::Messages => conversion::responses::from_messages::translate_response(bytes),
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
 					"from {:?} to {:?}",
 					self.output,
@@ -617,6 +618,14 @@ impl ChatTranslation {
 			ChatFormat::OpenAIResponses => match self.input {
 				InputFormat::Responses => resp.map(|b| {
 					conversion::responses::passthrough_stream(
+						b,
+						ctx.buffer_limit,
+						ctx.logger,
+						ctx.log_content,
+					)
+				}),
+				InputFormat::Messages => resp.map(|b| {
+					conversion::responses::from_messages::translate_stream(
 						b,
 						ctx.buffer_limit,
 						ctx.logger,
@@ -753,6 +762,9 @@ impl ChatTranslation {
 			ChatFormat::OpenAIResponses => match format {
 				ChatErrorFormat::OpenAI => match self.input {
 					InputFormat::Responses => Ok(bytes.clone()),
+					InputFormat::Messages => {
+						conversion::responses::from_messages::translate_error(bytes, status)
+					},
 					_ => unsupported(),
 				},
 				_ => unsupported(),

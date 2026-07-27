@@ -1,0 +1,200 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/responses_agent_subset.json
+info:
+  model: claude-sonnet-4-20250514
+  max_tokens: 256
+  system:
+    - type: text
+      text: You are a reliable tool-using assistant.
+    - type: text
+      text: Return compact JSON when asked.
+  thinking:
+    type: adaptive
+  output_config:
+    effort: medium
+    format:
+      type: json_schema
+      schema:
+        type: object
+        properties:
+          answer:
+            type: string
+        required:
+          - answer
+        additionalProperties: false
+  metadata:
+    user_id: user-123
+    trace_id: trace-abc
+  tools:
+    - name: get_weather
+      description: Get the current weather in a given location
+      input_schema:
+        type: object
+        properties:
+          location:
+            type: string
+        required:
+          - location
+  tool_choice:
+    type: tool
+    name: get_weather
+    disable_parallel_tool_use: true
+  messages:
+    - role: user
+      content:
+        - type: text
+          text: "What is in these images, then check the weather?"
+        - type: image
+          source:
+            type: base64
+            media_type: image/png
+            data: aGVsbG8=
+        - type: image
+          source:
+            type: url
+            url: "https://example.com/image.png"
+        - type: image
+          source:
+            type: file
+            file_id: file_abc123
+    - role: assistant
+      content:
+        - type: tool_use
+          id: call_weather
+          name: get_weather
+          input:
+            location: San Francisco
+    - role: user
+      content:
+        - type: tool_result
+          tool_use_id: call_weather
+          content:
+            - type: text
+              text: Sunny and 65F.
+---
+{
+  "request": {
+    "input": [
+      {
+        "type": "message",
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "What is in these images, then check the weather?"
+          },
+          {
+            "type": "input_image",
+            "image_url": "data:image/png;base64,aGVsbG8=",
+            "detail": "auto"
+          },
+          {
+            "type": "input_image",
+            "image_url": "https://example.com/image.png",
+            "detail": "auto"
+          },
+          {
+            "type": "input_image",
+            "file_id": "file_abc123",
+            "detail": "auto"
+          }
+        ]
+      },
+      {
+        "type": "function_call",
+        "id": "call_weather",
+        "call_id": "call_weather",
+        "name": "get_weather",
+        "arguments": "{\"location\":\"San Francisco\"}",
+        "status": "completed"
+      },
+      {
+        "type": "function_call_output",
+        "call_id": "call_weather",
+        "output": "Sunny and 65F.",
+        "status": "completed"
+      }
+    ],
+    "model": "claude-sonnet-4-20250514",
+    "max_output_tokens": 256,
+    "stream": false,
+    "instructions": "You are a reliable tool-using assistant.\nReturn compact JSON when asked.",
+    "reasoning": {
+      "effort": "medium"
+    },
+    "text": {
+      "format": {
+        "type": "json_schema",
+        "name": "structured_output",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "answer": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "answer"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "metadata": {
+      "trace_id": "trace-abc",
+      "user_id": "user-123"
+    },
+    "tools": [
+      {
+        "type": "function",
+        "name": "get_weather",
+        "description": "Get the current weather in a given location",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "location"
+          ]
+        }
+      }
+    ],
+    "tool_choice": {
+      "type": "function",
+      "name": "get_weather"
+    },
+    "parallel_tool_calls": false
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-sonnet-4-20250514",
+    "provider": "responses",
+    "streaming": false,
+    "params": {
+      "max_tokens": 256
+    },
+    "prompt": [
+      {
+        "role": "system",
+        "content": "You are a reliable tool-using assistant.\nReturn compact JSON when asked."
+      },
+      {
+        "role": "user",
+        "content": "What is in these images, then check the weather?"
+      },
+      {
+        "role": "assistant",
+        "content": ""
+      },
+      {
+        "role": "user",
+        "content": ""
+      }
+    ]
+  }
+}
