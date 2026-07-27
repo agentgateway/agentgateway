@@ -20,9 +20,10 @@ import (
 )
 
 var (
-	modelCatalogSetupManifest   = manifest("modelcatalog", "setup.yaml")
-	modelCatalogAltManifest     = manifest("modelcatalog", "alt-catalog.yaml")
-	modelCatalogUpdatedManifest = manifest("modelcatalog", "updated-catalog.yaml")
+	modelCatalogSetupManifest           = manifest("modelcatalog", "setup.yaml")
+	modelCatalogAltManifest             = manifest("modelcatalog", "alt-catalog.yaml")
+	modelCatalogUpdatedManifest         = manifest("modelcatalog", "updated-catalog.yaml")
+	modelCatalogUpdatedSentinelManifest = manifest("modelcatalog", "updated-catalog-sentinel.yaml")
 )
 
 const (
@@ -50,16 +51,17 @@ func maxLoggedCost(logs string) float64 {
 	return maxCost
 }
 
-// hasLoggedCostBelow reports whether logs contain an agw.ai.usage.cost.total value strictly below ceiling.
-func hasLoggedCostBelow(logs string, ceiling float64) bool {
+// latestLoggedCost returns the newest agw.ai.usage.cost.total value (last log line wins)
+func latestLoggedCost(logs string) float64 {
+	latest := -1.0
 	for line := range strings.SplitSeq(logs, "\n") {
 		if m := costTotalRe.FindStringSubmatch(line); m != nil {
-			if cost, err := strconv.ParseFloat(m[1], 64); err == nil && cost < ceiling {
-				return true
+			if cost, err := strconv.ParseFloat(m[1], 64); err == nil {
+				latest = cost
 			}
 		}
 	}
-	return false
+	return latest
 }
 
 func TestModelCatalogCost(tt *testing.T) {
@@ -98,7 +100,7 @@ func TestModelCatalogCost(tt *testing.T) {
 		}).WithTimeout(30 * time.Second).WithPolling(2 * time.Second).Should(gomega.Succeed())
 	})
 
-	t.Run("ConfigMapUpdatePropagatesWithoutRestart", func(t base.Test) {
+	t.Run("ConsecutiveConfigMapUpdatesPropagateWithoutRestart", func(t base.Test) {
 		gwName := types.NamespacedName{Name: modelCatalogGatewayName, Namespace: modelCatalogNamespace}
 		gw := base.Gateway{
 			NamespacedName: gwName,
@@ -110,41 +112,63 @@ func TestModelCatalogCost(tt *testing.T) {
 		podsBefore, err := gatewayPodUIDs(t, modelCatalogGatewayName)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 
-		t.Apply(modelCatalogUpdatedManifest)
+		steps := []struct {
+			name         string
+			manifest     string
+			wantSentinel bool
+		}{
+			{"cheap", modelCatalogUpdatedManifest, false},
+			{"sentinel", modelCatalogUpdatedSentinelManifest, true},
+			{"cheap-again", modelCatalogUpdatedManifest, false},
+		}
 
 		podClient := t.TestInstallation.ClusterContext.Client.Kube().CoreV1().Pods(modelCatalogNamespace)
-		pods, err := podClient.List(t.Ctx, metav1.ListOptions{
-			LabelSelector: "gateway.networking.k8s.io/gateway-name=" + modelCatalogGatewayName,
-		})
-		g.Expect(err).NotTo(gomega.HaveOccurred())
-		g.Expect(pods.Items).To(gomega.HaveLen(1), "expected a single gateway pod")
-		pod := pods.Items[0]
-		metav1.SetMetaDataAnnotation(&pod.ObjectMeta, "throwawaytoupdateconfigmapdata", "true")
-		_, err = podClient.Update(t.Ctx, &pod, metav1.UpdateOptions{})
-		g.Expect(err).NotTo(gomega.HaveOccurred())
 
-		g.Eventually(func() error {
-			gw.Send(
-				t,
-				base.ExpectBody(gomega.ContainSubstring("The name of this project is agentgateway")),
-				curl.WithPath("/v1/chat/completions"),
-				curl.WithPostBody(`{"messages": [{"role": "user", "content": "What is the name of this project?"}]}`),
-				curl.WithHeader("Content-Type", "application/json"),
-			)
-			logs, err := gatewayAccessLogs(t, modelCatalogGatewayName)
-			if err != nil {
-				return err
-			}
-			if !hasLoggedCostBelow(logs, minSentinelCost) {
-				return fmt.Errorf("no agw.ai.usage.cost.total below ceiling %v in gateway logs (ConfigMap update not yet reflected by running pod)", minSentinelCost)
-			}
-			return nil
-		}).WithTimeout(10 * time.Second).WithPolling(1 * time.Second).Should(gomega.Succeed())
+		for i, step := range steps {
+			t.Apply(step.manifest)
+
+			// Nudge kubelet to re-sync the projected volume now; a unique annotation
+			// forces a real update without restarting the pod.
+			pods, err := podClient.List(t.Ctx, metav1.ListOptions{
+				LabelSelector: "gateway.networking.k8s.io/gateway-name=" + modelCatalogGatewayName,
+			})
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+			g.Expect(pods.Items).To(gomega.HaveLen(1), "expected a single gateway pod")
+			pod := pods.Items[0]
+			metav1.SetMetaDataAnnotation(&pod.ObjectMeta, "throwawaytoupdateconfigmapdata", fmt.Sprintf("update-%d-%s", i, step.name))
+			_, err = podClient.Update(t.Ctx, &pod, metav1.UpdateOptions{})
+			g.Expect(err).NotTo(gomega.HaveOccurred())
+
+			g.Eventually(func() error {
+				gw.Send(
+					t,
+					base.ExpectBody(gomega.ContainSubstring("The name of this project is agentgateway")),
+					curl.WithPath("/v1/chat/completions"),
+					curl.WithPostBody(`{"messages": [{"role": "user", "content": "What is the name of this project?"}]}`),
+					curl.WithHeader("Content-Type", "application/json"),
+				)
+				logs, err := gatewayAccessLogs(t, modelCatalogGatewayName)
+				if err != nil {
+					return err
+				}
+				latest := latestLoggedCost(logs)
+				if latest < 0 {
+					return fmt.Errorf("update %d (%s): no agw.ai.usage.cost.total in gateway logs", i, step.name)
+				}
+				if step.wantSentinel && latest < minSentinelCost {
+					return fmt.Errorf("update %d (%s): latest cost %v < sentinel floor %v (atomic ConfigMap replacement not detected by running pod?)", i, step.name, latest, minSentinelCost)
+				}
+				if !step.wantSentinel && latest >= minSentinelCost {
+					return fmt.Errorf("update %d (%s): latest cost %v >= sentinel floor %v (atomic ConfigMap replacement not detected by running pod?)", i, step.name, latest, minSentinelCost)
+				}
+				return nil
+			}).WithTimeout(30 * time.Second).WithPolling(1 * time.Second).Should(gomega.Succeed())
+		}
 
 		podsAfter, err := gatewayPodUIDs(t, modelCatalogGatewayName)
 		g.Expect(err).NotTo(gomega.HaveOccurred())
 		g.Expect(podsAfter).To(gomega.Equal(podsBefore),
-			"gateway pod must not have restarted for the ConfigMap update to take effect")
+			"gateway pod must not have restarted for the ConfigMap updates to take effect")
 	})
 
 	t.Run("AlternativeCatalog", func(t base.Test) {
