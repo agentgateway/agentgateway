@@ -555,18 +555,27 @@ fn log_loaded_catalog(message: &'static str, snapshot: &CatalogSnapshot, missing
 }
 
 fn watch_catalog_files(file_paths: Vec<PathBuf>, catalog: Arc<ModelCatalog>) -> anyhow::Result<()> {
-	let mut watched = crate::util::watch_files_with_options(
-		file_paths,
-		crate::util::WatchFilesOptions::default().reload_on_disappearance(true),
-	)?;
+	let watch_options = crate::util::WatchFilesOptions::default()
+		.reload_on_disappearance(true)
+		.close_on_removal(true);
+	let mut watched = crate::util::watch_files_with_options(file_paths, watch_options)?;
 	info!(
 		count = watched.paths().len(),
 		"watching model catalog files"
 	);
 	tokio::task::spawn(async move {
-		while watched.changed().await {
+		while let Some(invalidated) = watched.changed_invalidated().await {
 			if let Err(e) = catalog.reload().await {
 				error!("failed to reload model catalog; keeping last valid catalog: {e:#}")
+			}
+			if invalidated {
+				match crate::util::watch_files_with_options(watched.paths().to_vec(), watch_options) {
+					Ok(new_watched) => watched = new_watched,
+					Err(e) => {
+						warn!("failed to re-watch model catalog files: {e}");
+						break;
+					},
+				}
 			}
 		}
 	});
@@ -648,6 +657,9 @@ fn usage_for(
 
 #[cfg(test)]
 mod tests {
+	use std::path::Path;
+	use std::time::Duration;
+
 	use rust_decimal::prelude::ToPrimitive;
 
 	use super::*;
@@ -656,6 +668,41 @@ mod tests {
 		format!(
 			r#"{{"providers":{{"openai":{{"models":{{"my-model":{{"rates":{{"input":"{input_rate}","output":"2"}}}}}}}}}}}}"#
 		)
+	}
+
+	async fn write_catalog(path: &Path, input_rate: &str) {
+		fs_err::tokio::write(path, test_catalog(input_rate))
+			.await
+			.unwrap();
+	}
+
+	async fn replace_catalog(path: &Path, input_rate: &str) {
+		let replacement = path.with_extension(format!("{input_rate}.tmp"));
+		write_catalog(&replacement, input_rate).await;
+		fs_err::rename(&replacement, path).unwrap();
+	}
+
+	async fn wait_for_catalog_rate(catalog: &ModelCatalog, input_rate: f64) {
+		let response = LLMResponse {
+			input_tokens: Some(1_000_000),
+			..Default::default()
+		};
+		tokio::time::timeout(Duration::from_secs(5), async {
+			loop {
+				let (cost, status) = catalog.snapshot().price(
+					"openai",
+					"my-model",
+					&response,
+					CacheTokenConvention::InputIncludesCache,
+				);
+				if status == CostLookupStatus::Exact && cost == Some(input_rate) {
+					return;
+				}
+				tokio::time::sleep(Duration::from_millis(10)).await;
+			}
+		})
+		.await
+		.unwrap_or_else(|_| panic!("timed out waiting for catalog input rate {input_rate}"));
 	}
 
 	fn test_llm_info(request_model: &str, provider_model: Option<&str>) -> LLMInfo {
@@ -1162,6 +1209,32 @@ mod tests {
 		);
 		assert_eq!(status, CostLookupStatus::Exact);
 		assert_eq!(cost, Some(5.0));
+	}
+
+	#[tokio::test]
+	async fn file_catalog_reloads_after_in_place_and_rename_updates() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("catalog.json");
+		write_catalog(&path, "1").await;
+
+		let catalog = ModelCatalog::new(vec![ModelCatalogSource::File { file: path.clone() }]).unwrap();
+		wait_for_catalog_rate(&catalog, 1.0).await;
+
+		write_catalog(&path, "2").await;
+		wait_for_catalog_rate(&catalog, 2.0).await;
+
+		replace_catalog(&path, "3").await;
+		wait_for_catalog_rate(&catalog, 3.0).await;
+
+		write_catalog(&path, "4").await;
+		wait_for_catalog_rate(&catalog, 4.0).await;
+
+		fs_err::rename(&path, dir.path().join("catalog_2.json")).unwrap();
+		write_catalog(&path, "5").await;
+		wait_for_catalog_rate(&catalog, 5.0).await;
+
+		replace_catalog(&path, "6").await;
+		wait_for_catalog_rate(&catalog, 6.0).await;
 	}
 
 	#[tokio::test]
