@@ -1,11 +1,11 @@
 //! Authenticated encryption (AEAD) primitives.
 //!
 //! This is the single seam through which agentgateway performs symmetric
-//! authenticated encryption. It is currently backed by `aws-lc-rs`, which is
-//! always linked regardless of the selected TLS provider feature. Additional
-//! backends (e.g. SymCrypt) plug in here behind `#[cfg]` without changing call
-//! sites.
+//! authenticated encryption. The backend is selected by the `crypto-*` feature;
+//! `crypto-aws-lc` (the default) backs it with `aws-lc-rs`. Additional backends
+//! plug in here behind `#[cfg]` without changing call sites.
 
+#[cfg(feature = "crypto-aws-lc")]
 use aws_lc_rs::aead::{AES_256_GCM, Aad, Nonce, RandomizedNonceKey};
 
 /// Length in bytes of the AES-256-GCM nonce that [`Aes256Gcm::seal`] prepends to
@@ -17,11 +17,13 @@ const NONCE_LEN: usize = 12;
 /// [`seal`](Aes256Gcm::seal) generates a fresh random nonce per message and
 /// returns `nonce || ciphertext || tag`; [`open`](Aes256Gcm::open) expects that
 /// same framing.
+#[cfg(feature = "crypto-aws-lc")]
 #[derive(Debug)]
 pub struct Aes256Gcm {
 	key: RandomizedNonceKey,
 }
 
+#[cfg(feature = "crypto-aws-lc")]
 impl Aes256Gcm {
 	/// Creates an AES-256-GCM key from 32 bytes of key material.
 	pub fn new(key: &[u8]) -> Result<Self, AeadError> {

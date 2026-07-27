@@ -1,21 +1,24 @@
 //! Cryptographically-secure random number generation.
 //!
-//! This is the single seam for CSPRNG output in agentgateway. It is currently
-//! backed by `aws-lc-rs`, which is always linked regardless of the selected TLS
-//! provider feature. Additional backends (e.g. SymCrypt) plug in here behind
-//! `#[cfg]` without changing call sites.
+//! This is the single seam for CSPRNG output in agentgateway. The backend is
+//! selected by the `crypto-*` feature; `crypto-aws-lc` (the default) backs it
+//! with `aws-lc-rs`. Additional backends plug in here behind `#[cfg]` without
+//! changing call sites.
 
+#[cfg(feature = "crypto-aws-lc")]
 use aws_lc_rs::rand::{SecureRandom, SystemRandom};
 
 /// Fills `dest` with cryptographically-secure random bytes.
 ///
 /// Returns [`RandError`] only if the system CSPRNG fails, which callers should
 /// treat as unrecoverable.
+#[cfg(feature = "crypto-aws-lc")]
 pub fn fill(dest: &mut [u8]) -> Result<(), RandError> {
 	SystemRandom::new().fill(dest).map_err(|_| RandError)
 }
 
 /// Returns `len` cryptographically-secure random bytes.
+#[cfg(feature = "crypto-aws-lc")]
 pub fn bytes(len: usize) -> Result<Vec<u8>, RandError> {
 	let mut out = vec![0u8; len];
 	fill(&mut out)?;

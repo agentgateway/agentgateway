@@ -1,27 +1,31 @@
 //! Cryptographic hash functions.
 //!
-//! This is the seam for hashing within the `agentgateway` crate. It is
-//! currently backed by `aws-lc-rs`, which is always linked regardless of the
-//! selected TLS provider feature. Additional backends (e.g. SymCrypt) plug in
-//! here behind `#[cfg]` without changing call sites.
+//! This is the seam for hashing within the `agentgateway` crate. The backend is
+//! selected by the `crypto-*` feature; `crypto-aws-lc` (the default) backs it
+//! with `aws-lc-rs`. Additional backends plug in here behind `#[cfg]` without
+//! changing call sites.
 //!
 //! Note: hashing in sibling crates (`agent-celx`, `htpasswd-verify-fork`) still
 //! uses the RustCrypto crates directly, as they cannot depend on this crate.
 //! Consolidating those requires a shared crypto crate and is tracked separately.
 
+#[cfg(feature = "crypto-aws-lc")]
 use aws_lc_rs::digest::{self, Context, SHA256};
 
 /// Length in bytes of a SHA-256 digest.
 pub const SHA256_LEN: usize = 32;
 
 /// Computes the SHA-256 digest of `data` in one shot.
+#[cfg(feature = "crypto-aws-lc")]
 pub fn sha256(data: &[u8]) -> [u8; SHA256_LEN] {
 	to_array(digest::digest(&SHA256, data).as_ref())
 }
 
 /// Incremental SHA-256 hasher, for data supplied in multiple pieces.
+#[cfg(feature = "crypto-aws-lc")]
 pub struct Sha256(Context);
 
+#[cfg(feature = "crypto-aws-lc")]
 impl Sha256 {
 	/// Creates a new, empty SHA-256 hasher.
 	pub fn new() -> Self {
@@ -39,12 +43,14 @@ impl Sha256 {
 	}
 }
 
+#[cfg(feature = "crypto-aws-lc")]
 impl Default for Sha256 {
 	fn default() -> Self {
 		Self::new()
 	}
 }
 
+#[cfg(feature = "crypto-aws-lc")]
 fn to_array(bytes: &[u8]) -> [u8; SHA256_LEN] {
 	let mut out = [0u8; SHA256_LEN];
 	out.copy_from_slice(bytes);

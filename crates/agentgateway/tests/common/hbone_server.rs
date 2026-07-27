@@ -44,8 +44,6 @@ impl HboneTestServer {
 	pub async fn new(mode: Mode, name: &str, waypoint_message: Vec<u8>, port: u16) -> Self {
 		#[cfg(feature = "crypto-aws-lc")]
 		let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-		#[cfg(feature = "crypto-openssl")]
-		let _ = rustls_openssl::default_provider().install_default();
 
 		let addr = SocketAddr::from(([127, 0, 0, 1], port));
 		let listener = TcpListener::bind(addr).await.unwrap();
