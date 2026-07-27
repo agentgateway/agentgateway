@@ -27,6 +27,7 @@ import (
 	apitests "github.com/agentgateway/agentgateway/controller/api/tests"
 	agwv1alpha1 "github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/modeldiscovery"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/policyselection"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
@@ -248,6 +249,7 @@ func BuildMockCollection(t test.Failer, inputs []any) *plugins.AgwCollections {
 		InferencePools:       krttest.GetMockCollection[*inf.InferencePool](mock),
 		Backends:             krttest.GetMockCollection[*agwv1alpha1.AgentgatewayBackend](mock),
 		Models:               krttest.GetMockCollection[*agwv1alpha1.AgentgatewayModel](mock),
+		DiscoveredModels:     krttest.GetMockCollection[modeldiscovery.Model](mock),
 		AgentgatewayPolicies: krttest.GetMockCollection[*agwv1alpha1.AgentgatewayPolicy](mock),
 		ControllerName:       wellknown.DefaultAgwControllerName,
 		SystemNamespace:      "agentgateway-system",

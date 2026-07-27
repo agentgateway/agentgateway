@@ -11,12 +11,14 @@ import (
 	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
 	discovery "k8s.io/api/discovery/v1"
+	"k8s.io/apimachinery/pkg/types"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
 
 	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/modeldiscovery"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	kgwversioned "github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned"
 	"github.com/agentgateway/agentgateway/controller/pkg/meshconfig"
@@ -71,11 +73,13 @@ type AgwCollections struct {
 	InferencePoolsByNamespace krt.Index[string, *inf.InferencePool]
 
 	// agentgateway resources
-	Backends             krt.Collection[*agentgateway.AgentgatewayBackend]
-	BackendsByNamespace  krt.Index[string, *agentgateway.AgentgatewayBackend]
-	Models               krt.Collection[*agentgateway.AgentgatewayModel]
-	ModelsByNamespace    krt.Index[string, *agentgateway.AgentgatewayModel]
-	AgentgatewayPolicies krt.Collection[*agentgateway.AgentgatewayPolicy]
+	Backends                krt.Collection[*agentgateway.AgentgatewayBackend]
+	BackendsByNamespace     krt.Index[string, *agentgateway.AgentgatewayBackend]
+	Models                  krt.Collection[*agentgateway.AgentgatewayModel]
+	ModelsByNamespace       krt.Index[string, *agentgateway.AgentgatewayModel]
+	DiscoveredModels        krt.Collection[modeldiscovery.Model]
+	DiscoveredModelsByOwner krt.Index[types.NamespacedName, modeldiscovery.Model]
+	AgentgatewayPolicies    krt.Collection[*agentgateway.AgentgatewayPolicy]
 
 	// ControllerName is the name of the Gateway controller.
 	ControllerName string
@@ -212,6 +216,7 @@ func NewAgwCollections(
 		AgentgatewayPolicies: krt.NewFilteredInformer[*agentgateway.AgentgatewayPolicy](client, filter, krtOptions.ToOptions("informer/AgentgatewayPolicies")...),
 		Backends:             krt.NewFilteredInformer[*agentgateway.AgentgatewayBackend](client, filter, krtOptions.ToOptions("informer/AgentgatewayBackends")...),
 		Models:               krt.NewStaticCollection[*agentgateway.AgentgatewayModel](nil, nil, krtOptions.ToOptions("disable/AgentgatewayModels")...),
+		DiscoveredModels:     krt.NewStaticCollection[modeldiscovery.Model](nil, nil, krtOptions.ToOptions("disable/DiscoveredModels")...),
 	}
 
 	if settings.EnableInferExt {
@@ -221,6 +226,17 @@ func NewAgwCollections(
 	}
 	if settings.EnableAgentgatewayModels {
 		agwCollections.Models = krt.NewFilteredInformer[*agentgateway.AgentgatewayModel](client, filter, krtOptions.ToOptions("informer/AgentgatewayModels")...)
+	}
+	if settings.EnableAgentgatewayModels && settings.EnableInferExt {
+		discoveryController := modeldiscovery.NewController(
+			krtOptions.Stop,
+			agwCollections.Models,
+			agwCollections.InferencePools,
+			agwCollections.Pods,
+			modeldiscovery.Options{},
+			krtOptions.ToOptions("discovery/AgentgatewayModels")...,
+		)
+		agwCollections.DiscoveredModels = discoveryController.Collection()
 	}
 	agwCollections.SetupIndexes()
 
@@ -237,6 +253,9 @@ func (c *AgwCollections) SetupIndexes() {
 	c.ListenerSetsByNamespace = krt.NewNamespaceIndex(c.ListenerSets)
 	c.BackendsByNamespace = krt.NewNamespaceIndex(c.Backends)
 	c.ModelsByNamespace = krt.NewNamespaceIndex(c.Models)
+	c.DiscoveredModelsByOwner = krt.NewIndex(c.DiscoveredModels, "owner", func(model modeldiscovery.Model) []types.NamespacedName {
+		return []types.NamespacedName{model.Owner}
+	})
 	c.InferencePoolsByNamespace = krt.NewNamespaceIndex(c.InferencePools)
 }
 

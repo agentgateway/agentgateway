@@ -17,6 +17,7 @@ import (
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	agwir "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/modeldiscovery"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
@@ -52,6 +53,116 @@ func AgwModelCollection(
 
 	attachments := gatewayRouteAttachmentCollection(inputs, models, wellknown.AgentgatewayModelGVK, krtopts)
 	return modelResources, attachments
+}
+
+func convertModelForParent(
+	ctx RouteContext,
+	model *agentgateway.AgentgatewayModel,
+	parent RouteParentReference,
+) ([]*api.Resource, error) {
+	_, discoveryEnabled, discoveryErr := modeldiscovery.ParseAnchor(model)
+	if discoveryEnabled {
+		if discoveryErr != nil {
+			return nil, discoveryErr
+		}
+		discovered := krt.Fetch(
+			ctx.Krt,
+			ctx.DiscoveredModels,
+			krt.FilterIndex(ctx.DiscoveredModelsByOwner, config.NamespacedName(model)),
+		)
+		slices.SortFunc(discovered, func(a, b modeldiscovery.Model) int {
+			return strings.Compare(a.ID, b.ID)
+		})
+		return convertDiscoveredAgentgatewayModel(ctx, model, parent, discovered)
+	}
+	return convertAgentgatewayModel(ctx, model, parent)
+}
+
+func convertDiscoveredAgentgatewayModel(
+	ctx RouteContext,
+	model *agentgateway.AgentgatewayModel,
+	parent RouteParentReference,
+	discovered []modeldiscovery.Model,
+) ([]*api.Resource, error) {
+	backend, err := modelConcreteBackend(ctx, model, parent, nil)
+	if err != nil {
+		return nil, err
+	}
+	resources := []*api.Resource{backendResource(backend)}
+
+	// Keep the per-listener model router installed while discovery is empty.
+	// This route is internal and its synthetic name is not advertised or
+	// selected directly.
+	anchor, err := discoveredModelRoute(
+		ctx,
+		model,
+		parent,
+		modelRouteKey(model, parent),
+		"__discovery_anchor/"+config.NamespacedName(model).String(),
+		uint64(max(model.CreationTimestamp.Unix(), 0)),
+		api.ModelRoute_ConcreteModel_INTERNAL,
+		backend.Key,
+	)
+	if err != nil {
+		return nil, err
+	}
+	resources = append(resources, &api.Resource{Kind: &api.Resource_ModelRoute{ModelRoute: anchor}})
+
+	for _, discoveredModel := range discovered {
+		route, err := discoveredModelRoute(
+			ctx,
+			model,
+			parent,
+			"~discovered/"+discoveredModel.ResourceName()+routeKeySuffix(parent),
+			discoveredModel.ID,
+			discoveredModel.Created,
+			translateModelVisibility(model.Spec.Visibility),
+			backend.Key,
+		)
+		if err != nil {
+			return nil, err
+		}
+		resources = append(resources, &api.Resource{Kind: &api.Resource_ModelRoute{ModelRoute: route}})
+	}
+	return resources, nil
+}
+
+func discoveredModelRoute(
+	ctx RouteContext,
+	model *agentgateway.AgentgatewayModel,
+	parent RouteParentReference,
+	key string,
+	match string,
+	created uint64,
+	visibility api.ModelRoute_ConcreteModel_ModelVisibility,
+	backendKey string,
+) (*api.ModelRoute, error) {
+	route := &api.ModelRoute{
+		Key:         key,
+		ListenerKey: parent.ListenerKey,
+		Match:       &api.ModelRoute_Match{Model: match},
+		Created:     created,
+		Kind: &api.ModelRoute_ConcreteModel_{
+			ConcreteModel: &api.ModelRoute_ConcreteModel{
+				ModelVisibility: visibility,
+				Backend:         backendRef(backendKey),
+			},
+		},
+	}
+	aiPolicy, err := translateModelRouteAIPolicy(ctx, model.Namespace, model.Spec.Policies)
+	if err != nil {
+		return nil, err
+	}
+	route.AiPolicy = aiPolicy
+	if model.Spec.Policies == nil || model.Spec.Policies.Authorization == nil {
+		return route, nil
+	}
+	authorization, err := plugins.TranslateAuthorization(model.Spec.Policies.Authorization)
+	if err != nil {
+		return nil, err
+	}
+	route.Authorization = authorization
+	return route, nil
 }
 
 func translateModelForParents(
@@ -91,7 +202,7 @@ func translateModelForParents(
 		if a := agg[parentStatusKey(parent)]; a != nil {
 			a.anyAllowed = true
 		}
-		parentResources, err := convertAgentgatewayModel(ctx, model, parent)
+		parentResources, err := convertModelForParent(ctx, model, parent)
 		if err != nil {
 			conversionErr = &reporter.RouteCondition{
 				Type:    gwv1.RouteConditionResolvedRefs,

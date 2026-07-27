@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use agent_core::strng;
@@ -187,19 +188,21 @@ impl ModelRouter {
 	}
 
 	fn model_list_response(&self, req: &Request) -> Response {
-		let data = self
-			.models
-			.iter()
-			.filter(|model| model.visibility == ModelVisibility::Public)
-			.filter(|model| model_authorized(model, req))
-			.map(|model| model_list_entry(&model.name, model.created))
-			.chain(
-				self
-					.virtual_models
-					.iter()
-					.map(|model| model_list_entry(&model.name, model.created)),
-			)
-			.collect::<Vec<_>>();
+		let mut seen = HashSet::new();
+		let mut data = Vec::new();
+		for model in &self.models {
+			if model.visibility == ModelVisibility::Public
+				&& model_authorized(model, req)
+				&& seen.insert(model.name.clone())
+			{
+				data.push(model_list_entry(&model.name, model.created));
+			}
+		}
+		for model in &self.virtual_models {
+			if seen.insert(model.name.clone()) {
+				data.push(model_list_entry(&model.name, model.created));
+			}
+		}
 		let body = serde_json::json!({
 			"data": data,
 			"object": "list",
@@ -722,6 +725,41 @@ mod tests {
 
 		assert!(model_authorized(&model, &allowed));
 		assert!(!model_authorized(&model, &denied));
+	}
+
+	#[tokio::test]
+	async fn model_list_deduplicates_model_names() {
+		let model = |created| ModelRoute {
+			id: None,
+			name: "shared-model".to_string(),
+			created,
+			visibility: ModelVisibility::Public,
+			header_matches: vec![],
+			backend: RouteBackendReference {
+				weight: 1,
+				target: RouteBackendTarget::Invalid,
+				inline_policies: vec![],
+			},
+			policies: ModelRoutePolicies {
+				llm: default_route_types(),
+				authorization: None,
+			},
+			backend_policies: vec![],
+		};
+		let router = ModelRouter::new(vec![model(10), model(20)], vec![]);
+		let request = ::http::Request::builder()
+			.uri("http://example.com/v1/models")
+			.body(http::Body::empty())
+			.expect("valid request");
+
+		let response = router.model_list_response(&request);
+		let body = http::read_body_with_limit(response.into_body(), 1024)
+			.await
+			.expect("model list body");
+		let body: Value = serde_json::from_slice(&body).expect("model list JSON");
+		assert_eq!(body["data"].as_array().map(Vec::len), Some(1));
+		assert_eq!(body["data"][0]["id"], "shared-model");
+		assert_eq!(body["data"][0]["created"], 10);
 	}
 
 	#[test]

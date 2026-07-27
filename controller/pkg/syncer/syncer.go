@@ -463,20 +463,22 @@ func (s *Syncer) buildAgwResources(
 	}
 
 	routeInputs := translator.RouteContextInputs{
-		Collections:         s.agwCollections,
-		Grants:              refGrants,
-		RouteParents:        routeParents,
-		ControllerName:      s.controllerName,
-		Services:            s.agwCollections.Services,
-		Secrets:             s.agwCollections.Secrets,
-		Namespaces:          s.agwCollections.Namespaces,
-		ServiceEntries:      s.agwCollections.ServiceEntries,
-		InferencePools:      s.agwCollections.InferencePools,
-		Backends:            s.agwCollections.Backends,
-		Models:              s.agwCollections.Models,
-		ModelsByNamespace:   s.agwCollections.ModelsByNamespace,
-		References:          referenceTypes,
-		BackendRefGrantMode: s.agwCollections.Settings.BackendRefGrantMode,
+		Collections:             s.agwCollections,
+		Grants:                  refGrants,
+		RouteParents:            routeParents,
+		ControllerName:          s.controllerName,
+		Services:                s.agwCollections.Services,
+		Secrets:                 s.agwCollections.Secrets,
+		Namespaces:              s.agwCollections.Namespaces,
+		ServiceEntries:          s.agwCollections.ServiceEntries,
+		InferencePools:          s.agwCollections.InferencePools,
+		Backends:                s.agwCollections.Backends,
+		Models:                  s.agwCollections.Models,
+		ModelsByNamespace:       s.agwCollections.ModelsByNamespace,
+		DiscoveredModels:        s.agwCollections.DiscoveredModels,
+		DiscoveredModelsByOwner: s.agwCollections.DiscoveredModelsByOwner,
+		References:              referenceTypes,
+		BackendRefGrantMode:     s.agwCollections.Settings.BackendRefGrantMode,
 	}
 
 	baseAgwRoutes, routeAttachments, ancestorBackends := translator.AgwRouteCollection(s.statusCollections, s.agwCollections.HTTPRoutes, s.agwCollections.GRPCRoutes, s.agwCollections.TCPRoutes, s.agwCollections.TLSRoutes, routeInputs, krtopts)

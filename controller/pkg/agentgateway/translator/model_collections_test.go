@@ -4,10 +4,16 @@ import (
 	"strings"
 	"testing"
 
+	"istio.io/istio/pkg/kube/krt"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/modeldiscovery"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
@@ -181,6 +187,76 @@ func TestModelAuthorization(t *testing.T) {
 	}
 	if got := route.GetAuthorization().GetAllow(); len(got) != 1 || got[0] != "request.headers['x-model-access'] == 'allowed'" {
 		t.Errorf("authorization allow = %#v, want model access rule", got)
+	}
+}
+
+func TestDiscoveredModelRoutes(t *testing.T) {
+	providerType := agentgateway.ModelProviderCustom
+	group := wellknown.InferencePoolGVK.Group
+	kind := wellknown.InferencePoolGVK.Kind
+	model := &agentgateway.AgentgatewayModel{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "llama-models"},
+		Spec: agentgateway.AgentgatewayModelSpec{
+			Provider: &providerType,
+			Custom: &agentgateway.CustomProviderSettings{
+				BackendRef: &agentgateway.LocalBackendObjectReference{
+					Group: &group,
+					Kind:  &kind,
+					Name:  "llama-pool",
+				},
+				Formats: []agentgateway.ProviderFormatConfig{{Type: agentgateway.ProviderFormatCompletions}},
+			},
+			Policies: &agentgateway.ModelPolicies{
+				Authorization: &agentgateway.Authorization{
+					Policy: agentgateway.AuthorizationPolicy{
+						MatchExpressions: []agentgateway.CELExpression{"request.headers['x-tenant'] == 'allowed'"},
+					},
+				},
+			},
+		},
+	}
+	ctx := RouteContext{RouteContextInputs: RouteContextInputs{
+		References: plugins.ReferenceTypes{
+			RouteBackend: func(
+				_ krt.HandlerContext,
+				_ string,
+				_ schema.GroupKind,
+				_ gwv1.ObjectName,
+				_ *gwv1.Namespace,
+				_ *gwv1.PortNumber,
+			) (*api.BackendReference, error) {
+				return &api.BackendReference{}, nil
+			},
+		},
+	}}
+	parent := RouteParentReference{ListenerKey: "default/gateway.llm"}
+	discovered := []modeldiscovery.Model{
+		{Owner: types.NamespacedName{Namespace: "default", Name: "llama-models"}, ID: "base-model", Created: 10},
+		{Owner: types.NamespacedName{Namespace: "default", Name: "llama-models"}, ID: "tweet-summary", Created: 20},
+	}
+
+	resources, err := convertDiscoveredAgentgatewayModel(ctx, model, parent, discovered)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resources) != 4 {
+		t.Fatalf("resources = %d, want backend, anchor, and two models", len(resources))
+	}
+	anchor := resources[1].GetModelRoute()
+	if anchor.GetConcreteModel().GetModelVisibility() != api.ModelRoute_ConcreteModel_INTERNAL {
+		t.Fatalf("anchor visibility = %v, want internal", anchor.GetConcreteModel().GetModelVisibility())
+	}
+	for i, want := range []string{"base-model", "tweet-summary"} {
+		route := resources[i+2].GetModelRoute()
+		if got := route.GetMatch().GetModel(); got != want {
+			t.Errorf("route %d model = %q, want %q", i, got, want)
+		}
+		if route.GetConcreteModel().GetBackend().GetBackend() != resources[0].GetBackend().GetKey() {
+			t.Errorf("route %d does not share the discovery anchor backend", i)
+		}
+		if route.GetAuthorization() == nil {
+			t.Errorf("route %d did not inherit authorization", i)
+		}
 	}
 }
 

@@ -27,6 +27,7 @@ import (
 	apisettings "github.com/agentgateway/agentgateway/controller/api/settings"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	agwir "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/modeldiscovery"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
@@ -959,20 +960,22 @@ type RouteContext struct {
 
 // RouteContextInputs defines the collections needed to translate a route.
 type RouteContextInputs struct {
-	Collections         *plugins.AgwCollections
-	Grants              ReferenceGrants
-	RouteParents        ParentResolver
-	Services            krt.Collection[*corev1.Service]
-	Secrets             krt.Collection[*corev1.Secret]
-	InferencePools      krt.Collection[*inf.InferencePool]
-	Namespaces          krt.Collection[*corev1.Namespace]
-	ServiceEntries      krt.Collection[*networkingclient.ServiceEntry]
-	Backends            krt.Collection[*agentgateway.AgentgatewayBackend]
-	Models              krt.Collection[*agentgateway.AgentgatewayModel]
-	ModelsByNamespace   krt.Index[string, *agentgateway.AgentgatewayModel]
-	References          plugins.ReferenceTypes
-	ControllerName      string
-	BackendRefGrantMode apisettings.BackendRefGrantMode
+	Collections             *plugins.AgwCollections
+	Grants                  ReferenceGrants
+	RouteParents            ParentResolver
+	Services                krt.Collection[*corev1.Service]
+	Secrets                 krt.Collection[*corev1.Secret]
+	InferencePools          krt.Collection[*inf.InferencePool]
+	Namespaces              krt.Collection[*corev1.Namespace]
+	ServiceEntries          krt.Collection[*networkingclient.ServiceEntry]
+	Backends                krt.Collection[*agentgateway.AgentgatewayBackend]
+	Models                  krt.Collection[*agentgateway.AgentgatewayModel]
+	ModelsByNamespace       krt.Index[string, *agentgateway.AgentgatewayModel]
+	DiscoveredModels        krt.Collection[modeldiscovery.Model]
+	DiscoveredModelsByOwner krt.Index[types.NamespacedName, modeldiscovery.Model]
+	References              plugins.ReferenceTypes
+	ControllerName          string
+	BackendRefGrantMode     apisettings.BackendRefGrantMode
 }
 
 func (i RouteContextInputs) WithCtx(krtctx krt.HandlerContext) RouteContext {
