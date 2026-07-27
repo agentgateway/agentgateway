@@ -1,0 +1,63 @@
+apiVersion: gateway.networking.x-k8s.io/v1alpha1
+kind: XBackend
+metadata:
+  name: external-mcp
+  namespace: default
+spec:
+  type: ExternalHostname
+  port:
+    port: 443
+  externalHostname:
+    hostname: mcp.example.com
+  protocol: MCP
+  tls:
+    mode: ServerOnly
+    validation:
+      hostname: mcp.example.com
+      wellKnownCACertificates: System
+
+---
+# Output
+output:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      inlinePolicies:
+      - backendTls:
+          hostname: mcp.example.com
+      key: default/external-mcp
+      mcp:
+        targets:
+        - backend:
+            port: 443
+            service:
+              hostname: mcp.example.com
+              namespace: default
+          name: default
+          protocol: STREAMABLE_HTTP
+      name:
+        name: external-mcp
+        namespace: default
+status:
+- apiVersion: gateway.networking.x-k8s.io/v1alpha1
+  kind: XBackend
+  metadata:
+    name: external-mcp
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Backend successfully accepted
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: basic
+        namespace: default

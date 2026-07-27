@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+	gwxv1a1 "sigs.k8s.io/gateway-api/apisx/v1alpha1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
@@ -128,6 +129,8 @@ func enqueueStatus[T any](sw WorkerQueue, obj controllers.Object, ws T, extraGVK
 		res.GroupVersionKind = wellknown.ListenerSetGVK
 	case *gwv1.BackendTLSPolicy:
 		res.GroupVersionKind = wellknown.BackendTLSPolicyGVK
+	case *gwxv1a1.XBackend:
+		res.GroupVersionKind = wellknown.XBackendGVK
 	case *inf.InferencePool:
 		res.GroupVersionKind = wellknown.InferencePoolGVK
 	default:
