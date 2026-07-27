@@ -55,12 +55,12 @@ pub fn provider_with_cipher_suites(cipher_suites: &[CipherSuite]) -> Arc<CryptoP
 	provider_with_options(cipher_suites, &[])
 }
 
-#[cfg(feature = "tls-aws-lc")]
+#[cfg(feature = "crypto-aws-lc")]
 fn default_crypto_provider() -> CryptoProvider {
 	rustls::crypto::aws_lc_rs::default_provider()
 }
 
-#[cfg(feature = "tls-openssl")]
+#[cfg(feature = "crypto-openssl")]
 fn default_crypto_provider() -> CryptoProvider {
 	rustls_openssl::default_provider()
 }

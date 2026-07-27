@@ -27,7 +27,7 @@ pub static ALL_TLS_VERSIONS: &[&rustls::SupportedProtocolVersion] =
 	&[&rustls::version::TLS12, &rustls::version::TLS13];
 
 /// All currently supported cipher suites.
-#[cfg(feature = "tls-aws-lc")]
+#[cfg(feature = "crypto-aws-lc")]
 pub static ALL_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 	// TLS 1.3 cipher suites
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_256_GCM_SHA384,
@@ -43,7 +43,7 @@ pub static ALL_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 ];
 
 /// All currently supported cipher suites (OpenSSL provider).
-#[cfg(feature = "tls-openssl")]
+#[cfg(feature = "crypto-openssl")]
 pub static ALL_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 	// TLS 1.3 cipher suites
 	rustls_openssl::cipher_suite::TLS13_AES_256_GCM_SHA384,
@@ -56,7 +56,7 @@ pub static ALL_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 ];
 
 // Default cipher suites to use if user does not specify cipher suites
-#[cfg(feature = "tls-aws-lc")]
+#[cfg(feature = "crypto-aws-lc")]
 pub static DEFAULT_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_256_GCM_SHA384,
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS13_AES_128_GCM_SHA256,
@@ -66,7 +66,7 @@ pub static DEFAULT_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 	rustls::crypto::aws_lc_rs::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 ];
 
-#[cfg(feature = "tls-openssl")]
+#[cfg(feature = "crypto-openssl")]
 pub static DEFAULT_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 	rustls_openssl::cipher_suite::TLS13_AES_256_GCM_SHA384,
 	rustls_openssl::cipher_suite::TLS13_AES_128_GCM_SHA256,
@@ -76,7 +76,7 @@ pub static DEFAULT_CIPHER_SUITES: &[SupportedCipherSuite] = &[
 	rustls_openssl::cipher_suite::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
 ];
 
-#[cfg(feature = "tls-aws-lc")]
+#[cfg(feature = "crypto-aws-lc")]
 pub static DEFAULT_KEY_EXCHANGE_GROUPS: &[&'static dyn SupportedKxGroup] = &[
 	KeyExchangeGroup::X25519.to_supported_kx_group(),
 	KeyExchangeGroup::P256.to_supported_kx_group(),
@@ -84,7 +84,7 @@ pub static DEFAULT_KEY_EXCHANGE_GROUPS: &[&'static dyn SupportedKxGroup] = &[
 	KeyExchangeGroup::X25519_MLKEM768.to_supported_kx_group(),
 ];
 
-#[cfg(feature = "tls-openssl")]
+#[cfg(feature = "crypto-openssl")]
 pub static DEFAULT_KEY_EXCHANGE_GROUPS: &[&'static dyn SupportedKxGroup] = &[
 	rustls_openssl::kx_group::X25519,
 	rustls_openssl::kx_group::SECP256R1,
@@ -146,7 +146,7 @@ impl CipherSuite {
 		}
 	}
 
-	#[cfg(feature = "tls-aws-lc")]
+	#[cfg(feature = "crypto-aws-lc")]
 	pub const fn to_supported_cipher_suite(&self) -> SupportedCipherSuite {
 		match self {
 			// TLS 1.3 cipher suites
@@ -182,7 +182,7 @@ impl CipherSuite {
 		}
 	}
 
-	#[cfg(feature = "tls-openssl")]
+	#[cfg(feature = "crypto-openssl")]
 	pub fn to_supported_cipher_suite(&self) -> SupportedCipherSuite {
 		match self {
 			// TLS 1.3 cipher suites
@@ -238,7 +238,7 @@ impl KeyExchangeGroup {
 		}
 	}
 
-	#[cfg(feature = "tls-aws-lc")]
+	#[cfg(feature = "crypto-aws-lc")]
 	pub const fn to_supported_kx_group(&self) -> &'static dyn SupportedKxGroup {
 		match self {
 			KeyExchangeGroup::X25519 => rustls::crypto::aws_lc_rs::kx_group::X25519,
@@ -248,7 +248,7 @@ impl KeyExchangeGroup {
 		}
 	}
 
-	#[cfg(feature = "tls-openssl")]
+	#[cfg(feature = "crypto-openssl")]
 	pub fn to_supported_kx_group(&self) -> &'static dyn SupportedKxGroup {
 		match self {
 			KeyExchangeGroup::X25519 => rustls_openssl::kx_group::X25519,

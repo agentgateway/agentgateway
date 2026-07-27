@@ -11,14 +11,14 @@
 //! `#[cfg(feature = ...)]` so the backend in use stays explicit.
 
 // Exactly one crypto backend must be selected at compile time.
-#[cfg(not(any(feature = "tls-aws-lc", feature = "tls-openssl")))]
+#[cfg(not(any(feature = "crypto-aws-lc", feature = "crypto-openssl")))]
 compile_error!(
-	"no crypto backend selected: enable exactly one of the `tls-aws-lc` or `tls-openssl` features"
+	"no crypto backend selected: enable exactly one of the `crypto-aws-lc` or `crypto-openssl` features"
 );
 
-#[cfg(all(feature = "tls-aws-lc", feature = "tls-openssl"))]
+#[cfg(all(feature = "crypto-aws-lc", feature = "crypto-openssl"))]
 compile_error!(
-	"multiple crypto backends selected: enable exactly one of the `tls-aws-lc` or `tls-openssl` features"
+	"multiple crypto backends selected: enable exactly one of the `crypto-aws-lc` or `crypto-openssl` features"
 );
 
 pub mod aead;
@@ -30,8 +30,8 @@ pub use provider::{provider, provider_with_cipher_suites, provider_with_options}
 
 /// Human-readable name of the crypto backend compiled into this binary. Useful
 /// for startup logging and diagnostics.
-#[cfg(feature = "tls-aws-lc")]
+#[cfg(feature = "crypto-aws-lc")]
 pub const CRYPTO_BACKEND: &str = "aws-lc-rs";
 
-#[cfg(feature = "tls-openssl")]
+#[cfg(feature = "crypto-openssl")]
 pub const CRYPTO_BACKEND: &str = "openssl";

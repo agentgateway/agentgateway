@@ -9,11 +9,11 @@ publish = { workspace = true }
 path = "src/lib.rs"
 
 [features]
-default = ["jemalloc", "mimalloc", "tls-aws-lc"]
+default = ["jemalloc", "mimalloc", "crypto-aws-lc"]
 jemalloc = ["dep:tikv-jemallocator", "dep:jemalloc_pprof"]
 mimalloc = ["pprof-alloc/allocator-mimalloc", "dep:mimalloc"]
-tls-aws-lc = ["rustls/aws_lc_rs", "tokio-rustls/aws_lc_rs"]
-tls-openssl = ["dep:openssl", "dep:rustls-openssl"]
+crypto-aws-lc = ["rustls/aws_lc_rs", "tokio-rustls/aws_lc_rs"]
+crypto-openssl = ["dep:openssl", "dep:rustls-openssl"]
 ui = []
 schema = ["schemars", "agent-core/schema", "agent-llm/schema"]
 internal_benches = ["divan"]
