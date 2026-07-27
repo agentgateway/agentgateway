@@ -1,835 +1,455 @@
-# EP-1462: Extensible Model Catalog for /v1/models
+# EP-1462: Dynamic Model Discovery for `/v1/models`
 
 - Issue: [#1462](https://github.com/agentgateway/agentgateway/issues/1462)
 - Status: proposed
 
 ## Background
 
-Many OpenAI-compatible clients call `GET /v1/models` to discover the model IDs they can send in request bodies.
-Agentgateway already knows about models from several places, but it does not currently expose a scoped synthetic
-`/v1/models` response that reflects those configured or discovered models.
+OpenAI-compatible clients use `GET /v1/models` to discover the model IDs that
+they can send to an endpoint. The response needs to answer:
 
-Issue [#1462](https://github.com/agentgateway/agentgateway/issues/1462) describes this broader need across multiple
-agentgateway modes and backend types:
+> Which model IDs can this caller successfully send to this Gateway listener?
 
-- Standalone config can define models through `llm.models[].name`.
-- Kubernetes config can define models through `AgentgatewayBackend` AI provider settings.
-- AI policies can define user-facing aliases through `modelAliases`.
-- Gateway API routes can make only a subset of backends reachable from a given Gateway, listener, hostname, or path.
+The original version of this proposal derived a catalog and its reachability
+from `HTTPRoute`, `AgentgatewayPolicy`, and backend configuration. That made
+HTTP routing configuration the source of truth for model discovery.
 
-The common requirement is not specific to one backend type. Agentgateway needs an internal model catalog that can be
-populated by multiple sources and then published as a scoped OpenAI-compatible `/v1/models` response.
+`AgentgatewayModel`, introduced by
+[#2583](https://github.com/agentgateway/agentgateway/pull/2583), provides a
+model-centric source of truth instead. An `AgentgatewayModel` attaches to a
+Gateway listener, declares a client-facing model match, selects a concrete
+provider or virtual model, and carries model policies. The controller
+translates it to an xDS `ModelRoute`. The data plane groups `ModelRoute`
+resources by listener and uses the resulting `ModelRouter` for both request
+routing and the synthetic `/v1/models` response.
 
-Gateway API Inference Extension (GAIE) `InferencePool` support adds an important dynamic source. A common GAIE
-deployment uses one `Gateway` and multiple `InferencePool` backends to serve multiple base models behind a single
-endpoint. Each `InferencePool` represents endpoints that share a common base model, and LoRA adapters associated with
-the base model are served by the same backend inference servers as the base model.
+This proposal extends that machinery with dynamic producers. It does not
+derive a second catalog from HTTP routes.
 
-An `InferencePool` is not tied to one model server implementation. At the time of writing, GAIE documentation lists
-vLLM, Triton with the TensorRT-LLM backend, SGLang, and custom protocol-compatible engines as supported model-server
-options. This means agentgateway should treat `/v1/models` discovery as a runtime capability, not as a vLLM-specific
-assumption.
+Gateway API Inference Extension (GAIE) `InferencePool` is the first dynamic
+source. A pool can serve a base model and LoRA adapters whose inventory changes
+without Kubernetes configuration changing. OpenAI-compatible runtimes can
+expose that inventory through `GET /v1/models`.
 
-With agentgateway, body-based routing can be implemented natively with an `AgentgatewayPolicy` in the `PreRouting`
-phase. The policy reads the OpenAI request body model name, maps it to a base model, and sets the
-`X-Gateway-Base-Model-Name` request header. `HTTPRoute` rules then match that header and forward the request to the
-appropriate `InferencePool`.
+## Decision
 
-For example, a client may send:
+Dynamic discovery produces exact xDS `ModelRoute` entries. The per-listener
+`ModelRouter` remains the catalog, routing table, and `/v1/models` publisher.
+
+An `AgentgatewayModel` acts as the discovery anchor:
+
+- `parentRefs` select the Gateway listeners that receive discovered entries;
+- a custom provider `backendRef` selects the `InferencePool`;
+- visibility and policies are inherited by discovered entries; and
+- discovery configuration opts the anchor into polling.
+
+The anchor does not advertise its resource name or a wildcard. Each discovered
+client-facing ID becomes an exact concrete `ModelRoute` targeting the pool.
+The EPP remains responsible for selecting a capable endpoint within that pool.
+
+Initial configuration uses annotations on `AgentgatewayModel` while the API is
+experimental. A typed `spec.discovery` field can replace the annotations after
+the behavior is proven.
+
+```yaml
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: llama-models
+  annotations:
+    agentgateway.dev/model-discovery: "enabled"
+    agentgateway.dev/model-discovery-path: /v1/models
+    agentgateway.dev/model-discovery-interval: 30s
+    agentgateway.dev/model-discovery-stale-after: 5m
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: Custom
+  custom:
+    backendRef:
+      group: inference.networking.k8s.io
+      kind: InferencePool
+      name: llama-pool
+    formats:
+    - type: Completions
+```
+
+## Goals
+
+- Discover model IDs from opted-in `InferencePool` runtimes.
+- Feed discovered IDs into the existing per-listener `ModelRouter`.
+- Keep model advertisement and request routing backed by the same entries.
+- Preserve Gateway/listener scoping through `AgentgatewayModel.parentRefs`.
+- Preserve per-model authorization and backend policies by inheritance.
+- Keep the EPP responsible for endpoint scheduling.
+- Retain last-known-good inventory during transient failures.
+- Remove expired inventory atomically from routing and `/v1/models`.
+- Provide status, metrics, and logs for freshness and failures.
+
+## Non-Goals
+
+- Derive model inventory or reachability from `HTTPRoute`.
+- Generate or mutate `HTTPRoute` or `AgentgatewayPolicy` resources.
+- Replace the EPP or its model-aware endpoint selection.
+- Require all GAIE runtimes to implement `/v1/models`.
+- Support arbitrary provider-specific discovery APIs in the first milestone.
+- Publish filesystem paths or other runtime-specific metadata to clients.
+- Add a second Kubernetes catalog CRD.
+
+## Architecture
+
+```text
+AgentgatewayModel discovery anchor
+  parentRefs + InferencePool backend + inherited policies
+                         |
+                         v
+InferencePool discovery controller
+  selects ready pool Pods and polls /v1/models
+                         |
+                         v
+normalized discovered model IDs
+                         |
+                         v
+exact xDS ModelRoute resources per attached listener
+                         |
+                         v
+listener ModelRouter
+       |                                  |
+       v                                  v
+request routing                    GET /v1/models
+```
+
+Static and discovered models converge before publication. There is no separate
+generated `/v1/models` route or model-to-header routing map. The existing data
+plane creates the internal LLM route and direct response from its model table.
+
+### Why the anchor is required
+
+Annotating an `InferencePool` alone identifies an inventory source but not
+where its models should be exposed. Deriving listeners from `HTTPRoute`
+references would recreate the routing-centric design this proposal replaces.
+
+The anchor provides explicit operator intent and gives dynamic entries the
+same attachment and policy semantics as static `AgentgatewayModel` resources.
+
+## Discovery Configuration
+
+The initial annotations are:
+
+| Annotation | Default | Meaning |
+| --- | --- | --- |
+| `agentgateway.dev/model-discovery` | `disabled` | Enables discovery when set to `enabled`. |
+| `agentgateway.dev/model-discovery-path` | `/v1/models` | Path polled on selected pool Pods. It must be an absolute path, not a URL. |
+| `agentgateway.dev/model-discovery-interval` | `30s` | Successful polling interval. |
+| `agentgateway.dev/model-discovery-stale-after` | `5m` | Maximum age of last-known-good inventory after all polls fail. |
+
+An enabled anchor must:
+
+- use the `Custom` provider;
+- reference a namespace-local `InferencePool`;
+- omit `spec.match`, because discovered IDs provide exact matches; and
+- attach only to listeners that allow `AgentgatewayModel`.
+
+Discovery is disabled by default. The controller never forwards client
+credentials to discovery endpoints.
+
+Future typed configuration may add:
+
+- runtime profiles;
+- include and exclude filters;
+- discovery authentication;
+- response size and timeout overrides within administrator limits; and
+- aggregation behavior for schedulers that are not model-aware.
+
+## Endpoint Selection and Polling
+
+`InferencePool.spec.selector` selects Pods in the pool namespace. The
+controller polls Pods that:
+
+- match the selector;
+- are in the Running phase;
+- have a Pod IP; and
+- have a Ready condition set to `True`.
+
+The first `InferencePool.spec.targetPorts` entry is used initially. Multi-port
+selection requires a typed discovery setting before it is supported.
+
+Polls use bounded timeouts, response-size limits, and concurrency. Inventory
+from successful endpoints is normalized and combined. Because the GAIE EPP is
+model-aware, the initial aggregation mode is `union`: a model is routable when
+at least one ready endpoint reports it and the EPP can select such an endpoint.
+
+If support is added for a scheduler that cannot steer around endpoints lacking
+a model, that integration must use `intersection` or another safe policy.
+
+## Response Normalization
+
+The first implementation accepts the OpenAI-compatible shape:
 
 ```json
 {
-  "model": "tweet-summary",
-  "messages": []
+  "object": "list",
+  "data": [
+    {
+      "id": "tweet-summary",
+      "object": "model",
+      "created": 1710000000,
+      "owned_by": "vllm"
+    }
+  ]
 }
 ```
 
-The effective model routing map may be:
+Only non-empty `data[].id` and a valid non-negative `created` value are needed
+for routing. Unknown fields are ignored. Duplicate IDs from the same anchor are
+deduplicated.
 
-```text
-tweet-summary -> meta-llama/Llama-2-7b-hf
-```
-
-Agentgateway sets:
-
-```http
-X-Gateway-Base-Model-Name: meta-llama/Llama-2-7b-hf
-```
-
-The matching `HTTPRoute` forwards the request to the `InferencePool` for `meta-llama/Llama-2-7b-hf`.
-
-Route-only discovery can find the base model route key from `HTTPRoute` header matches, but it cannot discover
-user-facing LoRA adapter IDs or aliases unless those names are also represented in static route or policy config.
-For some OpenAI-compatible model servers, the backend can expose this information through `GET /v1/models`:
+The initial client response remains the existing strictly OpenAI-compatible
+model entry:
 
 ```json
 {
   "id": "tweet-summary",
   "object": "model",
-  "owned_by": "vllm",
-  "root": "/adapters/vineetsharma/qlora-adapter-Llama-2-7b-hf-TweetSumm_4",
-  "parent": "meta-llama/Llama-2-7b-hf"
+  "created": 1710000000,
+  "owned_by": "openai"
 }
 ```
 
-This endpoint contains the user-facing model ID (`tweet-summary`) and, when the runtime reports it, the parent/base
-model (`meta-llama/Llama-2-7b-hf`). A GAIE `InferencePool` publisher can contribute that dynamic inventory to the same
-internal catalog used by configured model publishers. When the runtime does not expose enough lineage in
-`/v1/models`, the publisher should use explicit profile configuration, pool metadata, or static alias sources instead
-of assuming vLLM response extensions are available.
+Runtime-specific `root`, `parent`, endpoint addresses, and source metadata are
+not copied into the client response. They may be retained internally for
+status and metrics in a later milestone.
 
-The EPP remains responsible for endpoint scheduling. It discovers endpoints and uses runtime signals, such as metrics
-and readiness, to choose an endpoint for a request. This proposal keeps model catalog publication in agentgateway
-because the gateway owns the client-facing API surface, Gateway API scoping, and `AgentgatewayPolicy` integration.
+## Generated Model Routes
 
-## Motivation
-
-A `/v1/models` implementation should answer this client-facing question:
-
-> Which model IDs can I send to this Gateway endpoint?
-
-It should not only answer implementation-specific questions such as:
-
-> Which base model headers appear in attached `HTTPRoute`s?
-
-or:
-
-> Which provider model is configured on one backend?
-
-Different sources can contribute valid answers:
-
-- Standalone `llm.models[]` can publish statically configured model IDs.
-- `AgentgatewayBackend` can publish configured provider models.
-- `modelAliases` can publish user-facing aliases.
-- GAIE `InferencePool` discovery can publish dynamically loaded LoRA adapters.
-- A future CRD or external integration can publish additional catalog entries.
-
-A source-specific implementation would solve only one aspect of
-[#1462](https://github.com/agentgateway/agentgateway/issues/1462) and would likely duplicate scoping, conflict
-resolution, generated route, and status logic. An extensible internal catalog lets agentgateway add new publishers over
-time while keeping `/v1/models` behavior consistent.
-
-GAIE with dynamically loaded LoRA serving is the first high-value dynamic publisher. The model server may know about
-adapters that are loaded, unloaded, or updated independently of Gateway API configuration. Requiring users to duplicate
-those adapter IDs in `AgentgatewayPolicy` mappings is operationally fragile and can drift quickly.
-
-### Goals
-
-- Introduce an internal model catalog that can be populated by multiple publisher implementations.
-- Generate scoped OpenAI-compatible `GET /v1/models` responses from the internal catalog.
-- Support a GAIE `InferencePool` publisher as the first dynamic publisher.
-- Poll opted-in `InferencePool` endpoints for `GET /v1/models` when the selected runtime profile supports it.
-- Normalize returned model entries through runtime profiles for vLLM, SGLang, Triton OpenAI-compatible frontends, and
-  custom protocol-compatible engines.
-- Derive LoRA/user-facing model IDs and base model route keys from runtime profile rules or explicit user
-  configuration.
-- Preserve the existing GAIE routing model based on `X-Gateway-Base-Model-Name` and `HTTPRoute` header matches.
-- Scope published models to the Gateway/listener/route context that can actually reach the associated backend.
-- Allow users to opt in or out of dynamic discovery per `InferencePool`.
-- Allow operators to filter which discovered model IDs are published or included in generated routing maps.
-- Avoid mutating user-authored `AgentgatewayPolicy` resources by default.
-- Provide status and observability for catalog sources, freshness, conflicts, and generated resources.
-
-### Non-Goals
-
-- Replace the EPP or change EPP request scheduling behavior.
-- Require the GAIE community to add `/v1/models` scraping to the EPP.
-- Make dynamic discovery mandatory for all `InferencePool`s.
-- Implement every possible model publisher in the first milestone.
-- Support arbitrary provider-specific model catalog APIs in the initial implementation.
-- Reverse-engineer arbitrary CEL expressions from existing `AgentgatewayPolicy` resources.
-- Require every GAIE-compatible model server to implement `GET /v1/models`.
-- Guarantee that every OpenAI-compatible server returns the same schema extensions as vLLM, such as `parent` and
-  `root`.
-- Delete or overwrite user-authored `AgentgatewayPolicy` resources.
-
-## Implementation Details
-
-This feature has five separate pieces:
-
-1. Internal model catalog and publisher interface.
-2. Source-specific model publishers.
-3. Catalog aggregation, conflict handling, and reachability scoping.
-4. Generated `/v1/models` publication.
-5. Optional generated routing maps for sources that need model-to-route-key translation.
-
-### Architecture
-
-Conceptual flow:
+For every normalized ID and every accepted parent listener, the controller
+generates an exact concrete `ModelRoute`:
 
 ```text
-Standalone config publisher
-  reads llm.models[]
-        |
-AgentgatewayBackend publisher
-  reads configured AI provider models and aliases
-        |
-AgentgatewayPolicy alias publisher
-  reads explicit modelAliases or simple routing maps
-        |
-GAIE InferencePool publisher
-  polls runtime-supported /v1/models from model-server endpoints
-        |
-Future publishers
-  read ModelCatalog CRDs or external inventory
-        |
-        v
-Internal Model Catalog
-        |
-        v
-Scoped GET /v1/models direct response
-        |
-        v
-Optional model ID -> route key transformation
+match.model: tweet-summary
+listener: default/ai-gateway/llm
+backend: InferencePool/default/llama-pool
+visibility: inherited from the anchor
+authorization: inherited from the anchor
+policies: inherited from the anchor
 ```
 
-The catalog is the shared boundary. Publishers should not generate `/v1/models` routes directly. They should emit
-normalized catalog entries with enough source and reachability metadata for the central catalog reconciler to publish
-models consistently.
-
-### Model Catalog Entries
-
-Conceptual shape:
-
-```go
-type ModelCatalogEntry struct {
-    ID            string
-    RouteKey      string
-    SourceKind    string
-    SourceName    types.NamespacedName
-    SourceSection string
-    Parent        string
-    OwnedBy       string
-    Metadata      map[string]string
-    Freshness     ModelFreshness
-    Reachability  []RouteScope
-}
-
-type RouteScope struct {
-    Gateway     types.NamespacedName
-    Listener    string
-    Hostnames   []string
-    PathContext string
-}
-```
-
-Field meanings:
-
-| Field | Meaning |
-| --- | --- |
-| `ID` | User-facing model ID to publish in `/v1/models`. |
-| `RouteKey` | Value used for routing. For GAIE this is the base model used in `X-Gateway-Base-Model-Name`. |
-| `SourceKind` | Publisher source type, such as `InferencePool`, `AgentgatewayBackend`, or `StandaloneConfig`. |
-| `SourceName` | Namespace/name of the source when applicable. |
-| `SourceSection` | Optional section or sub-backend identifier. |
-| `Parent` | Parent/base model metadata to include when safe. Usually equal to `RouteKey` for LoRA entries. |
-| `OwnedBy` | Optional OpenAI-compatible owner metadata. |
-| `Metadata` | Optional source metadata. Sensitive fields should not be published by default. |
-| `Freshness` | Last-seen and stale state for dynamic publishers. |
-| `Reachability` | Gateway/listener/path contexts where this model is available. |
-
-Examples:
-
-```text
-GAIE runtime-discovered LoRA:
-  ID: tweet-summary
-  RouteKey: meta-llama/Llama-2-7b-hf
-  SourceKind: InferencePool
-  SourceName: default/llama2-pool
-  Parent: meta-llama/Llama-2-7b-hf
-```
-
-```text
-AgentgatewayBackend configured model:
-  ID: gpt-4o
-  RouteKey: gpt-4o
-  SourceKind: AgentgatewayBackend
-  SourceName: tenant-a/openai-backend
-```
-
-```text
-Alias:
-  ID: friendly-model
-  RouteKey: provider-model-name
-  SourceKind: AgentgatewayBackend
-  SourceName: tenant-a/openai-backend
-```
-
-### Model Publisher Interface
-
-Each publisher should answer two questions:
-
-1. Which model catalog entries does this source contribute?
-2. Where are those entries reachable?
-
-Conceptual interface:
-
-```go
-type ModelPublisher interface {
-    Name() string
-    Entries(ctx krt.HandlerContext) []ModelCatalogEntry
-}
-```
-
-Publisher implementations can use existing collections and reference indexes. The central catalog reconciler should be
-responsible for deduplication, conflict handling, generated route behavior, and final response shaping.
-
-Initial publishers:
-
-| Publisher | Source | Milestone | Notes |
-| --- | --- | --- | --- |
-| `InferencePoolModelPublisher` | Opted-in GAIE `InferencePool` endpoints | M1 | First dynamic publisher and primary motivation. |
-| `AgentgatewayBackendModelPublisher` | `AgentgatewayBackend` AI provider config | M2 | Covers Kubernetes configured backend models. |
-| `StandaloneModelPublisher` | standalone `llm.models[]` | M2/M3 | Covers standalone config mode. |
-| `PolicyAliasPublisher` | explicit `modelAliases` or simple static maps | M2/M3 | Covers user-facing aliases when statically configured. |
-| `ExternalModelCatalogPublisher` | future CRD or external inventory | Future | Lets users integrate non-standard discovery systems. |
-
-### User Configuration
-
-The extensible catalog should not require every source to use the same configuration mechanism. Each publisher can own
-its source-specific opt-in and tuning knobs while emitting the same normalized entries.
-
-For the initial GAIE `InferencePool` publisher, annotations avoid adding a new CRD before the behavior is proven.
-
-Example:
-
-```yaml
-apiVersion: inference.networking.k8s.io/v1
-kind: InferencePool
-metadata:
-  name: llama2-pool
-  namespace: default
-  annotations:
-    agentgateway.dev/model-discovery: "enabled"
-    agentgateway.dev/model-discovery-path: "/v1/models"
-    agentgateway.dev/model-discovery-port: "8000"
-    agentgateway.dev/model-discovery-runtime: "auto"
-    agentgateway.dev/model-discovery-mode: "intersection"
-    agentgateway.dev/model-discovery-publish-exclude: "internal-*,experimental-*"
-spec:
-  selector:
-    matchLabels:
-      app: llama2-pool
-```
-
-Proposed GAIE publisher annotations:
-
-| Annotation | Default | Description |
-| --- | --- | --- |
-| `agentgateway.dev/model-discovery` | `disabled` | Enables model discovery for the `InferencePool` when set to `enabled`. |
-| `agentgateway.dev/model-discovery-path` | `/v1/models` | HTTP path to poll on model-server endpoints. |
-| `agentgateway.dev/model-discovery-port` | first target port | Endpoint port used for discovery. |
-| `agentgateway.dev/model-discovery-scheme` | `http` | Discovery scheme. Initial support is `http`; `https` can be added with backend TLS settings. |
-| `agentgateway.dev/model-discovery-runtime` | `auto` | Runtime profile used to parse responses and derive routing keys. Supported values include `auto`, `openai`, `vllm`, `sglang`, `triton-openai`, and `custom`. |
-| `agentgateway.dev/model-discovery-route-key-source` | profile default | How to derive `RouteKey`. Supported values include `profile`, `response.parent`, `response.id`, `inferencepool`, `annotation`, `separator`, and `custom`. |
-| `agentgateway.dev/model-discovery-base-model` | empty | Explicit base model route key for runtimes that do not report parent/base model lineage. |
-| `agentgateway.dev/model-discovery-id-jsonpath` | profile default | Custom JSON path for model IDs when `runtime=custom`. |
-| `agentgateway.dev/model-discovery-parent-jsonpath` | profile default | Custom JSON path for parent/base model metadata when `runtime=custom`. |
-| `agentgateway.dev/model-discovery-mode` | `intersection` | Aggregation mode across endpoints. Supported values: `intersection`, `union`, `firstHealthy`. |
-| `agentgateway.dev/model-discovery-interval` | controller default | Optional per-pool polling interval. |
-| `agentgateway.dev/model-discovery-publish` | `enabled` | Controls whether discovered models are published through generated `/v1/models`. |
-| `agentgateway.dev/model-discovery-publish-include` | empty | Optional comma-separated glob list of model IDs to publish. Empty means all discovered IDs are eligible. |
-| `agentgateway.dev/model-discovery-publish-exclude` | empty | Optional comma-separated glob list of model IDs to hide from generated `/v1/models`. Exclude wins over include. |
-| `agentgateway.dev/model-discovery-routing` | `internal` | Controls routing map generation. Supported values: `internal`, `agentgatewayPolicy`, `disabled`. |
-| `agentgateway.dev/model-discovery-routing-include` | empty | Optional comma-separated glob list of model IDs to include in generated routing maps. Empty means all discovered IDs are eligible. |
-| `agentgateway.dev/model-discovery-routing-exclude` | empty | Optional comma-separated glob list of model IDs to exclude from generated routing maps. Exclude wins over include. |
-
-If this feature graduates, these annotations can become typed fields on an agentgateway-owned policy or parameters
-resource. The discovery behavior should not require changes to the upstream GAIE `InferencePool` API.
-
-### GAIE InferencePool Publisher
-
-The `InferencePoolModelPublisher` is the first dynamic publisher. It discovers live model inventory from opted-in
-model servers behind a GAIE `InferencePool`.
-
-Agentgateway already watches `InferencePool`s when GAIE support is enabled. For an opted-in pool, agentgateway should
-discover candidate model-server endpoints using the pool's selector and target port information, following the same
-Kubernetes source of truth used for backend endpoint discovery.
-
-The publisher should:
-
-- Watch opted-in `InferencePool`s.
-- Resolve selected pods or endpoint slices for each pool.
-- Filter to ready endpoints.
-- Select a runtime profile from annotations, endpoint labels, or the default profile.
-- Construct a polling URL from scheme, endpoint address, port, and path.
-- Poll endpoints on a bounded interval with timeout and jitter.
-- Cache the last successful model response per endpoint.
-- Emit normalized catalog entries.
-- Expose discovery errors without immediately deleting the last known-good catalog.
-
-The implementation can run in the controller process or in a dedicated sidecar process colocated with the controller.
-
-Controller process advantages:
-
-- Direct access to existing informers and reference indexes.
-- Simpler deployment and fewer moving parts.
-- Easier integration with generated xDS resources and status.
-
-Sidecar process advantages:
-
-- Isolates outbound polling and parser bugs from the main controller.
-- Can be independently tuned for concurrency, timeouts, and network policy.
-- May be reused by future non-controller deployments.
-
-The recommended initial implementation is in the controller process unless polling volume or isolation requirements
-force a sidecar split.
-
-### Runtime Profiles
-
-The GAIE publisher should use runtime profiles so discovery behavior is explicit and extensible. A profile defines:
-
-- Whether `GET /v1/models` discovery is supported.
-- Which response fields identify user-facing model IDs.
-- Which response fields, annotations, or static settings identify the route key.
-- Which metadata fields are safe to preserve in the catalog.
-- Whether LoRA adapter lineage can be inferred from the response.
-
-Initial profiles:
-
-| Profile | Discovery behavior | Route key default | LoRA/alias support |
-| --- | --- | --- | --- |
-| `openai` | Parse standard OpenAI-style `data[].id` entries. | `data[].id` | Publishes listed IDs but does not infer base-model lineage. |
-| `vllm` | Parse OpenAI-style entries plus vLLM extensions such as `parent` and `root` when present. | `data[].parent`, else `data[].id` | Supports dynamically reported LoRA adapter IDs when `parent` is present. |
-| `sglang` | Parse OpenAI-style entries and SGLang-reported LoRA entries when enabled by the runtime. | `data[].parent`, else `data[].id` | Supports dynamically reported LoRA adapter IDs when `parent` is present. |
-| `triton-openai` | Parse Triton OpenAI-compatible model IDs. | `data[].id` or explicit base-model config | Conservative default because Triton does not currently provide the same LoRA metrics support GAIE uses for affinity. |
-| `custom` | Parse fields selected by user-provided JSON paths or future CEL expressions. | explicit config | Allows protocol-compatible engines to integrate without agentgateway code changes. |
-
-`auto` should select a profile using explicit annotations first, then endpoint or pod engine labels such as
-`inference.networking.k8s.io/engine-type`, then the controller default. Auto-detection must be conservative: if a
-runtime does not report parent/base model lineage, agentgateway should not invent aliases. Operators can still provide
-`agentgateway.dev/model-discovery-base-model` or `agentgateway.dev/model-discovery-route-key-source` when they know how
-the discovered model IDs should map to a route key.
-
-This keeps the first implementation useful for vLLM and SGLang LoRA discovery, while still allowing Triton and custom
-OpenAI-compatible model servers to publish catalog entries safely.
-
-### Model Response Normalization
-
-When a runtime profile supports OpenAI-compatible model listing, the GAIE publisher should accept standard
-OpenAI-style responses:
-
-```json
-{
-  "object": "list",
-  "data": [
-    {
-      "id": "tweet-summary",
-      "object": "model",
-      "parent": "meta-llama/Llama-2-7b-hf"
-    }
-  ]
-}
-```
-
-For each entry, normalize:
-
-| Field | Source | Required | Meaning |
-| --- | --- | --- | --- |
-| `id` | `data[].id` | yes | User-facing model ID. |
-| `routeKey` | runtime profile or explicit config | yes | Base model route key or provider route key. |
-| `parent` | `data[].parent` | no | Parent/base model metadata. |
-| `ownedBy` | `data[].owned_by` | no | Provider metadata to preserve in `/v1/models`. |
-| `root` | `data[].root` | no | Adapter/root metadata to preserve when safe. |
-| `sourceName` | `InferencePool` namespace/name | yes | Pool that discovered the model. |
-| `endpoint` | endpoint address | yes | Endpoint that reported the model. |
-| `lastSeen` | poll timestamp | yes | Freshness indicator. |
-
-If the selected profile derives `routeKey` from `parent` and `parent` is absent, `routeKey` should default to `id`.
-This preserves behavior for non-LoRA base models. Other profiles may require an explicit base-model annotation or custom
-route-key rule before they can generate alias-to-base-model routing maps.
-
-For the example response above:
-
-```text
-ID: tweet-summary
-RouteKey: meta-llama/Llama-2-7b-hf
-SourceKind: InferencePool
-SourceName: default/llama2-pool
-```
-
-The publisher should also include an implicit base model entry when appropriate:
-
-```text
-meta-llama/Llama-2-7b-hf -> meta-llama/Llama-2-7b-hf
-tweet-summary -> meta-llama/Llama-2-7b-hf
-```
-
-### Catalog Filters
-
-Operators may need to hide or disable individual model IDs even when an `InferencePool` is opted in. Examples include
-experimental adapters, tenant-private LoRAs, canary models, or aliases that should remain routable for known clients
-but should not be advertised through `/v1/models`.
-
-The GAIE publisher should support separate filters for publication and generated routing:
-
-```yaml
-metadata:
-  annotations:
-    agentgateway.dev/model-discovery-publish-include: "meta-llama/*,tweet-summary-*"
-    agentgateway.dev/model-discovery-publish-exclude: "internal-*,experimental-*"
-    agentgateway.dev/model-discovery-routing-exclude: "disabled-*"
-```
-
-Filter behavior:
-
-- Filters apply after runtime profile normalization and before catalog aggregation.
-- Include filters are allow lists. Empty include filters mean all discovered model IDs are eligible.
-- Exclude filters are deny lists. Exclude filters win over include filters.
-- Publication filters affect generated `GET /v1/models` responses.
-- Routing filters affect generated model ID to route-key maps.
-- Filtering a model from publication should not automatically remove it from generated routing maps.
-- Filtering a model from routing should not automatically remove it from generated `/v1/models`.
-- If a model is published but excluded from generated routing, status should warn that the model may not be routable
-  through agentgateway-generated policy.
-
-The initial filter language should be simple comma-separated globs matched against normalized model IDs. A future typed
-configuration surface can add label selectors or CEL expressions if model servers or external catalog publishers expose
-structured metadata suitable for richer filtering.
-
-### Dynamic Aggregation Modes
-
-Dynamic publishers may see different model inventories across endpoints. The default should be safe.
-
-`intersection` mode:
-
-- Publish only models reported by all currently ready endpoints in the source.
-- Best default for correctness when the EPP may choose any endpoint in the pool.
-- Avoids publishing a LoRA ID that only some endpoints can serve.
-
-`union` mode:
-
-- Publish any model reported by at least one ready endpoint.
-- Useful when the scheduler is model-aware and can route a request only to endpoints that serve the requested model.
-- Risky if endpoint selection is not constrained by model availability.
-
-`firstHealthy` mode:
-
-- Publish the response from the first successful ready endpoint.
-- Operationally simple.
-- Useful for homogeneous pools.
-- Can be misleading if endpoints drift.
-
-Initial recommendation: implement `intersection` first and leave `union` behind an explicit annotation.
-
-### Catalog Aggregation and Scoping
-
-The internal catalog should not be global-only. It must be scoped by reachability. A model should appear in a generated
-`/v1/models` response only when the associated source is reachable through that Gateway/listener/path context.
-
-For route-based Kubernetes sources, scoping should account for:
-
-- which `HTTPRoute`s reference the backend or `InferencePool`;
-- which Gateway/listener those routes are accepted by;
-- route hostnames and listener hostnames;
-- `sectionName`, allowed routes, protocol, and accepted status;
-- path context when a Gateway exposes separate model surfaces such as `/cheap-llms` and `/expensive-llms`.
-
-This prevents one tenant or listener from seeing models that are only reachable through another route.
-
-Duplicate handling:
-
-- If the same `ID` and `RouteKey` are published by multiple sources in the same scope, deduplicate the response entry.
-- If the same `ID` maps to different `RouteKey` values in the same scope, report a catalog conflict and do not generate
-  an ambiguous routing map for that ID.
-- If two sources publish the same `ID` with different metadata but equivalent routing, prefer deterministic metadata
-  precedence and surface the source list in status.
-
-### Generated `/v1/models`
-
-For each Gateway/listener/path context with a non-empty scoped catalog, agentgateway can generate an internal route:
-
-```http
-GET /v1/models
-```
-
-The response should be OpenAI-compatible:
-
-```json
-{
-  "object": "list",
-  "data": [
-    {
-      "id": "tweet-summary",
-      "object": "model",
-      "owned_by": "vllm",
-      "parent": "meta-llama/Llama-2-7b-hf"
-    }
-  ]
-}
-```
-
-Generated route behavior:
-
-- only emit routes for HTTP-capable listeners;
-- do not emit a generated route when a user-authored `GET /v1/models` route already exists for the same listener unless
-  an explicit override is configured;
-- return `Content-Type: application/json`;
-- prefer last known-good catalog data when a dynamic publisher temporarily fails;
-- include freshness metadata in controller status or metrics, not necessarily in the OpenAI response body.
-
-### Generated Routing Map
-
-Some publishers only need to publish model IDs. Others also need a generated request routing map. GAIE `InferencePool`
-discovery needs this when the user-facing model ID differs from the base model route key.
-
-For each scoped model catalog, agentgateway can generate the request body model map:
-
-```text
-tweet-summary -> meta-llama/Llama-2-7b-hf
-meta-llama/Llama-2-7b-hf -> meta-llama/Llama-2-7b-hf
-```
-
-The recommended default is to generate this internally as xDS/IR policy attached to the relevant Gateway/listener/path
-context. This avoids mutating user-owned `AgentgatewayPolicy` resources.
-
-Equivalent generated transformation:
-
-```yaml
-traffic:
-  phase: PreRouting
-  transformation:
-    request:
-      set:
-      - name: X-Gateway-Base-Model-Name
-        value: |
-          {
-            "meta-llama/Llama-2-7b-hf": "meta-llama/Llama-2-7b-hf",
-            "tweet-summary": "meta-llama/Llama-2-7b-hf"
-          }[string(json(request.body).model)]
-```
-
-If `agentgateway.dev/model-discovery-routing: agentgatewayPolicy` is set, agentgateway may create a Kubernetes
-`AgentgatewayPolicy` instead. Generated policies must:
-
-- Use deterministic names.
-- Use owner references where possible.
-- Carry labels and annotations that identify them as generated.
-- Use server-side apply with a stable field manager.
-- Refuse to overwrite user-authored policies.
-- Be deleted or disabled when discovery is disabled.
-- Report conflicts through status.
-
-Generated `AgentgatewayPolicy` is useful for transparency but should not be the default because it turns runtime
-discovery state into user-visible configuration and creates ownership conflicts.
-
-### Failure Behavior
-
-Dynamic discovery should fail soft for data-plane availability:
-
-- If a poll fails, keep using the last known-good catalog until a configurable TTL expires.
-- If the TTL expires, remove stale models from generated `/v1/models` and generated routing maps.
-- If all endpoints fail discovery but the backend is still routable, do not remove user-authored routes or policies.
-- If catalog generation produces an invalid or ambiguous map, fail closed for generated routing and surface a status
-  error.
-
-Example status conditions:
+The request model is preserved for the upstream runtime. There is no generated
+base-model header or body-to-header mapping. The selected `InferencePool`
+determines the scheduling domain and the EPP handles adapter-aware endpoint
+selection.
+
+The anchor also contributes a hidden internal route so its listener continues
+to serve an empty `/v1/models` response before the first successful poll or
+after confirmed expiry.
+
+Updates are sent as one reconciled collection so a model is never advertised
+without its route or left routable after it is removed from discovery.
+
+## Visibility and Authorization
+
+Discovered concrete models inherit the anchor's visibility:
+
+- `Public` entries are directly routable and eligible for `/v1/models`.
+- `Internal` entries can only be selected by virtual models and are not
+  advertised.
+
+The data plane evaluates concrete model authorization while building
+`/v1/models`, so callers sharing a listener can receive different model lists
+based on request credentials.
+
+Virtual models currently cannot carry their own authorization policy and are
+always included in the model list. That pre-existing limitation should be
+addressed separately before virtual models are used as a tenant boundary.
+
+## Conflicts and Filtering
+
+Advertisement must be a subset of routability. Publication and routing filters
+must not be independently configurable.
+
+Conflict precedence within a listener is:
+
+1. an exact user-authored, non-discovery `AgentgatewayModel`;
+2. a user-authored wildcard model route;
+3. a discovered exact model.
+
+If multiple discovery anchors publish the same ID to the same listener:
+
+- equivalent entries are deduplicated;
+- conflicting backends or policies cause the discovered ID to be omitted; and
+- status reports the contributing anchors.
+
+Initial implementation may omit configurable filters. When filters are added,
+one include/exclude decision controls both routing and `/v1/models`.
+
+## Freshness and Failure Behavior
+
+Discovery fails soft for transient control-plane errors:
+
+- Any successful endpoint poll produces the current union for the anchor.
+- If every endpoint poll fails, the last-known-good inventory remains active
+  until `stale-after`.
+- Once `stale-after` expires, all dynamic entries for the anchor are removed
+  from routing and `/v1/models` together.
+- A successful empty response is authoritative and removes existing entries.
+- Disabling or deleting the anchor removes its dynamic entries immediately.
+- User-authored routes and policies are never modified.
+
+Confirmed expiry is different from a transient publisher failure: expired
+models are hidden rather than advertised as unavailable.
+
+## Status
+
+The discovery anchor is the status owner. In addition to normal
+`AgentgatewayModel` attachment conditions, discovery should expose:
 
 | Condition | Meaning |
 | --- | --- |
-| `ModelCatalogAccepted` | Catalog source config is valid. |
-| `ModelCatalogReady` | At least one publisher contributed usable entries. |
-| `ModelCatalogStale` | Catalog is using last known-good data after recent dynamic publisher failures. |
-| `ModelCatalogConflict` | Duplicate or generated route/policy conflict requires user action. |
+| `DiscoveryAccepted` | Discovery configuration and the pool reference are valid. |
+| `DiscoveryReady` | At least one current model entry is available. |
+| `DiscoveryStale` | Last-known-good inventory is serving after polling failures. |
+| `DiscoveryConflict` | One or more IDs were suppressed because routing was ambiguous. |
 
-Status can initially be exposed through logs and metrics if no appropriate status target exists, then promoted to a
-typed status surface later.
+The first implementation may begin with structured logs and metrics while the
+experimental status shape is finalized, but invalid anchor configuration must
+still set `ResolvedRefs=False`.
 
-### Security Considerations
+## Security
 
-The model catalog can reveal adapter names, tenant workloads, provider names, or filesystem-like `root` metadata.
-Dynamic discovery must be opt-in and scoped.
+- Discovery is explicit and disabled by default.
+- Targets are selected Pod IPs from the referenced `InferencePool`; users
+  cannot configure an arbitrary discovery host.
+- The path must begin with `/` and cannot contain a scheme or host.
+- Polls have connection and request timeouts.
+- Responses have byte, entry-count, and model-ID length limits.
+- Redirects are not followed outside the selected Pod.
+- Client or backend credentials are not sent during discovery.
+- Error logs avoid response bodies and sensitive runtime metadata.
+- NetworkPolicy must permit controller-to-Pod polling when discovery is used.
 
-Security requirements:
+Authenticated or TLS-protected discovery requires a future typed credential
+and transport configuration rather than credential-bearing annotations.
 
-- Do not enable dynamic discovery by default.
-- Do not publish models from sources that are not reachable from the requesting Gateway/listener/path context.
-- Allow operators to exclude sensitive model IDs, such as private LoRAs, from generated `/v1/models` responses.
-- Allow operators to disable metadata passthrough fields such as `root`.
-- Support network policy patterns where the controller is allowed to reach model-server pods only when discovery is
-  explicitly enabled.
-- Add timeouts, response size limits, and JSON parse limits for polling.
-- Avoid forwarding user credentials to model discovery endpoints.
-- Consider future support for service-account, mTLS, or configured headers if `/v1/models` requires authentication.
+## Observability
 
-### Observability
+Suggested metrics:
 
-Add metrics such as:
-
-- `agentgateway_model_catalog_entries`
-- `agentgateway_model_catalog_filtered_entries`
-- `agentgateway_model_catalog_conflicts_total`
-- `agentgateway_model_catalog_publish_errors_total`
+- `agentgateway_model_discovery_models`
 - `agentgateway_model_discovery_polls_total`
 - `agentgateway_model_discovery_poll_errors_total`
-- `agentgateway_model_discovery_stale_catalogs`
+- `agentgateway_model_discovery_stale_anchors`
+- `agentgateway_model_discovery_conflicts_total`
 - `agentgateway_model_discovery_response_seconds`
 
-Useful log fields:
+Useful structured log fields include anchor, pool, endpoint count, successful
+poll count, discovered model count, last success time, and stale state.
+Endpoint addresses should only be logged at debug level.
 
-- publisher name
-- source kind and namespace/name
-- Gateway/listener/path scope
-- endpoint address for dynamic publishers
-- discovered model count
-- filtered model count and filter reason
-- aggregation mode
-- catalog generation
-- last successful poll time
-- generated route or policy conflict reason
+## Milestones
 
-### Milestones
+### M1: OpenAI-compatible InferencePool discovery
 
-M1: internal catalog plus GAIE `InferencePool` publisher.
+- Opt in through `AgentgatewayModel` annotations.
+- Select ready Pods for the referenced pool.
+- Poll standard OpenAI-compatible `/v1/models`.
+- Use union aggregation for the model-aware EPP.
+- Retain last-known-good state until expiry.
+- Generate exact xDS `ModelRoute` entries.
+- Preserve listener, backend, policy, visibility, and authorization semantics.
+- Add unit, controller, and data-plane integration coverage.
 
-- Implement catalog entry normalization, scoping, conflict handling, and generated `/v1/models`.
-- Implement opt-in `InferencePool` polling for runtime-supported `/v1/models`.
-- Implement initial runtime profiles for `openai`, `vllm`, `sglang`, `triton-openai`, and `custom`.
-- Implement per-pool publication and routing filters for discovered model IDs.
-- Support internal generated routing maps for GAIE base-model header routing.
+### M2: Typed configuration and operational status
 
-M2: configured Kubernetes model publishers.
+- Replace provisional annotations with `spec.discovery`.
+- Add typed status conditions.
+- Add include/exclude filters shared by routing and publication.
+- Add explicit port selection and administrator-bounded tuning.
+- Resolve listener-scoped conflicts with detailed status.
 
-- Publish models from `AgentgatewayBackend` AI provider config.
-- Publish explicit aliases from supported `modelAliases` fields.
-- Share the same generated `/v1/models` and conflict handling logic.
+### M3: Runtime profiles and external producers
 
-M3: standalone and external publishers.
+- Add conservative profiles for runtime-specific metadata.
+- Add authenticated and TLS-protected discovery.
+- Evaluate other producers that can emit normalized model routes.
+- Extend xDS catalog metadata only when a concrete client requirement exists.
 
-- Publish standalone `llm.models[]` entries.
-- Evaluate a typed `ModelCatalog` CRD or external publisher API if needed.
-
-### Test Plan
+## Test Plan
 
 Unit tests:
 
-- Normalize entries from each publisher type.
-- Parse `/v1/models` responses through `openai`, `vllm`, `sglang`, `triton-openai`, and `custom` profiles.
-- Default `routeKey` to `id` when the selected profile uses `parent` but `parent` is absent.
-- Use explicit base-model and custom route-key configuration for runtimes that do not report parent lineage.
-- Reject malformed responses and oversized payloads.
-- Aggregate endpoint catalogs in `intersection`, `union`, and `firstHealthy` modes.
-- Apply publication and routing include/exclude filters after normalization.
-- Verify exclude filters win over include filters.
-- Deduplicate equivalent catalog entries.
-- Detect duplicate IDs with conflicting route keys.
-- Scope catalogs to accepted route/listener/Gateway/path contexts.
-- Detect user-defined `GET /v1/models` route collisions.
-- Generate deterministic direct response JSON.
+- parse valid OpenAI-compatible model responses;
+- reject malformed, oversized, and over-limit responses;
+- deduplicate model IDs;
+- select only matching Ready Pods;
+- combine successful endpoint responses by union;
+- retain last-known-good data during transient failures;
+- expire stale data;
+- validate discovery anchor configuration; and
+- ensure deleting or disabling an anchor removes dynamic entries.
 
 Controller tests:
 
-- Opted-in `InferencePool` creates scoped catalog entries.
-- Opted-out `InferencePool` is ignored.
-- Stale poll keeps last known-good catalog until TTL.
-- Discovery disablement removes generated dynamic entries.
-- Publication filters remove matching models from generated `/v1/models`.
-- Routing filters remove matching models from generated routing maps.
-- Generated resources are updated when model-server inventory changes.
-- Configured `AgentgatewayBackend` entries and discovered `InferencePool` entries can coexist in one catalog.
+- an anchor generates exact model routes for each discovered ID;
+- generated routes use the anchor's listener and `InferencePool`;
+- policies, authorization, and visibility are inherited;
+- the anchor itself is not advertised;
+- a successful empty inventory produces an empty model list;
+- static exact models take precedence over discovered entries; and
+- invalid configuration reports `ResolvedRefs=False`.
 
 Integration tests:
 
-- Run fake OpenAI-compatible model servers for standard, vLLM-style, SGLang-style, and Triton-style responses.
-- Verify `GET /v1/models` returns discovered LoRA IDs.
-- Verify a request with `model: <lora-id>` sets the base-model header and routes to the correct `InferencePool`.
-- Verify runtimes without parent lineage require explicit base-model or route-key configuration before generating alias
-  routing maps.
-- Verify configured backend models also appear when reachable.
-- Verify a listener or tenant only sees models reachable from that listener's routes.
+- a fake runtime exposes `/v1/models`;
+- the Gateway's `/v1/models` returns the discovered IDs;
+- a request using a discovered ID reaches the referenced pool;
+- changing runtime inventory updates routing and discovery atomically;
+- authorization filters the response per caller; and
+- stale expiry removes a model from both routing and discovery.
 
 ## Alternatives
 
-### GAIE-Only Model Discovery
+### Derive the catalog from HTTPRoute
 
-Build the feature specifically around `InferencePool` polling and generated GAIE routing maps.
+Rejected. HTTP routes describe transport reachability rather than the complete
+client-facing model contract. Reconstructing aliases, dynamic adapters,
+authorization, and body-based selection from routes and CEL is incomplete and
+creates a second source of truth.
 
-Pros:
+### Annotate InferencePool without an AgentgatewayModel anchor
 
-- Simplest initial implementation.
-- Directly solves the dynamic LoRA model discovery gap for GAIE.
-- Avoids designing a general abstraction before the first use case is proven.
+Rejected. The pool does not identify the Gateway listener, visibility, or
+model policies. Inferring those from references recreates route-derived
+scoping.
 
-Cons:
+### Generate AgentgatewayPolicy mappings
 
-- Does not address the broader scope of [#1462](https://github.com/agentgateway/agentgateway/issues/1462).
-- Duplicates future `/v1/models` logic for other backend types.
-- Risks making `InferencePool` the wrong long-term abstraction boundary.
+Rejected as the default. It exposes runtime inventory as mutable Kubernetes
+configuration, creates ownership conflicts, and separates advertisement from
+the actual model router.
 
-### Route-Only Model Discovery
+### Add a ModelCatalog CRD
 
-Discover models from `HTTPRoute` rules that match `X-Gateway-Base-Model-Name` and reference `InferencePool`s.
+Deferred. `AgentgatewayModel` plus xDS `ModelRoute` already provides the needed
+catalog and routing boundary. Another CRD would add synchronization and
+conflict semantics without solving runtime discovery.
 
-Pros:
+### Move discovery into the EPP
 
-- Simple.
-- No outbound polling.
-- No new runtime model catalog.
-
-Cons:
-
-- Only discovers base model route keys.
-- Misses LoRA IDs and aliases known only to the model server or body-routing policy.
-- Can accidentally aggregate models too broadly if not carefully scoped.
-
-### Static AgentgatewayPolicy Alias Extraction
-
-Scan `AgentgatewayPolicy` resources for simple literal maps from `json(request.body).model` to base model names.
-
-Pros:
-
-- Avoids polling.
-- Can recover user-facing aliases when they are explicitly configured.
-- Aligns with current agentgateway body-based routing.
-
-Cons:
-
-- Only works for simple static CEL maps.
-- Cannot discover dynamically loaded LoRAs.
-- Still requires users to maintain alias config manually.
-
-### EPP-Published Model Inventory
-
-Extend the EPP to scrape or publish `/v1/models` inventory and have agentgateway consume that state.
-
-Pros:
-
-- Co-locates endpoint inventory with the scheduler.
-- Avoids duplicate endpoint watches.
-
-Cons:
-
-- Expands the EPP beyond request scheduling and metrics-driven endpoint selection.
-- May not be accepted by the GAIE community.
-- Couples agentgateway model publication to EPP feature availability.
-
-### User-Managed ModelCatalog CRD
-
-Add an agentgateway-owned `ModelCatalog` CRD where users or external automation publish model-to-route-key mappings.
-
-Pros:
-
-- Explicit.
-- Auditable.
-- Avoids controller outbound polling.
-
-Cons:
-
-- Introduces another API.
-- Does not remove the operational burden of keeping model inventory in sync.
-- Less compelling for dynamically loaded LoRA adapters.
+Deferred. The EPP schedules requests, while agentgateway owns listener
+attachment, authorization, and the client-facing `/v1/models` response.
+Inventory may be shared with the EPP in the future if the GAIE API defines an
+appropriate contract.
 
 ## Open Questions
 
-- Should the initial dynamic discovery implementation run in the controller process or a sidecar process?
-- Where should catalog status live for source objects that agentgateway should not modify, such as `InferencePool`?
-- Should generated `/v1/models` include vLLM extension fields such as `root` and `parent`, or only OpenAI core fields?
-- Should stale discovered models be hidden immediately after TTL expiry or marked unavailable in a future extended
+- What typed `spec.discovery` shape should replace the annotations?
+- Should discovery status extend `AgentgatewayModelStatus.Parents` or add a
+  top-level condition list?
+- How should authenticated discovery reuse backend TLS and credential policy
+  without forwarding inference credentials unnecessarily?
+- Does multi-port discovery select a named port or an index?
+- Should xDS add optional `owned_by` metadata, or keep the current minimal
   response?
-- Is `intersection` too conservative for pools where the EPP can already avoid endpoints that do not serve a requested
-  LoRA?
-- How should discovery authentication be configured for model servers that protect `/v1/models`?
-- Should generated model-routing maps coexist with user-authored `AgentgatewayPolicy` mappings, or should one take
-  precedence?
-- Do we need a typed agentgateway API before supporting generated Kubernetes `AgentgatewayPolicy` resources?
-- Which configured model sources should be implemented immediately after the GAIE `InferencePool` publisher?
+- How should authorization be added to virtual models?
+- When should non-GAIE dynamic producers be supported?
