@@ -697,9 +697,7 @@ async fn test_aws_sign_request_implicit_configured_region_wins() {
 }
 
 #[test]
-fn extract_subject_token_falls_back_to_claims_for_authorization_header() {
-	// Default source is the Authorization Bearer header; a JWT policy stripped it,
-	// leaving only the Claims extension.
+fn subject_token_ignores_claims() {
 	let mut req = ::http::Request::builder()
 		.uri("http://example/")
 		.body(crate::http::Body::empty())
@@ -710,7 +708,25 @@ fn extract_subject_token_falls_back_to_claims_for_authorization_header() {
 	});
 
 	let token = oauth::extract_subject_token(&AuthorizationLocation::default(), &req);
-	assert_eq!(token.as_deref(), Some("claims-jwt"));
+	assert_eq!(token, None);
+}
+
+#[test]
+fn subject_token_expression_reads_validated_claims() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example/")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	req.extensions_mut().insert(Claims {
+		inner: Map::new(),
+		jwt: SecretString::from("validated-jwt"),
+	});
+	let source = AuthorizationLocation::Expression(std::sync::Arc::new(
+		crate::cel::Expression::new_strict("jwt.rawToken.unredacted()").unwrap(),
+	));
+
+	let token = oauth::extract_subject_token(&source, &req);
+	assert_eq!(token.as_deref(), Some("validated-jwt"));
 }
 
 #[test]
@@ -723,22 +739,6 @@ fn extract_subject_token_uses_authorization_header_without_claims() {
 
 	let token = oauth::extract_subject_token(&AuthorizationLocation::default(), &req);
 	assert_eq!(token.as_deref(), Some("header-tok"));
-}
-
-#[test]
-fn extract_subject_token_empty_authorization_header_falls_back_to_claims() {
-	let mut req = ::http::Request::builder()
-		.uri("http://example/")
-		.header(::http::header::AUTHORIZATION, "Bearer ")
-		.body(crate::http::Body::empty())
-		.unwrap();
-	req.extensions_mut().insert(Claims {
-		inner: Map::new(),
-		jwt: SecretString::from("claims-jwt"),
-	});
-
-	let token = oauth::extract_subject_token(&AuthorizationLocation::default(), &req);
-	assert_eq!(token.as_deref(), Some("claims-jwt"));
 }
 
 #[test]
@@ -789,8 +789,27 @@ fn extract_subject_token_custom_source_prefers_configured_location_over_claims()
 	assert_eq!(token.as_deref(), Some("custom-tok"));
 }
 
-#[test]
-fn extract_subject_token_custom_header_falls_back_to_claims() {
+#[rstest::rstest]
+#[case::header(AuthorizationLocation::Header {
+	name: ::http::HeaderName::from_static("x-subject"),
+	prefix: None,
+})]
+#[case::basic_authorization(AuthorizationLocation::Header {
+	name: ::http::header::AUTHORIZATION,
+	prefix: Some("Basic ".into()),
+})]
+#[case::query_parameter(AuthorizationLocation::QueryParameter {
+	name: "subject".into(),
+})]
+#[case::cookie(AuthorizationLocation::Cookie {
+	name: "subject".into(),
+})]
+#[case::expression(AuthorizationLocation::Expression(std::sync::Arc::new(
+	crate::cel::Expression::new_strict(r#"request.headers["x-subject"]"#).unwrap(),
+)))]
+fn extract_subject_token_custom_sources_do_not_fall_back_to_claims(
+	#[case] source: AuthorizationLocation,
+) {
 	let mut req = ::http::Request::builder()
 		.uri("http://example/")
 		.body(crate::http::Body::empty())
@@ -799,31 +818,9 @@ fn extract_subject_token_custom_header_falls_back_to_claims() {
 		inner: Map::new(),
 		jwt: SecretString::from("claims-jwt"),
 	});
-	let source = AuthorizationLocation::Header {
-		name: ::http::HeaderName::from_static("x-subject"),
-		prefix: None,
-	};
 
 	let token = oauth::extract_subject_token(&source, &req);
-	assert_eq!(token.as_deref(), Some("claims-jwt"));
-}
-
-#[test]
-fn extract_subject_token_expression_falls_back_to_claims() {
-	let mut req = ::http::Request::builder()
-		.uri("http://example/")
-		.body(crate::http::Body::empty())
-		.unwrap();
-	req.extensions_mut().insert(Claims {
-		inner: Map::new(),
-		jwt: SecretString::from("claims-jwt"),
-	});
-	let source = AuthorizationLocation::Expression(std::sync::Arc::new(
-		crate::cel::Expression::new_strict(r#"request.headers["x-subject"]"#).unwrap(),
-	));
-
-	let token = oauth::extract_subject_token(&source, &req);
-	assert_eq!(token.as_deref(), Some("claims-jwt"));
+	assert_eq!(token, None);
 }
 
 fn credential(name: &'static str, value: &str, prefix: Option<&str>) -> BackendAuthCredential {

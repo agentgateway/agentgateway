@@ -15960,9 +15960,7 @@ func (x *OAuthClientAuth_PrivateKeyJwt) GetCertificateHeader() OAuthClientAuth_P
 type OAuthTokenExchange_TokenSpec struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Where to extract the token from the incoming request. The `expression`
-	// (CEL) variant is permitted here. A Header/Authorization source also reads
-	// from the Claims extension when an upstream JWT policy has stripped the
-	// header, so the default keeps working behind a JWT auth policy.
+	// (CEL) variant is permitted here.
 	Source *AuthorizationLocation `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
 	// RFC 8693 token type URI sent as subject_token_type / actor_token_type.
 	// Built-ins such as "urn:ietf:params:oauth:token-type:access_token" and
