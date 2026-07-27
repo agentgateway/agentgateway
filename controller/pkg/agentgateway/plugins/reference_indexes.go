@@ -350,7 +350,7 @@ func (r RouteAttachment) ResourceName() string {
 	return r.From.Kind + "/" + r.From.NamespacedName.String() + "->" + to + "/" + r.ListenerName
 }
 
-func (r RouteAttachment) Equals(other RouteAttachment) bool {
+func (r *RouteAttachment) Equals(other *RouteAttachment) bool {
 	return r.From == other.From && r.To == other.To && r.ListenerName == other.ListenerName && r.Gateway == other.Gateway
 }
 
@@ -374,7 +374,7 @@ type PolicyAttachment struct {
 	Source  utils.TypedNamespacedName
 }
 
-func (a PolicyAttachment) Equals(other PolicyAttachment) bool {
+func (a *PolicyAttachment) Equals(other *PolicyAttachment) bool {
 	return a.Target == other.Target && a.Backend == other.Backend && a.Source == other.Source
 }
 
