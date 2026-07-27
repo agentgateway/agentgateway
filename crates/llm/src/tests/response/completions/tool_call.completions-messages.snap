@@ -66,6 +66,7 @@ info:
     "usage": {
       "input_tokens": 25,
       "output_tokens": 18,
+      "cache_read_input_tokens": 0,
       "service_tier": "default"
     }
   },
@@ -75,6 +76,7 @@ info:
     "output_tokens": 18,
     "output_audio_tokens": 0,
     "total_tokens": 43,
+    "cached_input_tokens": 0,
     "service_tier": "default",
     "provider_model": "gpt-4-turbo",
     "output_messages": [

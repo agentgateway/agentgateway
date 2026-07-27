@@ -1,0 +1,27 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/basic.json
+info:
+  model: claude-sonnet-4-20250514
+  max_tokens: 1024
+  messages:
+    - role: user
+      content: "Hello, world"
+---
+{
+  "input": [
+    {
+      "type": "message",
+      "role": "user",
+      "content": [
+        {
+          "type": "input_text",
+          "text": "Hello, world"
+        }
+      ]
+    }
+  ],
+  "model": "claude-sonnet-4-20250514",
+  "max_output_tokens": 1024,
+  "stream": false
+}

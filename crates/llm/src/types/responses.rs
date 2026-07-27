@@ -29,6 +29,10 @@ impl RawInputItem {
 		Self(serde_json::to_value(item).expect("responses input item should serialize"))
 	}
 
+	pub(crate) fn from_value(item: Value) -> Self {
+		Self(item)
+	}
+
 	fn from_user_text(text: String) -> Self {
 		Self::from_typed(InputItem::from(InputMessage {
 			content: vec![InputContent::InputText(InputTextContent {
@@ -638,6 +642,7 @@ mod tests {
 			call_id: "call_123".to_string(),
 			namespace: None,
 			name: "get_weather".to_string(),
+			caller: None,
 			id: Some("fc_123".to_string()),
 			status: Some(OutputStatus::Completed),
 		})]);
@@ -667,6 +672,7 @@ mod tests {
 			call_id: "call_123".to_string(),
 			namespace: None,
 			name: "get_weather".to_string(),
+			caller: None,
 			id: Some("fc_123".to_string()),
 			status: Some(OutputStatus::Completed),
 		})]);

@@ -298,7 +298,7 @@ mod tests {
 			"modelVersion": "gemini-2.5-flash"
 		}));
 
-		let llm_response = resp.to_llm_response(false);
+		let llm_response = resp.to_llm_response(crate::LogContentFields::default());
 
 		assert_eq!(llm_response.input_tokens, Some(8));
 		assert_eq!(llm_response.output_tokens, Some(14));
