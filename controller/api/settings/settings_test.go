@@ -94,6 +94,8 @@ func TestSettings(t *testing.T) {
 				GatewayClassParametersRefs:           GatewayClassParametersRefs{},
 				ProxyImageRegistry:                   "cr.agentgateway.dev",
 				ProxyImageRepository:                 "agentgateway",
+				ControllerName:                       "agentgateway.dev/agentgateway",
+				AgentgatewayClassName:                "agentgateway",
 			},
 		},
 		{
@@ -221,6 +223,8 @@ func TestSettings(t *testing.T) {
 				GatewayClassParametersRefs:           GatewayClassParametersRefs{},
 				ProxyImageRegistry:                   "cr.agentgateway.dev",
 				ProxyImageRepository:                 "agentgateway",
+				ControllerName:                       "agentgateway.dev/agentgateway",
+				AgentgatewayClassName:                "agentgateway",
 			},
 		},
 	}

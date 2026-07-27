@@ -258,14 +258,14 @@ type Settings struct {
 
 	// ControllerName is the value written to GatewayClass.spec.controllerName that this controller
 	// reconciles; Gateways referencing a GatewayClass with this controllerName are managed here.
-	// If empty, defaults to wellknown.DefaultAgwControllerName ("agentgateway.dev/agentgateway").
+	// Defaults to wellknown.DefaultAgwControllerName ("agentgateway.dev/agentgateway").
 	// A value set programmatically via setup.Options.ControllerName takes precedence over this.
-	ControllerName string `split_words:"true"`
+	ControllerName string `split_words:"true" default:"agentgateway.dev/agentgateway"`
 
 	// AgentgatewayClassName is the name of the primary GatewayClass this controller creates and
-	// manages. If empty, defaults to wellknown.DefaultAgwClassName ("agentgateway").
+	// manages. Defaults to wellknown.DefaultAgwClassName ("agentgateway").
 	// A value set programmatically via setup.Options.AgentgatewayClassName takes precedence.
-	AgentgatewayClassName string `split_words:"true"`
+	AgentgatewayClassName string `split_words:"true" default:"agentgateway"`
 
 	// GatewayClassParametersRefs configures the GatewayParameters references to set on the default GatewayClasses.
 	// Format: JSON map where keys are GatewayClass names and values are objects with "name" (required),
