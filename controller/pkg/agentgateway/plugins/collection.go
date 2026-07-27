@@ -4,7 +4,6 @@ import (
 	networkingclient "istio.io/client-go/pkg/apis/networking/v1"
 	"istio.io/istio/pilot/pkg/serviceregistry/ambient"
 	"istio.io/istio/pkg/config/schema/gvr"
-	istiokube "istio.io/istio/pkg/kube"
 	"istio.io/istio/pkg/kube/kclient"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/kube/kubetypes"
@@ -19,6 +18,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	kgwversioned "github.com/agentgateway/agentgateway/controller/pkg/client/clientset/versioned"
+	"github.com/agentgateway/agentgateway/controller/pkg/controller/cachetransform"
 	"github.com/agentgateway/agentgateway/controller/pkg/meshconfig"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/collections"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
@@ -164,7 +164,7 @@ func NewAgwCollections(
 			ObjectFilter: client.ObjectFilter(),
 		}, krtOptions.ToOptions("informer/Nodes")...),
 		Pods: krt.NewFilteredInformer[*corev1.Pod](client, kclient.Filter{
-			ObjectTransform: istiokube.StripPodUnusedFields,
+			ObjectTransform: cachetransform.PodCacheTransform,
 			ObjectFilter:    client.ObjectFilter(),
 		}, krtOptions.ToOptions("informer/Pods")...),
 
@@ -177,7 +177,10 @@ func NewAgwCollections(
 		),
 		ConfigMaps: configMaps,
 		Services: krt.WrapClient(
-			kclient.NewFiltered[*corev1.Service](client, kubetypes.Filter{ObjectFilter: client.ObjectFilter()}),
+			kclient.NewFiltered[*corev1.Service](client, kubetypes.Filter{
+				ObjectFilter:    client.ObjectFilter(),
+				ObjectTransform: cachetransform.ServiceCacheTransform,
+			}),
 			krtOptions.ToOptions("informer/Services")...),
 		EndpointSlices: krt.WrapClient(
 			kclient.NewFiltered[*discovery.EndpointSlice](client, kubetypes.Filter{ObjectFilter: client.ObjectFilter()}),
