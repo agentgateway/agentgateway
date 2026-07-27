@@ -1,0 +1,44 @@
+{
+  "model": "gemini-2.5-pro",
+  "messages": [
+    { "role": "user", "content": "Weather in Columbus and Berlin?" },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "call_1",
+          "type": "function",
+          "function": { "name": "get_weather", "arguments": "{\"location\":\"Columbus\"}" }
+        }
+      ]
+    },
+    { "role": "tool", "tool_call_id": "call_1", "name": "get_weather", "content": "{\"temp\":15}" },
+    {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [
+        {
+          "id": "call_2",
+          "type": "function",
+          "function": { "name": "get_weather", "arguments": "{\"location\":\"Berlin\"}" }
+        }
+      ]
+    },
+    { "role": "tool", "tool_call_id": "call_2", "name": "get_weather", "content": "{\"temp\":9}" }
+  ],
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get the current weather in a location",
+        "parameters": {
+          "type": "object",
+          "properties": { "location": { "type": "string" } },
+          "required": ["location"]
+        }
+      }
+    }
+  ]
+}

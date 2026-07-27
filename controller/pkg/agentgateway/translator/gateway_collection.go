@@ -49,6 +49,8 @@ func ToAgwResource(t any) *api.Resource {
 		return &api.Resource{Kind: &api.Resource_TcpRoute{TcpRoute: tt.TCPRoute}}
 	case AgwPolicy:
 		return &api.Resource{Kind: &api.Resource_Policy{Policy: tt.Policy}}
+	case *api.ModelRoute:
+		return &api.Resource{Kind: &api.Resource_ModelRoute{ModelRoute: tt}}
 	case *api.Resource:
 		return tt
 	}
@@ -204,15 +206,16 @@ func (g GatewayListener) Equals(other GatewayListener) bool {
 }
 
 type GatewayCollectionConfig struct {
-	ControllerName string
-	Gateways       krt.Collection[*gwv1.Gateway]
-	ListenerSets   krt.Collection[ListenerSet]
-	GatewayClasses krt.Collection[GatewayClass]
-	Namespaces     krt.Collection[*corev1.Namespace]
-	Grants         ReferenceGrants
-	Secrets        krt.Collection[*corev1.Secret]
-	ConfigMaps     krt.Collection[*corev1.ConfigMap]
-	KrtOpts        krtutil.KrtOptions
+	ControllerName           string
+	Gateways                 krt.Collection[*gwv1.Gateway]
+	ListenerSets             krt.Collection[ListenerSet]
+	GatewayClasses           krt.Collection[GatewayClass]
+	Namespaces               krt.Collection[*corev1.Namespace]
+	Grants                   ReferenceGrants
+	Secrets                  krt.Collection[*corev1.Secret]
+	ConfigMaps               krt.Collection[*corev1.ConfigMap]
+	KrtOpts                  krtutil.KrtOptions
+	EnableAgentgatewayModels bool
 
 	listenerIndex      krt.Index[types.NamespacedName, ListenerSet]
 	transformationFunc GatewayTransformationFunction
@@ -283,13 +286,13 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 			// Attached Routes count starts at 0 and gets updated later in the status syncer
 			// when the real count is available after route processing
 
-			hostnames, tlsInfo, updatedStatus, programmed := BuildListener(ctx, cfg.Secrets, cfg.ConfigMaps, cfg.Grants, cfg.Namespaces, obj, status.Listeners, kgw, l, i, nil, false)
+			hostnames, tlsInfo, updatedStatus, programmed := BuildListener(ctx, cfg.Secrets, cfg.ConfigMaps, cfg.Grants, cfg.Namespaces, obj, status.Listeners, kgw, l, i, nil, false, cfg.EnableAgentgatewayModels)
 			status.Listeners = updatedStatus
 
 			lstatus := status.Listeners[i]
 
 			// Generate supported kinds for the listener
-			allowed, _ := GenerateSupportedKinds(l)
+			allowed, _ := GenerateSupportedKinds(l, cfg.EnableAgentgatewayModels)
 
 			// Set all listener conditions from the actual status
 			for _, lcond := range lstatus.Conditions {
@@ -509,6 +512,7 @@ func ListenerSetBuilder(
 	grants ReferenceGrants,
 	secrets krt.Collection[*corev1.Secret],
 	configMaps krt.Collection[*corev1.ConfigMap],
+	enableAgentgatewayModels bool,
 ) (*gwv1.ListenerSetStatus, []ListenerSet) {
 	result := []ListenerSet{}
 	ls := obj.Spec
@@ -563,7 +567,7 @@ func ListenerSetBuilder(
 		standardListener := convertListenerSetToListener(l)
 		originalStatus := slices.Map(status.Listeners, convertListenerSetStatusToStandardStatus)
 		hostnames, tlsInfo, updatedStatus, programmed := BuildListener(ctx, secrets, configMaps, grants, namespaces,
-			obj, originalStatus, parentGwObj.Spec, standardListener, i, portErr, true)
+			obj, originalStatus, parentGwObj.Spec, standardListener, i, portErr, true, enableAgentgatewayModels)
 		status.Listeners = slices.Map(updatedStatus, convertStandardStatusToListenerSetStatus)
 
 		if controllerName == constants.ManagedGatewayMeshController || controllerName == constants.ManagedGatewayEastWestController {
@@ -572,7 +576,7 @@ func ListenerSetBuilder(
 		}
 		name := utils.InternalGatewayName(obj.Namespace, obj.Name, string(l.Name))
 
-		allowed, _ := GenerateSupportedKinds(standardListener)
+		allowed, _ := GenerateSupportedKinds(standardListener, enableAgentgatewayModels)
 		pri := ParentInfo{
 			ParentGateway:    config.NamespacedName(parentGwObj),
 			ListenerKey:      name,

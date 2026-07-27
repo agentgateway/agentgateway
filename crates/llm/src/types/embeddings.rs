@@ -99,7 +99,7 @@ impl RequestType for Request {
 }
 
 impl crate::types::ResponseType for Response {
-	fn to_llm_response(&self, _include_completion_in_log: bool) -> crate::LLMResponse {
+	fn to_llm_response(&self, _log_content: crate::LogContentFields) -> crate::LLMResponse {
 		crate::LLMResponse {
 			input_tokens: self.usage.as_ref().map(|u| u.prompt_tokens as u64),
 			input_image_tokens: None,

@@ -634,7 +634,7 @@ export function Drawer(props: {
     const target = event.target as HTMLElement;
     if (
       target.closest(
-        '[role="option"], [role="radio"], .segmented-control button',
+        '[role="option"], [role="radio"], .segmented-control button, .choice-pill',
       )
     )
       setFormChanged(true);

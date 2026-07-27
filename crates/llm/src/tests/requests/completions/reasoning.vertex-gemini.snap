@@ -1,0 +1,28 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/completions/reasoning.json
+info:
+  model: gpt-3.5-turbo
+  messages:
+    - role: user
+      content: How is the current weather in Columbus?
+  reasoning_effort: medium
+---
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "How is the current weather in Columbus?"
+        }
+      ]
+    }
+  ],
+  "generationConfig": {
+    "thinkingConfig": {
+      "thinkingBudget": 2048,
+      "includeThoughts": true
+    }
+  }
+}

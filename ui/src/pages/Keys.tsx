@@ -11,12 +11,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import {
-  disableApiKeyPolicy,
-  getApiKeyPolicy,
-  removeVirtualKey,
-  upsertVirtualKey,
-} from "../config";
+import { getApiKeyPolicy, upsertVirtualKey } from "../config";
 import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { EnumSelector } from "../components/EnumSelector";
 import { hasKeyValue, keyValue, maskKey } from "../credentialDisplay";
@@ -45,6 +40,9 @@ import { randomUuid } from "../randomUuid";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import type { GatewayConfig, LlmApiKeyPolicy, VirtualApiKey } from "../types";
 
+const fileOwnedPolicyMessage =
+  "This API key policy is file-owned and cannot be modified in hybrid mode.";
+
 export function KeysPage() {
   const persistence = useLlmConfigPersistence();
   const {
@@ -58,6 +56,7 @@ export function KeysPage() {
   const help = useSchemaHelp();
   const policy = (policies.apiKey ?? null) as LlmApiKeyPolicy | null;
   const filePolicyOwned = persistence.isFilePolicy("llm.policy", "apiKey");
+  const policyReadOnly = hybrid && filePolicyOwned;
   const [editing, setEditing] = useState<{
     previousKey?: string;
     key: VirtualApiKey;
@@ -139,6 +138,7 @@ export function KeysPage() {
   }
 
   function disablePolicy() {
+    if (policyReadOnly) return;
     const onSuccess = () => {
       setDisablePolicyOpen(false);
       closeKeyDrawer();
@@ -239,15 +239,23 @@ export function KeysPage() {
             description="Create a key so callers can authenticate without exposing provider credentials."
             action={
               <div className="button-row">
-                <button
-                  className="button danger"
-                  type="button"
-                  disabled={saving}
-                  onClick={() => setDisablePolicyOpen(true)}
+                <Tooltip
+                  content={
+                    policyReadOnly
+                      ? fileOwnedPolicyMessage
+                      : "Disable API key policy"
+                  }
                 >
-                  <X size={16} />
-                  Disable API Key Policy
-                </button>
+                  <button
+                    className="button danger"
+                    type="button"
+                    disabled={saving || policyReadOnly}
+                    onClick={() => setDisablePolicyOpen(true)}
+                  >
+                    <X size={16} />
+                    Disable API Key Policy
+                  </button>
+                </Tooltip>
                 <button
                   className="button primary"
                   type="button"
@@ -296,11 +304,20 @@ export function KeysPage() {
                             Edit
                           </button>
                         </Tooltip>
-                        <Tooltip content="Delete key">
+                        <Tooltip
+                          content={
+                            hybrid && !databaseKeyId(item)
+                              ? "File-owned keys cannot be deleted here"
+                              : "Delete key"
+                          }
+                        >
                           <button
                             className="table-action danger"
                             type="button"
                             aria-label="Delete key"
+                            disabled={
+                              saving || (hybrid && !databaseKeyId(item))
+                            }
                             onClick={() => setDeleteKey(item)}
                           >
                             <Trash2 size={14} />
@@ -373,6 +390,7 @@ export function KeysPage() {
           config={config.data}
           policy={policy}
           databaseBacked={hybrid && !filePolicyOwned}
+          readOnly={policyReadOnly}
           keyCount={keys.length}
           help={help}
           saving={saving}
@@ -402,6 +420,7 @@ function AdvancedSettingsDrawer(props: {
   config?: GatewayConfig | null;
   policy?: LlmApiKeyPolicy | null;
   databaseBacked?: boolean;
+  readOnly?: boolean;
   keyCount: number;
   help: SchemaHelp;
   saving: boolean;
@@ -418,6 +437,7 @@ function AdvancedSettingsDrawer(props: {
       <PolicyControls
         policy={props.policy}
         databaseBacked={props.databaseBacked}
+        readOnly={props.readOnly}
         config={props.config}
         keyCount={props.keyCount}
         help={props.help}
@@ -438,6 +458,7 @@ function PolicyControls(props: {
   config?: GatewayConfig | null;
   policy?: LlmApiKeyPolicy | null;
   databaseBacked?: boolean;
+  readOnly?: boolean;
   keyCount: number;
   help: SchemaHelp;
   saving: boolean;
@@ -500,14 +521,22 @@ function PolicyControls(props: {
           title="Disable API key policy"
           description="Remove the API key policy entirely. Requests will not be validated against virtual API keys."
           action={
-            <button
-              className="button danger compact-action"
-              type="button"
-              disabled={props.saving}
-              onClick={props.onDisable}
+            <Tooltip
+              content={
+                props.readOnly
+                  ? fileOwnedPolicyMessage
+                  : "Disable API key policy"
+              }
             >
-              Disable
-            </button>
+              <button
+                className="button danger compact-action"
+                type="button"
+                disabled={props.saving || props.readOnly}
+                onClick={props.onDisable}
+              >
+                Disable
+              </button>
+            </Tooltip>
           }
         />
       ) : null}
@@ -530,6 +559,8 @@ function PolicyControls(props: {
         }
         saveLabel={props.policy ? "Save policy" : "Enable API key auth"}
         saving={props.saving}
+        saveDisabled={props.readOnly}
+        hybridFileWriteMessage={fileOwnedPolicyMessage}
         onSave={() => props.onSave(patch)}
         applyDiff={(next) => {
           Object.assign(getApiKeyPolicy(next), patch);
@@ -543,6 +574,21 @@ function apiKeyPolicyResourceValue(policy: LlmApiKeyPolicy) {
   const value: Partial<LlmApiKeyPolicy> = { ...policy };
   delete value.keys;
   return value;
+}
+
+function removeVirtualKey(config: GatewayConfig, keyToRemove?: string) {
+  if (!keyToRemove) return;
+  const policy = getApiKeyPolicy(config);
+  const keys = policy.keys ?? [];
+  policy.keys = keys.filter((key) => keyValue(key) !== keyToRemove);
+}
+
+function disableApiKeyPolicy(config: GatewayConfig) {
+  const llm = config.llm;
+  if (!llm?.policies) return;
+  const nextPolicies = { ...llm.policies };
+  delete nextPolicies.apiKey;
+  llm.policies = Object.keys(nextPolicies).length ? nextPolicies : null;
 }
 
 function KeyEditor(props: {

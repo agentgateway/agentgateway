@@ -2517,9 +2517,12 @@ async fn make_backend_call(
 	dtrace::trace(|trace| trace.backend_call_started(&call.target));
 	let upstream = inputs.upstream.clone();
 	let llm_response_log = log.as_ref().map(|l| l.llm_response.clone());
-	let include_completion_in_log = log
+	let log_content = log
 		.as_ref()
-		.map(|l| l.cel.cel_context.needs_llm_completion())
+		.map(|l| llm::LogContentFields {
+			completion: l.cel.cel_context.needs_llm_completion(),
+			tool_calls: l.cel.cel_context.needs_llm_tool_calls(),
+		})
 		.unwrap_or_default();
 	let a2a_type = response_policies.a2a_type.clone();
 
@@ -2574,13 +2577,18 @@ async fn make_backend_call(
 			));
 		dtrace::snapshot!(Response, "raw response", log, &resp);
 	}
-	a2a::apply_to_response(
+	if let Some(a2a_response) = a2a::apply_to_response(
 		backend_call.backend_policies.a2a.as_ref(),
 		a2a_type,
 		&mut resp,
 	)
 	.await
-	.map_err(ProxyError::Processing)?;
+	.map_err(ProxyError::Processing)?
+	{
+		log.add(|l| {
+			l.a2a_response = Some(a2a_response);
+		});
+	}
 	let mut resp = if let (Some(llm), Some(llm_request)) = (
 		backend_call.backend_policies.llm_provider.clone(),
 		llm_request,
@@ -2594,7 +2602,7 @@ async fn make_backend_call(
 					llm_response_policies,
 					log.as_ref().expect("must be set").request_snapshot.clone(),
 					llm_response_log.expect("must be set"),
-					include_completion_in_log,
+					log_content,
 					Some(&inputs.model_catalog),
 					resp,
 				)

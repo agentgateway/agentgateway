@@ -32,7 +32,7 @@ import {
 import {
   useConfigDumpMode,
   useDeleteConfigResource,
-  useGatewayConfig,
+  useRawGatewayConfig,
   useHybridFileWriteOverrideKeys,
   useConfigResources,
   useRuntimeInfo,
@@ -69,7 +69,7 @@ export function RawConfigPage() {
 }
 
 function RawConfigEditorPage() {
-  const config = useGatewayConfig();
+  const config = useRawGatewayConfig();
   const runtime = useRuntimeInfo();
   const hybrid = runtime.data?.ui.configStoreMode === "hybrid";
   const resources = useConfigResources({ enabled: hybrid });
@@ -315,8 +315,12 @@ function DatabaseResourcesPanel(props: {
                         <td>
                           <code>{resource.id}</code>
                         </td>
-                        <td>{resource.revision}</td>
-                        <td>{new Date(resource.updatedAt).toLocaleString()}</td>
+                        <td>{resource.revision ?? "—"}</td>
+                        <td>
+                          {resource.updatedAt
+                            ? new Date(resource.updatedAt).toLocaleString()
+                            : "—"}
+                        </td>
                         <td>
                           <div className="button-row compact">
                             <button

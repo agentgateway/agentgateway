@@ -2,8 +2,15 @@ import type {
   LlmModel,
   LlmProvider,
   LlmVirtualModel,
+  McpConfig,
+  McpTarget,
+  TrafficGateway,
   VirtualApiKey,
 } from "../types";
+import type {
+  LocalAttachedRoute,
+  LocalAttachedTCPRoute,
+} from "../gateway-config";
 import { requestJson } from "./base";
 
 export type ConfigResourceKind =
@@ -13,12 +20,25 @@ export type ConfigResourceKind =
   | "llm.virtualModel"
   | "llm.apiKey"
   | "llm.policy"
+  | "mcp.target"
+  | "mcp.policy"
+  | "mcp.settings"
+  | "traffic.gateway"
+  | "traffic.route"
+  | "traffic.tcpRoute"
   | "ui.policy";
 
 export type PolicyResourceKind = Extract<
   ConfigResourceKind,
   `${string}.policy`
 >;
+
+export type McpSettingsResource = Partial<
+  Omit<McpConfig, "targets" | "policies">
+>;
+export type TrafficGatewayResource = TrafficGateway & { name: string };
+export type TrafficRouteResource = LocalAttachedRoute & { name: string };
+export type TrafficTcpRouteResource = LocalAttachedTCPRoute & { name: string };
 
 export type ConfigResourceValue<K extends ConfigResourceKind> =
   K extends "modelCatalog"
@@ -31,9 +51,19 @@ export type ConfigResourceValue<K extends ConfigResourceKind> =
           ? LlmVirtualModel
           : K extends "llm.apiKey"
             ? VirtualApiKey
-            : K extends "llm.policy" | "ui.policy"
-              ? unknown
-              : never;
+            : K extends "mcp.target"
+              ? McpTarget
+              : K extends "mcp.settings"
+                ? McpSettingsResource
+                : K extends "traffic.gateway"
+                  ? TrafficGatewayResource
+                  : K extends "traffic.route"
+                    ? TrafficRouteResource
+                    : K extends "traffic.tcpRoute"
+                      ? TrafficTcpRouteResource
+                      : K extends "llm.policy" | "mcp.policy" | "ui.policy"
+                        ? unknown
+                        : never;
 
 export interface ConfigResource<
   K extends ConfigResourceKind = ConfigResourceKind,
@@ -41,9 +71,9 @@ export interface ConfigResource<
   kind: K;
   id: string;
   value: ConfigResourceValue<K>;
-  revision: number;
-  createdAt: string;
-  updatedAt: string;
+  revision?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ConfigResourcesResponse<
@@ -54,14 +84,6 @@ export interface ConfigResourcesResponse<
 
 export function listConfigResources() {
   return requestJson<ConfigResourcesResponse>("/api/config/resources");
-}
-
-export function listConfigResourcesByKind<K extends ConfigResourceKind>(
-  kind: K,
-) {
-  return requestJson<ConfigResourcesResponse<K>>(
-    `/api/config/resources/${encodeURIComponent(kind)}`,
-  );
 }
 
 export function putConfigResources<K extends ConfigResourceKind>(

@@ -944,7 +944,7 @@ fn test_completions_reasoning_effort_maps_to_enabled_thinking_budget() {
 		Some(json!({
 			"thinking": {
 				"type": "enabled",
-				"budget_tokens": 4096
+				"budget_tokens": 8192
 			}
 		}))
 	);

@@ -34,8 +34,8 @@
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.outputAudio`|string|Cost per 1M output audio tokens. Falls back to the output rate if unset.|
 |`config.database`|object|Primary database used by local runtime features.|
 |`config.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.|
-|`config.configStore`|object|Controls whether UI-managed configuration is written to the config file or a DB overlay.|
-|`config.configStore.mode`|enum|Possible values: `file`, `hybrid`.|
+|`config.storage`|object|Controls whether UI-managed configuration is written to the config file or a DB overlay.|
+|`config.storage.mode`|enum|Possible values: `file`, `hybrid`.|
 |`config.caAddress`|string|Address of the Certificate Authority used to issue SPIFFE certificates.|
 |`config.caAuthToken`|string|Authentication token for communicating with the Certificate Authority.|
 |`config.xdsAddress`|string|Address of the xDS control plane used for dynamic configuration.|
@@ -195,7 +195,7 @@
 |`binds[].listeners[].routes[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`binds[].listeners[].routes[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].routes[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`binds[].listeners[].routes[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`binds[].listeners[].routes[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
@@ -454,7 +454,7 @@
 |`binds[].listeners[].routes[].policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`binds[].listeners[].routes[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].routes[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`binds[].listeners[].routes[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`binds[].listeners[].routes[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication`|object|Authenticate MCP clients.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -5316,12 +5316,12 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`binds[].listeners[].routes[].backends[].ai.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].routes[].backends[].ai.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`binds[].listeners[].routes[].backends[].ai.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].ai.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`binds[].listeners[].routes[].backends[].ai.policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails`|object|External MCP policy processors.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
@@ -8087,12 +8087,12 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
@@ -10828,12 +10828,12 @@
 |`binds[].listeners[].routes[].backends[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`binds[].listeners[].routes[].backends[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].routes[].backends[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`binds[].listeners[].routes[].backends[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`binds[].listeners[].routes[].backends[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`binds[].listeners[].routes[].backends[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
@@ -12975,7 +12975,7 @@
 |`binds[].listeners[].policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`binds[].listeners[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`binds[].listeners[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`binds[].listeners[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`binds[].listeners[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`binds[].listeners[].policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service.|
 |`binds[].listeners[].policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
@@ -14129,7 +14129,7 @@
 |`frontendPolicies.networkAuthorization`|object|CEL authorization for downstream network connections.|
 |`frontendPolicies.networkAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`frontendPolicies.networkAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`frontendPolicies.networkAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`frontendPolicies.networkAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`frontendPolicies.networkAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`frontendPolicies.proxy`|object|Enable downstream PROXY protocol handling on this gateway or port, including<br>version matching and whether PROXY headers are required or optional.|
 |`frontendPolicies.proxy.version`|enum|PROXY protocol versions accepted from downstream clients.<br>Possible values: `v1`, `v2`, `all`.|
@@ -14994,7 +14994,7 @@
 |`policies[].policy.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`policies[].policy.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`policies[].policy.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`policies[].policy.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`policies[].policy.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`policies[].policy.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`policies[].policy.mcpGuardrails`|object|External MCP policy processors.|
 |`policies[].policy.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
@@ -15253,7 +15253,7 @@
 |`policies[].policy.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`policies[].policy.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`policies[].policy.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`policies[].policy.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`policies[].policy.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`policies[].policy.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`policies[].policy.mcpAuthentication`|object|Authenticate MCP clients.|
 |`policies[].policy.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -20112,12 +20112,12 @@
 |`backends[].ai.policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`backends[].ai.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`backends[].ai.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`backends[].ai.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`backends[].ai.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`backends[].ai.policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`backends[].ai.policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`backends[].ai.policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`backends[].ai.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`backends[].ai.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`backends[].ai.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`backends[].ai.policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`backends[].ai.policies.mcpGuardrails`|object|External MCP policy processors.|
 |`backends[].ai.policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
@@ -22883,12 +22883,12 @@
 |`backends[].ai.groups[].providers[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`backends[].ai.groups[].providers[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`backends[].ai.groups[].providers[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`backends[].ai.groups[].providers[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`backends[].ai.groups[].providers[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`backends[].ai.groups[].providers[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
@@ -25622,12 +25622,12 @@
 |`backends[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`backends[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`backends[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`backends[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`backends[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`backends[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`backends[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`backends[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`backends[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`backends[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`backends[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`backends[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`backends[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`backends[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
@@ -27762,7 +27762,7 @@
 |`routeGroups[].routes[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`routeGroups[].routes[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routeGroups[].routes[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`routeGroups[].routes[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routeGroups[].routes[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routeGroups[].routes[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
@@ -28021,7 +28021,7 @@
 |`routeGroups[].routes[].policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`routeGroups[].routes[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routeGroups[].routes[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`routeGroups[].routes[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routeGroups[].routes[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routeGroups[].routes[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].policies.mcpAuthentication`|object|Authenticate MCP clients.|
 |`routeGroups[].routes[].policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -32883,12 +32883,12 @@
 |`routeGroups[].routes[].backends[].ai.policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`routeGroups[].routes[].backends[].ai.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routeGroups[].routes[].backends[].ai.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`routeGroups[].routes[].backends[].ai.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].ai.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routeGroups[].routes[].backends[].ai.policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
@@ -35654,12 +35654,12 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
@@ -38395,12 +38395,12 @@
 |`routeGroups[].routes[].backends[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`routeGroups[].routes[].backends[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routeGroups[].routes[].backends[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`routeGroups[].routes[].backends[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routeGroups[].routes[].backends[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routeGroups[].routes[].backends[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
@@ -40518,7 +40518,7 @@
 |`gateways.*.listeners[].authorization`|object|Authorization rules for incoming HTTP requests.|
 |`gateways.*.listeners[].authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`gateways.*.listeners[].authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`gateways.*.listeners[].authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`gateways.*.listeners[].authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`gateways.*.listeners[].authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`gateways.*.listeners[].extAuthz`|object|Authorize incoming requests by calling an external authorization service.|
 |`gateways.*.listeners[].extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
@@ -41696,7 +41696,7 @@
 |`gateways.*.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`gateways.*.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`gateways.*.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`gateways.*.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`gateways.*.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`gateways.*.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`gateways.*.extAuthz`|object|Authorize incoming requests by calling an external authorization service.|
 |`gateways.*.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
@@ -42897,7 +42897,7 @@
 |`routes[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`routes[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routes[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`routes[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routes[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routes[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routes[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routes[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
@@ -43156,7 +43156,7 @@
 |`routes[].policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`routes[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routes[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`routes[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routes[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routes[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routes[].policies.mcpAuthentication`|object|Authenticate MCP clients.|
 |`routes[].policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -48018,12 +48018,12 @@
 |`routes[].backends[].ai.policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`routes[].backends[].ai.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routes[].backends[].ai.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`routes[].backends[].ai.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routes[].backends[].ai.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routes[].backends[].ai.policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routes[].backends[].ai.policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`routes[].backends[].ai.policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routes[].backends[].ai.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`routes[].backends[].ai.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routes[].backends[].ai.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routes[].backends[].ai.policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routes[].backends[].ai.policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
@@ -50789,12 +50789,12 @@
 |`routes[].backends[].ai.groups[].providers[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`routes[].backends[].ai.groups[].providers[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routes[].backends[].ai.groups[].providers[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
@@ -53530,12 +53530,12 @@
 |`routes[].backends[].policies.authorization`|object|Authorize incoming requests after this backend is selected.|
 |`routes[].backends[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routes[].backends[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`routes[].backends[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routes[].backends[].policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routes[].backends[].policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routes[].backends[].policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`routes[].backends[].policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`routes[].backends[].policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`routes[].backends[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`routes[].backends[].policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`routes[].backends[].policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`routes[].backends[].policies.mcpGuardrails`|object|External MCP policy processors.|
 |`routes[].backends[].policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
@@ -56091,7 +56091,7 @@
 |`llm.models[].authorization`|object|authorization configures HTTP authorization rules for requests to this model.|
 |`llm.models[].authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`llm.models[].authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`llm.models[].authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`llm.models[].authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`llm.models[].authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`llm.models[].defaults`|object|defaults allows setting default values for the request. If these are not present in the request body, they will be set.<br>To override even when set, use `overrides`.|
 |`llm.models[].overrides`|object|overrides allows setting values for the request, overriding any existing values|
@@ -58316,7 +58316,7 @@
 |`llm.policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`llm.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`llm.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`llm.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`llm.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`llm.policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`llm.policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service.|
 |`llm.policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|
@@ -61804,7 +61804,7 @@
 |`mcp.policies.mcpAuthorization`|object|Authorization rules for MCP requests.|
 |`mcp.policies.mcpAuthorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`mcp.policies.mcpAuthorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`mcp.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`mcp.policies.mcpAuthorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`mcp.policies.mcpAuthorization.rules[].require`|string|Require this CEL expression to be true.|
 |`mcp.policies.mcpGuardrails`|object|External MCP policy processors.|
 |`mcp.policies.mcpGuardrails.processors`|[]object|Ordered list of policy processors applied to matched methods; the first<br>to reject a request short-circuits the chain. Processors may run on the<br>request or response side, or both; see `Processor.methods`.|
@@ -62063,7 +62063,7 @@
 |`mcp.policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`mcp.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`mcp.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`mcp.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`mcp.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`mcp.policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`mcp.policies.mcpAuthentication`|object|Authenticate MCP clients.|
 |`mcp.policies.mcpAuthentication.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -65987,7 +65987,7 @@
 |`ui.policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`ui.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`ui.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
-|`ui.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true.|
+|`ui.policies.authorization.rules[].deny`|string|Deny the request when this CEL expression is true. This mode is not<br>recommended because expression failures fail to deny; prefer `Allow` or<br>`Require`. If used, design expressions defensively against evaluation errors.|
 |`ui.policies.authorization.rules[].require`|string|Require this CEL expression to be true.|
 |`ui.policies.extAuthz`|object|Authorize incoming requests by calling an external authorization service.|
 |`ui.policies.extAuthz.conditional`|[]object|conditional policy entries. An entry without a condition must be the final fallback.|

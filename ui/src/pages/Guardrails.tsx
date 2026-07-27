@@ -231,7 +231,7 @@ export function GuardrailsPage() {
             <button
               className="button danger"
               type="button"
-              disabled={saving}
+              disabled={saving || (hybrid && fileOwned)}
               onClick={() => setRemoveAllOpen(true)}
             >
               <Trash2 size={16} />

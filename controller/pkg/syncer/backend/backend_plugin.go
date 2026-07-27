@@ -546,7 +546,7 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 			},
 		}
 	} else if llm.Custom != nil {
-		formats, err := translateProviderFormats(llm.Custom.Formats)
+		formats, err := plugins.TranslateCustomProviderFormats(llm.Custom.Formats)
 		if err != nil {
 			return nil, err
 		}
@@ -557,7 +557,7 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 			},
 		}
 		if llm.Custom.BackendRef != nil {
-			providerBackend, err := translateCustomProviderBackendRef(ctx, namespace, *llm.Custom.BackendRef)
+			providerBackend, err := plugins.TranslateCustomProviderBackendRef(ctx.Krt, ctx.References.RouteBackend, namespace, *llm.Custom.BackendRef)
 			if err != nil {
 				return nil, err
 			}
@@ -568,71 +568,6 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 	}
 
 	return provider, nil
-}
-
-func translateProviderFormats(formats []agentgateway.ProviderFormatConfig) ([]*api.AIBackend_ProviderFormatConfig, error) {
-	out := make([]*api.AIBackend_ProviderFormatConfig, 0, len(formats))
-	for _, format := range formats {
-		protoFormat, err := translateProviderFormat(format.Type)
-		if err != nil {
-			return nil, err
-		}
-		protoConfig := &api.AIBackend_ProviderFormatConfig{Format: protoFormat}
-		if format.Path != "" {
-			path := string(format.Path)
-			protoConfig.Path = &path
-		}
-		out = append(out, protoConfig)
-	}
-	return out, nil
-}
-
-func translateProviderFormat(format agentgateway.ProviderFormat) (api.AIBackend_ProviderFormat, error) {
-	switch format {
-	case agentgateway.ProviderFormatCompletions:
-		return api.AIBackend_COMPLETIONS, nil
-	case agentgateway.ProviderFormatMessages:
-		return api.AIBackend_MESSAGES, nil
-	case agentgateway.ProviderFormatResponses:
-		return api.AIBackend_RESPONSES, nil
-	case agentgateway.ProviderFormatEmbeddings:
-		return api.AIBackend_EMBEDDINGS, nil
-	case agentgateway.ProviderFormatAnthropicTokenCount:
-		return api.AIBackend_ANTHROPIC_TOKEN_COUNT, nil
-	case agentgateway.ProviderFormatRealtime:
-		return api.AIBackend_REALTIME, nil
-	case agentgateway.ProviderFormatRerank:
-		return api.AIBackend_RERANK, nil
-	default:
-		return api.AIBackend_PROVIDER_FORMAT_UNSPECIFIED, fmt.Errorf("unsupported custom provider format %q", format)
-	}
-}
-
-func translateCustomProviderBackendRef(ctx plugins.PolicyCtx, namespace string, ref agentgateway.LocalBackendObjectReference) (*api.BackendReference, error) {
-	kind := gwv1.Kind(wellknown.ServiceKind)
-	if ref.Kind != nil {
-		kind = gwv1.Kind(*ref.Kind)
-	}
-	group := gwv1.Group("")
-	if ref.Group != nil {
-		group = gwv1.Group(*ref.Group)
-	}
-	gk := schema.GroupKind{
-		Group: string(group),
-		Kind:  string(kind),
-	}
-	switch gk {
-	case wellknown.ServiceGVK.GroupKind(), wellknown.InferencePoolGVK.GroupKind():
-	default:
-		return nil, fmt.Errorf("custom provider backendRef may target only Service or InferencePool")
-	}
-
-	var port *gwv1.PortNumber
-	if ref.Port != nil {
-		port = new(gwv1.PortNumber(*ref.Port))
-	}
-
-	return ctx.References.RouteBackend(ctx.Krt, namespace, gk, gwv1.ObjectName(ref.Name), nil, port)
 }
 
 func translateAwsBackends(

@@ -172,6 +172,10 @@ spec:
             - name: AGW_ENABLE_INFER_EXT
               value: "true"
             {{- end }}
+            {{- if .Values.agentgatewayModels.enabled }}
+            - name: AGW_ENABLE_AGENTGATEWAY_MODELS
+              value: "true"
+            {{- end }}
             - name: AGW_XDS_MODE
               value: {{ .Values.controller.xds.mode | quote }}
             - name: AGW_GATEWAY_CLASS_PARAMETERS_REFS

@@ -6,7 +6,7 @@ import {
   StatusBanner,
 } from "../components/Primitives";
 import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
-import { useGatewayConfig, useUpdateConfig } from "../hooks";
+import { useEffectiveGatewayConfig, useUpdateConfig } from "../hooks";
 import type { LocalUIConfig } from "../gateway-config";
 import type { GatewayConfig, TrafficGateway } from "../types";
 import type { PolicyKey } from "../policies/types";
@@ -63,7 +63,7 @@ export function RawSettingsPage() {
 }
 
 function UiGatewayPanel() {
-  const config = useGatewayConfig();
+  const config = useEffectiveGatewayConfig();
   const update = useUpdateConfig();
   const gatewayOptions = useMemo(
     () => gatewayReferenceOptions(config.data),

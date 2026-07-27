@@ -76,18 +76,17 @@ impl AgentGateway {
 				agentgateway::config::parse_config(js, Some(agentgateway::ConfigSource::File(config)))
 					.unwrap(),
 			);
-			let config_resource_store =
-				if config.config_store.mode == agentgateway::ConfigStoreMode::Hybrid {
-					Some(
-						agentgateway::config_store::setup(
-							config.database.as_ref().expect("hybrid database config"),
-						)
-						.await
-						.unwrap(),
+			let config_resource_store = if config.storage.mode == agentgateway::ConfigStoreMode::Hybrid {
+				Some(
+					agentgateway::config_store::setup(
+						config.database.as_ref().expect("hybrid database config"),
 					)
-				} else {
-					None
-				};
+					.await
+					.unwrap(),
+				)
+			} else {
+				None
+			};
 			let app = agentgateway::app::run(config, config_resource_store)
 				.await
 				.unwrap();

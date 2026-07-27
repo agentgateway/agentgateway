@@ -129,8 +129,9 @@ pub async fn run(
 	)
 	.await
 	.context("admin server starts")?;
-	#[cfg(feature = "ui")]
-	info!("serving UI at {}", ui_url(config.as_ref()).await);
+	if cfg!(feature = "ui") {
+		info!("serving UI at {}", ui_url(config.as_ref()).await);
+	}
 
 	let pi = ProxyInputs {
 		cfg: config.clone(),
@@ -182,7 +183,6 @@ pub async fn run(
 	})
 }
 
-#[cfg(feature = "ui")]
 async fn ui_url(config: &Config) -> String {
 	let admin_url = || format!("http://{}/ui", config.admin_addr);
 	let Some(local_config) = &config.xds.local_config else {

@@ -17,9 +17,8 @@ import {
   useLlmConfigPersistence,
   useUpdateConfig,
 } from "../hooks";
-import type { ConfigResource } from "../api/configResourcesApi";
-import type { GatewayConfig } from "../types";
 import { useEffect, useMemo, useState } from "react";
+import type { GatewayConfig } from "../types";
 
 type CustomCostRow = {
   provider: string;
@@ -37,26 +36,42 @@ type DisplayCostSource = CostCatalogSource & {
 
 export function CostsPage() {
   const persistence = useLlmConfigPersistence();
-  const { config, hybrid, resources, configResources } = persistence;
+  const {
+    rawConfig,
+    hybrid,
+    resources,
+    configResources,
+    isLoading: configDataLoading,
+    error: configDataError,
+  } = persistence;
   const updateConfig = useUpdateConfig();
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const databaseCatalog = useMemo(
-    () => modelCatalogResource(resources),
+  const catalogResource = useMemo(
+    () => resources?.find((resource) => resource.kind === "modelCatalog"),
     [resources],
   );
+  const catalog = useMemo(
+    () =>
+      record(catalogResource?.value) as {
+        base?: unknown;
+        custom?: unknown;
+      },
+    [catalogResource],
+  );
+  const databaseCatalog = catalogResource ? catalog : {};
   const sources = useMemo(
     () => [
       ...databaseCostSources(databaseCatalog),
-      ...configuredCostSources(config.data).map(fileCostSource),
+      ...configuredCostSources(rawConfig.data).map(fileCostSource),
     ],
-    [config.data, databaseCatalog],
+    [rawConfig.data, databaseCatalog],
   );
   const baseFile = useMemo(
     () =>
-      configuredCostSources(config.data).find((source) => source.file)?.file,
-    [config.data],
+      configuredCostSources(rawConfig.data).find((source) => source.file)?.file,
+    [rawConfig.data],
   );
   const customRows = useMemo(
     () =>
@@ -65,9 +80,11 @@ export function CostsPage() {
           ? databaseCatalog.custom === undefined
             ? []
             : [{ inline: databaseCatalog.custom }]
-          : sources,
+          : catalog.custom === undefined
+            ? sources
+            : [{ inline: catalog.custom }],
       ),
-    [databaseCatalog, hybrid, sources],
+    [catalog.custom, databaseCatalog.custom, hybrid, sources],
   );
   const saving = updateConfig.isPending || persistence.isPending;
   const [editingCustom, setEditingCustom] = useState(false);
@@ -118,6 +135,13 @@ export function CostsPage() {
           </ConfigSaveButton>
         }
       />
+      {configDataLoading ? (
+        <StatusBanner state="loading" title="Loading cost configuration" />
+      ) : configDataError ? (
+        <StatusBanner state="bad" title="Configuration API unavailable">
+          {configDataError.message}
+        </StatusBanner>
+      ) : null}
       {error ? (
         <StatusBanner state="bad" title="Cost refresh failed">
           {error}
@@ -407,16 +431,6 @@ export function CostsPage() {
   }
 }
 
-function modelCatalogResource(resources: ConfigResource[] | undefined): {
-  base?: unknown;
-  custom?: unknown;
-} {
-  const value = resources?.find(
-    (resource) => resource.kind === "modelCatalog",
-  )?.value;
-  return record(value) as { base?: unknown; custom?: unknown };
-}
-
 function databaseCostSources(catalog: {
   base?: unknown;
   custom?: unknown;
@@ -496,16 +510,6 @@ function inlineCostRows(sources: CostCatalogSource[]): CustomCostRow[] {
   );
 }
 
-function setInlineCostRows(config: GatewayConfig, rows: CustomCostRow[]) {
-  config.config = config.config ?? {};
-  const existing = configuredCostSources(config);
-  const withoutInline = existing.filter((source) => !("inline" in source));
-  config.config.modelCatalog = [
-    ...withoutInline,
-    { inline: inlineCatalog(rows) },
-  ] as never;
-}
-
 function inlineCatalog(rows: CustomCostRow[]) {
   const providers: Record<
     string,
@@ -526,6 +530,16 @@ function inlineCatalog(rows: CustomCostRow[]) {
     providers[provider].models[model] = { rates };
   }
   return { providers };
+}
+
+function setInlineCostRows(config: GatewayConfig, rows: CustomCostRow[]) {
+  const fileSources = configuredCostSources(config).filter((source) => source.file);
+  const custom = inlineCatalog(rows);
+  const hasCustom = Object.keys(custom.providers).length > 0;
+  config.config = config.config ?? {};
+  config.config.modelCatalog = (
+    hasCustom ? [...fileSources, { inline: custom }] : fileSources
+  ) as never;
 }
 
 function cleanRates(rates: Record<string, string>) {

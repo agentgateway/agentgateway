@@ -308,6 +308,8 @@ type BackendEviction struct {
 	// If all endpoints are evicted, the load balancer falls back to returning evicted endpoints
 	// rather than failing entirely.
 	// If unset, defaults to `3s`.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="evictionDuration must be at least 1 second"
 	// +kubebuilder:default="3s"
@@ -667,6 +669,8 @@ type FrontendHTTP struct {
 	// Timeout before an unused connection is
 	// closed.
 	// If unset, this defaults to 10 minutes.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http1IdleTimeout must be at least 1 second"
 	// +optional
@@ -699,10 +703,14 @@ type FrontendHTTP struct {
 	// If unset, this defaults to `16Ki`.
 	// +optional
 	HTTP2MaxHeaderSize *ByteSize `json:"http2MaxHeaderSize,omitempty"`
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http2KeepaliveInterval must be at least 1 second"
 	// +optional
 	HTTP2KeepaliveInterval *metav1.Duration `json:"http2KeepaliveInterval,omitempty"`
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http2KeepaliveTimeout must be at least 1 second"
 	// +optional
@@ -710,6 +718,8 @@ type FrontendHTTP struct {
 	// Maximum time a connection is allowed to remain open.
 	// After this duration, the connection is gracefully closed after the current in-flight request completes.
 	// Useful for ensuring even traffic distribution behind load balancers during scaling events.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="maxConnectionDuration must be at least 1 second"
 	// +optional
@@ -720,6 +730,8 @@ type FrontendHTTP struct {
 type FrontendTLS struct {
 	// Deadline for a TLS handshake to
 	// complete. If unset, this defaults to `15s`.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('100ms')",message="handshakeTimeout must be at least 100ms"
 	// +optional
@@ -814,6 +826,8 @@ type Keepalive struct {
 
 	// Time a connection needs to be idle before keepalive probes start being sent.
 	// If unset, this defaults to 180s.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="time must be at least 1 second"
 	// +optional
@@ -821,6 +835,8 @@ type Keepalive struct {
 
 	// Time between keepalive probes.
 	// If unset, this defaults to 180s.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="interval must be at least 1 second"
 	// +optional
@@ -1171,6 +1187,8 @@ type RemoteJWKS struct {
 	// +kubebuilder:validation:MaxLength=2000
 	JwksPath string `json:"jwksPath"`
 	// +optional
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('5m')",message="cacheDuration must be at least 5m."
 	// +kubebuilder:default="5m"
@@ -2313,6 +2331,8 @@ type BackendHTTP struct {
 	Version *HTTPVersion `json:"version,omitempty"`
 
 	// Deadline for receiving a response from the backend.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1ms')",message="requestTimeout must be at least 1ms"
 	// +optional
@@ -2334,6 +2354,8 @@ type BackendTCP struct {
 	Keepalive *Keepalive `json:"keepalive,omitempty"`
 	// Deadline for establishing a connection to
 	// the destination.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('100ms')",message="connectTimeout must be at least 100ms"
 	// +optional
@@ -3077,6 +3099,8 @@ type Timeouts struct {
 	// Timeout for an individual request from the gateway to a backend. This covers the time from when
 	// the request first starts being sent from the gateway to when the full response has been received from the backend.
 	//
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('100ms')",message="request must be at least 1ms"
 	// +optional

@@ -1,0 +1,32 @@
+{
+  "model": "gemini-2.5-pro",
+  "messages": [
+    { "role": "system", "content": "You are a helpful assistant." },
+    { "role": "user", "content": "What is the weather?" }
+  ],
+  "max_tokens": 1000,
+  "temperature": 0.7,
+  "top_p": 0.9,
+  "top_k": 40,
+  "n": 3,
+  "stop": ["\n\n", "END"],
+  "presence_penalty": 0.1,
+  "frequency_penalty": 0.2,
+  "seed": 42,
+  "response_format": { "type": "json_object" },
+  "tool_choice": { "type": "function", "function": { "name": "get_weather" } },
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_weather",
+        "description": "Get the current weather in a location",
+        "parameters": {
+          "type": "object",
+          "properties": { "location": { "type": "string" } },
+          "required": ["location"]
+        }
+      }
+    }
+  ]
+}

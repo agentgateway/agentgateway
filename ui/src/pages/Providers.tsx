@@ -6,7 +6,6 @@ import {
   makeEmptyLlmProvider,
   providerDisplayName,
   providerLabel,
-  removeLlmProvider,
   upsertLlmProvider,
 } from "../config";
 import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
@@ -36,7 +35,7 @@ import { ProviderConfigEditor } from "./models/ProviderConfigEditor";
 
 export function ProvidersPage() {
   const persistence = useLlmConfigPersistence();
-  const { config, hybrid, configResources, models, providers } = persistence;
+  const { config, hybrid, models, providers, isLoading, error } = persistence;
   const help = useSchemaHelp();
   const [editing, setEditing] = useState<{
     previousName?: string;
@@ -109,7 +108,11 @@ export function ProvidersPage() {
       {
         kind: "llm.provider",
         id: name,
-        updateFile: (next) => removeLlmProvider(next, name),
+        updateFile: (next) => {
+          const llm = next.llm;
+          if (!llm?.providers) return;
+          llm.providers = llm.providers.filter((provider) => provider.name !== name);
+        },
       },
       { onSuccess: () => setDeletingProvider(null) },
     );
@@ -140,11 +143,11 @@ export function ProvidersPage() {
       {saved ? <StatusBanner state="ok" title="Configuration saved" /> : null}
 
       <Panel>
-        {config.isLoading || (hybrid && configResources.isLoading) ? (
+        {isLoading ? (
           <StatusBanner state="loading" title="Loading providers" />
-        ) : config.isError || (hybrid && configResources.isError) ? (
+        ) : error ? (
           <StatusBanner state="bad" title="Configuration API unavailable">
-            {config.error?.message ?? configResources.error?.message}
+            {error.message}
           </StatusBanner>
         ) : providers.length === 0 ? (
           <EmptyState
@@ -177,18 +180,17 @@ export function ProvidersPage() {
               <tbody>
                 {providers.map((provider) => {
                   const usage = providerUsage(provider.name, models);
+                  const databaseBacked = persistence.isDatabaseResource(
+                    "llm.provider",
+                    provider.name,
+                  );
                   return (
                     <tr key={provider.name}>
                       <td className="strong">{provider.name}</td>
                       {hybrid ? (
                         <td>
                           <span className="badge">
-                            {persistence.isDatabaseResource(
-                              "llm.provider",
-                              provider.name,
-                            )
-                              ? "Database"
-                              : "File"}
+                            {databaseBacked ? "Database" : "File"}
                           </span>
                         </td>
                       ) : null}
@@ -235,14 +237,20 @@ export function ProvidersPage() {
                           content={
                             usage.length
                               ? "Provider is referenced by models"
-                              : "Delete provider"
+                              : hybrid && !databaseBacked
+                                ? "File-owned providers cannot be deleted here"
+                                : "Delete provider"
                           }
                         >
                           <button
                             className="icon-button danger"
                             aria-label="Delete provider"
                             type="button"
-                            disabled={usage.length > 0 || saving}
+                            disabled={
+                              usage.length > 0 ||
+                              saving ||
+                              (hybrid && !databaseBacked)
+                            }
                             onClick={() => setDeletingProvider(provider.name)}
                           >
                             <Trash2 size={16} />

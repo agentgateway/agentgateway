@@ -1,0 +1,28 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/completions/reasoning_max.json
+info:
+  model: claude-opus-4-6
+  messages:
+    - role: user
+      content: Deeply analyze quantum gravity
+  reasoning_effort: xhigh
+---
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "Deeply analyze quantum gravity"
+        }
+      ]
+    }
+  ],
+  "generationConfig": {
+    "thinkingConfig": {
+      "thinkingBudget": 2048,
+      "includeThoughts": true
+    }
+  }
+}

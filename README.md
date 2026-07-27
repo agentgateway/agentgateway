@@ -70,14 +70,14 @@
 
 ## Getting Started
 
-- [Standalone Quickstart](https://agentgateway.dev/docs/quickstart) — Get started with agentgateway in minutes.
-- [Kubernetes Quickstart](https://agentgateway.dev/docs/kubernetes/latest) — Deploy on Kubernetes using the built-in controller and Gateway API.
+- [Standalone Quickstart](https://agentgateway.dev/docs/standalone/latest/quickstart) — Get started with agentgateway in minutes.
+- [Kubernetes Quickstart](https://agentgateway.dev/docs/kubernetes/latest/quickstart) — Deploy on Kubernetes using the built-in controller and Gateway API.
 
 ## Documentation
 
 Depending on your deployment environment, check out the following docs:
 
-- [agentgateway.dev/docs](https://agentgateway.dev/docs/): For standalone deployments such as local or on-prem. These docs are for this upstream `agentgateway/agentgateway` GitHub project.
+- [agentgateway.dev/docs](https://agentgateway.dev/docs/standalone/latest): For deployments without the full Kubernetes controller, driven by flat yaml config.
 - [agentgateway.dev/docs/kubernetes/latest](https://agentgateway.dev/docs/kubernetes/latest): For Kubernetes-based deployments using the built-in Kubernetes controller and Gateway API support.
 
 Agentgateway has a built-in UI for you to explore agentgateway connecting agent-to-agent or agent-to-tool:

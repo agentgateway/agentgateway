@@ -21,8 +21,6 @@ import {
   providerDisplayName,
   providerLabel,
   providerReferenceName,
-  removeModel,
-  removeVirtualModel,
   upsertModel,
   upsertVirtualModel,
 } from "../config";
@@ -112,7 +110,7 @@ type ConditionalVirtualTarget = NonNullable<
 
 export function ModelsPage() {
   const persistence = useLlmConfigPersistence();
-  const { config, hybrid, configResources, models, virtualModels, providers } =
+  const { config, hybrid, models, virtualModels, providers, isLoading, error } =
     persistence;
   const help = useSchemaHelp();
   const [editing, setEditing] = useState<{
@@ -268,7 +266,11 @@ export function ModelsPage() {
       {
         kind: "llm.model",
         id,
-        updateFile: (next) => removeModel(next, id),
+        updateFile: (next) => {
+          const llm = next.llm;
+          if (!llm?.models) return;
+          llm.models = llm.models.filter((model) => modelIdentity(model) !== id);
+        },
       },
       { onSuccess: () => setDeleting(null) },
     );
@@ -291,7 +293,11 @@ export function ModelsPage() {
       {
         kind: "llm.virtualModel",
         id: name,
-        updateFile: (next) => removeVirtualModel(next, name),
+        updateFile: (next) => {
+          const llm = next.llm;
+          if (!llm?.virtualModels) return;
+          llm.virtualModels = llm.virtualModels.filter((model) => model.name !== name);
+        },
       },
       { onSuccess: () => setDeleting(null) },
     );
@@ -332,11 +338,11 @@ export function ModelsPage() {
       {saved ? <StatusBanner state="ok" title="Configuration saved" /> : null}
 
       <Panel>
-        {config.isLoading || (hybrid && configResources.isLoading) ? (
+        {isLoading ? (
           <StatusBanner state="loading" title="Loading models" />
-        ) : config.isError || (hybrid && configResources.isError) ? (
+        ) : error ? (
           <StatusBanner state="bad" title="Configuration API unavailable">
-            {config.error?.message ?? configResources.error?.message}
+            {error.message}
           </StatusBanner>
         ) : modelRows.length === 0 ? (
           <EmptyState
@@ -380,18 +386,17 @@ export function ModelsPage() {
                 {modelRows.map((row) => {
                   if (row.kind === "virtual") {
                     const model = row.model;
+                    const databaseBacked = persistence.isDatabaseResource(
+                      "llm.virtualModel",
+                      model.name,
+                    );
                     return (
                       <tr key={`virtual:${model.name}`}>
                         <td className="strong">{model.name}</td>
                         {hybrid ? (
                           <td>
                             <span className="badge">
-                              {persistence.isDatabaseResource(
-                                "llm.virtualModel",
-                                model.name,
-                              )
-                                ? "Database"
-                                : "File"}
+                              {databaseBacked ? "Database" : "File"}
                             </span>
                           </td>
                         ) : null}
@@ -432,12 +437,18 @@ export function ModelsPage() {
                               <Pencil size={16} />
                             </button>
                           </Tooltip>
-                          <Tooltip content="Delete model">
+                          <Tooltip
+                            content={
+                              hybrid && !databaseBacked
+                                ? "File-owned models cannot be deleted here"
+                                : "Delete model"
+                            }
+                          >
                             <button
                               className="icon-button danger"
                               aria-label="Delete model"
                               type="button"
-                              disabled={saving}
+                              disabled={saving || (hybrid && !databaseBacked)}
                               onClick={() =>
                                 setDeleting({
                                   kind: "virtual model",
@@ -455,18 +466,17 @@ export function ModelsPage() {
                   }
                   const model = row.model;
                   const warnings = modelWarnings(model);
+                  const databaseBacked = persistence.isDatabaseResource(
+                    "llm.model",
+                    modelIdentity(model),
+                  );
                   return (
                     <tr key={`model:${modelIdentity(model)}`}>
                       <td className="strong">{model.name}</td>
                       {hybrid ? (
                         <td>
                           <span className="badge">
-                            {persistence.isDatabaseResource(
-                              "llm.model",
-                              modelIdentity(model),
-                            )
-                              ? "Database"
-                              : "File"}
+                            {databaseBacked ? "Database" : "File"}
                           </span>
                         </td>
                       ) : null}
@@ -504,12 +514,18 @@ export function ModelsPage() {
                             <Pencil size={16} />
                           </button>
                         </Tooltip>
-                        <Tooltip content="Delete model">
+                        <Tooltip
+                          content={
+                            hybrid && !databaseBacked
+                              ? "File-owned models cannot be deleted here"
+                              : "Delete model"
+                          }
+                        >
                           <button
                             className="icon-button danger"
                             aria-label="Delete model"
                             type="button"
-                            disabled={saving}
+                            disabled={saving || (hybrid && !databaseBacked)}
                             onClick={() =>
                               setDeleting({
                                 kind: "model",

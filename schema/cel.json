@@ -67,6 +67,13 @@
             "null"
           ]
         },
+        "bodyPrefix": {
+          "description": "The request body buffered up to `maxBufferSize`. If the complete body exceeds the limit,\nthis contains the first `maxBufferSize` bytes.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "startTime": {
           "description": "The time the request started",
           "type": [
@@ -119,6 +126,13 @@
         },
         "body": {
           "description": "The response's body, buffered up to `maxBufferSize`. If the body exceeds the max buffer size,\nthis field is not available and will fail to evaluate.\nIncluding this attribute in an expression will trigger the body to be buffered.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bodyPrefix": {
+          "description": "The response body buffered up to `maxBufferSize`. If the complete body exceeds the limit,\nthis contains the first `maxBufferSize` bytes.",
           "type": [
             "string",
             "null"
@@ -510,6 +524,32 @@
           ],
           "items": {
             "type": "string"
+          }
+        },
+        "toolCalls": {
+          "description": "The tool calls from the LLM. Warning: accessing this has some performance impacts for large responses.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "description": "ToolCall represents a single tool/function invocation surfaced for observability.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "arguments": true
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "name",
+              "arguments"
+            ]
           }
         },
         "params": {

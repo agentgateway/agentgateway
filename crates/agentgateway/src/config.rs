@@ -15,8 +15,8 @@ use crate::telemetry::trc;
 use crate::types::discovery::{Identity, WaypointIdentity};
 use crate::util::ErrorContext;
 use crate::{
-	Address, Config, ConfigSource, ConfigStoreConfig, ConfigStoreMode, DnsLookupFamily,
-	NestedRawConfig, RawLoggingFields, RawLoggingLevel, StringOrInt, ThreadingMode, XDSConfig, cel,
+	Address, Config, ConfigSource, ConfigStoreMode, DnsLookupFamily, NestedRawConfig,
+	RawLoggingFields, RawLoggingLevel, StorageConfig, StringOrInt, ThreadingMode, XDSConfig, cel,
 	client, serdes, telemetry, types,
 };
 
@@ -364,11 +364,11 @@ pub fn parse_config(
 	let database = shared_database
 		.clone()
 		.or_else(|| raw.logging.as_ref().and_then(|l| l.database.clone()));
-	let config_store = ConfigStoreConfig {
-		mode: raw.config_store.clone().unwrap_or_default().mode,
+	let storage = StorageConfig {
+		mode: raw.storage.clone().unwrap_or_default().mode,
 	};
-	if config_store.mode == ConfigStoreMode::Hybrid && shared_database.is_none() {
-		anyhow::bail!("configStore.mode=hybrid requires config.database.url");
+	if storage.mode == ConfigStoreMode::Hybrid && shared_database.is_none() {
+		anyhow::bail!("config.storage.mode=hybrid requires config.database.url");
 	}
 
 	Ok(crate::Config {
@@ -557,7 +557,7 @@ pub fn parse_config(
 			sources: model_catalog_sources,
 		},
 		database,
-		config_store,
+		storage,
 		session_encoder,
 		oidc_cookie_encoder,
 			hbone: Arc::new(agent_hbone::Config {
@@ -1237,23 +1237,23 @@ config:
 	}
 
 	#[test]
-	fn config_store_defaults_to_file_mode() {
+	fn storage_defaults_to_file_mode() {
 		let _env_lock = lock_env();
 		let config = parse_config("{}".to_string(), None).expect("config should parse");
 
-		assert_eq!(config.config_store.mode, ConfigStoreMode::File);
+		assert_eq!(config.storage.mode, ConfigStoreMode::File);
 		assert!(config.database.is_none());
 	}
 
 	#[test]
-	fn config_store_hybrid_uses_shared_database_url() {
+	fn storage_hybrid_uses_shared_database_url() {
 		let _env_lock = lock_env();
 		let config = parse_config(
 			r#"
 config:
   database:
     url: "sqlite::memory:"
-  configStore:
+  storage:
     mode: hybrid
 "#
 			.to_string(),
@@ -1261,7 +1261,7 @@ config:
 		)
 		.expect("hybrid config should parse with primary database");
 
-		assert_eq!(config.config_store.mode, ConfigStoreMode::Hybrid);
+		assert_eq!(config.storage.mode, ConfigStoreMode::Hybrid);
 		assert_eq!(
 			config.database.as_ref().map(|db| db.url.as_str()),
 			Some("sqlite::memory:")
@@ -1270,7 +1270,7 @@ config:
 		let err = parse_config(
 			r#"
 config:
-  configStore:
+  storage:
     mode: hybrid
 "#
 			.to_string(),
@@ -1281,7 +1281,7 @@ config:
 		assert!(
 			err
 				.to_string()
-				.contains("configStore.mode=hybrid requires config.database.url"),
+				.contains("config.storage.mode=hybrid requires config.database.url"),
 			"unexpected error: {err}"
 		);
 
@@ -1291,7 +1291,7 @@ config:
   logging:
     database:
       url: "sqlite::memory:"
-  configStore:
+  storage:
     mode: hybrid
 "#
 			.to_string(),
@@ -1302,7 +1302,7 @@ config:
 		assert!(
 			err
 				.to_string()
-				.contains("configStore.mode=hybrid requires config.database.url"),
+				.contains("config.storage.mode=hybrid requires config.database.url"),
 			"unexpected error: {err}"
 		);
 	}

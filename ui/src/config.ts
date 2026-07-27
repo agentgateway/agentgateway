@@ -16,7 +16,6 @@ import type {
 import type {
   ConfigResource,
   ConfigResourceKind,
-  PolicyResourceKind,
 } from "./api/configResourcesApi";
 import { keyValue } from "./credentialDisplay";
 
@@ -25,6 +24,14 @@ const completionLogKey = "gen_ai.completion";
 const promptLogExpression = "llm.prompt";
 const completionLogExpression =
   'llm.completion.map(c, {"role":"assistant", "content": c})';
+
+export const mcpSettingsFields = [
+  "gateways",
+  "port",
+  "statefulMode",
+  "prefixMode",
+  "failureMode",
+] as const;
 
 export const providerNames: ProviderName[] = [
   "openai",
@@ -214,13 +221,6 @@ export function upsertModel(
   }
 }
 
-export function removeModel(config: GatewayConfig, id: string) {
-  if (!config.llm?.models) return;
-  config.llm.models = config.llm.models.filter(
-    (model) => modelIdentity(model) !== id,
-  );
-}
-
 export function modelIdentity(model: LlmModel): string {
   return model.id || model.name;
 }
@@ -243,13 +243,6 @@ export function upsertVirtualModel(
   }
 }
 
-export function removeVirtualModel(config: GatewayConfig, name: string) {
-  if (!config.llm?.virtualModels) return;
-  config.llm.virtualModels = config.llm.virtualModels.filter(
-    (model) => model.name !== name,
-  );
-}
-
 export function upsertLlmProvider(
   config: GatewayConfig,
   provider: LlmProvider,
@@ -268,48 +261,6 @@ export function upsertLlmProvider(
   }
 }
 
-export function removeLlmProvider(config: GatewayConfig, name: string) {
-  if (!config.llm?.providers) return;
-  config.llm.providers = config.llm.providers.filter(
-    (provider) => provider.name !== name,
-  );
-}
-
-export function llmProviderResources(
-  resources: ConfigResource<ConfigResourceKind>[] | undefined,
-): LlmProvider[] {
-  return llmResourceValues(resources, "llm.provider");
-}
-
-export function llmModelResources(
-  resources: ConfigResource<ConfigResourceKind>[] | undefined,
-): LlmModel[] {
-  return llmResourceValues(resources, "llm.model");
-}
-
-export function llmVirtualModelResources(
-  resources: ConfigResource<ConfigResourceKind>[] | undefined,
-): LlmVirtualModel[] {
-  return llmResourceValues(resources, "llm.virtualModel");
-}
-
-export function llmApiKeyResources(
-  resources: ConfigResource<ConfigResourceKind>[] | undefined,
-): VirtualApiKey[] {
-  return llmResourceValues(resources, "llm.apiKey");
-}
-
-export function policyResources(
-  resources: ConfigResource<ConfigResourceKind>[] | undefined,
-  kind: PolicyResourceKind,
-): Record<string, unknown> {
-  return Object.fromEntries(
-    (resources ?? [])
-      .filter((resource) => resource.kind === kind)
-      .map((resource) => [resource.id, resource.value]),
-  );
-}
-
 export function isDatabaseConfigResource(
   resources: ConfigResource<ConfigResourceKind>[] | undefined,
   kind: ConfigResourceKind,
@@ -320,13 +271,17 @@ export function isDatabaseConfigResource(
   );
 }
 
-function llmResourceValues<K extends ConfigResourceKind>(
-  resources: ConfigResource<ConfigResourceKind>[] | undefined,
-  kind: K,
-) {
-  return (resources ?? [])
-    .filter((resource) => resource.kind === kind)
-    .map((resource) => resource.value) as ConfigResource<K>["value"][];
+export function fileOwnedMcpSettingFields(
+  config: GatewayConfig | null | undefined,
+  hybrid: boolean,
+): ReadonlySet<string> {
+  if (!hybrid) return new Set();
+  const mcp = config?.mcp;
+  return new Set(
+    mcpSettingsFields.filter((field) =>
+      Object.prototype.hasOwnProperty.call(mcp ?? {}, field),
+    ),
+  );
 }
 
 type LlmPolicyWithGuardrails = NonNullable<LlmConfig["policies"]> & {
@@ -337,13 +292,6 @@ function ensureLlmPolicies(config: GatewayConfig): LlmPolicyWithGuardrails {
   const llm = ensureLlm(config);
   llm.policies ??= {};
   return llm.policies as LlmPolicyWithGuardrails;
-}
-
-export function getLlmGuardrails(
-  config: GatewayConfig | undefined,
-): LlmGuardrail | null {
-  return ((config?.llm?.policies as LlmPolicyWithGuardrails | undefined)
-    ?.guardrails ?? null) as LlmGuardrail | null;
 }
 
 export function setLlmGuardrails(
@@ -371,11 +319,6 @@ export function upsertMcpTarget(
   }
 }
 
-export function removeMcpTarget(config: GatewayConfig, name: string) {
-  const mcp = ensureMcp(config);
-  mcp.targets = mcp.targets.filter((target) => target.name !== name);
-}
-
 export function getApiKeyPolicy(config: GatewayConfig): LlmApiKeyPolicy {
   const policies = ensureLlmPolicies(config);
   policies.apiKey ??= {
@@ -400,17 +343,6 @@ export function upsertVirtualKey(
   } else {
     policy.keys.push(key);
   }
-}
-
-export function removeVirtualKey(config: GatewayConfig, key: string) {
-  const policy = getApiKeyPolicy(config);
-  policy.keys = policy.keys.filter((item) => keyValue(item) !== key);
-}
-
-export function disableApiKeyPolicy(config: GatewayConfig) {
-  if (!config.llm?.policies) return;
-  delete config.llm.policies.apiKey;
-  if (Object.keys(config.llm.policies).length === 0) delete config.llm.policies;
 }
 
 export function promptCompletionLoggingEnabled(
@@ -520,9 +452,15 @@ export function modelWarnings(model: LlmModel): string[] {
   return warnings;
 }
 
-export function configWarnings(config: GatewayConfig): string[] {
+export function configWarnings(
+  config: GatewayConfig,
+  effectiveLlm?: {
+    models: LlmModel[];
+    policies: NonNullable<LlmConfig["policies"]>;
+  },
+): string[] {
   const warnings: string[] = [];
-  const models = config.llm?.models ?? [];
+  const models = effectiveLlm?.models ?? config.llm?.models ?? [];
   const mcpTargets = config.mcp?.targets ?? [];
   const duplicateNames = models
     .filter((model) => !model.id)
@@ -541,7 +479,8 @@ export function configWarnings(config: GatewayConfig): string[] {
       `Duplicate model IDs: ${Array.from(new Set(duplicateIds)).join(", ")}.`,
     );
   }
-  const apiPolicy = config.llm?.policies?.apiKey;
+  const apiPolicy = (effectiveLlm?.policies.apiKey ??
+    config.llm?.policies?.apiKey) as LlmApiKeyPolicy | null | undefined;
   if (apiPolicy?.mode && apiPolicy.mode !== "strict") {
     warnings.push(
       `Virtual API key mode is ${apiPolicy.mode}; unauthenticated requests may be accepted.`,
