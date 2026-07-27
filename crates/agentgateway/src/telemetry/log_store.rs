@@ -23,6 +23,11 @@ static REQUEST_LOG_STORE_BACKLOG: AtomicUsize = AtomicUsize::new(0);
 pub struct Config {
 	/// Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.
 	pub url: String,
+	/// Maximum number of connections to open in this database's connection pool. Defaults to 5.
+	/// Note this pool is separate from the config store's pool (config.storage.mode=hybrid), which
+	/// is sized independently from the same field when both share the same `url`.
+	#[serde(default)]
+	pub max_connections: Option<u32>,
 }
 
 #[derive(Clone)]
@@ -686,7 +691,13 @@ impl Backend {
 	) -> anyhow::Result<Self> {
 		let pool = match pool {
 			Some(pool) => pool,
-			None => crate::database::DatabasePool::connect(&cfg.url).await?,
+			None => {
+				crate::database::DatabasePool::connect_with_max_connections(
+					&cfg.url,
+					cfg.max_connections,
+				)
+				.await?
+			},
 		};
 		match pool {
 			crate::database::DatabasePool::Sqlite(pool) => {

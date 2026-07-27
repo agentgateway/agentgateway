@@ -666,6 +666,15 @@
         "url": {
           "description": "Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.",
           "type": "string"
+        },
+        "maxConnections": {
+          "description": "Maximum number of connections to open in this database's connection pool. Defaults to 5. Note this pool is separate from the config store's pool (config.storage.mode=hybrid), which is sized independently from the same field when both share the same `url`.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
         }
       },
       "additionalProperties": false,
