@@ -95,16 +95,14 @@ const klogVerbosityEnv = "AGW_KLOG_VERBOSITY"
 // ensure global logger wiring happens once to avoid data races
 var setLoggerOnce sync.Once
 
-// resolveName returns the first non-empty value in precedence order: the explicit
-// setup.Options value, then the env-backed Settings value, then the built-in default.
-func resolveName(optionValue, settingsValue, defaultValue string) string {
+// resolveName returns the explicit setup.Options value if set, otherwise the
+// env-backed Settings value. Settings carries the built-in defaults via its
+// struct tags, so it is expected to be non-empty on the standard path.
+func resolveName(optionValue, settingsValue string) string {
 	if optionValue != "" {
 		return optionValue
 	}
-	if settingsValue != "" {
-		return settingsValue
-	}
-	return defaultValue
+	return settingsValue
 }
 
 func New(opts Options) (*setup, error) {
@@ -121,10 +119,11 @@ func New(opts Options) (*setup, error) {
 		}
 	}
 
-	// Resolve the controller and GatewayClass names with precedence:
-	// explicit setup.Options value > env-backed Settings value > wellknown default.
-	s.ControllerName = resolveName(s.ControllerName, s.GlobalSettings.ControllerName, wellknown.DefaultAgwControllerName)
-	s.AgentgatewayClassName = resolveName(s.AgentgatewayClassName, s.GlobalSettings.AgentgatewayClassName, wellknown.DefaultAgwClassName)
+	// Resolve the controller and GatewayClass names: an explicit setup.Options value
+	// takes precedence over the env-backed Settings value (which defaults to the
+	// wellknown names via its struct tags).
+	s.ControllerName = resolveName(s.ControllerName, s.GlobalSettings.ControllerName)
+	s.AgentgatewayClassName = resolveName(s.AgentgatewayClassName, s.GlobalSettings.AgentgatewayClassName)
 	if s.LeaderElectionID == "" {
 		s.LeaderElectionID = wellknown.LeaderElectionID
 	}
