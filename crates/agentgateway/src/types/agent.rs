@@ -736,6 +736,21 @@ pub type RouteKey = Strng;
 pub type RouteGroupKey = Strng;
 pub type RouteRuleName = Strng;
 
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelRoute {
+	pub key: RouteKey,
+	pub name: Strng,
+	pub kind: ModelRouteKind,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelRouteKind {
+	Concrete(crate::llm::model_router::ModelRoute),
+	Virtual(crate::llm::model_router::VirtualModelRoute),
+}
+
 #[apply(schema!)]
 #[derive(Hash, Eq, PartialEq)]
 #[cfg_attr(any(test, feature = "internal_benches"), derive(Default))]

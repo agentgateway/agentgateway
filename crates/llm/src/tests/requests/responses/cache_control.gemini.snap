@@ -1,0 +1,49 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/responses/cache_control.json
+info:
+  model: gpt-5
+  input:
+    - role: user
+      content:
+        - type: input_text
+          text: Cached user input
+          prompt_cache_breakpoint:
+            mode: explicit
+    - role: system
+      content:
+        - type: input_text
+          text: Cached system input
+          prompt_cache_breakpoint:
+            mode: explicit
+---
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "Cached user input",
+          "prompt_cache_breakpoint": {
+            "mode": "explicit"
+          }
+        }
+      ]
+    },
+    {
+      "role": "developer",
+      "content": [
+        {
+          "type": "text",
+          "text": "Cached system input",
+          "prompt_cache_breakpoint": {
+            "mode": "explicit"
+          }
+        }
+      ]
+    }
+  ],
+  "model": "gpt-5",
+  "stream": false
+}

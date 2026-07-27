@@ -22,15 +22,12 @@ import {
   providerDisplayName,
   providerLabel,
   providerReferenceName,
-  removeModel,
-  removeVirtualModel,
   upsertModel,
   upsertVirtualModel,
 } from "../config";
 import {
   useDeleteConfigResource,
   useLlmConfigData,
-  useUpdateConfig,
   useUpsertConfigResource,
 } from "../hooks";
 import { MiniMonacoEditor } from "../components/MiniMonacoEditor";
@@ -120,13 +117,13 @@ export function ModelsPage() {
   const {
     config,
     hybrid,
-    configResources,
     resources,
     models,
     virtualModels,
     providers,
+    isLoading,
+    error,
   } = useLlmConfigData();
-  const update = useUpdateConfig();
   const upsertResource = useUpsertConfigResource();
   const deleteResource = useDeleteConfigResource();
   const help = useSchemaHelp();
@@ -201,7 +198,6 @@ export function ModelsPage() {
 
   useEffect(() => {
     function syncSelectedFromUrl() {
-      update.reset();
       upsertResource.reset();
       deleteResource.reset();
       setEditing(null);
@@ -214,17 +210,12 @@ export function ModelsPage() {
       window.removeEventListener("hashchange", syncSelectedFromUrl);
       window.removeEventListener("popstate", syncSelectedFromUrl);
     };
-  }, [deleteResource, update, upsertResource]);
+  }, [deleteResource, upsertResource]);
 
-  const saving =
-    update.isPending || upsertResource.isPending || deleteResource.isPending;
+  const saving = upsertResource.isPending || deleteResource.isPending;
   const saveError =
-    update.error?.message ??
-    upsertResource.error?.message ??
-    deleteResource.error?.message ??
-    null;
-  const saved =
-    update.isSuccess || upsertResource.isSuccess || deleteResource.isSuccess;
+    upsertResource.error?.message ?? deleteResource.error?.message ?? null;
+  const saved = upsertResource.isSuccess || deleteResource.isSuccess;
 
   function openModelEditor(model: LlmModel) {
     resetSaves();
@@ -273,73 +264,41 @@ export function ModelsPage() {
   }
 
   function resetSaves() {
-    update.reset();
     upsertResource.reset();
     deleteResource.reset();
   }
 
   function saveModel(model: LlmModel, previousId?: string) {
-    if (
-      hybrid &&
-      (!previousId ||
-        isDatabaseConfigResource(resources, "llm.model", previousId))
-    ) {
-      model.id ??= randomUuid();
-      upsertResource.mutate(
-        { kind: "llm.model", value: model, previousId },
-        { onSuccess: closeModelEditor },
-      );
-      return;
-    }
-    update.mutate((next) => upsertModel(next, model, previousId), {
-      onSuccess: closeModelEditor,
-    });
+    if (hybrid) model.id ??= randomUuid();
+    upsertResource.mutate(
+      { kind: "llm.model", value: model, previousId },
+      { onSuccess: closeModelEditor },
+    );
   }
 
   function deleteModel(id: string) {
-    if (hybrid && isDatabaseConfigResource(resources, "llm.model", id)) {
-      deleteResource.mutate(
-        { kind: "llm.model", id },
-        { onSuccess: () => setDeleting(null) },
-      );
-      return;
-    }
-    update.mutate((next) => removeModel(next, id), {
-      onSuccess: () => setDeleting(null),
-    });
+    deleteResource.mutate(
+      { kind: "llm.model", id },
+      {
+        onSuccess: () => setDeleting(null),
+      },
+    );
   }
 
   function saveVirtualModel(model: LlmVirtualModel, previousName?: string) {
-    if (
-      hybrid &&
-      (!previousName ||
-        isDatabaseConfigResource(resources, "llm.virtualModel", previousName))
-    ) {
-      upsertResource.mutate(
-        { kind: "llm.virtualModel", value: model, previousId: previousName },
-        { onSuccess: closeVirtualModelEditor },
-      );
-      return;
-    }
-    update.mutate((next) => upsertVirtualModel(next, model, previousName), {
-      onSuccess: closeVirtualModelEditor,
-    });
+    upsertResource.mutate(
+      { kind: "llm.virtualModel", value: model, previousId: previousName },
+      { onSuccess: closeVirtualModelEditor },
+    );
   }
 
   function deleteVirtualModel(name: string) {
-    if (
-      hybrid &&
-      isDatabaseConfigResource(resources, "llm.virtualModel", name)
-    ) {
-      deleteResource.mutate(
-        { kind: "llm.virtualModel", id: name },
-        { onSuccess: () => setDeleting(null) },
-      );
-      return;
-    }
-    update.mutate((next) => removeVirtualModel(next, name), {
-      onSuccess: () => setDeleting(null),
-    });
+    deleteResource.mutate(
+      { kind: "llm.virtualModel", id: name },
+      {
+        onSuccess: () => setDeleting(null),
+      },
+    );
   }
 
   return (
@@ -377,11 +336,11 @@ export function ModelsPage() {
       {saved ? <StatusBanner state="ok" title="Configuration saved" /> : null}
 
       <Panel>
-        {config.isLoading || (hybrid && configResources.isLoading) ? (
+        {isLoading ? (
           <StatusBanner state="loading" title="Loading models" />
-        ) : config.isError || (hybrid && configResources.isError) ? (
+        ) : error ? (
           <StatusBanner state="bad" title="Configuration API unavailable">
-            {config.error?.message ?? configResources.error?.message}
+            {error.message}
           </StatusBanner>
         ) : modelRows.length === 0 ? (
           <EmptyState
@@ -425,19 +384,18 @@ export function ModelsPage() {
                 {modelRows.map((row) => {
                   if (row.kind === "virtual") {
                     const model = row.model;
+                    const databaseBacked = isDatabaseConfigResource(
+                      resources,
+                      "llm.virtualModel",
+                      model.name,
+                    );
                     return (
                       <tr key={`virtual:${model.name}`}>
                         <td className="strong">{model.name}</td>
                         {hybrid ? (
                           <td>
                             <span className="badge">
-                              {isDatabaseConfigResource(
-                                resources,
-                                "llm.virtualModel",
-                                model.name,
-                              )
-                                ? "Database"
-                                : "File"}
+                              {databaseBacked ? "Database" : "File"}
                             </span>
                           </td>
                         ) : null}
@@ -478,12 +436,18 @@ export function ModelsPage() {
                               <Pencil size={16} />
                             </button>
                           </Tooltip>
-                          <Tooltip content="Delete model">
+                          <Tooltip
+                            content={
+                              hybrid && !databaseBacked
+                                ? "File-owned models cannot be deleted here"
+                                : "Delete model"
+                            }
+                          >
                             <button
                               className="icon-button danger"
                               aria-label="Delete model"
                               type="button"
-                              disabled={saving}
+                              disabled={saving || (hybrid && !databaseBacked)}
                               onClick={() =>
                                 setDeleting({
                                   kind: "virtual model",
@@ -501,19 +465,18 @@ export function ModelsPage() {
                   }
                   const model = row.model;
                   const warnings = modelWarnings(model);
+                  const databaseBacked = isDatabaseConfigResource(
+                    resources,
+                    "llm.model",
+                    modelIdentity(model),
+                  );
                   return (
                     <tr key={`model:${modelIdentity(model)}`}>
                       <td className="strong">{model.name}</td>
                       {hybrid ? (
                         <td>
                           <span className="badge">
-                            {isDatabaseConfigResource(
-                              resources,
-                              "llm.model",
-                              modelIdentity(model),
-                            )
-                              ? "Database"
-                              : "File"}
+                            {databaseBacked ? "Database" : "File"}
                           </span>
                         </td>
                       ) : null}
@@ -551,12 +514,18 @@ export function ModelsPage() {
                             <Pencil size={16} />
                           </button>
                         </Tooltip>
-                        <Tooltip content="Delete model">
+                        <Tooltip
+                          content={
+                            hybrid && !databaseBacked
+                              ? "File-owned models cannot be deleted here"
+                              : "Delete model"
+                          }
+                        >
                           <button
                             className="icon-button danger"
                             aria-label="Delete model"
                             type="button"
-                            disabled={saving}
+                            disabled={saving || (hybrid && !databaseBacked)}
                             onClick={() =>
                               setDeleting({
                                 kind: "model",

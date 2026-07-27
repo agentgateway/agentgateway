@@ -138,6 +138,11 @@ test("does not allow a second default gateway", async ({ page }) => {
     gateways: { default: { port: 8080 } },
   });
   await page.goto("/traffic/gateways");
+
+  await page.getByRole("button", { name: "Edit gateway" }).click();
+  await expect(page.getByText(/impact .* traffic/)).not.toBeVisible();
+  await page.getByRole("button", { name: "Close" }).click();
+
   await page.getByRole("button", { name: "Add gateway" }).click();
 
   await expect(
@@ -334,7 +339,7 @@ test("attaches traffic routes to gateways", async ({ page }) => {
   await page.goto("/traffic/routes");
 
   await page.getByRole("button", { name: "Add route" }).first().click();
-  await page.getByRole("textbox", { name: "Name", exact: true }).fill("api");
+  await page.getByPlaceholder("api").fill("api");
   await page.getByRole("button", { name: "Save route" }).click();
 
   await expect.poll(() => gateway.postedConfigs.length).toBe(1);
@@ -368,6 +373,7 @@ test("migrates legacy HTTP binds to gateways", async ({ page }) => {
       }
     >;
     routes?: Array<{ gateways?: string; name?: string }>;
+    tcpRoutes?: Array<{ gateways?: string; name?: string }>;
   };
   expect(saved.gateways?.["port-8080"]).toMatchObject({
     port: 8080,
@@ -385,7 +391,19 @@ test("migrates legacy HTTP binds to gateways", async ({ page }) => {
       }),
     ]),
   );
-  expect(saved.binds).toEqual([expect.objectContaining({ port: 9090 })]);
+  expect(saved.gateways?.["port-9090"]).toMatchObject({
+    port: 9090,
+    listeners: [{ name: "tcp", hostname: "tcp.example.com" }],
+  });
+  expect(saved.tcpRoutes).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        gateways: "port-9090/tcp",
+        name: "tcp-main",
+      }),
+    ]),
+  );
+  expect(saved.binds).toBeUndefined();
 });
 
 test("raw configuration editor shows schema diagnostics", async ({ page }) => {
@@ -519,7 +537,7 @@ test("creates a weighted virtual model with a concrete wildcard target", async (
   });
 });
 
-test("hybrid model edits use the resource's owning store", async ({ page }) => {
+test("hybrid model edits use the unified resource API", async ({ page }) => {
   const config = emptyConfig();
   const llm = config.llm as { models: Array<Record<string, unknown>> };
   llm.models = [
@@ -531,7 +549,7 @@ test("hybrid model edits use the resource's owning store", async ({ page }) => {
   ];
   delete (llm as Record<string, unknown>).providers;
   delete (llm as Record<string, unknown>).virtualModels;
-  const gateway = await mockGateway(page, config);
+  await mockGateway(page, config);
   const resourceWrites: Array<Record<string, unknown>> = [];
   const dbResource = {
     kind: "llm.model",
@@ -563,6 +581,16 @@ test("hybrid model edits use the resource's owning store", async ({ page }) => {
       }),
     }),
   );
+  await page.route("**/api/config/effective", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...config,
+        llm: { ...llm, models: [...llm.models, dbResource.value] },
+      }),
+    }),
+  );
   await page.route("**/api/config/resources**", async (route) => {
     if (route.request().method() === "GET") {
       await route.fulfill({
@@ -574,9 +602,9 @@ test("hybrid model edits use the resource's owning store", async ({ page }) => {
     }
     if (route.request().method() === "PUT") {
       const request = route.request().postDataJSON() as {
-        resources: Array<{ value: Record<string, unknown> }>;
+        value: Record<string, unknown>;
       };
-      const value = request.resources[0].value;
+      const value = request.value;
       resourceWrites.push(value);
       dbResource.value = value as typeof dbResource.value;
       dbResource.revision += 1;
@@ -606,24 +634,11 @@ test("hybrid model edits use the resource's owning store", async ({ page }) => {
   await expect(
     diffDrawer.getByRole("heading", { name: "Model config diff" }),
   ).toBeVisible();
-  await diffDrawer.getByRole("button", { name: "Close" }).first().click();
-  await page.getByRole("button", { name: "Save model" }).click();
-
-  await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+  await expect(diffDrawer.getByRole("button", { name: "Save" })).toBeDisabled();
   expect(resourceWrites).toHaveLength(0);
-  const savedFileConfig = gateway.postedConfigs[0] as {
-    llm?: {
-      models?: Array<{ name: string }>;
-      providers?: unknown;
-      virtualModels?: unknown;
-    };
-  };
-  expect(savedFileConfig.llm?.models?.[0]).toMatchObject({
-    name: "file-model-renamed",
-  });
-  expect(savedFileConfig.llm?.models?.[0]).not.toHaveProperty("id");
-  expect(savedFileConfig.llm).not.toHaveProperty("providers");
-  expect(savedFileConfig.llm).not.toHaveProperty("virtualModels");
+  await diffDrawer.getByRole("button", { name: "Close" }).first().click();
+  await page.getByRole("button", { name: "Close" }).first().click();
+  await page.getByRole("button", { name: "Discard changes" }).click();
 
   await databaseRow.getByRole("button", { name: "Edit model" }).click();
   await page.getByLabel("Incoming model match").fill("db-model-renamed");
@@ -635,7 +650,6 @@ test("hybrid model edits use the resource's owning store", async ({ page }) => {
   await page.getByRole("button", { name: "Save model" }).click();
 
   await expect.poll(() => resourceWrites.length).toBe(1);
-  expect(gateway.postedConfigs).toHaveLength(1);
   expect(resourceWrites[0]).toMatchObject({
     id: "db-model-id",
     name: "db-model-renamed",
@@ -661,17 +675,345 @@ test("hybrid model edits use the resource's owning store", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("database-backed MCP servers are available across hybrid UI pages", async ({
+  page,
+}) => {
+  const config = emptyConfig();
+  delete config.mcp;
+  const gateway = await mockGateway(page, config);
+  const resources = [
+    {
+      kind: "mcp.target",
+      id: "db-weather",
+      value: {
+        name: "db-weather",
+        mcp: { host: "http://weather.example/mcp" },
+      },
+      revision: 1,
+      createdAt: "2026-07-23T00:00:00Z",
+      updatedAt: "2026-07-23T00:00:00Z",
+    },
+    {
+      kind: "mcp.settings",
+      id: "default",
+      value: { port: 3000 },
+      revision: 1,
+      createdAt: "2026-07-23T00:00:00Z",
+      updatedAt: "2026-07-23T00:00:00Z",
+    },
+  ];
+  const writes: Array<Record<string, unknown>> = [];
+
+  await page.route("**/api/runtime", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        build: {},
+        ui: { gatewayMode: "standalone", configStoreMode: "hybrid" },
+      }),
+    }),
+  );
+  await page.route("**/api/config/effective", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...config,
+        mcp: {
+          port: 3000,
+          targets: [resources[0].value],
+          policies: {},
+        },
+      }),
+    }),
+  );
+  await page.route("**/api/config/resources**", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ resources }),
+      });
+      return;
+    }
+    if (
+      route.request().method() === "PUT" &&
+      new URL(route.request().url()).pathname.endsWith("/mcp.target")
+    ) {
+      const request = route.request().postDataJSON() as {
+        resources: Array<{ value: Record<string, unknown> }>;
+      };
+      writes.push(request.resources[0].value);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ resources: [] }),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.goto("/mcp/playground");
+  await expect(page.getByText("No MCP servers", { exact: true })).toHaveCount(
+    0,
+  );
+
+  await page.goto("/");
+  await expect(page.getByText("1 configured server")).toBeVisible();
+
+  await page.goto("/mcp/servers");
+  await expect(page.getByRole("row", { name: /db-weather/ })).toBeVisible();
+  await page.getByRole("button", { name: "Add server" }).click();
+  await page.getByLabel("Server name").fill("db-search");
+  await expect(page.getByRole("button", { name: "Save server" })).toBeEnabled();
+  await page.getByRole("button", { name: "Save server" }).click();
+
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0]).toMatchObject({ name: "db-search" });
+  expect(gateway.postedConfigs).toHaveLength(0);
+});
+
+test("hybrid MCP settings only lock file-owned fields", async ({ page }) => {
+  const config = emptyConfig();
+  config.mcp = {
+    port: 3000,
+    targets: [],
+    policies: {},
+  };
+  const gateway = await mockGateway(page, config);
+  const writes: Array<Record<string, unknown>> = [];
+
+  await page.route("**/api/runtime", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        build: {},
+        ui: { gatewayMode: "standalone", configStoreMode: "hybrid" },
+      }),
+    }),
+  );
+  await page.route("**/api/config/effective", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(config),
+    }),
+  );
+  await page.route("**/api/config/resources**", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ resources: [] }),
+      });
+      return;
+    }
+    if (
+      route.request().method() === "PUT" &&
+      new URL(route.request().url()).pathname.endsWith("/mcp.settings")
+    ) {
+      const request = route.request().postDataJSON() as {
+        resources: Array<{ value: Record<string, unknown> }>;
+      };
+      writes.push(request.resources[0].value);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ resources: [] }),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.goto("/mcp/servers");
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect(page.getByRole("textbox", { name: /Port/ })).toBeDisabled();
+  await expect(
+    page.getByRole("combobox", { name: "State mode" }),
+  ).toBeEnabled();
+  await page.getByRole("combobox", { name: "State mode" }).click();
+  await page.getByRole("option", { name: "Stateful" }).click();
+  await page.getByRole("button", { name: "Save settings" }).click();
+
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0]).toMatchObject({ statefulMode: "stateful" });
+  expect(writes[0]).not.toHaveProperty("port");
+  expect(gateway.postedConfigs).toHaveLength(0);
+});
+
+test("hybrid file-owned API key policy is read-only", async ({ page }) => {
+  const config = emptyConfig();
+  const policies = (config.llm as Record<string, unknown>).policies as Record<
+    string,
+    unknown
+  >;
+  policies.apiKey = { mode: "strict", keys: [] };
+  const gateway = await mockGateway(page, config);
+  await page.route("**/api/runtime", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        build: {},
+        ui: { gatewayMode: "standalone", configStoreMode: "hybrid" },
+      }),
+    }),
+  );
+
+  await page.goto("/llm/keys");
+  const disablePolicy = page.getByRole("button", {
+    name: "Disable API Key Policy",
+  });
+  await expect(disablePolicy).toBeDisabled();
+  await disablePolicy.hover({ force: true });
+  await expect(page.getByRole("tooltip")).toContainText(
+    "file-owned and cannot be modified",
+  );
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  const drawer = page.locator(".drawer");
+  await expect(
+    drawer.getByRole("button", { name: "Save policy" }),
+  ).toBeDisabled();
+  await expect(
+    drawer.getByRole("button", { name: "Disable", exact: true }),
+  ).toBeDisabled();
+  expect(gateway.postedConfigs).toHaveLength(0);
+});
+
+test("new hybrid traffic gateways save as database resources", async ({
+  page,
+}) => {
+  const gateway = await mockGateway(page, emptyConfig());
+  const resources = [
+    {
+      kind: "traffic.gateway",
+      id: "db-public",
+      value: { name: "db-public", port: 8080 },
+      revision: 1,
+      createdAt: "2026-07-23T00:00:00Z",
+      updatedAt: "2026-07-23T00:00:00Z",
+    },
+  ];
+  const writes: Array<Record<string, unknown>> = [];
+
+  await page.route("**/api/runtime", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        build: {},
+        ui: { gatewayMode: "standalone", configStoreMode: "hybrid" },
+      }),
+    }),
+  );
+  await page.route("**/api/config/effective", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...emptyConfig(),
+        gateways: { "db-public": { port: 8080 } },
+      }),
+    }),
+  );
+  await page.route("**/api/config/resources**", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ resources }),
+      });
+      return;
+    }
+    if (
+      route.request().method() === "PUT" &&
+      new URL(route.request().url()).pathname.endsWith("/traffic.gateway")
+    ) {
+      const request = route.request().postDataJSON() as {
+        resources: Array<{ value: Record<string, unknown> }>;
+      };
+      writes.push(request.resources[0].value);
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ resources: [] }),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.goto("/traffic/gateways");
+  await expect(page.getByRole("heading", { name: "db-public" })).toBeVisible();
+  await page.getByRole("button", { name: "Add gateway" }).first().click();
+  const drawer = page.locator(".drawer");
+  await drawer.getByLabel("Name", { exact: true }).fill("db-internal");
+  await expect(
+    drawer.getByRole("button", { name: "Save gateway" }),
+  ).toBeEnabled();
+  await drawer.getByRole("button", { name: "Save gateway" }).click();
+
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0]).toMatchObject({ name: "db-internal" });
+  expect(gateway.postedConfigs).toHaveLength(0);
+});
+
 test("hybrid LLM and UI policies are stored as individual resources", async ({
   page,
 }) => {
   const config = emptyConfig();
   delete (config.llm as Record<string, unknown>).policies;
+  const mcp = config.mcp as Record<string, unknown>;
+  mcp.port = 3000;
+  const mcpPolicies = mcp.policies as Record<string, unknown>;
+  mcpPolicies.cors = { allowOrigins: [] };
   config.gateways = { default: { port: 8080 } };
   config.ui = { gateways: "default" };
   const gateway = await mockGateway(page, config);
-  const resources: Array<Record<string, unknown>> = [];
+  const resources: Array<Record<string, unknown>> = [
+    {
+      kind: "ui.policy",
+      id: "oidc",
+      value: { issuer: "https://idp.example.com" },
+      revision: 1,
+      createdAt: "2026-07-23T00:00:00Z",
+      updatedAt: "2026-07-23T00:00:00Z",
+    },
+    {
+      kind: "llm.policy",
+      id: "apiKey",
+      value: { mode: "optional" },
+      revision: 1,
+      createdAt: "2026-07-23T00:00:00Z",
+      updatedAt: "2026-07-23T00:00:00Z",
+    },
+  ];
   const writes: Array<{ kind: string; id: string; value: unknown }> = [];
 
+  await page.route("**/api/config/effective", (route) => {
+    const effective = structuredClone(config);
+    for (const resource of resources) {
+      const kind = String(resource.kind);
+      if (!kind.endsWith(".policy")) continue;
+      const sectionName = kind.split(".")[0];
+      const section = (effective[sectionName] ??= {}) as Record<
+        string,
+        unknown
+      >;
+      const policies = (section.policies ??= {}) as Record<string, unknown>;
+      policies[String(resource.id)] = resource.value;
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(effective),
+    });
+  });
   await page.route("**/api/runtime", (route) =>
     route.fulfill({
       status: 200,
@@ -716,12 +1058,26 @@ test("hybrid LLM and UI policies are stored as individual resources", async ({
     await route.fallback();
   });
 
-  await page.goto("/llm/policies");
-  await page.getByText("CORS", { exact: true }).click();
-  await page.getByRole("button", { name: "Add current origin" }).click();
-  await page.getByRole("button", { name: "Save policy" }).click();
+  await page.goto("/");
+  await expect(
+    page.getByText("UI is exposed without authentication"),
+  ).toHaveCount(0);
+  await expect(
+    page.getByText(
+      "Virtual API key mode is optional; unauthenticated requests may be accepted.",
+    ),
+  ).toBeVisible();
+
+  await page.goto("/llm/playground");
+  await page.getByRole("button", { name: "Apply CORS" }).click();
   await expect.poll(() => writes.length).toBe(1);
   expect(writes[0]).toMatchObject({ kind: "llm.policy", id: "cors" });
+  await expect(page.getByText("Browser access is not allowed")).toHaveCount(0);
+
+  await page.goto("/mcp/playground");
+  await expect(
+    page.getByRole("link", { name: "Configure CORS" }),
+  ).toHaveAttribute("href", "/mcp/policies#cors");
 
   await page.goto("/settings");
   await page.getByText("CORS", { exact: true }).click();
@@ -730,6 +1086,38 @@ test("hybrid LLM and UI policies are stored as individual resources", async ({
   await expect.poll(() => writes.length).toBe(2);
   expect(writes[1]).toMatchObject({ kind: "ui.policy", id: "cors" });
   expect(gateway.postedConfigs).toHaveLength(0);
+});
+
+test("hybrid pages surface configuration database errors", async ({ page }) => {
+  await mockGateway(page);
+  await page.route("**/api/runtime", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        build: {},
+        ui: { gatewayMode: "standalone", configStoreMode: "hybrid" },
+      }),
+    }),
+  );
+  await page.route("**/api/config/resources**", (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify("configuration database unavailable"),
+    }),
+  );
+
+  await page.goto("/");
+  await expect(
+    page.getByText("Configuration API unavailable", { exact: true }),
+  ).toBeVisible();
+
+  await page.goto("/llm/playground");
+  await expect(
+    page.getByText("Configuration API unavailable", { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText("No configured models")).toHaveCount(0);
 });
 
 test("reveals a virtual API key explicitly", async ({ page }) => {
@@ -914,6 +1302,51 @@ test("edits top-level MCP policies", async ({ page }) => {
   );
 });
 
+test("refreshes a reopened policy diff", async ({ page }) => {
+  const config = emptyConfig();
+  const llm = config.llm as {
+    policies: {
+      cors: {
+        allowHeaders: string[];
+        allowMethods: string[];
+      };
+    };
+  };
+  llm.policies.cors = {
+    allowHeaders: ["authorization", "content-type"],
+    allowMethods: ["GET", "POST", "DELETE"],
+  };
+  await mockGateway(page, config);
+  await page.route("**/api/runtime", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        build: {},
+        ui: { gatewayMode: "standalone", configStoreMode: "file" },
+      }),
+    }),
+  );
+  await page.goto("/llm/policies");
+
+  await page.getByRole("button", { name: /CORS/ }).click();
+  await page.getByRole("button", { name: "PUT", exact: true }).click();
+  await page.getByRole("button", { name: "View diff" }).click();
+  await page
+    .locator(".drawer.nested")
+    .getByRole("button", { name: "Close" })
+    .last()
+    .click();
+
+  await page.getByRole("button", { name: "PATCH", exact: true }).click();
+  await page.getByRole("button", { name: "View diff" }).click();
+
+  const diff = page.locator(".drawer.nested");
+  await expect(
+    diff.locator(".view-lines").filter({ hasText: "PATCH" }),
+  ).toHaveCount(1);
+});
+
 test("Client Setup includes virtual models in snippets", async ({ page }) => {
   await mockGateway(page);
   await page.goto("/llm/client-setup");
@@ -939,7 +1372,7 @@ test("creates a traffic bind and listener", async ({ page }) => {
 
   await expect.poll(() => gateway.postedConfigs.length).toBe(1);
   await page.getByRole("button", { name: "Add listener" }).first().click();
-  await page.getByRole("textbox", { name: "Name", exact: true }).fill("public");
+  await page.getByPlaceholder("public-http").fill("public");
   await page.getByRole("textbox", { name: /Hostname/ }).fill("example.test");
   await page.getByRole("button", { name: "Save listener" }).click();
 
@@ -961,9 +1394,7 @@ test("creates HTTP and TCP traffic routes", async ({ page }) => {
   await page.goto("/traffic/routes");
 
   await page.getByRole("button", { name: "Add route" }).first().click();
-  await page
-    .getByRole("textbox", { name: "Name", exact: true })
-    .fill("new-http");
+  await page.getByPlaceholder("api").fill("new-http");
   await page.getByRole("textbox", { name: "Path" }).fill("/new");
   await page.getByRole("button", { name: "Save route" }).click();
 
@@ -971,9 +1402,7 @@ test("creates HTTP and TCP traffic routes", async ({ page }) => {
   await page.getByRole("button", { name: "Add route" }).first().click();
   await page.getByRole("combobox", { name: "Listener" }).click();
   await page.getByRole("option", { name: /tcp-listener/ }).click();
-  await page
-    .getByRole("textbox", { name: "Name", exact: true })
-    .fill("new-tcp");
+  await page.getByPlaceholder("api").fill("new-tcp");
   await page.getByRole("button", { name: "Save route" }).click();
 
   await expect.poll(() => gateway.postedConfigs.length).toBe(2);

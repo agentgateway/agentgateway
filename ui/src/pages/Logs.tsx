@@ -92,6 +92,8 @@ export function LogsPage() {
     models: configuredModels,
     virtualModels,
     providers,
+    isLoading: configDataLoading,
+    error: configDataError,
   } = useLlmConfigData();
   const updateConfig = useUpdateConfig();
   const models = useMemo(
@@ -336,6 +338,13 @@ export function LogsPage() {
           </div>
         }
       />
+      {configDataLoading ? (
+        <StatusBanner state="loading" title="Loading LLM configuration" />
+      ) : configDataError ? (
+        <StatusBanner state="bad" title="Configuration API unavailable">
+          {configDataError.message}
+        </StatusBanner>
+      ) : null}
       {error ? (
         <StatusBanner state="bad" title="Logs API error">
           {error}

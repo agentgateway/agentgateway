@@ -454,6 +454,40 @@ async fn test_llm_virtual_model_conditional_config() {
 	test_config_parsing("llm_virtual_model_conditional").await;
 }
 
+#[test]
+fn test_llm_route_types_reuse_defaults_and_override_passthrough() {
+	let default_routes = super::llm_route_types(None);
+	assert!(
+		default_routes
+			.iter()
+			.any(|(path, route_type)| path.as_str() == "/v1/messages"
+				&& *route_type == crate::llm::RouteType::Messages),
+		"default route table should include explicit message endpoint"
+	);
+	assert!(
+		default_routes
+			.iter()
+			.any(|(path, route_type)| path.as_str() == "*"
+				&& *route_type == crate::llm::RouteType::Passthrough),
+		"default route table should include passthrough wildcard"
+	);
+
+	let detect_passthrough = super::llm_route_types(Some(&super::LocalLLMPassthrough::Detect));
+	assert!(
+		detect_passthrough
+			.iter()
+			.any(|(path, route_type)| path.as_str() == "/v1/messages"
+				&& *route_type == crate::llm::RouteType::Messages),
+		"passthrough override should preserve explicit route defaults"
+	);
+	assert!(
+		detect_passthrough.iter().any(
+			|(path, route_type)| path.as_str() == "*" && *route_type == crate::llm::RouteType::Detect
+		),
+		"passthrough override should replace wildcard fallback"
+	);
+}
+
 #[tokio::test]
 async fn test_backend_auth_credentials_config() {
 	test_config_parsing("backend_auth_credentials").await;

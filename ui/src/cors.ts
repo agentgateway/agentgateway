@@ -29,7 +29,7 @@ export function applyPlaygroundCors(
   if (target === "llm") {
     config.llm ??= { models: [] };
     config.llm.policies ??= {};
-    config.llm.policies.cors = withPlaygroundCors(
+    config.llm.policies.cors = playgroundCorsPolicy(
       config.llm.policies.cors,
       target,
       origin,
@@ -39,17 +39,17 @@ export function applyPlaygroundCors(
 
   config.mcp ??= { targets: [] };
   config.mcp.policies ??= {};
-  config.mcp.policies.cors = withPlaygroundCors(
+  config.mcp.policies.cors = playgroundCorsPolicy(
     config.mcp.policies.cors,
     target,
     origin,
   );
 }
 
-function withPlaygroundCors(
+export function playgroundCorsPolicy(
   cors: CorsPolicy | null | undefined,
   target: CorsTarget,
-  origin: string,
+  origin = currentOrigin(),
 ): CorsPolicy {
   return {
     ...(cors ?? {}),

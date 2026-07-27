@@ -33,7 +33,12 @@ info:
     },
     {
       "role": "system",
-      "content": "The following skills are available for use."
+      "content": [
+        {
+          "type": "text",
+          "text": "The following skills are available for use."
+        }
+      ]
     }
   ],
   "model": "claude-opus-4-8",

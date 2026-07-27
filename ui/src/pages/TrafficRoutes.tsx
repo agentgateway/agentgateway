@@ -19,7 +19,14 @@ import {
   YamlBlock,
 } from "../components/Primitives";
 import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
-import { useConfigDumpMode, useGatewayConfig, useUpdateConfig } from "../hooks";
+import { isDatabaseConfigResource } from "../config";
+import {
+  useConfigDumpMode,
+  useDeleteConfigResource,
+  useTrafficConfigData,
+  useUpdateConfig,
+  useUpsertConfigResource,
+} from "../hooks";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import {
   backendSummary,
@@ -56,6 +63,12 @@ type HttpMatch = NonNullable<TrafficRoute["matches"]>[number];
 type HeaderMatch = NonNullable<HttpMatch["headers"]>[number];
 type QueryMatch = NonNullable<HttpMatch["query"]>[number];
 type LocalAttachedGatewayRoute = LocalAttachedRoute | LocalAttachedTCPRoute;
+type GatewayRouteRow = {
+  kind: RouteKind;
+  route: LocalAttachedGatewayRoute;
+  routeIndex?: number;
+  resourceId?: string;
+};
 
 export function TrafficRoutesPage() {
   const mode = useConfigDumpMode();
@@ -92,7 +105,14 @@ export function TrafficRoutesPage() {
 
 function TrafficRoutesEditorPage() {
   const location = useLocation();
-  const config = useGatewayConfig();
+  const traffic = useTrafficConfigData();
+  const config = {
+    ...traffic.config,
+    data: traffic.data,
+    isLoading: traffic.isLoading,
+    isError: Boolean(traffic.error),
+    error: traffic.error,
+  };
   const update = useUpdateConfig();
   const help = useSchemaHelp();
   const hasLegacyBinds = Boolean(config.data?.binds?.length);
@@ -248,7 +268,7 @@ function TrafficRoutesEditorPage() {
           <StatusBanner state="loading" title="Loading traffic routes" />
         ) : config.isError ? (
           <StatusBanner state="bad" title="Configuration API unavailable">
-            {config.error.message}
+            {config.error?.message}
           </StatusBanner>
         ) : !routes.length ? (
           <EmptyState
@@ -425,20 +445,42 @@ function TrafficRoutesEditorPage() {
 }
 
 function GatewayRoutesEditorPage() {
-  const config = useGatewayConfig();
-  const update = useUpdateConfig();
+  const traffic = useTrafficConfigData();
+  const config = {
+    ...traffic.config,
+    data: traffic.data,
+    isLoading: traffic.isLoading,
+    isError: Boolean(traffic.error),
+    error: traffic.error,
+  };
+  const upsertResource = useUpsertConfigResource();
+  const deleteResource = useDeleteConfigResource();
   const help = useSchemaHelp();
-  const routes = [
-    ...(config.data?.routes ?? []).map((route, routeIndex) => ({
-      kind: "http" as const,
-      route,
-      routeIndex,
-    })),
-    ...(config.data?.tcpRoutes ?? []).map((route, routeIndex) => ({
-      kind: "tcp" as const,
-      route,
-      routeIndex,
-    })),
+  const routes: GatewayRouteRow[] = [
+    ...(config.data?.routes ?? []).map((route, routeIndex) => {
+      const database = traffic.resources?.find(
+        (resource) =>
+          resource.kind === "traffic.route" && resource.id === route.name,
+      );
+      return {
+        kind: "http" as const,
+        route,
+        routeIndex,
+        resourceId: database?.id ?? route.name ?? undefined,
+      };
+    }),
+    ...(config.data?.tcpRoutes ?? []).map((route, routeIndex) => {
+      const database = traffic.resources?.find(
+        (resource) =>
+          resource.kind === "traffic.tcpRoute" && resource.id === route.name,
+      );
+      return {
+        kind: "tcp" as const,
+        route,
+        routeIndex,
+        resourceId: database?.id ?? route.name ?? undefined,
+      };
+    }),
   ];
   const httpGatewayOptions = gatewayReferenceOptions(config.data, "http");
   const tcpGatewayOptions = gatewayReferenceOptions(config.data, "tcp");
@@ -448,8 +490,12 @@ function GatewayRoutesEditorPage() {
   const [editing, setEditing] = useState<{
     kind: RouteKind;
     routeIndex?: number;
+    resourceId?: string;
     route: LocalAttachedGatewayRoute;
   } | null>(null);
+  const saveError =
+    upsertResource.error?.message ?? deleteResource.error?.message ?? null;
+  const saved = upsertResource.isSuccess || deleteResource.isSuccess;
 
   function openAddRoute(kind: RouteKind) {
     const gatewayOptions =
@@ -465,6 +511,17 @@ function GatewayRoutesEditorPage() {
 
   function closeEditor() {
     setEditing(null);
+  }
+
+  function databaseRoute(kind: RouteKind, resourceId: string | undefined) {
+    return Boolean(
+      resourceId &&
+      isDatabaseConfigResource(
+        traffic.resources,
+        kind === "http" ? "traffic.route" : "traffic.tcpRoute",
+        resourceId,
+      ),
+    );
   }
 
   return (
@@ -487,21 +544,19 @@ function GatewayRoutesEditorPage() {
         }
       />
 
-      {update.isError ? (
+      {saveError ? (
         <StatusBanner state="bad" title="Save failed">
-          {update.error.message}
+          {saveError}
         </StatusBanner>
       ) : null}
-      {update.isSuccess ? (
-        <StatusBanner state="ok" title="Configuration saved" />
-      ) : null}
+      {saved ? <StatusBanner state="ok" title="Configuration saved" /> : null}
 
       <Panel>
         {config.isLoading ? (
           <StatusBanner state="loading" title="Loading traffic routes" />
         ) : config.isError ? (
           <StatusBanner state="bad" title="Configuration API unavailable">
-            {config.error.message}
+            {config.error?.message}
           </StatusBanner>
         ) : !hasGatewayOptions ? (
           <EmptyState
@@ -545,12 +600,10 @@ function GatewayRoutesEditorPage() {
                 </tr>
               </thead>
               <tbody>
-                {routes.map(({ kind, route, routeIndex }) => (
-                  <tr
-                    key={`${kind}-${effectiveGatewayRouteRef(route, config.data, kind)}-${routeIndex}`}
-                  >
+                {routes.map(({ kind, route, routeIndex, resourceId }) => (
+                  <tr key={`${kind}-${resourceId ?? routeIndex}`}>
                     <td className="strong">
-                      {routeDisplayName(route, routeIndex)}
+                      {routeDisplayName(route, routeIndex ?? 0)}
                     </td>
                     <td>
                       <span className="badge">{kind.toUpperCase()}</span>
@@ -562,15 +615,23 @@ function GatewayRoutesEditorPage() {
                     <td>{kind === "http" ? httpPathSummary(route) : "TCP"}</td>
                     <td>{backendListSummary(route.backends)}</td>
                     <td className="row-actions">
-                      <Tooltip content="Edit route">
+                      <Tooltip
+                        content={
+                          resourceId
+                            ? "Edit route"
+                            : "Unnamed routes must be edited in raw configuration"
+                        }
+                      >
                         <button
                           className="icon-button"
                           type="button"
                           aria-label="Edit route"
+                          disabled={!resourceId}
                           onClick={() =>
                             setEditing({
                               kind,
                               routeIndex,
+                              resourceId,
                               route: structuredClone(route),
                             })
                           }
@@ -578,27 +639,33 @@ function GatewayRoutesEditorPage() {
                           <Pencil size={16} />
                         </button>
                       </Tooltip>
-                      <Tooltip content="Delete route">
+                      <Tooltip
+                        content={
+                          !resourceId
+                            ? "Unnamed routes must be deleted in raw configuration"
+                            : traffic.hybrid && !databaseRoute(kind, resourceId)
+                              ? "File-owned routes cannot be deleted here"
+                              : "Delete route"
+                        }
+                      >
                         <button
                           className="icon-button danger"
                           type="button"
                           aria-label="Delete route"
-                          onClick={() =>
-                            update.mutate((next) => {
-                              if (kind === "http") {
-                                next.routes = (next.routes ?? []).filter(
-                                  (_, index) => index !== routeIndex,
-                                );
-                                if (!next.routes.length) delete next.routes;
-                              } else {
-                                next.tcpRoutes = (next.tcpRoutes ?? []).filter(
-                                  (_, index) => index !== routeIndex,
-                                );
-                                if (!next.tcpRoutes.length)
-                                  delete next.tcpRoutes;
-                              }
-                            })
+                          disabled={
+                            !resourceId ||
+                            (traffic.hybrid && !databaseRoute(kind, resourceId))
                           }
+                          onClick={() => {
+                            if (!resourceId) return;
+                            deleteResource.mutate({
+                              kind:
+                                kind === "http"
+                                  ? "traffic.route"
+                                  : "traffic.tcpRoute",
+                              id: resourceId,
+                            });
+                          }}
                         >
                           <Trash2 size={16} />
                         </button>
@@ -617,32 +684,46 @@ function GatewayRoutesEditorPage() {
           config={config.data}
           editing={editing}
           help={help}
-          saving={update.isPending}
+          saving={upsertResource.isPending || deleteResource.isPending}
           onCancel={closeEditor}
-          onSave={(nextEditing) =>
-            update.mutate(
-              (next) => {
-                if (nextEditing.kind === "http") {
-                  if (!Array.isArray(next.routes)) next.routes = [];
-                  if (typeof nextEditing.routeIndex === "number")
-                    next.routes[nextEditing.routeIndex] =
-                      nextEditing.route as LocalAttachedRoute;
-                  else
-                    next.routes.push(nextEditing.route as LocalAttachedRoute);
-                } else {
-                  if (!Array.isArray(next.tcpRoutes)) next.tcpRoutes = [];
-                  if (typeof nextEditing.routeIndex === "number")
-                    next.tcpRoutes[nextEditing.routeIndex] =
-                      nextEditing.route as LocalAttachedTCPRoute;
-                  else
-                    next.tcpRoutes.push(
-                      nextEditing.route as LocalAttachedTCPRoute,
-                    );
-                }
-              },
-              { onSuccess: closeEditor },
-            )
+          databaseBacked={
+            traffic.hybrid &&
+            (!editing.resourceId ||
+              databaseRoute(editing.kind, editing.resourceId))
           }
+          onSave={(nextEditing) => {
+            const name = nextEditing.route.name?.trim();
+            if (!name) return;
+            if (nextEditing.kind === "http") {
+              const { name: _name, ...route } =
+                nextEditing.route as LocalAttachedRoute;
+              upsertResource.mutate(
+                {
+                  kind: "traffic.route",
+                  value: {
+                    ...route,
+                    name,
+                  },
+                  previousId: nextEditing.resourceId,
+                },
+                { onSuccess: closeEditor },
+              );
+            } else {
+              const { name: _name, ...route } =
+                nextEditing.route as LocalAttachedTCPRoute;
+              upsertResource.mutate(
+                {
+                  kind: "traffic.tcpRoute",
+                  value: {
+                    ...route,
+                    name,
+                  },
+                  previousId: nextEditing.resourceId,
+                },
+                { onSuccess: closeEditor },
+              );
+            }
+          }}
         />
       ) : null}
     </div>
@@ -654,14 +735,17 @@ function GatewayRouteEditor(props: {
   editing: {
     kind: RouteKind;
     routeIndex?: number;
+    resourceId?: string;
     route: LocalAttachedGatewayRoute;
   };
   help: SchemaHelp;
   saving: boolean;
+  databaseBacked?: boolean;
   onCancel: () => void;
   onSave: (editing: {
     kind: RouteKind;
     routeIndex?: number;
+    resourceId?: string;
     route: LocalAttachedGatewayRoute;
   }) => void;
 }) {
@@ -685,6 +769,10 @@ function GatewayRouteEditor(props: {
   );
 
   function save() {
+    if (!route.name?.trim()) {
+      setError("Enter a route name.");
+      return;
+    }
     if (!gateway) {
       setError("Select a gateway.");
       return;
@@ -692,6 +780,7 @@ function GatewayRouteEditor(props: {
     props.onSave({
       kind,
       routeIndex: props.editing.routeIndex,
+      resourceId: props.editing.resourceId,
       route: preview,
     });
   }
@@ -699,7 +788,7 @@ function GatewayRouteEditor(props: {
   return (
     <Drawer
       title={
-        typeof props.editing.routeIndex === "number"
+        props.editing.resourceId || typeof props.editing.routeIndex === "number"
           ? "Edit route"
           : "Add route"
       }
@@ -707,12 +796,25 @@ function GatewayRouteEditor(props: {
       footer={
         <ConfigDiffSaveActions
           config={props.config}
+          resourceDiff={
+            props.databaseBacked
+              ? {
+                  original: props.editing.resourceId ? props.editing.route : {},
+                  modified: preview,
+                }
+              : undefined
+          }
           diffTitle="Route config diff"
           saveLabel="Save route"
           saving={props.saving}
+          saveDisabled={!route.name?.trim()}
           onCancel={props.onCancel}
           onSave={save}
           beforeDiff={() => {
+            if (!route.name?.trim()) {
+              setError("Enter a route name.");
+              return false;
+            }
             if (!gateway) {
               setError("Select a gateway.");
               return false;
@@ -743,7 +845,8 @@ function GatewayRouteEditor(props: {
     >
       {error ? <StatusBanner state="bad" title={error} /> : null}
       <div className="route-editor-stack">
-        {typeof props.editing.routeIndex !== "number" ? (
+        {!props.editing.resourceId &&
+        typeof props.editing.routeIndex !== "number" ? (
           <FieldGroup label="Kind" tooltip="Route protocol family.">
             <EnumSelector
               ariaLabel="Route kind"

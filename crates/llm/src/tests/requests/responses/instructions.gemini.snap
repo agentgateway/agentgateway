@@ -10,7 +10,12 @@ info:
   "messages": [
     {
       "role": "user",
-      "content": "What is the weather like in San Francisco? Use the get_weather tool."
+      "content": [
+        {
+          "type": "text",
+          "text": "What is the weather like in San Francisco? Use the get_weather tool."
+        }
+      ]
     }
   ],
   "model": "gpt-4o",

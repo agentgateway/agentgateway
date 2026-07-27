@@ -48,6 +48,7 @@ export function CorsPolicyEditor(props: {
     props.cors?.exposeHeaders ?? [],
   );
   const policy = buildCorsPolicy({
+    original: props.cors,
     origins,
     allMethods,
     methods,
@@ -188,6 +189,7 @@ export function CorsPolicyEditor(props: {
 }
 
 function buildCorsPolicy(args: {
+  original: CorsPolicy | null | undefined;
   origins: string[];
   allMethods: boolean;
   methods: Set<string>;
@@ -198,9 +200,10 @@ function buildCorsPolicy(args: {
   maxAge: string;
 }): CorsPolicy {
   return cleanEmpty({
+    ...args.original,
     allowOrigins: args.origins,
-    allowMethods: args.allMethods ? ["*"] : Array.from(args.methods),
     allowHeaders: args.allHeaders ? ["*"] : args.headers,
+    allowMethods: args.allMethods ? ["*"] : Array.from(args.methods),
     exposeHeaders: args.exposeHeaders,
     allowCredentials: args.allowCredentials ? true : undefined,
     maxAge: args.maxAge.trim() || undefined,

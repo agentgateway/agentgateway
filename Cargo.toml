@@ -2,8 +2,8 @@
 schemars = { git = "https://github.com/howardjohn/schemars", rev = "f3e45a59786debf49e67d6bd6d8dcffc004d39ff" }
 http-serde = { git = "https://gitlab.com/howardjohn/http-serde", rev = "c2e482be0ddf029895ba72ef8749b9f94b388fc7" }
 wiremock = { git = "https://github.com/howardjohn/wiremock-rs", rev = "e55f5b96083125fdabc3e62f92790ee15ae3a10d" }
-pprof-alloc = { git = "https://github.com/howardjohn/pprof-alloc", rev = "649d730b7971874a433836f1a77987bf02b652ec" }
 rmcp = { git = "https://github.com/howardjohn/rust-sdk", rev = "7366ffc42beb89f27410ae348a67001beb4c6ba5" }
+async-openai = { git = "https://github.com/howardjohn/async-openai", rev = "681e3c6e382fa8bf8abf511d45ada73c25c659b6" }
 
 [workspace]
 resolver = "2"
@@ -80,7 +80,7 @@ multer = "3.0.0"
 azure_identity = { version = "1.0", default-features = false }
 azure_core = { version = "1.0", default-features = false }
 typespec_client_core = { default-features = false, version = "1.0" }
-base64 = "0.22"
+base64 = "0.23.0"
 cookie = { version = "0.18", default-features = false }
 bcrypt = "0.19"
 bytes = { version = "1.11", features = ["serde"] }
@@ -144,7 +144,7 @@ phonenumber = "0.3"
 pin-project-lite = "0.2"
 pingora-pool = "0.8"
 ppp = "2.3"
-pprof-alloc = "0.4"
+pprof-alloc = "0.5"
 # NOTE: the "frame-pointer" feature is NOT enabled here. pprof 0.15's
 # frame-pointer unwinder only supports x86_64/aarch64/riscv64/loongarch64, and
 # its call site is not arch-gated, so enabling it breaks the build on other
@@ -255,11 +255,11 @@ serde_with = { version = "3.20", features = [
 ], default-features = false }
 value-bag = { version = "1.12", features = ["serde", "value-bag-serde1"] }
 time = "0.3"
-tikv-jemallocator = { version = "0.6", features = [
+tikv-jemallocator = { version = "0.7", features = [
     "profiling",
     "unprefixed_malloc_on_supported_platforms",
 ] }
-jemalloc_pprof = { version = "0.8", features = ["symbolize"] }
+jemalloc_pprof = { version = "0.9", features = ["symbolize"] }
 protox = "0.9"
 async-compression = { version = "0.4", features = [
     "brotli",

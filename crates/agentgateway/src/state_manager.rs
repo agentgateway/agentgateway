@@ -267,7 +267,7 @@ impl LocalClient {
 	}
 
 	async fn config_content(&self) -> anyhow::Result<String> {
-		if self.config.config_store.mode == ConfigStoreMode::Hybrid
+		if self.config.storage.mode == ConfigStoreMode::Hybrid
 			&& let Some(store) = &self.config_resource_store
 		{
 			return config_store::materialize_hybrid_config(&self.cfg, store).await;

@@ -192,9 +192,12 @@ backends:
         target:
           models:
             - name: openai/gpt-5-mini
+              created: 0
               visibility: public
               headerMatches: []
-              backendKey: "llm:model:openai/gpt-5-mini:0"
+              backend:
+                backend: "/llm:model:openai/gpt-5-mini:0"
+                weight: 1
               policies:
                 llm:
                   routes:
@@ -214,9 +217,12 @@ backends:
                 authorization: ~
               backendPolicies: []
             - name: anthropic/*
+              created: 0
               visibility: internal
               headerMatches: []
-              backendKey: "llm:model:anthropic/*:1"
+              backend:
+                backend: "/llm:model:anthropic/*:1"
+                weight: 1
               policies:
                 llm:
                   routes:
@@ -237,6 +243,7 @@ backends:
               backendPolicies: []
           virtualModels:
             - name: resilient
+              created: 0
               llmPolicy:
                 routes:
                   "*": passthrough
@@ -254,8 +261,9 @@ backends:
                   ":streamRawPredict": messages
               routing:
                 failover:
-                  backend_key: "llm:virtual-model:resilient:0"
-          created: 0
+                  backend:
+                    backend: "/llm:virtual-model:resilient:0"
+                    weight: 1
 route_groups: []
 workloads: []
 services: []

@@ -132,7 +132,9 @@ enum RuleSerde {
 enum RuleTypeSerde {
 	/// Allow the request when this CEL expression is true.
 	Allow(String),
-	/// Deny the request when this CEL expression is true.
+	/// Deny the request when this CEL expression is true. This mode is not
+	/// recommended because expression failures fail to deny; prefer `Allow` or
+	/// `Require`. If used, design expressions defensively against evaluation errors.
 	Deny(String),
 	/// Require this CEL expression to be true.
 	Require(String),

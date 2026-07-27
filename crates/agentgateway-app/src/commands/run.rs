@@ -51,7 +51,7 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 				"running with config: {}",
 				serdes::yamlviajson::to_string(&config)?
 			);
-			let config_resource_store = if config.config_store.mode == ConfigStoreMode::Hybrid {
+			let config_resource_store = if config.storage.mode == ConfigStoreMode::Hybrid {
 				let database = config
 					.database
 					.as_ref()

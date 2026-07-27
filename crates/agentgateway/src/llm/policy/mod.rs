@@ -313,9 +313,9 @@ struct TextResponse {
 }
 
 impl crate::llm::ResponseType for TextResponse {
-	fn to_llm_response(&self, include_completion_in_log: bool) -> crate::llm::LLMResponse {
+	fn to_llm_response(&self, log_content: crate::llm::LogContentFields) -> crate::llm::LLMResponse {
 		crate::llm::LLMResponse {
-			completion: include_completion_in_log.then(|| vec![self.content.clone()]),
+			completion: log_content.completion.then(|| vec![self.content.clone()]),
 			..Default::default()
 		}
 	}

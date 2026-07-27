@@ -1,0 +1,41 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/vertex-gemini/blocked.json
+info:
+  candidates: []
+  promptFeedback:
+    blockReason: SAFETY
+  usageMetadata:
+    promptTokenCount: 12
+    totalTokenCount: 12
+  modelVersion: gemini-2.5-pro
+---
+{
+  "response": {
+    "model": "gemini-2.5-pro",
+    "usage": {
+      "prompt_tokens": 12,
+      "completion_tokens": 0,
+      "total_tokens": 12
+    },
+    "choices": [
+      {
+        "message": {
+          "content": "",
+          "role": "assistant"
+        },
+        "index": 0,
+        "finish_reason": "content_filter"
+      }
+    ],
+    "id": "[id]",
+    "created": "[date]",
+    "object": "chat.completion"
+  },
+  "parsed": {
+    "input_tokens": 12,
+    "output_tokens": 0,
+    "total_tokens": 12,
+    "provider_model": "gemini-2.5-pro"
+  }
+}

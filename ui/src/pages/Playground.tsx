@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Bot,
@@ -15,13 +16,14 @@ import {
 import { sendChatCompletion, sendMcpJsonRpc } from "../api/playgroundApi";
 import { claudeSubscriptionWarning } from "../claudeSubscription";
 import { providerLabel } from "../config";
-import { applyPlaygroundCors, corsNeedsUpdate, currentOrigin } from "../cors";
+import { corsNeedsUpdate, currentOrigin, playgroundCorsPolicy } from "../cors";
 import { hasKeyValue, keyLabel } from "../credentialDisplay";
 import { llmPlaygroundEndpoint, mcpPlaygroundEndpoint } from "../gatewayUrls";
 import {
   useLlmConfigData,
+  useMcpConfigData,
   useStoredStringState,
-  useUpdateConfig,
+  useUpsertPolicyResource,
 } from "../hooks";
 import { CatalogModelSelector } from "../components/CatalogModelSelector";
 import {
@@ -47,7 +49,7 @@ import {
   wildcardModelPrefix,
   wildcardResolvedSuffix,
 } from "../modelResolution";
-import type { LlmModel, LlmProvider, ProviderName } from "../types";
+import type { CorsPolicy, LlmModel, LlmProvider, ProviderName } from "../types";
 
 type ChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
@@ -115,9 +117,20 @@ const legacySecretStorageKeys = [
 ];
 
 export function PlaygroundPage() {
-  const { config, models, virtualModels, providers, apiKeys } =
-    useLlmConfigData();
-  const updateConfig = useUpdateConfig();
+  const {
+    config,
+    hybrid,
+    filePolicies,
+    policies,
+    models,
+    virtualModels,
+    providers,
+    apiKeys,
+    isLoading: configDataLoading,
+    error: configDataError,
+  } = useLlmConfigData();
+  const mcpData = useMcpConfigData();
+  const upsertPolicy = useUpsertPolicyResource();
   const modelOptions = useMemo(
     () => [
       ...models.map((item) => ({
@@ -168,12 +181,12 @@ export function PlaygroundPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [runSteps, setRunSteps] = useState<RunStep[]>([]);
-  const mcpEndpoint = mcpPlaygroundEndpoint(config.data);
+  const mcpEndpoint = mcpPlaygroundEndpoint(mcpData.data);
   const derivedMcpBaseUrl = mcpEndpoint.baseUrl;
   const [mcpEnabled, setMcpEnabled] = useState(false);
   const [mcpSessionId, setMcpSessionId] = useState("");
   const [mcpTools, setMcpTools] = useState<PlaygroundTool[]>([]);
-  const mcpServerCount = config.data?.mcp?.targets?.length ?? 0;
+  const mcpServerCount = mcpData.data?.mcp?.targets?.length ?? 0;
 
   useEffect(() => {
     for (const key of legacySecretStorageKeys) localStorage.removeItem(key);
@@ -226,13 +239,28 @@ export function PlaygroundPage() {
     "";
   const selectedKeyValue =
     apiKeyMode === "saved" && rawVirtualKeys.length > 0 ? savedKey : apiKey;
+  const llmCors = policies.cors as CorsPolicy | null | undefined;
+  const fileCorsOwned = Object.prototype.hasOwnProperty.call(
+    filePolicies,
+    "cors",
+  );
+  const fileMcpCorsOwned = Boolean(
+    mcpData.rawConfig.data?.mcp?.policies &&
+    Object.prototype.hasOwnProperty.call(
+      mcpData.rawConfig.data.mcp.policies,
+      "cors",
+    ),
+  );
   const needsCors =
-    config.data && !llmEndpoint.sameOrigin
-      ? corsNeedsUpdate(config.data.llm?.policies?.cors, "llm")
+    !configDataLoading &&
+    !configDataError &&
+    config.data &&
+    !llmEndpoint.sameOrigin
+      ? corsNeedsUpdate(llmCors, "llm")
       : false;
   const needsMcpCors =
-    mcpEnabled && config.data && !mcpEndpoint.sameOrigin
-      ? corsNeedsUpdate(config.data.mcp?.policies?.cors, "mcp")
+    mcpEnabled && mcpData.data && !mcpEndpoint.sameOrigin
+      ? corsNeedsUpdate(mcpData.data.mcp?.policies?.cors, "mcp")
       : false;
   const sendBlockers = sendReadinessBlockers({
     loading,
@@ -243,6 +271,24 @@ export function PlaygroundPage() {
     apiKeyMode,
     virtualKeysCount: rawVirtualKeys.length,
   });
+  const corsSaving = upsertPolicy.isPending;
+  const corsSaveError = upsertPolicy.error?.message ?? null;
+
+  function applyLlmCors() {
+    upsertPolicy.mutate({
+      kind: "llm.policy",
+      id: "cors",
+      value: playgroundCorsPolicy(llmCors, "llm"),
+    });
+  }
+
+  function applyMcpCors() {
+    upsertPolicy.mutate({
+      kind: "mcp.policy",
+      id: "cors",
+      value: playgroundCorsPolicy(mcpData.data?.mcp?.policies?.cors, "mcp"),
+    });
+  }
 
   useEffect(() => {
     if (modelOptions.length > 0 && model && !savedModelExists) setModel("");
@@ -503,21 +549,32 @@ export function PlaygroundPage() {
         title="LLM Playground"
         description="Send a real chat completion request through the configured gateway for setup debugging."
       />
+      {configDataLoading ? (
+        <StatusBanner state="loading" title="Loading LLM configuration" />
+      ) : configDataError ? (
+        <StatusBanner state="bad" title="Configuration API unavailable">
+          {configDataError.message}
+        </StatusBanner>
+      ) : null}
       {needsCors ? (
         <StatusBanner
           state="warn"
           title="Browser access is not allowed"
           action={
-            <button
-              className="button"
-              type="button"
-              disabled={updateConfig.isPending}
-              onClick={() =>
-                updateConfig.mutate((next) => applyPlaygroundCors(next, "llm"))
-              }
-            >
-              Apply CORS
-            </button>
+            hybrid && fileCorsOwned ? (
+              <Link className="button" to="/llm/policies" hash="cors">
+                Configure CORS
+              </Link>
+            ) : (
+              <button
+                className="button"
+                type="button"
+                disabled={corsSaving}
+                onClick={applyLlmCors}
+              >
+                Apply CORS
+              </button>
+            )
           }
         >
           Add {currentOrigin()} to the LLM CORS policy so this playground can
@@ -529,23 +586,27 @@ export function PlaygroundPage() {
           state="warn"
           title="MCP browser access is not allowed"
           action={
-            <button
-              className="button"
-              type="button"
-              disabled={updateConfig.isPending}
-              onClick={() =>
-                updateConfig.mutate((next) => applyPlaygroundCors(next, "mcp"))
-              }
-            >
-              Apply MCP CORS
-            </button>
+            hybrid && fileMcpCorsOwned ? (
+              <Link className="button" to="/mcp/policies" hash="cors">
+                Configure CORS
+              </Link>
+            ) : (
+              <button
+                className="button"
+                type="button"
+                disabled={corsSaving}
+                onClick={applyMcpCors}
+              >
+                Apply MCP CORS
+              </button>
+            )
           }
         >
           Add {currentOrigin()} to the MCP CORS policy so the playground can
           list and call MCP tools from the browser.
         </StatusBanner>
       ) : null}
-      {modelOptions.length === 0 ? (
+      {!configDataLoading && !configDataError && modelOptions.length === 0 ? (
         <StatusBanner state="warn" title="No configured models">
           Create a model before testing chat traffic.
         </StatusBanner>
@@ -558,6 +619,11 @@ export function PlaygroundPage() {
       {error ? (
         <StatusBanner state="bad" title="Playground request failed">
           {error}
+        </StatusBanner>
+      ) : null}
+      {corsSaveError ? (
+        <StatusBanner state="bad" title="CORS update failed">
+          {corsSaveError}
         </StatusBanner>
       ) : null}
       <section className="playground-shell">

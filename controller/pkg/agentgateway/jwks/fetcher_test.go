@@ -461,6 +461,204 @@ func TestProxyURLAffectsFetchKey(t *testing.T) {
 	assert.NotEqual(t, a.Key(), b.Key(), "different proxy URLs should produce different fetch keys")
 }
 
+func TestParallelFetchMultipleSourcesAllSucceed(t *testing.T) {
+	ctx := t.Context()
+
+	const numSources = 15
+	sources := make([]JwksSource, numSources)
+	for i := range numSources {
+		sources[i] = testSourceWithURL(fmt.Sprintf("https://test/jwks-%d", i))
+	}
+
+	f := NewFetcher(NewCache())
+	for _, s := range sources {
+		require.NoError(t, f.AddOrUpdateKeyset(s))
+	}
+
+	expectedJwks := jose.JSONWebKeySet{}
+	require.NoError(t, json.Unmarshal([]byte(sampleJWKS), &expectedJwks))
+
+	f.defaultJwksClient = multiStubJwksClient{result: expectedJwks}
+
+	updates := f.SubscribeToUpdates()
+	go f.maybeFetchJwks(ctx)
+
+	// Wait for subscriber notification.
+	var update sets.Set[remotehttp.FetchKey]
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		select {
+		case u := <-updates:
+			update = u
+		default:
+			assert.Fail(c, "no update yet")
+		}
+	}, testEventuallyTimeout, testEventuallyPoll)
+
+	// All sources should be in a single batch notification.
+	assert.Equal(t, numSources, len(update), "all sources should be in updates")
+	for _, s := range sources {
+		assert.True(t, update.Contains(s.RequestKey), "source %s should be in updates", s.RequestKey)
+		_, ok := f.cache.GetJwks(s.RequestKey)
+		assert.True(t, ok, "source %s should be in cache", s.RequestKey)
+	}
+}
+
+func TestParallelFetchPartialError(t *testing.T) {
+	ctx := t.Context()
+
+	successSource := testSourceWithURL("https://test/success")
+	errorSource := testSourceWithURL("https://test/error")
+
+	f := NewFetcher(NewCache())
+	require.NoError(t, f.AddOrUpdateKeyset(successSource))
+	require.NoError(t, f.AddOrUpdateKeyset(errorSource))
+
+	expectedJwks := jose.JSONWebKeySet{}
+	require.NoError(t, json.Unmarshal([]byte(sampleJWKS), &expectedJwks))
+
+	f.defaultJwksClient = selectiveStubJwksClient{
+		results: map[string]stubFetchResult{
+			successSource.Target.URL: {jwks: expectedJwks},
+			errorSource.Target.URL:   {err: fmt.Errorf("network error")},
+		},
+	}
+
+	updates := f.SubscribeToUpdates()
+	go f.maybeFetchJwks(ctx)
+
+	awaitJwksUpdate(t, updates, successSource.RequestKey)
+
+	// Success source should be in cache.
+	_, ok := f.cache.GetJwks(successSource.RequestKey)
+	assert.True(t, ok, "successful source should be in cache")
+
+	// Error source should NOT be in cache.
+	_, ok = f.cache.GetJwks(errorSource.RequestKey)
+	assert.False(t, ok, "failed source should not be in cache")
+
+	// Error source should be scheduled for retry.
+	f.mu.Lock()
+	retryScheduled := f.schedule.scheduled[errorSource.RequestKey]
+	successScheduled := f.schedule.scheduled[successSource.RequestKey]
+	f.mu.Unlock()
+	assert.NotNil(t, retryScheduled, "error source should have retry scheduled")
+	assert.Equal(t, 1, retryScheduled.RetryAttempt)
+	// Both sources are in schedule: error → retry delay, success → TTL delay.
+	assert.NotNil(t, successScheduled, "success source should be in schedule with TTL")
+	assert.Equal(t, 0, successScheduled.RetryAttempt, "success source should not be a retry")
+}
+
+func TestParallelFetchContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+
+	const numSources = 5
+	sources := make([]JwksSource, numSources)
+	for i := range numSources {
+		sources[i] = testSourceWithURL(fmt.Sprintf("https://test/jwks-%d", i))
+	}
+
+	f := NewFetcher(NewCache())
+	for _, s := range sources {
+		require.NoError(t, f.AddOrUpdateKeyset(s))
+	}
+
+	expectedJwks := jose.JSONWebKeySet{}
+	require.NoError(t, json.Unmarshal([]byte(sampleJWKS), &expectedJwks))
+
+	// Block all fetches until release is closed.
+	release := make(chan struct{})
+	f.defaultJwksClient = blockingJwksClient{result: expectedJwks, release: release}
+
+	updates := f.SubscribeToUpdates()
+	done := make(chan struct{})
+	go func() {
+		f.maybeFetchJwks(ctx)
+		close(done)
+	}()
+
+	// Cancel context while fetches are in flight, then release blocked fetches.
+	// blockingJwksClient checks ctx.Err() after release, so all fetches fail.
+	cancel()
+	close(release)
+
+	// maybeFetchJwks should return promptly.
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("maybeFetchJwks did not return after context cancellation")
+	}
+
+	// All fetches failed → no successful updates, no notifySubscribers call.
+	select {
+	case <-updates:
+		t.Fatal("should not receive updates when all fetches fail due to context cancellation")
+	case <-time.After(200 * time.Millisecond):
+		// Expected: no updates.
+	}
+
+	// All sources should be scheduled for retry.
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, s := range sources {
+		retry := f.schedule.scheduled[s.RequestKey]
+		assert.NotNil(t, retry, "source %s should have retry scheduled", s.RequestKey)
+		assert.Equal(t, 1, retry.RetryAttempt)
+	}
+}
+
+func TestParallelFetchConcurrencyBounded(t *testing.T) {
+	const numSources = 20 // > maxConcurrentFetches (10)
+	sources := make([]JwksSource, numSources)
+	for i := range numSources {
+		sources[i] = testSourceWithURL(fmt.Sprintf("https://test/jwks-%d", i))
+	}
+
+	f := NewFetcher(NewCache())
+	for _, s := range sources {
+		require.NoError(t, f.AddOrUpdateKeyset(s))
+	}
+
+	expectedJwks := jose.JSONWebKeySet{}
+	require.NoError(t, json.Unmarshal([]byte(sampleJWKS), &expectedJwks))
+
+	client := &concurrentCountingClient{
+		delay:      100 * time.Millisecond,
+		result:     expectedJwks,
+		peak:       new(atomic.Int32),
+		concurrent: new(atomic.Int32),
+	}
+	f.defaultJwksClient = client
+
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+
+	updates := f.SubscribeToUpdates()
+	go f.maybeFetchJwks(ctx)
+
+	// Wait for all updates.
+	var update sets.Set[remotehttp.FetchKey]
+	assert.EventuallyWithT(t, func(c *assert.CollectT) {
+		select {
+		case u := <-updates:
+			update = u
+		default:
+			assert.Fail(c, "no update yet")
+		}
+	}, testEventuallyTimeout, testEventuallyPoll)
+
+	// Peak concurrency must not exceed the limit.
+	assert.LessOrEqual(t, int(client.peak.Load()), maxConcurrentFetches,
+		"peak concurrency should not exceed maxConcurrentFetches")
+
+	// With 20 sources and 100ms delay, concurrency should have been meaningfully exercised.
+	assert.GreaterOrEqual(t, int(client.peak.Load()), 2,
+		"test should have exercised meaningful concurrency")
+
+	// All sources should be fetched.
+	assert.Equal(t, numSources, len(update), "all sources should be fetched")
+	assert.Equal(t, int32(numSources), client.calls.Load(), "all sources should have been fetched")
+}
+
 func testOwnerKey() JwksOwnerID {
 	return JwksOwnerID{
 		Kind:      OwnerKindPolicy,
@@ -513,6 +711,81 @@ func (s stubJwksClient) FetchJwks(_ context.Context, req remotehttp.FetchTarget)
 		<-s.release
 	}
 	return s.result, s.err
+}
+
+// multiStubJwksClient returns the same JWKS for any target.
+type multiStubJwksClient struct {
+	result jose.JSONWebKeySet
+}
+
+func (m multiStubJwksClient) FetchJwks(_ context.Context, _ remotehttp.FetchTarget) (jose.JSONWebKeySet, error) {
+	return m.result, nil
+}
+
+type stubFetchResult struct {
+	jwks jose.JSONWebKeySet
+	err  error
+}
+
+// selectiveStubJwksClient returns different results per target URL.
+type selectiveStubJwksClient struct {
+	results map[string]stubFetchResult
+}
+
+func (s selectiveStubJwksClient) FetchJwks(_ context.Context, req remotehttp.FetchTarget) (jose.JSONWebKeySet, error) {
+	r, ok := s.results[req.URL]
+	if !ok {
+		return jose.JSONWebKeySet{}, fmt.Errorf("unexpected target: %s", req.URL)
+	}
+	return r.jwks, r.err
+}
+
+// blockingJwksClient blocks until release is closed, then returns the result.
+// It always checks ctx.Done() first to ensure deterministic cancellation behavior.
+type blockingJwksClient struct {
+	result  jose.JSONWebKeySet
+	release <-chan struct{}
+}
+
+func (b blockingJwksClient) FetchJwks(ctx context.Context, _ remotehttp.FetchTarget) (jose.JSONWebKeySet, error) {
+	// Wait for release, but always check if context was cancelled.
+	<-b.release
+	if ctx.Err() != nil {
+		return jose.JSONWebKeySet{}, ctx.Err()
+	}
+	return b.result, nil
+}
+
+// concurrentCountingClient tracks peak concurrent FetchJwks calls.
+type concurrentCountingClient struct {
+	delay      time.Duration
+	result     jose.JSONWebKeySet
+	peak       *atomic.Int32
+	concurrent *atomic.Int32
+	calls      atomic.Int32
+}
+
+func (c *concurrentCountingClient) FetchJwks(ctx context.Context, _ remotehttp.FetchTarget) (jose.JSONWebKeySet, error) {
+	cur := c.concurrent.Add(1)
+	c.calls.Add(1)
+
+	// Update peak.
+	for {
+		old := c.peak.Load()
+		if cur <= old || c.peak.CompareAndSwap(old, cur) {
+			break
+		}
+	}
+
+	select {
+	case <-time.After(c.delay):
+	case <-ctx.Done():
+		c.concurrent.Add(-1)
+		return jose.JSONWebKeySet{}, ctx.Err()
+	}
+
+	c.concurrent.Add(-1)
+	return c.result, nil
 }
 
 var sampleJWKS = `{"keys":[{"use":"sig","kty":"RSA","kid":"JWxVLtipR-Q6wF2zmQKEoxbFhqwibK2aKNLyRqNxdj4","alg":"RS256","n":"5ApthhEwr6U00Coa0_572OytJXbVZKgl-myirM2m4GSrVfaKus41GEPHHXMzyGDPgHU7Rb4o0yzB-obkgz0zo2jnjv1zSx88BgdhhdE0BX2ULFDj67jVYdFZdCOoBr1_xJ5LEjQArHxfywZxW4a0egc3JaIwo-3qSSlRnD1KV2uzTG9FoDpvJLn1ZzdMgoTHuxIMla6WdgPDswVD8nrQM0I_1VGyGC0l2dICUEiqN0QrZen--U70J6EU6hd8vi_9qmALhjoSEASH2Z2sHco4Shv_aVx0BM-zN5UJWz4VF51Ag_KgcePS5Co7iVM0FUwMNWauWhPDPLWiXoUJvUWVPw","e":"AQAB","x5c":["MIICozCCAYsCBgGYyKDydjANBgkqhkiG9w0BAQsFADAVMRMwEQYDVQQDDAprYWdlbnQtZGV2MB4XDTI1MDgyMDE3NTU0N1oXDTM1MDgyMDE3NTcyN1owFTETMBEGA1UEAwwKa2FnZW50LWRldjCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAOQKbYYRMK+lNNAqGtP+e9jsrSV21WSoJfpsoqzNpuBkq1X2irrONRhDxx1zM8hgz4B1O0W+KNMswfqG5IM9M6No5479c0sfPAYHYYXRNAV9lCxQ4+u41WHRWXQjqAa9f8SeSxI0AKx8X8sGcVuGtHoHNyWiMKPt6kkpUZw9Sldrs0xvRaA6byS59Wc3TIKEx7sSDJWulnYDw7MFQ/J60DNCP9VRshgtJdnSAlBIqjdEK2Xp/vlO9CehFOoXfL4v/apgC4Y6EhAEh9mdrB3KOEob/2lcdATPszeVCVs+FRedQIPyoHHj0uQqO4lTNBVMDDVmrloTwzy1ol6FCb1FlT8CAwEAATANBgkqhkiG9w0BAQsFAAOCAQEAxElyp6gak62xC3yEw0nRUZNI0nsu0Oeow8ZwbmfTSa2hRKFQQe2sjMzm6L4Eyg2IInVn0spkw9BVJ07i8mDmvChjRNra7t6CX1dIykUUtxtNwglX0YBRjMl/heG7dC/dyDRVW6EUrPopMQ9QibzmH5XOBLDanTfK6tPwe5ezG5JF3JCx2Z3dtmAMtpCp7Nnr/gj48z7j4V8EHSB8hgITHBPcLOmiVglS3LF2/D+PK6efRWnVaDtcPmuh/0JmdmKxwJcvvuZD7tp5UFRbw9cgx5Pvv+mOWVCp/E2L+P17Gu0C/MC4Wnbn3Pi6Tgt0GNUMngCCyBnfcTpljUddW6Kheg=="],"x5t":"SmEthIFV9ehf3ggduek6QLfXxyU","x5t#S256":"XNGenWvGVC_sxSOTW0j_d7zwQlbGzkFj5XGCgPrLNJA"},{"use":"enc","kty":"RSA","kid":"hb2m-EP6nG_ktqHJOna_rnadxRaOtzArOecAJlNSmqU","alg":"RSA-OAEP","n":"xYU8uN6rXI6l6LAQ5inpylE4qiFqshbV92VnPrUO8gNff_TuZjvq19f0zXpVnnu88bCL5Q6DjRqRP4a2brAsYYBjSjwKGF3dd7jda6uavU1br2NFppZ6GSisOlKuKqMAUitQuYgAzYP-E2FasQOskrZ8HQ8S8hff7rNZH84VL5lNwTMHiwL1O8jBmxJE-ABM0To-2a9YosRkRa_uVzY720lSAir1UNiUSR1PypS2ixWyO04AVMJf8JgYU8rsUHNkZenYSRySzYzIxE57RCYnuZoc1hSVBtN2cFXXSqTwGMI7tfzTAtG11Z7zkiWmP0Tk7xabh5xfdXhZtJfHT6id5w","e":"AQAB","x5c":["MIICozCCAYsCBgGYyKD0zDANBgkqhkiG9w0BAQsFADAVMRMwEQYDVQQDDAprYWdlbnQtZGV2MB4XDTI1MDgyMDE3NTU0OFoXDTM1MDgyMDE3NTcyOFowFTETMBEGA1UEAwwKa2FnZW50LWRldjCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMWFPLjeq1yOpeiwEOYp6cpROKoharIW1fdlZz61DvIDX3/07mY76tfX9M16VZ57vPGwi+UOg40akT+Gtm6wLGGAY0o8Chhd3Xe43Wurmr1NW69jRaaWehkorDpSriqjAFIrULmIAM2D/hNhWrEDrJK2fB0PEvIX3+6zWR/OFS+ZTcEzB4sC9TvIwZsSRPgATNE6PtmvWKLEZEWv7lc2O9tJUgIq9VDYlEkdT8qUtosVsjtOAFTCX/CYGFPK7FBzZGXp2Ekcks2MyMROe0QmJ7maHNYUlQbTdnBV10qk8BjCO7X80wLRtdWe85Ilpj9E5O8Wm4ecX3V4WbSXx0+onecCAwEAATANBgkqhkiG9w0BAQsFAAOCAQEAWuRnoKtKhCqLaz3Ze2q8hRykke7JwNrNxqDPn7eToa1MKsfsrtE678kzXhnfdivK/1F/8dr7Thn/WX7ZUJW2jsmbP1sCJjK02yY2setJ1jJKvJZcib8y7LAsqoACYZ4FM/KLrdywGn7KSenqWCLRMqeT04dWlmJexEszb5fgCKCFIZLKjaGJZIuLhsJBLyYHEVFpacr69cZ/ZjNpshHIiV0l/I434vcW39S9+uMfxf1glLTEPifmwK4gMRem3QQLqK21vBcjuS0GBQXQinaztcNaiu1invyTZd5s+3u5yORsip6YhbGhe08TbbtN7yLlZFITDQL4oFrXVGXX+4dp8w=="],"x5t":"BMlhx-2TUdiyftY8aR_zt7xECEI","x5t#S256":"YTTj8SxySpGgVFl5ZQqniLPnmg0gWHgBhissHXQCZ8k"}]}`
@@ -583,4 +856,54 @@ func awaitJwksRetryNoWait(f *Fetcher) fetchAt {
 		return fetchAt{}
 	}
 	return *scheduled
+}
+
+// TestScheduleAtDropsStaleGeneration ensures that scheduleAt refuses to
+// schedule a retry when the request has since been superseded by a newer
+// generation (e.g. via AddOrUpdateKeyset). This prevents the error path in
+// maybeFetchJwks from queuing retries for requests that no longer exist in
+// their original form.
+func TestScheduleAtDropsStaleGeneration(t *testing.T) {
+	source := testSource()
+	f := NewFetcher(NewCache())
+
+	// First AddOrUpdate: generation becomes 1, scheduled at now.
+	require.NoError(t, f.AddOrUpdateKeyset(source))
+
+	f.mu.Lock()
+	state1 := f.requests[source.RequestKey]
+	assert.Equal(t, uint64(1), state1.generation)
+	assert.Equal(t, 1, f.schedule.Len())
+	f.mu.Unlock()
+
+	// A second AddOrUpdate: generation becomes 2; schedule is updated.
+	require.NoError(t, f.AddOrUpdateKeyset(source))
+
+	f.mu.Lock()
+	state2 := f.requests[source.RequestKey]
+	assert.Equal(t, uint64(2), state2.generation)
+	f.mu.Unlock()
+
+	// scheduleAt with the OLD generation (1) must be a no-op: the request
+	// now lives at generation 2, so a stale retry must not be queued.
+	f.scheduleAt(source.RequestKey, 1, time.Now().Add(time.Hour), 5)
+
+	f.mu.Lock()
+	scheduled := f.schedule.Peek()
+	require.NotNil(t, scheduled)
+	assert.Equal(t, uint64(2), scheduled.Generation,
+		"schedule should still hold the current generation, not the stale one")
+	assert.Equal(t, 1, f.schedule.Len(),
+		"no extra entry should have been created for the stale retry")
+	f.mu.Unlock()
+
+	// scheduleAt with the CURRENT generation (2) should succeed normally.
+	f.scheduleAt(source.RequestKey, 2, time.Now().Add(time.Hour), 7)
+
+	f.mu.Lock()
+	scheduled = f.schedule.Peek()
+	require.NotNil(t, scheduled)
+	assert.Equal(t, uint64(2), scheduled.Generation)
+	assert.Equal(t, 7, scheduled.RetryAttempt)
+	f.mu.Unlock()
 }

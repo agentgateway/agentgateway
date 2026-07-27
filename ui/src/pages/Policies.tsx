@@ -2,13 +2,12 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import type { ComponentType, ReactNode } from "react";
 import { Shield } from "lucide-react";
-import { ensureLlm, ensureMcp, policyResources } from "../config";
+import { ensureLlm, ensureMcp } from "../config";
 import {
-  useConfigResources,
   useDeleteConfigResource,
-  useGatewayConfig,
+  useEffectiveGatewayConfig,
+  useRawGatewayConfig,
   useRuntimeInfo,
-  useUpdateConfig,
   useUpsertPolicyResource,
 } from "../hooks";
 import { useSchemaHelp } from "../schemaHelp";
@@ -109,6 +108,7 @@ export function McpPoliciesPage() {
       title="MCP Policies"
       description="Configure top-level behavior for MCP gateway traffic."
       schemaRoot="FilterOrPolicy"
+      resourceKind="mcp.policy"
       sections={mcpPolicySections}
       policyKeys={mcpPolicyKeys}
       yamlDescription="Read-only view of mcp.policies."
@@ -134,44 +134,33 @@ export function PolicyCatalogPage(props: {
   actions?: ReactNode;
   beforePolicies?: ReactNode;
   schemaRoot: string;
-  resourceKind?: PolicyResourceKind;
+  resourceKind: PolicyResourceKind;
   sections: Array<{ title: string; keys: PolicyKey[] }>;
   policyKeys?: PolicyKey[];
   yamlDescription: string;
   policies: (
-    config: ReturnType<typeof useGatewayConfig>,
+    config: ReturnType<typeof useEffectiveGatewayConfig>,
   ) => Record<string, unknown> | null | undefined;
-  policiesDisabled?: (config: ReturnType<typeof useGatewayConfig>) => boolean;
+  policiesDisabled?: (
+    config: ReturnType<typeof useEffectiveGatewayConfig>,
+  ) => boolean;
   policiesDisabledReason?: string;
   managedLinks?: Partial<Record<PolicyKey, { to: string; summary: string }>>;
   onSavePolicy: (config: GatewayConfig, key: PolicyKey, value: unknown) => void;
   onDisablePolicy: (config: GatewayConfig, key: PolicyKey) => void;
 }) {
-  const config = useGatewayConfig();
+  const rawConfig = useRawGatewayConfig();
+  const config = useEffectiveGatewayConfig();
   const runtime = useRuntimeInfo();
   const hybrid = runtime.data?.ui.configStoreMode === "hybrid";
-  const configResources = useConfigResources({
-    enabled: hybrid && Boolean(props.resourceKind),
-  });
-  const update = useUpdateConfig();
   const upsertPolicy = useUpsertPolicyResource();
   const deleteResource = useDeleteConfigResource();
-  const filePolicies = props.policies(config);
-  const databasePolicies = props.resourceKind
-    ? policyResources(configResources.data?.resources, props.resourceKind)
-    : {};
-  const policies = hybrid
-    ? { ...(filePolicies ?? {}), ...databasePolicies }
-    : filePolicies;
+  const filePolicies = props.policies(rawConfig);
+  const policies = props.policies(config);
   const policyDataLoading =
-    config.isLoading ||
-    runtime.isLoading ||
-    Boolean(hybrid && props.resourceKind && configResources.isLoading);
+    config.isLoading || rawConfig.isLoading || runtime.isLoading;
   const policyDataUnavailable =
-    policyDataLoading ||
-    config.isError ||
-    runtime.isError ||
-    Boolean(hybrid && props.resourceKind && configResources.isError);
+    policyDataLoading || config.isError || rawConfig.isError || runtime.isError;
   const policiesDisabled = props.policiesDisabled?.(config) ?? false;
   const [selected, setSelected] = useState<PolicyKey | null>(() =>
     policyKeyFromHash(),
@@ -211,17 +200,9 @@ export function PolicyCatalogPage(props: {
     filePolicies &&
     Object.prototype.hasOwnProperty.call(filePolicies, selected),
   );
-  const selectedDatabaseOwned = Boolean(
-    selected &&
-    Object.prototype.hasOwnProperty.call(databasePolicies, selected),
-  );
-  const saving =
-    update.isPending || upsertPolicy.isPending || deleteResource.isPending;
+  const saving = upsertPolicy.isPending || deleteResource.isPending;
   const saveError =
-    update.error?.message ??
-    upsertPolicy.error?.message ??
-    deleteResource.error?.message ??
-    null;
+    upsertPolicy.error?.message ?? deleteResource.error?.message ?? null;
 
   const policyItems = useMemo(() => {
     return policyCatalog.map((meta) => ({
@@ -262,7 +243,8 @@ export function PolicyCatalogPage(props: {
 
   useEffect(() => {
     function syncSelectedFromUrl() {
-      update.reset();
+      upsertPolicy.reset();
+      deleteResource.reset();
       setSelected(policyKeyFromHash());
     }
     window.addEventListener("hashchange", syncSelectedFromUrl);
@@ -271,7 +253,7 @@ export function PolicyCatalogPage(props: {
       window.removeEventListener("hashchange", syncSelectedFromUrl);
       window.removeEventListener("popstate", syncSelectedFromUrl);
     };
-  }, [update]);
+  }, [deleteResource, upsertPolicy]);
 
   useLayoutEffect(() => {
     const scroll = pendingScrollRestore.current;
@@ -281,13 +263,15 @@ export function PolicyCatalogPage(props: {
   }, [selected]);
 
   function openPolicy(policyKey: PolicyKey) {
-    update.reset();
+    upsertPolicy.reset();
+    deleteResource.reset();
     setSelected(policyKey);
     setPolicyHash(policyKey, "push");
   }
 
   function closePolicy() {
-    update.reset();
+    upsertPolicy.reset();
+    deleteResource.reset();
     pendingScrollRestore.current = { x: window.scrollX, y: window.scrollY };
     setSelected(null);
     setPolicyHash(null, "replace");
@@ -300,13 +284,11 @@ export function PolicyCatalogPage(props: {
         description={props.description}
         actions={props.actions}
       />
-      {config.isError ||
-      runtime.isError ||
-      (hybrid && configResources.isError) ? (
+      {config.isError || rawConfig.isError || runtime.isError ? (
         <StatusBanner state="bad" title="Configuration API unavailable">
           {config.error?.message ??
-            runtime.error?.message ??
-            configResources.error?.message}
+            rawConfig.error?.message ??
+            runtime.error?.message}
         </StatusBanner>
       ) : null}
       {policyDataLoading ? (
@@ -370,36 +352,22 @@ export function PolicyCatalogPage(props: {
           saving={saving}
           saveError={saveError}
           config={config.data}
-          databaseBacked={
-            hybrid && Boolean(props.resourceKind) && !selectedFileOwned
-          }
+          databaseBacked={hybrid && !selectedFileOwned}
           onClose={closePolicy}
           applySaveDiff={(next, value) => {
             props.onSavePolicy(next, selected, value);
           }}
           onSave={(value) => {
-            if (hybrid && props.resourceKind && !selectedFileOwned) {
-              upsertPolicy.mutate(
-                { kind: props.resourceKind, id: selected, value },
-                { onSuccess: closePolicy },
-              );
-              return;
-            }
-            update.mutate((next) => props.onSavePolicy(next, selected, value), {
-              onSuccess: closePolicy,
-            });
+            upsertPolicy.mutate(
+              { kind: props.resourceKind, id: selected, value },
+              { onSuccess: closePolicy },
+            );
           }}
           onDisable={() => {
-            if (hybrid && props.resourceKind && selectedDatabaseOwned) {
-              deleteResource.mutate(
-                { kind: props.resourceKind, id: selected },
-                { onSuccess: closePolicy },
-              );
-              return;
-            }
-            update.mutate((next) => props.onDisablePolicy(next, selected), {
-              onSuccess: closePolicy,
-            });
+            deleteResource.mutate(
+              { kind: props.resourceKind, id: selected },
+              { onSuccess: closePolicy },
+            );
           }}
         />
       ) : null}

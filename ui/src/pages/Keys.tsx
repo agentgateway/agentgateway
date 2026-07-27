@@ -11,12 +11,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import {
-  disableApiKeyPolicy,
-  getApiKeyPolicy,
-  removeVirtualKey,
-  upsertVirtualKey,
-} from "../config";
+import { getApiKeyPolicy, upsertVirtualKey } from "../config";
 import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { EnumSelector } from "../components/EnumSelector";
 import { hasKeyValue, keyValue, maskKey } from "../credentialDisplay";
@@ -24,7 +19,6 @@ import { useStickyQueryParam } from "../drawerRouteState";
 import {
   useDeleteConfigResource,
   useLlmConfigData,
-  useUpdateConfig,
   useUpsertConfigResource,
   useUpsertPolicyResource,
 } from "../hooks";
@@ -52,9 +46,13 @@ import { randomUuid } from "../randomUuid";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import type { GatewayConfig, LlmApiKeyPolicy, VirtualApiKey } from "../types";
 
+const fileOwnedPolicyMessage =
+  "This API key policy is file-owned and cannot be modified in hybrid mode.";
+
 export function KeysPage() {
   const {
     config,
+    rawConfig,
     hybrid,
     resources,
     policies,
@@ -62,18 +60,16 @@ export function KeysPage() {
     isLoading,
     error,
   } = useLlmConfigData();
-  const update = useUpdateConfig();
   const upsertResource = useUpsertConfigResource();
   const upsertPolicy = useUpsertPolicyResource();
   const deleteResource = useDeleteConfigResource();
   const help = useSchemaHelp();
   const policy = (policies.apiKey ?? null) as LlmApiKeyPolicy | null;
   const filePolicyOwned = Boolean(
-    config.data?.llm?.policies &&
-    Object.prototype.hasOwnProperty.call(config.data.llm.policies, "apiKey"),
+    rawConfig.data?.llm?.policies &&
+    Object.prototype.hasOwnProperty.call(rawConfig.data.llm.policies, "apiKey"),
   );
-  const databasePolicyOwned =
-    hybrid && isDatabaseConfigResource(resources, "llm.policy", "apiKey");
+  const policyReadOnly = hybrid && filePolicyOwned;
   const [editing, setEditing] = useState<{
     previousKey?: string;
     key: VirtualApiKey;
@@ -91,12 +87,10 @@ export function KeysPage() {
         : null);
   const advancedOpen = keyDrawer === "settings";
   const saving =
-    update.isPending ||
     upsertResource.isPending ||
     upsertPolicy.isPending ||
     deleteResource.isPending;
   const saveError =
-    update.error?.message ??
     upsertResource.error?.message ??
     upsertPolicy.error?.message ??
     deleteResource.error?.message ??
@@ -114,35 +108,30 @@ export function KeysPage() {
     const previous = previousKey
       ? keys.find((item) => keyValue(item) === previousKey)
       : undefined;
-    const previousId = previous ? databaseKeyId(previous) : undefined;
-    if (hybrid && (!previous || previousId)) {
-      const value = structuredClone(key);
-      if (value.metadata && typeof value.metadata === "object") {
-        delete value.metadata.id;
-      }
-      upsertResource.mutate(
-        { kind: "llm.apiKey", value, previousId },
-        { onSuccess: closeKeyDrawer },
-      );
-      return;
+    const previousIndex = previous ? keys.indexOf(previous) : -1;
+    const previousId = previous
+      ? keyId(previous) || `@index:${previousIndex}`
+      : undefined;
+    const value = structuredClone(key);
+    if (value.metadata && typeof value.metadata === "object") {
+      delete value.metadata.id;
     }
-    update.mutate((next) => upsertVirtualKey(next, key, previousKey), {
-      onSuccess: closeKeyDrawer,
-    });
+    upsertResource.mutate(
+      { kind: "llm.apiKey", value, previousId },
+      { onSuccess: closeKeyDrawer },
+    );
   }
 
   function removeKey(key: VirtualApiKey) {
-    const id = databaseKeyId(key);
-    if (id) {
-      deleteResource.mutate(
-        { kind: "llm.apiKey", id },
-        { onSuccess: () => setDeleteKey(null) },
-      );
-      return;
-    }
-    update.mutate((next) => removeVirtualKey(next, keyValue(key)), {
-      onSuccess: () => setDeleteKey(null),
-    });
+    const index = keys.indexOf(key);
+    const id = keyId(key) || (index >= 0 ? `@index:${index}` : "");
+    if (!id) return;
+    deleteResource.mutate(
+      { kind: "llm.apiKey", id },
+      {
+        onSuccess: () => setDeleteKey(null),
+      },
+    );
   }
 
   function openNewKey() {
@@ -161,20 +150,12 @@ export function KeysPage() {
   }
 
   function disablePolicy() {
+    if (policyReadOnly) return;
     const onSuccess = () => {
       setDisablePolicyOpen(false);
       closeKeyDrawer();
     };
-    if (databasePolicyOwned) {
-      deleteResource.mutate(
-        { kind: "llm.policy", id: "apiKey" },
-        { onSuccess },
-      );
-      return;
-    }
-    update.mutate((next) => disableApiKeyPolicy(next), {
-      onSuccess,
-    });
+    deleteResource.mutate({ kind: "llm.policy", id: "apiKey" }, { onSuccess });
   }
 
   return (
@@ -263,15 +244,23 @@ export function KeysPage() {
             description="Create a key so callers can authenticate without exposing provider credentials."
             action={
               <div className="button-row">
-                <button
-                  className="button danger"
-                  type="button"
-                  disabled={saving}
-                  onClick={() => setDisablePolicyOpen(true)}
+                <Tooltip
+                  content={
+                    policyReadOnly
+                      ? fileOwnedPolicyMessage
+                      : "Disable API key policy"
+                  }
                 >
-                  <X size={16} />
-                  Disable API Key Policy
-                </button>
+                  <button
+                    className="button danger"
+                    type="button"
+                    disabled={saving || policyReadOnly}
+                    onClick={() => setDisablePolicyOpen(true)}
+                  >
+                    <X size={16} />
+                    Disable API Key Policy
+                  </button>
+                </Tooltip>
                 <button
                   className="button primary"
                   type="button"
@@ -320,11 +309,20 @@ export function KeysPage() {
                             Edit
                           </button>
                         </Tooltip>
-                        <Tooltip content="Delete key">
+                        <Tooltip
+                          content={
+                            hybrid && !databaseKeyId(item)
+                              ? "File-owned keys cannot be deleted here"
+                              : "Delete key"
+                          }
+                        >
                           <button
                             className="table-action danger"
                             type="button"
                             aria-label="Delete key"
+                            disabled={
+                              saving || (hybrid && !databaseKeyId(item))
+                            }
                             onClick={() => setDeleteKey(item)}
                           >
                             <Trash2 size={14} />
@@ -397,6 +395,7 @@ export function KeysPage() {
           config={config.data}
           policy={policy}
           databaseBacked={hybrid && !filePolicyOwned}
+          readOnly={policyReadOnly}
           keyCount={keys.length}
           help={help}
           saving={saving}
@@ -404,20 +403,12 @@ export function KeysPage() {
           onClose={closeKeyDrawer}
           onDisable={disablePolicy}
           onSave={(nextPolicy) => {
-            if (hybrid && !filePolicyOwned) {
-              upsertPolicy.mutate(
-                {
-                  kind: "llm.policy",
-                  id: "apiKey",
-                  value: nextPolicy,
-                },
-                { onSuccess: closeKeyDrawer },
-              );
-              return;
-            }
-            update.mutate(
-              (next) => {
-                Object.assign(getApiKeyPolicy(next), nextPolicy);
+            if (policyReadOnly) return;
+            upsertPolicy.mutate(
+              {
+                kind: "llm.policy",
+                id: "apiKey",
+                value: nextPolicy,
               },
               { onSuccess: closeKeyDrawer },
             );
@@ -432,6 +423,7 @@ function AdvancedSettingsDrawer(props: {
   config?: GatewayConfig | null;
   policy?: LlmApiKeyPolicy | null;
   databaseBacked?: boolean;
+  readOnly?: boolean;
   keyCount: number;
   help: SchemaHelp;
   saving: boolean;
@@ -448,6 +440,7 @@ function AdvancedSettingsDrawer(props: {
       <PolicyControls
         policy={props.policy}
         databaseBacked={props.databaseBacked}
+        readOnly={props.readOnly}
         config={props.config}
         keyCount={props.keyCount}
         help={props.help}
@@ -468,6 +461,7 @@ function PolicyControls(props: {
   config?: GatewayConfig | null;
   policy?: LlmApiKeyPolicy | null;
   databaseBacked?: boolean;
+  readOnly?: boolean;
   keyCount: number;
   help: SchemaHelp;
   saving: boolean;
@@ -530,14 +524,22 @@ function PolicyControls(props: {
           title="Disable API key policy"
           description="Remove the API key policy entirely. Requests will not be validated against virtual API keys."
           action={
-            <button
-              className="button danger compact-action"
-              type="button"
-              disabled={props.saving}
-              onClick={props.onDisable}
+            <Tooltip
+              content={
+                props.readOnly
+                  ? fileOwnedPolicyMessage
+                  : "Disable API key policy"
+              }
             >
-              Disable
-            </button>
+              <button
+                className="button danger compact-action"
+                type="button"
+                disabled={props.saving || props.readOnly}
+                onClick={props.onDisable}
+              >
+                Disable
+              </button>
+            </Tooltip>
           }
         />
       ) : null}
@@ -560,6 +562,8 @@ function PolicyControls(props: {
         }
         saveLabel={props.policy ? "Save policy" : "Enable API key auth"}
         saving={props.saving}
+        saveDisabled={props.readOnly}
+        hybridFileWriteMessage={fileOwnedPolicyMessage}
         onSave={() => props.onSave(patch)}
         applyDiff={(next) => {
           Object.assign(getApiKeyPolicy(next), patch);

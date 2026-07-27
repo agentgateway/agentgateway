@@ -147,6 +147,7 @@ pub enum ChatFormat {
 	OpenAIResponses,
 	AnthropicMessages,
 	BedrockConverse,
+	VertexGemini,
 }
 
 #[derive(Debug, Clone)]
@@ -167,6 +168,7 @@ pub enum ProviderState {
 	Bedrock {
 		tool_names: Arc<conversion::bedrock::BedrockToolNameMap>,
 	},
+	VertexGemini,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -264,8 +266,19 @@ pub struct LLMResponse {
 	pub provider_model: Option<Strng>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub completion: Option<Vec<String>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub output_messages: Option<Vec<types::OutputMessage>>,
 	#[serde(skip)]
 	pub first_token: Option<Instant>,
+}
+
+/// LogContentFields controls which response content is captured for observability.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LogContentFields {
+	/// Whether to capture the raw completion text.
+	pub completion: bool,
+	/// Whether to capture tool/function calls as structured output messages.
+	pub tool_calls: bool,
 }
 
 pub trait StreamingUsageReporter: Send {
@@ -304,7 +317,10 @@ impl Default for StreamingUsageGuard {
 	}
 }
 
-pub use types::{RequestType, ResponseType, SimpleChatCompletionMessage};
+pub use types::{
+	OutputMessage, OutputMessagePart, RequestType, ResponseType, SimpleChatCompletionMessage,
+	ToolCall,
+};
 
 pub fn logged_response_parsing(bytes: &[u8]) -> impl FnOnce(serde_json::Error) -> AIError + '_ {
 	|e| {

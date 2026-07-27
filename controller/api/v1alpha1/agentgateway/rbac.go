@@ -8,8 +8,8 @@ type Authorization struct {
 	// * `Require`: every require rule must match for the request to be allowed.
 	// * `Deny`: any matching deny rule denies the request.
 	//
-	// A CEL expression that fails to evaluate does not match. Prefer `Require`
-	// for deny-by-default behavior.
+	// `Deny` is not recommended because expression failures fail to deny; prefer
+	// `Allow` or `Require`. If used, design expressions defensively against evaluation errors.
 	//
 	// If at least one `Allow` rule is configured, requests are denied unless at
 	// least one allow rule matches.

@@ -100,6 +100,7 @@ export function PolicyDrawer(props: {
           enabled ? (
             <ConfigSaveButton
               disabled={props.saving}
+              allowHybridWrite={props.databaseBacked}
               onClick={() => setConfirmDelete(true)}
             >
               <Trash2 size={16} />
@@ -234,6 +235,7 @@ export function PolicyEditorBody(props: {
         />
       ) : props.customEditor === "cors" ? (
         <CorsPolicyEditor
+          key={JSON.stringify(props.policyValue ?? null)}
           formId={props.formId}
           cors={props.policyValue as CorsPolicy | null | undefined}
           help={props.help}

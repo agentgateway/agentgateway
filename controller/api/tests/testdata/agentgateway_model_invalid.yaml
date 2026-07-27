@@ -1,0 +1,168 @@
+_err: bedrock must be set if and only if provider is Bedrock
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: bedrock-without-settings
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: Bedrock
+---
+_err: model wildcards must be '*', a suffix like 'gpt-*', or a prefix like '*-latest'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: invalid-wildcard
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  match:
+    model: gpt-*-latest
+  provider: OpenAI
+---
+_err: virtual model match.model must be an exact name
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: wildcard-virtual-model
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  match:
+    model: virtual/*
+  virtualModel:
+    weighted:
+      targets:
+      - modelRef:
+          name: concrete-model
+---
+_err: unknown fields [spec.custom.model]
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: custom-model-setting
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: Custom
+  custom:
+    model: gpt-oss
+    formats:
+    - type: Completions
+---
+_err: 'Unsupported value: "AzureOpenAI"'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: legacy-azure-openai
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: AzureOpenAI
+---
+_err: baseURL must be an absolute http or https URL with a host
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: incomplete-upstream-endpoint
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: OpenAI
+  baseURL: ftp://api.openai.com
+---
+_err: baseURL requires provider
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: virtual-model-with-upstream-overrides
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  baseURL: https://api.example.com
+  virtualModel:
+    weighted:
+      targets:
+      - modelRef:
+          name: concrete-model
+---
+_err: ollama requires baseURL
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: ollama-without-base-url
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: Ollama
+---
+_err: baseURL cannot target localhost, loopback, or link-local addresses
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: local-base-url
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: OpenAI
+  baseURL: http://169.254.169.254/latest/meta-data
+---
+_err: policies cannot be used with virtualModel
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: virtual-model-with-policies
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  policies:
+    transformations:
+    - field: model
+      expression: '"replacement"'
+    authorization:
+      policy:
+        matchExpressions:
+        - 'true'
+  virtualModel:
+    weighted:
+      targets:
+      - modelRef:
+          name: concrete-model
+---
+_err: azure must be set if and only if provider is Azure
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: azure-settings-for-openai
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: OpenAI
+  azure:
+    resourceName: example
+    resourceType: OpenAI
+---
+_err: unknown fields [spec.policies.auth.crossAppAccess]
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: model-cross-app-access
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: OpenAI
+  policies:
+    auth:
+      crossAppAccess: {}

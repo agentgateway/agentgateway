@@ -62,12 +62,9 @@ where
 #[derive(Clone)]
 struct AdminState {
 	stores: crate::store::Stores,
-	#[cfg_attr(not(feature = "ui"), allow(dead_code))]
 	resource_manager: crate::resource_manager::ResourceManager,
 	config: Arc<Config>,
-	#[cfg_attr(not(feature = "ui"), allow(dead_code))]
 	model_catalog: Arc<crate::llm::cost::ModelCatalog>,
-	#[cfg_attr(not(feature = "ui"), allow(dead_code))]
 	config_resource_store: Option<crate::config_store::ConfigResourceStore>,
 	shutdown_trigger: signal::ShutdownTrigger,
 	#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
@@ -187,15 +184,16 @@ fn admin_router(state: Arc<AdminState>) -> Router {
 		.route("/logging", post(handle_logging))
 		.with_state(state.clone());
 
-	#[cfg(feature = "ui")]
-	let router = router.merge(crate::ui::router(
-		state.config.clone(),
-		state.model_catalog.clone(),
-		state.config_resource_store.clone(),
-		state.resource_manager.clone(),
-	));
-	#[cfg(not(feature = "ui"))]
-	let router = router.route("/", get(handle_dashboard));
+	let router = if cfg!(feature = "ui") {
+		router.merge(crate::ui::router(
+			state.config.clone(),
+			state.model_catalog.clone(),
+			state.config_resource_store.clone(),
+			state.resource_manager.clone(),
+		))
+	} else {
+		router.route("/", get(handle_dashboard))
+	};
 
 	router.layer(add_cors_layer())
 }
@@ -230,7 +228,6 @@ fn add_cors_layer() -> CorsLayer {
 		.max_age(Duration::from_secs(3600))
 }
 
-#[cfg(not(feature = "ui"))]
 async fn handle_dashboard(_req: Request) -> Response {
 	let apis = &[
 		(

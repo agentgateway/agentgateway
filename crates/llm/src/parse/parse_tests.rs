@@ -63,8 +63,12 @@ struct Test {
 
 #[tokio::test]
 async fn test_sse_json() {
-	let msg1 = "data: {\"msg\": 1}\n\n";
-	let msg2 = "data: {\"msg\": 2}\n\n";
+	let msg1 = r#"data: {"msg": 1}
+
+"#;
+	let msg2 = r#"data: {"msg": 2}
+
+"#;
 	let body = Body::from_stream(futures_util::stream::iter(vec![
 		Ok::<_, std::io::Error>(Bytes::copy_from_slice(msg1.as_bytes())),
 		Ok::<_, std::io::Error>(Bytes::copy_from_slice(msg2.as_bytes())),
@@ -129,8 +133,12 @@ async fn test_full_passthrough_parser_flushes_decoder_on_eof() {
 
 #[tokio::test]
 async fn test_sse_json_transform() {
-	let msg1 = "data: {\"msg\": 1, \"type\": \"input\"}\n\n";
-	let msg2 = "data: {\"msg\": 2, \"type\": \"input\"}\n\n";
+	let msg1 = r#"data: {"msg": 1, "type": "input"}
+
+"#;
+	let msg2 = r#"data: {"msg": 2, "type": "input"}
+
+"#;
 	let msg3 = "data: [DONE]\n\n";
 	let trailers = HeaderMap::try_from(&HashMap::from([("k".to_string(), "v".to_string())])).unwrap();
 	let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::iter(
@@ -193,8 +201,12 @@ data: [DONE]
 
 #[tokio::test]
 async fn test_sse_json_transform_multi_named_events_and_done() {
-	let msg1 = "data: {\"msg\": 1}\n\n";
-	let msg2 = "data: {\"msg\": 2}\n\n";
+	let msg1 = r#"data: {"msg": 1}
+
+"#;
+	let msg2 = r#"data: {"msg": 2}
+
+"#;
 	let done = "data: [DONE]\n\n";
 	let body = Body::from_stream(futures_util::stream::iter(vec![
 		Ok::<_, std::io::Error>(Bytes::copy_from_slice(msg1.as_bytes())),
@@ -244,11 +256,11 @@ async fn test_sse_json_transform_multi_named_events_and_done() {
 		"missing named delta event:\n{result}"
 	);
 	assert!(
-		result.contains("data: {\"message\":1,\"status\":\"ok\"}"),
+		result.contains(r#"data: {"message":1,"status":"ok"}"#),
 		"missing translated payload for first event:\n{result}"
 	);
 	assert!(
-		result.contains("data: {\"message\":2,\"status\":\"ok\"}"),
+		result.contains(r#"data: {"message":2,"status":"ok"}"#),
 		"missing translated payload for second event:\n{result}"
 	);
 	assert!(
@@ -256,15 +268,19 @@ async fn test_sse_json_transform_multi_named_events_and_done() {
 		"missing done event from [DONE] translation:\n{result}"
 	);
 	assert!(
-		result.contains("data: {\"message\":0,\"status\":\"done\"}"),
+		result.contains(r#"data: {"message":0,"status":"done"}"#),
 		"missing done payload:\n{result}"
 	);
 }
 
 #[tokio::test]
 async fn test_sse_json_transform_multi_parse_error_path() {
-	let msg1 = "data: {\"msg\": 1}\n\n";
-	let msg2 = "data: {\"msg\": \"bad\"}\n\n";
+	let msg1 = r#"data: {"msg": 1}
+
+"#;
+	let msg2 = r#"data: {"msg": "bad"}
+
+"#;
 	let done = "data: [DONE]\n\n";
 	let body = Body::from_stream(futures_util::stream::iter(vec![
 		Ok::<_, std::io::Error>(Bytes::copy_from_slice(msg1.as_bytes())),
@@ -303,7 +319,7 @@ async fn test_sse_json_transform_multi_parse_error_path() {
 		"missing parse error event:\n{result}"
 	);
 	assert!(
-		result.contains("data: {\"status\":\"parse_error\"}"),
+		result.contains(r#"data: {"status":"parse_error"}"#),
 		"missing parse error payload:\n{result}"
 	);
 	assert!(

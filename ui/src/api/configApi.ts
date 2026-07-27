@@ -5,6 +5,10 @@ export function getConfig() {
   return requestJson<GatewayConfig>("/api/config");
 }
 
+export function getEffectiveConfig() {
+  return requestJson<GatewayConfig>("/api/config/effective");
+}
+
 export function writeConfig(config: GatewayConfig) {
   return requestJson<{ status: string; message: string }>("/api/config", {
     method: "POST",

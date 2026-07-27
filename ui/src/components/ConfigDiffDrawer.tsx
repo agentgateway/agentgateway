@@ -1,7 +1,7 @@
 import "../monacoWorkers";
 import { DiffEditor } from "@monaco-editor/react";
 import { FileText, Save } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useId, useState } from "react";
 import { configureConfigYamlMonaco } from "../configMonaco";
 import { cloneConfig } from "../config";
 import {
@@ -85,6 +85,8 @@ export function ConfigDiffDrawer(props: {
   onClose: () => void;
   onSave?: () => void;
 }) {
+  const modelId = useId();
+  const modelPath = `inmemory://config-diff/${encodeURIComponent(props.title)}/${encodeURIComponent(modelId)}`;
   const saveButton = props.onSave ? (
     <ConfigSaveButton
       disabled={props.saving}
@@ -115,8 +117,8 @@ export function ConfigDiffDrawer(props: {
           language="yaml"
           original={props.original}
           modified={props.modified}
-          originalModelPath={`inmemory://config-diff/${encodeURIComponent(props.title)}/original.yaml`}
-          modifiedModelPath={`inmemory://config-diff/${encodeURIComponent(props.title)}/modified.yaml`}
+          originalModelPath={`${modelPath}/original.yaml`}
+          modifiedModelPath={`${modelPath}/modified.yaml`}
           keepCurrentOriginalModel
           keepCurrentModifiedModel
           theme={
@@ -159,6 +161,7 @@ export function ConfigDiffSaveActions(props: {
   saveLabel: string;
   saving?: boolean;
   saveDisabled?: boolean;
+  hybridFileWriteMessage?: string;
   diffDisabled?: boolean;
   onCancel?: () => void;
   onSave: () => void;
@@ -228,6 +231,7 @@ export function ConfigDiffSaveActions(props: {
         <ConfigSaveButton
           disabled={props.saving || props.saveDisabled}
           allowHybridWrite={Boolean(props.resourceDiff)}
+          hybridFileWriteMessage={props.hybridFileWriteMessage}
           onClick={props.onSave}
         >
           <Save size={16} />

@@ -9,9 +9,9 @@ use agent_core::strng;
 pub use agent_llm::tokenizer::{num_tokens_from_messages, preload_tokenizers};
 pub use agent_llm::{
 	AIError, CacheTokenConvention, ChatFormat, InputFormat, LLMInfo, LLMRequest, LLMRequestParams,
-	LLMResponse, PromptCachingConfig, Provider, ProviderState, RequestType, ResponseType, RouteType,
-	SimpleChatCompletionMessage, anthropic, conversion, copilot, custom, gemini,
-	logged_response_parsing, openai, types,
+	LLMResponse, LogContentFields, PromptCachingConfig, Provider, ProviderState, RequestType,
+	ResponseType, RouteType, SimpleChatCompletionMessage, anthropic, conversion, copilot, custom,
+	gemini, logged_response_parsing, openai, types,
 };
 use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
@@ -38,6 +38,7 @@ pub mod cost;
 pub mod policy;
 
 use policy::streaming_guardrails::GuardedSseBody;
+pub use types::{OutputMessage, OutputMessagePart, ToolCall};
 
 use crate::cel::{Executor, LLMContext, RequestSnapshot};
 use crate::proxy::dtrace;
@@ -288,7 +289,7 @@ struct ChatStreamContext {
 	buffer_limit: usize,
 	logger: agent_llm::StreamingUsageGuard,
 	model: String,
-	include_completion_in_log: bool,
+	log_content: LogContentFields,
 	tool_name_map: Option<conversion::bedrock::BedrockToolNameMap>,
 }
 
@@ -304,6 +305,10 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 	&[
 		// Direct passthrough
 		chat(InputFormat::Responses, ChatFormat::OpenAIResponses),
+		// Quirk: normally we prefer direct passthrough. However, for Gemini, we can do a better job of
+		// the conversion than Google's OpenAI compatible endpoint, so we put this first. This will
+		// only actually be used for Vertex + Gemini models.
+		chat(InputFormat::Completions, ChatFormat::VertexGemini),
 		chat(InputFormat::Completions, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Messages, ChatFormat::AnthropicMessages),
 		// Missing: Bedrock --> Bedrock
@@ -348,6 +353,25 @@ fn render_anthropic_messages(req: types::ChatRequest<'_>) -> Result<Vec<u8>, AIE
 		types::ChatRequest::Messages(req) => serde_json::to_vec(req).map_err(AIError::RequestMarshal),
 		types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"responses to messages"
+		))),
+	}
+}
+
+fn render_vertex_gemini(
+	req: types::ChatRequest<'_>,
+	ctx: &ChatRequestContext<'_>,
+) -> Result<Vec<u8>, AIError> {
+	let AIProvider::Vertex(provider) = ctx.provider else {
+		return Err(AIError::UnsupportedConversion(strng::literal!(
+			"expected vertex provider"
+		)));
+	};
+	match req {
+		types::ChatRequest::Completions(req) => {
+			conversion::vertex_gemini::from_completions::translate(req, provider.model.as_deref())
+		},
+		_ => Err(AIError::UnsupportedConversion(strng::literal!(
+			"vertex gemini only supports completions input"
 		))),
 	}
 }
@@ -406,6 +430,7 @@ impl ChatTranslation {
 				InputFormat::Responses => custom::ProviderFormat::Responses,
 				_ => unreachable!("chat translation selected for non-chat input"),
 			},
+			ChatFormat::VertexGemini => custom::ProviderFormat::Completions,
 		}
 	}
 
@@ -422,6 +447,12 @@ impl ChatTranslation {
 			},
 			ChatFormat::AnthropicMessages => render_anthropic_messages(req),
 			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
+			ChatFormat::VertexGemini => {
+				return Ok(RenderedChatRequest {
+					body: render_vertex_gemini(req, ctx)?,
+					provider_state: Some(ProviderState::VertexGemini),
+				});
+			},
 		}?;
 		Ok(RenderedChatRequest {
 			body,
@@ -490,19 +521,32 @@ impl ChatTranslation {
 					self.input
 				))),
 			},
+			ChatFormat::VertexGemini => match self.input {
+				InputFormat::Completions => {
+					conversion::vertex_gemini::to_completions::translate_response(bytes)
+				},
+				_ => Err(AIError::UnsupportedConversion(strng::format!(
+					"from {:?} to {:?}",
+					self.output,
+					self.input
+				))),
+			},
 		}
 	}
 
 	fn stream(&self, resp: Response, ctx: ChatStreamContext) -> Response {
 		match self.output {
 			ChatFormat::OpenAICompletions => match self.input {
-				InputFormat::Completions => conversion::completions::passthrough_stream(
-					ctx.logger,
-					ctx.include_completion_in_log,
-					resp,
-				),
+				InputFormat::Completions => {
+					conversion::completions::passthrough_stream(ctx.logger, ctx.log_content, resp)
+				},
 				InputFormat::Messages => resp.map(|b| {
-					conversion::completions::from_messages::translate_stream(b, ctx.buffer_limit, ctx.logger)
+					conversion::completions::from_messages::translate_stream(
+						b,
+						ctx.buffer_limit,
+						ctx.logger,
+						ctx.log_content,
+					)
 				}),
 				InputFormat::Responses => resp.map(|b| {
 					conversion::openai_compat::to_responses::translate_stream(b, ctx.buffer_limit, ctx.logger)
@@ -516,7 +560,7 @@ impl ChatTranslation {
 						b,
 						ctx.buffer_limit,
 						ctx.logger,
-						ctx.include_completion_in_log,
+						ctx.log_content,
 					)
 				}),
 				_ => resp,
@@ -524,12 +568,7 @@ impl ChatTranslation {
 
 			ChatFormat::AnthropicMessages => match self.input {
 				InputFormat::Messages => resp.map(|b| {
-					conversion::messages::passthrough_stream(
-						b,
-						ctx.buffer_limit,
-						ctx.logger,
-						ctx.include_completion_in_log,
-					)
+					conversion::messages::passthrough_stream(b, ctx.buffer_limit, ctx.logger, ctx.log_content)
 				}),
 				InputFormat::Completions => resp.map(|b| {
 					conversion::messages::from_completions::translate_stream(b, ctx.buffer_limit, ctx.logger)
@@ -562,7 +601,7 @@ impl ChatTranslation {
 							ctx.logger,
 							&ctx.model,
 							&msg,
-							ctx.include_completion_in_log,
+							ctx.log_content,
 							tool_name_map,
 						)
 					})
@@ -581,6 +620,18 @@ impl ChatTranslation {
 						)
 					})
 				},
+				_ => resp,
+			},
+
+			ChatFormat::VertexGemini => match self.input {
+				InputFormat::Completions => resp.map(|b| {
+					conversion::vertex_gemini::to_completions::translate_stream(
+						b,
+						ctx.buffer_limit,
+						strng::new(&ctx.model),
+						ctx.logger,
+					)
+				}),
 				_ => resp,
 			},
 		}
@@ -657,6 +708,11 @@ impl ChatTranslation {
 					InputFormat::Messages => Ok(bytes.clone()),
 					_ => unsupported(),
 				},
+				_ => unsupported(),
+			},
+
+			ChatFormat::VertexGemini => match format {
+				ChatErrorFormat::Google => conversion::completions::translate_google_error(bytes),
 				_ => unsupported(),
 			},
 		}
@@ -797,6 +853,9 @@ impl AIProvider {
 			AIProvider::Vertex(p) if p.is_anthropic_model(request_model) => {
 				vec![ChatFormat::AnthropicMessages]
 			},
+			AIProvider::Vertex(p) if p.is_gemini_model(request_model) => {
+				vec![ChatFormat::VertexGemini, ChatFormat::OpenAICompletions]
+			},
 			AIProvider::Vertex(_) => vec![ChatFormat::OpenAICompletions],
 
 			AIProvider::Custom(p) => p
@@ -827,6 +886,7 @@ impl AIProvider {
 			(_, ChatFormat::BedrockConverse) => ChatErrorFormat::Bedrock,
 			(_, ChatFormat::AnthropicMessages) => ChatErrorFormat::Anthropic,
 			(_, ChatFormat::OpenAICompletions | ChatFormat::OpenAIResponses) => ChatErrorFormat::OpenAI,
+			(_, ChatFormat::VertexGemini) => ChatErrorFormat::Google,
 		}
 	}
 
@@ -1081,9 +1141,13 @@ impl AIProvider {
 			AIProvider::Vertex(provider) => {
 				let request_model = llm_request.map(|l| l.request_model.as_str());
 				let streaming = llm_request.map(|l| l.streaming).unwrap_or(false);
+				let native_gemini = llm_request
+					.and_then(|l| l.provider_state.as_ref())
+					.is_some_and(|s| matches!(s, ProviderState::VertexGemini));
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
-						let path = provider.get_path_for_model(route_type, request_model, streaming);
+						let path =
+							provider.get_path_for_model(route_type, request_model, streaming, native_gemini);
 						let path = Self::with_path_prefix(&path, path_prefix);
 						Self::set_path_and_query(uri, &path)?;
 						Ok(())
@@ -1802,7 +1866,7 @@ impl AIProvider {
 		rate_limit: LLMResponsePolicies,
 		req_snapshot: Option<Arc<RequestSnapshot>>,
 		log: AsyncLog<llm::LLMInfo>,
-		include_completion_in_log: bool,
+		log_content: LogContentFields,
 		model_catalog: Option<&Arc<cost::ModelCatalog>>,
 		resp: Response,
 	) -> Result<Response, AIError> {
@@ -1816,7 +1880,7 @@ impl AIProvider {
 				rate_limit,
 				req_snapshot,
 				log,
-				include_completion_in_log,
+				log_content,
 				model_catalog.cloned(),
 				resp,
 			);
@@ -1843,7 +1907,7 @@ impl AIProvider {
 						rate_limit,
 						req_snapshot,
 						log,
-						include_completion_in_log,
+						log_content,
 						model_catalog,
 						buffered,
 					)
@@ -1860,7 +1924,7 @@ impl AIProvider {
 		rate_limit: LLMResponsePolicies,
 		req_snapshot: Option<Arc<RequestSnapshot>>,
 		log: AsyncLog<llm::LLMInfo>,
-		include_completion_in_log: bool,
+		log_content: LogContentFields,
 		model_catalog: Option<&cost::ModelCatalog>,
 		buffered: BufferedResponse,
 	) -> Result<Response, AIError> {
@@ -1894,7 +1958,7 @@ impl AIProvider {
 				return Ok(dr);
 			}
 
-			let llm_resp = resp.to_llm_response(include_completion_in_log);
+			let llm_resp = resp.to_llm_response(log_content);
 			let body = resp.serialize().map_err(AIError::ResponseParsing)?;
 			(llm_resp, Bytes::copy_from_slice(&body))
 		};
@@ -2101,21 +2165,21 @@ impl AIProvider {
 					headers,
 					&req.request_model,
 				)?;
-				let llm_resp = translated.to_llm_response(false);
+				let llm_resp = translated.to_llm_response(LogContentFields::default());
 				let body = translated.serialize().map_err(AIError::ResponseParsing)?;
 				Ok((llm_resp, Bytes::from(body)))
 			},
 			AIProvider::Vertex(p) if !p.is_anthropic_model(Some(&req.request_model)) => {
 				let translated =
 					conversion::vertex::from_embeddings::translate_response(&bytes, &req.request_model)?;
-				let llm_resp = translated.to_llm_response(false);
+				let llm_resp = translated.to_llm_response(LogContentFields::default());
 				let body = translated.serialize().map_err(AIError::ResponseParsing)?;
 				Ok((llm_resp, Bytes::from(body)))
 			},
 			_ => {
 				let resp: types::embeddings::Response =
 					serde_json::from_slice(&bytes).map_err(logged_response_parsing(&bytes))?;
-				Ok((resp.to_llm_response(false), bytes))
+				Ok((resp.to_llm_response(LogContentFields::default()), bytes))
 			},
 		}
 	}
@@ -2124,20 +2188,20 @@ impl AIProvider {
 		match self {
 			AIProvider::Bedrock(_) => {
 				let translated = conversion::bedrock::from_rerank::translate_response(&bytes)?;
-				let llm_resp = translated.to_llm_response(false);
+				let llm_resp = translated.to_llm_response(LogContentFields::default());
 				let body = translated.serialize().map_err(AIError::ResponseParsing)?;
 				Ok((llm_resp, Bytes::from(body)))
 			},
 			AIProvider::Vertex(_) => {
 				let translated = conversion::vertex::from_rerank::translate_response(&bytes)?;
-				let llm_resp = translated.to_llm_response(false);
+				let llm_resp = translated.to_llm_response(LogContentFields::default());
 				let body = translated.serialize().map_err(AIError::ResponseParsing)?;
 				Ok((llm_resp, Bytes::from(body)))
 			},
 			_ => {
 				let resp =
 					types::rerank::parse_response_lenient(&bytes).map_err(logged_response_parsing(&bytes))?;
-				Ok((resp.to_llm_response(false), bytes))
+				Ok((resp.to_llm_response(LogContentFields::default()), bytes))
 			},
 		}
 	}
@@ -2181,7 +2245,7 @@ impl AIProvider {
 		response_policies: LLMResponsePolicies,
 		req_snapshot: Option<Arc<RequestSnapshot>>,
 		log: AsyncLog<llm::LLMInfo>,
-		include_completion_in_log: bool,
+		log_content: LogContentFields,
 		model_catalog: Option<Arc<cost::ModelCatalog>>,
 		resp: Response,
 	) -> Result<Response, AIError> {
@@ -2273,7 +2337,7 @@ impl AIProvider {
 					buffer_limit: buffer,
 					logger,
 					model: model.to_string(),
-					include_completion_in_log,
+					log_content,
 					tool_name_map: bedrock_tool_name_map,
 				},
 			)
