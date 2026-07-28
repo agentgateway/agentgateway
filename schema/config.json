@@ -668,13 +668,14 @@
           "type": "string"
         },
         "maxConnections": {
-          "description": "Maximum number of connections to open in this database's connection pool. Defaults to 5. Note this pool is separate from the config store's pool (config.storage.mode=hybrid), which is sized independently from the same field when both share the same `url`.",
+          "description": "Maximum number of connections to open in this database's connection pool. Defaults to 5.\nNote this pool is separate from the config store's pool (config.storage.mode=hybrid), which\nis sized independently from the same field when both share the same `url`.",
           "type": [
             "integer",
             "null"
           ],
           "format": "uint32",
-          "minimum": 0
+          "minimum": 0,
+          "default": null
         }
       },
       "additionalProperties": false,

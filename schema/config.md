@@ -34,7 +34,7 @@
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.outputAudio`|string|Cost per 1M output audio tokens. Falls back to the output rate if unset.|
 |`config.database`|object|Primary database used by local runtime features.|
 |`config.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.|
-|`config.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5. Note this pool is separate from the config store's pool (config.storage.mode=hybrid), which is sized independently from the same field when both share the same `url`.|
+|`config.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5.<br>Note this pool is separate from the config store's pool (config.storage.mode=hybrid), which<br>is sized independently from the same field when both share the same `url`.|
 |`config.storage`|object|Controls whether UI-managed configuration is written to the config file or a DB overlay.|
 |`config.storage.mode`|enum|Possible values: `file`, `hybrid`.|
 |`config.caAddress`|string|Address of the Certificate Authority used to issue SPIFFE certificates.|
@@ -82,7 +82,7 @@
 |`config.logging.format`|enum|Log output format: `text` or `json`.<br>Possible values: `text`, `json`, `null`.|
 |`config.logging.database`|object|Log-store database configuration; enables request logging to a database backend.|
 |`config.logging.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.|
-|`config.logging.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5. Note this pool is separate from the config store's pool (config.storage.mode=hybrid), which is sized independently from the same field when both share the same `url`.|
+|`config.logging.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5.<br>Note this pool is separate from the config store's pool (config.storage.mode=hybrid), which<br>is sized independently from the same field when both share the same `url`.|
 |`config.metrics`|object|Metrics configuration, including metric removal and custom fields.|
 |`config.metrics.remove`|[]string|Metric names to exclude from collection.|
 |`config.metrics.fields`|object|Custom fields to add to all metrics.|
