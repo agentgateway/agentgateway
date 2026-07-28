@@ -498,6 +498,10 @@ impl ResponseType for Response {
 			Self::Json(v) => Ok(serde_json::to_vec(v)?),
 		}
 	}
+
+	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(&mut String)) {
+		unimplemented!("visit_text_mut is used for prompt guard; prompt guard is disabled for detect.")
+	}
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]

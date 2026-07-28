@@ -245,6 +245,14 @@ impl ResponseType for Response {
 	fn serialize(&self) -> serde_json::Result<Vec<u8>> {
 		serde_json::to_vec(&self)
 	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		for c in &mut self.choices {
+			if let Some(text) = &mut c.message.content {
+				f(text);
+			}
+		}
+	}
 }
 
 fn extract_output_messages(choices: &[Choice]) -> Option<Vec<OutputMessage>> {

@@ -593,6 +593,18 @@ impl ResponseType for Response {
 	fn serialize(&self) -> serde_json::Result<Vec<u8>> {
 		serde_json::to_vec(&self)
 	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		for o in &mut self.output {
+			if let OutputItem::Message(msg) = o {
+				for c in &mut msg.content {
+					if let Content::OutputText(t) = c {
+						f(&mut t.text);
+					}
+				}
+			}
+		}
+	}
 }
 
 pub mod typed {

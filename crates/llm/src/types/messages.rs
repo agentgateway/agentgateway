@@ -487,6 +487,14 @@ impl ResponseType for Response {
 	fn serialize(&self) -> serde_json::Result<Vec<u8>> {
 		serde_json::to_vec(&self)
 	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		for c in &mut self.content {
+			if let Some(text) = &mut c.text {
+				f(text);
+			}
+		}
+	}
 }
 
 // 'typed' provides a typed accessor
@@ -1202,6 +1210,14 @@ pub mod typed {
 
 		fn serialize(&self) -> serde_json::Result<Vec<u8>> {
 			serde_json::to_vec(&self)
+		}
+
+		fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+			for block in &mut self.content {
+				if let ContentBlock::Text(t) = block {
+					f(&mut t.text);
+				}
+			}
 		}
 	}
 }
