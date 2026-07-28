@@ -771,7 +771,7 @@ pub mod from_messages {
 
 	/// Convert an Anthropic image source JSON value into an OpenAI-compatible URL string.
 	/// Base64 sources become `data:` URIs; URL sources pass through directly.
-	fn anthropic_source_to_url(source: &serde_json::Value) -> Option<String> {
+	pub(crate) fn anthropic_source_to_url(source: &serde_json::Value) -> Option<String> {
 		let source_type = source.get("type")?.as_str()?;
 		match source_type {
 			"base64" => {

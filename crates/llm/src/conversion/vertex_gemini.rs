@@ -100,6 +100,115 @@ pub fn passthrough_stream(
 	})
 }
 
+const THINKING_BUDGET_LOW: i32 = 1024;
+const THINKING_BUDGET_MEDIUM: i32 = 2048;
+const THINKING_BUDGET_HIGH: i32 = 4096;
+
+fn apply_rest_extras(
+	rest: &serde_json::Value,
+) -> (
+	Option<String>,
+	Vec<vg::SafetySetting>,
+	Option<serde_json::Map<String, serde_json::Value>>,
+) {
+	use serde::Deserialize as _;
+
+	let cached_content = rest
+		.get("cachedContent")
+		.or_else(|| rest.get("cached_content"))
+		.and_then(serde_json::Value::as_str)
+		.map(str::to_string);
+
+	let safety_settings = match rest
+		.get("safetySettings")
+		.or_else(|| rest.get("safety_settings"))
+	{
+		Some(v) => Vec::<vg::SafetySetting>::deserialize(v).unwrap_or_else(|e| {
+			tracing::warn!(error = %e, "ignoring malformed safetySettings");
+			Vec::new()
+		}),
+		None => Vec::new(),
+	};
+
+	let labels = rest.get("labels").and_then(|v| v.as_object().cloned());
+
+	(cached_content, safety_settings, labels)
+}
+
+fn drop_if_cached(
+	cached_content: &Option<String>,
+	system_instruction: Option<vg::Content>,
+	tools: Vec<vg::Tool>,
+	tool_config: Option<vg::ToolConfig>,
+) -> (Option<vg::Content>, Vec<vg::Tool>, Option<vg::ToolConfig>) {
+	if cached_content.is_none() {
+		return (system_instruction, tools, tool_config);
+	}
+	let dropped: Vec<&str> = [
+		("systemInstruction", system_instruction.is_some()),
+		("tools", !tools.is_empty()),
+		("toolConfig", tool_config.is_some()),
+	]
+	.into_iter()
+	.filter_map(|(name, present)| present.then_some(name))
+	.collect();
+	if !dropped.is_empty() {
+		tracing::warn!(dropped = ?dropped, "cachedContent is set; dropped cache-incompatible fields");
+	}
+	(None, Vec::new(), None)
+}
+
+fn reorder_function_responses(
+	contents: &mut [vg::Content],
+	call_meta: &std::collections::HashMap<String, (String, usize)>,
+) {
+	for content in contents.iter_mut() {
+		let mut ordered: Vec<vg::Part> = content
+			.parts
+			.iter()
+			.filter(|p| matches!(p, vg::Part::FunctionResponse(_)))
+			.cloned()
+			.collect();
+		if ordered.is_empty() {
+			continue;
+		}
+		ordered.sort_by_key(|p| match p {
+			vg::Part::FunctionResponse(fr) => fr
+				.function_response
+				.id
+				.as_deref()
+				.and_then(|id| call_meta.get(id))
+				.map(|(_, idx)| *idx)
+				.unwrap_or(usize::MAX),
+			_ => usize::MAX,
+		});
+		for p in &mut ordered {
+			if let vg::Part::FunctionResponse(fr) = p {
+				fr.function_response.id = None;
+			}
+		}
+		let mut ordered = ordered.into_iter();
+		for p in &mut content.parts {
+			if matches!(p, vg::Part::FunctionResponse(_)) {
+				*p = ordered
+					.next()
+					.expect("one reordered response per functionResponse slot");
+			}
+		}
+	}
+}
+
+fn wrap_tool_declarations(decls: Vec<vg::FunctionDeclaration>) -> Vec<vg::Tool> {
+	if decls.is_empty() {
+		Vec::new()
+	} else {
+		vec![vg::Tool {
+			function_declarations: decls,
+			rest: Default::default(),
+		}]
+	}
+}
+
 pub mod from_completions {
 	use serde::Deserialize;
 	use serde_json::{Value, json};
@@ -423,7 +532,7 @@ pub mod from_completions {
 		})
 	}
 
-	fn image_part(image_url: Option<&Value>) -> Result<vg::Part, AIError> {
+	pub(super) fn image_part(image_url: Option<&Value>) -> Result<vg::Part, AIError> {
 		let url = image_url
 			.and_then(|u| u.get("url"))
 			.and_then(Value::as_str)
@@ -521,7 +630,7 @@ pub mod from_completions {
 		)))
 	}
 
-	fn text_part(text: &str) -> vg::Part {
+	pub(super) fn text_part(text: &str) -> vg::Part {
 		vg::Part::Text(vg::TextPart {
 			text: text.to_string(),
 			thought: None,
@@ -571,7 +680,7 @@ pub mod from_completions {
 	/// Function responses must remain in their own user entry: Gemini 3 rejects a
 	/// functionResponse with sibling parts. Other user entries retain a text filler when
 	/// necessary (for example, image-only turns).
-	fn push_content(contents: &mut Vec<vg::Content>, role: &str, mut parts: Vec<vg::Part>) {
+	pub(super) fn push_content(contents: &mut Vec<vg::Content>, role: &str, mut parts: Vec<vg::Part>) {
 		if parts.is_empty() {
 			return;
 		}
@@ -1057,7 +1166,7 @@ pub mod from_completions {
 
 	/// Gemini 3.x takes a `thinkingLevel` string; Gemini 2.5 takes an integer
 	/// `thinkingBudget`. Detected by model name.
-	fn uses_thinking_levels(model: &str) -> bool {
+	pub(super) fn uses_thinking_levels(model: &str) -> bool {
 		model.contains("gemini-3")
 	}
 
@@ -1102,11 +1211,478 @@ pub mod from_completions {
 	}
 }
 
+pub mod from_messages {
+	use std::collections::HashMap;
+
+	use serde_json::{Value, json};
+
+	use super::from_completions::{image_part, push_content, text_part, uses_thinking_levels};
+	use super::*;
+	use crate::conversion::completions::from_messages::anthropic_source_to_url;
+
+	pub fn translate(
+		req: &types::messages::Request,
+		configured_model: Option<&str>,
+	) -> Result<Vec<u8>, AIError> {
+		let typed: types::messages::typed::Request =
+			crate::json::convert(req).map_err(AIError::RequestParsing)?;
+		let out = build_request(&typed, configured_model, &req.rest)?;
+		serde_json::to_vec(&out).map_err(AIError::RequestMarshal)
+	}
+
+	fn build_request(
+		req: &types::messages::typed::Request,
+		configured_model: Option<&str>,
+		rest: &Value,
+	) -> Result<vg::GenerateContentRequest, AIError> {
+		use types::messages::typed as mt;
+
+		let model = configured_model.unwrap_or(&req.model).to_string();
+		let contents = messages_to_contents(&req.messages)?;
+
+		let contents = if contents.is_empty() {
+			vec![vg::Content {
+				role: Some("user".to_string()),
+				parts: vec![text_part(" ")],
+				rest: Value::Null,
+			}]
+		} else {
+			contents
+		};
+
+		use types::messages::typed::{ContentBlock, Role};
+		let mut system_parts: Vec<&str> = Vec::new();
+		if let Some(sys) = &req.system {
+			match sys {
+				mt::SystemPrompt::Text(t) if !t.is_empty() => system_parts.push(t),
+				mt::SystemPrompt::Blocks(blocks) => {
+					system_parts.extend(blocks.iter().filter_map(|b| match b {
+						mt::SystemContentBlock::Text { text, .. } if !text.is_empty() => Some(text.as_str()),
+						_ => None,
+					}))
+				},
+				_ => {},
+			}
+		}
+		system_parts.extend(
+			req
+				.messages
+				.iter()
+				.filter(|m| m.role == Role::System)
+				.flat_map(|m| m.content.iter())
+				.filter_map(|b| {
+					if let ContentBlock::Text(t) = b {
+						Some(t.text.as_str())
+					} else {
+						None
+					}
+				})
+				.filter(|s| !s.is_empty()),
+		);
+		let system_instruction = (!system_parts.is_empty()).then(|| vg::Content {
+			role: None,
+			parts: vec![text_part(&system_parts.join("\n"))],
+			rest: Value::Null,
+		});
+
+		let tools = build_tools(req);
+		let tool_config = build_tool_config(req);
+		let generation_config = build_generation_config(req, &model);
+
+		let (cached_content, safety_settings, labels) = super::apply_rest_extras(rest);
+		let (system_instruction, tools, tool_config) =
+			super::drop_if_cached(&cached_content, system_instruction, tools, tool_config);
+
+		Ok(vg::GenerateContentRequest {
+			contents,
+			system_instruction,
+			tools,
+			tool_config,
+			generation_config,
+			safety_settings,
+			cached_content,
+			labels,
+			rest: Default::default(),
+		})
+	}
+
+	fn messages_to_contents(
+		messages: &[types::messages::typed::Message],
+	) -> Result<Vec<vg::Content>, AIError> {
+		use types::messages::typed::{ContentBlock, Role};
+
+		// Prepass: build base_id -> (name, call_index) from assistant ToolUse blocks.
+		// The base id is after splitting off any embedded __thought__ signature suffix.
+		let call_meta: HashMap<String, (String, usize)> = messages
+			.iter()
+			.filter(|m| m.role == Role::Assistant)
+			.flat_map(|m| {
+				m.content.iter().filter_map(|b| {
+					if let ContentBlock::ToolUse { id, name, .. } = b {
+						Some((id, name))
+					} else {
+						None
+					}
+				})
+			})
+			.enumerate()
+			.map(|(idx, (id, name))| (split_tool_call_id(id).0.to_string(), (name.clone(), idx)))
+			.collect();
+
+		let mut contents: Vec<vg::Content> = Vec::new();
+
+		for m in messages {
+			match m.role {
+				Role::User => {
+					let mut parts: Vec<vg::Part> = Vec::new();
+					for block in &m.content {
+						match block {
+							ContentBlock::Text(t) => parts.push(text_part(&t.text)),
+							ContentBlock::Image(img) => {
+								if let Some(url) = anthropic_source_to_url(&img.source) {
+									parts.push(
+										image_part(Some(&json!({ "url": url }))).map_err(|e| match e {
+											AIError::InvalidResponse(m) => AIError::BadRequest(m),
+											other => other,
+										})?,
+									);
+								}
+							},
+							ContentBlock::ToolResult {
+								tool_use_id,
+								content,
+								is_error,
+								..
+							} => {
+								let base_id = split_tool_call_id(tool_use_id).0.to_string();
+								// T3.3: fail loudly on an unknown tool_use_id. Sending the raw id
+								// as `functionResponse.name` matches no declared function and
+								// causes Gemini to silently ignore the result.
+								let Some((name, _)) = call_meta.get(&base_id) else {
+									return Err(AIError::BadRequest(strng::new(format!(
+										"tool_result references unknown tool_use_id '{tool_use_id}'; \
+										 all assistant turns containing the matching tool_use block \
+										 must be included in the request"
+									))));
+								};
+								let name = name.clone();
+								let text = tool_result_text(content)?;
+								let mut response = json!({ "content": text });
+								if *is_error == Some(true) {
+									response["is_error"] = json!(true);
+								}
+								// Carry base_id as a transient correlation key; stripped by
+								// reorder_function_responses after reordering.
+								parts.push(vg::Part::FunctionResponse(vg::FunctionResponsePart {
+									function_response: vg::FunctionResponse {
+										name,
+										id: Some(base_id),
+										response,
+										rest: Value::Null,
+									},
+									rest: Value::Null,
+								}));
+							},
+							_ => {},
+						}
+					}
+					push_content(&mut contents, "user", parts);
+				},
+				Role::Assistant => {
+					let mut parts: Vec<vg::Part> = Vec::new();
+					for block in &m.content {
+						match block {
+							ContentBlock::Text(t) if !t.text.is_empty() => {
+								parts.push(text_part(&t.text));
+							},
+							ContentBlock::Thinking {
+								thinking,
+								signature,
+							} => {
+								parts.push(vg::Part::Text(vg::TextPart {
+									text: thinking.clone(),
+									thought: Some(true),
+									thought_signature: if signature.is_empty() {
+										None
+									} else {
+										Some(signature.clone())
+									},
+									rest: Value::Null,
+								}));
+							},
+							ContentBlock::ToolUse {
+								id, name, input, ..
+							} => {
+								let (_, thought_signature) = split_tool_call_id(id);
+								// Invariant: Vertex rejects `id` on functionCall parts.
+								parts.push(vg::Part::FunctionCall(vg::FunctionCallPart {
+									function_call: vg::FunctionCall {
+										name: name.clone(),
+										id: None,
+										args: input.clone(),
+										rest: Value::Null,
+									},
+									thought: None,
+									thought_signature: thought_signature.map(str::to_string),
+									rest: Value::Null,
+								}));
+							},
+							_ => {},
+						}
+					}
+					push_content(&mut contents, "model", parts);
+				},
+				Role::System => {
+					// Collected into systemInstruction in build_request; skip here.
+				},
+			}
+		}
+
+		// Vertex correlates functionResponse to functionCall positionally (no id), so responses must
+		// follow the call order even when the client returns them out of order.
+		super::reorder_function_responses(&mut contents, &call_meta);
+
+		Ok(contents)
+	}
+
+	fn tool_result_text(
+		content: &types::messages::typed::ToolResultContent,
+	) -> Result<String, AIError> {
+		use types::messages::typed::{ToolResultContent, ToolResultContentPart};
+		match content {
+			ToolResultContent::Text(s) => Ok(s.clone()),
+			ToolResultContent::Array(parts) => {
+				if parts
+					.iter()
+					.any(|p| !matches!(p, ToolResultContentPart::Text { .. }))
+				{
+					return Err(AIError::BadRequest(strng::new(
+						"tool_result with image or document content is not supported on this provider",
+					)));
+				}
+				Ok(
+					parts
+						.iter()
+						.filter_map(|p| match p {
+							ToolResultContentPart::Text { text, .. } => Some(text.as_str()),
+							_ => None,
+						})
+						.collect::<String>(),
+				)
+			},
+		}
+	}
+
+	fn build_tools(req: &types::messages::typed::Request) -> Vec<vg::Tool> {
+		let Some(tools) = &req.tools else {
+			return Vec::new();
+		};
+		// Anthropic server tools execute upstream of the provider; Gemini cannot run them, so
+		// drop them rather than fail the request (same policy as conversion::bedrock).
+		let decls: Vec<vg::FunctionDeclaration> = tools
+			.iter()
+			.filter_map(|t| match t {
+				types::messages::typed::Tool::Custom(t) => Some(vg::FunctionDeclaration {
+					name: t.name.clone(),
+					description: t.description.clone(),
+					parameters: Some(super::from_completions::normalize_gemini_schema(
+						&t.input_schema,
+					)),
+					rest: Default::default(),
+				}),
+				types::messages::typed::Tool::Server(_) => None,
+			})
+			.collect();
+		super::wrap_tool_declarations(decls)
+	}
+
+	fn build_tool_config(req: &types::messages::typed::Request) -> Option<vg::ToolConfig> {
+		use types::messages::typed::ToolChoice;
+		let tc = req.tool_choice.as_ref()?;
+		let (disable_parallel, cfg) = match tc {
+			ToolChoice::None {} => (
+				None,
+				vg::FunctionCallingConfig {
+					mode: Some("NONE".into()),
+					..Default::default()
+				},
+			),
+			ToolChoice::Auto {
+				disable_parallel_tool_use,
+			} => (
+				disable_parallel_tool_use.as_ref(),
+				vg::FunctionCallingConfig {
+					mode: Some("AUTO".into()),
+					..Default::default()
+				},
+			),
+			ToolChoice::Any {
+				disable_parallel_tool_use,
+			} => (
+				disable_parallel_tool_use.as_ref(),
+				vg::FunctionCallingConfig {
+					mode: Some("ANY".into()),
+					..Default::default()
+				},
+			),
+			ToolChoice::Tool {
+				name,
+				disable_parallel_tool_use,
+			} => (
+				disable_parallel_tool_use.as_ref(),
+				vg::FunctionCallingConfig {
+					mode: Some("ANY".into()),
+					allowed_function_names: vec![name.clone()],
+					rest: Default::default(),
+				},
+			),
+		};
+		if disable_parallel.copied().unwrap_or(false) {
+			tracing::warn!("disable_parallel_tool_use is not supported on Vertex Gemini; ignored");
+		}
+		Some(vg::ToolConfig {
+			function_calling_config: Some(cfg),
+			rest: Default::default(),
+		})
+	}
+
+	fn build_generation_config(
+		req: &types::messages::typed::Request,
+		model: &str,
+	) -> Option<vg::GenerationConfig> {
+		use types::messages::typed as mt;
+
+		let (response_mime_type, response_schema) = req
+			.output_config
+			.as_ref()
+			.and_then(|oc| oc.format.as_ref())
+			.map(|fmt| match fmt {
+				mt::OutputFormat::JsonSchema { schema } => (
+					Some("application/json".to_string()),
+					Some(super::from_completions::normalize_gemini_schema(schema)),
+				),
+			})
+			.unwrap_or((None, None));
+
+		let thinking_config = build_thinking_config(req, model);
+
+		let cfg = vg::GenerationConfig {
+			temperature: req.temperature,
+			top_p: req.top_p,
+			top_k: req.top_k.map(|v| v as u32),
+			frequency_penalty: None,
+			presence_penalty: None,
+			max_output_tokens: Some(u32::try_from(req.max_tokens).unwrap_or(u32::MAX)),
+			stop_sequences: req.stop_sequences.clone(),
+			candidate_count: None,
+			seed: None,
+			response_mime_type,
+			response_schema,
+			thinking_config,
+			rest: Default::default(),
+		};
+
+		if cfg == vg::GenerationConfig::default() {
+			None
+		} else {
+			Some(cfg)
+		}
+	}
+
+	fn build_thinking_config(
+		req: &types::messages::typed::Request,
+		model: &str,
+	) -> Option<vg::ThinkingConfig> {
+		use types::messages::typed as mt;
+
+		// output_config.effort takes precedence when present.
+		if let Some(effort) = req.output_config.as_ref().and_then(|oc| oc.effort) {
+			return Some(effort_to_thinking_config(effort, model));
+		}
+
+		match req.thinking.as_ref()? {
+			mt::ThinkingInput::Disabled {} => None,
+			mt::ThinkingInput::Adaptive {} => {
+				if uses_thinking_levels(model) {
+					// Gemini 3: omit thinkingConfig; model adapts on its own.
+					None
+				} else {
+					// Gemini 2.5: -1 signals dynamic budget.
+					Some(vg::ThinkingConfig {
+						thinking_level: None,
+						thinking_budget: Some(-1),
+						include_thoughts: Some(true),
+						rest: Default::default(),
+					})
+				}
+			},
+			mt::ThinkingInput::Enabled { budget_tokens } => {
+				if uses_thinking_levels(model) {
+					let level = if *budget_tokens <= THINKING_BUDGET_LOW as u64 {
+						"low"
+					} else if *budget_tokens <= THINKING_BUDGET_MEDIUM as u64 {
+						"medium"
+					} else {
+						"high"
+					};
+					Some(vg::ThinkingConfig {
+						thinking_level: Some(level.to_string()),
+						thinking_budget: None,
+						include_thoughts: Some(true),
+						rest: Default::default(),
+					})
+				} else {
+					Some(vg::ThinkingConfig {
+						thinking_level: None,
+						thinking_budget: Some(i32::try_from(*budget_tokens).unwrap_or(i32::MAX)),
+						include_thoughts: Some(true),
+						rest: Default::default(),
+					})
+				}
+			},
+		}
+	}
+
+	fn effort_to_thinking_config(
+		effort: types::messages::typed::ThinkingEffort,
+		model: &str,
+	) -> vg::ThinkingConfig {
+		use types::messages::typed::ThinkingEffort;
+		if uses_thinking_levels(model) {
+			let level = match effort {
+				ThinkingEffort::Low => "low",
+				ThinkingEffort::Medium => "medium",
+				ThinkingEffort::High | ThinkingEffort::Xhigh | ThinkingEffort::Max => "high",
+			};
+			vg::ThinkingConfig {
+				thinking_level: Some(level.to_string()),
+				thinking_budget: None,
+				include_thoughts: Some(true),
+				rest: Default::default(),
+			}
+		} else {
+			let budget = match effort {
+				ThinkingEffort::Low => THINKING_BUDGET_LOW,
+				ThinkingEffort::Medium => THINKING_BUDGET_MEDIUM,
+				ThinkingEffort::High | ThinkingEffort::Xhigh | ThinkingEffort::Max => THINKING_BUDGET_HIGH,
+			};
+			vg::ThinkingConfig {
+				thinking_level: None,
+				thinking_budget: Some(budget),
+				include_thoughts: Some(true),
+				rest: Default::default(),
+			}
+		}
+	}
+}
+
 pub mod to_completions {
 	use std::collections::HashMap;
 	use std::time::Instant;
 
 	use agent_http::Body;
+	use futures_util::StreamExt;
+	use futures_util::stream::{self, BoxStream};
 	use serde_json::Value;
 
 	use super::*;
@@ -1126,29 +1702,37 @@ pub mod to_completions {
 	}
 
 	#[derive(Default)]
-	struct DecodedParts<'a> {
-		content: String,
-		reasoning: String,
-		calls: Vec<DecodedCall<'a>>,
+	pub(super) struct DecodedParts<'a> {
+		pub(super) content: String,
+		pub(super) reasoning: String,
+		/// `thoughtSignature` from a reasoning-only turn. Gemini 3 attaches it to the thought
+		/// part rather than a functionCall, and the Messages `thinking` block must echo it back.
+		pub(super) reasoning_signature: Option<&'a str>,
+		pub(super) calls: Vec<DecodedCall<'a>>,
 	}
 
 	/// Borrows the function-call fields from the source content; the callers own the single
 	/// `String`/`Value` allocation the typed message requires, so the decode itself clones nothing.
-	struct DecodedCall<'a> {
-		id: Option<&'a str>,
-		name: &'a str,
-		args: &'a Value,
-		thought_signature: Option<&'a str>,
+	pub(super) struct DecodedCall<'a> {
+		pub(super) id: Option<&'a str>,
+		pub(super) name: &'a str,
+		pub(super) args: &'a Value,
+		pub(super) thought_signature: Option<&'a str>,
 	}
 
-	fn decode_parts<'a>(content: Option<&'a vg::Content>) -> DecodedParts<'a> {
+	pub(super) fn decode_parts<'a>(content: Option<&'a vg::Content>) -> DecodedParts<'a> {
 		let mut out = DecodedParts::default();
 		let Some(content) = content else {
 			return out;
 		};
 		for part in &content.parts {
 			match part {
-				vg::Part::Text(t) if t.thought == Some(true) => out.reasoning.push_str(&t.text),
+				vg::Part::Text(t) if t.thought == Some(true) => {
+					out.reasoning.push_str(&t.text);
+					if let Some(sig) = t.thought_signature.as_deref() {
+						out.reasoning_signature = Some(sig);
+					}
+				},
 				vg::Part::Text(t) => out.content.push_str(&t.text),
 				vg::Part::FunctionCall(fc) => out.calls.push(DecodedCall {
 					id: fc.function_call.id.as_deref(),
@@ -1162,7 +1746,7 @@ pub mod to_completions {
 		out
 	}
 
-	fn encode_args(args: &Value) -> String {
+	pub(super) fn encode_args(args: &Value) -> String {
 		serde_json::to_string(args).unwrap_or_else(|_| "{}".to_string())
 	}
 
@@ -1313,7 +1897,7 @@ pub mod to_completions {
 		}
 	}
 
-	fn finish_with_tool_override(
+	pub(super) fn finish_with_tool_override(
 		reason: Option<&str>,
 		saw_tool_call: bool,
 	) -> completions::FinishReason {
@@ -1616,5 +2200,549 @@ pub mod to_completions {
 			cache_read_input_tokens: None,
 			cache_creation_input_tokens: None,
 		}
+	}
+
+	pub(super) fn append_done_on_close<S>(stream: S) -> Body
+	where
+		S: futures_core::Stream<Item = Result<Bytes, axum_core::Error>> + Send + 'static,
+	{
+		let done = crate::parse::encode_sse_event("", Bytes::from_static(b"[DONE]"));
+		let stream = stream::unfold(
+			(Some(stream.boxed()), Some(done)),
+			|(stream, done): (
+				Option<BoxStream<'static, Result<Bytes, axum_core::Error>>>,
+				Option<Bytes>,
+			)| async move {
+				let mut stream = stream?;
+				match stream.next().await {
+					Some(Ok(chunk)) => Some((Ok(chunk), (Some(stream), done))),
+					Some(Err(err)) => Some((Err(err), (None, None))),
+					None => done.map(|done| (Ok(done), (None, None))),
+				}
+			},
+		);
+		Body::from_stream(stream)
+	}
+}
+
+
+pub mod to_messages {
+	use std::time::Instant;
+
+	use agent_core::strng;
+	use axum_core::body::Body;
+	use bytes::Bytes;
+
+	use super::to_completions::decode_parts;
+	use super::*;
+	use crate::types::messages::typed as messages;
+	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, parse, types};
+
+	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
+		let resp: vg::GenerateContentResponse =
+			serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
+		let typed = build_response(&resp);
+		let inner =
+			json::convert::<_, types::messages::Response>(&typed).map_err(AIError::ResponseParsing)?;
+		Ok(Box::new(inner))
+	}
+
+	fn build_response(resp: &vg::GenerateContentResponse) -> messages::MessagesResponse {
+		let model = resp.model_version.clone().unwrap_or_default();
+		let id = resp
+			.response_id
+			.clone()
+			.unwrap_or_else(|| format!("msg-vertex-{}", chrono::Utc::now().timestamp_millis()));
+
+		let (content, stop_reason) = if resp.candidates.is_empty() {
+			let blocked = resp
+				.prompt_feedback
+				.as_ref()
+				.and_then(|pf| pf.block_reason.as_ref())
+				.is_some();
+			let reason = if blocked {
+				messages::StopReason::Refusal
+			} else {
+				messages::StopReason::EndTurn
+			};
+			(vec![], Some(reason))
+		} else {
+			let cand = &resp.candidates[0];
+			let decoded = decode_parts(cand.content.as_ref());
+			let has_calls = !decoded.calls.is_empty();
+
+			let finish =
+				to_completions::finish_with_tool_override(cand.finish_reason.as_deref(), has_calls);
+			let stop_reason = crate::conversion::messages::finish_reason_to_stop_reason(finish);
+
+			let seed = id.as_str();
+			let mut blocks: Vec<messages::ContentBlock> = Vec::new();
+
+			// Block emission order: Thinking → Text → ToolUse
+			if !decoded.reasoning.is_empty() {
+				blocks.push(messages::ContentBlock::Thinking {
+					thinking: decoded.reasoning,
+					signature: decoded.reasoning_signature.unwrap_or("").to_string(),
+				});
+			}
+			if !decoded.content.is_empty() {
+				blocks.push(messages::ContentBlock::Text(messages::ContentTextBlock {
+					text: decoded.content,
+					citations: None,
+					cache_control: None,
+				}));
+			}
+			blocks.extend(decoded.calls.iter().enumerate().map(|(idx, call)| {
+				let base_id = call
+					.id
+					.map(str::to_string)
+					.unwrap_or_else(|| format!("toolu_{seed}_{idx}"));
+				let id = join_tool_call_id(base_id, call.thought_signature);
+				messages::ContentBlock::ToolUse {
+					id,
+					name: call.name.to_string(),
+					input: if call.args.is_null() {
+						serde_json::Value::Object(Default::default())
+					} else {
+						call.args.clone()
+					},
+					cache_control: None,
+				}
+			}));
+
+			(blocks, Some(stop_reason))
+		};
+
+		messages::MessagesResponse {
+			id,
+			r#type: "message".to_string(),
+			role: messages::Role::Assistant,
+			content,
+			model,
+			stop_reason,
+			stop_sequence: None,
+			usage: build_usage_messages(resp.usage_metadata.as_ref()),
+			input_audio_tokens: None,
+			output_audio_tokens: None,
+		}
+	}
+
+	fn build_usage_messages(um: Option<&vg::UsageMetadata>) -> messages::Usage {
+		let Some(um) = um else {
+			return messages::Usage {
+				input_tokens: 0,
+				output_tokens: 0,
+				cache_creation_input_tokens: None,
+				cache_read_input_tokens: None,
+				service_tier: None,
+			};
+		};
+		let prompt = um.prompt_token_count.unwrap_or(0) as usize;
+		let cached = um.cached_content_token_count.unwrap_or(0) as usize;
+		let completion = um.candidates_token_count.unwrap_or(0) as usize;
+		messages::Usage {
+			input_tokens: prompt.saturating_sub(cached),
+			output_tokens: completion,
+			cache_creation_input_tokens: None,
+			cache_read_input_tokens: (cached > 0).then_some(cached),
+			service_tier: None,
+		}
+	}
+
+	/// Which kind of content block (if any) is currently open in the stream.
+	#[derive(Default)]
+	enum OpenBlock {
+		#[default]
+		None,
+		Text(usize),
+		Thinking(usize),
+	}
+
+	pub(super) struct StreamState {
+		stream_id: Option<String>,
+		model_version: String,
+		message_started: bool,
+		message_stop_sent: bool,
+		block_index: usize,
+		open_block: OpenBlock,
+		saw_tool_call: bool,
+		tool_call_index: u32,
+		saw_token: bool,
+		// Accumulated for flush_message_end; populated when finish_reason arrives.
+		pending_stop_reason: Option<messages::StopReason>,
+		pending_input_tokens: usize,
+		pending_output_tokens: usize,
+		pending_cache_read: Option<usize>,
+	}
+
+	impl StreamState {
+		pub(super) fn new() -> Self {
+			Self {
+				stream_id: None,
+				model_version: String::new(),
+				message_started: false,
+				message_stop_sent: false,
+				block_index: 0,
+				open_block: OpenBlock::None,
+				saw_tool_call: false,
+				tool_call_index: 0,
+				saw_token: false,
+				pending_stop_reason: None,
+				pending_input_tokens: 0,
+				pending_output_tokens: 0,
+				pending_cache_read: None,
+			}
+		}
+
+		fn record_first_token(&mut self, log: &StreamingUsageGuard) {
+			if !self.saw_token {
+				self.saw_token = true;
+				log.update(|r| r.response.first_token = Some(Instant::now()));
+			}
+		}
+
+		/// Emit `message_delta` + `message_stop` exactly once.
+		///
+		/// If called from the data handler (finish_reason present), `force` is false and the
+		/// stop_reason was already stored in `self.pending_stop_reason`.  If called from the
+		/// Done handler (stream closed cleanly but no finishReason arrived), `force` is true
+		/// and we fall back to `EndTurn` so the client always receives a well-terminated message.
+		fn flush_message_end(
+			&mut self,
+			force: bool,
+			out: &mut Vec<(&'static str, messages::MessagesStreamEvent)>,
+		) {
+			if self.message_stop_sent {
+				return;
+			}
+			if !self.message_started {
+				return;
+			}
+			let stop_reason = self.pending_stop_reason.take().or(if force {
+				Some(messages::StopReason::EndTurn)
+			} else {
+				None
+			});
+			let Some(stop_reason) = stop_reason else {
+				return;
+			};
+			out.push(
+				messages::MessagesStreamEvent::MessageDelta {
+					delta: messages::MessageDelta {
+						stop_reason: Some(stop_reason),
+						stop_sequence: None,
+					},
+					usage: messages::MessageDeltaUsage {
+						input_tokens: Some(self.pending_input_tokens),
+						output_tokens: Some(self.pending_output_tokens),
+						cache_creation_input_tokens: None,
+						cache_read_input_tokens: self.pending_cache_read,
+					},
+				}
+				.into_sse_tuple(),
+			);
+			out.push(messages::MessagesStreamEvent::MessageStop.into_sse_tuple());
+			self.message_stop_sent = true;
+		}
+
+		/// Emit a `content_block_stop` for the currently open block, and return the index.
+		fn close_open_block(&mut self, out: &mut Vec<(&'static str, messages::MessagesStreamEvent)>) {
+			let idx = match self.open_block {
+				OpenBlock::None => return,
+				OpenBlock::Text(i) | OpenBlock::Thinking(i) => i,
+			};
+			out.push(messages::MessagesStreamEvent::ContentBlockStop { index: idx }.into_sse_tuple());
+			self.open_block = OpenBlock::None;
+			self.block_index += 1;
+		}
+
+		pub(super) fn translate(
+			&mut self,
+			chunk: &vg::GenerateContentResponse,
+			log: &StreamingUsageGuard,
+		) -> Vec<(&'static str, messages::MessagesStreamEvent)> {
+			let mut out: Vec<(&'static str, messages::MessagesStreamEvent)> = Vec::new();
+
+			let id = self
+				.stream_id
+				.get_or_insert_with(|| {
+					chunk
+						.response_id
+						.clone()
+						.unwrap_or_else(|| format!("msg-vtx-{}", chrono::Utc::now().timestamp_millis()))
+				})
+				.clone();
+			if self.model_version.is_empty()
+				&& let Some(m) = &chunk.model_version
+			{
+				self.model_version = m.clone();
+			}
+
+			if chunk.usage_metadata.is_some() || chunk.model_version.is_some() {
+				log.update(|r| {
+					if let Some(um) = &chunk.usage_metadata {
+						let (prompt, completion, total) = um.counts();
+						r.response.input_tokens = Some(prompt);
+						r.response.output_tokens = Some(completion);
+						r.response.total_tokens = Some(total);
+						r.response.cached_input_tokens = um.cached_content_token_count;
+						r.response.reasoning_tokens = um.thoughts_token_count;
+					}
+					if let Some(m) = &chunk.model_version
+						&& r.response.provider_model.is_none()
+					{
+						r.response.provider_model = Some(strng::new(m));
+					}
+				});
+			}
+
+			// Emit message_start on the first chunk that has any candidate or usage.
+			if !self.message_started {
+				self.message_started = true;
+				// Gemini only sends usageMetadata on the final streaming chunk, so
+				// input_tokens is always 0 here. The correct count arrives later via
+				// flush_message_end, which emits it in message_delta.usage.input_tokens.
+				let mut usage = build_usage_messages(chunk.usage_metadata.as_ref());
+				usage.output_tokens = 0;
+				let stub = messages::MessagesResponse {
+					id: id.clone(),
+					r#type: "message".to_string(),
+					role: messages::Role::Assistant,
+					content: vec![],
+					model: self.model_version.clone(),
+					stop_reason: None,
+					stop_sequence: None,
+					usage,
+					input_audio_tokens: None,
+					output_audio_tokens: None,
+				};
+				out.push(messages::MessagesStreamEvent::MessageStart { message: stub }.into_sse_tuple());
+			}
+
+			let cand = chunk.candidates.first();
+
+			// Emit per-part deltas.
+			if let Some(content) = cand.and_then(|c| c.content.as_ref()) {
+				for part in &content.parts {
+					match part {
+						vg::Part::Text(t) if t.thought == Some(true) => {
+							self.record_first_token(log);
+							// Close any open text block before starting/continuing a thinking block.
+							if matches!(self.open_block, OpenBlock::Text(_)) {
+								self.close_open_block(&mut out);
+							}
+							if matches!(self.open_block, OpenBlock::None) {
+								let idx = self.block_index;
+								out.push(
+									messages::MessagesStreamEvent::ContentBlockStart {
+										index: idx,
+										content_block: messages::ContentBlock::Thinking {
+											thinking: String::new(),
+											signature: String::new(),
+										},
+									}
+									.into_sse_tuple(),
+								);
+								self.open_block = OpenBlock::Thinking(idx);
+							}
+							let idx = match self.open_block {
+								OpenBlock::Thinking(i) => i,
+								_ => unreachable!(),
+							};
+							out.push(
+								messages::MessagesStreamEvent::ContentBlockDelta {
+									index: idx,
+									delta: messages::ContentBlockDelta::ThinkingDelta {
+										thinking: t.text.clone(),
+									},
+								}
+								.into_sse_tuple(),
+							);
+							if let Some(sig) = t.thought_signature.as_deref()
+								&& !sig.is_empty()
+							{
+								out.push(
+									messages::MessagesStreamEvent::ContentBlockDelta {
+										index: idx,
+										delta: messages::ContentBlockDelta::SignatureDelta {
+											signature: sig.to_string(),
+										},
+									}
+									.into_sse_tuple(),
+								);
+							}
+						},
+						vg::Part::Text(t) => {
+							self.record_first_token(log);
+							// Close any open thinking block before starting/continuing a text block.
+							if matches!(self.open_block, OpenBlock::Thinking(_)) {
+								self.close_open_block(&mut out);
+							}
+							if matches!(self.open_block, OpenBlock::None) {
+								let idx = self.block_index;
+								out.push(
+									messages::MessagesStreamEvent::ContentBlockStart {
+										index: idx,
+										content_block: messages::ContentBlock::Text(messages::ContentTextBlock {
+											text: String::new(),
+											citations: None,
+											cache_control: None,
+										}),
+									}
+									.into_sse_tuple(),
+								);
+								self.open_block = OpenBlock::Text(idx);
+							}
+							let idx = match self.open_block {
+								OpenBlock::Text(i) => i,
+								_ => unreachable!(),
+							};
+							out.push(
+								messages::MessagesStreamEvent::ContentBlockDelta {
+									index: idx,
+									delta: messages::ContentBlockDelta::TextDelta {
+										text: t.text.clone(),
+									},
+								}
+								.into_sse_tuple(),
+							);
+						},
+						vg::Part::FunctionCall(fc) => {
+							self.record_first_token(log);
+							self.close_open_block(&mut out);
+							self.saw_tool_call = true;
+							let call_idx = self.tool_call_index;
+							self.tool_call_index += 1;
+							let base_id = fc
+								.function_call
+								.id
+								.as_deref()
+								.map(str::to_string)
+								.unwrap_or_else(|| format!("toolu_{id}_{call_idx}"));
+							let tool_id = join_tool_call_id(base_id, fc.thought_signature.as_deref());
+							let block_idx = self.block_index;
+							out.push(
+								messages::MessagesStreamEvent::ContentBlockStart {
+									index: block_idx,
+									content_block: messages::ContentBlock::ToolUse {
+										id: tool_id,
+										name: fc.function_call.name.clone(),
+										input: serde_json::Value::Object(Default::default()),
+										cache_control: None,
+									},
+								}
+								.into_sse_tuple(),
+							);
+							let args_json = to_completions::encode_args(&fc.function_call.args);
+							out.push(
+								messages::MessagesStreamEvent::ContentBlockDelta {
+									index: block_idx,
+									delta: messages::ContentBlockDelta::InputJsonDelta {
+										partial_json: args_json,
+									},
+								}
+								.into_sse_tuple(),
+							);
+							out.push(
+								messages::MessagesStreamEvent::ContentBlockStop { index: block_idx }
+									.into_sse_tuple(),
+							);
+							self.block_index += 1;
+						},
+						_ => {},
+					}
+				}
+			}
+
+			// Emit message_delta + message_stop when finish_reason arrives or prompt was blocked.
+			let finish_reason_str = cand.and_then(|c| c.finish_reason.as_deref());
+			let prompt_blocked = cand.is_none()
+				&& chunk
+					.prompt_feedback
+					.as_ref()
+					.and_then(|pf| pf.block_reason.as_ref())
+					.is_some();
+
+			if let Some(um) = chunk.usage_metadata.as_ref() {
+				let usage = build_usage_messages(Some(um));
+				self.pending_input_tokens = usage.input_tokens;
+				self.pending_output_tokens = usage.output_tokens;
+				self.pending_cache_read = usage.cache_read_input_tokens;
+			}
+
+			if finish_reason_str.is_some() || prompt_blocked {
+				self.close_open_block(&mut out);
+
+				let finish = if prompt_blocked {
+					crate::types::completions::typed::FinishReason::ContentFilter
+				} else {
+					to_completions::finish_with_tool_override(finish_reason_str, self.saw_tool_call)
+				};
+				self.pending_stop_reason = Some(crate::conversion::messages::finish_reason_to_stop_reason(
+					finish,
+				));
+				self.flush_message_end(false, &mut out);
+			}
+
+			out
+		}
+
+		fn on_done(&mut self) -> Vec<(&'static str, messages::MessagesStreamEvent)> {
+			let mut out = Vec::new();
+			self.close_open_block(&mut out);
+			self.flush_message_end(true, &mut out);
+			out
+		}
+	}
+
+	/// Translate a native Gemini `:streamGenerateContent?alt=sse` stream into Anthropic
+	/// Messages-format SSE events.
+	pub fn translate_stream(
+		b: Body,
+		buffer_limit: usize,
+		model: Strng,
+		log: StreamingUsageGuard,
+	) -> Body {
+		let mut state = StreamState::new();
+		// Gemini ends without [DONE]; append one to the INPUT so json_transform_multi fires
+		// SseJsonEvent::Done on clean close, which lets on_done() emit message_stop.
+		let b = to_completions::append_done_on_close(b.into_data_stream());
+		parse::sse::json_transform_multi::<vg::GenerateContentResponse, messages::MessagesStreamEvent, _>(
+			b,
+			buffer_limit,
+			move |ev| match ev {
+				parse::sse::SseJsonEvent::Data(Ok(chunk)) => {
+					// Capture before translate() sets message_started so we know whether this
+					// chunk will emit a message_start (only the first chunk can).
+					let is_first_chunk = !state.message_started;
+					let mut events = state.translate(&chunk, &log);
+					// Fill in the model if the chunk didn't carry a modelVersion.
+					if state.model_version.is_empty() {
+						state.model_version = model.to_string();
+					}
+					// Patch model in a message_start emitted before the first modelVersion arrived.
+					// Only possible on the first chunk, so skip scanning on all subsequent chunks.
+					if is_first_chunk {
+						for (_, ev) in &mut events {
+							if let messages::MessagesStreamEvent::MessageStart { message } = ev
+								&& message.model.is_empty()
+							{
+								message.model = state.model_version.clone();
+							}
+						}
+					}
+					events
+				},
+				parse::sse::SseJsonEvent::Data(Err(e)) => {
+					tracing::debug!("failed to parse gemini stream chunk: {e}");
+					vec![]
+				},
+				// Gemini has no [DONE] of its own (we append one), so Eof is the abnormal close.
+				// on_done() guards on message_stop_sent, so this cannot double-emit message_stop.
+				parse::sse::SseJsonEvent::Done | parse::sse::SseJsonEvent::Eof => state.on_done(),
+				// Don't synthesize a clean termination over a stream that actually failed.
+				parse::sse::SseJsonEvent::Error => vec![],
+			},
+		)
 	}
 }
