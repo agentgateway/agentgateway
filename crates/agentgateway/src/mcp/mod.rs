@@ -305,6 +305,30 @@ pub struct MCPTool {
 #[apply(schema!)]
 #[derive(Default, PartialEq, ::cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
+pub struct MCPTask {
+	/// The target handling the task.
+	pub target: String,
+	/// The task ID.
+	pub name: String,
+}
+
+impl MCPTask {
+	pub fn new(target: String, name: String) -> Self {
+		Self { target, name }
+	}
+
+	pub fn target(&self) -> &str {
+		&self.target
+	}
+
+	pub fn name(&self) -> &str {
+		&self.name
+	}
+}
+
+#[apply(schema!)]
+#[derive(Default, PartialEq, ::cel::DynamicType)]
+#[dynamic(rename_all = "camelCase")]
 pub struct MCPInfo {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub method_name: Option<String>,
@@ -317,7 +341,7 @@ pub struct MCPInfo {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub resource: Option<ResourceId>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub task: Option<ResourceId>,
+	pub task: Option<MCPTask>,
 }
 
 impl MCPInfo {
@@ -351,7 +375,7 @@ impl MCPInfo {
 			.map(|tool| tool.target.as_str())
 			.or_else(|| self.prompt.as_ref().map(ResourceId::target))
 			.or_else(|| self.resource.as_ref().map(ResourceId::target))
-			.or_else(|| self.task.as_ref().map(ResourceId::target))
+			.or_else(|| self.task.as_ref().map(MCPTask::target))
 	}
 
 	pub fn resource_name(&self) -> Option<&str> {
@@ -361,7 +385,7 @@ impl MCPInfo {
 			.map(|tool| tool.name.as_str())
 			.or_else(|| self.prompt.as_ref().map(ResourceId::name))
 			.or_else(|| self.resource.as_ref().map(ResourceId::name))
-			.or_else(|| self.task.as_ref().map(ResourceId::name))
+			.or_else(|| self.task.as_ref().map(MCPTask::name))
 	}
 
 	pub fn set_tool(&mut self, target: String, name: String) {
@@ -401,7 +425,7 @@ impl MCPInfo {
 		self.tool = None;
 		self.prompt = None;
 		self.resource = None;
-		self.task = Some(ResourceId::new(target, task_id));
+		self.task = Some(MCPTask::new(target, task_id));
 	}
 
 	pub fn capture_call_arguments(
@@ -448,7 +472,7 @@ impl From<&ResourceType> for MCPInfo {
 				..Default::default()
 			},
 			ResourceType::Task(task) => Self {
-				task: Some(task.clone()),
+				task: Some(MCPTask::new(task.target().to_string(), task.name().to_string())),
 				..Default::default()
 			},
 		}

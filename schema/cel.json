@@ -993,17 +993,19 @@
           ],
           "properties": {
             "target": {
-              "description": "The target of the resource",
-              "type": "string",
-              "default": ""
+              "description": "The target handling the task.",
+              "type": "string"
             },
             "name": {
-              "description": "The name of the resource",
-              "type": "string",
-              "default": ""
+              "description": "The task ID.",
+              "type": "string"
             }
           },
-          "additionalProperties": false
+          "additionalProperties": false,
+          "required": [
+            "target",
+            "name"
+          ]
         }
       },
       "additionalProperties": false

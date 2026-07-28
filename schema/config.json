@@ -7740,7 +7740,7 @@
       ]
     },
     "McpPrefixMode": {
-      "description": "Controls how upstream tool/prompt names are exposed to clients. Does not affect\ntask IDs (SEP-2663), which are always target-namespaced when multiplexing since\nthere's no `tasks/list` to resolve an unprefixed one against.",
+      "description": "Controls how upstream tool/prompt names are exposed to clients.",
       "oneOf": [
         {
           "description": "Prefix names with the target name only when there are multiple targets.",
