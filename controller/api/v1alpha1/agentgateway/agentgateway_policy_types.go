@@ -1707,6 +1707,10 @@ type CrossAppAccessSubjectToken struct {
 	// Where to read the subject token. Defaults to the Authorization Bearer header.
 	// +optional
 	Source *AuthorizationExtractionLocation `json:"source,omitempty"`
+
+	// OAuth RFC 8693 subject token type. Defaults to id_token
+	// +optional
+	TokenType *OAuthTokenType `json:"tokenType,omitempty"`
 }
 
 // +kubebuilder:validation:ExactlyOneOf=backendRef;url

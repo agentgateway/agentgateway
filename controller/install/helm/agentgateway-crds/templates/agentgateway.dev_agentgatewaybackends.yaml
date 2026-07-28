@@ -5161,6 +5161,10 @@ spec:
                                                     expression] must be set
                                                   rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                     == 1'
+                                              tokenType:
+                                                description: OAuth RFC 8693 subject
+                                                  token type. Defaults to id_token
+                                                type: string
                                             type: object
                                         required:
                                         - audience
@@ -8395,6 +8399,10 @@ spec:
                                                   expression] must be set
                                                 rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                                   == 1'
+                                            tokenType:
+                                              description: OAuth RFC 8693 subject
+                                                token type. Defaults to id_token
+                                              type: string
                                           type: object
                                       required:
                                       - audience
@@ -13717,6 +13725,10 @@ spec:
                                     cookie expression] must be set
                                   rule: '[has(self.header),has(self.queryParameter),has(self.cookie),has(self.expression)].filter(x,x==true).size()
                                     == 1'
+                              tokenType:
+                                description: OAuth RFC 8693 subject token type. Defaults
+                                  to id_token
+                                type: string
                             type: object
                         required:
                         - audience

@@ -9126,8 +9126,7 @@ type CrossAppAccessAuth struct {
 	Scopes []string `protobuf:"bytes,5,rep,name=scopes,proto3" json:"scopes,omitempty"`
 	// Response cache configuration. When unset uses InMemory cache with defaults.
 	Cache *OAuthTokenExchange_TokenCache `protobuf:"bytes,6,opt,name=cache,proto3" json:"cache,omitempty"`
-	// Subject token sent to the identity provider. Its type is fixed to an
-	// OpenID Connect ID token until other subject token types are supported.
+	// Subject token sent to the identity provider. Defaults to an OpenID Connect ID token.
 	SubjectToken  *CrossAppAccessAuth_SubjectToken `protobuf:"bytes,7,opt,name=subject_token,json=subjectToken,proto3" json:"subject_token,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -16897,7 +16896,9 @@ func (x *CrossAppAccessAuth_Endpoint) GetInlinePolicies() []*BackendPolicySpec {
 type CrossAppAccessAuth_SubjectToken struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Where to read the subject token. Defaults to the Authorization Bearer header.
-	Source        *AuthorizationLocation `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
+	Source *AuthorizationLocation `protobuf:"bytes,1,opt,name=source,proto3" json:"source,omitempty"`
+	// RFC 8693 subject token type URI. Empty defaults to id_token.
+	TokenType     string `protobuf:"bytes,2,opt,name=token_type,json=tokenType,proto3" json:"token_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -16937,6 +16938,13 @@ func (x *CrossAppAccessAuth_SubjectToken) GetSource() *AuthorizationLocation {
 		return x.Source
 	}
 	return nil
+}
+
+func (x *CrossAppAccessAuth_SubjectToken) GetTokenType() string {
+	if x != nil {
+		return x.TokenType
+	}
+	return ""
 }
 
 type ModelRoute_Match struct {
@@ -18807,7 +18815,7 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"JWT_BEARER\x10\x02B\x16\n" +
 	"\x14_token_endpoint_pathB\x17\n" +
-	"\x15_requested_token_type\"\xa4\a\n" +
+	"\x15_requested_token_type\"\xc3\a\n" +
 	"\x12CrossAppAccessAuth\x12c\n" +
 	"\x11identity_provider\x18\x01 \x01(\v26.agentgateway.dev.resource.CrossAppAccessAuth.EndpointR\x10identityProvider\x12z\n" +
 	"\x1dresource_authorization_server\x18\x02 \x01(\v26.agentgateway.dev.resource.CrossAppAccessAuth.EndpointR\x1bresourceAuthorizationServer\x12\x1a\n" +
@@ -18822,9 +18830,11 @@ const file_resource_proto_rawDesc = "" +
 	"\vclient_auth\x18\x03 \x01(\v2*.agentgateway.dev.resource.OAuthClientAuthR\n" +
 	"clientAuth\x12U\n" +
 	"\x0finline_policies\x18\x04 \x03(\v2,.agentgateway.dev.resource.BackendPolicySpecR\x0einlinePoliciesB\x16\n" +
-	"\x14_token_endpoint_path\x1aX\n" +
+	"\x14_token_endpoint_path\x1aw\n" +
 	"\fSubjectToken\x12H\n" +
-	"\x06source\x18\x01 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x06source\"\xf2\f\n" +
+	"\x06source\x18\x01 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x06source\x12\x1d\n" +
+	"\n" +
+	"token_type\x18\x02 \x01(\tR\ttokenType\"\xf2\f\n" +
 	"\n" +
 	"ModelRoute\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12!\n" +

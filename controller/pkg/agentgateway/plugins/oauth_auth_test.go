@@ -191,6 +191,7 @@ func TestBuildCrossAppAccess(t *testing.T) {
 			Source: &agentgateway.AuthorizationExtractionLocation{
 				Expression: ptr.Of(agentgateway.CELExpression("jwt.the_id_token")),
 			},
+			TokenType: ptr.Of(agentgateway.OAuthTokenTypeAccessToken),
 		},
 	}, "default")
 	if err != nil {
@@ -224,6 +225,62 @@ func TestBuildCrossAppAccess(t *testing.T) {
 	if got := crossAppAccess.GetSubjectToken().GetSource().GetExpression(); got != "jwt.the_id_token" {
 		t.Fatalf("subject token expression = %q, want jwt.the_id_token", got)
 	}
+	if got := crossAppAccess.GetSubjectToken().GetTokenType(); got != "urn:ietf:params:oauth:token-type:access_token" {
+		t.Fatalf("subject token type = %q, want access_token URN", got)
+	}
+}
+
+func TestBuildCrossAppAccessSubjectTokenTypes(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t)
+	tests := []struct {
+		tokenType agentgateway.OAuthTokenType
+		want      string
+	}{
+		{
+			tokenType: agentgateway.OAuthTokenTypeAccessToken,
+			want:      "urn:ietf:params:oauth:token-type:access_token",
+		},
+		{
+			tokenType: "urn:company:domain:human",
+			want:      "urn:company:domain:human",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.tokenType), func(t *testing.T) {
+			got, err := BuildCrossAppAccess(ctx, &agentgateway.CrossAppAccessAuth{
+				IdentityProvider:            crossAppAccessEndpoint("idp"),
+				ResourceAuthorizationServer: crossAppAccessEndpoint("resource-as"),
+				Audience:                    "https://resource.example.com",
+				SubjectToken: &agentgateway.CrossAppAccessSubjectToken{
+					TokenType: new(tt.tokenType),
+				},
+			}, "default")
+			if err != nil {
+				t.Fatalf("BuildCrossAppAccess() error = %v, want nil", err)
+			}
+			if got.GetSubjectToken().GetTokenType() != tt.want {
+				t.Fatalf("subject token type = %q, want %q", got.GetSubjectToken().GetTokenType(), tt.want)
+			}
+		})
+	}
+}
+
+func TestBuildCrossAppAccessRejectsMalformedSubjectTokenType(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t)
+	tokenType := agentgateway.OAuthTokenType("https://")
+
+	_, err := BuildCrossAppAccess(ctx, &agentgateway.CrossAppAccessAuth{
+		IdentityProvider:            crossAppAccessEndpoint("idp"),
+		ResourceAuthorizationServer: crossAppAccessEndpoint("resource-as"),
+		Audience:                    "https://resource.example.com",
+		SubjectToken: &agentgateway.CrossAppAccessSubjectToken{
+			TokenType: &tokenType,
+		},
+	}, "default")
+	if err == nil || !strings.Contains(err.Error(), "crossAppAccess subjectToken tokenType") {
+		t.Fatalf("BuildCrossAppAccess() error = %v, want malformed subject token type error", err)
+	}
 }
 
 func TestBuildCrossAppAccessRejectsInvalidConfig(t *testing.T) {
@@ -244,6 +301,7 @@ func TestBuildCrossAppAccessRejectsInvalidConfig(t *testing.T) {
 			Source: &agentgateway.AuthorizationExtractionLocation{
 				Expression: ptr.Of(agentgateway.CELExpression("((")),
 			},
+			TokenType: ptr.Of(agentgateway.OAuthTokenTypeIDJAG),
 		},
 	}, "default")
 	if err == nil {
@@ -253,6 +311,7 @@ func TestBuildCrossAppAccessRejectsInvalidConfig(t *testing.T) {
 		"crossAppAccess audience must not be empty",
 		"crossAppAccess.identityProvider.path",
 		"crossAppAccess subjectToken source expression is not a valid CEL expression",
+		"crossAppAccess subjectToken tokenType IdJag is not supported",
 	} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("BuildCrossAppAccess() error = %v, want containing %q", err, want)
@@ -784,6 +843,19 @@ func TestOAuthTokenExchangeRejectsInvalidCustomTokenTypes(t *testing.T) {
 			},
 			tokenType: agentgateway.OAuthTokenType("https://tokens.example/custom#fragment"),
 			wantErr:   "without a fragment",
+		},
+		{
+			name: "subject malformed absolute URI",
+			buildAuth: func(tokenType agentgateway.OAuthTokenType) *agentgateway.OAuthTokenExchange {
+				return &agentgateway.OAuthTokenExchange{
+					BackendRef: oauthTokenEndpointRef(),
+					SubjectToken: &agentgateway.OAuthTokenSpec{
+						TokenType: new(tokenType),
+					},
+				}
+			},
+			tokenType: agentgateway.OAuthTokenType("https://"),
+			wantErr:   "absolute URI",
 		},
 		{
 			name: "actor typo",
