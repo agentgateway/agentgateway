@@ -2837,6 +2837,16 @@ pub struct McpAuthentication {
 		serialize_with = "crate::serdes::ser_redact"
 	)]
 	pub client_secret: Option<SecretString>,
+	/// Enable broker-callback mode (Entra provider): present Entra one registered callback URL
+	/// for every MCP client and relay the authorization code back to each client's own redirect.
+	pub broker_callback: bool,
+	/// HMAC key that signs the stateless broker-callback state token. Required when
+	/// `broker_callback` is set.
+	#[serde(
+		skip_serializing_if = "Option::is_none",
+		serialize_with = "crate::serdes::ser_redact"
+	)]
+	pub signing_key: Option<SecretString>,
 }
 
 #[apply(schema_enum!)]
@@ -2897,6 +2907,21 @@ pub struct LocalMcpAuthentication {
 	/// client secret at the token endpoint.
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	pub client_secret: Option<SecretString>,
+	/// Broker-callback mode for the `entra` provider. When enabled, the gateway presents Entra a
+	/// single, pre-registered Web redirect (`<served-metadata-path>/callback`) for every MCP
+	/// client, then relays Entra's authorization code back to each client's own redirect URI. This
+	/// collapses Entra's per-client redirect-URI registration (Entra has no DCR) to one URL and
+	/// keeps every sign-in classified as a browser flow. Requires `signingKey` and `clientId`.
+	/// Defaults to `false` (plain pass-through: Entra sees each client's own redirect URI).
+	#[serde(default)]
+	pub broker_callback: bool,
+	/// HMAC-SHA256 key used to sign the stateless broker-callback state token. **Required when
+	/// `brokerCallback` is enabled.** It is dedicated to callback integrity and is independent of
+	/// `clientSecret` and the OAuth client credential, so it also works for public-client
+	/// registrations and can be rotated on its own. The key is stable across gateway replicas, so
+	/// any replica can verify a state token another replica issued (no shared session store).
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub signing_key: Option<SecretString>,
 }
 
 impl LocalMcpAuthentication {
@@ -2975,6 +3000,20 @@ impl LocalMcpAuthentication {
 		&self,
 		resources: &crate::resource_manager::ResourceFetcher,
 	) -> anyhow::Result<McpAuthentication> {
+		if self.broker_callback {
+			anyhow::ensure!(
+				matches!(self.provider, Some(McpIDP::Entra {})),
+				"mcpAuthentication.brokerCallback is only supported by the entra provider"
+			);
+			anyhow::ensure!(
+				self.signing_key.is_some(),
+				"mcpAuthentication.brokerCallback requires signingKey to be set"
+			);
+			anyhow::ensure!(
+				self.client_id.is_some(),
+				"mcpAuthentication.brokerCallback requires clientId to be set"
+			);
+		}
 		let jwt_cfg = self.as_jwt()?;
 		let jwt = jwt_cfg.try_into(resources).await?;
 		Ok(McpAuthentication {
@@ -2986,6 +3025,8 @@ impl LocalMcpAuthentication {
 			mode: self.mode,
 			client_id: self.client_id.clone(),
 			client_secret: self.client_secret.clone(),
+			broker_callback: self.broker_callback,
+			signing_key: self.signing_key.clone(),
 		})
 	}
 }
