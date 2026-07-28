@@ -1523,3 +1523,385 @@ fn test_google_model_armor_implicit_auth_used_when_no_user_credentials() {
 		resolved.backend_auth
 	);
 }
+
+#[cfg(test)]
+#[derive(Clone, Copy)]
+enum ChatFmt {
+	Anthropic,
+	Completions,
+	Responses,
+}
+
+#[cfg(test)]
+enum Expect {
+	Masked(serde_json::Value),
+	Rejected,
+	Unchanged,
+}
+
+#[cfg(test)]
+fn email_and_ssn() -> Vec<RegexRule> {
+	vec![
+		RegexRule::Builtin {
+			builtin: Builtin::Email,
+		},
+		RegexRule::Builtin {
+			builtin: Builtin::Ssn,
+		},
+	]
+}
+
+#[cfg(test)]
+fn ssn_only() -> Vec<RegexRule> {
+	vec![RegexRule::Builtin {
+		builtin: Builtin::Ssn,
+	}]
+}
+
+#[cfg(test)]
+fn run_apply_regex(
+	fmt: ChatFmt,
+	action: Action,
+	rules: Vec<RegexRule>,
+	input: serde_json::Value,
+) -> (GuardrailOutcome, serde_json::Value) {
+	let rules = RegexRules { action, rules };
+	let rejection = RequestRejection::default();
+	match fmt {
+		ChatFmt::Anthropic => {
+			let mut req: crate::llm::types::messages::Request = serde_json::from_value(input).unwrap();
+			let outcome = Policy::apply_regex(&mut req, &rules, &rejection).unwrap();
+			(outcome, serde_json::to_value(&req).unwrap())
+		},
+		ChatFmt::Completions => {
+			let mut req: crate::llm::types::completions::Request = serde_json::from_value(input).unwrap();
+			let outcome = Policy::apply_regex(&mut req, &rules, &rejection).unwrap();
+			(outcome, serde_json::to_value(&req).unwrap())
+		},
+		ChatFmt::Responses => {
+			let mut req: crate::llm::types::responses::Request = serde_json::from_value(input).unwrap();
+			let outcome = Policy::apply_regex(&mut req, &rules, &rejection).unwrap();
+			(outcome, serde_json::to_value(&req).unwrap())
+		},
+	}
+}
+
+/// Same as `run_apply_regex`, but for `Policy::apply_regex_response`.
+#[cfg(test)]
+fn run_apply_regex_response(
+	fmt: ChatFmt,
+	action: Action,
+	rules: Vec<RegexRule>,
+	input: serde_json::Value,
+) -> (GuardrailOutcome, serde_json::Value) {
+	let rules = RegexRules { action, rules };
+	let rejection = RequestRejection::default();
+	match fmt {
+		ChatFmt::Anthropic => {
+			let mut resp: crate::llm::types::messages::Response = serde_json::from_value(input).unwrap();
+			let outcome = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
+			(outcome, serde_json::to_value(&resp).unwrap())
+		},
+		ChatFmt::Completions => {
+			let mut resp: crate::llm::types::completions::Response =
+				serde_json::from_value(input).unwrap();
+			let outcome = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
+			(outcome, serde_json::to_value(&resp).unwrap())
+		},
+		ChatFmt::Responses => {
+			let mut resp: crate::llm::types::responses::Response = serde_json::from_value(input).unwrap();
+			let outcome = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
+			(outcome, serde_json::to_value(&resp).unwrap())
+		},
+	}
+}
+
+#[cfg(test)]
+#[rstest::rstest]
+#[case::anthropic_mask_tool_output_untouched(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	email_and_ssn(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"system": "You are a helpful assistant. Contact admin@example.com for help.",
+		"messages": [
+			{"role": "user", "content": "list pods"},
+			{"role": "assistant", "content": [
+				{"type": "text", "text": "Calling the tool."},
+				{"type": "tool_use", "id": "toolu_01", "name": "k8s_get_resources", "input": {"ns": "kagent"}}
+			]},
+			{"role": "user", "content": [
+				{"type": "tool_result", "tool_use_id": "toolu_01", "content": "pod-a Running, owner ssn 123-45-6789"}
+			]},
+			{"role": "user", "content": [
+				{"type": "tool_result", "tool_use_id": "toolu_02", "content": [
+					{"type": "text", "text": "reach ops@example.com"},
+					{"type": "image", "source": {"type": "base64", "data": "aGk="}}
+				]}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"system": "You are a helpful assistant. Contact <EMAIL_ADDRESS> for help.",
+		"messages": [
+			{"role": "user", "content": "list pods"},
+			{"role": "assistant", "content": [
+				{"type": "text", "text": "Calling the tool."},
+				{"type": "tool_use", "id": "toolu_01", "name": "k8s_get_resources", "input": {"ns": "kagent"}}
+			]},
+			{"role": "user", "content": [
+				{"type": "tool_result", "tool_use_id": "toolu_01", "content": "pod-a Running, owner ssn 123-45-6789"}
+			]},
+			{"role": "user", "content": [
+				{"type": "tool_result", "tool_use_id": "toolu_02", "content": [
+					{"type": "text", "text": "reach ops@example.com"},
+					{"type": "image", "source": {"type": "base64", "data": "aGk="}}
+				]}
+			]}
+		]
+	}))
+)]
+#[case::anthropic_reject_matches_regular_message(
+	ChatFmt::Anthropic,
+	Action::Reject,
+	ssn_only(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": "my ssn is 123-45-6789"}
+		]
+	}),
+	Expect::Rejected
+)]
+#[case::anthropic_reject_does_not_reach_tool_output(
+	ChatFmt::Anthropic,
+	Action::Reject,
+	ssn_only(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "tool_result", "tool_use_id": "toolu_01", "content": [
+					{"type": "text", "text": "owner ssn 123-45-6789"}
+				]}
+			]}
+		]
+	}),
+	Expect::Unchanged
+)]
+#[case::completions_mask_tool_output_untouched(
+	ChatFmt::Completions,
+	Action::Mask,
+	email_and_ssn(),
+	serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": "email admin@example.com about the pods"},
+			{"role": "assistant", "content": null, "tool_calls": [
+				{"id": "call_01", "type": "function", "function": {"name": "list_pods", "arguments": "{}"}}
+			]},
+			{"role": "tool", "tool_call_id": "call_01", "content": "pod-a Running"},
+			{"role": "tool", "tool_call_id": "call_02", "content": [
+				{"type": "text", "text": "owner ssn 123-45-6789"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": "email <EMAIL_ADDRESS> about the pods"},
+			{"role": "assistant", "tool_calls": [
+				{"id": "call_01", "type": "function", "function": {"name": "list_pods", "arguments": "{}"}}
+			]},
+			{"role": "tool", "tool_call_id": "call_01", "content": "pod-a Running"},
+			{"role": "tool", "tool_call_id": "call_02", "content": [
+				{"type": "text", "text": "owner ssn 123-45-6789"}
+			]}
+		]
+	}))
+)]
+#[case::completions_reject_does_not_reach_tool_output(
+	ChatFmt::Completions,
+	Action::Reject,
+	ssn_only(),
+	serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "tool", "tool_call_id": "call_01", "content": "owner ssn 123-45-6789"}
+		]
+	}),
+	Expect::Unchanged
+)]
+#[case::responses_mask_tool_output_untouched(
+	ChatFmt::Responses,
+	Action::Mask,
+	email_and_ssn(),
+	serde_json::json!({
+		"model": "gpt-4o",
+		"input": [
+			{"role": "user", "content": [
+				{"type": "input_text", "text": "email admin@example.com about the pods"}
+			]},
+			{"type": "function_call", "call_id": "call_01", "name": "list_pods", "arguments": "{}"},
+			{"type": "function_call_output", "call_id": "call_01", "output": "pod-a Running, owner ssn 123-45-6789"},
+			{"type": "function_call_output", "call_id": "call_02", "output": [
+				{"type": "output_text", "text": "billing contact admin@example.com"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "gpt-4o",
+		"input": [
+			{"role": "user", "content": [
+				{"type": "input_text", "text": "email <EMAIL_ADDRESS> about the pods"}
+			]},
+			{"type": "function_call", "call_id": "call_01", "name": "list_pods", "arguments": "{}"},
+			{"type": "function_call_output", "call_id": "call_01", "output": "pod-a Running, owner ssn 123-45-6789"},
+			{"type": "function_call_output", "call_id": "call_02", "output": [
+				{"type": "output_text", "text": "billing contact admin@example.com"}
+			]}
+		]
+	}))
+)]
+#[case::responses_reject_does_not_reach_tool_output(
+	ChatFmt::Responses,
+	Action::Reject,
+	ssn_only(),
+	serde_json::json!({
+		"model": "gpt-4o",
+		"input": [
+			{"type": "function_call_output", "call_id": "call_01", "output": "owner ssn 123-45-6789"}
+		]
+	}),
+	Expect::Unchanged
+)]
+fn test_apply_regex_preserves_tool_structure(
+	#[case] fmt: ChatFmt,
+	#[case] action: Action,
+	#[case] rules: Vec<RegexRule>,
+	#[case] input: serde_json::Value,
+	#[case] expected: Expect,
+) {
+	let (outcome, actual) = run_apply_regex(fmt, action, rules, input);
+	match expected {
+		Expect::Masked(expected) => {
+			assert!(matches!(outcome, GuardrailOutcome::Masked));
+			assert_eq!(actual, expected);
+		},
+		Expect::Rejected => assert!(matches!(outcome, GuardrailOutcome::Rejected(_))),
+		Expect::Unchanged => assert!(matches!(outcome, GuardrailOutcome::None)),
+	}
+}
+
+#[cfg(test)]
+#[rstest::rstest]
+#[case::anthropic_mask(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	ssn_only(),
+	serde_json::json!({
+		"id": "msg_01", "type": "message", "role": "assistant", "model": "claude-sonnet-5",
+		"stop_reason": "tool_use", "stop_sequence": null,
+		"usage": {"input_tokens": 10, "output_tokens": 20},
+		"content": [
+			{"type": "text", "text": "Looking up the patient, ssn 123-45-6789 on file."},
+			{"type": "tool_use", "id": "toolu_01", "name": "lookup_patient", "input": {"name": "John Doe"}}
+		]
+	}),
+	Some(serde_json::json!({
+		"id": "msg_01", "type": "message", "role": "assistant", "model": "claude-sonnet-5",
+		"stop_reason": "tool_use", "stop_sequence": null,
+		"usage": {"input_tokens": 10, "output_tokens": 20},
+		"content": [
+			{"type": "text", "text": "Looking up the patient, ssn <SSN> on file."},
+			{"type": "tool_use", "id": "toolu_01", "name": "lookup_patient", "input": {"name": "John Doe"}}
+		]
+	}))
+)]
+#[case::anthropic_reject(
+	ChatFmt::Anthropic,
+	Action::Reject,
+	ssn_only(),
+	serde_json::json!({
+		"id": "msg_01", "type": "message", "role": "assistant", "model": "claude-sonnet-5",
+		"stop_reason": "tool_use", "stop_sequence": null,
+		"usage": {"input_tokens": 10, "output_tokens": 20},
+		"content": [
+			{"type": "text", "text": "ssn 123-45-6789"},
+			{"type": "tool_use", "id": "toolu_01", "name": "lookup_patient", "input": {"name": "John Doe"}}
+		]
+	}),
+	None
+)]
+#[case::completions_mask(
+	ChatFmt::Completions,
+	Action::Mask,
+	ssn_only(),
+	serde_json::json!({
+		"model": "gpt-4o",
+		"usage": null,
+		"choices": [
+			{"message": {"role": "assistant", "content": "ssn 123-45-6789"}},
+			{"message": {"role": "assistant", "content": null, "tool_calls": [
+				{"id": "call_01", "type": "function", "function": {"name": "list_pods", "arguments": "{}"}}
+			]}}
+		]
+	}),
+	Some(serde_json::json!({
+		"model": "gpt-4o",
+		"usage": null,
+		"choices": [
+			{"message": {"role": "assistant", "content": "ssn <SSN>"}},
+			{"message": {"role": "assistant", "tool_calls": [
+				{"id": "call_01", "type": "function", "function": {"name": "list_pods", "arguments": "{}"}}
+			]}}
+		]
+	}))
+)]
+#[case::responses_mask(
+	ChatFmt::Responses,
+	Action::Mask,
+	ssn_only(),
+	serde_json::json!({
+		"id": "resp_01", "status": "completed", "model": "gpt-4o",
+		"output": [
+			{"type": "message", "id": "msg_01", "role": "assistant", "status": "completed", "content": [
+				{"type": "output_text", "annotations": [], "logprobs": null, "text": "Intro, all good."},
+				{"type": "output_text", "annotations": [], "logprobs": null, "text": "ssn 123-45-6789"}
+			]},
+			{"type": "function_call", "arguments": "{}", "call_id": "call_01", "name": "list_pods"}
+		]
+	}),
+	Some(serde_json::json!({
+		"id": "resp_01", "status": "completed", "model": "gpt-4o",
+		"output": [
+			{"type": "message", "id": "msg_01", "role": "assistant", "status": "completed", "content": [
+				{"type": "output_text", "annotations": [], "logprobs": null, "text": "Intro, all good."},
+				{"type": "output_text", "annotations": [], "logprobs": null, "text": "ssn <SSN>"}
+			]},
+			{"type": "function_call", "arguments": "{}", "call_id": "call_01", "name": "list_pods"}
+		]
+	}))
+)]
+fn test_apply_regex_response_preserves_tool_structure(
+	#[case] fmt: ChatFmt,
+	#[case] action: Action,
+	#[case] rules: Vec<RegexRule>,
+	#[case] input: serde_json::Value,
+	#[case] expected: Option<serde_json::Value>,
+) {
+	let (outcome, actual) = run_apply_regex_response(fmt, action, rules, input);
+	match expected {
+		Some(expected) => {
+			assert!(matches!(outcome, GuardrailOutcome::Masked));
+			assert_eq!(actual, expected);
+		},
+		None => assert!(matches!(outcome, GuardrailOutcome::Rejected(_))),
+	}
+}
