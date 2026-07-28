@@ -13833,7 +13833,7 @@ type BackendPolicySpec_Ai_Webhook struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	Backend *BackendReference      `protobuf:"bytes,1,opt,name=backend,proto3" json:"backend,omitempty"`
 	// CEL-computed headers to include in webhook requests.
-	Headers map[string]string `protobuf:"bytes,2,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Headers              map[string]string                        `protobuf:"bytes,2,rep,name=headers,proto3" json:"headers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	ForwardHeaderMatches []*HeaderMatch                           `protobuf:"bytes,3,rep,name=forward_header_matches,json=forwardHeaderMatches,proto3" json:"forward_header_matches,omitempty"`
 	FailureMode          BackendPolicySpec_Ai_Webhook_FailureMode `protobuf:"varint,4,opt,name=failure_mode,json=failureMode,proto3,enum=agentgateway.dev.resource.BackendPolicySpec_Ai_Webhook_FailureMode" json:"failure_mode,omitempty"`
 	unknownFields        protoimpl.UnknownFields
