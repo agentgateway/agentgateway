@@ -401,6 +401,10 @@ impl super::RequestType for Request {
 
 	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
 		for msg in &mut self.messages {
+			// TODO opt-in setting to apply guards to tool results
+			if msg.role == "tool" {
+				continue;
+			}
 			match &mut msg.content {
 				Some(Content::Text(text)) => f(text),
 				Some(Content::Array(parts)) => {

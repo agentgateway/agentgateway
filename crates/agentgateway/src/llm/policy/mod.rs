@@ -2046,6 +2046,13 @@ enum ChatFmt {
 }
 
 #[cfg(test)]
+enum Expect {
+	Masked(serde_json::Value),
+	Rejected,
+	Unchanged,
+}
+
+#[cfg(test)]
 fn email_and_ssn() -> Vec<RegexRule> {
 	vec![
 		RegexRule::Builtin {
@@ -2124,7 +2131,7 @@ fn run_apply_regex_response(
 
 #[cfg(test)]
 #[rstest::rstest]
-#[case::anthropic_mask(
+#[case::anthropic_mask_tool_output_untouched(
 	ChatFmt::Anthropic,
 	Action::Mask,
 	email_and_ssn(),
@@ -2149,7 +2156,7 @@ fn run_apply_regex_response(
 			]}
 		]
 	}),
-	Some(serde_json::json!({
+	Expect::Masked(serde_json::json!({
 		"model": "claude-sonnet-5",
 		"max_tokens": 1024,
 		"system": "You are a helpful assistant. Contact <EMAIL_ADDRESS> for help.",
@@ -2160,18 +2167,31 @@ fn run_apply_regex_response(
 				{"type": "tool_use", "id": "toolu_01", "name": "k8s_get_resources", "input": {"ns": "kagent"}}
 			]},
 			{"role": "user", "content": [
-				{"type": "tool_result", "tool_use_id": "toolu_01", "content": "pod-a Running, owner ssn <SSN>"}
+				{"type": "tool_result", "tool_use_id": "toolu_01", "content": "pod-a Running, owner ssn 123-45-6789"}
 			]},
 			{"role": "user", "content": [
 				{"type": "tool_result", "tool_use_id": "toolu_02", "content": [
-					{"type": "text", "text": "reach <EMAIL_ADDRESS>"},
+					{"type": "text", "text": "reach ops@example.com"},
 					{"type": "image", "source": {"type": "base64", "data": "aGk="}}
 				]}
 			]}
 		]
 	}))
 )]
-#[case::anthropic_reject(
+#[case::anthropic_reject_matches_regular_message(
+	ChatFmt::Anthropic,
+	Action::Reject,
+	ssn_only(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": "my ssn is 123-45-6789"}
+		]
+	}),
+	Expect::Rejected
+)]
+#[case::anthropic_reject_does_not_reach_tool_output(
 	ChatFmt::Anthropic,
 	Action::Reject,
 	ssn_only(),
@@ -2186,9 +2206,9 @@ fn run_apply_regex_response(
 			]}
 		]
 	}),
-	None
+	Expect::Unchanged
 )]
-#[case::completions_mask(
+#[case::completions_mask_tool_output_untouched(
 	ChatFmt::Completions,
 	Action::Mask,
 	email_and_ssn(),
@@ -2205,7 +2225,7 @@ fn run_apply_regex_response(
 			]}
 		]
 	}),
-	Some(serde_json::json!({
+	Expect::Masked(serde_json::json!({
 		"model": "gpt-4o",
 		"messages": [
 			{"role": "user", "content": "email <EMAIL_ADDRESS> about the pods"},
@@ -2214,12 +2234,12 @@ fn run_apply_regex_response(
 			]},
 			{"role": "tool", "tool_call_id": "call_01", "content": "pod-a Running"},
 			{"role": "tool", "tool_call_id": "call_02", "content": [
-				{"type": "text", "text": "owner ssn <SSN>"}
+				{"type": "text", "text": "owner ssn 123-45-6789"}
 			]}
 		]
 	}))
 )]
-#[case::completions_reject(
+#[case::completions_reject_does_not_reach_tool_output(
 	ChatFmt::Completions,
 	Action::Reject,
 	ssn_only(),
@@ -2229,9 +2249,9 @@ fn run_apply_regex_response(
 			{"role": "tool", "tool_call_id": "call_01", "content": "owner ssn 123-45-6789"}
 		]
 	}),
-	None
+	Expect::Unchanged
 )]
-#[case::responses_mask(
+#[case::responses_mask_tool_output_untouched(
 	ChatFmt::Responses,
 	Action::Mask,
 	email_and_ssn(),
@@ -2248,21 +2268,21 @@ fn run_apply_regex_response(
 			]}
 		]
 	}),
-	Some(serde_json::json!({
+	Expect::Masked(serde_json::json!({
 		"model": "gpt-4o",
 		"input": [
 			{"role": "user", "content": [
 				{"type": "input_text", "text": "email <EMAIL_ADDRESS> about the pods"}
 			]},
 			{"type": "function_call", "call_id": "call_01", "name": "list_pods", "arguments": "{}"},
-			{"type": "function_call_output", "call_id": "call_01", "output": "pod-a Running, owner ssn <SSN>"},
+			{"type": "function_call_output", "call_id": "call_01", "output": "pod-a Running, owner ssn 123-45-6789"},
 			{"type": "function_call_output", "call_id": "call_02", "output": [
-				{"type": "output_text", "text": "billing contact <EMAIL_ADDRESS>"}
+				{"type": "output_text", "text": "billing contact admin@example.com"}
 			]}
 		]
 	}))
 )]
-#[case::responses_reject(
+#[case::responses_reject_does_not_reach_tool_output(
 	ChatFmt::Responses,
 	Action::Reject,
 	ssn_only(),
@@ -2272,22 +2292,23 @@ fn run_apply_regex_response(
 			{"type": "function_call_output", "call_id": "call_01", "output": "owner ssn 123-45-6789"}
 		]
 	}),
-	None
+	Expect::Unchanged
 )]
 fn test_apply_regex_preserves_tool_structure(
 	#[case] fmt: ChatFmt,
 	#[case] action: Action,
 	#[case] rules: Vec<RegexRule>,
 	#[case] input: serde_json::Value,
-	#[case] expected: Option<serde_json::Value>,
+	#[case] expected: Expect,
 ) {
 	let (outcome, actual) = run_apply_regex(fmt, action, rules, input);
 	match expected {
-		Some(expected) => {
+		Expect::Masked(expected) => {
 			assert!(matches!(outcome, GuardrailOutcome::Masked));
 			assert_eq!(actual, expected);
 		},
-		None => assert!(matches!(outcome, GuardrailOutcome::Rejected(_))),
+		Expect::Rejected => assert!(matches!(outcome, GuardrailOutcome::Rejected(_))),
+		Expect::Unchanged => assert!(matches!(outcome, GuardrailOutcome::None)),
 	}
 }
 

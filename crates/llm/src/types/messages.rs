@@ -276,32 +276,14 @@ impl RequestType for Request {
 					for part in parts {
 						match part {
 							ContentPart::Text { text, .. } => f(text),
-							ContentPart::Unknown(value) => visit_tool_result_text(value, f),
+							// TODO opt-in setting to apply guards to tool results
+							ContentPart::Unknown(_) => {},
 						}
 					}
 				},
 				None => {},
 			}
 		}
-	}
-}
-
-fn visit_tool_result_text(value: &mut serde_json::Value, f: &mut dyn FnMut(&mut String)) {
-	if value.get("type").and_then(|t| t.as_str()) != Some("tool_result") {
-		return;
-	}
-	match value.get_mut("content") {
-		Some(serde_json::Value::String(text)) => f(text),
-		Some(serde_json::Value::Array(parts)) => {
-			for part in parts {
-				if part.get("type").and_then(|t| t.as_str()) == Some("text")
-					&& let Some(serde_json::Value::String(text)) = part.get_mut("text")
-				{
-					f(text);
-				}
-			}
-		},
-		_ => {},
 	}
 }
 

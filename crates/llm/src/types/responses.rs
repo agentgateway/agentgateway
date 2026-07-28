@@ -83,13 +83,8 @@ impl RawInputItem {
 				Some(Value::Array(parts)) => visit_text_parts(parts, f),
 				_ => {},
 			}
-		} else if self.0.get("type").and_then(|t| t.as_str()) == Some("function_call_output") {
-			match self.0.get_mut("output") {
-				Some(Value::String(text)) => f(text),
-				Some(Value::Array(parts)) => visit_text_parts(parts, f),
-				_ => {},
-			}
 		}
+		// TODO opt-in setting to apply guards to tool results
 	}
 }
 
