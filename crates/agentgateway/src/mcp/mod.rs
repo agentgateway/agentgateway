@@ -472,7 +472,10 @@ impl From<&ResourceType> for MCPInfo {
 				..Default::default()
 			},
 			ResourceType::Task(task) => Self {
-				task: Some(MCPTask::new(task.target().to_string(), task.name().to_string())),
+				task: Some(MCPTask::new(
+					task.target().to_string(),
+					task.name().to_string(),
+				)),
 				..Default::default()
 			},
 		}
