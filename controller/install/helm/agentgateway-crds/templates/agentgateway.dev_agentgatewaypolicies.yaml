@@ -1837,6 +1837,17 @@ spec:
                                         - value
                                         type: object
                                       type: array
+                                    headers:
+                                      additionalProperties:
+                                        description: A Common Expression Language
+                                          (CEL) expression.
+                                        maxLength: 16384
+                                        minLength: 1
+                                        type: string
+                                      description: CEL-computed headers to include
+                                        in webhook requests.
+                                      maxProperties: 64
+                                      type: object
                                   required:
                                   - backendRef
                                   type: object
@@ -3006,6 +3017,17 @@ spec:
                                         - value
                                         type: object
                                       type: array
+                                    headers:
+                                      additionalProperties:
+                                        description: A Common Expression Language
+                                          (CEL) expression.
+                                        maxLength: 16384
+                                        minLength: 1
+                                        type: string
+                                      description: CEL-computed headers to include
+                                        in webhook requests.
+                                      maxProperties: 64
+                                      type: object
                                   required:
                                   - backendRef
                                   type: object

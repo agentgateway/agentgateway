@@ -1232,6 +1232,9 @@ message BackendPolicySpec {
 
     message Webhook {
       BackendReference backend = 1;
+
+      // CEL-computed headers to include in webhook requests.
+      map<string, string> headers = 2;
       repeated HeaderMatch forward_header_matches = 3;
 
       // Behavior when the webhook guardrail is unavailable or returns an

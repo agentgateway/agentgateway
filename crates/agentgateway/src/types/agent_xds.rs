@@ -3767,10 +3767,28 @@ fn convert_webhook(
 			_ => llm::policy::FailureMode::FailClosed,
 		};
 
+	let headers: Vec<(HeaderOrPseudo, Arc<cel::Expression>)> = w
+		.headers
+		.iter()
+		.filter_map(|(k, v)| {
+			let header = match HeaderOrPseudo::try_from(k.as_str()) {
+				Ok(h) => h,
+				Err(_) => {
+					diagnostics.add_warning(format!(
+						"skipping webhook header {k:?}: invalid header or pseudo-header name"
+					));
+					return None;
+				},
+			};
+			let expr =
+				permissive_cel_expression_arc(diagnostics, format!("backend.ai.webhook.headers.{k}"), v);
+			Some((header, expr))
+		})
+		.collect();
+
 	Ok(llm::policy::Webhook {
 		target,
-		// CEL header expressions are not yet exposed via the XDS API.
-		headers: Default::default(),
+		headers,
 		forward_header_matches,
 		failure_mode,
 	})

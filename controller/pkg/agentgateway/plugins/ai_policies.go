@@ -128,6 +128,13 @@ func processWebhook(ctx PolicyCtx, namespace string, webhook *agentgateway.Webho
 		FailureMode: webhookFailureMode(webhook.FailureMode),
 	}
 
+	if len(webhook.Headers) > 0 {
+		w.Headers = make(map[string]string, len(webhook.Headers))
+		for k, v := range webhook.Headers {
+			w.Headers[k] = string(v)
+		}
+	}
+
 	if len(webhook.ForwardHeaderMatches) > 0 {
 		headers := make([]*api.HeaderMatch, 0, len(webhook.ForwardHeaderMatches))
 		for _, match := range webhook.ForwardHeaderMatches {

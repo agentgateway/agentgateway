@@ -5499,6 +5499,13 @@ func (in *VirtualModel) DeepCopy() *VirtualModel {
 func (in *Webhook) DeepCopyInto(out *Webhook) {
 	*out = *in
 	in.BackendRef.DeepCopyInto(&out.BackendRef)
+	if in.Headers != nil {
+		in, out := &in.Headers, &out.Headers
+		*out = make(map[string]CELExpression, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	if in.ForwardHeaderMatches != nil {
 		in, out := &in.ForwardHeaderMatches, &out.ForwardHeaderMatches
 		*out = make([]apisv1.HTTPHeaderMatch, len(*in))
