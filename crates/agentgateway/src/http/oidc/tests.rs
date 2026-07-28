@@ -1029,6 +1029,7 @@ async fn local_oidc_config_rejects_ambiguous_provider_source_configuration() {
 					url: "https://example.invalid/should-not-be-called"
 						.parse()
 						.expect("discovery override url"),
+					tunnel: None,
 				}),
 				..explicit_local_oidc_config()
 			},

@@ -2947,13 +2947,15 @@ impl LocalMcpAuthentication {
 		let jwks = match &self.jwks {
 			None => FileInlineOrRemote::Remote {
 				url: self.derived_jwks_url()?,
+				tunnel: None,
 			},
-			Some(FileInlineOrRemote::Remote { url }) => FileInlineOrRemote::Remote {
+			Some(FileInlineOrRemote::Remote { url, tunnel }) => FileInlineOrRemote::Remote {
 				url: if !url.to_string().is_empty() {
 					url.clone()
 				} else {
 					self.derived_jwks_url()?
 				},
+				tunnel: tunnel.clone(),
 			},
 			Some(jwks @ (FileInlineOrRemote::Inline(_) | FileInlineOrRemote::File { .. })) => {
 				jwks.clone()
@@ -3647,7 +3649,7 @@ jwtValidationOptions:
 
 		match jwt_config {
 			http::jwt::LocalJwtConfig::Single { jwks, .. } => match jwks {
-				FileInlineOrRemote::Remote { url } => {
+				FileInlineOrRemote::Remote { url, tunnel: _ } => {
 					assert_eq!(
 						url.to_string(),
 						"https://authentik.example.com/application/o/mcp/jwks/"

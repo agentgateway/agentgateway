@@ -45,7 +45,12 @@ impl ResourceKind {
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub enum ResourceRef {
 	File(PathBuf),
-	Http { url: http::Uri, kind: ResourceKind },
+	Http {
+		url: http::Uri,
+		kind: ResourceKind,
+		/// Optional CONNECT / absolute-form proxy as `host:port`.
+		tunnel: Option<String>,
+	},
 }
 
 #[derive(Clone, Debug, Default)]
@@ -709,13 +714,21 @@ async fn fetch_direct(client: &Client, resource: &ResourceRef) -> anyhow::Result
 				next: None,
 			})
 		},
-		ResourceRef::Http { url, kind } => {
+		ResourceRef::Http { url, kind, tunnel } => {
+			let tunnel_target = match tunnel.as_deref() {
+				Some(host) => Some(
+					crate::types::agent::Target::try_from(host)
+						.with_context(|| format!("invalid remote resource tunnel proxy '{host}'"))?,
+				),
+				None => None,
+			};
 			let resp = client
-				.simple_call(
+				.simple_call_with_tunnel(
 					::http::Request::builder()
 						.uri(url)
 						.body(Body::empty())
 						.expect("builder should succeed"),
+					tunnel_target,
 				)
 				.await
 				.with_context(|| format!("fetch {url}"))?;
@@ -753,14 +766,17 @@ fn cache_control_max_age(headers: &http::HeaderMap) -> Option<Duration> {
 fn resource_key(resource: &ResourceRef) -> String {
 	match resource {
 		ResourceRef::File(path) => format!("file:{}", path.display()),
-		ResourceRef::Http { url, kind } => format!("http:{kind:?}:{url}"),
+		ResourceRef::Http { url, kind, tunnel } => match tunnel {
+			Some(proxy) => format!("http:{kind:?}:{url}:tunnel:{proxy}"),
+			None => format!("http:{kind:?}:{url}"),
+		},
 	}
 }
 
 fn normalize_resource(resource: ResourceRef) -> anyhow::Result<ResourceRef> {
 	Ok(match resource {
 		ResourceRef::File(path) => ResourceRef::File(absolute(path)?),
-		ResourceRef::Http { url, kind } => ResourceRef::Http { url, kind },
+		ResourceRef::Http { url, kind, tunnel } => ResourceRef::Http { url, kind, tunnel },
 	})
 }
 
@@ -961,5 +977,68 @@ mod tests {
 			.await
 			.expect("resource deletion should notify")
 			.expect("change channel should remain open");
+	}
+
+	#[tokio::test]
+	async fn remote_jwks_fetch_via_http_tunnel() {
+		use jsonwebtoken::jwk::JwkSet;
+		use wiremock::matchers::method;
+		use wiremock::{Mock, MockServer, ResponseTemplate};
+
+		use crate::serdes::{FileInlineOrRemote, RemoteHttpTunnel, RemoteHttpTunnelProxy};
+
+		let jwks_body = serde_json::json!({
+			"keys": [{
+				"use": "sig",
+				"kty": "EC",
+				"kid": "test-kid",
+				"crv": "P-256",
+				"alg": "ES256",
+				"x": "WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk",
+				"y": "xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"
+			}]
+		});
+
+		// Absolute-form HTTP proxy that serves JWKS for tunneled fetches.
+		let proxy = MockServer::start().await;
+		Mock::given(method("GET"))
+			.respond_with(ResponseTemplate::new(200).set_body_json(&jwks_body))
+			.mount(&proxy)
+			.await;
+
+		// Unreachable JWKS origin — without a tunnel this fetch must fail.
+		let jwks_url: http::Uri = "http://127.0.0.1:1/.well-known/jwks.json"
+			.parse()
+			.expect("jwks url");
+
+		let resources = ResourceFetcher::direct(test_client());
+
+		let with_tunnel = FileInlineOrRemote::Remote {
+			url: jwks_url.clone(),
+			tunnel: Some(RemoteHttpTunnel {
+				proxy: RemoteHttpTunnelProxy {
+					host: proxy.address().to_string(),
+				},
+			}),
+		};
+		let jwks: JwkSet = with_tunnel
+			.load(&resources, ResourceKind::Jwks)
+			.await
+			.expect("JWKS fetch via tunnel should succeed");
+		assert_eq!(jwks.keys.len(), 1);
+		assert_eq!(jwks.keys[0].common.key_id.as_deref(), Some("test-kid"));
+
+		let without_tunnel = FileInlineOrRemote::Remote {
+			url: jwks_url,
+			tunnel: None,
+		};
+		let err = without_tunnel
+			.load::<JwkSet>(&resources, ResourceKind::Jwks)
+			.await
+			.expect_err("direct fetch to unreachable JWKS host should fail");
+		assert!(
+			err.to_string().contains("fetch") || err.to_string().contains("Connection"),
+			"unexpected error: {err}"
+		);
 	}
 }
