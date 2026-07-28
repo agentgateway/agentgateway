@@ -146,7 +146,16 @@ impl WaypointIdentity {
 		addr: &NetworkAddress,
 		get_service_at: impl FnOnce(&NetworkAddress) -> Option<(Strng, Strng)>,
 	) -> bool {
-		get_service_at(addr).is_some_and(|(name, ns)| name == self.gateway && ns == self.namespace)
+		match get_service_at(addr) {
+			Some((name, ns)) => name == self.gateway && ns == self.namespace,
+			None => {
+				warn!(
+					"waypoint {}.{} cannot resolve service at {} for address verification",
+					self.gateway, self.namespace, addr
+				);
+				false
+			},
+		}
 	}
 
 	/// Checks whether this waypoint fronts `svc`, and may therefore serve traffic for it. That is
