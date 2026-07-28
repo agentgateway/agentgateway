@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -128,11 +129,12 @@ func processWebhook(ctx PolicyCtx, namespace string, webhook *agentgateway.Webho
 		FailureMode: webhookFailureMode(webhook.FailureMode),
 	}
 
-	if len(webhook.Headers) > 0 {
-		w.Headers = make(map[string]string, len(webhook.Headers))
-		for k, v := range webhook.Headers {
-			w.Headers[k] = string(v)
-		}
+	var errs []error
+	w.Headers = castCELMap(webhook.Headers, func(key string, expr agentgateway.CELExpression) {
+		errs = append(errs, fmt.Errorf("webhook header %q is not a valid CEL expression: %s", key, expr))
+	})
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
 	}
 
 	if len(webhook.ForwardHeaderMatches) > 0 {
