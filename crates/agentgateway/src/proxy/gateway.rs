@@ -35,7 +35,6 @@ use crate::types::agent::{
 	BindKey, BindProtocol, Listener, ListenerProtocol, TransportProtocol, TunnelProtocol,
 };
 use crate::types::discovery::Service;
-use crate::types::discovery::gatewayaddress::Destination;
 use crate::types::frontend;
 use crate::{ProxyInputs, Stores, client};
 
@@ -1443,32 +1442,29 @@ impl Gateway {
 		};
 
 		// Make sure the service is actually bound to us
-		let Some(wp) = svc.waypoint.as_ref() else {
+		if !svc.has_fronting_waypoint() {
 			anyhow::bail!(
 				"service {}.{} is not bound to a waypoint",
 				svc.hostname,
 				svc.namespace
 			);
-		};
+		}
 		let Some(self_id) = pi.cfg.self_addr.as_ref() else {
 			anyhow::bail!("self_id required for waypoint");
 		};
-		let is_ours = match &wp.destination {
-			Destination::Address(addr) => self_id.matches_address(addr, |a| {
-				discovery
-					.services
-					.get_by_vip(a)
-					.map(|s| (s.name.clone(), s.namespace.clone()))
-			}),
-			Destination::Hostname(n) => self_id.matches_hostname(n),
-		};
+		let is_ours = self_id.fronts_service(&svc, |a| {
+			discovery
+				.services
+				.get_by_vip(a)
+				.map(|s| (s.name.clone(), s.namespace.clone()))
+		});
 		if !is_ours {
 			anyhow::bail!(
-				"service {} is meant for waypoint {:?}, but we are {}.{}",
+				"service {} is not fronted by waypoint {}.{}; its waypoints are {:?}",
 				svc.hostname,
-				wp.destination,
 				self_id.gateway,
-				self_id.namespace
+				self_id.namespace,
+				svc.fronting_waypoint_destinations(),
 			);
 		}
 
