@@ -23,48 +23,59 @@ translates it to an xDS `ModelRoute`. The data plane groups `ModelRoute`
 resources by listener and uses the resulting `ModelRouter` for both request
 routing and the synthetic `/v1/models` response.
 
-This proposal extends that machinery with dynamic producers. It does not
-derive a second catalog from HTTP routes.
+Known model inventories require no additional discovery machinery. An operator
+declares each such model with an ordinary `AgentgatewayModel`, which remains
+the source of truth for its client-facing name, attachment, backend, and
+policies.
 
-Gateway API Inference Extension (GAIE) `InferencePool` is the first dynamic
-source. A pool can serve a base model and LoRA adapters whose inventory changes
-without Kubernetes configuration changing. OpenAI-compatible runtimes can
-expose that inventory through `GET /v1/models`.
+This proposal only addresses runtime-managed inventories that can change
+without a Kubernetes configuration update. Dynamically loaded and removed
+LoRA adapters are the motivating example. Gateway API Inference Extension
+(GAIE) `InferencePool` is the first such source, and an OpenAI-compatible
+runtime can expose its current inventory through `GET /v1/models`.
+
+If the supported runtimes do not have a concrete need for inventory that
+changes independently of Kubernetes configuration, runtime polling should not
+be implemented. It is not a replacement for declaring known models.
 
 ## Decision
 
 Dynamic discovery produces exact xDS `ModelRoute` entries. The per-listener
 `ModelRouter` remains the catalog, routing table, and `/v1/models` publisher.
 
-An `AgentgatewayModel` acts as the discovery anchor:
+An `AgentgatewayModel` in explicit discovery mode acts as the discovery anchor:
 
 - `parentRefs` select the Gateway listeners that receive discovered entries;
 - a custom provider `backendRef` selects the `InferencePool`;
 - visibility and policies are inherited by discovered entries; and
-- discovery configuration opts the anchor into polling.
+- `spec.discovery` opts the anchor into polling.
 
 The anchor does not advertise its resource name or a wildcard. Each discovered
 client-facing ID becomes an exact concrete `ModelRoute` targeting the pool.
 The EPP remains responsible for selecting a capable endpoint within that pool.
 
-Initial configuration uses annotations on `AgentgatewayModel` while the API is
-experimental. A typed `spec.discovery` field can replace the annotations after
-the behavior is proven.
+Discovery is an explicit alternative to the existing match mode. For an
+ordinary model, omitting `spec.match.model` continues to mean an exact match on
+`metadata.name`. For a discovery anchor, `spec.discovery` is present,
+`spec.match` must be absent, and the controller does not create the normal
+`metadata.name` model route. Only IDs returned by discovery become
+client-facing routes. This distinction must be represented by the API rather
+than inferred from an omitted match or an annotation.
 
 ```yaml
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
 metadata:
   name: llama-models
-  annotations:
-    agentgateway.dev/model-discovery: "enabled"
-    agentgateway.dev/model-discovery-path: /v1/models
-    agentgateway.dev/model-discovery-interval: 30s
-    agentgateway.dev/model-discovery-stale-after: 5m
 spec:
   parentRefs:
   - name: ai-gateway
     sectionName: llm
+  discovery:
+    type: OpenAI
+    path: /v1/models
+    interval: 30s
+    staleAfter: 5m
   provider: Custom
   custom:
     backendRef:
@@ -77,7 +88,8 @@ spec:
 
 ## Goals
 
-- Discover model IDs from opted-in `InferencePool` runtimes.
+- Discover model IDs from explicitly opted-in, runtime-managed
+  `InferencePool` inventories.
 - Feed discovered IDs into the existing per-listener `ModelRouter`.
 - Keep model advertisement and request routing backed by the same entries.
 - Preserve Gateway/listener scoping through `AgentgatewayModel.parentRefs`.
@@ -89,6 +101,8 @@ spec:
 
 ## Non-Goals
 
+- Poll an `InferencePool` whose model inventory is known declaratively.
+- Replace ordinary `AgentgatewayModel` resources for static model inventories.
 - Derive model inventory or reachability from `HTTPRoute`.
 - Generate or mutate `HTTPRoute` or `AgentgatewayPolicy` resources.
 - Replace the EPP or its model-aware endpoint selection.
@@ -135,26 +149,31 @@ same attachment and policy semantics as static `AgentgatewayModel` resources.
 
 ## Discovery Configuration
 
-The initial annotations are:
+The proposed typed fields are:
 
-| Annotation | Default | Meaning |
+| Field | Default | Meaning |
 | --- | --- | --- |
-| `agentgateway.dev/model-discovery` | `disabled` | Enables discovery when set to `enabled`. |
-| `agentgateway.dev/model-discovery-path` | `/v1/models` | Path polled on selected pool Pods. It must be an absolute path, not a URL. |
-| `agentgateway.dev/model-discovery-interval` | `30s` | Successful polling interval. |
-| `agentgateway.dev/model-discovery-stale-after` | `5m` | Maximum age of last-known-good inventory after all polls fail. |
+| `spec.discovery.type` | none | Required discriminator. Initially only `OpenAI` is supported. |
+| `spec.discovery.path` | `/v1/models` | Path polled on selected pool Pods. It must be an absolute path, not a URL. |
+| `spec.discovery.interval` | `30s` | Successful polling interval. |
+| `spec.discovery.staleAfter` | `5m` | Maximum age of last-known-good inventory after all polls fail. |
 
 An enabled anchor must:
 
 - use the `Custom` provider;
 - reference a namespace-local `InferencePool`;
-- omit `spec.match`, because discovered IDs provide exact matches; and
+- set `spec.discovery`;
+- omit `spec.match`, with API validation making `match` and `discovery`
+  mutually exclusive; and
 - attach only to listeners that allow `AgentgatewayModel`.
 
+When `spec.discovery` is absent, all existing match behavior is unchanged,
+including the `metadata.name` default. When it is present, `metadata.name`
+identifies the anchor but is not advertised or accepted as a model ID.
 Discovery is disabled by default. The controller never forwards client
 credentials to discovery endpoints.
 
-Future typed configuration may add:
+Future configuration may add:
 
 - runtime profiles;
 - include and exclude filters;
@@ -350,7 +369,9 @@ Endpoint addresses should only be logged at debug level.
 
 ### M1: OpenAI-compatible InferencePool discovery
 
-- Opt in through `AgentgatewayModel` annotations.
+- Add an explicit typed `AgentgatewayModel.spec.discovery` mode.
+- Preserve the existing `metadata.name` match default for non-discovery
+  models.
 - Select ready Pods for the referenced pool.
 - Poll standard OpenAI-compatible `/v1/models`.
 - Use union aggregation for the model-aware EPP.
@@ -361,7 +382,6 @@ Endpoint addresses should only be logged at debug level.
 
 ### M2: Typed configuration and operational status
 
-- Replace provisional annotations with `spec.discovery`.
 - Add typed status conditions.
 - Add include/exclude filters shared by routing and publication.
 - Add explicit port selection and administrator-bounded tuning.
@@ -422,6 +442,14 @@ Rejected. The pool does not identify the Gateway listener, visibility, or
 model policies. Inferring those from references recreates route-derived
 scoping.
 
+### Put a static model list on InferencePool
+
+Rejected. If an operator knows the inventory, ordinary `AgentgatewayModel`
+resources express it with the required listener, visibility, authorization,
+and policy semantics. A second list on `InferencePool` would duplicate that
+source of truth. Runtime discovery is reserved for inventory that changes
+independently of Kubernetes configuration.
+
 ### Generate AgentgatewayPolicy mappings
 
 Rejected as the default. It exposes runtime inventory as mutable Kubernetes
@@ -443,7 +471,12 @@ appropriate contract.
 
 ## Open Questions
 
-- What typed `spec.discovery` shape should replace the annotations?
+- Is runtime-managed inventory required by a supported `InferencePool`
+  implementation, or are declarative `AgentgatewayModel` resources sufficient
+  for the initial milestone?
+- Should the initial `spec.discovery` shape be extensible to non-OpenAI
+  protocols, or expose only the fields required by the first supported
+  runtime?
 - Should discovery status extend `AgentgatewayModelStatus.Parents` or add a
   top-level condition list?
 - How should authenticated discovery reuse backend TLS and credential policy
