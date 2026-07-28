@@ -34,6 +34,9 @@ pub fn parse_config(
 	contents: String,
 	local_config_source: Option<ConfigSource>,
 ) -> anyhow::Result<Config> {
+	// Shellexpend before parsing it
+	let contents = contents.replace("# yaml-language-server: $schema", "#");
+	let contents = shellexpand::full(&contents).ctx("invalid config")?;
 	let nested: NestedRawConfig = serdes::yamlviajson::from_str(&contents).ctx("invalid config")?;
 	let raw = nested.config.unwrap_or_default();
 	cel::register_custom_functions(&raw.custom_functions).ctx("invalid config.customFunctions")?;
@@ -1504,6 +1507,85 @@ config:
 		unsafe {
 			env::remove_var("SESSION_KEY");
 		}
+	}
+
+	#[test]
+	fn expands_environment_variables_in_config() {
+		let _env_lock = lock_env();
+		let _network = TempEnvVar::set("TEST_EXPAND_NETWORK", "expanded-network");
+
+		let config = parse_config(
+			r#"
+config:
+  network: "${TEST_EXPAND_NETWORK}"
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config should parse");
+
+		assert_eq!(config.network.as_str(), "expanded-network");
+	}
+
+	#[test]
+	fn expands_environment_variables_with_default_values() {
+		let _env_lock = lock_env();
+		unsafe {
+			env::remove_var("TEST_EXPAND_UNSET");
+		}
+
+		let config = parse_config(
+			r#"
+config:
+  network: "${TEST_EXPAND_UNSET:-fallback-network}"
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config should parse");
+
+		assert_eq!(config.network.as_str(), "fallback-network");
+	}
+
+	#[test]
+	fn does_not_expand_schema_comment() {
+		let _env_lock = lock_env();
+
+		// The schema comment contains a `$schema` token that must not be treated as a variable.
+		let config = parse_config(
+			r#"# yaml-language-server: $schema=https://example.com/schema.json
+config:
+  network: "static-network"
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config with schema comment should parse");
+
+		assert_eq!(config.network.as_str(), "static-network");
+	}
+
+	#[test]
+	fn errors_on_unset_environment_variable() {
+		let _env_lock = lock_env();
+		unsafe {
+			env::remove_var("TEST_EXPAND_MISSING");
+		}
+
+		let err = parse_config(
+			r#"
+config:
+  network: "${TEST_EXPAND_MISSING}"
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("unset variable should fail expansion");
+
+		assert!(
+			err.to_string().contains("invalid config"),
+			"unexpected error: {err}"
+		);
 	}
 
 	#[test]
