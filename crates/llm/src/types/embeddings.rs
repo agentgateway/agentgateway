@@ -111,6 +111,7 @@ impl crate::types::ResponseType for Response {
 			output_text_tokens: None,
 			output_audio_tokens: None,
 			service_tier: None,
+			provider_model: Some(strng::new(&self.model)),
 			..Default::default()
 		}
 	}
