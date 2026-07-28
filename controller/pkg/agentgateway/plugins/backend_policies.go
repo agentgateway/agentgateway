@@ -1032,6 +1032,12 @@ func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, n
 		if err := validateExtractionAuthorizationLocation(auth.SubjectToken.Source, "crossAppAccess subjectToken source"); err != nil {
 			errs = append(errs, err)
 		}
+		if auth.SubjectToken.TokenType != nil {
+			errs = append(errs, validateOAuthTokenType(*auth.SubjectToken.TokenType, "crossAppAccess subjectToken tokenType"))
+			if *auth.SubjectToken.TokenType == agentgateway.OAuthTokenTypeIDJAG {
+				errs = append(errs, errors.New("crossAppAccess subjectToken tokenType IdJag is not supported"))
+			}
+		}
 	}
 
 	return &api.CrossAppAccessAuth{
@@ -1049,9 +1055,13 @@ func translateCrossAppAccessSubjectToken(spec *agentgateway.CrossAppAccessSubjec
 	if spec == nil {
 		return nil
 	}
-	return &api.CrossAppAccessAuth_SubjectToken{
+	res := &api.CrossAppAccessAuth_SubjectToken{
 		Source: translateAuthorizationExtractionLocation(spec.Source),
 	}
+	if spec.TokenType != nil {
+		res.TokenType = translateOAuthTokenType(*spec.TokenType)
+	}
+	return res
 }
 
 func buildCrossAppAccessPolicy(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, namespace string) (*api.BackendAuthPolicy, error) {
@@ -1319,10 +1329,19 @@ func validateOAuthTokenType(tokenType agentgateway.OAuthTokenType, field string)
 		return nil
 	}
 	parsed, err := url.Parse(string(tokenType))
-	if err != nil || !parsed.IsAbs() || parsed.Fragment != "" {
+	if err != nil || !parsed.IsAbs() || parsed.Fragment != "" || oauthTokenTypeURLRequiresHost(parsed) {
 		return fmt.Errorf("%s %q must be a built-in token type or an absolute URI without a fragment", field, tokenType)
 	}
 	return nil
+}
+
+func oauthTokenTypeURLRequiresHost(parsed *url.URL) bool {
+	switch strings.ToLower(parsed.Scheme) {
+	case "ftp", "http", "https", "ws", "wss":
+		return parsed.Host == ""
+	default:
+		return false
+	}
 }
 
 func translateOAuthTokenType(tokenType agentgateway.OAuthTokenType) string {
