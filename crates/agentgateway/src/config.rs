@@ -363,8 +363,12 @@ pub fn parse_config(
 	// Database url can be sensitive by including username and password.
 	// In order to prevent it from being written directly in the config
 	// allow reading it from environment variable
-	let database = parse_database(raw.database.clone(),"config.database.url","DATABASE_URL")?;
-	let explicit_logging_database = parse_database(raw.logging.as_ref().and_then(|l| l.database.clone()),"config.logging.database.url","LOGGING_DATABASE_URL")?;
+	let database = parse_database(raw.database.clone(), "config.database.url", "DATABASE_URL")?;
+	let explicit_logging_database = parse_database(
+		raw.logging.as_ref().and_then(|l| l.database.clone()),
+		"config.logging.database.url",
+		"LOGGING_DATABASE_URL",
+	)?;
 	if database
 		.as_ref()
 		.is_some_and(|database| database.max_connections == Some(0))
@@ -717,19 +721,21 @@ pub fn empty_to_none<A: AsRef<str>>(inp: Option<A>) -> Option<A> {
 	inp
 }
 
-pub fn parse_database(cfg: Option<telemetry::log_store::Config>,inp_name: &str,env_param_name: &str)-> anyhow::Result<Option<telemetry::log_store::Config>>{
+pub fn parse_database(
+	cfg: Option<telemetry::log_store::Config>,
+	inp_name: &str,
+	env_param_name: &str,
+) -> anyhow::Result<Option<telemetry::log_store::Config>> {
 	match cfg {
 		Some(mut db) => {
-			db.url = parse_exclusive_env_or_config(inp_name, db.url, env_param_name)?
-				.unwrap_or_default();
+			db.url = parse_exclusive_env_or_config(inp_name, db.url, env_param_name)?.unwrap_or_default();
 			Ok(Some(db))
 		},
 		None => {
 			if empty_to_none(parse::<String>(env_param_name)?).is_some() {
 				warn!(
 					"{} is set but no {} block is defined; the environment variable will be ignored",
-					env_param_name,
-					inp_name
+					env_param_name, inp_name
 				);
 			}
 			Ok(None)
@@ -1564,7 +1570,9 @@ config:
 			.to_string(),
 			None,
 		)
-		.expect_err("setting both config.logging.database.url and LOGGING_DATABASE_URL should conflict");
+		.expect_err(
+			"setting both config.logging.database.url and LOGGING_DATABASE_URL should conflict",
+		);
 
 		assert!(
 			err.to_string().contains(
@@ -1638,9 +1646,12 @@ config:
 		let _env_lock = lock_env();
 		let _env = TempEnvVar::set("TEST_EXCLUSIVE_DB_URL", "");
 
-		let result =
-			parse_exclusive_env_or_config("config.database.url", String::new(), "TEST_EXCLUSIVE_DB_URL")
-				.expect("empty config and empty env should resolve to None");
+		let result = parse_exclusive_env_or_config(
+			"config.database.url",
+			String::new(),
+			"TEST_EXCLUSIVE_DB_URL",
+		)
+		.expect("empty config and empty env should resolve to None");
 
 		assert_eq!(result, None);
 	}
