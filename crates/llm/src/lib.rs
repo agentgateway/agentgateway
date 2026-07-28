@@ -366,6 +366,8 @@ pub enum AIError {
 	RequestMarshal(serde_json::Error),
 	#[error("failed to parse response: {0}")]
 	ResponseParsing(serde_json::Error),
+	#[error("bad request: {0}")]
+	BadRequest(Strng),
 	#[error("invalid response: {0}")]
 	InvalidResponse(Strng),
 	#[error("failed to marshal response: {0}")]

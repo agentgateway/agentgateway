@@ -195,13 +195,7 @@ pub mod from_messages {
 
 		let stop_reason = choice
 			.finish_reason
-			.map(|r| match r {
-				completions::FinishReason::Stop => messages::StopReason::EndTurn,
-				completions::FinishReason::Length => messages::StopReason::MaxTokens,
-				completions::FinishReason::ToolCalls => messages::StopReason::ToolUse,
-				completions::FinishReason::ContentFilter => messages::StopReason::EndTurn,
-				completions::FinishReason::FunctionCall => messages::StopReason::ToolUse,
-			})
+			.map(crate::conversion::messages::finish_reason_to_stop_reason)
 			.unwrap_or(messages::StopReason::EndTurn);
 
 		let cache_creation_input_tokens = usage.as_ref().and_then(|u| {
@@ -624,13 +618,8 @@ pub mod from_messages {
 						}
 
 						if let Some(finish_reason) = &choice.finish_reason {
-							let stop_reason = match finish_reason {
-								completions::FinishReason::Stop => messages::StopReason::EndTurn,
-								completions::FinishReason::Length => messages::StopReason::MaxTokens,
-								completions::FinishReason::ToolCalls => messages::StopReason::ToolUse,
-								completions::FinishReason::ContentFilter => messages::StopReason::Refusal,
-								completions::FinishReason::FunctionCall => messages::StopReason::ToolUse,
-							};
+							let stop_reason =
+								crate::conversion::messages::finish_reason_to_stop_reason(*finish_reason);
 							state.pending_stop_reason = Some(stop_reason);
 						}
 					}
@@ -670,7 +659,7 @@ pub mod from_messages {
 
 	/// Convert an Anthropic image source JSON value into an OpenAI-compatible URL string.
 	/// Base64 sources become `data:` URIs; URL sources pass through directly.
-	fn anthropic_source_to_url(source: &serde_json::Value) -> Option<String> {
+	pub(crate) fn anthropic_source_to_url(source: &serde_json::Value) -> Option<String> {
 		let source_type = source.get("type")?.as_str()?;
 		match source_type {
 			"base64" => {

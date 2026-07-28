@@ -11,6 +11,15 @@ fn to_gemini(v: Value) -> Value {
 	serde_json::from_slice(&bytes).expect("valid json")
 }
 
+fn msg_req(v: Value) -> types::messages::Request {
+	serde_json::from_value(v).expect("valid messages request")
+}
+
+fn to_gemini_msg(v: Value) -> Value {
+	let bytes = from_messages::translate(&msg_req(v), None).expect("translate ok");
+	serde_json::from_slice(&bytes).expect("valid json")
+}
+
 fn gemini_response_bytes(v: Value) -> bytes::Bytes {
 	bytes::Bytes::from(serde_json::to_vec(&v).expect("serialize gemini response"))
 }
@@ -1324,4 +1333,560 @@ fn streaming_usage_suppressed_on_interim_content_chunks() {
 	.unwrap();
 	assert_eq!(c2["usage"]["total_tokens"], 7);
 	assert_eq!(c2["choices"][0]["finish_reason"], "stop");
+}
+
+// ---------- Request: Anthropic Messages -> Gemini ----------
+//
+// These cover the behaviours the design pins as unambiguous. Thinking-config bucketing, the
+// streaming terminator and the `tool_result.is_error` envelope are deliberately NOT covered here:
+// they are open questions, and encoding a guess as a test would bake it in.
+
+#[test]
+fn msg_tool_result_recovers_function_name() {
+	// Gemini's functionResponse REQUIRES `name`, but Anthropic's tool_result carries only
+	// `tool_use_id`. So the translator must prepass the message list building id -> name from the
+	// tool_use blocks. Putting an id in `name` instead violates the Gemini contract and makes the
+	// model return EMPTY responses rather than erroring, so this fails silently if we get it wrong.
+	// No analogue on the completions path, where the `tool` message carries `name` directly.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-2.5-pro",
+		"max_tokens": 1024,
+		"messages": [
+			{ "role": "user", "content": "Weather in Berlin?" },
+			{ "role": "assistant", "content": [
+				{ "type": "tool_use", "id": "toolu_1", "name": "get_weather",
+					"input": { "location": "Berlin" } }
+			]},
+			{ "role": "user", "content": [
+				{ "type": "tool_result", "tool_use_id": "toolu_1", "content": "{\"temp\":9}" }
+			]}
+		],
+		"tools": [{
+			"name": "get_weather",
+			"description": "Get the current weather in a location",
+			"input_schema": { "type": "object", "properties": { "location": { "type": "string" } } }
+		}]
+	}));
+
+	let fr = &g["contents"][2]["parts"][0]["functionResponse"];
+	assert_eq!(
+		fr["name"], "get_weather",
+		"functionResponse.name must be recovered from the matching tool_use, got: {g}"
+	);
+}
+
+#[test]
+fn msg_omits_id_on_function_parts() {
+	// Same Vertex constraint as the completions path: `id` on functionCall/functionResponse is a
+	// hard 400 ("Unknown name \"id\" ... Cannot find field"). Anthropic ids must be stripped, not
+	// forwarded.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-2.5-pro",
+		"max_tokens": 1024,
+		"messages": [
+			{ "role": "assistant", "content": [
+				{ "type": "tool_use", "id": "toolu_1", "name": "get_weather", "input": {} }
+			]},
+			{ "role": "user", "content": [
+				{ "type": "tool_result", "tool_use_id": "toolu_1", "content": "ok" }
+			]}
+		]
+	}));
+
+	let fc = &g["contents"][0]["parts"][0]["functionCall"];
+	assert!(
+		fc.get("id").is_none(),
+		"functionCall must not carry `id`: Vertex rejects it, got: {fc}"
+	);
+	let fr = &g["contents"][1]["parts"][0]["functionResponse"];
+	assert!(
+		fr.get("id").is_none(),
+		"functionResponse must not carry `id`: Vertex rejects it, got: {fr}"
+	);
+}
+
+#[test]
+fn msg_out_of_order_tool_results_reorder_to_call_order() {
+	// Because `id` is stripped, Vertex correlates functionResponse to functionCall POSITIONALLY.
+	// Anthropic clients have no ordering obligation (linkage is tool_use_id), so results may arrive
+	// in any order and must be reordered to match the call order.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-2.5-pro",
+		"max_tokens": 1024,
+		"messages": [
+			{ "role": "assistant", "content": [
+				{ "type": "tool_use", "id": "toolu_a", "name": "get_weather", "input": {} },
+				{ "type": "tool_use", "id": "toolu_b", "name": "get_time", "input": {} }
+			]},
+			{ "role": "user", "content": [
+				{ "type": "tool_result", "tool_use_id": "toolu_b", "content": "12:00" },
+				{ "type": "tool_result", "tool_use_id": "toolu_a", "content": "9C" }
+			]}
+		]
+	}));
+
+	let parts = &g["contents"][1]["parts"];
+	assert_eq!(
+		parts[0]["functionResponse"]["name"], "get_weather",
+		"first functionResponse must match the first functionCall, got: {parts}"
+	);
+	assert_eq!(
+		parts[1]["functionResponse"]["name"], "get_time",
+		"second functionResponse must match the second functionCall, got: {parts}"
+	);
+}
+
+#[test]
+fn msg_thought_signature_round_trips_through_tool_use_id() {
+	// Gemini 3 hard-400s on the next turn if a functionCall's thoughtSignature isn't echoed back.
+	// Anthropic's tool_use block has no signature field, so (as on the completions path) the
+	// signature rides inside the client-durable id and is recovered before the outbound request.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-3-pro",
+		"max_tokens": 1024,
+		"messages": [
+			{ "role": "assistant", "content": [
+				{ "type": "tool_use", "id": "toolu_1__thought__SIG", "name": "get_weather",
+					"input": {} }
+			]},
+			{ "role": "user", "content": [
+				{ "type": "tool_result", "tool_use_id": "toolu_1__thought__SIG", "content": "ok" }
+			]}
+		]
+	}));
+
+	let part = &g["contents"][0]["parts"][0];
+	assert_eq!(
+		part["thoughtSignature"], "SIG",
+		"thoughtSignature must be recovered from the tool_use id, got: {part}"
+	);
+	assert!(
+		part["functionCall"].get("id").is_none(),
+		"the id carrying the signature must still be stripped, got: {part}"
+	);
+	// Name recovery must key on the BASE id, after the __thought__ suffix is split off.
+	assert_eq!(
+		g["contents"][1]["parts"][0]["functionResponse"]["name"], "get_weather",
+		"name recovery must use the base id, not the signature-suffixed one, got: {g}"
+	);
+}
+
+#[test]
+fn msg_thinking_block_becomes_thought_part_with_signature() {
+	// The Messages shape's one advantage over Completions: `thinking` has a first-class signature
+	// slot, so reasoning round-trips without the id-smuggling hack. Note `decode_parts` currently
+	// discards TextPart.thought_signature, so the response direction needs extending too.
+	let g = to_gemini_msg(json!({
+		"model": "gemini-3-pro",
+		"max_tokens": 1024,
+		"messages": [
+			{ "role": "assistant", "content": [
+				{ "type": "thinking", "thinking": "reasoning here", "signature": "SIG" },
+				{ "type": "text", "text": "answer" }
+			]}
+		]
+	}));
+
+	let parts = &g["contents"][0]["parts"];
+	assert_eq!(parts[0]["text"], "reasoning here");
+	assert_eq!(
+		parts[0]["thought"], true,
+		"a thinking block must become a thought part, got: {parts}"
+	);
+	assert_eq!(
+		parts[0]["thoughtSignature"], "SIG",
+		"the thinking block signature must be preserved, got: {parts}"
+	);
+	assert_eq!(
+		parts[1]["text"], "answer",
+		"thought and text ordering must be preserved, got: {parts}"
+	);
+}
+
+// ---------- Response: Messages (to_messages) ----------
+
+fn msg_resp(v: Value) -> Value {
+	let bytes = gemini_response_bytes(v);
+	let out = to_messages::translate_response(&bytes).expect("translate_response ok");
+	let serialized = out.serialize().expect("serialize");
+	serde_json::from_slice(&serialized).expect("valid json")
+}
+
+#[test]
+fn msg_resp_basic_text() {
+	let r = msg_resp(json!({
+		"candidates": [{
+			"content": { "role": "model", "parts": [{ "text": "hello" }] },
+			"finishReason": "STOP"
+		}],
+		"usageMetadata": {
+			"promptTokenCount": 10,
+			"candidatesTokenCount": 5,
+			"totalTokenCount": 15
+		}
+	}));
+	assert_eq!(r["role"], "assistant");
+	assert_eq!(r["stop_reason"], "end_turn");
+	assert_eq!(r["content"][0]["type"], "text");
+	assert_eq!(r["content"][0]["text"], "hello");
+	assert_eq!(r["usage"]["input_tokens"], 10);
+	assert_eq!(r["usage"]["output_tokens"], 5);
+}
+
+#[test]
+fn msg_resp_tool_use_stop_reason() {
+	let r = msg_resp(json!({
+		"candidates": [{
+			"content": { "role": "model", "parts": [
+				{ "functionCall": { "name": "get_weather", "args": { "city": "Berlin" } } }
+			]},
+			"finishReason": "STOP"
+		}]
+	}));
+	assert_eq!(r["stop_reason"], "tool_use");
+	assert_eq!(r["content"][0]["type"], "tool_use");
+	assert_eq!(r["content"][0]["name"], "get_weather");
+	assert_eq!(r["content"][0]["input"]["city"], "Berlin");
+}
+
+#[test]
+fn msg_resp_max_tokens_stop_reason() {
+	let r = msg_resp(json!({
+		"candidates": [{
+			"content": { "role": "model", "parts": [{ "text": "..." }] },
+			"finishReason": "MAX_TOKENS"
+		}]
+	}));
+	assert_eq!(r["stop_reason"], "max_tokens");
+}
+
+#[test]
+fn msg_resp_safety_block_is_refusal() {
+	let r = msg_resp(json!({
+		"candidates": [{
+			"content": { "role": "model", "parts": [{ "text": "blocked" }] },
+			"finishReason": "SAFETY"
+		}]
+	}));
+	assert_eq!(r["stop_reason"], "refusal");
+}
+
+#[test]
+fn msg_resp_prompt_block_is_refusal_with_empty_content() {
+	let r = msg_resp(json!({
+		"candidates": [],
+		"promptFeedback": { "blockReason": "SAFETY" }
+	}));
+	assert_eq!(r["stop_reason"], "refusal");
+	assert_eq!(r["content"].as_array().unwrap().len(), 0);
+}
+
+#[test]
+fn msg_resp_thinking_block_emission_order() {
+	// Thinking → Text → ToolUse
+	let r = msg_resp(json!({
+		"candidates": [{
+			"content": { "role": "model", "parts": [
+				{ "text": "thought here", "thought": true, "thoughtSignature": "SIG" },
+				{ "text": "answer" },
+				{ "functionCall": { "name": "tool_a", "args": {} } }
+			]},
+			"finishReason": "STOP"
+		}]
+	}));
+	let content = &r["content"];
+	assert_eq!(content[0]["type"], "thinking");
+	assert_eq!(content[0]["thinking"], "thought here");
+	assert_eq!(content[0]["signature"], "SIG");
+	assert_eq!(content[1]["type"], "text");
+	assert_eq!(content[1]["text"], "answer");
+	assert_eq!(content[2]["type"], "tool_use");
+}
+
+#[test]
+fn msg_resp_unsigned_thought_uses_empty_signature() {
+	let r = msg_resp(json!({
+		"candidates": [{
+			"content": { "role": "model", "parts": [
+				{ "text": "thinking", "thought": true }
+			]},
+			"finishReason": "STOP"
+		}]
+	}));
+	assert_eq!(r["content"][0]["type"], "thinking");
+	// unsigned (Gemini 2.5) thought has empty signature, not null
+	assert_eq!(r["content"][0]["signature"], "");
+}
+
+#[test]
+fn msg_resp_usage_subtracts_cached_tokens() {
+	let r = msg_resp(json!({
+		"candidates": [{ "content": { "role": "model", "parts": [{ "text": "hi" }] }, "finishReason": "STOP" }],
+		"usageMetadata": {
+			"promptTokenCount": 100,
+			"candidatesTokenCount": 20,
+			"cachedContentTokenCount": 30
+		}
+	}));
+	// input_tokens should NOT double-count the cache: 100 - 30 = 70
+	assert_eq!(r["usage"]["input_tokens"], 70);
+	assert_eq!(r["usage"]["output_tokens"], 20);
+	assert_eq!(r["usage"]["cache_read_input_tokens"], 30);
+}
+
+// ---------- Streaming: Messages (to_messages) ----------
+
+/// Feed one Gemini stream chunk through the Messages stream state and return all emitted
+/// events as JSON objects.
+fn msg_stream_chunk(state: &mut to_messages::StreamState, v: Value) -> Vec<Value> {
+	let chunk: vg::GenerateContentResponse =
+		serde_json::from_value(v).expect("valid gemini stream chunk");
+	let log = crate::StreamingUsageGuard::default();
+	state
+		.translate(&chunk, &log)
+		.into_iter()
+		.map(|(_, ev)| serde_json::to_value(ev).expect("serialize event"))
+		.collect()
+}
+
+#[test]
+fn msg_stream_text_emits_message_start_and_text_block() {
+	let mut s = to_messages::StreamState::new();
+	let events = msg_stream_chunk(
+		&mut s,
+		json!({ "candidates": [{
+			"content": { "role": "model", "parts": [{ "text": "hello" }] },
+			"finishReason": "STOP"
+		}] }),
+	);
+	// message_start, content_block_start, content_block_delta, content_block_stop, message_delta
+	assert_eq!(events[0]["type"], "message_start");
+	assert_eq!(events[1]["type"], "content_block_start");
+	assert_eq!(events[1]["content_block"]["type"], "text");
+	assert_eq!(events[2]["type"], "content_block_delta");
+	assert_eq!(events[2]["delta"]["type"], "text_delta");
+	assert_eq!(events[2]["delta"]["text"], "hello");
+	assert_eq!(events[3]["type"], "content_block_stop");
+	assert_eq!(events[4]["type"], "message_delta");
+	assert_eq!(events[4]["delta"]["stop_reason"], "end_turn");
+}
+
+#[test]
+fn msg_stream_thinking_before_text() {
+	let mut s = to_messages::StreamState::new();
+	let events = msg_stream_chunk(
+		&mut s,
+		json!({ "candidates": [{
+			"content": { "role": "model", "parts": [
+				{ "text": "thought", "thought": true, "thoughtSignature": "SIG" },
+				{ "text": "answer" }
+			]},
+			"finishReason": "STOP"
+		}] }),
+	);
+	// thinking block: start, thinking_delta, signature_delta, stop
+	assert_eq!(events[0]["type"], "message_start");
+	assert_eq!(events[1]["type"], "content_block_start");
+	assert_eq!(events[1]["content_block"]["type"], "thinking");
+	assert_eq!(events[2]["type"], "content_block_delta");
+	assert_eq!(events[2]["delta"]["type"], "thinking_delta");
+	assert_eq!(events[2]["delta"]["thinking"], "thought");
+	assert_eq!(events[3]["type"], "content_block_delta");
+	assert_eq!(events[3]["delta"]["type"], "signature_delta");
+	assert_eq!(events[3]["delta"]["signature"], "SIG");
+	// thinking block close
+	assert_eq!(events[4]["type"], "content_block_stop");
+	assert_eq!(events[4]["index"], 0);
+	// text block opens
+	assert_eq!(events[5]["type"], "content_block_start");
+	assert_eq!(events[5]["content_block"]["type"], "text");
+	assert_eq!(events[5]["index"], 1);
+}
+
+#[test]
+fn msg_stream_tool_call_block() {
+	let mut s = to_messages::StreamState::new();
+	let events = msg_stream_chunk(
+		&mut s,
+		json!({ "candidates": [{
+			"content": { "role": "model", "parts": [
+				{ "functionCall": { "name": "get_time", "args": { "tz": "UTC" } } }
+			]},
+			"finishReason": "STOP"
+		}] }),
+	);
+	assert_eq!(events[0]["type"], "message_start");
+	assert_eq!(events[1]["type"], "content_block_start");
+	assert_eq!(events[1]["content_block"]["type"], "tool_use");
+	assert_eq!(events[1]["content_block"]["name"], "get_time");
+	assert_eq!(events[2]["type"], "content_block_delta");
+	assert_eq!(events[2]["delta"]["type"], "input_json_delta");
+	// args must be JSON
+	let partial: Value =
+		serde_json::from_str(events[2]["delta"]["partial_json"].as_str().unwrap()).unwrap();
+	assert_eq!(partial["tz"], "UTC");
+	assert_eq!(events[3]["type"], "content_block_stop");
+	// stop_reason: tool_use (STOP + saw_tool_call)
+	assert_eq!(events[4]["type"], "message_delta");
+	assert_eq!(events[4]["delta"]["stop_reason"], "tool_use");
+}
+
+#[test]
+fn msg_stream_text_continues_across_chunks() {
+	let mut s = to_messages::StreamState::new();
+	// First chunk: text part, no finishReason
+	let e1 = msg_stream_chunk(
+		&mut s,
+		json!({ "candidates": [{
+			"content": { "role": "model", "parts": [{ "text": "hel" }] }
+		}] }),
+	);
+	// Second chunk: continuation, with finishReason
+	let e2 = msg_stream_chunk(
+		&mut s,
+		json!({ "candidates": [{
+			"content": { "role": "model", "parts": [{ "text": "lo" }] },
+			"finishReason": "STOP"
+		}] }),
+	);
+	// First chunk: message_start, block_start, delta (no finish)
+	assert_eq!(e1[0]["type"], "message_start");
+	assert_eq!(e1[1]["type"], "content_block_start");
+	assert_eq!(e1[2]["type"], "content_block_delta");
+	assert_eq!(e1[2]["delta"]["text"], "hel");
+	assert_eq!(
+		e1.len(),
+		3,
+		"no block_stop or message_delta without finishReason"
+	);
+	// Second chunk: delta into same block (no new block_start), block_stop, message_delta
+	assert_eq!(e2[0]["type"], "content_block_delta");
+	assert_eq!(e2[0]["delta"]["text"], "lo");
+	assert_eq!(e2[0]["index"], 0, "same block index");
+	assert_eq!(e2[1]["type"], "content_block_stop");
+	assert_eq!(e2[2]["type"], "message_delta");
+	assert_eq!(e2[3]["type"], "message_stop");
+}
+
+// ---------- Streaming: translate_stream wire-level tests ----------
+// These drive `to_messages::translate_stream` end-to-end (real SSE bytes in, Anthropic
+// SSE events out) to catch wiring bugs that state-machine unit tests cannot reach.
+
+/// Collect all SSE events from a `translate_stream` Body into a Vec of deserialized
+/// Values, one per `data:` line that parses as JSON.
+async fn collect_stream_events(body: axum_core::body::Body) -> Vec<Value> {
+	use http_body_util::BodyExt;
+	let bytes = body.collect().await.unwrap().to_bytes();
+	String::from_utf8(bytes.to_vec())
+		.unwrap()
+		.lines()
+		.filter_map(|line| line.strip_prefix("data: "))
+		.filter_map(|data| serde_json::from_str::<Value>(data).ok())
+		.collect()
+}
+
+/// Build a one-chunk Gemini SSE stream followed by a clean close (no [DONE]).
+fn gemini_sse(chunk: Value) -> axum_core::body::Body {
+	let data = format!("data: {}\n\n", serde_json::to_string(&chunk).unwrap());
+	axum_core::body::Body::from(data)
+}
+
+#[tokio::test]
+async fn translate_stream_emits_message_stop_on_clean_close() {
+	let body = gemini_sse(json!({
+		"candidates": [{
+			"content": { "role": "model", "parts": [{ "text": "hello" }] },
+			"finishReason": "STOP"
+		}]
+	}));
+	let log = crate::StreamingUsageGuard::default();
+	let out = to_messages::translate_stream(body, 1024 * 1024, strng::new("gemini-2.5-flash"), log);
+	let events = collect_stream_events(out).await;
+
+	let types: Vec<&str> = events.iter().filter_map(|e| e["type"].as_str()).collect();
+	assert!(
+		types.contains(&"message_start"),
+		"expected message_start, got: {types:?}"
+	);
+	assert!(
+		types.contains(&"message_delta"),
+		"expected message_delta, got: {types:?}"
+	);
+	assert_eq!(
+		types.last().copied(),
+		Some("message_stop"),
+		"last event must be message_stop; got: {types:?}"
+	);
+}
+
+#[tokio::test]
+async fn translate_stream_message_stop_on_truncated_stream_no_finish_reason() {
+	// Gemini closes without ever sending a finishReason (truncated stream).
+	// Client must still receive a well-terminated message (message_delta + message_stop).
+	let body = gemini_sse(json!({
+		"candidates": [{
+			"content": { "role": "model", "parts": [{ "text": "partial" }] }
+			// no finishReason
+		}]
+	}));
+	let log = crate::StreamingUsageGuard::default();
+	let out = to_messages::translate_stream(body, 1024 * 1024, strng::new("gemini-2.5-flash"), log);
+	let events = collect_stream_events(out).await;
+
+	let types: Vec<&str> = events.iter().filter_map(|e| e["type"].as_str()).collect();
+	assert!(
+		types.contains(&"message_delta"),
+		"truncated stream must emit message_delta; got: {types:?}"
+	);
+	assert_eq!(
+		types.last().copied(),
+		Some("message_stop"),
+		"truncated stream must end with message_stop; got: {types:?}"
+	);
+	let delta = events
+		.iter()
+		.find(|e| e["type"] == "message_delta")
+		.unwrap();
+	assert_eq!(delta["delta"]["stop_reason"], "end_turn");
+}
+
+#[tokio::test]
+async fn translate_stream_input_tokens_forwarded_to_client() {
+	// Gemini sends usageMetadata only on the final chunk (carrying finishReason).
+	// The client's message_delta must reflect the real input token count, not 0.
+	let body = axum_core::body::Body::from(format!(
+		"data: {}\n\ndata: {}\n\n",
+		serde_json::to_string(&json!({
+			"candidates": [{ "content": { "role": "model", "parts": [{ "text": "hi" }] } }]
+		}))
+		.unwrap(),
+		serde_json::to_string(&json!({
+			"candidates": [{
+				"content": { "role": "model", "parts": [{ "text": "" }] },
+				"finishReason": "STOP"
+			}],
+			"usageMetadata": {
+				"promptTokenCount": 100,
+				"candidatesTokenCount": 5,
+				"totalTokenCount": 105,
+				"cachedContentTokenCount": 20
+			}
+		}))
+		.unwrap()
+	));
+	let log = crate::StreamingUsageGuard::default();
+	let out = to_messages::translate_stream(body, 1024 * 1024, strng::new("gemini-2.5-flash"), log);
+	let events = collect_stream_events(out).await;
+
+	let delta = events
+		.iter()
+		.find(|e| e["type"] == "message_delta")
+		.unwrap();
+	// input_tokens = promptTokenCount(100) - cachedContentTokenCount(20) = 80
+	assert_eq!(
+		delta["usage"]["input_tokens"], 80,
+		"input_tokens must be prompt - cached"
+	);
+	assert_eq!(delta["usage"]["output_tokens"], 5);
+	assert_eq!(delta["usage"]["cache_read_input_tokens"], 20);
 }

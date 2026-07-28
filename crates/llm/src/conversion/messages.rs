@@ -759,6 +759,21 @@ fn translate_stop_reason(resp: &messages::StopReason) -> completions::FinishReas
 	}
 }
 
+/// Map a completions `FinishReason` to an Anthropic Messages `StopReason`.
+/// Used by native-provider response translators (e.g. Vertex Gemini → Messages).
+pub(crate) fn finish_reason_to_stop_reason(
+	reason: completions::FinishReason,
+) -> messages::StopReason {
+	match reason {
+		completions::FinishReason::Stop => messages::StopReason::EndTurn,
+		completions::FinishReason::Length => messages::StopReason::MaxTokens,
+		completions::FinishReason::ToolCalls | completions::FinishReason::FunctionCall => {
+			messages::StopReason::ToolUse
+		},
+		completions::FinishReason::ContentFilter => messages::StopReason::Refusal,
+	}
+}
+
 struct PendingStreamingToolCall {
 	id: Strng,
 	name: Strng,
