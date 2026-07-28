@@ -2036,4 +2036,3 @@ fn test_apply_prompt_guard_regex_reject(#[case] rules: Vec<RegexRule>, #[case] i
 	);
 	assert!(matches!(result, Some(RegexResult::Reject)));
 }
-
