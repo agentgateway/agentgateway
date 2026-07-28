@@ -346,6 +346,8 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 		// (Vertex or the Gemini API with a Gemini model, custom providers advertising
 		// generateContent) takes it in preference to the compat shim.
 		chat(InputFormat::Completions, ChatFormat::VertexGemini),
+		// Native Messages api to Vertex Gemini
+		chat(InputFormat::Messages, ChatFormat::VertexGemini),
 		chat(InputFormat::Completions, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Messages, ChatFormat::AnthropicMessages),
 		// Missing: Bedrock --> Bedrock
@@ -452,8 +454,13 @@ fn render_vertex_gemini(
 			let override_model = ctx.provider.override_model();
 			conversion::vertex_gemini::from_completions::translate(&req, override_model.as_deref())
 		},
+		types::ChatRequest::Messages(req) => {
+			// Same backend-pinned model resolution as the completions arm above.
+			let override_model = ctx.provider.override_model();
+			conversion::vertex_gemini::from_messages::translate(&req, override_model.as_deref())
+		},
 		_ => Err(AIError::UnsupportedConversion(strng::literal!(
-			"vertex gemini only supports completions or native gemini input"
+			"vertex gemini only supports completions, messages, or native gemini input"
 		))),
 	}
 }
@@ -614,6 +621,7 @@ impl ChatTranslation {
 				InputFormat::Completions => {
 					conversion::vertex_gemini::to_completions::translate_response(bytes)
 				},
+				InputFormat::Messages => conversion::vertex_gemini::to_messages::translate_response(bytes),
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
 					"from {:?} to {:?}",
 					self.output,
@@ -750,6 +758,14 @@ impl ChatTranslation {
 						ctx.log_content,
 					)
 				}),
+				InputFormat::Messages => resp.map(|b| {
+					conversion::vertex_gemini::to_messages::translate_stream(
+						b,
+						ctx.buffer_limit,
+						strng::new(&ctx.model),
+						ctx.logger,
+					)
+				}),
 				_ => resp,
 			},
 		}
@@ -835,7 +851,10 @@ impl ChatTranslation {
 			ChatFormat::VertexGemini => match format {
 				// Native Gemini clients expect the Google error shape; pass it through unchanged.
 				ChatErrorFormat::Google if self.input == InputFormat::Gemini => Ok(bytes.clone()),
-				ChatErrorFormat::Google => conversion::completions::translate_google_error(bytes),
+				ChatErrorFormat::Google => match self.input {
+					InputFormat::Messages => conversion::messages::translate_google_error(bytes),
+					_ => conversion::completions::translate_google_error(bytes),
+				},
 				_ => unsupported(),
 			},
 		}
@@ -1637,7 +1656,7 @@ impl AIProvider {
 			.await?;
 		self.apply_model_alias(policies, &mut req);
 
-		self
+		let result = self
 			.process_chat_request(
 				backend_info,
 				policies,
@@ -1650,7 +1669,26 @@ impl AIProvider {
 				catalog,
 				types::ChatRequest::Messages,
 			)
-			.await
+			.await;
+
+		// BadRequest errors from the translation layer (e.g. unknown tool_use_id) are
+		// client mistakes, not upstream failures. Return a 400 directly so the proxy
+		// layer sees a Rejected result rather than a Processing error (503).
+		match result {
+			Err(AIError::BadRequest(msg)) => {
+				let body = serde_json::json!({
+					"type": "error",
+					"error": { "type": "invalid_request_error", "message": msg.as_str() }
+				});
+				let resp = ::http::Response::builder()
+					.status(::http::StatusCode::BAD_REQUEST)
+					.header(::http::header::CONTENT_TYPE, "application/json")
+					.body(Body::from(body.to_string()))
+					.expect("static response is always valid");
+				Ok(RequestResult::Rejected(resp))
+			},
+			other => other,
+		}
 	}
 
 	pub async fn process_gemini_request(
