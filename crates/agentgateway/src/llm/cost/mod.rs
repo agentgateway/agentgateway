@@ -251,9 +251,9 @@ impl CatalogSnapshot {
 			return CostProjection::unpriced(CostLookupStatus::Missing);
 		};
 
-		let provisional_usage = usage_for(convention, resp, true);
-		// Tier selection must be invariant to cache-read repricing below: the
-		// cache tokens may move between input/cache_read, but their sum is stable.
+		let provisional_usage = usage_for(convention, resp, true, true);
+		// Tier selection must be invariant to cache repricing below: cache tokens
+		// may move between input and their cache buckets, but their sum is stable.
 		let context_tokens = provisional_usage.context_tokens();
 		let rates = entry.effective_rates(context_tokens);
 		if rates.is_empty() {
@@ -274,10 +274,11 @@ impl CatalogSnapshot {
 		}
 
 		let prices_cache_read = rates.cache_read.is_some();
-		let usage = if prices_cache_read {
+		let prices_cache_write = rates.cache_write.is_some();
+		let usage = if prices_cache_read && prices_cache_write {
 			provisional_usage
 		} else {
-			usage_for(convention, resp, false)
+			usage_for(convention, resp, prices_cache_read, prices_cache_write)
 		};
 		let breakdown = rates.breakdown(&usage);
 		let cost = CostBreakdown::from(&breakdown);
@@ -292,6 +293,7 @@ impl CatalogSnapshot {
 				"cacheTokenConvention": cache_convention_name(convention),
 				"contextTokens": context_tokens,
 				"pricesCacheRead": prices_cache_read,
+				"pricesCacheWrite": prices_cache_write,
 				"usage": &usage,
 				"rates": cost_rates,
 				"cost": cost,
@@ -611,31 +613,37 @@ fn usage_for(
 	convention: CacheTokenConvention,
 	resp: &LLMResponse,
 	prices_cache_read: bool,
+	prices_cache_write: bool,
 ) -> Usage {
 	let mut cache_read = resp.cached_input_tokens.unwrap_or(0);
-	let cache_write = resp.cache_creation_input_tokens.unwrap_or(0);
+	let mut cache_write = resp.cache_creation_input_tokens.unwrap_or(0);
 	let input_audio = resp.input_audio_tokens.unwrap_or(0);
 	let output_audio = resp.output_audio_tokens.unwrap_or(0);
 	let reasoning = resp.reasoning_tokens.unwrap_or(0);
 
 	let mut input = resp.input_tokens.unwrap_or(0).saturating_sub(input_audio);
-	match (convention, prices_cache_read) {
-		(CacheTokenConvention::InputIncludesCache, true) => {
-			input = input.saturating_sub(cache_read);
+	match convention {
+		CacheTokenConvention::InputIncludesCache => {
+			if prices_cache_read {
+				input = input.saturating_sub(cache_read);
+			} else {
+				cache_read = 0;
+			}
+			if prices_cache_write {
+				input = input.saturating_sub(cache_write);
+			} else {
+				cache_write = 0;
+			}
 		},
-		(CacheTokenConvention::InputIncludesCache, false) => {
-			// Cached tokens are already included in input_tokens; zero the separate
-			// bucket so they aren't double-counted or left unrated.
-			cache_read = 0;
-		},
-		(CacheTokenConvention::InputExcludesCache, true) => {
-			// cache_read is already separate from input; keep as-is.
-		},
-		(CacheTokenConvention::InputExcludesCache, false) => {
-			// No cache_read rate in the catalog: fold cached tokens into input so
-			// they're billed at the input rate rather than going unrated ($0).
-			input = input.saturating_add(cache_read);
-			cache_read = 0;
+		CacheTokenConvention::InputExcludesCache => {
+			if !prices_cache_read {
+				input = input.saturating_add(cache_read);
+				cache_read = 0;
+			}
+			if !prices_cache_write {
+				input = input.saturating_add(cache_write);
+				cache_write = 0;
+			}
 		},
 	}
 	let output = resp
@@ -757,10 +765,25 @@ mod tests {
 			output_tokens: Some(500),
 			..Default::default()
 		};
-		let u = usage_for(CacheTokenConvention::InputIncludesCache, &resp, true);
+		let u = usage_for(CacheTokenConvention::InputIncludesCache, &resp, true, true);
 		assert_eq!(u.input, 700, "fresh input excludes the cached portion");
 		assert_eq!(u.cache_read, 300);
 		assert_eq!(u.output, 500);
+	}
+
+	#[test]
+	fn openai_family_splits_cache_reads_and_writes_out_of_input() {
+		let resp = LLMResponse {
+			input_tokens: Some(1000),
+			cached_input_tokens: Some(300),
+			cache_creation_input_tokens: Some(200),
+			..Default::default()
+		};
+		let u = usage_for(CacheTokenConvention::InputIncludesCache, &resp, true, true);
+		assert_eq!(u.input, 500);
+		assert_eq!(u.cache_read, 300);
+		assert_eq!(u.cache_write, 200);
+		assert_eq!(u.input + u.cache_read + u.cache_write, 1000);
 	}
 
 	#[test]
@@ -771,9 +794,80 @@ mod tests {
 			output_tokens: Some(500),
 			..Default::default()
 		};
-		let u = usage_for(CacheTokenConvention::InputIncludesCache, &resp, false);
+		let u = usage_for(
+			CacheTokenConvention::InputIncludesCache,
+			&resp,
+			false,
+			false,
+		);
 		assert_eq!(u.input, 1000, "cached tokens remain billable in input");
 		assert_eq!(u.cache_read, 0, "no separate cache bucket");
+	}
+
+	#[test]
+	fn openai_still_splits_cache_writes_when_reads_are_unpriced() {
+		let resp = LLMResponse {
+			input_tokens: Some(1000),
+			cached_input_tokens: Some(300),
+			cache_creation_input_tokens: Some(200),
+			..Default::default()
+		};
+		let u = usage_for(CacheTokenConvention::InputIncludesCache, &resp, false, true);
+		assert_eq!(u.input, 800);
+		assert_eq!(u.cache_read, 0);
+		assert_eq!(u.cache_write, 200);
+	}
+
+	#[test]
+	fn openai_prices_cache_writes_once() {
+		let snap = CatalogSnapshot::parse(
+			r#"{"providers":{"openai":{"models":{"gpt-5.6":{"rates":{"input":"1","cacheRead":"0.1","cacheWrite":"1.25"}}}}}}"#,
+		)
+		.unwrap();
+		let resp = LLMResponse {
+			input_tokens: Some(1_000_000),
+			cached_input_tokens: Some(300_000),
+			cache_creation_input_tokens: Some(200_000),
+			..Default::default()
+		};
+
+		let projection = snap.project(
+			"openai",
+			"gpt-5.6",
+			&resp,
+			CacheTokenConvention::InputIncludesCache,
+		);
+		let cost = projection.cost.expect("model is priced");
+		assert_eq!(cost.input.to_f64(), Some(0.5));
+		assert_eq!(cost.cache_read.to_f64(), Some(0.03));
+		assert_eq!(cost.cache_write.to_f64(), Some(0.25));
+		assert_eq!(cost.total().to_f64(), Some(0.78));
+	}
+
+	#[test]
+	fn openai_folds_cache_writes_into_input_when_unpriced() {
+		let snap = CatalogSnapshot::parse(
+			r#"{"providers":{"openai":{"models":{"gpt-5.6":{"rates":{"input":"1","cacheRead":"0.1"}}}}}}"#,
+		)
+		.unwrap();
+		let resp = LLMResponse {
+			input_tokens: Some(1_000_000),
+			cached_input_tokens: Some(300_000),
+			cache_creation_input_tokens: Some(200_000),
+			..Default::default()
+		};
+
+		let projection = snap.project(
+			"openai",
+			"gpt-5.6",
+			&resp,
+			CacheTokenConvention::InputIncludesCache,
+		);
+		let cost = projection.cost.expect("model is priced");
+		assert_eq!(cost.input.to_f64(), Some(0.7));
+		assert_eq!(cost.cache_read.to_f64(), Some(0.03));
+		assert_eq!(cost.cache_write.to_f64(), Some(0.0));
+		assert_eq!(cost.total().to_f64(), Some(0.73));
 	}
 
 	#[test]
@@ -785,7 +879,7 @@ mod tests {
 			output_tokens: Some(500),
 			..Default::default()
 		};
-		let u = usage_for(CacheTokenConvention::InputExcludesCache, &resp, true);
+		let u = usage_for(CacheTokenConvention::InputExcludesCache, &resp, true, true);
 		assert_eq!(u.input, 1000, "Anthropic input_tokens is already fresh");
 		assert_eq!(u.cache_read, 300);
 		assert_eq!(u.cache_write, 200);
@@ -799,7 +893,7 @@ mod tests {
 			cached_input_tokens: Some(300),
 			..Default::default()
 		};
-		let u = usage_for(CacheTokenConvention::InputExcludesCache, &resp, true);
+		let u = usage_for(CacheTokenConvention::InputExcludesCache, &resp, true, true);
 		assert_eq!(
 			u.input, 1000,
 			"fresh input must not be reduced by cache_read"
@@ -815,7 +909,7 @@ mod tests {
 			cached_input_tokens: Some(300),
 			..Default::default()
 		};
-		let u = usage_for(CacheTokenConvention::InputIncludesCache, &resp, true);
+		let u = usage_for(CacheTokenConvention::InputIncludesCache, &resp, true, true);
 		assert_eq!(u.input, 700);
 		assert_eq!(u.cache_read, 300);
 	}
@@ -831,7 +925,7 @@ mod tests {
 			output_audio_tokens: Some(100),
 			..Default::default()
 		};
-		let u = usage_for(CacheTokenConvention::InputIncludesCache, &resp, true);
+		let u = usage_for(CacheTokenConvention::InputIncludesCache, &resp, true, true);
 		assert_eq!(u.input, 500, "fresh text = 1000 - 300 cached - 200 audio");
 		assert_eq!(u.cache_read, 300);
 		assert_eq!(u.input_audio, 200);
@@ -1059,7 +1153,12 @@ mod tests {
 			output_tokens: Some(500),
 			..Default::default()
 		};
-		let u = usage_for(CacheTokenConvention::InputExcludesCache, &resp, false);
+		let u = usage_for(
+			CacheTokenConvention::InputExcludesCache,
+			&resp,
+			false,
+			false,
+		);
 		assert_eq!(u.input, 1300, "cached tokens folded into input for billing");
 		assert_eq!(u.cache_read, 0, "no separate cache bucket");
 		assert_eq!(u.output, 500);

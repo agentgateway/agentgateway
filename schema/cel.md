@@ -56,7 +56,7 @@
 |`llm.inputTextTokens`|integer|The number of text tokens in the input/prompt.<br>Note: this field is only set in multi-modal calls where the total token count is split out by<br>text/image/audio; for standard all-text calls, this is unset.|
 |`llm.inputAudioTokens`|integer|The number of audio tokens in the input/prompt.|
 |`llm.cachedInputTokens`|integer|The number of tokens in the input/prompt read from cache (savings)|
-|`llm.cacheCreationInputTokens`|integer|Tokens written to cache (costs)<br>Not present with OpenAI|
+|`llm.cacheCreationInputTokens`|integer|Tokens written to cache (costs)|
 |`llm.outputTokens`|integer|The number of tokens in the output/completion.|
 |`llm.outputImageTokens`|integer|The number of image tokens in the output/completion.|
 |`llm.outputTextTokens`|integer|The number of text tokens in the output/completion.|
