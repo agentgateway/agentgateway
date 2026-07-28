@@ -164,8 +164,7 @@ func NewAgwCollections(
 			ObjectFilter: client.ObjectFilter(),
 		}, krtOptions.ToOptions("informer/Nodes")...),
 		Pods: krt.NewFilteredInformer[*corev1.Pod](client, kclient.Filter{
-			ObjectTransform: cachetransform.PodCacheTransform,
-			ObjectFilter:    client.ObjectFilter(),
+			ObjectFilter: client.ObjectFilter(),
 		}, krtOptions.ToOptions("informer/Pods")...),
 
 		Secrets: krt.WrapClient(

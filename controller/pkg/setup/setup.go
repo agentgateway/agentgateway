@@ -25,7 +25,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	ctrl "sigs.k8s.io/controller-runtime"
-	ctrlcache "sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
@@ -38,7 +37,6 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/common"
 	"github.com/agentgateway/agentgateway/controller/pkg/controller"
-	"github.com/agentgateway/agentgateway/controller/pkg/controller/cachetransform"
 	"github.com/agentgateway/agentgateway/controller/pkg/deployer"
 	"github.com/agentgateway/agentgateway/controller/pkg/logging"
 	"github.com/agentgateway/agentgateway/controller/pkg/metrics"
@@ -160,13 +158,6 @@ func New(opts Options) (*setup, error) {
 				LeaderElectionNamespace: namespaces.GetPodNamespace(),
 				LeaderElection:          !s.GlobalSettings.DisableLeaderElection,
 				LeaderElectionID:        leaderElectionID,
-				// Note: the main informer caches are managed by the istio kube
-				// client (which applies its own stripUnusedFields by default);
-				// this DefaultTransform covers any additional resources the
-				// manager may watch via controller-runtime.
-				Cache: ctrlcache.Options{
-					DefaultTransform: cachetransform.DefaultCacheTransform,
-				},
 			}
 		}
 	}
