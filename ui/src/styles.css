@@ -3004,8 +3004,8 @@ tbody tr:hover {
   display: grid;
   width: 100%;
   grid-template-columns:
-    4px minmax(126px, 0.55fr) auto minmax(0, 2fr) minmax(230px, 0.9fr)
-    auto;
+    4px minmax(126px, 0.55fr) auto 48px minmax(0, 2fr)
+    minmax(230px, 0.9fr) auto;
   gap: 14px;
   align-items: center;
   border: 0;
@@ -3083,9 +3083,8 @@ tbody tr:hover {
 
 .log-call-title-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
 }
 
 .log-message-preview {
@@ -3107,9 +3106,9 @@ tbody tr:hover {
   font-size: 12px;
 }
 
-.log-call-inline-status {
+.log-call-status {
   display: inline-flex;
-  flex: 0 0 auto;
+  justify-content: center;
 }
 
 .log-call-subtitle > span {
@@ -5785,12 +5784,13 @@ details summary {
   }
 
   .log-call-summary {
-    grid-template-columns: 4px minmax(0, 1fr) auto;
+    grid-template-columns: 4px minmax(0, 1fr) 48px;
     gap: 10px;
     padding: 12px;
   }
 
   .log-status-rail {
+    grid-column: 1;
     grid-row: 1 / span 5;
   }
 
@@ -5811,6 +5811,12 @@ details summary {
   .log-call-main {
     grid-column: 2 / 4;
     grid-row: 1;
+  }
+
+  .log-call-status {
+    grid-column: 3;
+    grid-row: 2;
+    justify-self: stretch;
   }
 
   .log-call-title-row {

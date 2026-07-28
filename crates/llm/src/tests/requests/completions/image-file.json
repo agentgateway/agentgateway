@@ -1,0 +1,17 @@
+{
+  "model": "gemini-2.5-pro",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "Describe this image." },
+        {
+          "type": "image_url",
+          "image_url": {
+            "url": "gs://my-bucket/photo.png"
+          }
+        }
+      ]
+    }
+  ]
+}

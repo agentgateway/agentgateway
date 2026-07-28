@@ -308,6 +308,8 @@ type BackendEviction struct {
 	// If all endpoints are evicted, the load balancer falls back to returning evicted endpoints
 	// rather than failing entirely.
 	// If unset, defaults to `3s`.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="evictionDuration must be at least 1 second"
 	// +kubebuilder:default="3s"
@@ -688,6 +690,8 @@ type FrontendHTTP struct {
 	// Timeout before an unused connection is
 	// closed.
 	// If unset, this defaults to 10 minutes.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http1IdleTimeout must be at least 1 second"
 	// +optional
@@ -720,10 +724,14 @@ type FrontendHTTP struct {
 	// If unset, this defaults to `16Ki`.
 	// +optional
 	HTTP2MaxHeaderSize *ByteSize `json:"http2MaxHeaderSize,omitempty"`
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http2KeepaliveInterval must be at least 1 second"
 	// +optional
 	HTTP2KeepaliveInterval *metav1.Duration `json:"http2KeepaliveInterval,omitempty"`
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http2KeepaliveTimeout must be at least 1 second"
 	// +optional
@@ -731,6 +739,8 @@ type FrontendHTTP struct {
 	// Maximum time a connection is allowed to remain open.
 	// After this duration, the connection is gracefully closed after the current in-flight request completes.
 	// Useful for ensuring even traffic distribution behind load balancers during scaling events.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="maxConnectionDuration must be at least 1 second"
 	// +optional
@@ -741,6 +751,8 @@ type FrontendHTTP struct {
 type FrontendTLS struct {
 	// Deadline for a TLS handshake to
 	// complete. If unset, this defaults to `15s`.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('100ms')",message="handshakeTimeout must be at least 100ms"
 	// +optional
@@ -835,6 +847,8 @@ type Keepalive struct {
 
 	// Time a connection needs to be idle before keepalive probes start being sent.
 	// If unset, this defaults to 180s.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="time must be at least 1 second"
 	// +optional
@@ -842,6 +856,8 @@ type Keepalive struct {
 
 	// Time between keepalive probes.
 	// If unset, this defaults to 180s.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="interval must be at least 1 second"
 	// +optional
@@ -1192,6 +1208,8 @@ type RemoteJWKS struct {
 	// +kubebuilder:validation:MaxLength=2000
 	JwksPath string `json:"jwksPath"`
 	// +optional
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('5m')",message="cacheDuration must be at least 5m."
 	// +kubebuilder:default="5m"
@@ -1453,8 +1471,9 @@ const (
 	HostnameRewriteModeNone HostnameRewriteMode = "None"
 )
 
-// +kubebuilder:validation:ExactlyOneOf=key;secretRef;passthrough;aws;azure;gcp;oauthTokenExchange;crossAppAccess
-// +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) || has(self.passthrough) : true",message="location may only be set for key or passthrough auth"
+// +kubebuilder:validation:AtMostOneOf=key;secretRef;passthrough;aws;azure;gcp;oauthTokenExchange;crossAppAccess
+// +kubebuilder:validation:XValidation:rule="has(self.credentials) || has(self.key) || has(self.secretRef) || has(self.passthrough) || has(self.aws) || has(self.azure) || has(self.gcp) || has(self.oauthTokenExchange) || has(self.crossAppAccess)",message="must specify credentials, or at most one of key/secretRef/passthrough/aws/azure/gcp/oauthTokenExchange/crossAppAccess (credentials may be combined with a primary auth kind)"
+// +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) || has(self.passthrough) : true",message="location may only be set for key, secretRef, or passthrough auth"
 type BackendAuth struct {
 	// Inline key to use as the value of the
 	// `Authorization` header. This option is the least secure; usage of a
@@ -1501,11 +1520,37 @@ type BackendAuth struct {
 	// +optional
 	CrossAppAccess *CrossAppAccessAuth `json:"crossAppAccess,omitempty"`
 
-	// Where backend credentials are inserted. Defaults to the `Authorization`
-	// header with the `Bearer ` prefix. Applies to `key`, `secretRef`, and
-	// `passthrough`.
+	// Where backend credentials are inserted.
+	// If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
+	// This applies to `key`, `secretRef`, and `passthrough`. Entries in `credentials` carry their own location.
 	// +optional
 	Location *AuthorizationLocation `json:"location,omitempty"`
+
+	// Credentials is a list of additional credentials to inject on the
+	// backend request. Each entry resolves a Secret key and writes its value
+	// to the entry's location. `credentials` is independent of the primary
+	// `key`/`secretRef`/`passthrough` mechanism and may be set on its own or
+	// alongside it.
+	//
+	// +optional
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=8
+	// +listType=atomic
+	Credentials []BackendAuthCredential `json:"credentials,omitempty"`
+}
+
+// BackendAuthCredential specifies one additional credential to inject on the
+// backend request.
+type BackendAuthCredential struct {
+	// Where the credential is inserted on the backend request.
+	// +required
+	Location AuthorizationLocation `json:"location"`
+
+	// SecretRef references a Kubernetes Secret holding the credential value, and
+	// optionally overrides the key read from it. Defaults to `Authorization`,
+	// matching the key convention used by the top-level `secretRef`.
+	// +required
+	SecretRef LocalSecretKeyRef `json:"secretRef"`
 }
 
 // OpenAIModerationAuth configures credentials for OpenAI Moderation requests.
@@ -1810,21 +1855,32 @@ type OAuthClientAuth struct {
 	// +optional
 	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
 
-	// privateKeyJwt client assertion settings. Required when method is PrivateKeyJwt.
+	// Client assertion settings. Required when method is PrivateKeyJwt.
 	// +optional
 	PrivateKeyJWT *OAuthPrivateKeyJWT `json:"privateKeyJwt,omitempty"`
 
-	// Defaults to ClientSecretBasic.
+	// Client authentication method. Defaults to ClientSecretBasic.
 	// +optional
 	Method *OAuthClientAuthMethod `json:"method,omitempty"`
 }
 
 // OAuthPrivateKeyJWT configures RFC 7523 private_key_jwt client authentication.
+// +kubebuilder:validation:XValidation:rule="has(self.certificateRef) == has(self.certificateHeader)",message="certificateRef and certificateHeader must be set together"
 type OAuthPrivateKeyJWT struct {
-	// Secret providing the `signingKey` key by default with a PEM-encoded RSA
-	// or EC private key; override the key name via `signingKeyRef.key`.
+	// PEM-encoded RSA or EC private key; key defaults to `signingKey`.
 	// +required
 	SigningKeyRef LocalSecretKeyRef `json:"signingKeyRef"`
+
+	// PEM-encoded X.509 certificate chain, leaf first, for certificateHeader. The
+	// leaf public key should match signingKeyRef; a mismatch only logs a warning
+	// but the token endpoint will reject the assertions. Required when
+	// certificateHeader is set. The key defaults to `certificate`.
+	// +optional
+	CertificateRef *LocalSecretKeyRef `json:"certificateRef,omitempty"`
+
+	// JWS certificate header. Required when certificateRef is set.
+	// +optional
+	CertificateHeader *OAuthPrivateKeyJWTCertificateHeader `json:"certificateHeader,omitempty"`
 
 	// JWS signing algorithm. Defaults to RS256.
 	// +optional
@@ -1841,12 +1897,21 @@ type OAuthPrivateKeyJWT struct {
 }
 
 // +k8s:enum
+type OAuthPrivateKeyJWTCertificateHeader string
+
+const (
+	OAuthPrivateKeyJWTCertificateHeaderX5C     OAuthPrivateKeyJWTCertificateHeader = "x5c"
+	OAuthPrivateKeyJWTCertificateHeaderX5TS256 OAuthPrivateKeyJWTCertificateHeader = "x5t#S256"
+)
+
+// +k8s:enum
 type OAuthPrivateKeyJWTSigningAlgorithm string
 
 const (
 	OAuthPrivateKeyJWTSigningAlgorithmRS256 OAuthPrivateKeyJWTSigningAlgorithm = "RS256"
 	OAuthPrivateKeyJWTSigningAlgorithmRS384 OAuthPrivateKeyJWTSigningAlgorithm = "RS384"
 	OAuthPrivateKeyJWTSigningAlgorithmRS512 OAuthPrivateKeyJWTSigningAlgorithm = "RS512"
+	OAuthPrivateKeyJWTSigningAlgorithmPS256 OAuthPrivateKeyJWTSigningAlgorithm = "PS256"
 	OAuthPrivateKeyJWTSigningAlgorithmES256 OAuthPrivateKeyJWTSigningAlgorithm = "ES256"
 	OAuthPrivateKeyJWTSigningAlgorithmES384 OAuthPrivateKeyJWTSigningAlgorithm = "ES384"
 )
@@ -2307,6 +2372,8 @@ type BackendHTTP struct {
 	Version *HTTPVersion `json:"version,omitempty"`
 
 	// Deadline for receiving a response from the backend.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1ms')",message="requestTimeout must be at least 1ms"
 	// +optional
@@ -2328,6 +2395,8 @@ type BackendTCP struct {
 	Keepalive *Keepalive `json:"keepalive,omitempty"`
 	// Deadline for establishing a connection to
 	// the destination.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('100ms')",message="connectTimeout must be at least 100ms"
 	// +optional
@@ -3071,6 +3140,8 @@ type Timeouts struct {
 	// Timeout for an individual request from the gateway to a backend. This covers the time from when
 	// the request first starts being sent from the gateway to when the full response has been received from the backend.
 	//
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('100ms')",message="request must be at least 1ms"
 	// +optional

@@ -404,9 +404,12 @@ backends:
         target:
           models:
             - name: llama-3.1-8b-instant
+              created: 0
               visibility: public
               headerMatches: []
-              backendKey: "llm:model:llama-3.1-8b-instant:0"
+              backend:
+                backend: "/llm:model:llama-3.1-8b-instant:0"
+                weight: 1
               policies:
                 llm:
                   routes:
@@ -426,9 +429,12 @@ backends:
                 authorization: ~
               backendPolicies: []
             - name: fireworks-llama
+              created: 0
               visibility: public
               headerMatches: []
-              backendKey: "llm:model:fireworks-llama:1"
+              backend:
+                backend: "/llm:model:fireworks-llama:1"
+                weight: 1
               policies:
                 llm:
                   routes:
@@ -448,12 +454,15 @@ backends:
                 authorization: ~
               backendPolicies: []
             - name: claude-3-haiku
+              created: 0
               visibility: public
               headerMatches:
                 - - name: x-org
                     value:
                       exact: engineering
-              backendKey: "llm:model:claude-3-haiku:2"
+              backend:
+                backend: "/llm:model:claude-3-haiku:2"
+                weight: 1
               policies:
                 llm:
                   routes:
@@ -473,9 +482,12 @@ backends:
                 authorization: ~
               backendPolicies: []
             - name: gpt-3.5-turbo
+              created: 0
               visibility: public
               headerMatches: []
-              backendKey: "llm:model:gpt-3.5-turbo:3"
+              backend:
+                backend: "/llm:model:gpt-3.5-turbo:3"
+                weight: 1
               policies:
                 llm:
                   routes:
@@ -495,9 +507,12 @@ backends:
                 authorization: ~
               backendPolicies: []
             - name: gpt-7-max
+              created: 0
               visibility: public
               headerMatches: []
-              backendKey: "llm:model:gpt-7-max:4"
+              backend:
+                backend: "/llm:model:gpt-7-max:4"
+                weight: 1
               policies:
                 llm:
                   routes:
@@ -517,9 +532,12 @@ backends:
                 authorization: ~
               backendPolicies: []
             - name: "*"
+              created: 0
               visibility: public
               headerMatches: []
-              backendKey: "llm:model:*:5"
+              backend:
+                backend: "/llm:model:*:5"
+                weight: 1
               policies:
                 llm:
                   routes:
@@ -539,7 +557,6 @@ backends:
                 authorization: ~
               backendPolicies: []
           virtualModels: []
-          created: 0
 route_groups: []
 workloads: []
 services: []

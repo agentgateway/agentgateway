@@ -399,11 +399,13 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Azure: &agentgateway.AzureConfig{
-								ResourceName: "my-foundry-resource",
-								ResourceType: agentgateway.AzureResourceTypeFoundry,
-								Model:        new("gpt-4o-mini"),
-								ApiVersion:   new("2024-12-01-preview"),
-								ProjectName:  new("my-project"),
+								AzureSettings: agentgateway.AzureSettings{
+									ResourceName: "my-foundry-resource",
+									ResourceType: agentgateway.AzureResourceTypeFoundry,
+									ApiVersion:   new("2024-12-01-preview"),
+									ProjectName:  new("my-project"),
+								},
+								Model: new("gpt-4o-mini"),
 							},
 						},
 					},
@@ -475,9 +477,11 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Custom: &agentgateway.CustomProvider{
-								Formats: []agentgateway.ProviderFormatConfig{
-									{Type: agentgateway.ProviderFormatCompletions},
-									{Type: agentgateway.ProviderFormatResponses, Path: "/v1/responses"},
+								CustomProviderSettings: agentgateway.CustomProviderSettings{
+									Formats: []agentgateway.ProviderFormatConfig{
+										{Type: agentgateway.ProviderFormatCompletions},
+										{Type: agentgateway.ProviderFormatResponses, Path: "/v1/responses"},
+									},
 								},
 							},
 							Host: "llm.example.com",
@@ -498,12 +502,14 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Custom: &agentgateway.CustomProvider{
-								BackendRef: &agentgateway.LocalBackendObjectReference{
-									Name: "llm-service",
-									Port: new(int32(8080)),
-								},
-								Formats: []agentgateway.ProviderFormatConfig{
-									{Type: agentgateway.ProviderFormatCompletions},
+								CustomProviderSettings: agentgateway.CustomProviderSettings{
+									BackendRef: &agentgateway.LocalBackendObjectReference{
+										Name: "llm-service",
+										Port: new(int32(8080)),
+									},
+									Formats: []agentgateway.ProviderFormatConfig{
+										{Type: agentgateway.ProviderFormatCompletions},
+									},
 								},
 							},
 						},
@@ -523,13 +529,15 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Custom: &agentgateway.CustomProvider{
-								BackendRef: &agentgateway.LocalBackendObjectReference{
-									Group: new(wellknown.InferencePoolGVK.Group),
-									Kind:  new(wellknown.InferencePoolGVK.Kind),
-									Name:  "llm-pool",
-								},
-								Formats: []agentgateway.ProviderFormatConfig{
-									{Type: agentgateway.ProviderFormatMessages, Path: "/api/messages"},
+								CustomProviderSettings: agentgateway.CustomProviderSettings{
+									BackendRef: &agentgateway.LocalBackendObjectReference{
+										Group: new(wellknown.InferencePoolGVK.Group),
+										Kind:  new(wellknown.InferencePoolGVK.Kind),
+										Name:  "llm-pool",
+									},
+									Formats: []agentgateway.ProviderFormatConfig{
+										{Type: agentgateway.ProviderFormatMessages, Path: "/api/messages"},
+									},
 								},
 							},
 						},
@@ -555,12 +563,14 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Bedrock: &agentgateway.BedrockConfig{
-								Model:  new("anthropic.claude-3-haiku-20240307-v1:0"),
-								Region: "eu-west-1",
-								Guardrail: &agentgateway.AWSGuardrailConfig{
-									GuardrailIdentifier: "test-guardrail",
-									GuardrailVersion:    "1.0",
+								BedrockSettings: agentgateway.BedrockSettings{
+									Region: "eu-west-1",
+									Guardrail: &agentgateway.AWSGuardrailConfig{
+										GuardrailIdentifier: "test-guardrail",
+										GuardrailVersion:    "1.0",
+									},
 								},
+								Model: new("anthropic.claude-3-haiku-20240307-v1:0"),
 							},
 						},
 					},
@@ -781,7 +791,7 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Bedrock: &agentgateway.BedrockConfig{
-								Region: "us-east-1",
+								BedrockSettings: agentgateway.BedrockSettings{Region: "us-east-1"},
 							},
 						},
 					},
@@ -812,12 +822,14 @@ func TestBuildAgwBackendReferencesIncludesCustomProviderBackendRefs(t *testing.T
 			AI: &agentgateway.AIBackend{
 				LLM: &agentgateway.LLMProvider{
 					Custom: &agentgateway.CustomProvider{
-						BackendRef: &agentgateway.LocalBackendObjectReference{
-							Name: "llm-service",
-							Port: new(int32(8080)),
-						},
-						Formats: []agentgateway.ProviderFormatConfig{
-							{Type: agentgateway.ProviderFormatCompletions},
+						CustomProviderSettings: agentgateway.CustomProviderSettings{
+							BackendRef: &agentgateway.LocalBackendObjectReference{
+								Name: "llm-service",
+								Port: new(int32(8080)),
+							},
+							Formats: []agentgateway.ProviderFormatConfig{
+								{Type: agentgateway.ProviderFormatCompletions},
+							},
 						},
 					},
 				},
@@ -828,13 +840,15 @@ func TestBuildAgwBackendReferencesIncludesCustomProviderBackendRefs(t *testing.T
 								Name: "pool-provider",
 								LLMProvider: agentgateway.LLMProvider{
 									Custom: &agentgateway.CustomProvider{
-										BackendRef: &agentgateway.LocalBackendObjectReference{
-											Group: new(wellknown.InferencePoolGVK.Group),
-											Kind:  new(wellknown.InferencePoolGVK.Kind),
-											Name:  "llm-pool",
-										},
-										Formats: []agentgateway.ProviderFormatConfig{
-											{Type: agentgateway.ProviderFormatMessages},
+										CustomProviderSettings: agentgateway.CustomProviderSettings{
+											BackendRef: &agentgateway.LocalBackendObjectReference{
+												Group: new(wellknown.InferencePoolGVK.Group),
+												Kind:  new(wellknown.InferencePoolGVK.Kind),
+												Name:  "llm-pool",
+											},
+											Formats: []agentgateway.ProviderFormatConfig{
+												{Type: agentgateway.ProviderFormatMessages},
+											},
 										},
 									},
 								},

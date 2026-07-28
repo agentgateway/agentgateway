@@ -32,7 +32,12 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Tooltip, useDismissiblePopover } from "./Primitives";
-import { useConfigDumpMode, useGatewayConfig } from "../hooks";
+import {
+  useConfigDumpMode,
+  useEffectiveGatewayConfig,
+  useMcpConfigData,
+  useTrafficConfigData,
+} from "../hooks";
 import logoDark from "../assets/agw-dark.svg";
 import logoLight from "../assets/agw-light.svg";
 
@@ -67,7 +72,13 @@ export function Shell() {
   const router = useRouterState();
   const mode = useConfigDumpMode();
   const dumpMode = mode.data?.mode === "dump";
-  const config = useGatewayConfig({
+  const config = useEffectiveGatewayConfig({
+    enabled: Boolean(mode.data && mode.data.mode !== "dump"),
+  });
+  const mcpData = useMcpConfigData({
+    enabled: Boolean(mode.data && mode.data.mode !== "dump"),
+  });
+  const trafficData = useTrafficConfigData({
     enabled: Boolean(mode.data && mode.data.mode !== "dump"),
   });
   const [theme, setTheme] = useState(
@@ -85,15 +96,16 @@ export function Shell() {
       : true;
   const hasMcp = dumpMode
     ? false
-    : config.data
-      ? Boolean(config.data.mcp)
+    : mcpData.data
+      ? Boolean(mcpData.data.mcp)
       : true;
   const hasTraffic = dumpMode
     ? true
-    : config.data
-      ? Boolean(config.data.binds?.length) ||
-        "gateways" in config.data ||
-        "routes" in config.data
+    : trafficData.data
+      ? Boolean(trafficData.data.binds?.length) ||
+        "gateways" in trafficData.data ||
+        "routes" in trafficData.data ||
+        "tcpRoutes" in trafficData.data
       : true;
   const hasBinds = dumpMode
     ? true

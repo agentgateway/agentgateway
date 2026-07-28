@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { getConfig, writeConfig } from "./api/configApi";
+import { getConfig, getEffectiveConfig, writeConfig } from "./api/configApi";
 import {
   deleteConfigResource,
   listConfigResources,
@@ -8,18 +8,13 @@ import {
   updateConfigResource,
   type ConfigResourceKind,
   type ConfigResourceValue,
+  type PolicyResourceKind,
 } from "./api/configResourcesApi";
 import { getConfigDump } from "./api/configDumpApi";
 import { getRuntimeInfo } from "./api/runtimeApi";
-import {
-  cloneConfig,
-  llmApiKeyResources,
-  llmModelResources,
-  llmProviderResources,
-  llmVirtualModelResources,
-} from "./config";
+import { cloneConfig, configWarnings } from "./config";
 import { validateGatewayConfig } from "./configValidation";
-import type { GatewayConfig } from "./types";
+import type { GatewayConfig, LlmApiKeyPolicy, LlmConfig } from "./types";
 
 let hybridFileWriteOverride = false;
 
@@ -51,10 +46,19 @@ export function useHybridFileWriteOverrideKeys() {
   return active;
 }
 
-export function useGatewayConfig(options?: { enabled?: boolean }) {
+export function useRawGatewayConfig(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: ["config"],
     queryFn: getConfig,
+    enabled: options?.enabled ?? true,
+    retry: false,
+  });
+}
+
+export function useEffectiveGatewayConfig(options?: { enabled?: boolean }) {
+  return useQuery({
+    queryKey: ["effectiveConfig"],
+    queryFn: getEffectiveConfig,
     enabled: options?.enabled ?? true,
     retry: false,
   });
@@ -79,55 +83,97 @@ export function useConfigResources(options?: { enabled?: boolean }) {
 
 export function useLlmConfigData(options?: { enabled?: boolean }) {
   const enabled = options?.enabled ?? true;
-  const config = useGatewayConfig({ enabled });
+  const rawConfig = useRawGatewayConfig({ enabled });
+  const config = useEffectiveGatewayConfig({ enabled });
   const runtime = useRuntimeInfo();
   const hybrid = runtime.data?.ui.configStoreMode === "hybrid";
   const configResources = useConfigResources({ enabled: enabled && hybrid });
   const resources = configResources.data?.resources;
-  const models = useMemo(
-    () => [
-      ...(config.data?.llm?.models ?? []),
-      ...(hybrid ? llmModelResources(resources) : []),
-    ],
-    [config.data, hybrid, resources],
+  const filePolicies = useMemo(
+    () => rawConfig.data?.llm?.policies ?? {},
+    [rawConfig.data?.llm?.policies],
   );
-  const virtualModels = useMemo(
-    () => [
-      ...(config.data?.llm?.virtualModels ?? []),
-      ...(hybrid ? llmVirtualModelResources(resources) : []),
-    ],
-    [config.data, hybrid, resources],
-  );
-  const providers = useMemo(
-    () => [
-      ...(config.data?.llm?.providers ?? []),
-      ...(hybrid ? llmProviderResources(resources) : []),
-    ],
-    [config.data, hybrid, resources],
-  );
-  const apiKeys = useMemo(
-    () => [
-      ...(config.data?.llm?.policies?.apiKey?.keys ?? []),
-      ...(hybrid ? llmApiKeyResources(resources) : []),
-    ],
-    [config.data, hybrid, resources],
+  const policies = (config.data?.llm?.policies ?? {}) as NonNullable<
+    LlmConfig["policies"]
+  >;
+  const models = config.data?.llm?.models ?? [];
+  const virtualModels = config.data?.llm?.virtualModels ?? [];
+  const providers = config.data?.llm?.providers ?? [];
+  const apiKeys =
+    (policies.apiKey as LlmApiKeyPolicy | null | undefined)?.keys ?? [];
+  const warnings = useMemo(
+    () =>
+      config.data
+        ? configWarnings(config.data, {
+            models,
+            policies,
+          })
+        : [],
+    [config.data, models, policies],
   );
 
   return {
     config,
+    rawConfig,
     runtime,
     hybrid,
     configResources,
     resources,
+    filePolicies,
     models,
     virtualModels,
     providers,
+    policies,
     apiKeys,
+    warnings,
     isLoading:
       config.isLoading ||
+      rawConfig.isLoading ||
       runtime.isLoading ||
-      (hybrid && configResources.isLoading),
-    error: config.error ?? (hybrid ? configResources.error : null),
+      configResources.isLoading,
+    error:
+      config.error ?? rawConfig.error ?? runtime.error ?? configResources.error,
+  };
+}
+
+export function useMcpConfigData(options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? true;
+  const rawConfig = useRawGatewayConfig({ enabled });
+  const config = useEffectiveGatewayConfig({ enabled });
+  const runtime = useRuntimeInfo();
+  const hybrid = runtime.data?.ui.configStoreMode === "hybrid";
+  const configResources = useConfigResources({ enabled: enabled && hybrid });
+  const resources = configResources.data?.resources;
+  return {
+    rawConfig,
+    resources,
+    hybrid,
+    data: config.data,
+    isLoading:
+      config.isLoading ||
+      rawConfig.isLoading ||
+      runtime.isLoading ||
+      configResources.isLoading,
+    error:
+      config.error ?? rawConfig.error ?? runtime.error ?? configResources.error,
+  };
+}
+
+export function useTrafficConfigData(options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? true;
+  const config = useEffectiveGatewayConfig({ enabled });
+  const runtime = useRuntimeInfo();
+  const hybrid = runtime.data?.ui.configStoreMode === "hybrid";
+  const configResources = useConfigResources({ enabled: enabled && hybrid });
+  const resources = configResources.data?.resources;
+  return {
+    config,
+    resources,
+    hybrid,
+    data: config.data,
+    isLoading:
+      config.isLoading || runtime.isLoading || configResources.isLoading,
+    error: config.error ?? runtime.error ?? configResources.error,
   };
 }
 
@@ -153,6 +199,7 @@ export function useConfigDumpMode() {
 function invalidateConfigViews(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ["configResources"] });
   void queryClient.invalidateQueries({ queryKey: ["config"] });
+  void queryClient.invalidateQueries({ queryKey: ["effectiveConfig"] });
   void queryClient.invalidateQueries({ queryKey: ["runtime"] });
   void queryClient.invalidateQueries({ queryKey: ["config_dump"] });
   void queryClient.invalidateQueries({ queryKey: ["config_dump_mode"] });
@@ -195,16 +242,11 @@ export function useUpsertConfigResource() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: UpsertConfigResourceInput) => {
-      if (input.kind === "llm.apiKey" && input.previousId) {
+      if (input.previousId) {
         await updateConfigResource(input.kind, input.previousId, input.value);
         return;
       }
       await putConfigResources(input.kind, [input.value]);
-      if (input.kind === "llm.apiKey") return;
-      const id = configResourceId(input.kind, input.value);
-      if (input.previousId && input.previousId !== id) {
-        await deleteConfigResource(input.kind, input.previousId);
-      }
     },
     onSuccess: () => invalidateConfigViews(queryClient),
   });
@@ -227,24 +269,16 @@ export function useDeleteConfigResource() {
   });
 }
 
-export function configResourceId<K extends ConfigResourceKind>(
-  kind: K,
-  value: ConfigResourceValue<K>,
-) {
-  if (
-    kind === "llm.provider" ||
-    kind === "llm.model" ||
-    kind === "llm.virtualModel"
-  ) {
-    const name =
-      (value as { id?: string; name?: string }).id ??
-      (value as { name?: string }).name;
-    if (name) return name;
-  }
-  if (kind === "modelCatalog") return "default";
-  const apiKeyId = (value as { metadata?: { id?: string } })?.metadata?.id;
-  if (apiKeyId) return apiKeyId;
-  throw new Error(`Cannot derive config resource id for ${kind}`);
+export function useUpsertPolicyResource() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      kind: PolicyResourceKind;
+      id: string;
+      value: unknown;
+    }) => updateConfigResource(input.kind, input.id, input.value),
+    onSuccess: () => invalidateConfigViews(queryClient),
+  });
 }
 
 export function useStoredStringState(key: string, defaultValue: string) {

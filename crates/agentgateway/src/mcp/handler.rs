@@ -31,7 +31,7 @@ use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, FailureMode, MCPInfo, apps, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
-use crate::types::agent::McpPrefixMode;
+use crate::types::agent::{McpPrefixMode, ResourceName};
 
 const DELIMITER: &str = "_";
 
@@ -221,6 +221,7 @@ pub struct Relay {
 }
 
 pub struct RelayInputs {
+	pub backend_id: ResourceName,
 	pub backend: McpBackendGroup,
 	pub policies: McpAuthorizationSet,
 	pub mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,

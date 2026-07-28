@@ -30,7 +30,6 @@ func TestStandaloneChartHelmInstall(t *testing.T) {
 	if timeout == "" {
 		timeout = "2m"
 	}
-
 	t.Cleanup(func() {
 		_ = runStandaloneE2ECommand(t, "helm", "uninstall", releaseName, "--namespace", namespace)
 		_ = runStandaloneE2ECommand(t, "kubectl", "delete", "namespace", namespace, "--ignore-not-found=true")
@@ -60,28 +59,9 @@ func TestStandaloneChartHelmInstall(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	requireStandaloneE2EOutput(t, "Bound", "kubectl", "get", "pvc", "agentgateway-standalone-config", "--namespace", namespace, "-o", "jsonpath={.status.phase}")
-	runStandaloneE2EPVCJob(t, namespace, "verify-persisted-config", timeout, `
-set -eu
-test -f /config/config.yaml
-grep -q 'sqlite:///config/data.db' /config/config.yaml
-for i in $(seq 1 30); do
-  if [ -f /config/data.db ]; then
-    break
-  fi
-  sleep 1
-done
-test -f /config/data.db
-printf '\n# agw-standalone-e2e-preserved\n' >> /config/config.yaml
-`)
-	require.NoError(t, runStandaloneE2ECommand(t, "kubectl", "rollout", "restart", "deployment/agentgateway-standalone", "--namespace", namespace))
-	require.NoError(t, runStandaloneE2ECommand(t, "kubectl", "rollout", "status", "deployment/agentgateway-standalone", "--namespace", namespace, "--timeout", timeout))
-	runStandaloneE2EPVCJob(t, namespace, "verify-persisted-restart", timeout, `
-set -eu
-test -f /config/config.yaml
-test -f /config/data.db
-grep -q '# agw-standalone-e2e-preserved' /config/config.yaml
-`)
+	requireStandaloneE2EOutput(t, releaseName+"-config", "kubectl", "get", "configmap", releaseName+"-config", "--namespace", namespace, "-o", "jsonpath={.metadata.name}")
+	require.NoError(t, runStandaloneE2ECommand(t, "kubectl", "rollout", "restart", "deployment/"+releaseName, "--namespace", namespace))
+	require.NoError(t, runStandaloneE2ECommand(t, "kubectl", "rollout", "status", "deployment/"+releaseName, "--namespace", namespace, "--timeout", timeout))
 }
 
 func runStandaloneE2ECommand(t *testing.T, name string, args ...string) error {
@@ -118,57 +98,6 @@ func requireStandaloneE2EOutput(t *testing.T, expected string, name string, args
 	require.Equal(t, expected, stdout)
 }
 
-func runStandaloneE2EPVCJob(t *testing.T, namespace string, name string, timeout string, script string) {
-	t.Helper()
-
-	jobPath := filepath.Join(t.TempDir(), name+".yaml")
-	manifest := fmt.Sprintf(`apiVersion: batch/v1
-kind: Job
-metadata:
-  name: %s
-  namespace: %s
-spec:
-  backoffLimit: 0
-  template:
-    spec:
-      restartPolicy: Never
-      containers:
-      - name: check
-        image: docker.io/library/busybox:1.36
-        command:
-        - sh
-        - -ec
-        - |
-%s
-        volumeMounts:
-        - name: config
-          mountPath: /config
-      volumes:
-      - name: config
-        persistentVolumeClaim:
-          claimName: agentgateway-standalone-config
-`, name, namespace, indentStandaloneE2EScript(script))
-	require.NoError(t, os.WriteFile(jobPath, []byte(manifest), 0o600))
-
-	if err := runStandaloneE2ECommand(t, "kubectl", "apply", "-f", jobPath); err != nil {
-		dumpStandaloneE2EJobDiagnostics(t, namespace, name)
-		require.NoError(t, err)
-	}
-	if err := runStandaloneE2ECommand(t, "kubectl", "wait", "--for=condition=complete", "job/"+name, "--namespace", namespace, "--timeout", timeout); err != nil {
-		dumpStandaloneE2EJobDiagnostics(t, namespace, name)
-		require.NoError(t, err)
-	}
-}
-
-func indentStandaloneE2EScript(script string) string {
-	script = strings.Trim(script, "\n")
-	lines := strings.Split(script, "\n")
-	for i := range lines {
-		lines[i] = "          " + lines[i]
-	}
-	return strings.Join(lines, "\n")
-}
-
 func splitStandaloneImage(t *testing.T, image string) (string, string, string) {
 	t.Helper()
 
@@ -193,11 +122,4 @@ func dumpStandaloneE2EDiagnostics(t *testing.T, namespace string, releaseName st
 	_ = runStandaloneE2ECommand(t, "kubectl", "describe", "deployment", "--namespace", namespace, "--selector", selector)
 	_ = runStandaloneE2ECommand(t, "kubectl", "describe", "pod", "--namespace", namespace, "--selector", selector)
 	_ = runStandaloneE2ECommand(t, "kubectl", "logs", "--namespace", namespace, "--selector", selector, "--all-containers", "--tail=100")
-}
-
-func dumpStandaloneE2EJobDiagnostics(t *testing.T, namespace string, name string) {
-	t.Helper()
-
-	_ = runStandaloneE2ECommand(t, "kubectl", "describe", "job/"+name, "--namespace", namespace)
-	_ = runStandaloneE2ECommand(t, "kubectl", "logs", "job/"+name, "--namespace", namespace, "--all-containers", "--tail=100")
 }

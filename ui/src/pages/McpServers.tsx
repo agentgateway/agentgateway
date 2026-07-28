@@ -2,8 +2,9 @@ import { Pencil, Plus, Server, SlidersHorizontal, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   ensureMcp,
+  fileOwnedMcpSettingFields,
+  isDatabaseConfigResource,
   makeEmptyMcpTarget,
-  removeMcpTarget,
   upsertMcpTarget,
 } from "../config";
 import { EnumSelector } from "../components/EnumSelector";
@@ -14,7 +15,12 @@ import {
 import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { MiniMonacoEditor } from "../components/MiniMonacoEditor";
 import { useStickyQueryParam } from "../drawerRouteState";
-import { useGatewayConfig, useUpdateConfig } from "../hooks";
+import {
+  useDeleteConfigResource,
+  useMcpConfigData,
+  useUpsertConfigResource,
+} from "../hooks";
+import type { McpSettingsResource } from "../api/configResourcesApi";
 import {
   ConfirmDialog,
   Drawer,
@@ -48,11 +54,23 @@ type McpSettingsPatch = Partial<Omit<McpConfig, "gateways" | "port">> & {
 };
 
 export function McpServersPage() {
-  const config = useGatewayConfig();
-  const update = useUpdateConfig();
+  const mcpData = useMcpConfigData();
+  const rawConfig = mcpData.rawConfig;
+  const hybrid = mcpData.hybrid;
+  const upsertResource = useUpsertConfigResource();
+  const deleteResource = useDeleteConfigResource();
   const help = useSchemaHelp();
-  const mcp = config.data?.mcp;
+  const resources = mcpData.resources;
+  const effectiveConfig = mcpData.data;
+  const mcp = effectiveConfig?.mcp;
   const targets = useMemo(() => mcp?.targets ?? [], [mcp]);
+  const fileOwnedSettingFields = fileOwnedMcpSettingFields(
+    rawConfig.data,
+    hybrid,
+  );
+  const saving = upsertResource.isPending || deleteResource.isPending;
+  const saveError =
+    upsertResource.error?.message ?? deleteResource.error?.message ?? null;
   const [editing, setEditing] = useState<{
     previousName?: string;
     target: McpTarget;
@@ -117,21 +135,21 @@ export function McpServersPage() {
         }
       />
 
-      {update.isError && !activeEditing && !settingsOpen ? (
+      {saveError && !activeEditing && !settingsOpen ? (
         <StatusBanner state="bad" title="Save failed">
-          {update.error.message}
+          {saveError}
         </StatusBanner>
       ) : null}
-      {update.isSuccess ? (
+      {upsertResource.isSuccess || deleteResource.isSuccess ? (
         <StatusBanner state="ok" title="Configuration saved" />
       ) : null}
 
       <Panel>
-        {config.isLoading ? (
+        {mcpData.isLoading ? (
           <StatusBanner state="loading" title="Loading MCP servers" />
-        ) : config.isError ? (
+        ) : mcpData.error ? (
           <StatusBanner state="bad" title="Configuration API unavailable">
-            {config.error.message}
+            {mcpData.error.message}
           </StatusBanner>
         ) : targets.length === 0 ? (
           <EmptyState
@@ -164,6 +182,11 @@ export function McpServersPage() {
                 {targets.map((target) => {
                   const kind = targetKind(target);
                   const warnings = targetWarnings(target);
+                  const databaseBacked = isDatabaseConfigResource(
+                    resources,
+                    "mcp.target",
+                    target.name,
+                  );
                   return (
                     <tr key={target.name}>
                       <td className="strong">{target.name}</td>
@@ -193,12 +216,18 @@ export function McpServersPage() {
                             <Pencil size={16} />
                           </button>
                         </Tooltip>
-                        <Tooltip content="Delete server">
+                        <Tooltip
+                          content={
+                            hybrid && !databaseBacked
+                              ? "File-owned servers cannot be deleted here"
+                              : "Delete server"
+                          }
+                        >
                           <button
                             className="icon-button danger"
                             aria-label="Delete server"
                             type="button"
-                            disabled={update.isPending}
+                            disabled={saving || (hybrid && !databaseBacked)}
                             onClick={() => setDeletingServer(target.name)}
                           >
                             <Trash2 size={16} />
@@ -218,40 +247,52 @@ export function McpServersPage() {
         <McpServerEditor
           key={activeEditing.previousName ?? "new"}
           initial={activeEditing.target}
-          config={config.data}
+          config={effectiveConfig}
           previousName={activeEditing.previousName}
+          databaseBacked={
+            hybrid &&
+            (!activeEditing.previousName ||
+              isDatabaseConfigResource(
+                resources,
+                "mcp.target",
+                activeEditing.previousName,
+              ))
+          }
           help={help}
-          saving={update.isPending}
-          saveError={update.isError ? update.error.message : null}
+          saving={saving}
+          saveError={saveError}
           onCancel={closeServerDrawer}
-          onSave={(target, previousName) =>
-            update.mutate(
-              (next) => upsertMcpTarget(next, target, previousName),
+          onSave={(target, previousName) => {
+            upsertResource.mutate(
+              { kind: "mcp.target", value: target, previousId: previousName },
               {
                 onSuccess: closeServerDrawer,
               },
-            )
-          }
+            );
+          }}
         />
       ) : null}
       {settingsOpen ? (
         <McpSettingsDrawer
-          config={config.data}
+          config={effectiveConfig}
           mcp={mcp}
+          databaseBacked={hybrid}
+          readOnlyFields={fileOwnedSettingFields}
           help={help}
-          saving={update.isPending}
-          saveError={update.isError ? update.error.message : null}
+          saving={saving}
+          saveError={saveError}
           onClose={closeServerDrawer}
-          onSave={(settings) =>
-            update.mutate(
-              (next) => {
-                Object.assign(ensureMcp(next), settings);
-              },
+          onSave={(settings) => {
+            const value = Object.fromEntries(
+              Object.entries(settings).filter(([, field]) => field != null),
+            ) as McpSettingsResource;
+            upsertResource.mutate(
+              { kind: "mcp.settings", value },
               {
                 onSuccess: closeServerDrawer,
               },
-            )
-          }
+            );
+          }}
         />
       ) : null}
       {deletingServer ? (
@@ -259,13 +300,16 @@ export function McpServersPage() {
           title="Delete MCP server?"
           destructive
           confirmLabel="Delete server"
-          confirmDisabled={update.isPending}
+          confirmDisabled={saving}
           onCancel={() => setDeletingServer(null)}
-          onConfirm={() =>
-            update.mutate((next) => removeMcpTarget(next, deletingServer), {
-              onSuccess: () => setDeletingServer(null),
-            })
-          }
+          onConfirm={() => {
+            deleteResource.mutate(
+              { kind: "mcp.target", id: deletingServer },
+              {
+                onSuccess: () => setDeletingServer(null),
+              },
+            );
+          }}
         >
           <p>
             Delete <strong>{deletingServer}</strong>? Traffic can no longer be
@@ -280,6 +324,8 @@ export function McpServersPage() {
 export function McpSettingsDrawer(props: {
   config?: GatewayConfig | null;
   mcp?: McpConfig | null;
+  databaseBacked?: boolean;
+  readOnlyFields?: ReadonlySet<string>;
   help: SchemaHelp;
   saving: boolean;
   saveError?: string | null;
@@ -291,6 +337,8 @@ export function McpSettingsDrawer(props: {
       <McpSettings
         config={props.config}
         mcp={props.mcp}
+        databaseBacked={props.databaseBacked}
+        readOnlyFields={props.readOnlyFields}
         help={props.help}
         saving={props.saving}
         onSave={props.onSave}
@@ -307,6 +355,8 @@ export function McpSettingsDrawer(props: {
 function McpSettings(props: {
   config?: GatewayConfig | null;
   mcp?: McpConfig | null;
+  databaseBacked?: boolean;
+  readOnlyFields?: ReadonlySet<string>;
   help: SchemaHelp;
   saving: boolean;
   onSave: (settings: McpSettingsPatch) => void;
@@ -325,21 +375,54 @@ function McpSettings(props: {
     props.mcp?.failureMode ?? "failClosed",
   );
   const patch: McpSettingsPatch = {
-    gateways: binding.gateways ?? null,
-    port: binding.gateways ? null : (binding.port ?? null),
+    gateways: binding.gateways ?? [],
+    port:
+      binding.gateways != null && binding.gateways.length > 0
+        ? null
+        : binding.port,
     statefulMode,
     prefixMode: prefixMode === "none" ? null : prefixMode,
     failureMode,
   };
+  const originalResourceValue = Object.fromEntries(
+    Object.entries({
+      gateways: props.mcp?.gateways,
+      port: props.mcp?.port,
+      statefulMode: props.mcp?.statefulMode,
+      prefixMode: props.mcp?.prefixMode,
+      failureMode: props.mcp?.failureMode,
+    }).filter(
+      ([field, value]) => value != null && !props.readOnlyFields?.has(field),
+    ),
+  );
+  const resourceValue = Object.fromEntries(
+    Object.entries(patch).filter(
+      ([field, value]) => value != null && !props.readOnlyFields?.has(field),
+    ),
+  );
+  const writablePatch = Object.fromEntries(
+    Object.entries(patch).filter(
+      ([field]) => !props.readOnlyFields?.has(field),
+    ),
+  ) as McpSettingsPatch;
+  const bindingReadOnly = Boolean(
+    props.readOnlyFields?.has("gateways") || props.readOnlyFields?.has("port"),
+  );
 
   return (
     <form
       className="policy-editor-stack"
       onSubmit={(event) => {
         event.preventDefault();
-        props.onSave(patch);
+        props.onSave(writablePatch);
       }}
     >
+      {props.readOnlyFields?.size ? (
+        <StatusBanner state="warn" title="Some settings are file-owned">
+          Disabled fields are managed by the file configuration. Other MCP
+          settings can still be saved to the database.
+        </StatusBanner>
+      ) : null}
       <PolicySection
         icon={<Server size={17} />}
         title="Gateway binding"
@@ -357,6 +440,7 @@ function McpSettings(props: {
               "port",
               "Gateway port for MCP traffic.",
             )}
+            disabled={bindingReadOnly}
             onChange={setBinding}
           />
         </div>
@@ -398,6 +482,7 @@ function McpSettings(props: {
                 "properties",
                 "statefulMode",
               ])}
+              disabled={props.readOnlyFields?.has("statefulMode")}
               onChange={setStatefulMode}
             />
           </FieldGroup>
@@ -444,6 +529,7 @@ function McpSettings(props: {
                 "properties",
                 "prefixMode",
               ])}
+              disabled={props.readOnlyFields?.has("prefixMode")}
               onChange={setPrefixMode}
             />
           </FieldGroup>
@@ -462,6 +548,7 @@ function McpSettings(props: {
                 { value: "failOpen", label: "Fail open" },
               ]}
               schema={props.help.node(["$defs", "McpBackendFailureMode"])}
+              disabled={props.readOnlyFields?.has("failureMode")}
               onChange={setFailureMode}
             />
           </FieldGroup>
@@ -472,7 +559,16 @@ function McpSettings(props: {
         diffTitle="MCP settings config diff"
         saveLabel="Save settings"
         saving={props.saving}
-        onSave={() => props.onSave(patch)}
+        saveDisabled={Object.keys(writablePatch).length === 0}
+        onSave={() => props.onSave(writablePatch)}
+        resourceDiff={
+          props.databaseBacked
+            ? {
+                original: originalResourceValue,
+                modified: resourceValue,
+              }
+            : undefined
+        }
         applyDiff={(next) => {
           Object.assign(ensureMcp(next), patch);
         }}
@@ -485,6 +581,7 @@ function McpServerEditor(props: {
   initial: McpTarget;
   config?: GatewayConfig | null;
   previousName?: string;
+  databaseBacked?: boolean;
   help: SchemaHelp;
   saving: boolean;
   saveError?: string | null;
@@ -577,6 +674,14 @@ function McpServerEditor(props: {
           onCancel={requestClose}
           onSave={save}
           beforeDiff={() => Boolean(validTargetPreview())}
+          resourceDiff={
+            props.databaseBacked
+              ? () => ({
+                  original: props.previousName ? props.initial : {},
+                  modified: targetPreview(),
+                })
+              : undefined
+          }
           applyDiff={(next) => {
             const target = targetPreview();
             upsertMcpTarget(next, target, props.previousName);

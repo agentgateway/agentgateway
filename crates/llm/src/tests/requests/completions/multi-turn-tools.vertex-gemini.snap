@@ -1,0 +1,136 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/completions/multi-turn-tools.json
+info:
+  model: gemini-2.5-pro
+  messages:
+    - role: user
+      content: Weather in Columbus and Berlin?
+    - role: assistant
+      content: ~
+      tool_calls:
+        - id: call_1
+          type: function
+          function:
+            name: get_weather
+            arguments: "{\"location\":\"Columbus\"}"
+    - role: tool
+      tool_call_id: call_1
+      name: get_weather
+      content: "{\"temp\":15}"
+    - role: assistant
+      content: ~
+      tool_calls:
+        - id: call_2
+          type: function
+          function:
+            name: get_weather
+            arguments: "{\"location\":\"Berlin\"}"
+    - role: tool
+      tool_call_id: call_2
+      name: get_weather
+      content: "{\"temp\":9}"
+  tools:
+    - type: function
+      function:
+        name: get_weather
+        description: Get the current weather in a location
+        parameters:
+          type: object
+          properties:
+            location:
+              type: string
+          required:
+            - location
+---
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "Weather in Columbus and Berlin?"
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "functionCall": {
+            "name": "get_weather",
+            "args": {
+              "location": "Columbus"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "functionResponse": {
+            "name": "get_weather",
+            "response": {
+              "content": "{\"temp\":15}"
+            }
+          }
+        },
+        {
+          "text": " "
+        }
+      ]
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "functionCall": {
+            "name": "get_weather",
+            "args": {
+              "location": "Berlin"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "functionResponse": {
+            "name": "get_weather",
+            "response": {
+              "content": "{\"temp\":9}"
+            }
+          }
+        },
+        {
+          "text": " "
+        }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "functionDeclarations": [
+        {
+          "name": "get_weather",
+          "description": "Get the current weather in a location",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "location"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

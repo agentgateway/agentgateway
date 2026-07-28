@@ -685,6 +685,45 @@ async fn test_llm_virtual_model_conditional_config() {
 	test_config_parsing("llm_virtual_model_conditional").await;
 }
 
+#[test]
+fn test_llm_route_types_reuse_defaults_and_override_passthrough() {
+	let default_routes = super::llm_route_types(None);
+	assert!(
+		default_routes
+			.iter()
+			.any(|(path, route_type)| path.as_str() == "/v1/messages"
+				&& *route_type == crate::llm::RouteType::Messages),
+		"default route table should include explicit message endpoint"
+	);
+	assert!(
+		default_routes
+			.iter()
+			.any(|(path, route_type)| path.as_str() == "*"
+				&& *route_type == crate::llm::RouteType::Passthrough),
+		"default route table should include passthrough wildcard"
+	);
+
+	let detect_passthrough = super::llm_route_types(Some(&super::LocalLLMPassthrough::Detect));
+	assert!(
+		detect_passthrough
+			.iter()
+			.any(|(path, route_type)| path.as_str() == "/v1/messages"
+				&& *route_type == crate::llm::RouteType::Messages),
+		"passthrough override should preserve explicit route defaults"
+	);
+	assert!(
+		detect_passthrough.iter().any(
+			|(path, route_type)| path.as_str() == "*" && *route_type == crate::llm::RouteType::Detect
+		),
+		"passthrough override should replace wildcard fallback"
+	);
+}
+
+#[tokio::test]
+async fn test_backend_auth_credentials_config() {
+	test_config_parsing("backend_auth_credentials").await;
+}
+
 #[tokio::test]
 async fn test_llm_conditional_virtual_model_requires_fallback_last() {
 	let err = normalize_test_config(
@@ -1111,72 +1150,16 @@ async fn test_mcp_simple_config() {
 }
 
 #[tokio::test]
-async fn test_llm_mcp_same_port_share_listener_routes() {
-	let normalized = normalize_test_yaml(
-		r#"
-llm:
-  port: 3000
-  models:
-  - name: gpt-4
-    provider: openAI
-mcp:
-  targets:
-  - name: time
-    stdio:
-      cmd: uvx
-"#,
-	)
-	.await
-	.expect("same-port LLM and MCP should normalize");
-
-	assert_eq!(normalized.binds.len(), 1);
-	assert_eq!(normalized.binds[0].address.port(), 3000);
-	assert_eq!(
-		normalized.binds[0]
-			.listeners
-			.iter()
-			.map(|listener| listener.key.as_str())
-			.collect::<Vec<_>>(),
-		vec!["llm"],
-	);
-	assert_eq!(normalized.listener_routes.len(), 1);
-	assert_eq!(normalized.listener_routes[0].0.as_str(), "llm");
-	let routes = &normalized.listener_routes[0].1;
-	assert!(
-		routes
-			.iter()
-			.any(|route| route.key.as_str() == "llm:request")
-	);
-	let mcp_route = routes
-		.iter()
-		.find(|route| route.key.as_str() == "mcp:default")
-		.expect("expected MCP route on shared listener");
-	assert_eq!(
-		mcp_route
-			.matches
-			.iter()
-			.map(|route_match| match &route_match.path {
-				PathMatch::PathPrefix(path) => path.as_str(),
-				other => panic!("expected path prefix match, got {other:?}"),
-			})
-			.collect::<Vec<_>>(),
-		vec!["/mcp", "/sse", "/.well-known"],
-	);
-}
-
-#[tokio::test]
-async fn test_llm_mcp_same_port_rejects_llm_tls() {
+async fn test_llm_mcp_same_port_is_rejected() {
 	let err = normalize_test_yaml(
 		r#"
 llm:
   port: 3000
-  tls:
-    cert: inline
-    key: inline
   models:
   - name: gpt-4
     provider: openAI
 mcp:
+  port: 3000
   targets:
   - name: time
     stdio:
@@ -1184,11 +1167,11 @@ mcp:
 "#,
 	)
 	.await
-	.expect_err("same-port LLM and MCP should reject llm.tls");
+	.expect_err("same-port LLM and MCP should be rejected");
 	assert!(
 		err
 			.to_string()
-			.contains("top-level llm and mcp cannot share a port when llm.tls is configured"),
+			.contains("top-level llm and mcp cannot use the same port 3000"),
 		"{err:?}"
 	);
 }
@@ -2409,4 +2392,51 @@ binds:
 		err.to_string().contains("client_secret"),
 		"returned unexpected error: {err}"
 	);
+}
+
+#[test]
+fn test_de_backend_auth_accepts_each_shape() {
+	use serde::de::IntoDeserializer;
+
+	use crate::http::auth::BackendAuthKind;
+
+	let parse = |v: serde_json::Value| -> crate::http::auth::BackendAuth {
+		super::de_backend_auth::<serde_json::Value>(v.into_deserializer())
+			.unwrap()
+			.unwrap()
+	};
+
+	let copilot_scalar = parse(serde_json::json!("copilot"));
+	assert!(matches!(
+		copilot_scalar.kind,
+		Some(BackendAuthKind::Copilot)
+	));
+	assert!(copilot_scalar.credentials.is_empty());
+
+	let plain_key = parse(serde_json::json!({"key": "plain-secret"}));
+	assert!(matches!(
+		plain_key.kind,
+		Some(BackendAuthKind::Key { location: None, .. })
+	));
+	assert!(plain_key.credentials.is_empty());
+
+	let full_key = parse(serde_json::json!({"key": {"value": "explicit-secret"}}));
+	assert!(matches!(full_key.kind, Some(BackendAuthKind::Key { .. })));
+	assert!(full_key.credentials.is_empty());
+
+	let full_with_credentials = parse(serde_json::json!({
+		"key": {"value": "explicit-secret"},
+		"credentials": [{"location": {"header": {"name": "x-token"}}, "key": "tok"}],
+	}));
+	assert!(matches!(
+		full_with_credentials.kind,
+		Some(BackendAuthKind::Key { .. })
+	));
+	assert_eq!(full_with_credentials.credentials.len(), 1);
+
+	let credentials_only = parse(serde_json::json!({
+		"credentials": [{"location": {"header": {"name": "x-token"}}, "key": "tok"}],
+	}));
+	assert!(credentials_only.kind.is_none());
+	assert_eq!(credentials_only.credentials.len(), 1);
 }

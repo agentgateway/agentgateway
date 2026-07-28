@@ -13,7 +13,7 @@ import (
 
 // JwksCache stores fetched JWKS keysets by request key.
 type JwksCache struct {
-	l       sync.Mutex
+	l       sync.RWMutex
 	keysets map[remotehttp.FetchKey]Keyset
 }
 
@@ -44,8 +44,8 @@ func (c *JwksCache) LoadJwksFromStores(stored []Keyset) error {
 }
 
 func (c *JwksCache) GetJwks(requestKey remotehttp.FetchKey) (Keyset, bool) {
-	c.l.Lock()
-	defer c.l.Unlock()
+	c.l.RLock()
+	defer c.l.RUnlock()
 
 	keyset, ok := c.keysets[requestKey]
 	return keyset, ok

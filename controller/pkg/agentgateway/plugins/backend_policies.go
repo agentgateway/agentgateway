@@ -950,6 +950,16 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 			},
 		}
 	}
+
+	translatedCredentials, credErrs := translateBackendAuthCredentials(ctx, auth.Credentials, policy.Namespace)
+	errs = append(errs, credErrs...)
+	if len(translatedCredentials) > 0 {
+		if translatedAuth == nil {
+			translatedAuth = &api.BackendAuthPolicy{}
+		}
+		translatedAuth.Credentials = translatedCredentials
+	}
+
 	if translatedAuth == nil {
 		return nil, errors.Join(append(errs, kindErrs...)...)
 	}
@@ -1260,10 +1270,14 @@ func buildOAuthPrivateKeyJWT(ctx PolicyCtx, auth *agentgateway.OAuthPrivateKeyJW
 		Alg:               translateOAuthPrivateKeyJWTSigningAlg(auth.Alg),
 		Kid:               auth.KeyID,
 		AssertionAudience: auth.AssertionAudience,
+		CertificateHeader: translateOAuthPrivateKeyJWTCertificateHeader(auth.CertificateHeader),
 	}
 
 	if auth.AssertionAudience == "" {
 		errs = append(errs, errors.New("oauth clientAuth privateKeyJwt assertionAudience must not be empty"))
+	}
+	if (auth.CertificateRef == nil) != (auth.CertificateHeader == nil) {
+		errs = append(errs, errors.New("oauth clientAuth privateKeyJwt certificateRef and certificateHeader must be set together"))
 	}
 
 	data, key, err := ctx.ResolveCredentialKeyRef(auth.SigningKeyRef, namespace, wellknown.SigningKey)
@@ -1273,6 +1287,16 @@ func buildOAuthPrivateKeyJWT(ctx PolicyCtx, auth *agentgateway.OAuthPrivateKeyJW
 		errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SigningKeyRef.Name, key))
 	} else {
 		res.SigningKey = value
+	}
+	if auth.CertificateRef != nil {
+		data, key, err := ctx.ResolveCredentialKeyRef(*auth.CertificateRef, namespace, wellknown.Certificate)
+		if err != nil {
+			errs = append(errs, err)
+		} else if value, exists := kubeutils.GetSecretDataValue(data, key); !exists || value == "" {
+			errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.CertificateRef.Name, key))
+		} else {
+			res.Certificate = value
+		}
 	}
 
 	return res, errors.Join(errs...)
@@ -1342,12 +1366,28 @@ func translateOAuthPrivateKeyJWTSigningAlg(alg *agentgateway.OAuthPrivateKeyJWTS
 		return api.OAuthClientAuth_PrivateKeyJwt_RS384
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS512:
 		return api.OAuthClientAuth_PrivateKeyJwt_RS512
+	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmPS256:
+		return api.OAuthClientAuth_PrivateKeyJwt_PS256
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256:
 		return api.OAuthClientAuth_PrivateKeyJwt_ES256
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES384:
 		return api.OAuthClientAuth_PrivateKeyJwt_ES384
 	default:
 		return api.OAuthClientAuth_PrivateKeyJwt_SIGNING_ALG_UNSPECIFIED
+	}
+}
+
+func translateOAuthPrivateKeyJWTCertificateHeader(header *agentgateway.OAuthPrivateKeyJWTCertificateHeader) api.OAuthClientAuth_PrivateKeyJwt_CertificateHeader {
+	if header == nil {
+		return api.OAuthClientAuth_PrivateKeyJwt_CERTIFICATE_HEADER_UNSPECIFIED
+	}
+	switch *header {
+	case agentgateway.OAuthPrivateKeyJWTCertificateHeaderX5C:
+		return api.OAuthClientAuth_PrivateKeyJwt_X5C
+	case agentgateway.OAuthPrivateKeyJWTCertificateHeaderX5TS256:
+		return api.OAuthClientAuth_PrivateKeyJwt_X5T_S256
+	default:
+		return api.OAuthClientAuth_PrivateKeyJwt_CERTIFICATE_HEADER_UNSPECIFIED
 	}
 }
 
@@ -1374,6 +1414,48 @@ func isOAuthReservedAdditionalParam(key string) bool {
 		}
 	}
 	return false
+}
+
+// translateBackendAuthCredentials resolves BackendAuth credential entries.
+func translateBackendAuthCredentials(ctx PolicyCtx, creds []agentgateway.BackendAuthCredential, namespace string) ([]*api.BackendAuthCredential, []error) {
+	if len(creds) == 0 {
+		return nil, nil
+	}
+	var errs []error
+	translated := make([]*api.BackendAuthCredential, 0, len(creds))
+	for _, c := range creds {
+		locName := credentialLocationName(c.Location)
+		var value string
+		data, secretKey, err := ctx.ResolveCredentialKeyRef(c.SecretRef, namespace, wellknown.Authorization)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("backendAuth credential %q: %w", locName, err))
+		} else if resolvedValue, ok := kubeutils.GetSecretDataValue(data, secretKey); !ok {
+			errs = append(errs, fmt.Errorf("backendAuth credential %q: secret %s/%s missing key %q",
+				locName, namespace, c.SecretRef.Name, secretKey))
+		} else {
+			value = resolvedValue
+		}
+		translated = append(translated, &api.BackendAuthCredential{
+			Location: translateAuthorizationLocation(&c.Location),
+			Value:    value,
+		})
+	}
+	return translated, errs
+}
+
+// credentialLocationName returns the name field of whichever location variant is set.
+// AuthorizationLocation is guaranteed by CEL to have exactly one of header/queryParameter/cookie set.
+func credentialLocationName(loc agentgateway.AuthorizationLocation) string {
+	if loc.Header != nil {
+		return string(loc.Header.Name)
+	}
+	if loc.QueryParameter != nil {
+		return loc.QueryParameter.Name
+	}
+	if loc.Cookie != nil {
+		return loc.Cookie.Name
+	}
+	return ""
 }
 
 // translateRouteType converts RouteType to agentgateway proto RouteType

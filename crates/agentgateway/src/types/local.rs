@@ -15,7 +15,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use secrecy::SecretString;
 
-use crate::http::auth::BackendAuth;
+use crate::http::auth::{BackendAuth, BackendAuthKind};
 use crate::http::backendtls::{LocalBackendTLS, ResolvedBackendTLS};
 use crate::http::transformation_cel::{LocalTransformationConfig, Transformation};
 use crate::http::{filters, health, retry, timeout, transformation_cel};
@@ -828,9 +828,17 @@ pub struct LLMRouteMatch {
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
-#[serde(rename_all = "lowercase", deny_unknown_fields)]
+#[serde(untagged)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum LocalModelAIProvider {
+	Builtin(LocalBuiltinModelAIProvider),
+	Preset(custom::ProviderPreset),
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "lowercase", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub enum LocalBuiltinModelAIProvider {
 	#[serde(rename = "reference")]
 	Reference(Strng),
 	#[serde(rename = "openai", alias = "openAI")]
@@ -842,20 +850,6 @@ pub enum LocalModelAIProvider {
 	Azure,
 	Copilot,
 	Custom(custom::Provider),
-	// Providers below are synthetic conversions to custom with preconfigured defaults.
-	Cohere,
-	Ollama,
-	Baseten,
-	Cerebras,
-	Deepinfra,
-	Deepseek,
-	Groq,
-	Huggingface,
-	Mistral,
-	Openrouter,
-	Togetherai,
-	XAI,
-	Fireworks,
 }
 
 #[apply(schema_de!)]
@@ -939,7 +933,10 @@ impl LocalLLMModels {
 				provider.name
 			);
 		};
-		if matches!(&provider.provider, LocalModelAIProvider::Reference(_)) {
+		if matches!(
+			&provider.provider,
+			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Reference(_))
+		) {
 			bail!(
 				"llm.providers.{} cannot reference another provider",
 				provider.name
@@ -974,86 +971,8 @@ impl LocalLLMModels {
 		{
 			return;
 		}
-		match &self.provider {
-			LocalModelAIProvider::Cohere => {
-				self
-					.params
-					.base_url
-					.get_or_insert_with(|| strng::new("https://api.cohere.ai"));
-			},
-			LocalModelAIProvider::Ollama => {
-				self
-					.params
-					.base_url
-					.get_or_insert_with(|| strng::new("http://localhost:11434/v1"));
-			},
-			LocalModelAIProvider::Baseten => {
-				self
-					.params
-					.base_url
-					.get_or_insert_with(|| strng::new("https://inference.baseten.co/v1"));
-			},
-			LocalModelAIProvider::Cerebras => {
-				self
-					.params
-					.base_url
-					.get_or_insert_with(|| strng::new("https://api.cerebras.ai/v1"));
-			},
-			LocalModelAIProvider::Deepinfra => {
-				self
-					.params
-					.base_url
-					.get_or_insert_with(|| strng::new("https://api.deepinfra.com/v1/openai"));
-			},
-			LocalModelAIProvider::Deepseek => {
-				self
-					.params
-					.base_url
-					.get_or_insert_with(|| strng::new("https://api.deepseek.com/v1"));
-			},
-			LocalModelAIProvider::Groq => {
-				self
-					.params
-					.base_url
-					.get_or_insert_with(|| strng::new("https://api.groq.com/openai/v1"));
-			},
-			LocalModelAIProvider::Huggingface => {
-				self
-					.params
-					.base_url
-					.get_or_insert_with(|| strng::new("https://router.huggingface.co/v1"));
-			},
-			LocalModelAIProvider::Mistral => {
-				self
-					.params
-					.base_url
-					.get_or_insert_with(|| strng::new("https://api.mistral.ai/v1"));
-			},
-			LocalModelAIProvider::Openrouter => {
-				self
-					.params
-					.base_url
-					.get_or_insert_with(|| strng::new("https://openrouter.ai/api/v1"));
-			},
-			LocalModelAIProvider::Togetherai => {
-				self
-					.params
-					.base_url
-					.get_or_insert_with(|| strng::new("https://api.together.xyz/v1"));
-			},
-			LocalModelAIProvider::XAI => {
-				self
-					.params
-					.base_url
-					.get_or_insert_with(|| strng::new("https://api.x.ai/v1"));
-			},
-			LocalModelAIProvider::Fireworks => {
-				self
-					.params
-					.base_url
-					.get_or_insert_with(|| strng::new("https://api.fireworks.ai/inference/v1"));
-			},
-			_ => {},
+		if let LocalModelAIProvider::Preset(preset) = &self.provider {
+			self.params.base_url = Some(strng::new(preset.base_url()));
 		}
 	}
 
@@ -1064,6 +983,16 @@ impl LocalLLMModels {
 		};
 		let url = url::Url::parse(base_url)
 			.with_context(|| format!("invalid params.baseUrl for model {}", self.name))?;
+		if !url.username().is_empty()
+			|| url.password().is_some()
+			|| url.query().is_some()
+			|| url.fragment().is_some()
+		{
+			bail!(
+				"params.baseUrl for model {} cannot include user info, query parameters, or a fragment",
+				self.name
+			);
+		}
 		let port = url.port_or_known_default().with_context(|| {
 			format!(
 				"params.baseUrl for model {} must use http or https, or include an explicit port",
@@ -1103,16 +1032,6 @@ fn merge_optional_maps<T>(
 			base.extend(overrides);
 			Some(base)
 		},
-	}
-}
-
-fn custom_provider_format(
-	format: custom::ProviderFormat,
-	path: Option<&'static str>,
-) -> custom::ProviderFormatConfig {
-	custom::ProviderFormatConfig {
-		format,
-		path: path.map(strng::new),
 	}
 }
 
@@ -2208,24 +2127,44 @@ pub fn de_backend_auth<'de, D>(deserializer: D) -> Result<Option<BackendAuth>, D
 where
 	D: Deserializer<'de>,
 {
-	Option::<BackendAuthCompat>::deserialize(deserializer)?
-		.map(|auth| match auth {
-			BackendAuthCompat::Full(BackendAuth::OAuthTokenExchange(auth)) => {
+	fn validate_auth<E: serde::de::Error>(auth: BackendAuthKind) -> Result<BackendAuthKind, E> {
+		match auth {
+			BackendAuthKind::OAuthTokenExchange(auth) => {
 				// OAuth has a few cross-field checks serde won't catch on its own.
 				// Keep them here so untagged compat parsing still returns the real error.
 				auth.validate_load().map_err(serde::de::Error::custom)?;
-				Ok(BackendAuth::OAuthTokenExchange(auth))
+				Ok(BackendAuthKind::OAuthTokenExchange(auth))
 			},
-			BackendAuthCompat::Full(BackendAuth::CrossAppAccess(auth)) => {
+			BackendAuthKind::CrossAppAccess(auth) => {
 				// The derived exchange is built on deserialize; validate here so untagged
 				// compat parsing still returns the real cross-field error.
 				auth.validate_load().map_err(serde::de::Error::custom)?;
-				Ok(BackendAuth::CrossAppAccess(auth))
+				Ok(BackendAuthKind::CrossAppAccess(auth))
 			},
-			BackendAuthCompat::Full(auth) => Ok(auth),
-			BackendAuthCompat::PlainKey { key } => Ok(BackendAuth::Key {
-				value: key,
-				location: None,
+			auth => Ok(auth),
+		}
+	}
+
+	Option::<BackendAuthCompat>::deserialize(deserializer)?
+		.map(|auth| match auth {
+			BackendAuthCompat::PlainKey { key } => Ok(BackendAuth {
+				kind: Some(BackendAuthKind::Key {
+					value: key,
+					location: None,
+				}),
+				credentials: Vec::new(),
+			}),
+			BackendAuthCompat::FullWithCredentials { auth, credentials } => Ok(BackendAuth {
+				kind: Some(validate_auth::<D::Error>(auth)?),
+				credentials,
+			}),
+			BackendAuthCompat::CredentialsOnly { credentials } => Ok(BackendAuth {
+				kind: None,
+				credentials,
+			}),
+			BackendAuthCompat::Full(auth) => Ok(BackendAuth {
+				kind: Some(validate_auth::<D::Error>(auth)?),
+				credentials: Vec::new(),
 			}),
 		})
 		.transpose()
@@ -2240,7 +2179,15 @@ enum BackendAuthCompat {
 		#[serde(deserialize_with = "deser_key_from_file")]
 		key: SecretString,
 	},
-	Full(BackendAuth),
+	FullWithCredentials {
+		#[serde(flatten)]
+		auth: BackendAuthKind,
+		credentials: Vec<crate::http::auth::BackendAuthCredential>,
+	},
+	CredentialsOnly {
+		credentials: Vec<crate::http::auth::BackendAuthCredential>,
+	},
+	Full(BackendAuthKind),
 }
 
 #[apply(schema_de!)]
@@ -2983,17 +2930,9 @@ async fn convert(
 		}
 	}
 
-	match (llm, mcp) {
-		(Some(llm_config), Some(mcp_config))
-			if llm_config.gateways.is_empty()
-				&& mcp_config.gateways.is_empty()
-				&& llm_config.port.unwrap_or(DEFAULT_LLM_PORT)
-					== mcp_config.port.unwrap_or(DEFAULT_MCP_PORT) =>
-		{
-			if llm_config.tls.is_some() {
-				bail!("top-level llm and mcp cannot share a port when llm.tls is configured");
-			}
-			let (llm_bind, mut llm_routes, llm_policies, llm_backends) = Box::pin(convert_llm_config(
+	if let Some(llm_config) = llm {
+		if llm_config.gateways.is_empty() {
+			let (llm_bind, llm_routes, llm_policies, llm_backends) = Box::pin(convert_llm_config(
 				resources,
 				config,
 				gateway.clone(),
@@ -3001,82 +2940,52 @@ async fn convert(
 				false,
 			))
 			.await?;
-			let (_mcp_bind, mcp_routes, mcp_policies, mcp_backends) = Box::pin(convert_mcp_config(
-				resources,
-				config,
-				gateway.clone(),
-				mcp_config,
-				true,
-			))
-			.await?;
-			llm_routes.extend(mcp_routes);
 			all_listener_routes.push((strng::new(llm::LOCAL_LISTENER_NAME), llm_routes));
 			all_listener_tcp_routes.push((strng::new(llm::LOCAL_LISTENER_NAME), Vec::new()));
 			all_binds.push(llm_bind);
 			all_policies.extend_from_slice(&llm_policies);
-			all_policies.extend_from_slice(&mcp_policies);
 			all_backends.extend_from_slice(&llm_backends);
+		} else {
+			Box::pin(convert_attached_llm(
+				resources,
+				config,
+				gateway.clone(),
+				llm_config,
+				&gateway_refs,
+				&mut all_listener_routes,
+				&mut all_policies,
+				&mut all_backends,
+			))
+			.await?;
+		}
+	}
+	if let Some(mcp_config) = mcp {
+		if mcp_config.gateways.is_empty() {
+			let (mcp_bind, mcp_routes, mcp_policies, mcp_backends) = Box::pin(convert_mcp_config(
+				resources,
+				config,
+				gateway.clone(),
+				mcp_config,
+				false,
+			))
+			.await?;
+			all_listener_routes.push((strng::new("mcp"), mcp_routes));
+			all_listener_tcp_routes.push((strng::new("mcp"), Vec::new()));
+			all_binds.push(mcp_bind);
+			all_policies.extend_from_slice(&mcp_policies);
 			all_backends.extend_from_slice(&mcp_backends);
-		},
-		(llm, mcp) => {
-			if let Some(llm_config) = llm {
-				if llm_config.gateways.is_empty() {
-					let (llm_bind, llm_routes, llm_policies, llm_backends) = Box::pin(convert_llm_config(
-						resources,
-						config,
-						gateway.clone(),
-						llm_config,
-						false,
-					))
-					.await?;
-					all_listener_routes.push((strng::new(llm::LOCAL_LISTENER_NAME), llm_routes));
-					all_listener_tcp_routes.push((strng::new(llm::LOCAL_LISTENER_NAME), Vec::new()));
-					all_binds.push(llm_bind);
-					all_policies.extend_from_slice(&llm_policies);
-					all_backends.extend_from_slice(&llm_backends);
-				} else {
-					Box::pin(convert_attached_llm(
-						resources,
-						config,
-						gateway.clone(),
-						llm_config,
-						&gateway_refs,
-						&mut all_listener_routes,
-						&mut all_policies,
-						&mut all_backends,
-					))
-					.await?;
-				}
-			}
-			if let Some(mcp_config) = mcp {
-				if mcp_config.gateways.is_empty() {
-					let (mcp_bind, mcp_routes, mcp_policies, mcp_backends) = Box::pin(convert_mcp_config(
-						resources,
-						config,
-						gateway.clone(),
-						mcp_config,
-						false,
-					))
-					.await?;
-					all_listener_routes.push((strng::new("mcp"), mcp_routes));
-					all_listener_tcp_routes.push((strng::new("mcp"), Vec::new()));
-					all_binds.push(mcp_bind);
-					all_policies.extend_from_slice(&mcp_policies);
-					all_backends.extend_from_slice(&mcp_backends);
-				} else {
-					Box::pin(convert_attached_mcp(
-						resources,
-						config,
-						gateway.clone(),
-						mcp_config,
-						&gateway_refs,
-						&mut all_listener_routes,
-						&mut all_backends,
-					))
-					.await?;
-				}
-			}
-		},
+		} else {
+			Box::pin(convert_attached_mcp(
+				resources,
+				config,
+				gateway.clone(),
+				mcp_config,
+				&gateway_refs,
+				&mut all_listener_routes,
+				&mut all_backends,
+			))
+			.await?;
+		}
 	}
 	if let Some(ui_config) = ui {
 		Box::pin(convert_attached_ui(
@@ -3341,43 +3250,39 @@ fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
 			wildcard_binds
 		);
 	}
-	match (&config.llm, &config.mcp) {
-		(Some(llm), Some(mcp))
-			if llm.gateways.is_empty()
-				&& mcp.gateways.is_empty()
-				&& llm.port.unwrap_or(DEFAULT_LLM_PORT) == mcp.port.unwrap_or(DEFAULT_MCP_PORT) =>
-		{
-			insert_local_listener_port(
-				llm.port.unwrap_or(DEFAULT_LLM_PORT),
-				"llm and mcp".to_string(),
-			)?;
-		},
-		(llm, mcp) => {
-			if let Some(llm) = llm
-				&& llm.gateways.is_empty()
-			{
-				insert_local_listener_port(
-					llm.port.unwrap_or(DEFAULT_LLM_PORT),
-					if llm.port.is_some() {
-						"llm".to_string()
-					} else {
-						"llm (default)".to_string()
-					},
-				)?;
-			}
-			if let Some(mcp) = mcp
-				&& mcp.gateways.is_empty()
-			{
-				insert_local_listener_port(
-					mcp.port.unwrap_or(DEFAULT_MCP_PORT),
-					if mcp.port.is_some() {
-						"mcp".to_string()
-					} else {
-						"mcp (default)".to_string()
-					},
-				)?;
-			}
-		},
+	if let (Some(llm), Some(mcp)) = (&config.llm, &config.mcp)
+		&& llm.gateways.is_empty()
+		&& mcp.gateways.is_empty()
+		&& llm.port.unwrap_or(DEFAULT_LLM_PORT) == mcp.port.unwrap_or(DEFAULT_MCP_PORT)
+	{
+		let port = llm.port.unwrap_or(DEFAULT_LLM_PORT);
+		bail!(
+			"top-level llm and mcp cannot use the same port {port}; attach both to the same gateway instead"
+		);
+	}
+	if let Some(llm) = &config.llm
+		&& llm.gateways.is_empty()
+	{
+		insert_local_listener_port(
+			llm.port.unwrap_or(DEFAULT_LLM_PORT),
+			if llm.port.is_some() {
+				"llm".to_string()
+			} else {
+				"llm (default)".to_string()
+			},
+		)?;
+	}
+	if let Some(mcp) = &config.mcp
+		&& mcp.gateways.is_empty()
+	{
+		insert_local_listener_port(
+			mcp.port.unwrap_or(DEFAULT_MCP_PORT),
+			if mcp.port.is_some() {
+				"mcp".to_string()
+			} else {
+				"mcp (default)".to_string()
+			},
+		)?;
 	}
 	Ok(())
 }
@@ -4056,49 +3961,19 @@ impl ResolvedLLMModelRegistry {
 fn llm_route_types(
 	passthrough: Option<&LocalLLMPassthrough>,
 ) -> Vec<(Strng, crate::llm::RouteType)> {
+	let mut routes = crate::llm::model_router::default_route_types()
+		.routes
+		.iter()
+		.map(|(path, route_type)| (path.clone(), *route_type))
+		.collect::<Vec<_>>();
 	if let Some(passthrough) = passthrough {
-		return vec![(strng::new("*"), passthrough.route_type())];
+		if let Some((_, route_type)) = routes.iter_mut().find(|(path, _)| path.as_str() == "*") {
+			*route_type = passthrough.route_type();
+		} else {
+			routes.push((strng::new("*"), passthrough.route_type()));
+		}
 	}
-	vec![
-		(
-			strng::new("/v1/chat/completions"),
-			crate::llm::RouteType::Completions,
-		),
-		(strng::new("/v1/messages"), crate::llm::RouteType::Messages),
-		// TODO: we could do this to support vertex calls. But we would need to extract the model name from the URL
-		(strng::new(":rawPredict"), crate::llm::RouteType::Messages),
-		(
-			strng::new(":streamRawPredict"),
-			crate::llm::RouteType::Messages,
-		),
-		(
-			strng::new("/v1/responses"),
-			crate::llm::RouteType::Responses,
-		),
-		(
-			strng::new("/v1/images/generations"),
-			crate::llm::RouteType::Detect,
-		),
-		(
-			strng::new("/v1/images/edits"),
-			crate::llm::RouteType::Detect,
-		),
-		(
-			strng::new("/v1/images/variations"),
-			crate::llm::RouteType::Detect,
-		),
-		(
-			strng::new("/v1/responses/compact"),
-			crate::llm::RouteType::Detect,
-		),
-		(
-			strng::new("/v1/embeddings"),
-			crate::llm::RouteType::Embeddings,
-		),
-		(strng::new("/v1/rerank"), crate::llm::RouteType::Rerank),
-		(strng::new("/v2/rerank"), crate::llm::RouteType::Rerank),
-		(strng::new("*"), crate::llm::RouteType::Passthrough),
-	]
+	routes
 }
 
 fn ensure_ai_provider_model(provider: &mut AIProvider, model: &str) {
@@ -4223,7 +4098,9 @@ async fn convert_llm_config(
 	// Create routes and backends for each model
 	for (idx, (_, model_config)) in ordered_models.into_iter().enumerate() {
 		let mut model_config = model_config;
-		if let LocalModelAIProvider::Reference(reference) = &model_config.provider {
+		if let LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Reference(reference)) =
+			&model_config.provider
+		{
 			let provider = providers_by_name.get(reference).with_context(|| {
 				format!(
 					"model {} references unknown provider {}",
@@ -4246,18 +4123,26 @@ async fn convert_llm_config(
 
 		// Use provider from config and set the model name
 		let provider = match &model_config.provider {
-			LocalModelAIProvider::Reference(reference) => {
+			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Reference(reference)) => {
 				bail!(
 					"model {} has unresolved provider reference {}",
 					model_config.name,
 					reference
 				)
 			},
-			LocalModelAIProvider::Anthropic => AIProvider::Anthropic(anthropic::Provider { model }),
-			LocalModelAIProvider::OpenAI => AIProvider::OpenAI(openai::Provider { model }),
-			LocalModelAIProvider::Copilot => AIProvider::Copilot(copilot::Provider { model }),
-			LocalModelAIProvider::Gemini => AIProvider::Gemini(crate::llm::gemini::Provider { model }),
-			LocalModelAIProvider::Custom(custom_provider) => {
+			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Anthropic) => {
+				AIProvider::Anthropic(anthropic::Provider { model })
+			},
+			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::OpenAI) => {
+				AIProvider::OpenAI(openai::Provider { model })
+			},
+			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Copilot) => {
+				AIProvider::Copilot(copilot::Provider { model })
+			},
+			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Gemini) => {
+				AIProvider::Gemini(crate::llm::gemini::Provider { model })
+			},
+			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Custom(custom_provider)) => {
 				if custom_provider.formats.is_empty() {
 					bail!(
 						"custom provider for model {} must specify at least one format",
@@ -4275,165 +4160,45 @@ async fn convert_llm_config(
 					..custom_provider.clone()
 				})
 			},
-			LocalModelAIProvider::Cohere => AIProvider::Custom(custom::Provider {
-				model,
-				provider_override: Some(strng::literal!("cohere")),
-				formats: vec![
-					custom_provider_format(
-						custom::ProviderFormat::Completions,
-						Some("/compatibility/v1/chat/completions"),
-					),
-					custom_provider_format(
-						custom::ProviderFormat::Embeddings,
-						Some("/compatibility/v1/embeddings"),
-					),
-					custom_provider_format(custom::ProviderFormat::Rerank, Some("/v2/rerank")),
-				],
-			}),
-			LocalModelAIProvider::Ollama => AIProvider::Custom(custom::Provider {
-				model,
-				provider_override: Some(strng::literal!("ollama")),
-				formats: vec![
-					custom_provider_format(custom::ProviderFormat::Completions, None),
-					custom_provider_format(custom::ProviderFormat::Responses, None),
-					custom_provider_format(custom::ProviderFormat::Embeddings, None),
-				],
-			}),
-			LocalModelAIProvider::Baseten => AIProvider::Custom(custom::Provider {
-				model,
-				provider_override: Some(strng::literal!("baseten")),
-				formats: vec![
-					custom_provider_format(custom::ProviderFormat::Completions, None),
-					custom_provider_format(custom::ProviderFormat::Messages, None),
-				],
-			}),
-			LocalModelAIProvider::Cerebras => AIProvider::Custom(custom::Provider {
-				model,
-				provider_override: Some(strng::literal!("cerebras")),
-				formats: vec![custom_provider_format(
-					custom::ProviderFormat::Completions,
-					None,
-				)],
-			}),
-			LocalModelAIProvider::Deepinfra => AIProvider::Custom(custom::Provider {
-				model,
-				provider_override: Some(strng::literal!("deepinfra")),
-				formats: vec![
-					custom_provider_format(custom::ProviderFormat::Completions, None),
-					custom_provider_format(
-						custom::ProviderFormat::Messages,
-						Some("/anthropic/v1/messages"),
-					),
-					custom_provider_format(custom::ProviderFormat::Embeddings, None),
-				],
-			}),
-			LocalModelAIProvider::Deepseek => AIProvider::Custom(custom::Provider {
-				model,
-				provider_override: Some(strng::literal!("deepseek")),
-				formats: vec![
-					custom_provider_format(custom::ProviderFormat::Completions, None),
-					custom_provider_format(
-						custom::ProviderFormat::Messages,
-						Some("/anthropic/v1/messages"),
-					),
-				],
-			}),
-			LocalModelAIProvider::Groq => AIProvider::Custom(custom::Provider {
-				model,
-				provider_override: Some(strng::literal!("groq")),
-				formats: vec![
-					custom_provider_format(custom::ProviderFormat::Completions, None),
-					custom_provider_format(custom::ProviderFormat::Responses, None),
-				],
-			}),
-			LocalModelAIProvider::Huggingface => AIProvider::Custom(custom::Provider {
-				model,
-				provider_override: Some(strng::literal!("huggingface")),
-				formats: vec![
-					custom_provider_format(custom::ProviderFormat::Completions, None),
-					custom_provider_format(custom::ProviderFormat::Responses, None),
-				],
-			}),
-			LocalModelAIProvider::Mistral => AIProvider::Custom(custom::Provider {
-				model,
-				provider_override: Some(strng::literal!("mistral")),
-				formats: vec![
-					custom_provider_format(custom::ProviderFormat::Completions, None),
-					custom_provider_format(custom::ProviderFormat::Embeddings, None),
-				],
-			}),
-			LocalModelAIProvider::Openrouter => AIProvider::Custom(custom::Provider {
-				model,
-				provider_override: Some(strng::literal!("openrouter")),
-				formats: vec![
-					custom_provider_format(custom::ProviderFormat::Completions, None),
-					custom_provider_format(custom::ProviderFormat::Messages, None),
-					custom_provider_format(custom::ProviderFormat::Responses, None),
-					custom_provider_format(custom::ProviderFormat::Embeddings, None),
-					custom_provider_format(custom::ProviderFormat::Rerank, None),
-				],
-			}),
-			LocalModelAIProvider::Togetherai => AIProvider::Custom(custom::Provider {
-				model,
-				provider_override: Some(strng::literal!("togetherai")),
-				formats: vec![
-					custom_provider_format(custom::ProviderFormat::Completions, None),
-					custom_provider_format(custom::ProviderFormat::Embeddings, None),
-					custom_provider_format(custom::ProviderFormat::Rerank, None),
-				],
-			}),
-			LocalModelAIProvider::XAI => AIProvider::Custom(custom::Provider {
-				model,
-				provider_override: Some(strng::literal!("xai")),
-				formats: vec![
-					custom_provider_format(custom::ProviderFormat::Completions, None),
-					custom_provider_format(custom::ProviderFormat::Responses, None),
-					custom_provider_format(custom::ProviderFormat::Realtime, None),
-				],
-			}),
-			LocalModelAIProvider::Fireworks => AIProvider::Custom(custom::Provider {
-				model,
-				provider_override: Some(strng::literal!("fireworks")),
-				formats: vec![
-					custom_provider_format(custom::ProviderFormat::Completions, None),
-					custom_provider_format(custom::ProviderFormat::Messages, None),
-					custom_provider_format(custom::ProviderFormat::Responses, None),
-					custom_provider_format(custom::ProviderFormat::Embeddings, None),
-					custom_provider_format(custom::ProviderFormat::Rerank, None),
-				],
-			}),
-			LocalModelAIProvider::Vertex => AIProvider::Vertex(crate::llm::vertex::Provider {
-				model,
-				region: p.vertex_region,
-				project_id: p.vertex_project.context("vertex requires vertex_project")?,
-			}),
-			LocalModelAIProvider::Bedrock => AIProvider::bedrock(crate::llm::bedrock::Provider {
-				model,
-				region: p.aws_region.context("bedrock requires aws_region")?,
-				guardrail_identifier: None,
-				guardrail_version: None,
-			}),
-			LocalModelAIProvider::Azure => AIProvider::azure(crate::llm::azure::Provider {
-				model,
-				resource_name: p
-					.azure_resource_name
-					.context("azure requires azureResourceName")?,
-				resource_type: p
-					.azure_resource_type
-					.context("azure requires azureResourceType")?,
-				api_version: p.azure_api_version,
-				project_name: p.azure_project_name,
-			}),
+			LocalModelAIProvider::Preset(preset) => AIProvider::Custom(preset.provider(model.clone())),
+			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Vertex) => {
+				AIProvider::Vertex(crate::llm::vertex::Provider {
+					model,
+					region: p.vertex_region,
+					project_id: p.vertex_project.context("vertex requires vertex_project")?,
+				})
+			},
+			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Bedrock) => {
+				AIProvider::bedrock(crate::llm::bedrock::Provider {
+					model,
+					region: p.aws_region.context("bedrock requires aws_region")?,
+					guardrail_identifier: None,
+					guardrail_version: None,
+				})
+			},
+			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Azure) => {
+				AIProvider::azure(crate::llm::azure::Provider {
+					model,
+					resource_name: p
+						.azure_resource_name
+						.context("azure requires azureResourceName")?,
+					resource_type: p
+						.azure_resource_type
+						.context("azure requires azureResourceType")?,
+					api_version: p.azure_api_version,
+					project_name: p.azure_project_name,
+				})
+			},
 		};
 
 		// Create backend auth policy
 		let mut pols = vec![];
 		if let Some(key) = p.api_key.as_ref() {
-			let backend_auth = BackendAuth::Key {
+			let backend_auth = BackendAuthKind::Key {
 				value: key.0.clone(),
 				location: None,
 			};
-			pols.push(BackendTrafficPolicy::BackendAuth(backend_auth));
+			pols.push(BackendTrafficPolicy::backend_auth(backend_auth));
 		}
 
 		// Create AI backend
@@ -4510,13 +4275,18 @@ async fn convert_llm_config(
 		router_models.push(llm::model_router::ModelRoute {
 			id: model_config.id.clone(),
 			name: model_config.name.clone(),
+			created: startup_timestamp,
 			visibility: model_config.visibility,
 			header_matches: model_config
 				.matches
 				.iter()
 				.map(|m| m.headers.clone())
 				.collect(),
-			backend_key,
+			backend: RouteBackendReference {
+				weight: 1,
+				target: BackendReference::Backend(strng::format!("/{backend_key}")).into(),
+				inline_policies: vec![],
+			},
 			policies: llm::model_router::ModelRoutePolicies {
 				llm: Arc::new(crate::llm::Policy {
 					routes: llm_routes.into_iter().collect(),
@@ -4598,11 +4368,18 @@ async fn convert_llm_config(
 					),
 					inline_policies: vec![],
 				});
-				llm::model_router::VirtualModelRouting::Failover { backend_key }
+				llm::model_router::VirtualModelRouting::Failover {
+					backend: RouteBackendReference {
+						weight: 1,
+						target: BackendReference::Backend(strng::format!("/{backend_key}")).into(),
+						inline_policies: vec![],
+					},
+				}
 			},
 		};
 		router_virtual_models.push(llm::model_router::VirtualModelRoute {
 			name: virtual_model.name,
+			created: startup_timestamp,
 			llm_policy,
 			routing,
 		});
@@ -4615,7 +4392,6 @@ async fn convert_llm_config(
 			Arc::new(llm::model_router::ModelRouter::new(
 				router_models,
 				router_virtual_models,
-				startup_timestamp,
 			)),
 		),
 		inline_policies: vec![],

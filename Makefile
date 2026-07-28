@@ -105,6 +105,10 @@ test:
 test-release:
 	cargo test --profile quick-release --all-targets
 
+.PHONY: check-default-members
+check-default-members:
+	@cargo metadata --no-deps --format-version 1 | jq -e -f tools/check-default-members.jq >/dev/null
+
 # clean
 .PHONY: clean
 clean:

@@ -1,0 +1,103 @@
+---
+source: crates/agentgateway/src/llm/tests.rs
+description: src/llm/tests/requests/completions/generation-config.json
+info:
+  model: gemini-2.5-pro
+  messages:
+    - role: system
+      content: You are a helpful assistant.
+    - role: user
+      content: What is the weather?
+  max_tokens: 1000
+  temperature: 0.7
+  top_p: 0.9
+  top_k: 40
+  n: 3
+  stop:
+    - "\n\n"
+    - END
+  presence_penalty: 0.1
+  frequency_penalty: 0.2
+  seed: 42
+  response_format:
+    type: json_object
+  tool_choice:
+    type: function
+    function:
+      name: get_weather
+  tools:
+    - type: function
+      function:
+        name: get_weather
+        description: Get the current weather in a location
+        parameters:
+          type: object
+          properties:
+            location:
+              type: string
+          required:
+            - location
+---
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "text": "What is the weather?"
+        }
+      ]
+    }
+  ],
+  "systemInstruction": {
+    "parts": [
+      {
+        "text": "You are a helpful assistant."
+      }
+    ]
+  },
+  "tools": [
+    {
+      "functionDeclarations": [
+        {
+          "name": "get_weather",
+          "description": "Get the current weather in a location",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "location"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "toolConfig": {
+    "functionCallingConfig": {
+      "mode": "ANY",
+      "allowedFunctionNames": [
+        "get_weather"
+      ]
+    }
+  },
+  "generationConfig": {
+    "temperature": 0.7,
+    "topP": 0.9,
+    "topK": 40,
+    "frequencyPenalty": 0.2,
+    "presencePenalty": 0.1,
+    "maxOutputTokens": 1000,
+    "stopSequences": [
+      "\n\n",
+      "END"
+    ],
+    "candidateCount": 3,
+    "seed": 42,
+    "responseMimeType": "application/json"
+  }
+}

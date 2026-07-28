@@ -1,6 +1,5 @@
 package wellknown
 
-// AWS constants for lambda and bedrock configuration
 const (
 	// AccessKey is the key name for in the secret data for the access key id.
 	AccessKey = "accessKey"
@@ -16,8 +15,11 @@ const (
 	ClientSecret = "clientSecret"
 	// SigningKey is the key name in secret data for PEM-encoded signing keys.
 	SigningKey = "signingKey"
+	// Certificate is the key name in secret data for PEM-encoded certificates.
+	Certificate = "certificate"
 	// GCPCredentialsJSON is the key name for GCP ADC-compatible credential JSON.
 	GCPCredentialsJSON = "credentials.json"
-	// Authorization is the key name in secret data for a bearer credential.
+	// Authorization is the key name in secret data for the Authorization value,
+	// used as the default secret key across backendAuth mechanisms.
 	Authorization = "Authorization"
 )

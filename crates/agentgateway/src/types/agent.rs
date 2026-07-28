@@ -24,7 +24,7 @@ use serde_json::Value;
 
 use crate::control::caclient::CaClient;
 use crate::control::spiffe::SpiffeClient;
-use crate::http::auth::BackendAuth;
+use crate::http::auth::{BackendAuth, BackendAuthCredential, BackendAuthKind};
 use crate::http::authorization::RuleSet;
 use crate::http::backendtls::ResolvedBackendTLS;
 use crate::http::ext_proc::GrpcReferenceChannel;
@@ -785,6 +785,21 @@ pub struct Route {
 pub type RouteKey = Strng;
 pub type RouteGroupKey = Strng;
 pub type RouteRuleName = Strng;
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelRoute {
+	pub key: RouteKey,
+	pub name: Strng,
+	pub kind: ModelRouteKind,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelRouteKind {
+	Concrete(crate::llm::model_router::ModelRoute),
+	Virtual(crate::llm::model_router::VirtualModelRoute),
+}
 
 #[apply(schema!)]
 #[derive(Hash, Eq, PartialEq)]
@@ -2749,6 +2764,18 @@ pub enum BackendTrafficPolicy {
 	ResponseHeaderModifier(Arc<filters::HeaderModifier>),
 	RequestRedirect(filters::RequestRedirect),
 	RequestMirror(Vec<filters::RequestMirror>),
+}
+
+impl BackendTrafficPolicy {
+	pub fn backend_auth(auth: BackendAuthKind) -> Self {
+		Self::BackendAuth(BackendAuth::new(auth))
+	}
+	pub fn backend_auth_credentials(credentials: Vec<BackendAuthCredential>) -> Self {
+		Self::BackendAuth(BackendAuth {
+			kind: None,
+			credentials,
+		})
+	}
 }
 
 #[apply(schema!)]

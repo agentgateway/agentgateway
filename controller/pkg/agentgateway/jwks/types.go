@@ -3,8 +3,9 @@ package jwks
 import (
 	"crypto/tls"
 	"encoding/json"
-	"reflect"
 	"time"
+
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 )
@@ -36,7 +37,7 @@ func (s JwksSource) ResourceName() string {
 func (s JwksSource) Equals(other JwksSource) bool {
 	return s.OwnerKey == other.OwnerKey &&
 		s.RequestKey == other.RequestKey &&
-		reflect.DeepEqual(s.Target, other.Target) &&
+		apiequality.Semantic.DeepEqual(s.Target, other.Target) &&
 		s.TTL == other.TTL
 }
 
@@ -78,7 +79,7 @@ func (r SharedJwksRequest) ResourceName() string {
 
 func (r SharedJwksRequest) Equals(other SharedJwksRequest) bool {
 	return r.RequestKey == other.RequestKey &&
-		reflect.DeepEqual(r.Target, other.Target) &&
+		apiequality.Semantic.DeepEqual(r.Target, other.Target) &&
 		r.TTL == other.TTL
 }
 

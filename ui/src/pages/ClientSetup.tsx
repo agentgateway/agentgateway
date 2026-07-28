@@ -70,13 +70,12 @@ type RequestModelOption =
 export function ClientSetupPage() {
   const {
     config,
-    hybrid,
-    configResources,
     models,
     virtualModels,
     providers,
     apiKeys,
     isLoading: modelsLoading,
+    error: configDataError,
   } = useLlmConfigData();
   const modelOptions = useMemo(
     () => [
@@ -162,9 +161,9 @@ export function ClientSetupPage() {
         title="Client Setup"
         description="Generate connection settings and snippets for OpenAI-compatible LLM clients."
       />
-      {config.isError || (hybrid && configResources.isError) ? (
+      {configDataError ? (
         <StatusBanner state="bad" title="Configuration API unavailable">
-          {config.error?.message ?? configResources.error?.message}
+          {configDataError.message}
         </StatusBanner>
       ) : null}
       {modelOptions.length === 0 && !modelsLoading ? (

@@ -1,0 +1,438 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: virtual-models
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: llm
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      kinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+      namespaces:
+        from: Same
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: openai-models
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: virtual-models
+    sectionName: llm
+  match:
+    model: gpt-5-*
+  visibility: Internal
+  provider: OpenAI
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: gpt-5-mini
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: virtual-models
+    sectionName: llm
+  provider: OpenAI
+  policies:
+    transformations:
+    - field: model
+      expression: '"gpt-5-mini-transformed"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: fast
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: virtual-models
+    sectionName: llm
+  virtualModel:
+    weighted:
+      targets:
+      - modelRef:
+          name: gpt-5-mini
+        weight: 90
+      - modelRef:
+          name: openai-models
+        model: gpt-5-large
+        weight: 10
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: resilient
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: virtual-models
+    sectionName: llm
+  virtualModel:
+    failover:
+      targets:
+      - modelRef:
+          name: gpt-5-mini
+        priority: 0
+      - modelRef:
+          name: openai-models
+        model: gpt-5-large
+        priority: 1
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: smart
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: virtual-models
+    sectionName: llm
+  virtualModel:
+    conditional:
+      targets:
+      - when: request.headers["x-tier"] == "premium"
+        modelRef:
+          name: openai-models
+        model: gpt-5-large
+      - modelRef:
+          name: gpt-5-mini
+
+---
+# Output
+output:
+- gateway:
+    Name: virtual-models
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - name: backend
+            openai: {}
+      key: default/gpt-5-mini/backend.llm
+      name:
+        name: gpt-5-mini
+        namespace: default
+- gateway:
+    Name: virtual-models
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - name: backend
+            openai: {}
+      key: default/openai-models/backend.llm
+      name:
+        name: openai-models
+        namespace: default
+- gateway:
+    Name: virtual-models
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - inlinePolicies:
+            - ai:
+                transformations:
+                  model: '"gpt-5-mini-transformed"'
+            name: gpt-5-mini
+            openai:
+              model: gpt-5-mini
+        - providers:
+          - name: openai-models
+            openai:
+              model: gpt-5-large
+      key: default/resilient/failover.llm
+      name:
+        name: resilient
+        namespace: default
+- gateway:
+    Name: virtual-models
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/virtual-models
+      port: 80
+- gateway:
+    Name: virtual-models
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/virtual-models
+      key: default/virtual-models.llm
+      name:
+        gatewayName: virtual-models
+        gatewayNamespace: default
+        listenerName: llm
+      protocol: HTTP
+- gateway:
+    Name: virtual-models
+    Namespace: default
+  resource:
+    modelRoute:
+      key: default/fast.llm
+      listenerKey: default/virtual-models.llm
+      match:
+        model: fast
+      virtualModel:
+        weighted:
+          targets:
+          - model: gpt-5-mini
+            weight: 90
+          - model: gpt-5-large
+            weight: 10
+- gateway:
+    Name: virtual-models
+    Namespace: default
+  resource:
+    modelRoute:
+      aiPolicy:
+        transformations:
+          model: '"gpt-5-mini-transformed"'
+      concreteModel:
+        backend:
+          backend: default/gpt-5-mini/backend.llm
+      key: default/gpt-5-mini.llm
+      listenerKey: default/virtual-models.llm
+      match:
+        model: gpt-5-mini
+- gateway:
+    Name: virtual-models
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/openai-models/backend.llm
+        modelVisibility: INTERNAL
+      key: default/openai-models.llm
+      listenerKey: default/virtual-models.llm
+      match:
+        model: gpt-5-*
+- gateway:
+    Name: virtual-models
+    Namespace: default
+  resource:
+    modelRoute:
+      key: default/resilient.llm
+      listenerKey: default/virtual-models.llm
+      match:
+        model: resilient
+      virtualModel:
+        failover:
+          backend:
+            backend: default/resilient/failover.llm
+- gateway:
+    Name: virtual-models
+    Namespace: default
+  resource:
+    modelRoute:
+      key: default/smart.llm
+      listenerKey: default/virtual-models.llm
+      match:
+        model: smart
+      virtualModel:
+        conditional:
+          targets:
+          - model: gpt-5-large
+            when: request.headers["x-tier"] == "premium"
+          - model: gpt-5-mini
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: fast
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: virtual-models
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: gpt-5-mini
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: virtual-models
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: openai-models
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: virtual-models
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: resilient
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: virtual-models
+        namespace: default
+        sectionName: llm
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: smart
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: virtual-models
+        namespace: default
+        sectionName: llm
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: virtual-models
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 5
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: llm
+      supportedKinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel

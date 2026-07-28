@@ -353,7 +353,8 @@ func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 			Name:      "oauth-signing-key",
 		},
 		Data: map[string][]byte{
-			"signingKey": []byte("-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----"),
+			"signingKey":  []byte("-----BEGIN PRIVATE KEY-----\nkey\n-----END PRIVATE KEY-----"),
+			"certificate": []byte("-----BEGIN CERTIFICATE-----\ncert\n-----END CERTIFICATE-----"),
 		},
 	})
 
@@ -366,7 +367,11 @@ func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 				SigningKeyRef: agentgateway.LocalSecretKeyRef{
 					Name: "oauth-signing-key",
 				},
-				Alg:               ptr.Of(agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256),
+				CertificateRef: &agentgateway.LocalSecretKeyRef{
+					Name: "oauth-signing-key",
+				},
+				CertificateHeader: ptr.Of(agentgateway.OAuthPrivateKeyJWTCertificateHeaderX5TS256),
+				Alg:               ptr.Of(agentgateway.OAuthPrivateKeyJWTSigningAlgorithmPS256),
 				KeyID:             new("kid-1"),
 				AssertionAudience: "https://issuer.example.com/oauth/token",
 			},
@@ -390,8 +395,14 @@ func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 	if privateKeyJWT.GetSigningKey() == "" {
 		t.Fatal("signing key is empty, want secret value")
 	}
-	if privateKeyJWT.GetAlg() != api.OAuthClientAuth_PrivateKeyJwt_ES256 {
-		t.Fatalf("privateKeyJwt alg = %v, want ES256", privateKeyJWT.GetAlg())
+	if privateKeyJWT.GetCertificate() == "" {
+		t.Fatal("certificate is empty, want secret value")
+	}
+	if privateKeyJWT.GetCertificateHeader() != api.OAuthClientAuth_PrivateKeyJwt_X5T_S256 {
+		t.Fatalf("certificate header = %v, want X5T_S256", privateKeyJWT.GetCertificateHeader())
+	}
+	if privateKeyJWT.GetAlg() != api.OAuthClientAuth_PrivateKeyJwt_PS256 {
+		t.Fatalf("privateKeyJwt alg = %v, want PS256", privateKeyJWT.GetAlg())
 	}
 	if privateKeyJWT.GetKid() != "kid-1" {
 		t.Fatalf("privateKeyJwt kid = %q, want kid-1", privateKeyJWT.GetKid())
@@ -516,6 +527,38 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 				},
 			},
 			want: "method PrivateKeyJwt requires privateKeyJwt settings",
+		},
+		{
+			name: "private-key-jwt-certificate-without-header",
+			auth: agentgateway.OAuthTokenExchange{
+				BackendRef: oauthTokenEndpointRef(),
+				ClientAuth: &agentgateway.OAuthClientAuth{
+					ClientID: "gateway",
+					Method:   ptr.Of(agentgateway.OAuthClientAuthMethodPrivateKeyJWT),
+					PrivateKeyJWT: &agentgateway.OAuthPrivateKeyJWT{
+						SigningKeyRef:     agentgateway.LocalSecretKeyRef{Name: "missing"},
+						CertificateRef:    &agentgateway.LocalSecretKeyRef{Name: "missing"},
+						AssertionAudience: "https://issuer.example.com/oauth/token",
+					},
+				},
+			},
+			want: "certificateRef and certificateHeader must be set together",
+		},
+		{
+			name: "private-key-jwt-header-without-certificate",
+			auth: agentgateway.OAuthTokenExchange{
+				BackendRef: oauthTokenEndpointRef(),
+				ClientAuth: &agentgateway.OAuthClientAuth{
+					ClientID: "gateway",
+					Method:   ptr.Of(agentgateway.OAuthClientAuthMethodPrivateKeyJWT),
+					PrivateKeyJWT: &agentgateway.OAuthPrivateKeyJWT{
+						SigningKeyRef:     agentgateway.LocalSecretKeyRef{Name: "missing"},
+						CertificateHeader: ptr.Of(agentgateway.OAuthPrivateKeyJWTCertificateHeaderX5C),
+						AssertionAudience: "https://issuer.example.com/oauth/token",
+					},
+				},
+			},
+			want: "certificateRef and certificateHeader must be set together",
 		},
 	}
 

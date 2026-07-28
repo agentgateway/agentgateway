@@ -107,12 +107,13 @@ func SetConditions(generation int64, existingConditions []metav1.Condition, cond
 
 func reportListenerCondition(index int, l gwv1.Listener, obj controllers.Object,
 	statusListeners []gwv1.ListenerStatus, conditions map[string]*Condition,
+	enableAgentgatewayModels bool,
 ) []gwv1.ListenerStatus {
 	for index >= len(statusListeners) {
 		statusListeners = append(statusListeners, gwv1.ListenerStatus{})
 	}
 	cond := statusListeners[index].Conditions
-	supported, valid := GenerateSupportedKinds(l)
+	supported, valid := GenerateSupportedKinds(l, enableAgentgatewayModels)
 	if !valid {
 		conditions[string(gwv1.ListenerConditionResolvedRefs)] = &Condition{
 			Reason:  string(gwv1.ListenerReasonInvalidRouteKinds),
@@ -129,7 +130,7 @@ func reportListenerCondition(index int, l gwv1.Listener, obj controllers.Object,
 }
 
 // GenerateSupportedKinds returns the supported kinds for the listener.
-func GenerateSupportedKinds(l gwv1.Listener) ([]gwv1.RouteGroupKind, bool) {
+func GenerateSupportedKinds(l gwv1.Listener, enableAgentgatewayModels bool) ([]gwv1.RouteGroupKind, bool) {
 	supported := []gwv1.RouteGroupKind{}
 	switch l.Protocol {
 	case gwv1.HTTPProtocolType, gwv1.HTTPSProtocolType:
@@ -137,6 +138,18 @@ func GenerateSupportedKinds(l gwv1.Listener) ([]gwv1.RouteGroupKind, bool) {
 		supported = []gwv1.RouteGroupKind{
 			toRouteKind(wellknown.HTTPRouteGVK),
 			toRouteKind(wellknown.GRPCRouteGVK),
+		}
+		// AgentgatewayModel is opt-in. Listing it in allowedRoutes enables the
+		// listener's built-in LLM routes; it is not enabled by the default route
+		// kinds.
+		if enableAgentgatewayModels && l.AllowedRoutes != nil {
+			modelKind := toRouteKind(wellknown.AgentgatewayModelGVK)
+			for _, kind := range l.AllowedRoutes.Kinds {
+				if routeGroupKindEqual(modelKind, kind) {
+					supported = append(supported, modelKind)
+					break
+				}
+			}
 		}
 	case gwv1.TCPProtocolType:
 		supported = []gwv1.RouteGroupKind{toRouteKind(wellknown.TCPRouteGVK)}

@@ -129,6 +129,10 @@ type PolicyCtx struct {
 	// in OSS, or an injected resolver (which may itself be a chain). Access it
 	// through ResolveCredentialRef, which is nil-safe.
 	CredentialResolver kubeutils.CredentialResolver
+
+	// RouteBackend resolves references emitted by route-like resources that
+	// inline backend policies without participating in policy attachment.
+	RouteBackend RouteBackendResolver
 }
 
 // PolicySourceGVK returns the Kubernetes kind that should be used as the
@@ -1539,6 +1543,28 @@ func processAuthorizationPolicy(
 	basePolicyName string,
 	policy types.NamespacedName,
 ) (*api.Policy, error) {
+	rbac, err := TranslateAuthorization(auth)
+	pol := &api.Policy{
+		Key:  basePolicyName + rbacPolicySuffix,
+		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Traffic{
+			Traffic: &api.TrafficPolicySpec{
+				Phase: phase(policyPhase),
+				Kind:  &api.TrafficPolicySpec_Authorization{Authorization: rbac},
+			},
+		},
+	}
+
+	logger.Debug("generated Authorization policy",
+		"policy", basePolicyName,
+		"agentgateway_policy", pol.Name)
+
+	return pol, err
+}
+
+// TranslateAuthorization converts an Agentgateway authorization policy into
+// the data-plane RBAC representation.
+func TranslateAuthorization(auth *agentgateway.Authorization) (*api.TrafficPolicySpec_RBAC, error) {
 	var errs []error
 	var allowPolicies, denyPolicies, requirePolicies []string
 	policies := castCELSlice(auth.Policy.MatchExpressions, func(expr agentgateway.CELExpression) {
@@ -1552,28 +1578,11 @@ func processAuthorizationPolicy(
 		allowPolicies = append(allowPolicies, policies...)
 	}
 
-	pol := &api.Policy{
-		Key:  basePolicyName + rbacPolicySuffix,
-		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
-		Kind: &api.Policy_Traffic{
-			Traffic: &api.TrafficPolicySpec{
-				Phase: phase(policyPhase),
-				Kind: &api.TrafficPolicySpec_Authorization{
-					Authorization: &api.TrafficPolicySpec_RBAC{
-						Allow:   allowPolicies,
-						Deny:    denyPolicies,
-						Require: requirePolicies,
-					},
-				},
-			},
-		},
-	}
-
-	logger.Debug("generated Authorization policy",
-		"policy", basePolicyName,
-		"agentgateway_policy", pol.Name)
-
-	return pol, errors.Join(errs...)
+	return &api.TrafficPolicySpec_RBAC{
+		Allow:   allowPolicies,
+		Deny:    denyPolicies,
+		Require: requirePolicies,
+	}, errors.Join(errs...)
 }
 
 func getFrontendPolicyName(trafficPolicyNs, trafficPolicyName string) string {
@@ -1824,6 +1833,9 @@ func BuildBackendRef(ctx PolicyCtx, ref gwv1.BackendObjectReference, defaultNS s
 	gk := schema.GroupKind{
 		Group: string(group),
 		Kind:  string(kind),
+	}
+	if ctx.RouteBackend != nil {
+		return ctx.RouteBackend(ctx.Krt, defaultNS, gk, ref.Name, ref.Namespace, ref.Port)
 	}
 	if err := checkBackendRefGrant(ctx, ref, defaultNS, gk); err != nil {
 		return nil, err

@@ -298,7 +298,7 @@ mod tests {
 			"modelVersion": "gemini-2.5-flash"
 		}));
 
-		let llm_response = resp.to_llm_response(false);
+		let llm_response = resp.to_llm_response(crate::LogContentFields::default());
 
 		assert_eq!(llm_response.input_tokens, Some(8));
 		assert_eq!(llm_response.output_tokens, Some(14));
@@ -391,7 +391,19 @@ mod lookups {
 		// Completions
 		&["usage", "completion_tokens_details", "reasoning_tokens"],
 	];
-	pub const CACHE_CREATION_INPUT_TOKENS: [&[&str]; 3] = [
+	pub const CACHE_CREATION_INPUT_TOKENS: [&[&str]; 6] = [
+		// Responses
+		&["usage", "input_tokens_details", "cache_write_tokens"],
+		// Responses streaming
+		&[
+			"response",
+			"usage",
+			"input_tokens_details",
+			"cache_write_tokens",
+		],
+		// Completions
+		&["usage", "prompt_tokens_details", "cache_write_tokens"],
+		// Provider-specific compatibility fields
 		&["usage", "cache_creation_input_tokens"],
 		&["usage", "cacheWriteInputTokens"],
 		// Bedrock invoke
@@ -427,7 +439,7 @@ impl<'de> Deserialize<'de> for Response {
 }
 
 impl ResponseType for Response {
-	fn to_llm_response(&self, _include_completion_in_log: bool) -> LLMResponse {
+	fn to_llm_response(&self, _log_content: crate::LogContentFields) -> LLMResponse {
 		let input_tokens = self.lookup(lookups::USAGE_INPUT_TOKENS, |v| v.as_u64());
 		let output_tokens = self.lookup(lookups::USAGE_OUTPUT_TOKENS, |v| v.as_u64());
 		let total_tokens = self.lookup(lookups::USAGE_TOTAL_TOKENS, |v| v.as_u64());
@@ -451,6 +463,7 @@ impl ResponseType for Response {
 				.map(Into::into),
 			provider_model: self.lookup(lookups::MODEL, |v| v.as_str()).map(Into::into),
 			completion: None,
+			output_messages: None,
 			// TODO: we could probably derive this
 			first_token: None,
 		}

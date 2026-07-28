@@ -7,7 +7,6 @@ import {
   makeEmptyLlmProvider,
   providerDisplayName,
   providerLabel,
-  removeLlmProvider,
   upsertLlmProvider,
 } from "../config";
 import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
@@ -27,7 +26,6 @@ import { ProviderIcon } from "../components/ProviderIcon";
 import {
   useDeleteConfigResource,
   useLlmConfigData,
-  useUpdateConfig,
   useUpsertConfigResource,
 } from "../hooks";
 import { cleanEmpty } from "../policies/policyUtils";
@@ -41,9 +39,8 @@ import type {
 import { ProviderConfigEditor } from "./models/ProviderConfigEditor";
 
 export function ProvidersPage() {
-  const { config, hybrid, configResources, resources, models, providers } =
+  const { config, hybrid, resources, models, providers, isLoading, error } =
     useLlmConfigData();
-  const update = useUpdateConfig();
   const upsertResource = useUpsertConfigResource();
   const deleteResource = useDeleteConfigResource();
   const help = useSchemaHelp();
@@ -96,50 +93,30 @@ export function ProvidersPage() {
     setProviderDrawer(null, "replace");
   }
 
-  const saving =
-    update.isPending || upsertResource.isPending || deleteResource.isPending;
+  const saving = upsertResource.isPending || deleteResource.isPending;
   const saveError =
-    update.error?.message ??
-    upsertResource.error?.message ??
-    deleteResource.error?.message ??
-    null;
-  const saved =
-    update.isSuccess || upsertResource.isSuccess || deleteResource.isSuccess;
+    upsertResource.error?.message ?? deleteResource.error?.message ?? null;
+  const saved = upsertResource.isSuccess || deleteResource.isSuccess;
 
   function resetSaves() {
-    update.reset();
     upsertResource.reset();
     deleteResource.reset();
   }
 
   function saveProvider(provider: LlmProvider, previousName?: string) {
-    if (
-      hybrid &&
-      (!previousName ||
-        isDatabaseConfigResource(resources, "llm.provider", previousName))
-    ) {
-      upsertResource.mutate(
-        { kind: "llm.provider", value: provider, previousId: previousName },
-        { onSuccess: closeProviderEditor },
-      );
-      return;
-    }
-    update.mutate((next) => upsertLlmProvider(next, provider, previousName), {
-      onSuccess: closeProviderEditor,
-    });
+    upsertResource.mutate(
+      { kind: "llm.provider", value: provider, previousId: previousName },
+      { onSuccess: closeProviderEditor },
+    );
   }
 
   function deleteProvider(name: string) {
-    if (hybrid && isDatabaseConfigResource(resources, "llm.provider", name)) {
-      deleteResource.mutate(
-        { kind: "llm.provider", id: name },
-        { onSuccess: () => setDeletingProvider(null) },
-      );
-      return;
-    }
-    update.mutate((next) => removeLlmProvider(next, name), {
-      onSuccess: () => setDeletingProvider(null),
-    });
+    deleteResource.mutate(
+      { kind: "llm.provider", id: name },
+      {
+        onSuccess: () => setDeletingProvider(null),
+      },
+    );
   }
 
   return (
@@ -167,11 +144,11 @@ export function ProvidersPage() {
       {saved ? <StatusBanner state="ok" title="Configuration saved" /> : null}
 
       <Panel>
-        {config.isLoading || (hybrid && configResources.isLoading) ? (
+        {isLoading ? (
           <StatusBanner state="loading" title="Loading providers" />
-        ) : config.isError || (hybrid && configResources.isError) ? (
+        ) : error ? (
           <StatusBanner state="bad" title="Configuration API unavailable">
-            {config.error?.message ?? configResources.error?.message}
+            {error.message}
           </StatusBanner>
         ) : providers.length === 0 ? (
           <EmptyState
@@ -204,19 +181,18 @@ export function ProvidersPage() {
               <tbody>
                 {providers.map((provider) => {
                   const usage = providerUsage(provider.name, models);
+                  const databaseBacked = isDatabaseConfigResource(
+                    resources,
+                    "llm.provider",
+                    provider.name,
+                  );
                   return (
                     <tr key={provider.name}>
                       <td className="strong">{provider.name}</td>
                       {hybrid ? (
                         <td>
                           <span className="badge">
-                            {isDatabaseConfigResource(
-                              resources,
-                              "llm.provider",
-                              provider.name,
-                            )
-                              ? "Database"
-                              : "File"}
+                            {databaseBacked ? "Database" : "File"}
                           </span>
                         </td>
                       ) : null}
@@ -263,14 +239,20 @@ export function ProvidersPage() {
                           content={
                             usage.length
                               ? "Provider is referenced by models"
-                              : "Delete provider"
+                              : hybrid && !databaseBacked
+                                ? "File-owned providers cannot be deleted here"
+                                : "Delete provider"
                           }
                         >
                           <button
                             className="icon-button danger"
                             aria-label="Delete provider"
                             type="button"
-                            disabled={usage.length > 0 || saving}
+                            disabled={
+                              usage.length > 0 ||
+                              saving ||
+                              (hybrid && !databaseBacked)
+                            }
                             onClick={() => setDeletingProvider(provider.name)}
                           >
                             <Trash2 size={16} />

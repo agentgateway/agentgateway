@@ -31,7 +31,10 @@ impl RawInputItem {
 
 	fn from_user_text(text: String) -> Self {
 		Self::from_typed(InputItem::from(InputMessage {
-			content: vec![InputContent::InputText(InputTextContent { text })],
+			content: vec![InputContent::InputText(InputTextContent {
+				text,
+				prompt_cache_breakpoint: None,
+			})],
 			role: InputRole::User,
 			status: None,
 		}))
@@ -150,6 +153,8 @@ pub struct UsageOutputDetails {
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct UsageInputDetails {
 	pub cached_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_write_tokens: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -189,12 +194,14 @@ impl ResponseBuilder {
 			max_output_tokens: None,
 			metadata: None,
 			model: self.model.clone(),
+			moderation: None,
 			object: "response".to_string(),
 			output: Vec::new(),
 			parallel_tool_calls: None,
 			previous_response_id: None,
 			prompt: None,
 			prompt_cache_key: None,
+			prompt_cache_options: None,
 			prompt_cache_retention: None,
 			reasoning: None,
 			safety_identifier: None,
@@ -271,6 +278,7 @@ impl From<SimpleChatCompletionMessage> for InputItem {
 			"system" => InputItem::from(InputMessage {
 				content: vec![InputContent::InputText(InputTextContent {
 					text: msg.content.to_string(),
+					prompt_cache_breakpoint: None,
 				})],
 				role: InputRole::System,
 				status: None,
@@ -278,6 +286,7 @@ impl From<SimpleChatCompletionMessage> for InputItem {
 			"developer" => InputItem::from(InputMessage {
 				content: vec![InputContent::InputText(InputTextContent {
 					text: msg.content.to_string(),
+					prompt_cache_breakpoint: None,
 				})],
 				role: InputRole::Developer,
 				status: None,
@@ -285,6 +294,7 @@ impl From<SimpleChatCompletionMessage> for InputItem {
 			_ => InputItem::from(InputMessage {
 				content: vec![InputContent::InputText(InputTextContent {
 					text: msg.content.to_string(),
+					prompt_cache_breakpoint: None,
 				})],
 				role: InputRole::User,
 				status: None,
@@ -379,8 +389,47 @@ impl RequestType for Request {
 	}
 }
 
+fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {
+	let mut content = Vec::new();
+
+	for item in &resp.output {
+		if let OutputItem::FunctionCall(_) = item {
+			content.extend(output_item_tool_call_part(item));
+		}
+	}
+
+	if content.is_empty() {
+		return None;
+	}
+
+	Some(vec![OutputMessage {
+		role: strng::literal!("assistant"),
+		content,
+		finish_reason: Some(strng::new(&resp.status)),
+	}])
+}
+
+pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMessagePart> {
+	let OutputItem::FunctionCall(call) = item else {
+		return None;
+	};
+	let arguments =
+		serde_json::from_str(&call.arguments).unwrap_or(serde_json::Value::Object(Default::default()));
+	Some(OutputMessagePart::ToolCall {
+		id: strng::new(&call.call_id),
+		name: strng::new(&call.name),
+		arguments,
+	})
+}
+
 impl ResponseType for Response {
-	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
+	fn to_llm_response(&self, log_content: crate::LogContentFields) -> LLMResponse {
+		let output_messages = if log_content.tool_calls {
+			extract_output_messages(self)
+		} else {
+			None
+		};
+
 		LLMResponse {
 			input_tokens: self.usage.as_ref().map(|u| u.input_tokens),
 			input_image_tokens: None,
@@ -408,10 +457,14 @@ impl ResponseType for Response {
 					.as_ref()
 					.and_then(|d| d.cached_tokens)
 			}),
-			cache_creation_input_tokens: None,
+			cache_creation_input_tokens: self.usage.as_ref().and_then(|u| {
+				u.input_tokens_details
+					.as_ref()
+					.and_then(|d| d.cache_write_tokens)
+			}),
 			service_tier: self.service_tier.as_deref().map(Into::into),
 			provider_model: Some(strng::new(&self.model)),
-			completion: if include_completion_in_log {
+			completion: if log_content.completion {
 				Some(
 					self
 						.output
@@ -431,6 +484,7 @@ impl ResponseType for Response {
 			} else {
 				None
 			},
+			output_messages,
 			first_token: Default::default(),
 		}
 	}
@@ -557,5 +611,70 @@ pub mod typed {
 		/// Emitted when an error occurs.
 		#[serde(rename = "error")]
 		ResponseError(openai_responses::ResponseErrorEvent),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::typed::{FunctionToolCall, OutputStatus};
+	use super::*;
+
+	fn response_with_output(output: Vec<OutputItem>) -> Response {
+		Response {
+			id: "resp_123".to_string(),
+			status: "completed".to_string(),
+			output,
+			model: "gpt-4.1".to_string(),
+			service_tier: None,
+			usage: None,
+			rest: serde_json::Value::Null,
+		}
+	}
+
+	#[test]
+	fn test_response_tool_calls_populated_when_flag_true() {
+		let response = response_with_output(vec![OutputItem::FunctionCall(FunctionToolCall {
+			arguments: r#"{"location":"San Francisco"}"#.to_string(),
+			call_id: "call_123".to_string(),
+			namespace: None,
+			name: "get_weather".to_string(),
+			caller: None,
+			id: Some("fc_123".to_string()),
+			status: Some(OutputStatus::Completed),
+		})]);
+
+		let llm_response = response.to_llm_response(crate::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		});
+		let messages = llm_response
+			.output_messages
+			.expect("output_messages should be present");
+		let tool_calls = messages[0].tool_calls();
+
+		assert_eq!(tool_calls.len(), 1);
+		assert_eq!(tool_calls[0].id.as_str(), "call_123");
+		assert_eq!(tool_calls[0].name.as_str(), "get_weather");
+		assert_eq!(
+			tool_calls[0].arguments,
+			serde_json::json!({"location":"San Francisco"})
+		);
+	}
+
+	#[test]
+	fn test_response_output_messages_omitted_when_flag_false() {
+		let response = response_with_output(vec![OutputItem::FunctionCall(FunctionToolCall {
+			arguments: "{}".to_string(),
+			call_id: "call_123".to_string(),
+			namespace: None,
+			name: "get_weather".to_string(),
+			caller: None,
+			id: Some("fc_123".to_string()),
+			status: Some(OutputStatus::Completed),
+		})]);
+
+		let llm_response = response.to_llm_response(crate::LogContentFields::default());
+
+		assert!(llm_response.output_messages.is_none());
 	}
 }

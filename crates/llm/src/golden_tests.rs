@@ -75,7 +75,10 @@ fn test_response(
 
 	let resp = xlate(Bytes::copy_from_slice(&provider_bytes))
 		.expect("failed to translate provider response to expected format");
-	let llm_response = resp.to_llm_response(false);
+	let llm_response = resp.to_llm_response(crate::LogContentFields {
+		completion: false,
+		tool_calls: true,
+	});
 	let raw = resp.serialize().expect("failed to serialize response");
 	let resp_val = serde_json::from_slice::<Value>(&raw)
 		.unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&raw).to_string()));
@@ -141,6 +144,7 @@ const COMPLETIONS: &str = "completions";
 const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
 const COHERE: &str = "cohere";
+const VERTEX_GEMINI: &str = "vertex-gemini";
 
 #[test]
 fn request_conversion_golden() {
@@ -190,6 +194,11 @@ fn request_conversion_golden() {
 					.map(|r| r.body)
 			});
 		}
+		if name != "full" {
+			test_request(VERTEX_GEMINI, &path, |i| {
+				conversion::vertex_gemini::from_completions::translate(&i, Some("gemini-2.5-pro"))
+			});
+		}
 	}
 	for name in [
 		"parallel-tool-call",
@@ -200,6 +209,24 @@ fn request_conversion_golden() {
 		test_request(BEDROCK, &path, |i| {
 			conversion::bedrock::from_completions::translate(&i, &bedrock_claude, None, None)
 				.map(|r| r.body)
+		});
+		if name == "parallel-tool-call" {
+			test_request(VERTEX_GEMINI, &path, |i| {
+				conversion::vertex_gemini::from_completions::translate(&i, Some("gemini-2.5-pro"))
+			});
+		}
+	}
+	// `generation-config` stands in for `full`, whose remote http image the Gemini path rejects.
+	for name in [
+		"image-inline",
+		"image-file",
+		"structured-output",
+		"multi-turn-tools",
+		"generation-config",
+	] {
+		let path = format!("requests/completions/{name}.json");
+		test_request(VERTEX_GEMINI, &path, |i| {
+			conversion::vertex_gemini::from_completions::translate(&i, Some("gemini-2.5-pro"))
 		});
 	}
 
@@ -216,6 +243,9 @@ fn request_conversion_golden() {
 			vertex_anthropic.prepare_anthropic_message_body(body)
 		});
 	}
+	test_request(COMPLETIONS, "requests/messages/cache_control.json", |i| {
+		conversion::completions::from_messages::translate(&i)
+	});
 	test_request(
 		COMPLETIONS,
 		"requests/messages/gpt_adaptive_thinking_with_tools.json",
@@ -235,6 +265,9 @@ fn request_conversion_golden() {
 			conversion::openai_compat::from_responses::translate(&i)
 		});
 	}
+	test_request(GEMINI, "requests/responses/cache_control.json", |i| {
+		conversion::openai_compat::from_responses::translate(&i)
+	});
 
 	for name in ["basic", "array"] {
 		let path = format!("requests/embeddings/{name}.json");
@@ -348,6 +381,7 @@ fn response_conversion_golden() {
 		"openrouter_reasoning",
 		"gemini_zero_completion_tokens",
 		"gemini_with_completion_tokens",
+		"tool_call",
 	] {
 		let path = format!("response/completions/{name}.json");
 		test_response("completions-completions", &path, |i| {
@@ -403,6 +437,15 @@ fn response_conversion_golden() {
 			.map(|e| Box::new(e) as Box<dyn ResponseType>)
 			.map_err(AIError::ResponseParsing)
 	});
+
+	// Native Vertex Gemini responses translated to the OpenAI completions shape.
+	// Streaming translation is covered by conversion::vertex_gemini unit tests.
+	for name in ["basic", "tool", "reasoning", "blocked"] {
+		let path = format!("response/vertex-gemini/{name}.json");
+		test_response("vertex-gemini-completions", &path, |i| {
+			conversion::vertex_gemini::to_completions::translate_response(&i)
+		});
+	}
 }
 
 #[test]
@@ -447,5 +490,84 @@ fn get_messages_golden() {
 	extract_messages::<types::responses::Request>(
 		"requests/responses/assistant-history.json",
 		"get-messages-responses",
+	);
+}
+
+#[tokio::test]
+async fn completions_to_messages_stream_preserves_cache_usage() {
+	use http_body_util::BodyExt;
+
+	let input = r#"data: {"id":"chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"model":"gpt-5","usage":{"prompt_tokens":100,"completion_tokens":5,"total_tokens":105,"prompt_tokens_details":{"cached_tokens":20,"cache_write_tokens":30}}}
+
+data: [DONE]
+
+"#;
+	let output = conversion::completions::from_messages::translate_stream(
+		axum_core::body::Body::from(input),
+		1024 * 1024,
+		StreamingUsageGuard::default(),
+		crate::LogContentFields::default(),
+	)
+	.collect()
+	.await
+	.unwrap()
+	.to_bytes();
+	let delta = String::from_utf8(output.to_vec())
+		.unwrap()
+		.lines()
+		.filter_map(|line| line.strip_prefix("data: "))
+		.filter_map(|data| serde_json::from_str::<Value>(data).ok())
+		.find(|event| event["type"] == "message_delta")
+		.unwrap();
+
+	assert_eq!(
+		delta["usage"],
+		json!({
+			"input_tokens": 50,
+			"output_tokens": 5,
+			"cache_creation_input_tokens": 30,
+			"cache_read_input_tokens": 20,
+		})
+	);
+}
+
+#[test]
+fn responses_usage_allows_missing_cache_write_tokens() {
+	let event = serde_json::from_value::<types::responses::typed::ResponseStreamEvent>(json!({
+		"type": "response.completed",
+		"sequence_number": 1,
+		"response": {
+			"created_at": 1,
+			"id": "response",
+			"model": "gpt-5",
+			"object": "response",
+			"output": [],
+			"status": "completed",
+			"usage": {
+				"input_tokens": 10,
+				"input_tokens_details": {
+					"cached_tokens": 4
+				},
+				"output_tokens": 2,
+				"output_tokens_details": {
+					"reasoning_tokens": 0
+				},
+				"total_tokens": 12
+			}
+		}
+	}))
+	.unwrap();
+
+	let types::responses::typed::ResponseStreamEvent::ResponseCompleted(completed) = event else {
+		panic!("expected response.completed");
+	};
+	assert_eq!(
+		completed
+			.response
+			.usage
+			.unwrap()
+			.input_tokens_details
+			.cache_write_tokens,
+		None
 	);
 }

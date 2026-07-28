@@ -1,4 +1,5 @@
 import type { Page, Route } from "@playwright/test";
+import { mcpSettingsFields } from "../../src/config";
 
 export type TestConfig = Record<string, unknown>;
 
@@ -259,6 +260,23 @@ export async function mockGateway(
   const mcpUrls: string[] = [];
   const mcpHeaders: Array<Record<string, string>> = [];
 
+  await page.route("**/api/runtime", async (route) => {
+    await json(route, {
+      build: {
+        version: "test",
+        gitRevision: "test",
+        rustVersion: "test",
+        buildProfile: "test",
+        buildTarget: "test",
+      },
+      ui: { gatewayMode: "standalone", configStoreMode: "file" },
+    });
+  });
+
+  await page.route("**/api/config/effective", async (route) => {
+    await json(route, config);
+  });
+
   await page.route("**/config", async (route) => {
     if (route.request().method() === "GET") {
       await json(route, config);
@@ -268,6 +286,42 @@ export async function mockGateway(
       config = route.request().postDataJSON() as TestConfig;
       postedConfigs.push(structuredClone(config));
       await json(route, { status: "ok", message: "saved" });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await page.route("**/api/config/resources**", async (route) => {
+    const path = new URL(route.request().url()).pathname;
+    const suffix = path.split("/api/config/resources")[1] ?? "";
+    const [kind, id] = suffix
+      .split("/")
+      .filter(Boolean)
+      .map(decodeURIComponent);
+    if (route.request().method() === "GET") {
+      await json(route, { resources: [] });
+      return;
+    }
+    if (route.request().method() === "PUT") {
+      const body = route.request().postDataJSON() as {
+        value?: unknown;
+        resources?: Array<{ value: unknown }>;
+      };
+      const values = body.resources?.map((resource) => resource.value) ?? [
+        body.value,
+      ];
+      for (const value of values) {
+        if (kind && value !== undefined)
+          upsertFileConfigResource(config, kind, value, id);
+      }
+      postedConfigs.push(structuredClone(config));
+      await json(route, { resources: [] });
+      return;
+    }
+    if (route.request().method() === "DELETE" && kind && id) {
+      deleteFileConfigResource(config, kind, id);
+      postedConfigs.push(structuredClone(config));
+      await json(route, { status: "ok", message: "deleted" });
       return;
     }
     await route.fallback();
@@ -495,4 +549,216 @@ export function configWithClaudeSubscriptionKey(): TestConfig {
     },
   });
   return config;
+}
+
+function upsertFileConfigResource(
+  config: TestConfig,
+  kind: string,
+  input: unknown,
+  previousId?: string,
+) {
+  const value = structuredClone(record(input));
+  if (kind === "modelCatalog") {
+    const configSection = ensureRecord(config, "config");
+    const sources = array(configSection.modelCatalog).filter(
+      (source) => record(source).inline === undefined,
+    );
+    if (value.custom !== undefined) sources.push({ inline: value.custom });
+    configSection.modelCatalog = sources;
+    return;
+  }
+  if (kind === "llm.provider")
+    return upsertSectionList(config, "llm", "providers", value, previousId);
+  if (kind === "llm.model")
+    return upsertSectionList(
+      config,
+      "llm",
+      "models",
+      value,
+      previousId,
+      (item) => stringValue(item.id) || stringValue(item.name),
+    );
+  if (kind === "llm.virtualModel")
+    return upsertSectionList(config, "llm", "virtualModels", value, previousId);
+  if (kind === "mcp.target")
+    return upsertSectionList(config, "mcp", "targets", value, previousId);
+  if (kind === "llm.policy" || kind === "mcp.policy" || kind === "ui.policy") {
+    if (!previousId) throw new Error(`${kind} writes require an id`);
+    const sectionName = kind.split(".")[0];
+    const section = ensureRecord(config, sectionName);
+    const policies = ensureRecord(section, "policies");
+    const policyId = previousId;
+    const existingKeys =
+      kind === "llm.policy" && policyId === "apiKey"
+        ? record(policies.apiKey).keys
+        : undefined;
+    if (existingKeys !== undefined) value.keys = existingKeys;
+    policies[policyId] = value;
+    return;
+  }
+  if (kind === "llm.apiKey") {
+    const policies = ensureRecord(ensureRecord(config, "llm"), "policies");
+    const policy = ensureRecord(policies, "apiKey");
+    const keys = ensureArray(policy, "keys");
+    const index = previousId
+      ? keys.findIndex((key, keyIndex) => {
+          const keyValue = record(key);
+          return (
+            (stringValue(record(keyValue.metadata).id) ||
+              `@index:${keyIndex}`) === previousId
+          );
+        })
+      : -1;
+    if (!previousId || !previousId.startsWith("@index:")) {
+      value.metadata = {
+        ...record(value.metadata),
+        id: previousId ?? `test-key-${keys.length + 1}`,
+      };
+    }
+    if (index >= 0) keys[index] = value;
+    else keys.push(value);
+    return;
+  }
+  if (kind === "mcp.settings") {
+    const mcp = ensureRecord(config, "mcp");
+    for (const field of mcpSettingsFields) {
+      if (value[field] === undefined) delete mcp[field];
+      else mcp[field] = value[field];
+    }
+    return;
+  }
+  if (kind === "traffic.gateway") {
+    const name = stringValue(value.name);
+    if (!name) throw new Error("traffic.gateway writes require a name");
+    const gateways = ensureRecord(config, "gateways");
+    if (previousId && previousId !== name) delete gateways[previousId];
+    delete value.name;
+    gateways[name] = value;
+    return;
+  }
+  if (kind === "traffic.route" || kind === "traffic.tcpRoute") {
+    const field = kind === "traffic.route" ? "routes" : "tcpRoutes";
+    const values = ensureArray(config, field);
+    const name = stringValue(value.name);
+    if (!name) throw new Error(`${kind} writes require a name`);
+    const lookup = previousId ?? name;
+    const index = values.findIndex(
+      (item) => stringValue(record(item).name) === lookup,
+    );
+    if (index >= 0) values[index] = value;
+    else values.push(value);
+  }
+}
+
+function deleteFileConfigResource(
+  config: TestConfig,
+  kind: string,
+  id: string,
+) {
+  if (kind === "modelCatalog") {
+    const configSection = record(config.config);
+    configSection.modelCatalog = array(configSection.modelCatalog).filter(
+      (source) => record(source).inline === undefined,
+    );
+    return;
+  }
+  if (kind === "llm.provider")
+    return deleteSectionList(config, "llm", "providers", id);
+  if (kind === "llm.model")
+    return deleteSectionList(
+      config,
+      "llm",
+      "models",
+      id,
+      (item) => stringValue(item.id) || stringValue(item.name),
+    );
+  if (kind === "llm.virtualModel")
+    return deleteSectionList(config, "llm", "virtualModels", id);
+  if (kind === "mcp.target")
+    return deleteSectionList(config, "mcp", "targets", id);
+  if (kind === "llm.policy" || kind === "mcp.policy" || kind === "ui.policy") {
+    delete record(record(config[kind.split(".")[0]]).policies)[id];
+    return;
+  }
+  if (kind === "llm.apiKey") {
+    const policy = record(record(record(config.llm).policies).apiKey);
+    policy.keys = array(policy.keys).filter((key, index) => {
+      const value = record(key);
+      return (
+        (stringValue(record(value.metadata).id) || `@index:${index}`) !== id
+      );
+    });
+    return;
+  }
+  if (kind === "mcp.settings") {
+    const mcp = record(config.mcp);
+    for (const field of mcpSettingsFields) delete mcp[field];
+    return;
+  }
+  if (kind === "traffic.gateway") {
+    delete record(config.gateways)[id];
+    return;
+  }
+  if (kind === "traffic.route" || kind === "traffic.tcpRoute") {
+    const field = kind === "traffic.route" ? "routes" : "tcpRoutes";
+    config[field] = array(config[field]).filter(
+      (item) => stringValue(record(item).name) !== id,
+    );
+  }
+}
+
+function upsertSectionList(
+  config: TestConfig,
+  sectionName: string,
+  field: string,
+  value: Record<string, unknown>,
+  previousId?: string,
+  identity: (value: Record<string, unknown>) => string = (item) =>
+    stringValue(item.name),
+) {
+  const values = ensureArray(ensureRecord(config, sectionName), field);
+  const lookup = previousId ?? identity(value);
+  const index = values.findIndex((item) => identity(record(item)) === lookup);
+  if (index >= 0) values[index] = value;
+  else values.push(value);
+}
+
+function deleteSectionList(
+  config: TestConfig,
+  sectionName: string,
+  field: string,
+  id: string,
+  identity: (value: Record<string, unknown>) => string = (item) =>
+    stringValue(item.name),
+) {
+  const section = record(config[sectionName]);
+  section[field] = array(section[field]).filter(
+    (item) => identity(record(item)) !== id,
+  );
+}
+
+function ensureRecord(parent: Record<string, unknown>, field: string) {
+  const existing = record(parent[field]);
+  parent[field] = existing;
+  return existing;
+}
+
+function ensureArray(parent: Record<string, unknown>, field: string) {
+  const existing = array(parent[field]);
+  parent[field] = existing;
+  return existing;
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function array(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value : "";
 }

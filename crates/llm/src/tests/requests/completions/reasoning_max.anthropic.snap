@@ -24,6 +24,6 @@ info:
   "max_tokens": 4096,
   "thinking": {
     "type": "enabled",
-    "budget_tokens": 4096
+    "budget_tokens": 8192
   }
 }

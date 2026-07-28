@@ -542,6 +542,7 @@ spec:
                                             requestTimeout:
                                               description: Deadline for receiving
                                                 a response from the backend.
+                                              maxLength: 32
                                               type: string
                                               x-kubernetes-validations:
                                               - message: invalid duration value
@@ -568,6 +569,7 @@ spec:
                                               description: |-
                                                 Deadline for establishing a connection to
                                                 the destination.
+                                              maxLength: 32
                                               type: string
                                               x-kubernetes-validations:
                                               - message: invalid duration value
@@ -584,6 +586,7 @@ spec:
                                                   description: |-
                                                     Time between keepalive probes.
                                                     If unset, this defaults to 180s.
+                                                  maxLength: 32
                                                   type: string
                                                   x-kubernetes-validations:
                                                   - message: invalid duration value
@@ -603,6 +606,7 @@ spec:
                                                   description: |-
                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                     If unset, this defaults to 180s.
+                                                  maxLength: 32
                                                   type: string
                                                   x-kubernetes-validations:
                                                   - message: invalid duration value
@@ -961,6 +965,7 @@ spec:
                                             requestTimeout:
                                               description: Deadline for receiving
                                                 a response from the backend.
+                                              maxLength: 32
                                               type: string
                                               x-kubernetes-validations:
                                               - message: invalid duration value
@@ -987,6 +992,7 @@ spec:
                                               description: |-
                                                 Deadline for establishing a connection to
                                                 the destination.
+                                              maxLength: 32
                                               type: string
                                               x-kubernetes-validations:
                                               - message: invalid duration value
@@ -1003,6 +1009,7 @@ spec:
                                                   description: |-
                                                     Time between keepalive probes.
                                                     If unset, this defaults to 180s.
+                                                  maxLength: 32
                                                   type: string
                                                   x-kubernetes-validations:
                                                   - message: invalid duration value
@@ -1022,6 +1029,7 @@ spec:
                                                   description: |-
                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                     If unset, this defaults to 180s.
+                                                  maxLength: 32
                                                   type: string
                                                   x-kubernetes-validations:
                                                   - message: invalid duration value
@@ -1402,6 +1410,7 @@ spec:
                                             requestTimeout:
                                               description: Deadline for receiving
                                                 a response from the backend.
+                                              maxLength: 32
                                               type: string
                                               x-kubernetes-validations:
                                               - message: invalid duration value
@@ -1428,6 +1437,7 @@ spec:
                                               description: |-
                                                 Deadline for establishing a connection to
                                                 the destination.
+                                              maxLength: 32
                                               type: string
                                               x-kubernetes-validations:
                                               - message: invalid duration value
@@ -1444,6 +1454,7 @@ spec:
                                                   description: |-
                                                     Time between keepalive probes.
                                                     If unset, this defaults to 180s.
+                                                  maxLength: 32
                                                   type: string
                                                   x-kubernetes-validations:
                                                   - message: invalid duration value
@@ -1463,6 +1474,7 @@ spec:
                                                   description: |-
                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                     If unset, this defaults to 180s.
+                                                  maxLength: 32
                                                   type: string
                                                   x-kubernetes-validations:
                                                   - message: invalid duration value
@@ -2163,6 +2175,7 @@ spec:
                                             requestTimeout:
                                               description: Deadline for receiving
                                                 a response from the backend.
+                                              maxLength: 32
                                               type: string
                                               x-kubernetes-validations:
                                               - message: invalid duration value
@@ -2189,6 +2202,7 @@ spec:
                                               description: |-
                                                 Deadline for establishing a connection to
                                                 the destination.
+                                              maxLength: 32
                                               type: string
                                               x-kubernetes-validations:
                                               - message: invalid duration value
@@ -2205,6 +2219,7 @@ spec:
                                                   description: |-
                                                     Time between keepalive probes.
                                                     If unset, this defaults to 180s.
+                                                  maxLength: 32
                                                   type: string
                                                   x-kubernetes-validations:
                                                   - message: invalid duration value
@@ -2224,6 +2239,7 @@ spec:
                                                   description: |-
                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                     If unset, this defaults to 180s.
+                                                  maxLength: 32
                                                   type: string
                                                   x-kubernetes-validations:
                                                   - message: invalid duration value
@@ -2582,6 +2598,7 @@ spec:
                                             requestTimeout:
                                               description: Deadline for receiving
                                                 a response from the backend.
+                                              maxLength: 32
                                               type: string
                                               x-kubernetes-validations:
                                               - message: invalid duration value
@@ -2608,6 +2625,7 @@ spec:
                                               description: |-
                                                 Deadline for establishing a connection to
                                                 the destination.
+                                              maxLength: 32
                                               type: string
                                               x-kubernetes-validations:
                                               - message: invalid duration value
@@ -2624,6 +2642,7 @@ spec:
                                                   description: |-
                                                     Time between keepalive probes.
                                                     If unset, this defaults to 180s.
+                                                  maxLength: 32
                                                   type: string
                                                   x-kubernetes-validations:
                                                   - message: invalid duration value
@@ -2643,6 +2662,7 @@ spec:
                                                   description: |-
                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                     If unset, this defaults to 180s.
+                                                  maxLength: 32
                                                   type: string
                                                   x-kubernetes-validations:
                                                   - message: invalid duration value
@@ -3341,6 +3361,107 @@ spec:
                             workloadIdentity] may be set
                           rule: '[has(self.secretRef),has(self.managedIdentity),has(self.workloadIdentity)].filter(x,x==true).size()
                             <= 1'
+                      credentials:
+                        description: |-
+                          Credentials is a list of additional credentials to inject on the
+                          backend request. Each entry resolves a Secret key and writes its value
+                          to the entry's location. `credentials` is independent of the primary
+                          `key`/`secretRef`/`passthrough` mechanism and may be set on its own or
+                          alongside it.
+                        items:
+                          description: |-
+                            BackendAuthCredential specifies one additional credential to inject on the
+                            backend request.
+                          properties:
+                            location:
+                              description: Where the credential is inserted on the
+                                backend request.
+                              properties:
+                                cookie:
+                                  properties:
+                                    name:
+                                      maxLength: 256
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - name
+                                  type: object
+                                header:
+                                  properties:
+                                    name:
+                                      description: Name of an HTTP header. HTTP/2
+                                        pseudo-headers (names beginning with `:`)
+                                        are not supported
+                                      maxLength: 256
+                                      minLength: 1
+                                      pattern: ^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$
+                                      type: string
+                                    prefix:
+                                      maxLength: 256
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - name
+                                  type: object
+                                queryParameter:
+                                  properties:
+                                    name:
+                                      maxLength: 256
+                                      minLength: 1
+                                      type: string
+                                  required:
+                                  - name
+                                  type: object
+                              type: object
+                              x-kubernetes-validations:
+                              - message: exactly one of the fields in [header queryParameter
+                                  cookie] must be set
+                                rule: '[has(self.header),has(self.queryParameter),has(self.cookie)].filter(x,x==true).size()
+                                  == 1'
+                            secretRef:
+                              description: |-
+                                SecretRef references a Kubernetes Secret holding the credential value, and
+                                optionally overrides the key read from it. Defaults to `Authorization`,
+                                matching the key convention used by the top-level `secretRef`.
+                              properties:
+                                group:
+                                  description: API group of the referenced credential;
+                                    empty selects the core API group
+                                  type: string
+                                key:
+                                  description: Key in the referenced Secret. If omitted,
+                                    a location-specific default is used
+                                  maxLength: 253
+                                  minLength: 1
+                                  type: string
+                                kind:
+                                  description: Kind of the referenced credential;
+                                    empty defaults to `Secret`
+                                  type: string
+                                name:
+                                  description: Name of the referenced credential
+                                  maxLength: 253
+                                  minLength: 1
+                                  type: string
+                              required:
+                              - name
+                              type: object
+                              x-kubernetes-map-type: atomic
+                              x-kubernetes-validations:
+                              - message: custom credential refs must set both group
+                                  and kind
+                                rule: '(!has(self.group) || size(self.group) == 0)
+                                  ? (!has(self.kind) || size(self.kind) == 0 || self.kind
+                                  == ''Secret'') : (has(self.kind) && size(self.kind)
+                                  > 0)'
+                          required:
+                          - location
+                          - secretRef
+                          type: object
+                        maxItems: 8
+                        minItems: 1
+                        type: array
+                        x-kubernetes-list-type: atomic
                       crossAppAccess:
                         description: Cross App Access (Identity Assertion / ID-JAG)
                           authentication.
@@ -3424,15 +3545,16 @@ spec:
                                     minLength: 1
                                     type: string
                                   method:
-                                    description: Defaults to ClientSecretBasic.
+                                    description: Client authentication method. Defaults
+                                      to ClientSecretBasic.
                                     enum:
                                     - ClientSecretBasic
                                     - ClientSecretPost
                                     - PrivateKeyJwt
                                     type: string
                                   privateKeyJwt:
-                                    description: privateKeyJwt client assertion settings.
-                                      Required when method is PrivateKeyJwt.
+                                    description: Client assertion settings. Required
+                                      when method is PrivateKeyJwt.
                                     properties:
                                       alg:
                                         description: JWS signing algorithm. Defaults
@@ -3440,6 +3562,7 @@ spec:
                                         enum:
                                         - ES256
                                         - ES384
+                                        - PS256
                                         - RS256
                                         - RS384
                                         - RS512
@@ -3449,13 +3572,58 @@ spec:
                                           typically the token endpoint URL.
                                         minLength: 1
                                         type: string
+                                      certificateHeader:
+                                        description: JWS certificate header. Required
+                                          when certificateRef is set.
+                                        enum:
+                                        - x5c
+                                        - x5t#S256
+                                        type: string
+                                      certificateRef:
+                                        description: |-
+                                          PEM-encoded X.509 certificate chain, leaf first, for certificateHeader. The
+                                          leaf public key should match signingKeyRef; a mismatch only logs a warning
+                                          but the token endpoint will reject the assertions. Required when
+                                          certificateHeader is set. The key defaults to `certificate`.
+                                        properties:
+                                          group:
+                                            description: API group of the referenced
+                                              credential; empty selects the core API
+                                              group
+                                            type: string
+                                          key:
+                                            description: Key in the referenced Secret.
+                                              If omitted, a location-specific default
+                                              is used
+                                            maxLength: 253
+                                            minLength: 1
+                                            type: string
+                                          kind:
+                                            description: Kind of the referenced credential;
+                                              empty defaults to `Secret`
+                                            type: string
+                                          name:
+                                            description: Name of the referenced credential
+                                            maxLength: 253
+                                            minLength: 1
+                                            type: string
+                                        required:
+                                        - name
+                                        type: object
+                                        x-kubernetes-map-type: atomic
+                                        x-kubernetes-validations:
+                                        - message: custom credential refs must set
+                                            both group and kind
+                                          rule: '(!has(self.group) || size(self.group)
+                                            == 0) ? (!has(self.kind) || size(self.kind)
+                                            == 0 || self.kind == ''Secret'') : (has(self.kind)
+                                            && size(self.kind) > 0)'
                                       kid:
                                         description: Optional JWS key ID header.
                                         type: string
                                       signingKeyRef:
-                                        description: |-
-                                          Secret providing the `signingKey` key by default with a PEM-encoded RSA
-                                          or EC private key; override the key name via `signingKeyRef.key`.
+                                        description: PEM-encoded RSA or EC private
+                                          key; key defaults to `signingKey`.
                                         properties:
                                           group:
                                             description: API group of the referenced
@@ -3493,6 +3661,10 @@ spec:
                                     - assertionAudience
                                     - signingKeyRef
                                     type: object
+                                    x-kubernetes-validations:
+                                    - message: certificateRef and certificateHeader
+                                        must be set together
+                                      rule: has(self.certificateRef) == has(self.certificateHeader)
                                   secretRef:
                                     description: |-
                                       Secret providing the `clientSecret` key by default; override via
@@ -3611,15 +3783,16 @@ spec:
                                     minLength: 1
                                     type: string
                                   method:
-                                    description: Defaults to ClientSecretBasic.
+                                    description: Client authentication method. Defaults
+                                      to ClientSecretBasic.
                                     enum:
                                     - ClientSecretBasic
                                     - ClientSecretPost
                                     - PrivateKeyJwt
                                     type: string
                                   privateKeyJwt:
-                                    description: privateKeyJwt client assertion settings.
-                                      Required when method is PrivateKeyJwt.
+                                    description: Client assertion settings. Required
+                                      when method is PrivateKeyJwt.
                                     properties:
                                       alg:
                                         description: JWS signing algorithm. Defaults
@@ -3627,6 +3800,7 @@ spec:
                                         enum:
                                         - ES256
                                         - ES384
+                                        - PS256
                                         - RS256
                                         - RS384
                                         - RS512
@@ -3636,13 +3810,58 @@ spec:
                                           typically the token endpoint URL.
                                         minLength: 1
                                         type: string
+                                      certificateHeader:
+                                        description: JWS certificate header. Required
+                                          when certificateRef is set.
+                                        enum:
+                                        - x5c
+                                        - x5t#S256
+                                        type: string
+                                      certificateRef:
+                                        description: |-
+                                          PEM-encoded X.509 certificate chain, leaf first, for certificateHeader. The
+                                          leaf public key should match signingKeyRef; a mismatch only logs a warning
+                                          but the token endpoint will reject the assertions. Required when
+                                          certificateHeader is set. The key defaults to `certificate`.
+                                        properties:
+                                          group:
+                                            description: API group of the referenced
+                                              credential; empty selects the core API
+                                              group
+                                            type: string
+                                          key:
+                                            description: Key in the referenced Secret.
+                                              If omitted, a location-specific default
+                                              is used
+                                            maxLength: 253
+                                            minLength: 1
+                                            type: string
+                                          kind:
+                                            description: Kind of the referenced credential;
+                                              empty defaults to `Secret`
+                                            type: string
+                                          name:
+                                            description: Name of the referenced credential
+                                            maxLength: 253
+                                            minLength: 1
+                                            type: string
+                                        required:
+                                        - name
+                                        type: object
+                                        x-kubernetes-map-type: atomic
+                                        x-kubernetes-validations:
+                                        - message: custom credential refs must set
+                                            both group and kind
+                                          rule: '(!has(self.group) || size(self.group)
+                                            == 0) ? (!has(self.kind) || size(self.kind)
+                                            == 0 || self.kind == ''Secret'') : (has(self.kind)
+                                            && size(self.kind) > 0)'
                                       kid:
                                         description: Optional JWS key ID header.
                                         type: string
                                       signingKeyRef:
-                                        description: |-
-                                          Secret providing the `signingKey` key by default with a PEM-encoded RSA
-                                          or EC private key; override the key name via `signingKeyRef.key`.
+                                        description: PEM-encoded RSA or EC private
+                                          key; key defaults to `signingKey`.
                                         properties:
                                           group:
                                             description: API group of the referenced
@@ -3680,6 +3899,10 @@ spec:
                                     - assertionAudience
                                     - signingKeyRef
                                     type: object
+                                    x-kubernetes-validations:
+                                    - message: certificateRef and certificateHeader
+                                        must be set together
+                                      rule: has(self.certificateRef) == has(self.certificateHeader)
                                   secretRef:
                                     description: |-
                                       Secret providing the `clientSecret` key by default; override via
@@ -3888,9 +4111,9 @@ spec:
                         type: string
                       location:
                         description: |-
-                          Where backend credentials are inserted. Defaults to the `Authorization`
-                          header with the `Bearer ` prefix. Applies to `key`, `secretRef`, and
-                          `passthrough`.
+                          Where backend credentials are inserted.
+                          If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
+                          This applies to `key`, `secretRef`, and `passthrough`. Entries in `credentials` carry their own location.
                         properties:
                           cookie:
                             properties:
@@ -4097,15 +4320,16 @@ spec:
                                 minLength: 1
                                 type: string
                               method:
-                                description: Defaults to ClientSecretBasic.
+                                description: Client authentication method. Defaults
+                                  to ClientSecretBasic.
                                 enum:
                                 - ClientSecretBasic
                                 - ClientSecretPost
                                 - PrivateKeyJwt
                                 type: string
                               privateKeyJwt:
-                                description: privateKeyJwt client assertion settings.
-                                  Required when method is PrivateKeyJwt.
+                                description: Client assertion settings. Required when
+                                  method is PrivateKeyJwt.
                                 properties:
                                   alg:
                                     description: JWS signing algorithm. Defaults to
@@ -4113,6 +4337,7 @@ spec:
                                     enum:
                                     - ES256
                                     - ES384
+                                    - PS256
                                     - RS256
                                     - RS384
                                     - RS512
@@ -4122,13 +4347,57 @@ spec:
                                       typically the token endpoint URL.
                                     minLength: 1
                                     type: string
+                                  certificateHeader:
+                                    description: JWS certificate header. Required
+                                      when certificateRef is set.
+                                    enum:
+                                    - x5c
+                                    - x5t#S256
+                                    type: string
+                                  certificateRef:
+                                    description: |-
+                                      PEM-encoded X.509 certificate chain, leaf first, for certificateHeader. The
+                                      leaf public key should match signingKeyRef; a mismatch only logs a warning
+                                      but the token endpoint will reject the assertions. Required when
+                                      certificateHeader is set. The key defaults to `certificate`.
+                                    properties:
+                                      group:
+                                        description: API group of the referenced credential;
+                                          empty selects the core API group
+                                        type: string
+                                      key:
+                                        description: Key in the referenced Secret.
+                                          If omitted, a location-specific default
+                                          is used
+                                        maxLength: 253
+                                        minLength: 1
+                                        type: string
+                                      kind:
+                                        description: Kind of the referenced credential;
+                                          empty defaults to `Secret`
+                                        type: string
+                                      name:
+                                        description: Name of the referenced credential
+                                        maxLength: 253
+                                        minLength: 1
+                                        type: string
+                                    required:
+                                    - name
+                                    type: object
+                                    x-kubernetes-map-type: atomic
+                                    x-kubernetes-validations:
+                                    - message: custom credential refs must set both
+                                        group and kind
+                                      rule: '(!has(self.group) || size(self.group)
+                                        == 0) ? (!has(self.kind) || size(self.kind)
+                                        == 0 || self.kind == ''Secret'') : (has(self.kind)
+                                        && size(self.kind) > 0)'
                                   kid:
                                     description: Optional JWS key ID header.
                                     type: string
                                   signingKeyRef:
-                                    description: |-
-                                      Secret providing the `signingKey` key by default with a PEM-encoded RSA
-                                      or EC private key; override the key name via `signingKeyRef.key`.
+                                    description: PEM-encoded RSA or EC private key;
+                                      key defaults to `signingKey`.
                                     properties:
                                       group:
                                         description: API group of the referenced credential;
@@ -4165,6 +4434,10 @@ spec:
                                 - assertionAudience
                                 - signingKeyRef
                                 type: object
+                                x-kubernetes-validations:
+                                - message: certificateRef and certificateHeader must
+                                    be set together
+                                  rule: has(self.certificateRef) == has(self.certificateHeader)
                               secretRef:
                                 description: |-
                                   Secret providing the `clientSecret` key by default; override via
@@ -4417,13 +4690,19 @@ spec:
                             (has(self.kind) && size(self.kind) > 0)'
                     type: object
                     x-kubernetes-validations:
-                    - message: location may only be set for key or passthrough auth
+                    - message: must specify credentials, or at most one of key/secretRef/passthrough/aws/azure/gcp/oauthTokenExchange/crossAppAccess
+                        (credentials may be combined with a primary auth kind)
+                      rule: has(self.credentials) || has(self.key) || has(self.secretRef)
+                        || has(self.passthrough) || has(self.aws) || has(self.azure)
+                        || has(self.gcp) || has(self.oauthTokenExchange) || has(self.crossAppAccess)
+                    - message: location may only be set for key, secretRef, or passthrough
+                        auth
                       rule: 'has(self.location) ? has(self.key) || has(self.secretRef)
                         || has(self.passthrough) : true'
-                    - message: exactly one of the fields in [key secretRef passthrough
-                        aws azure gcp oauthTokenExchange crossAppAccess] must be set
+                    - message: at most one of the fields in [key secretRef passthrough
+                        aws azure gcp oauthTokenExchange crossAppAccess] may be set
                       rule: '[has(self.key),has(self.secretRef),has(self.passthrough),has(self.aws),has(self.azure),has(self.gcp),has(self.oauthTokenExchange),has(self.crossAppAccess)].filter(x,x==true).size()
-                        == 1'
+                        <= 1'
                   extAuth:
                     description: |-
                       External authentication configuration for requests
@@ -4695,6 +4974,7 @@ spec:
                               If all endpoints are evicted, the load balancer falls back to returning evicted endpoints
                               rather than failing entirely.
                               If unset, defaults to `3s`.
+                            maxLength: 32
                             type: string
                             x-kubernetes-validations:
                             - message: invalid duration value
@@ -4741,6 +5021,7 @@ spec:
                     properties:
                       requestTimeout:
                         description: Deadline for receiving a response from the backend.
+                        maxLength: 32
                         type: string
                         x-kubernetes-validations:
                         - message: invalid duration value
@@ -4889,6 +5170,7 @@ spec:
                                     ? has(self.port) : true'
                               cacheDuration:
                                 default: 5m
+                                maxLength: 32
                                 type: string
                                 x-kubernetes-validations:
                                 - message: invalid duration value
@@ -4963,8 +5245,8 @@ spec:
                               * `Require`: every require rule must match for the request to be allowed.
                               * `Deny`: any matching deny rule denies the request.
 
-                              A CEL expression that fails to evaluate does not match. Prefer `Require`
-                              for deny-by-default behavior.
+                              `Deny` is not recommended because expression failures fail to deny; prefer
+                              `Allow` or `Require`. If used, design expressions defensively against evaluation errors.
 
                               If at least one `Allow` rule is configured, requests are denied unless at
                               least one allow rule matches.
@@ -5172,6 +5454,7 @@ spec:
                         description: |-
                           Deadline for establishing a connection to
                           the destination.
+                        maxLength: 32
                         type: string
                         x-kubernetes-validations:
                         - message: invalid duration value
@@ -5187,6 +5470,7 @@ spec:
                             description: |-
                               Time between keepalive probes.
                               If unset, this defaults to 180s.
+                            maxLength: 32
                             type: string
                             x-kubernetes-validations:
                             - message: invalid duration value
@@ -5205,6 +5489,7 @@ spec:
                             description: |-
                               Time a connection needs to be idle before keepalive probes start being sent.
                               If unset, this defaults to 180s.
+                            maxLength: 32
                             type: string
                             x-kubernetes-validations:
                             - message: invalid duration value
@@ -5890,6 +6175,7 @@ spec:
                           Timeout before an unused connection is
                           closed.
                           If unset, this defaults to 10 minutes.
+                        maxLength: 32
                         type: string
                         x-kubernetes-validations:
                         - message: invalid duration value
@@ -5940,6 +6226,7 @@ spec:
                           rule: (self >= 1 && self <= 4294967295) || self.size() >
                             0
                       http2KeepaliveInterval:
+                        maxLength: 32
                         type: string
                         x-kubernetes-validations:
                         - message: invalid duration value
@@ -5947,6 +6234,7 @@ spec:
                         - message: http2KeepaliveInterval must be at least 1 second
                           rule: duration(self) >= duration('1s')
                       http2KeepaliveTimeout:
+                        maxLength: 32
                         type: string
                         x-kubernetes-validations:
                         - message: invalid duration value
@@ -6006,6 +6294,7 @@ spec:
                           Maximum time a connection is allowed to remain open.
                           After this duration, the connection is gracefully closed after the current in-flight request completes.
                           Useful for ensuring even traffic distribution behind load balancers during scaling events.
+                        maxLength: 32
                         type: string
                         x-kubernetes-validations:
                         - message: invalid duration value
@@ -6096,8 +6385,8 @@ spec:
                           * `Require`: every require rule must match for the request to be allowed.
                           * `Deny`: any matching deny rule denies the request.
 
-                          A CEL expression that fails to evaluate does not match. Prefer `Require`
-                          for deny-by-default behavior.
+                          `Deny` is not recommended because expression failures fail to deny; prefer
+                          `Allow` or `Require`. If used, design expressions defensively against evaluation errors.
 
                           If at least one `Allow` rule is configured, requests are denied unless at
                           least one allow rule matches.
@@ -6159,6 +6448,7 @@ spec:
                             description: |-
                               Time between keepalive probes.
                               If unset, this defaults to 180s.
+                            maxLength: 32
                             type: string
                             x-kubernetes-validations:
                             - message: invalid duration value
@@ -6177,6 +6467,7 @@ spec:
                             description: |-
                               Time a connection needs to be idle before keepalive probes start being sent.
                               If unset, this defaults to 180s.
+                            maxLength: 32
                             type: string
                             x-kubernetes-validations:
                             - message: invalid duration value
@@ -6227,6 +6518,7 @@ spec:
                         description: |-
                           Deadline for a TLS handshake to
                           complete. If unset, this defaults to `15s`.
+                        maxLength: 32
                         type: string
                         x-kubernetes-validations:
                         - message: invalid duration value
@@ -6818,8 +7110,8 @@ spec:
                           * `Require`: every require rule must match for the request to be allowed.
                           * `Deny`: any matching deny rule denies the request.
 
-                          A CEL expression that fails to evaluate does not match. Prefer `Require`
-                          for deny-by-default behavior.
+                          `Deny` is not recommended because expression failures fail to deny; prefer
+                          `Allow` or `Require`. If used, design expressions defensively against evaluation errors.
 
                           If at least one `Allow` rule is configured, requests are denied unless at
                           least one allow rule matches.
@@ -8725,6 +9017,7 @@ spec:
                                           == ''Service'') ? has(self.port) : true'
                                     cacheDuration:
                                       default: 5m
+                                      maxLength: 32
                                       type: string
                                       x-kubernetes-validations:
                                       - message: invalid duration value
@@ -9290,6 +9583,7 @@ spec:
                         description: |-
                           Timeout for an individual request from the gateway to a backend. This covers the time from when
                           the request first starts being sent from the gateway to when the full response has been received from the backend.
+                        maxLength: 32
                         type: string
                         x-kubernetes-validations:
                         - message: invalid duration value

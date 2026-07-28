@@ -10,7 +10,7 @@ use rmcp::service::RunningService;
 use rmcp::transport::StreamableHttpServerConfig;
 use secrecy::SecretString;
 
-use crate::http::auth::BackendAuth;
+use crate::http::auth::BackendAuthKind;
 use crate::http::authorization::{PolicySet, RuleSet};
 use crate::http::sessionpersistence::MCPSession;
 use crate::mcp::handler::Relay;
@@ -1439,6 +1439,64 @@ fn mcp_json_post<'a>(
 		.json(body)
 }
 
+#[tokio::test]
+async fn streamable_http_downstream_sse_frames_include_message_event() {
+	use wiremock::{Mock, ResponseTemplate};
+
+	let upstream = wiremock::MockServer::start().await;
+	let upstream_frame = concat!(
+		"data: {\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{",
+		"\"protocolVersion\":\"2025-06-18\",",
+		"\"capabilities\":{\"tools\":{}},",
+		"\"serverInfo\":{\"name\":\"mock\",\"version\":\"0.0.1\"}",
+		"}}\n\n",
+	);
+	Mock::given(wiremock::matchers::method("POST"))
+		.respond_with(ResponseTemplate::new(200).set_body_raw(upstream_frame, "text/event-stream"))
+		.mount(&upstream)
+		.await;
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(*upstream.address(), true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(*upstream.address()));
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let initialize = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {
+				"name": "test-client",
+				"version": "0.0.1"
+			}
+		}
+	});
+
+	let response = mcp_json_post(&client, &url, &initialize)
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	assert!(
+		response
+			.headers()
+			.get(reqwest::header::CONTENT_TYPE)
+			.and_then(|v| v.to_str().ok())
+			.is_some_and(|ct| ct.starts_with("text/event-stream"))
+	);
+	let text = response.text().await.unwrap();
+	assert!(
+		text.contains("event: message\ndata:"),
+		"expected explicit SSE message event, got: {text}"
+	);
+}
+
 // Forwarded modern responses may come back as a single JSON object or as an SSE stream.
 // Validation-layer errors are always plain JSON.
 async fn read_response_message(response: reqwest::Response) -> serde_json::Value {
@@ -1970,7 +2028,7 @@ async fn stream_to_stream_single_tls() {
 		&mock,
 		true,
 		false,
-		vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Key {
+		vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
 			value: SecretString::new("my-key".into()),
 			location: None,
 		})],
@@ -2053,6 +2111,86 @@ async fn authorization_denied_returns_unknown_tool_error() {
 		"Expected error message 'Unknown tool: echo', got: {}",
 		mcp_error.message
 	);
+}
+
+#[tokio::test]
+async fn stateful_session_cannot_cross_mcp_backends() {
+	let sensitive = mock_streamable_http_server(true).await;
+	let public = mock_streamable_http_server(true).await;
+	let deny_all = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(cel::Expression::new_strict("true").unwrap())],
+		vec![],
+	)));
+
+	let mut route_a = basic_named_route(strng::format!("/{}", sensitive.addr));
+	route_a.key = "route-a".into();
+	route_a.name.name = "route-a".into();
+	route_a.matches[0].path = crate::types::agent::PathMatch::Exact("/a".into());
+	let mut route_b = basic_named_route(strng::format!("/{}", public.addr));
+	route_b.key = "route-b".into();
+	route_b.name.name = "route-b".into();
+	route_b.matches[0].path = crate::types::agent::PathMatch::Exact("/b".into());
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_policies(
+			sensitive.addr,
+			true,
+			false,
+			vec![BackendTrafficPolicy::McpAuthorization(deny_all)],
+		)
+		.with_mcp_backend(public.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(route_a)
+		.with_route(route_b);
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+
+	let initialize = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {"name": "scope-test", "version": "0"}
+		}
+	});
+	let response = mcp_json_post(&client, &format!("http://{io}/a"), &initialize)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	let sid = response.headers()["mcp-session-id"]
+		.to_str()
+		.unwrap()
+		.to_owned();
+
+	let call = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 2,
+		"method": "tools/call",
+		"params": {"name": "echo", "arguments": {"hi": "world"}}
+	});
+	let denied = mcp_json_post(&client, &format!("http://{io}/a"), &call)
+		.header("mcp-protocol-version", "2025-06-18")
+		.header("mcp-session-id", &sid)
+		.send()
+		.await
+		.unwrap();
+	assert!(read_response_message(denied).await.get("error").is_some());
+
+	let cross_backend = mcp_json_post(&client, &format!("http://{io}/b"), &call)
+		.header("mcp-protocol-version", "2025-06-18")
+		.header("mcp-session-id", sid)
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(cross_backend.status(), reqwest::StatusCode::NOT_FOUND);
+	assert_eq!(sensitive.init_count().await, 1);
+	assert_eq!(public.init_count().await, 0);
 }
 
 /// Test that getting a prompt denied by MCP authorization policy returns proper JSON-RPC error

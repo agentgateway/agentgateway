@@ -30,6 +30,7 @@ use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, rbac};
 use crate::proxy::ProxyError;
 use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop};
+use crate::types::agent::ResourceName;
 use crate::{mcp, *};
 
 #[derive(Debug, Clone)]
@@ -43,6 +44,7 @@ pub struct Session {
 #[derive(Debug, Clone)]
 struct SessionEntry {
 	session: Session,
+	backend_id: ResourceName,
 	last_access: Instant,
 	idle_ttl: Duration,
 }
@@ -791,6 +793,9 @@ impl SessionManager {
 	pub fn get_session(&self, id: &str, builder: RelayInputs) -> Option<Session> {
 		let mut sessions = self.sessions.write().ok()?;
 		let entry = sessions.get_mut(id)?;
+		if entry.backend_id != builder.backend_id {
+			return None;
+		}
 		entry.last_access = Instant::now();
 		Some(entry.session.clone().with_inputs(builder))
 	}
@@ -801,10 +806,14 @@ impl SessionManager {
 		builder: RelayInputs,
 	) -> Result<Option<Session>, mcp::Error> {
 		if let Some(s) = self.sessions.write().expect("poisoned").get_mut(id) {
+			if s.backend_id != builder.backend_id {
+				return Ok(None);
+			}
 			s.last_access = Instant::now();
 			return Ok(Some(s.session.clone().with_inputs(builder)));
 		}
 		let idle_ttl = builder.backend.session_idle_ttl;
+		let backend_id = builder.backend_id.clone();
 		let d = http::sessionpersistence::SessionState::decode(id, &self.encoder)
 			.map_err(|_| mcp::Error::InvalidSessionIdHeader)?;
 		let http::sessionpersistence::SessionState::MCP(state) = d else {
@@ -827,6 +836,7 @@ impl SessionManager {
 			id.to_string(),
 			SessionEntry {
 				session: sess.clone(),
+				backend_id,
 				last_access: Instant::now(),
 				idle_ttl,
 			},
@@ -847,12 +857,13 @@ impl SessionManager {
 		}
 	}
 
-	pub fn insert_session(&self, sess: Session, idle_ttl: Duration) {
+	pub fn insert_session(&self, backend_id: ResourceName, sess: Session, idle_ttl: Duration) {
 		let mut sm = self.sessions.write().expect("write lock");
 		sm.insert(
 			sess.id.to_string(),
 			SessionEntry {
 				session: sess,
+				backend_id,
 				last_access: Instant::now(),
 				idle_ttl,
 			},
@@ -877,6 +888,7 @@ impl SessionManager {
 	/// These will have the ability to send messages to them via a channel.
 	pub fn create_legacy_session(
 		&self,
+		backend_id: ResourceName,
 		relay: Relay,
 		idle_ttl: Duration,
 	) -> (Session, Receiver<ServerJsonRpcMessage>) {
@@ -893,6 +905,7 @@ impl SessionManager {
 			id.to_string(),
 			SessionEntry {
 				session: sess.clone(),
+				backend_id,
 				last_access: Instant::now(),
 				idle_ttl,
 			},
@@ -900,9 +913,17 @@ impl SessionManager {
 		(sess, rx)
 	}
 
-	pub async fn delete_session(&self, id: &str, parts: Parts) -> Option<Response> {
+	pub async fn delete_session(
+		&self,
+		backend_id: &ResourceName,
+		id: &str,
+		parts: Parts,
+	) -> Option<Response> {
 		let sess = {
 			let mut sm = self.sessions.write().expect("write lock");
+			if sm.get(id)?.backend_id != *backend_id {
+				return None;
+			}
 			sm.remove(id)?.session
 		};
 		// Swallow the error
@@ -971,7 +992,7 @@ pub(crate) fn sse_stream_response(
 	use futures::StreamExt;
 	let stream = SseBody::new(stream.map(|message| {
 		let data = serde_json::to_string(&message.message).expect("valid message");
-		let mut sse = Sse::default().data(data);
+		let mut sse = Sse::default().event("message").data(data);
 		sse.id = message.event_id;
 		Result::<Sse, Infallible>::Ok(sse)
 	}));

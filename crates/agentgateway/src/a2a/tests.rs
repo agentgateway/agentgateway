@@ -1,8 +1,12 @@
+use bytes::Bytes;
 use http::Uri;
+use http_body::Frame;
+use http_body_util::StreamBody;
 use serde_json::json;
 
 use super::*;
 use crate::http::{self, Method, header};
+use crate::transport::BufferLimit;
 use crate::types::agent::A2aPolicy;
 
 #[test]
@@ -180,7 +184,7 @@ async fn test_apply_to_response_rewrites_agent_card_url() {
 		))
 		.unwrap();
 
-	apply_to_response(
+	let info = apply_to_response(
 		Some(&A2aPolicy {}),
 		RequestType::AgentCard(
 			"https://example.com/api/.well-known/agent-card.json"
@@ -191,6 +195,7 @@ async fn test_apply_to_response_rewrites_agent_card_url() {
 	)
 	.await
 	.unwrap();
+	assert!(info.is_none());
 
 	let body = http::read_resp_body(resp).await.unwrap();
 	let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -212,7 +217,7 @@ async fn test_apply_to_response_rewrites_v1_agent_card_single_interface() {
 		))
 		.unwrap();
 
-	apply_to_response(
+	let info = apply_to_response(
 		Some(&A2aPolicy {}),
 		RequestType::AgentCard(
 			"https://example.com/api/.well-known/agent-card.json"
@@ -223,6 +228,7 @@ async fn test_apply_to_response_rewrites_v1_agent_card_single_interface() {
 	)
 	.await
 	.unwrap();
+	assert!(info.is_none());
 
 	let body = http::read_resp_body(resp).await.unwrap();
 	let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -248,7 +254,7 @@ async fn test_apply_to_response_rewrites_v1_agent_card_multiple_interfaces() {
 		))
 		.unwrap();
 
-	apply_to_response(
+	let info = apply_to_response(
 		Some(&A2aPolicy {}),
 		RequestType::AgentCard(
 			"https://example.com/api/.well-known/agent-card.json"
@@ -259,6 +265,7 @@ async fn test_apply_to_response_rewrites_v1_agent_card_multiple_interfaces() {
 	)
 	.await
 	.unwrap();
+	assert!(info.is_none());
 
 	let body = http::read_resp_body(resp).await.unwrap();
 	let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -287,7 +294,7 @@ async fn test_apply_to_response_rewrites_v1_agent_card_root_path() {
 		))
 		.unwrap();
 
-	apply_to_response(
+	let info = apply_to_response(
 		Some(&A2aPolicy {}),
 		RequestType::AgentCard(
 			"https://example.com/.well-known/agent-card.json"
@@ -298,6 +305,7 @@ async fn test_apply_to_response_rewrites_v1_agent_card_root_path() {
 	)
 	.await
 	.unwrap();
+	assert!(info.is_none());
 
 	let body = http::read_resp_body(resp).await.unwrap();
 	let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -323,7 +331,7 @@ async fn test_apply_to_response_skips_interface_without_url() {
 		))
 		.unwrap();
 
-	apply_to_response(
+	let info = apply_to_response(
 		Some(&A2aPolicy {}),
 		RequestType::AgentCard(
 			"https://example.com/api/.well-known/agent-card.json"
@@ -334,6 +342,7 @@ async fn test_apply_to_response_skips_interface_without_url() {
 	)
 	.await
 	.unwrap();
+	assert!(info.is_none());
 
 	let body = http::read_resp_body(resp).await.unwrap();
 	let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
@@ -370,5 +379,200 @@ async fn test_apply_to_response_errors_when_neither_url_field_present() {
 			.unwrap_err()
 			.to_string()
 			.contains("agent card missing URL")
+	);
+}
+
+#[tokio::test]
+async fn test_apply_to_response_records_success_call_telemetry() {
+	let payload = json!({
+		"jsonrpc": "2.0",
+		"id": "1",
+		"result": {
+			"kind": "task",
+			"status": { "state": "completed" }
+		}
+	});
+	let raw = serde_json::to_vec(&payload).unwrap();
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(raw.clone()))
+		.unwrap();
+
+	let info = apply_to_response(
+		Some(&A2aPolicy {}),
+		RequestType::Call(Strng::from("tasks/send")),
+		&mut resp,
+	)
+	.await
+	.unwrap()
+	.expect("success response should produce telemetry");
+
+	assert_eq!(info.outcome, ResponseOutcome::Success);
+	assert_eq!(info.error_code, None);
+	assert_eq!(info.result_kind.as_ref().map(|s| s.as_str()), Some("task"));
+	assert_eq!(
+		info.task_state.as_ref().map(|s| s.as_str()),
+		Some("completed")
+	);
+	assert_eq!(http::read_resp_body(resp).await.unwrap(), raw);
+}
+
+#[tokio::test]
+async fn test_apply_to_response_records_error_call_telemetry() {
+	let payload = json!({
+		"jsonrpc": "2.0",
+		"id": "1",
+		"error": {
+			"code": -32602,
+			"message": "Invalid params"
+		}
+	});
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(serde_json::to_vec(&payload).unwrap()))
+		.unwrap();
+
+	let info = apply_to_response(
+		Some(&A2aPolicy {}),
+		RequestType::Call(Strng::from("tasks/send")),
+		&mut resp,
+	)
+	.await
+	.unwrap()
+	.expect("error response should produce telemetry");
+
+	assert_eq!(info.outcome, ResponseOutcome::Error);
+	assert_eq!(info.error_code, Some(-32602));
+	assert_eq!(info.result_kind, None);
+	assert_eq!(info.task_state, None);
+}
+
+#[tokio::test]
+async fn test_apply_to_response_records_unknown_size_json_call_telemetry() {
+	let frames = futures_util::stream::iter([
+		Ok::<_, crate::http::Error>(Frame::data(Bytes::from_static(
+			b"{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"result\":{",
+		))),
+		Ok::<_, crate::http::Error>(Frame::data(Bytes::from_static(
+			b"\"kind\":\"task\",\"status\":{\"state\":\"working\"}}}",
+		))),
+	]);
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::new(StreamBody::new(frames)))
+		.unwrap();
+
+	let info = apply_to_response(
+		Some(&A2aPolicy {}),
+		RequestType::Call(Strng::from("tasks/send")),
+		&mut resp,
+	)
+	.await
+	.unwrap()
+	.expect("finite JSON without a size hint should produce telemetry");
+
+	assert_eq!(info.outcome, ResponseOutcome::Success);
+	assert_eq!(info.result_kind.as_ref().map(|s| s.as_str()), Some("task"));
+	assert_eq!(
+		info.task_state.as_ref().map(|s| s.as_str()),
+		Some("working")
+	);
+}
+
+#[tokio::test]
+async fn test_apply_to_response_records_unknown_call_telemetry() {
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(r#"{"jsonrpc":"2.0","id":"1"}"#))
+		.unwrap();
+
+	let info = apply_to_response(
+		Some(&A2aPolicy {}),
+		RequestType::Call(Strng::from("tasks/send")),
+		&mut resp,
+	)
+	.await
+	.unwrap()
+	.expect("parseable response should produce telemetry");
+
+	assert_eq!(info.outcome, ResponseOutcome::Unknown);
+	assert_eq!(info.error_code, None);
+	assert_eq!(info.result_kind, None);
+	assert_eq!(info.task_state, None);
+}
+
+#[tokio::test]
+async fn test_apply_to_response_skips_invalid_json_call_telemetry() {
+	let raw = Bytes::from_static(b"{\"jsonrpc\":\"2.0\"");
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(raw.clone()))
+		.unwrap();
+
+	let info = apply_to_response(
+		Some(&A2aPolicy {}),
+		RequestType::Call(Strng::from("tasks/send")),
+		&mut resp,
+	)
+	.await
+	.unwrap();
+
+	assert!(info.is_none());
+	assert_eq!(
+		http::read_body_with_limit(resp.into_body(), raw.len())
+			.await
+			.unwrap(),
+		raw
+	);
+}
+
+#[tokio::test]
+async fn test_apply_to_response_skips_non_json_call_telemetry() {
+	let raw = Bytes::from_static(b"ok");
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "text/plain")
+		.body(http::Body::from(raw.clone()))
+		.unwrap();
+
+	let info = apply_to_response(
+		Some(&A2aPolicy {}),
+		RequestType::Call(Strng::from("tasks/send")),
+		&mut resp,
+	)
+	.await
+	.unwrap();
+
+	assert!(info.is_none());
+	assert_eq!(
+		http::read_body_with_limit(resp.into_body(), raw.len())
+			.await
+			.unwrap(),
+		raw
+	);
+}
+
+#[tokio::test]
+async fn test_apply_to_response_skips_partial_call_telemetry() {
+	let raw = Bytes::from_static(b"{\"jsonrpc\":\"2.0\",\"result\":{\"kind\":\"task\"}}");
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(raw.clone()))
+		.unwrap();
+	resp.extensions_mut().insert(BufferLimit::new(4));
+
+	let info = apply_to_response(
+		Some(&A2aPolicy {}),
+		RequestType::Call(Strng::from("tasks/send")),
+		&mut resp,
+	)
+	.await
+	.unwrap();
+
+	assert!(info.is_none());
+	assert_eq!(
+		http::read_body_with_limit(resp.into_body(), raw.len())
+			.await
+			.unwrap(),
+		raw
 	);
 }

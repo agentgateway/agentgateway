@@ -30,7 +30,8 @@ use crate::*;
 const CLOUD_AUTH_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[apply(schema!)]
-pub enum BackendAuth {
+#[cfg_attr(feature = "schema", schemars(rename = "BackendAuth"))]
+pub enum BackendAuthKind {
 	/// Forward the validated incoming JWT to the backend.
 	Passthrough {
 		/// Where to place the forwarded credential in the backend request.
@@ -70,6 +71,38 @@ pub enum BackendAuth {
 	CrossAppAccess(Box<CrossAppAccessAuth>),
 }
 
+/// Backend authentication configuration.
+#[derive(Clone, Debug, Default, serde::Serialize)]
+pub struct BackendAuth {
+	#[serde(flatten, skip_serializing_if = "Option::is_none")]
+	pub kind: Option<BackendAuthKind>,
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub credentials: Vec<BackendAuthCredential>,
+}
+
+impl BackendAuth {
+	pub fn new(kind: BackendAuthKind) -> Self {
+		Self {
+			kind: Some(kind),
+			credentials: Vec::new(),
+		}
+	}
+}
+
+/// An additional credential to inject on the backend request.
+#[apply(schema!)]
+pub struct BackendAuthCredential {
+	/// Where the credential is inserted on the backend request.
+	pub location: AuthorizationLocation,
+	/// Credential value.
+	#[serde(
+		serialize_with = "ser_redact",
+		deserialize_with = "deser_key_from_file"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
+	pub key: SecretString,
+}
+
 /// Records whether the backend auth location was explicitly configured by the user
 /// (vs. defaulted).
 ///
@@ -88,11 +121,16 @@ pub struct BackendInfo {
 }
 
 pub fn apply_tunnel_auth(auth: &BackendAuth) -> Result<HeaderValue, ProxyError> {
-	match auth {
-		BackendAuth::Key {
+	if !auth.credentials.is_empty() {
+		return Err(ProcessingString(
+			"backendAuth.credentials is not supported on tunnel-bound backends".to_string(),
+		));
+	}
+	match auth.kind.as_ref() {
+		Some(BackendAuthKind::Key {
 			value: key,
 			location,
-		} => {
+		}) => {
 			let resolved = location.as_ref().unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
 			match resolved {
 				AuthorizationLocation::Header { name: _, prefix } => {
@@ -121,8 +159,33 @@ pub async fn apply_backend_auth(
 	auth: &BackendAuth,
 	req: &mut Request,
 ) -> Result<(), ProxyError> {
+	if let Some(kind) = auth.kind.as_ref() {
+		apply_backend_auth_kind(backend_info, kind, req).await?;
+	}
+	for credential in &auth.credentials {
+		credential
+			.location
+			.insert(req, credential.key.expose_secret())?;
+		// Credential locations are always explicitly configured. Mark Authorization writes
+		// so providers (e.g. Anthropic) do not rewrite or relocate the header. Other
+		// locations must not touch the marker set by the primary auth kind.
+		if matches!(&credential.location, AuthorizationLocation::Header { name, .. } if *name == http::header::AUTHORIZATION)
+		{
+			req
+				.extensions_mut()
+				.insert(AppliedBackendAuthLocation { explicit: true });
+		}
+	}
+	Ok(())
+}
+
+async fn apply_backend_auth_kind(
+	backend_info: &BackendInfo,
+	auth: &BackendAuthKind,
+	req: &mut Request,
+) -> Result<(), ProxyError> {
 	match auth {
-		BackendAuth::Passthrough { location } => {
+		BackendAuthKind::Passthrough { location } => {
 			let explicit = location.is_some();
 			let resolved = location.as_ref().unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
 			// They should have a JWT policy defined. That will strip the token. Here we add it back
@@ -138,7 +201,7 @@ pub async fn apply_backend_auth(
 				.extensions_mut()
 				.insert(AppliedBackendAuthLocation { explicit });
 		},
-		BackendAuth::Key {
+		BackendAuthKind::Key {
 			value: key,
 			location,
 		} => {
@@ -149,15 +212,15 @@ pub async fn apply_backend_auth(
 				.extensions_mut()
 				.insert(AppliedBackendAuthLocation { explicit });
 		},
-		BackendAuth::Gcp(g) => {
+		BackendAuthKind::Gcp(g) => {
 			gcp::insert_token(g, &backend_info.call_target, req.headers_mut())
 				.await
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
 		},
-		BackendAuth::Aws(_) => {
+		BackendAuthKind::Aws(_) => {
 			// We handle this in 'apply_late_backend_auth' since it must come at the end (due to request signing)!
 		},
-		BackendAuth::Azure(azure_auth) => {
+		BackendAuthKind::Azure(azure_auth) => {
 			let token = azure::get_token(
 				&backend_info.inputs.upstream,
 				azure_auth,
@@ -167,18 +230,18 @@ pub async fn apply_backend_auth(
 			.map_err(ProxyError::BackendAuthenticationFailed)?;
 			req.headers_mut().insert(http::header::AUTHORIZATION, token);
 		},
-		BackendAuth::Copilot => {
+		BackendAuthKind::Copilot => {
 			copilot::insert_headers(req)
 				.await
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
 		},
-		BackendAuth::OAuthTokenExchange(te_auth) => {
+		BackendAuthKind::OAuthTokenExchange(te_auth) => {
 			let explicit = oauth::apply_token_exchange(&backend_info.inputs, te_auth, req).await?;
 			req
 				.extensions_mut()
 				.insert(AppliedBackendAuthLocation { explicit });
 		},
-		BackendAuth::CrossAppAccess(auth) => {
+		BackendAuthKind::CrossAppAccess(auth) => {
 			let explicit = oauth::apply_identity_assertion(&backend_info.inputs, auth, req).await?;
 			req
 				.extensions_mut()
@@ -192,7 +255,11 @@ pub async fn apply_late_backend_auth(
 	auth: Option<&BackendAuth>,
 	req: &mut Request,
 ) -> Result<(), ProxyError> {
-	let Some(BackendAuth::Aws(aws_auth)) = auth else {
+	let Some(BackendAuth {
+		kind: Some(BackendAuthKind::Aws(aws_auth)),
+		..
+	}) = auth
+	else {
 		return Ok(());
 	};
 

@@ -598,14 +598,19 @@ mod gemini {
 			.await;
 
 		let test_id = test_id_from_response(&resp);
-		assert_eq!(resp.status(), StatusCode::OK);
-		// drain response
-		resp
+		let status = resp.status();
+		let bytes = resp
 			.into_body()
 			.collect()
 			.await
 			.expect("collect streaming responses body")
 			.to_bytes();
+		assert_eq!(
+			status,
+			StatusCode::OK,
+			"body: {:?}",
+			String::from_utf8_lossy(&bytes)
+		);
 		assert_request_log("/v1/responses", true, &test_id).await;
 	}
 }
@@ -1027,7 +1032,17 @@ pub async fn send_completions_with_tools(gw: &AgentGateway) {
 		)
 		.await;
 
-	assert_eq!(resp.status(), StatusCode::OK);
+	let status = resp.status();
+	let bytes = http_body_util::BodyExt::collect(resp.into_body())
+		.await
+		.unwrap()
+		.to_bytes();
+	assert_eq!(
+		status,
+		StatusCode::OK,
+		"body: {:?}",
+		String::from_utf8_lossy(&bytes)
+	);
 }
 
 pub async fn send_messages_with_tools(gw: &AgentGateway) {
@@ -1060,12 +1075,18 @@ pub async fn send_messages_with_tools(gw: &AgentGateway) {
 		)
 		.await;
 
-	assert_eq!(resp.status(), StatusCode::OK);
+	let status = resp.status();
 	let body = resp.into_body();
 	let bytes = http_body_util::BodyExt::collect(body)
 		.await
 		.unwrap()
 		.to_bytes();
+	assert_eq!(
+		status,
+		StatusCode::OK,
+		"body: {:?}",
+		String::from_utf8_lossy(&bytes)
+	);
 	let body_json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
 
 	// Verify Anthropic Response Schema
@@ -1122,12 +1143,18 @@ pub async fn send_messages_with_parallel_tools(gw: &AgentGateway) {
 		)
 		.await;
 
-	assert_eq!(resp.status(), StatusCode::OK);
+	let status = resp.status();
 	let body = resp.into_body();
 	let bytes = http_body_util::BodyExt::collect(body)
 		.await
 		.unwrap()
 		.to_bytes();
+	assert_eq!(
+		status,
+		StatusCode::OK,
+		"body: {:?}",
+		String::from_utf8_lossy(&bytes)
+	);
 	let body_json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
 
 	// Verify Anthropic Response Schema for Parallel Tools
@@ -1183,11 +1210,17 @@ pub async fn send_messages_multi_turn_tool_use(gw: &AgentGateway) {
 		)
 		.await;
 
-	assert_eq!(resp.status(), StatusCode::OK);
+	let status = resp.status();
 	let bytes = http_body_util::BodyExt::collect(resp.into_body())
 		.await
 		.unwrap()
 		.to_bytes();
+	assert_eq!(
+		status,
+		StatusCode::OK,
+		"body: {:?}",
+		String::from_utf8_lossy(&bytes)
+	);
 	let body_json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
 
 	let content = body_json
@@ -1243,11 +1276,17 @@ pub async fn send_messages_multi_turn_tool_use(gw: &AgentGateway) {
 		)
 		.await;
 
-	assert_eq!(resp.status(), StatusCode::OK);
+	let status = resp.status();
 	let bytes = http_body_util::BodyExt::collect(resp.into_body())
 		.await
 		.unwrap()
 		.to_bytes();
+	assert_eq!(
+		status,
+		StatusCode::OK,
+		"body: {:?}",
+		String::from_utf8_lossy(&bytes)
+	);
 	let body_json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
 
 	let content = body_json
@@ -1280,7 +1319,17 @@ async fn send_responses(gw: &AgentGateway, stream: bool) {
 		.await;
 
 	let test_id = test_id_from_response(&resp);
-	assert_eq!(resp.status(), StatusCode::OK);
+	let status = resp.status();
+	let bytes = http_body_util::BodyExt::collect(resp.into_body())
+		.await
+		.unwrap()
+		.to_bytes();
+	assert_eq!(
+		status,
+		StatusCode::OK,
+		"body: {:?}",
+		String::from_utf8_lossy(&bytes)
+	);
 	assert_log("/v1/responses", stream, &test_id).await;
 }
 
@@ -1299,7 +1348,17 @@ pub async fn send_messages(gw: &AgentGateway, stream: bool) {
 		.await;
 
 	let test_id = test_id_from_response(&resp);
-	assert_eq!(resp.status(), StatusCode::OK);
+	let status = resp.status();
+	let bytes = http_body_util::BodyExt::collect(resp.into_body())
+		.await
+		.unwrap()
+		.to_bytes();
+	assert_eq!(
+		status,
+		StatusCode::OK,
+		"body: {:?}",
+		String::from_utf8_lossy(&bytes)
+	);
 	assert_log("/v1/messages", stream, &test_id).await;
 }
 
@@ -1531,9 +1590,20 @@ async fn send_messages_adaptive_thinking(gw: &AgentGateway) {
 		.await;
 
 	let test_id = test_id_from_response(&resp);
-	assert_eq!(resp.status(), StatusCode::OK);
-	let body = resp.into_body().collect().await.expect("collect body");
-	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
+	let status = resp.status();
+	let body = resp
+		.into_body()
+		.collect()
+		.await
+		.expect("collect body")
+		.to_bytes();
+	assert_eq!(
+		status,
+		StatusCode::OK,
+		"body: {:?}",
+		String::from_utf8_lossy(&body)
+	);
+	let body: serde_json::Value = serde_json::from_slice(&body).expect("parse json");
 	let content = body.get("content").unwrap().as_array().unwrap();
 	assert!(!content.is_empty(), "content should not be empty");
 
@@ -1616,9 +1686,20 @@ async fn send_messages_thinking_enabled(gw: &AgentGateway) {
 		.await;
 
 	let test_id = test_id_from_response(&resp);
-	assert_eq!(resp.status(), StatusCode::OK);
-	let body = resp.into_body().collect().await.expect("collect body");
-	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
+	let status = resp.status();
+	let body = resp
+		.into_body()
+		.collect()
+		.await
+		.expect("collect body")
+		.to_bytes();
+	assert_eq!(
+		status,
+		StatusCode::OK,
+		"body: {:?}",
+		String::from_utf8_lossy(&body)
+	);
+	let body: serde_json::Value = serde_json::from_slice(&body).expect("parse json");
 	let content = body.get("content").unwrap().as_array().unwrap();
 	assert!(!content.is_empty(), "content should not be empty");
 
@@ -1645,9 +1726,20 @@ async fn send_messages_output_config_effort(gw: &AgentGateway) {
 		.await;
 
 	let test_id = test_id_from_response(&resp);
-	assert_eq!(resp.status(), StatusCode::OK);
-	let body = resp.into_body().collect().await.expect("collect body");
-	let body: serde_json::Value = serde_json::from_slice(&body.to_bytes()).expect("parse json");
+	let status = resp.status();
+	let body = resp
+		.into_body()
+		.collect()
+		.await
+		.expect("collect body")
+		.to_bytes();
+	assert_eq!(
+		status,
+		StatusCode::OK,
+		"body: {:?}",
+		String::from_utf8_lossy(&body)
+	);
+	let body: serde_json::Value = serde_json::from_slice(&body).expect("parse json");
 	let content = body.get("content").unwrap().as_array().unwrap();
 	assert!(!content.is_empty(), "content should not be empty");
 
