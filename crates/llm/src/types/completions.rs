@@ -390,6 +390,22 @@ impl super::RequestType for Request {
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
 		self.messages = messages.into_iter().map(convert_message).collect();
 	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		for msg in &mut self.messages {
+			match &mut msg.content {
+				Some(Content::Text(text)) => f(text),
+				Some(Content::Array(parts)) => {
+					for part in parts {
+						if let Some(text) = &mut part.text {
+							f(text);
+						}
+					}
+				},
+				None => {},
+			}
+		}
+	}
 }
 
 fn convert_message(r: SimpleChatCompletionMessage) -> RequestMessage {

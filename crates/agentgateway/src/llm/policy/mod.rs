@@ -390,6 +390,10 @@ impl crate::llm::RequestType for TextRequest {
 			self.content = m.content.to_string();
 		}
 	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		f(&mut self.content);
+	}
 }
 
 impl PromptGuard {
@@ -1020,22 +1024,27 @@ impl Policy {
 		rgx: &RegexRules,
 		rej: &RequestRejection,
 	) -> anyhow::Result<GuardrailOutcome> {
-		let mut msgs = req.get_messages();
 		let mut any_changed = false;
-		for msg in &mut msgs {
-			match Self::apply_prompt_guard_regex(&msg.content, rgx) {
+		let mut rejected = false;
+		req.visit_text_mut(&mut |text| {
+			if rejected {
+				return;
+			}
+			match Self::apply_prompt_guard_regex(text, rgx) {
 				Some(RegexResult::Reject) => {
-					return Ok(GuardrailOutcome::Rejected(rej.as_response()));
+					rejected = true;
 				},
-				Some(RegexResult::Mask(content)) => {
+				Some(RegexResult::Mask(masked)) => {
 					any_changed = true;
-					msg.content = content.into();
+					*text = masked;
 				},
 				None => {},
 			}
+		});
+		if rejected {
+			return Ok(GuardrailOutcome::Rejected(rej.as_response()));
 		}
 		if any_changed {
-			req.set_messages(msgs);
 			return Ok(GuardrailOutcome::Masked);
 		}
 		Ok(GuardrailOutcome::None)
@@ -2017,4 +2026,193 @@ fn test_apply_prompt_guard_regex_reject(#[case] rules: Vec<RegexRule>, #[case] i
 		},
 	);
 	assert!(matches!(result, Some(RegexResult::Reject)));
+}
+
+#[test]
+fn test_apply_regex_mask_preserves_anthropic_tool_structure() {
+	let mut req: crate::llm::types::messages::Request = serde_json::from_value(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"system": "You are a helpful assistant. Contact admin@example.com for help.",
+		"messages": [
+			{"role": "user", "content": "list pods"},
+			{"role": "assistant", "content": [
+				{"type": "text", "text": "Calling the tool."},
+				{"type": "tool_use", "id": "toolu_01", "name": "k8s_get_resources", "input": {"ns": "kagent"}}
+			]},
+			{"role": "user", "content": [
+				{"type": "tool_result", "tool_use_id": "toolu_01", "content": "pod-a Running, owner ssn 123-45-6789"}
+			]},
+			{"role": "user", "content": [
+				{"type": "tool_result", "tool_use_id": "toolu_02", "content": [
+					{"type": "text", "text": "reach ops@example.com"},
+					{"type": "image", "source": {"type": "base64", "data": "aGk="}}
+				]}
+			]}
+		]
+	}))
+	.unwrap();
+
+	let outcome = Policy::apply_regex(
+		&mut req,
+		&RegexRules {
+			action: Action::Mask,
+			rules: vec![
+				RegexRule::Builtin {
+					builtin: Builtin::Email,
+				},
+				RegexRule::Builtin {
+					builtin: Builtin::Ssn,
+				},
+			],
+		},
+		&RequestRejection::default(),
+	)
+	.unwrap();
+
+	assert!(matches!(outcome, GuardrailOutcome::Masked));
+	assert_eq!(
+		serde_json::to_value(&req).unwrap(),
+		serde_json::json!({
+			"model": "claude-sonnet-5",
+			"max_tokens": 1024,
+			"system": "You are a helpful assistant. Contact <EMAIL_ADDRESS> for help.",
+			"messages": [
+				{"role": "user", "content": "list pods"},
+				{"role": "assistant", "content": [
+					{"type": "text", "text": "Calling the tool."},
+					{"type": "tool_use", "id": "toolu_01", "name": "k8s_get_resources", "input": {"ns": "kagent"}}
+				]},
+				{"role": "user", "content": [
+					{"type": "tool_result", "tool_use_id": "toolu_01", "content": "pod-a Running, owner ssn <SSN>"}
+				]},
+				{"role": "user", "content": [
+					{"type": "tool_result", "tool_use_id": "toolu_02", "content": [
+						{"type": "text", "text": "reach <EMAIL_ADDRESS>"},
+						{"type": "image", "source": {"type": "base64", "data": "aGk="}}
+					]}
+				]}
+			]
+		})
+	);
+}
+
+#[test]
+fn test_apply_regex_mask_preserves_responses_tool_structure() {
+	let mut req: crate::llm::types::responses::Request = serde_json::from_value(serde_json::json!({
+		"model": "gpt-4o",
+		"input": [
+			{"role": "user", "content": [
+				{"type": "input_text", "text": "email admin@example.com about the pods"}
+			]},
+			{"type": "function_call", "call_id": "call_01", "name": "list_pods", "arguments": "{}"},
+			{"type": "function_call_output", "call_id": "call_01", "output": "pod-a Running, owner ssn 123-45-6789"}
+		]
+	}))
+	.unwrap();
+
+	let outcome = Policy::apply_regex(
+		&mut req,
+		&RegexRules {
+			action: Action::Mask,
+			rules: vec![
+				RegexRule::Builtin {
+					builtin: Builtin::Email,
+				},
+				RegexRule::Builtin {
+					builtin: Builtin::Ssn,
+				},
+			],
+		},
+		&RequestRejection::default(),
+	)
+	.unwrap();
+
+	assert!(matches!(outcome, GuardrailOutcome::Masked));
+	assert_eq!(
+		serde_json::to_value(&req).unwrap(),
+		serde_json::json!({
+			"model": "gpt-4o",
+			"input": [
+				{"role": "user", "content": [
+					{"type": "input_text", "text": "email <EMAIL_ADDRESS> about the pods"}
+				]},
+				{"type": "function_call", "call_id": "call_01", "name": "list_pods", "arguments": "{}"},
+				{"type": "function_call_output", "call_id": "call_01", "output": "pod-a Running, owner ssn <SSN>"}
+			]
+		})
+	);
+}
+
+#[test]
+fn test_apply_regex_mask_preserves_completions_tool_calls() {
+	let mut req: crate::llm::types::completions::Request =
+		serde_json::from_value(serde_json::json!({
+			"model": "gpt-4o",
+			"messages": [
+				{"role": "user", "content": "email admin@example.com about the pods"},
+				{"role": "assistant", "content": null, "tool_calls": [
+					{"id": "call_01", "type": "function", "function": {"name": "list_pods", "arguments": "{}"}}
+				]},
+				{"role": "tool", "tool_call_id": "call_01", "content": "pod-a Running"}
+			]
+		}))
+		.unwrap();
+
+	let outcome = Policy::apply_regex(
+		&mut req,
+		&RegexRules {
+			action: Action::Mask,
+			rules: vec![RegexRule::Builtin {
+				builtin: Builtin::Email,
+			}],
+		},
+		&RequestRejection::default(),
+	)
+	.unwrap();
+
+	assert!(matches!(outcome, GuardrailOutcome::Masked));
+	assert_eq!(
+		serde_json::to_value(&req).unwrap(),
+		serde_json::json!({
+			"model": "gpt-4o",
+			"messages": [
+				{"role": "user", "content": "email <EMAIL_ADDRESS> about the pods"},
+				{"role": "assistant", "tool_calls": [
+					{"id": "call_01", "type": "function", "function": {"name": "list_pods", "arguments": "{}"}}
+				]},
+				{"role": "tool", "tool_call_id": "call_01", "content": "pod-a Running"}
+			]
+		})
+	);
+}
+
+#[test]
+fn test_apply_regex_reject_scans_tool_result_content() {
+	let mut req: crate::llm::types::messages::Request = serde_json::from_value(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "tool_result", "tool_use_id": "toolu_01", "content": [
+					{"type": "text", "text": "owner ssn 123-45-6789"}
+				]}
+			]}
+		]
+	}))
+	.unwrap();
+
+	let outcome = Policy::apply_regex(
+		&mut req,
+		&RegexRules {
+			action: Action::Reject,
+			rules: vec![RegexRule::Builtin {
+				builtin: Builtin::Ssn,
+			}],
+		},
+		&RequestRejection::default(),
+	)
+	.unwrap();
+
+	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
 }

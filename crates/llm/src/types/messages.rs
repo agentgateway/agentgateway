@@ -256,6 +256,53 @@ impl RequestType for Request {
 		};
 		self.messages = message_prompts.into_iter().map(Into::into).collect();
 	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		match &mut self.system {
+			Some(TextBlock::Text(text)) => f(text),
+			Some(TextBlock::Array(parts)) => {
+				for part in parts {
+					if let TextPart::Text { text, .. } = part {
+						f(text);
+					}
+				}
+			},
+			None => {},
+		}
+		for msg in &mut self.messages {
+			match &mut msg.content {
+				Some(ContentBlock::Text(text)) => f(text),
+				Some(ContentBlock::Array(parts)) => {
+					for part in parts {
+						match part {
+							ContentPart::Text { text, .. } => f(text),
+							ContentPart::Unknown(value) => visit_tool_result_text(value, f),
+						}
+					}
+				},
+				None => {},
+			}
+		}
+	}
+}
+
+fn visit_tool_result_text(value: &mut serde_json::Value, f: &mut dyn FnMut(&mut String)) {
+	if value.get("type").and_then(|t| t.as_str()) != Some("tool_result") {
+		return;
+	}
+	match value.get_mut("content") {
+		Some(serde_json::Value::String(text)) => f(text),
+		Some(serde_json::Value::Array(parts)) => {
+			for part in parts {
+				if part.get("type").and_then(|t| t.as_str()) == Some("text")
+					&& let Some(serde_json::Value::String(text)) = part.get_mut("text")
+				{
+					f(text);
+				}
+			}
+		},
+		_ => {},
+	}
 }
 
 pub fn prepend_prompts_helper(

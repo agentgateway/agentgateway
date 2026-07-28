@@ -100,6 +100,12 @@ impl RequestType for Request {
 	fn set_messages(&mut self, _messages: Vec<SimpleChatCompletionMessage>) {
 		unimplemented!("set_messages is used for prompt guard; prompt guard is disable for embeddings.")
 	}
+
+	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(&mut String)) {
+		unimplemented!(
+			"visit_text_mut is used for prompt guard; prompt guard is disable for embeddings."
+		)
+	}
 }
 
 impl crate::types::ResponseType for Response {

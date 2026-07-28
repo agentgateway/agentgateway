@@ -75,6 +75,34 @@ impl RawInputItem {
 
 		Some(SimpleChatCompletionMessage { role, content })
 	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		if self.0.get("role").is_some() {
+			match self.0.get_mut("content") {
+				Some(Value::String(text)) => f(text),
+				Some(Value::Array(parts)) => visit_text_parts(parts, f),
+				_ => {},
+			}
+		} else if self.0.get("type").and_then(|t| t.as_str()) == Some("function_call_output") {
+			match self.0.get_mut("output") {
+				Some(Value::String(text)) => f(text),
+				Some(Value::Array(parts)) => visit_text_parts(parts, f),
+				_ => {},
+			}
+		}
+	}
+}
+
+fn visit_text_parts(parts: &mut [Value], f: &mut dyn FnMut(&mut String)) {
+	for part in parts {
+		if matches!(
+			part.get("type").and_then(|t| t.as_str()),
+			Some("input_text" | "output_text")
+		) && let Some(Value::String(text)) = part.get_mut("text")
+		{
+			f(text);
+		}
+	}
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
@@ -390,6 +418,17 @@ impl RequestType for Request {
 				.map(RawInputItem::from_simple_message)
 				.collect(),
 		);
+	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		match &mut self.input {
+			RequestInput::Text(text) => f(text),
+			RequestInput::Items(items) => {
+				for item in items {
+					item.visit_text_mut(f);
+				}
+			},
+		}
 	}
 }
 
