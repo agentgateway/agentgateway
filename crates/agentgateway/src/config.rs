@@ -36,7 +36,7 @@ pub fn parse_config(
 ) -> anyhow::Result<Config> {
 	// Shellexpend before parsing it
 	let contents = contents.replace("# yaml-language-server: $schema", "#");
-	let contents = shellexpand::full(&contents).ctx("invalid config")?;
+	let contents = shellexpand::full(&contents)?;
 	let nested: NestedRawConfig = serdes::yamlviajson::from_str(&contents).ctx("invalid config")?;
 	let raw = nested.config.unwrap_or_default();
 	cel::register_custom_functions(&raw.custom_functions).ctx("invalid config.customFunctions")?;
@@ -1583,7 +1583,7 @@ config:
 		.expect_err("unset variable should fail expansion");
 
 		assert!(
-			err.to_string().contains("invalid config"),
+			err.to_string().contains("environment variable not found"),
 			"unexpected error: {err}"
 		);
 	}
