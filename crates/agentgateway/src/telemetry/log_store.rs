@@ -692,11 +692,8 @@ impl Backend {
 		let pool = match pool {
 			Some(pool) => pool,
 			None => {
-				crate::database::DatabasePool::connect_with_max_connections(
-					&cfg.url,
-					cfg.max_connections,
-				)
-				.await?
+				crate::database::DatabasePool::connect_with_max_connections(&cfg.url, cfg.max_connections)
+					.await?
 			},
 		};
 		match pool {
