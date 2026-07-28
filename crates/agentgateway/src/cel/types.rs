@@ -2344,6 +2344,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 			}),
 			prompt: None,
 			resource: None,
+			task: None,
 		}),
 		backend: Some(BackendContext {
 			name: "my-backend".into(),

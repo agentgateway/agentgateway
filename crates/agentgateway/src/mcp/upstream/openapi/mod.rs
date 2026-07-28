@@ -704,7 +704,7 @@ impl Handler {
 			ClientRequest::GetTaskRequest(_)
 			| ClientRequest::UpdateTaskRequest(_)
 			| ClientRequest::CancelTaskRequest(_) => {
-				return Err(UpstreamError::InvalidMethod(method.to_string()));
+				return Err(UpstreamError::InvalidRequest("unknown task".to_string()));
 			},
 			ClientRequest::ReadResourceRequest(_) => {
 				Messages::from_result(id, ReadResourceResult::new(vec![]))

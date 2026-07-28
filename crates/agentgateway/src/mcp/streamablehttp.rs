@@ -421,6 +421,9 @@ fn message_name(message: &ClientJsonRpcMessage) -> Option<&str> {
 		ClientRequest::ReadResourceRequest(r) => Some(&r.params.uri),
 		ClientRequest::SubscribeRequest(r) => Some(&r.params.uri),
 		ClientRequest::UnsubscribeRequest(r) => Some(&r.params.uri),
+		ClientRequest::GetTaskRequest(r) => Some(&r.params.task_id),
+		ClientRequest::UpdateTaskRequest(r) => Some(&r.params.task_id),
+		ClientRequest::CancelTaskRequest(r) => Some(&r.params.task_id),
 		_ => None,
 	}
 }

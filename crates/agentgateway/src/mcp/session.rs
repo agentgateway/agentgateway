@@ -238,6 +238,35 @@ impl Session {
 		Ok(())
 	}
 
+	// task_id here is the resolved upstream id, not the client-visible `target+id` form.
+	fn authorize_task_request(
+		&self,
+		service_name: &str,
+		task_id: &str,
+		method: &str,
+		span: &mut SpanWriteOnDrop,
+		log: &AsyncLog<mcp::MCPInfo>,
+		cel: &rbac::CelExecWrapper,
+	) -> Result<(), UpstreamError> {
+		span.rename_span(format!("{method} {service_name}"));
+		log.non_atomic_mutate(|l| {
+			l.set_task(service_name.to_string(), task_id.to_string());
+		});
+		if !self.relay.policies.validate(
+			&rbac::ResourceType::Task(rbac::ResourceId::new(
+				service_name.to_string(),
+				task_id.to_string(),
+			)),
+			cel,
+		) {
+			return Err(UpstreamError::Authorization {
+				resource_type: "task".to_string(),
+				resource_name: task_id.to_string(),
+			});
+		}
+		Ok(())
+	}
+
 	#[allow(clippy::too_many_arguments)]
 	async fn authorize_with_ctx<P>(
 		&self,
@@ -656,11 +685,47 @@ impl Session {
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 
-					ClientRequest::GetTaskRequest(_)
-					| ClientRequest::UpdateTaskRequest(_)
-					| ClientRequest::CancelTaskRequest(_) => {
-						// TODO(https://github.com/agentgateway/agentgateway/issues/404)
-						Err(UpstreamError::InvalidMethod(r.request.method().to_string()))
+					ClientRequest::GetTaskRequest(gtr) => {
+						let (service_name, original_id) =
+							mcp::handler::parse_task_id(&self.relay.upstreams, &gtr.params.task_id)?;
+						self.authorize_task_request(
+							service_name,
+							&original_id,
+							&method,
+							&mut span,
+							&log,
+							&cel,
+						)?;
+						gtr.params.task_id = original_id;
+						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
+					},
+					ClientRequest::UpdateTaskRequest(utr) => {
+						let (service_name, original_id) =
+							mcp::handler::parse_task_id(&self.relay.upstreams, &utr.params.task_id)?;
+						self.authorize_task_request(
+							service_name,
+							&original_id,
+							&method,
+							&mut span,
+							&log,
+							&cel,
+						)?;
+						utr.params.task_id = original_id;
+						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
+					},
+					ClientRequest::CancelTaskRequest(ctr) => {
+						let (service_name, original_id) =
+							mcp::handler::parse_task_id(&self.relay.upstreams, &ctr.params.task_id)?;
+						self.authorize_task_request(
+							service_name,
+							&original_id,
+							&method,
+							&mut span,
+							&log,
+							&cel,
+						)?;
+						ctr.params.task_id = original_id;
+						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::CustomRequest(_) => {
 						let method = r.request.method();
@@ -733,19 +798,18 @@ impl Session {
 		capabilities: &mut rmcp::model::ClientCapabilities,
 		ctx: &IncomingRequestContext,
 	) {
-		// TODO implement MCP tasks
-		if let Some(extensions) = capabilities.extensions.as_mut() {
-			extensions.remove("io.modelcontextprotocol/tasks");
-			if extensions.is_empty() {
-				capabilities.extensions = None;
-			}
-		}
-
 		if !mcp::handler::ctx_downstream_modern(ctx) {
 			// Legacy clients require reverse JSON-RPC routing for these capabilities.
 			capabilities.roots = None;
 			capabilities.sampling = None;
 			capabilities.elicitation = None;
+			// The tasks extension (SEP-2663) is undefined for legacy protocol versions.
+			if let Some(extensions) = capabilities.extensions.as_mut() {
+				extensions.remove(rmcp::model::TASKS_EXTENSION_ID);
+				if extensions.is_empty() {
+					capabilities.extensions = None;
+				}
+			}
 		}
 	}
 

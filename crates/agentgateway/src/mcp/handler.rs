@@ -162,6 +162,61 @@ pub(super) fn rewrite_resource_messages(
 	message
 }
 
+// Namespaces a task id as `<target>+<task id>`, mirroring `resource_uri`.
+fn task_id(default_target_name: Option<&String>, target: &str, task_id: &str) -> String {
+	if default_target_name.is_none() {
+		format!("{target}+{task_id}")
+	} else {
+		task_id.to_string()
+	}
+}
+
+// Rewrites task ids in outbound results/notifications so they round-trip through `parse_task_id`.
+pub(super) fn rewrite_task_messages(
+	default_target_name: Option<&String>,
+	target: &str,
+	mut message: ServerJsonRpcMessage,
+) -> ServerJsonRpcMessage {
+	if let ServerJsonRpcMessage::Response(resp) = &mut message {
+		match &mut resp.result {
+			ServerResult::CreateTaskResult(r) => {
+				r.task.task_id = task_id(default_target_name, target, &r.task.task_id);
+			},
+			ServerResult::GetTaskResult(r) => {
+				r.task.task.task_id = task_id(default_target_name, target, &r.task.task.task_id);
+			},
+			_ => {},
+		}
+	}
+	if let ServerJsonRpcMessage::Notification(notification) = &mut message
+		&& let ServerNotification::TaskStatusNotification(tsn) = &mut notification.notification
+	{
+		tsn.params.task.task.task_id =
+			task_id(default_target_name, target, &tsn.params.task.task.task_id);
+	}
+	message
+}
+
+// Reverse of `task_id`: splits `<target>+<task id>` into (target, task id).
+pub(super) fn parse_task_id<'a>(
+	upstreams: &'a upstream::UpstreamGroup,
+	task_id: &str,
+) -> Result<(&'a str, String), UpstreamError> {
+	if let Some(default) = upstreams.default_target_name.as_ref() {
+		Ok((default.as_str(), task_id.to_string()))
+	} else {
+		let plus_pos = task_id
+			.find('+')
+			.ok_or_else(|| UpstreamError::InvalidRequest("invalid task id".to_string()))?;
+		let service_name = &task_id[..plus_pos];
+		let original_id = &task_id[plus_pos + 1..];
+		let validated_name = upstreams
+			.get_name(service_name)
+			.ok_or_else(|| UpstreamError::InvalidRequest(format!("unknown service {service_name}")))?;
+		Ok((validated_name, original_id.to_string()))
+	}
+}
+
 /// What kind of name is being resolved to a target (`prefixMode: never`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ResolveKind {
@@ -271,6 +326,7 @@ impl Relay {
 		let policies = self.policies.clone();
 		stream.map_server_messages(move |message| {
 			let message = rewrite_resource_messages(default_target_name.as_ref(), &target, message);
+			let message = rewrite_task_messages(default_target_name.as_ref(), &target, message);
 
 			let mut resource_allowed = |uri: &str| {
 				// rewrite_tool_list_ui_meta extracts app URIs from tool metadata, apply RBAC against

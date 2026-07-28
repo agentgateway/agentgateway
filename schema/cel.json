@@ -985,6 +985,25 @@
             }
           },
           "additionalProperties": false
+        },
+        "task": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "target": {
+              "description": "The target of the resource",
+              "type": "string",
+              "default": ""
+            },
+            "name": {
+              "description": "The name of the resource",
+              "type": "string",
+              "default": ""
+            }
+          },
+          "additionalProperties": false
         }
       },
       "additionalProperties": false
