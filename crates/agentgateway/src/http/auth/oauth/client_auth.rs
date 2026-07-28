@@ -8,7 +8,6 @@ use jsonwebtoken::{Algorithm, EncodingKey, Header};
 use rustls::pki_types::PrivateKeyDer;
 use rustls::pki_types::pem::PemObject;
 use secrecy::{ExposeSecret, SecretString};
-use sha2::{Digest, Sha256};
 use tracing::warn;
 
 use crate::serdes::FileOrInline;
@@ -366,7 +365,7 @@ fn load_certificate_headers(
 		},
 		CertificateHeader::X5tS256 => CertificateHeaders {
 			x5c: None,
-			x5t_s256: Some(URL_SAFE_NO_PAD.encode(Sha256::digest(leaf.contents()))),
+			x5t_s256: Some(URL_SAFE_NO_PAD.encode(crate::crypto::digest::sha256(leaf.contents()))),
 		},
 	})
 }
