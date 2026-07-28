@@ -2022,6 +2022,15 @@ spec:
                                           maxItems: 1
                                           type: array
                                           x-kubernetes-list-type: atomic
+                                        certificateSource:
+                                          default: Inline
+                                          description: Source for the gateway's client
+                                            identity and trust roots (`Inline` default,
+                                            or `SPIFFE`).
+                                          enum:
+                                          - Inline
+                                          - SPIFFE
+                                          type: string
                                         insecureSkipVerify:
                                           description: |-
                                             Originates TLS but skips verification of the backend's certificate
@@ -2121,6 +2130,12 @@ spec:
                                           may not be set together
                                         rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                                           : true'
+                                      - message: certificateSource SPIFFE may not
+                                          be combined with mtlsCertificateRef, caCertificateRefs,
+                                          or insecureSkipVerify
+                                        rule: '!has(self.certificateSource) || self.certificateSource
+                                          != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
+                                          && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                       - message: at most one of the fields in [verifySubjectAltNames
                                           insecureSkipVerify] may be set
                                         rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
@@ -2422,6 +2437,15 @@ spec:
                                           maxItems: 1
                                           type: array
                                           x-kubernetes-list-type: atomic
+                                        certificateSource:
+                                          default: Inline
+                                          description: Source for the gateway's client
+                                            identity and trust roots (`Inline` default,
+                                            or `SPIFFE`).
+                                          enum:
+                                          - Inline
+                                          - SPIFFE
+                                          type: string
                                         insecureSkipVerify:
                                           description: |-
                                             Originates TLS but skips verification of the backend's certificate
@@ -2521,6 +2545,12 @@ spec:
                                           may not be set together
                                         rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                                           : true'
+                                      - message: certificateSource SPIFFE may not
+                                          be combined with mtlsCertificateRef, caCertificateRefs,
+                                          or insecureSkipVerify
+                                        rule: '!has(self.certificateSource) || self.certificateSource
+                                          != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
+                                          && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                       - message: at most one of the fields in [verifySubjectAltNames
                                           insecureSkipVerify] may be set
                                         rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
@@ -2841,6 +2871,15 @@ spec:
                                           maxItems: 1
                                           type: array
                                           x-kubernetes-list-type: atomic
+                                        certificateSource:
+                                          default: Inline
+                                          description: Source for the gateway's client
+                                            identity and trust roots (`Inline` default,
+                                            or `SPIFFE`).
+                                          enum:
+                                          - Inline
+                                          - SPIFFE
+                                          type: string
                                         insecureSkipVerify:
                                           description: |-
                                             Originates TLS but skips verification of the backend's certificate
@@ -2940,6 +2979,12 @@ spec:
                                           may not be set together
                                         rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                                           : true'
+                                      - message: certificateSource SPIFFE may not
+                                          be combined with mtlsCertificateRef, caCertificateRefs,
+                                          or insecureSkipVerify
+                                        rule: '!has(self.certificateSource) || self.certificateSource
+                                          != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
+                                          && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                       - message: at most one of the fields in [verifySubjectAltNames
                                           insecureSkipVerify] may be set
                                         rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
@@ -3576,6 +3621,15 @@ spec:
                                           maxItems: 1
                                           type: array
                                           x-kubernetes-list-type: atomic
+                                        certificateSource:
+                                          default: Inline
+                                          description: Source for the gateway's client
+                                            identity and trust roots (`Inline` default,
+                                            or `SPIFFE`).
+                                          enum:
+                                          - Inline
+                                          - SPIFFE
+                                          type: string
                                         insecureSkipVerify:
                                           description: |-
                                             Originates TLS but skips verification of the backend's certificate
@@ -3675,6 +3729,12 @@ spec:
                                           may not be set together
                                         rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                                           : true'
+                                      - message: certificateSource SPIFFE may not
+                                          be combined with mtlsCertificateRef, caCertificateRefs,
+                                          or insecureSkipVerify
+                                        rule: '!has(self.certificateSource) || self.certificateSource
+                                          != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
+                                          && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                       - message: at most one of the fields in [verifySubjectAltNames
                                           insecureSkipVerify] may be set
                                         rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
@@ -3976,6 +4036,15 @@ spec:
                                           maxItems: 1
                                           type: array
                                           x-kubernetes-list-type: atomic
+                                        certificateSource:
+                                          default: Inline
+                                          description: Source for the gateway's client
+                                            identity and trust roots (`Inline` default,
+                                            or `SPIFFE`).
+                                          enum:
+                                          - Inline
+                                          - SPIFFE
+                                          type: string
                                         insecureSkipVerify:
                                           description: |-
                                             Originates TLS but skips verification of the backend's certificate
@@ -4075,6 +4144,12 @@ spec:
                                           may not be set together
                                         rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                                           : true'
+                                      - message: certificateSource SPIFFE may not
+                                          be combined with mtlsCertificateRef, caCertificateRefs,
+                                          or insecureSkipVerify
+                                        rule: '!has(self.certificateSource) || self.certificateSource
+                                          != ''SPIFFE'' || (!has(self.mtlsCertificateRef)
+                                          && !has(self.caCertificateRefs) && !has(self.insecureSkipVerify))'
                                       - message: at most one of the fields in [verifySubjectAltNames
                                           insecureSkipVerify] may be set
                                         rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
@@ -4388,6 +4463,14 @@ spec:
                         maxItems: 1
                         type: array
                         x-kubernetes-list-type: atomic
+                      certificateSource:
+                        default: Inline
+                        description: Source for the gateway's client identity and
+                          trust roots (`Inline` default, or `SPIFFE`).
+                        enum:
+                        - Inline
+                        - SPIFFE
+                        type: string
                       insecureSkipVerify:
                         description: |-
                           Originates TLS but skips verification of the backend's certificate
@@ -4482,6 +4565,11 @@ spec:
                         be set together
                       rule: 'has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames)
                         : true'
+                    - message: certificateSource SPIFFE may not be combined with mtlsCertificateRef,
+                        caCertificateRefs, or insecureSkipVerify
+                      rule: '!has(self.certificateSource) || self.certificateSource
+                        != ''SPIFFE'' || (!has(self.mtlsCertificateRef) && !has(self.caCertificateRefs)
+                        && !has(self.insecureSkipVerify))'
                     - message: at most one of the fields in [verifySubjectAltNames
                         insecureSkipVerify] may be set
                       rule: '[has(self.verifySubjectAltNames),has(self.insecureSkipVerify)].filter(x,x==true).size()
