@@ -10,7 +10,7 @@ use tracing::{debug, trace, warn};
 
 use super::AuthorizationLocation;
 use crate::http::Request;
-use crate::http::jwt::Claims;
+use crate::http::jwt::{Claims, ValidatedCredential};
 use crate::http::oauth::{TOKEN_TYPE_ACCESS, TOKEN_TYPE_ID, TOKEN_TYPE_ID_JAG, TOKEN_TYPE_JWT};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
@@ -759,7 +759,7 @@ pub(super) async fn apply_identity_assertion(
 	Ok(explicit)
 }
 
-/// Extract the subject token, falling back to Claims only for the default source.
+/// Extract the subject token, reusing a matching credential stripped by JWT auth.
 pub(super) fn extract_subject_token(
 	source: &AuthorizationLocation,
 	req: &Request,
@@ -768,20 +768,12 @@ pub(super) fn extract_subject_token(
 		return Some(token.into_owned());
 	}
 
-	if !source.is_bearer_header() {
-		return None;
-	}
-
-	// Claims has no source provenance. OIDC also populates it with the ID token
-	// from an encrypted session cookie, even when no Authorization header existed
-	extract_validated_claims_token(req).filter(|token| !token.trim().is_empty())
-}
-
-fn extract_validated_claims_token(req: &Request) -> Option<String> {
 	req
 		.extensions()
-		.get::<Claims>()
-		.map(|claims| claims.jwt.expose_secret().to_string())
+		.get::<ValidatedCredential>()
+		.and_then(|credential| credential.token_for_source(source))
+		.filter(|token| !token.trim().is_empty())
+		.map(str::to_owned)
 }
 
 fn actor_token_from_request(

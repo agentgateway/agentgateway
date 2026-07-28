@@ -2,7 +2,7 @@ use secrecy::SecretString;
 use serde_json::Map;
 
 use super::*;
-use crate::http::jwt::Claims;
+use crate::http::jwt::{Claims, ValidatedCredential};
 use crate::llm::bedrock::AwsRegion;
 use crate::test_helpers::proxymock::setup_proxy_test;
 
@@ -697,20 +697,33 @@ async fn test_aws_sign_request_implicit_configured_region_wins() {
 }
 
 #[test]
-fn extract_subject_token_falls_back_to_claims_for_authorization_header() {
-	// Default source is the Authorization Bearer header; a JWT policy stripped it,
-	// leaving only the Claims extension.
+fn subject_token_reuses_default_jwt() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example/")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	req.extensions_mut().insert(ValidatedCredential {
+		token: SecretString::from("validated-jwt"),
+		source: AuthorizationLocation::default(),
+	});
+
+	let token = oauth::extract_subject_token(&AuthorizationLocation::default(), &req);
+	assert_eq!(token.as_deref(), Some("validated-jwt"));
+}
+
+#[test]
+fn subject_token_ignores_claims() {
 	let mut req = ::http::Request::builder()
 		.uri("http://example/")
 		.body(crate::http::Body::empty())
 		.unwrap();
 	req.extensions_mut().insert(Claims {
 		inner: Map::new(),
-		jwt: SecretString::from("claims-jwt"),
+		jwt: SecretString::from("oidc-id-token"),
 	});
 
 	let token = oauth::extract_subject_token(&AuthorizationLocation::default(), &req);
-	assert_eq!(token.as_deref(), Some("claims-jwt"));
+	assert_eq!(token, None);
 }
 
 #[test]
@@ -726,19 +739,19 @@ fn extract_subject_token_uses_authorization_header_without_claims() {
 }
 
 #[test]
-fn extract_subject_token_empty_authorization_header_falls_back_to_claims() {
+fn subject_token_empty_source_reuses_jwt() {
 	let mut req = ::http::Request::builder()
 		.uri("http://example/")
 		.header(::http::header::AUTHORIZATION, "Bearer ")
 		.body(crate::http::Body::empty())
 		.unwrap();
-	req.extensions_mut().insert(Claims {
-		inner: Map::new(),
-		jwt: SecretString::from("claims-jwt"),
+	req.extensions_mut().insert(ValidatedCredential {
+		token: SecretString::from("validated-jwt"),
+		source: AuthorizationLocation::default(),
 	});
 
 	let token = oauth::extract_subject_token(&AuthorizationLocation::default(), &req);
-	assert_eq!(token.as_deref(), Some("claims-jwt"));
+	assert_eq!(token.as_deref(), Some("validated-jwt"));
 }
 
 #[test]
@@ -754,15 +767,15 @@ fn extract_subject_token_empty_authorization_header_is_missing() {
 }
 
 #[test]
-fn extract_subject_token_prefers_authorization_header_over_claims() {
+fn subject_token_prefers_configured_source() {
 	let mut req = ::http::Request::builder()
 		.uri("http://example/")
 		.header(::http::header::AUTHORIZATION, "Bearer header-tok")
 		.body(crate::http::Body::empty())
 		.unwrap();
-	req.extensions_mut().insert(Claims {
-		inner: Map::new(),
-		jwt: SecretString::from("claims-jwt"),
+	req.extensions_mut().insert(ValidatedCredential {
+		token: SecretString::from("validated-jwt"),
+		source: AuthorizationLocation::default(),
 	});
 
 	let token = oauth::extract_subject_token(&AuthorizationLocation::default(), &req);
@@ -807,20 +820,69 @@ fn extract_subject_token_custom_source_prefers_configured_location_over_claims()
 #[case::expression(AuthorizationLocation::Expression(std::sync::Arc::new(
 	crate::cel::Expression::new_strict(r#"request.headers["x-subject"]"#).unwrap(),
 )))]
-fn extract_subject_token_custom_sources_do_not_fall_back_to_claims(
-	#[case] source: AuthorizationLocation,
-) {
+fn subject_token_rejects_mismatched_jwt(#[case] source: AuthorizationLocation) {
 	let mut req = ::http::Request::builder()
 		.uri("http://example/")
 		.body(crate::http::Body::empty())
 		.unwrap();
 	req.extensions_mut().insert(Claims {
 		inner: Map::new(),
-		jwt: SecretString::from("claims-jwt"),
+		jwt: SecretString::from("oidc-id-token"),
+	});
+	req.extensions_mut().insert(ValidatedCredential {
+		token: SecretString::from("different-validated-jwt"),
+		source: AuthorizationLocation::default(),
 	});
 
 	let token = oauth::extract_subject_token(&source, &req);
 	assert_eq!(token, None);
+}
+
+#[rstest::rstest]
+#[case::header(AuthorizationLocation::Header {
+	name: ::http::HeaderName::from_static("x-subject"),
+	prefix: None,
+})]
+#[case::query_parameter(AuthorizationLocation::QueryParameter {
+	name: "subject".into(),
+})]
+#[case::cookie(AuthorizationLocation::Cookie {
+	name: "subject".into(),
+})]
+fn subject_token_reuses_matching_jwt(#[case] source: AuthorizationLocation) {
+	let mut req = ::http::Request::builder()
+		.uri("http://example/")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	req.extensions_mut().insert(ValidatedCredential {
+		token: SecretString::from("validated-jwt"),
+		source: source.clone(),
+	});
+
+	let token = oauth::extract_subject_token(&source, &req);
+	assert_eq!(token.as_deref(), Some("validated-jwt"));
+}
+
+#[test]
+fn subject_token_reuses_jwt_with_empty_prefix() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example/")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	req.extensions_mut().insert(ValidatedCredential {
+		token: SecretString::from("validated-jwt"),
+		source: AuthorizationLocation::Header {
+			name: ::http::header::AUTHORIZATION,
+			prefix: Some("".into()),
+		},
+	});
+
+	let source = AuthorizationLocation::Header {
+		name: ::http::header::AUTHORIZATION,
+		prefix: None,
+	};
+	let token = oauth::extract_subject_token(&source, &req);
+	assert_eq!(token.as_deref(), Some("validated-jwt"));
 }
 
 fn credential(name: &'static str, value: &str, prefix: Option<&str>) -> BackendAuthCredential {

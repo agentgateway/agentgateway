@@ -535,6 +535,14 @@ pub async fn test_apply_permissive_valid_token_inserts_claims_and_removes_header
 			.is_none()
 	);
 	assert!(req.extensions().get::<super::Claims>().is_some());
+	let credential = req
+		.extensions()
+		.get::<super::ValidatedCredential>()
+		.expect("validated credential");
+	assert_eq!(
+		credential.token_for_source(&bearer_location()),
+		Some(token.as_str())
+	);
 }
 
 // Optional mode: allow requests without a token and do not attach claims
@@ -630,6 +638,14 @@ pub async fn test_apply_query_parameter_token_inserts_claims_and_removes_query_p
 	assert!(res.is_ok());
 	assert_eq!(req.uri().to_string(), "http://example.com/?keep=yes");
 	assert!(req.extensions().get::<super::Claims>().is_some());
+	let source = crate::http::auth::AuthorizationLocation::QueryParameter {
+		name: "token".into(),
+	};
+	let credential = req
+		.extensions()
+		.get::<super::ValidatedCredential>()
+		.expect("validated credential");
+	assert_eq!(credential.token_for_source(&source), Some(token.as_str()));
 }
 
 fn make_min_req_log() -> crate::telemetry::log::RequestLog {

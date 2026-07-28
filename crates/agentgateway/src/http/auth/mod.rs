@@ -188,8 +188,7 @@ async fn apply_backend_auth_kind(
 		BackendAuthKind::Passthrough { location } => {
 			let explicit = location.is_some();
 			let resolved = location.as_ref().unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
-			// They should have a JWT policy defined. That will strip the token. Here we add it back
-			// TODO: should we also support API key, etc?
+			// Unlike token exchange, passthrough forwards JWT or OIDC Claims without source matching
 			if let Some(token) = req
 				.extensions()
 				.get::<Claims>()
@@ -319,16 +318,31 @@ impl AuthorizationLocation {
 		}
 	}
 
-	/// Whether this is the default [`Self::bearer_header`] location. The prefix is compared
-	/// the same case-insensitive way [`Self::extract`] strips it, so configs differing only
-	/// in prefix casing are not treated as distinct locations.
-	pub(crate) fn is_bearer_header(&self) -> bool {
-		matches!(
-			self,
-			Self::Header { name, prefix }
-				if *name == http::header::AUTHORIZATION
-					&& prefix.as_deref().is_some_and(|p| p.eq_ignore_ascii_case("Bearer "))
-		)
+	pub fn matches_source(&self, other: &Self) -> bool {
+		match (self, other) {
+			(
+				Self::Header {
+					name,
+					prefix: source_prefix,
+				},
+				Self::Header {
+					name: other_name,
+					prefix: other_prefix,
+				},
+			) => {
+				let source_prefix = source_prefix.as_deref().filter(|prefix| !prefix.is_empty());
+				let other_prefix = other_prefix.as_deref().filter(|prefix| !prefix.is_empty());
+				let prefix_matches = match (source_prefix, other_prefix) {
+					(Some(source), Some(other)) => source.eq_ignore_ascii_case(other),
+					(None, None) => true,
+					_ => false,
+				};
+				name == other_name && prefix_matches
+			},
+			(Self::QueryParameter { name }, Self::QueryParameter { name: other_name })
+			| (Self::Cookie { name }, Self::Cookie { name: other_name }) => name == other_name,
+			_ => false,
+		}
 	}
 
 	pub fn extract<'a>(&self, req: &'a Request) -> Option<Cow<'a, str>> {

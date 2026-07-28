@@ -5,7 +5,7 @@ use std::str::FromStr;
 use ::cel::types::dynamic::DynamicType;
 use jsonwebtoken::jwk::{AlgorithmParameters, EllipticCurve, JwkSet, KeyAlgorithm};
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode, decode_header};
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Map, Value};
 
 use crate::http::Request;
@@ -427,6 +427,21 @@ pub struct Claims {
 	pub jwt: SecretString,
 }
 
+#[derive(Clone, Debug)]
+pub struct ValidatedCredential {
+	pub token: SecretString,
+	pub source: AuthorizationLocation,
+}
+
+impl ValidatedCredential {
+	pub fn token_for_source(&self, source: &AuthorizationLocation) -> Option<&str> {
+		self
+			.source
+			.matches_source(source)
+			.then_some(self.token.expose_secret())
+	}
+}
+
 #[cfg(feature = "schema")]
 impl schemars::JsonSchema for Claims {
 	fn schema_name() -> std::borrow::Cow<'static, str> {
@@ -540,13 +555,17 @@ impl Jwt {
 			.location
 			.remove(req)
 			.map_err(|e| TokenError::CredentialRemoval(e.to_string()))?;
-		// Insert the claims into extensions so we can reference it later
 		dtrace::pol_result!(
 			dtrace::Severity::Info,
 			Apply,
 			"authenticated request with JWT claims {}",
 			serde_json::to_string(&claims).unwrap_or_else(|_| "invalid claims".to_string())
 		);
+		// Preserve validated auth state for later policies
+		req.extensions_mut().insert(ValidatedCredential {
+			token: claims.jwt.clone(),
+			source: self.location.clone(),
+		});
 		req.extensions_mut().insert(claims);
 		Ok(())
 	}
