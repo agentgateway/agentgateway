@@ -5220,7 +5220,10 @@ mod tests {
 		};
 		let mut diag = Diagnostics::default();
 		let result = convert_webhook(&wh, &mut diag)?;
-		assert!(result.headers.is_empty(), "empty headers map should produce empty vec");
+		assert!(
+			result.headers.is_empty(),
+			"empty headers map should produce empty vec"
+		);
 		assert!(diag.is_empty(), "no warnings expected for empty headers");
 		Ok(())
 	}
@@ -5228,7 +5231,10 @@ mod tests {
 	#[test]
 	fn test_convert_webhook_with_headers() -> Result<(), ProtoError> {
 		let mut headers = std::collections::HashMap::new();
-		headers.insert("x-tenant".to_string(), r#"request.headers["x-tenant"]"#.to_string());
+		headers.insert(
+			"x-tenant".to_string(),
+			r#"request.headers["x-tenant"]"#.to_string(),
+		);
 		headers.insert("x-user".to_string(), "jwt.sub".to_string());
 		let wh = proto::agent::backend_policy_spec::ai::Webhook {
 			backend: None,
@@ -5240,13 +5246,16 @@ mod tests {
 		let result = convert_webhook(&wh, &mut diag)?;
 		assert_eq!(result.headers.len(), 2, "both headers should be parsed");
 		// Verify header names are valid
-		let names: std::collections::HashSet<_> = result
-			.headers
-			.iter()
-			.map(|(h, _)| h.to_string())
-			.collect();
-		assert!(names.contains("x-tenant"), "x-tenant header name should be present");
-		assert!(names.contains("x-user"), "x-user header name should be present");
+		let names: std::collections::HashSet<_> =
+			result.headers.iter().map(|(h, _)| h.to_string()).collect();
+		assert!(
+			names.contains("x-tenant"),
+			"x-tenant header name should be present"
+		);
+		assert!(
+			names.contains("x-user"),
+			"x-user header name should be present"
+		);
 		assert!(diag.is_empty(), "no warnings expected for valid headers");
 		Ok(())
 	}
@@ -5267,7 +5276,10 @@ mod tests {
 		// :path is a valid pseudo-header
 		let p = &result.headers[0];
 		assert_eq!(p.0.to_string(), ":path");
-		assert!(diag.is_empty(), "no warnings expected for valid :path pseudo-header");
+		assert!(
+			diag.is_empty(),
+			"no warnings expected for valid :path pseudo-header"
+		);
 		Ok(())
 	}
 
@@ -5285,10 +5297,23 @@ mod tests {
 		};
 		let mut diag = Diagnostics::default();
 		// convert_webhook returns Result, but invalid header names produce warnings not errors
-		let result = convert_webhook(&wh, &mut diag).expect("invalid header names should produce warnings, not errors");
-		assert_eq!(result.headers.len(), 1, "only the valid header should be kept");
+		let result = convert_webhook(&wh, &mut diag)
+			.expect("invalid header names should produce warnings, not errors");
+		assert_eq!(
+			result.headers.len(),
+			1,
+			"only the valid header should be kept"
+		);
 		assert_eq!(result.headers[0].0.to_string(), "x-valid");
-		assert!(!diag.is_empty(), "warnings expected for invalid header names");
-		assert!(diag.into_warnings().iter().any(|w| w.contains("skipping webhook header")));
+		assert!(
+			!diag.is_empty(),
+			"warnings expected for invalid header names"
+		);
+		assert!(
+			diag
+				.into_warnings()
+				.iter()
+				.any(|w| w.contains("skipping webhook header"))
+		);
 	}
 }
