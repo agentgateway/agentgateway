@@ -23,6 +23,9 @@ static REQUEST_LOG_STORE_BACKLOG: AtomicUsize = AtomicUsize::new(0);
 #[derive(Eq, PartialEq)]
 pub struct Config {
 	/// Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.
+	/// May instead be set via environment variables, `DATABASE_URL` for config.database.url or `LOGGING_DATABASE_URL` for config.logging.database.url (to mask credentials).
+	/// Setting both `DATABASE_URL` and config.database.url is an error
+	/// Setting both `LOGGING_DATABASE_URL` and config.logging.database.url
 	pub url: String,
 	/// Maximum number of connections to open in this database's connection pool. Defaults to 5.
 	/// When the request log and config stores have matching database settings, they share one pool

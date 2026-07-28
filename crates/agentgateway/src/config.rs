@@ -360,8 +360,11 @@ pub fn parse_config(
 		})
 		.or(raw.model_catalog)
 		.unwrap_or_default();
-	let database = raw.database.clone();
-	let explicit_logging_database = raw.logging.as_ref().and_then(|l| l.database.clone());
+	// Database url can be sensitive by including username and password.
+	// In order to prevent it from being written directly in the config
+	// allow reading it from environment variable
+	let database = parse_database(raw.database.clone(),"config.database.url","DATABASE_URL")?;
+	let explicit_logging_database = parse_database(raw.logging.as_ref().and_then(|l| l.database.clone()),"config.logging.database.url","LOGGING_DATABASE_URL")?;
 	if database
 		.as_ref()
 		.is_some_and(|database| database.max_connections == Some(0))
@@ -713,6 +716,46 @@ pub fn empty_to_none<A: AsRef<str>>(inp: Option<A>) -> Option<A> {
 	}
 	inp
 }
+
+pub fn parse_database(cfg: Option<telemetry::log_store::Config>,inp_name: &str,env_param_name: &str)-> anyhow::Result<Option<telemetry::log_store::Config>>{
+	match cfg {
+		Some(mut db) => {
+			db.url = parse_exclusive_env_or_config(inp_name, db.url, env_param_name)?
+				.unwrap_or_default();
+			Ok(Some(db))
+		},
+		None => {
+			if empty_to_none(parse::<String>(env_param_name)?).is_some() {
+				warn!(
+					"{} is set but no {} block is defined; the environment variable will be ignored",
+					env_param_name,
+					inp_name
+				);
+			}
+			Ok(None)
+		},
+	}
+}
+
+pub fn parse_exclusive_env_or_config(
+	inp_name: &str,
+	inp: String,
+	env_param_name: &str,
+) -> anyhow::Result<Option<String>> {
+	let env = empty_to_none(parse::<String>(env_param_name)?);
+	let cfg = empty_to_none(Some(inp));
+
+	match (cfg, env) {
+		(Some(_), Some(_)) => anyhow::bail!(
+			"{} and the {} environment variable are both set; specify only one",
+			inp_name,
+			env_param_name
+		),
+		(None, Some(env)) => Ok(Some(env)),
+		(cfg, None) => Ok(cfg),
+	}
+}
+
 // tries to parse the URI so we can fail early
 fn validate_uri(uri_str: Option<String>) -> anyhow::Result<Option<String>> {
 	let Some(uri_str) = uri_str else {
@@ -1422,6 +1465,184 @@ config:
 				.to_string()
 				.contains("maxConnections must be at least 2 for PostgreSQL hybrid storage")
 		);
+	}
+
+	#[test]
+	fn database_url_env_provides_url_when_block_present() {
+		let _env_lock = lock_env();
+		let _db_url = TempEnvVar::set("DATABASE_URL", "postgres://env-host/db");
+
+		let config = parse_config(
+			r#"
+config:
+  database:
+    url: ""
+  storage:
+    mode: hybrid
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config should parse with DATABASE_URL env var");
+
+		assert_eq!(
+			config.database.as_ref().map(|db| db.url.as_str()),
+			Some("postgres://env-host/db")
+		);
+		assert_eq!(config.storage.mode, ConfigStoreMode::Hybrid);
+	}
+
+	#[test]
+	fn database_url_env_conflicts_with_config_url() {
+		let _env_lock = lock_env();
+		let _db_url = TempEnvVar::set("DATABASE_URL", "postgres://env-host/db");
+
+		let err = parse_config(
+			r#"
+config:
+  database:
+    url: "sqlite::memory:"
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("setting both config.database.url and DATABASE_URL should conflict");
+
+		assert!(
+			err
+				.to_string()
+				.contains("config.database.url and the DATABASE_URL environment variable are both set"),
+		);
+	}
+
+	#[test]
+	fn database_url_env_ignored_without_database_block() {
+		let _env_lock = lock_env();
+		let _db_url = TempEnvVar::set("DATABASE_URL", "postgres://env-host/db");
+
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+
+		assert!(config.database.is_none());
+	}
+
+	#[test]
+	fn logging_database_url_env_provides_url_when_block_present() {
+		let _env_lock = lock_env();
+		let _db_url = TempEnvVar::set("LOGGING_DATABASE_URL", "postgres://env-logs/db");
+
+		let config = parse_config(
+			r#"
+config:
+  logging:
+    database:
+      url: ""
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config should parse with LOGGING_DATABASE_URL env var");
+
+		assert_eq!(
+			config.logging.database.as_ref().map(|db| db.url.as_str()),
+			Some("postgres://env-logs/db")
+		);
+		assert!(config.database.is_none());
+	}
+
+	#[test]
+	fn logging_database_url_env_conflicts_with_config_url() {
+		let _env_lock = lock_env();
+		let _db_url = TempEnvVar::set("LOGGING_DATABASE_URL", "postgres://env-logs/db");
+
+		let err = parse_config(
+			r#"
+config:
+  logging:
+    database:
+      url: "sqlite::memory:"
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("setting both config.logging.database.url and LOGGING_DATABASE_URL should conflict");
+
+		assert!(
+			err.to_string().contains(
+				"config.logging.database.url and the LOGGING_DATABASE_URL environment variable are both set"
+			),
+			"unexpected error: {err}"
+		);
+	}
+
+	#[test]
+	fn logging_database_url_env_ignored_without_database_block() {
+		let _env_lock = lock_env();
+		let _db_url = TempEnvVar::set("LOGGING_DATABASE_URL", "postgres://env-logs/db");
+
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+
+		assert!(config.logging.database.is_none());
+	}
+
+	#[test]
+	fn parse_exclusive_env_or_config_uses_config_when_env_unset() {
+		let _env_lock = lock_env();
+
+		let result = parse_exclusive_env_or_config(
+			"config.database.url",
+			"sqlite::memory:".to_string(),
+			"TEST_EXCLUSIVE_DB_URL",
+		)
+		.expect("config-only value should be accepted");
+
+		assert_eq!(result, Some("sqlite::memory:".to_string()));
+	}
+
+	#[test]
+	fn parse_exclusive_env_or_config_uses_env_when_config_empty() {
+		let _env_lock = lock_env();
+		let _env = TempEnvVar::set("TEST_EXCLUSIVE_DB_URL", "postgres://env-host/db");
+
+		let result = parse_exclusive_env_or_config(
+			"config.database.url",
+			String::new(),
+			"TEST_EXCLUSIVE_DB_URL",
+		)
+		.expect("env value should be used when config is empty");
+
+		assert_eq!(result, Some("postgres://env-host/db".to_string()));
+	}
+
+	#[test]
+	fn parse_exclusive_env_or_config_conflicts_when_both_set() {
+		let _env_lock = lock_env();
+		let _env = TempEnvVar::set("TEST_EXCLUSIVE_DB_URL", "postgres://env-host/db");
+
+		let err = parse_exclusive_env_or_config(
+			"config.database.url",
+			"sqlite::memory:".to_string(),
+			"TEST_EXCLUSIVE_DB_URL",
+		)
+		.expect_err("setting both config and env should conflict");
+
+		assert!(
+			err.to_string().contains(
+				"config.database.url and the TEST_EXCLUSIVE_DB_URL environment variable are both set"
+			),
+			"unexpected error: {err}"
+		);
+	}
+
+	#[test]
+	fn parse_exclusive_env_or_config_none_when_both_empty() {
+		let _env_lock = lock_env();
+		let _env = TempEnvVar::set("TEST_EXCLUSIVE_DB_URL", "");
+
+		let result =
+			parse_exclusive_env_or_config("config.database.url", String::new(), "TEST_EXCLUSIVE_DB_URL")
+				.expect("empty config and empty env should resolve to None");
+
+		assert_eq!(result, None);
 	}
 
 	#[test]

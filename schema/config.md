@@ -33,7 +33,7 @@
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.inputAudio`|string|Cost per 1M input audio tokens. Falls back to the input rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.outputAudio`|string|Cost per 1M output audio tokens. Falls back to the output rate if unset.|
 |`config.database`|object|Primary database used by local runtime features.|
-|`config.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.|
+|`config.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.<br>May instead be set via environment variables, `DATABASE_URL` for config.database.url or `LOGGING_DATABASE_URL` for config.logging.database.url (to mask credentials).<br>Setting both `DATABASE_URL` and config.database.url is an error<br>Setting both `LOGGING_DATABASE_URL` and config.logging.database.url|
 |`config.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5.<br>When the request log and config stores have matching database settings, they share one pool<br>with this limit.|
 |`config.storage`|object|Controls whether UI-managed configuration is written to the config file or a DB overlay.|
 |`config.storage.mode`|enum|Possible values: `file`, `hybrid`.|
@@ -81,7 +81,7 @@
 |`config.logging.level`|string|Log level: a single level (e.g. `info`), a comma-separated string of per-module levels (e.g. `info,agent_core=trace`), or a list of per-module levels (e.g. `[info, agent_core=trace]`).|
 |`config.logging.format`|enum|Log output format: `text` or `json`.<br>Possible values: `text`, `json`, `null`.|
 |`config.logging.database`|object|Log-store database configuration; enables request logging to a database backend.|
-|`config.logging.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.|
+|`config.logging.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.<br>May instead be set via environment variables, `DATABASE_URL` for config.database.url or `LOGGING_DATABASE_URL` for config.logging.database.url (to mask credentials).<br>Setting both `DATABASE_URL` and config.database.url is an error<br>Setting both `LOGGING_DATABASE_URL` and config.logging.database.url|
 |`config.logging.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5.<br>When the request log and config stores have matching database settings, they share one pool<br>with this limit.|
 |`config.metrics`|object|Metrics configuration, including metric removal and custom fields.|
 |`config.metrics.remove`|[]string|Metric names to exclude from collection.|

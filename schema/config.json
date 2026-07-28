@@ -664,7 +664,7 @@
       "type": "object",
       "properties": {
         "url": {
-          "description": "Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.",
+          "description": "Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.\nMay instead be set via environment variables, `DATABASE_URL` for config.database.url or `LOGGING_DATABASE_URL` for config.logging.database.url (to mask credentials).\nSetting both `DATABASE_URL` and config.database.url is an error\nSetting both `LOGGING_DATABASE_URL` and config.logging.database.url",
           "type": "string"
         },
         "maxConnections": {
