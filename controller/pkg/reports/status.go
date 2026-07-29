@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"reflect"
 	"strings"
 
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -313,7 +313,7 @@ func (r *ReportMap) BuildRouteStatusWithParentRefDefaulting(
 		// Get the status of the current parentRef conditions if they exist
 		var currentParentRefConditions []metav1.Condition
 		currentParentRefIdx := slices.IndexFunc(existingStatus.Parents, func(s gwv1.RouteParentStatus) bool {
-			return reflect.DeepEqual(s.ParentRef, parentRef)
+			return apiequality.Semantic.DeepEqual(s.ParentRef, parentRef)
 		})
 		if currentParentRefIdx != -1 {
 			currentParentRefConditions = existingStatus.Parents[currentParentRefIdx].Conditions

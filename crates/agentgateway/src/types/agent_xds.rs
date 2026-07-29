@@ -3786,10 +3786,28 @@ fn convert_webhook(
 			_ => llm::policy::FailureMode::FailClosed,
 		};
 
+	let headers: Vec<(HeaderOrPseudo, Arc<cel::Expression>)> = w
+		.headers
+		.iter()
+		.filter_map(|(k, v)| {
+			let header = match HeaderOrPseudo::try_from(k.as_str()) {
+				Ok(h) => h,
+				Err(_) => {
+					diagnostics.add_warning(format!(
+						"skipping webhook header {k:?}: invalid header or pseudo-header name"
+					));
+					return None;
+				},
+			};
+			let expr =
+				permissive_cel_expression_arc(diagnostics, format!("backend.ai.webhook.headers.{k}"), v);
+			Some((header, expr))
+		})
+		.collect();
+
 	Ok(llm::policy::Webhook {
 		target,
-		// CEL header expressions are not yet exposed via the XDS API.
-		headers: Default::default(),
+		headers,
 		forward_header_matches,
 		failure_mode,
 		action: convert_reject_audit(w.action),
@@ -5211,5 +5229,116 @@ mod tests {
 
 		assert_eq!(metrics.add.len(), 0);
 		Ok(())
+	}
+
+	#[test]
+	fn test_convert_webhook_empty_headers() -> Result<(), ProtoError> {
+		let wh = proto::agent::backend_policy_spec::ai::Webhook {
+			backend: None,
+			headers: Default::default(),
+			forward_header_matches: vec![],
+			failure_mode: 0,
+			action: 0,
+		};
+		let mut diag = Diagnostics::default();
+		let result = convert_webhook(&wh, &mut diag)?;
+		assert!(
+			result.headers.is_empty(),
+			"empty headers map should produce empty vec"
+		);
+		assert!(diag.is_empty(), "no warnings expected for empty headers");
+		Ok(())
+	}
+
+	#[test]
+	fn test_convert_webhook_with_headers() -> Result<(), ProtoError> {
+		let mut headers = std::collections::HashMap::new();
+		headers.insert(
+			"x-tenant".to_string(),
+			r#"request.headers["x-tenant"]"#.to_string(),
+		);
+		headers.insert("x-user".to_string(), "jwt.sub".to_string());
+		let wh = proto::agent::backend_policy_spec::ai::Webhook {
+			backend: None,
+			headers,
+			forward_header_matches: vec![],
+			failure_mode: 0,
+			action: 0,
+		};
+		let mut diag = Diagnostics::default();
+		let result = convert_webhook(&wh, &mut diag)?;
+		assert_eq!(result.headers.len(), 2, "both headers should be parsed");
+		// Verify header names are valid
+		let names: std::collections::HashSet<_> =
+			result.headers.iter().map(|(h, _)| h.to_string()).collect();
+		assert!(
+			names.contains("x-tenant"),
+			"x-tenant header name should be present"
+		);
+		assert!(
+			names.contains("x-user"),
+			"x-user header name should be present"
+		);
+		assert!(diag.is_empty(), "no warnings expected for valid headers");
+		Ok(())
+	}
+
+	#[test]
+	fn test_convert_webhook_path_pseudo_header() -> Result<(), ProtoError> {
+		let mut headers = std::collections::HashMap::new();
+		headers.insert(":path".to_string(), r#""/custom/guardrail""#.to_string());
+		let wh = proto::agent::backend_policy_spec::ai::Webhook {
+			backend: None,
+			headers,
+			forward_header_matches: vec![],
+			failure_mode: 0,
+			action: 0,
+		};
+		let mut diag = Diagnostics::default();
+		let result = convert_webhook(&wh, &mut diag)?;
+		assert_eq!(result.headers.len(), 1);
+		// :path is a valid pseudo-header
+		let p = &result.headers[0];
+		assert_eq!(p.0.to_string(), ":path");
+		assert!(
+			diag.is_empty(),
+			"no warnings expected for valid :path pseudo-header"
+		);
+		Ok(())
+	}
+
+	#[test]
+	fn test_convert_webhook_invalid_header_names_skipped() {
+		let mut headers = std::collections::HashMap::new();
+		headers.insert("x-valid".to_string(), "request.path".to_string());
+		headers.insert("\0invalid".to_string(), "request.path".to_string());
+		headers.insert("".to_string(), "request.path".to_string());
+		let wh = proto::agent::backend_policy_spec::ai::Webhook {
+			backend: None,
+			headers,
+			forward_header_matches: vec![],
+			failure_mode: 0,
+			action: 0,
+		};
+		let mut diag = Diagnostics::default();
+		// convert_webhook returns Result, but invalid header names produce warnings not errors
+		let result = convert_webhook(&wh, &mut diag)
+			.expect("invalid header names should produce warnings, not errors");
+		assert_eq!(
+			result.headers.len(),
+			1,
+			"only the valid header should be kept"
+		);
+		assert_eq!(result.headers[0].0.to_string(), "x-valid");
+		assert!(
+			!diag.is_empty(),
+			"warnings expected for invalid header names"
+		);
+		assert!(
+			diag
+				.into_warnings()
+				.iter()
+				.any(|w| w.contains("skipping webhook header"))
+		);
 	}
 }

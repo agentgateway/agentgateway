@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use ::http::header::{HeaderName, HeaderValue};
+use agent_core::version::BuildInfo;
 use headers::HeaderMapExt;
 use http::Method;
 use http::header::{ACCEPT, CONTENT_LENGTH, CONTENT_TYPE, HOST, TRANSFER_ENCODING};
@@ -450,7 +451,7 @@ pub(crate) fn parse_openapi_schema(
 									"final schema is not an object".to_string(),
 								))?
 								.clone();
-							let tool = Tool::new_with_raw(
+							let mut tool = Tool::new_with_raw(
 								Cow::Owned(name.clone()),
 								Some(Cow::Owned(
 									op.description
@@ -460,6 +461,10 @@ pub(crate) fn parse_openapi_schema(
 								)),
 								Arc::new(final_json),
 							);
+							if let Some(summary) = op.summary.as_ref().filter(|s| !s.is_empty()) {
+								let end = std::cmp::min(64, summary.len());
+								tool = tool.with_title(summary[..summary.floor_char_boundary(end)].to_string());
+							}
 							let upstream = UpstreamOpenAPICall {
 								// method: Method::from_bytes(method.as_ref()).expect("todo"),
 								method: method.to_string(),
@@ -690,16 +695,17 @@ impl Handler {
 				DiscoverResult::new(
 					ProtocolVersion::KNOWN_VERSIONS.to_vec(),
 					ServerCapabilities::builder().enable_tools().build(),
-				),
+				)
+				.with_server_info(Implementation::new(
+					"agentgateway",
+					BuildInfo::new().version.to_string(),
+				)),
 			),
-			ClientRequest::ListTasksRequest(_) => Messages::from_result(id, ListTasksResult::new(vec![])),
-			ClientRequest::GetTaskRequest(_) => {
-				Messages::from_result(id, GetTaskResult::new(Task::default()))
-			},
-			ClientRequest::GetTaskPayloadRequest(_) => {
+			ClientRequest::GetTaskRequest(_)
+			| ClientRequest::UpdateTaskRequest(_)
+			| ClientRequest::CancelTaskRequest(_) => {
 				return Err(UpstreamError::InvalidMethod(method.to_string()));
 			},
-			ClientRequest::CancelTaskRequest(_) => Messages::empty(),
 			ClientRequest::ReadResourceRequest(_) => {
 				Messages::from_result(id, ReadResourceResult::new(vec![]))
 			},
@@ -744,6 +750,7 @@ impl Handler {
 					..Default::default()
 				},
 			),
+			_ => return Err(UpstreamError::InvalidMethod(method.to_string())),
 		};
 		Ok(res)
 	}

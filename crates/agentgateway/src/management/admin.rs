@@ -41,6 +41,16 @@ const PPROF_DEFAULT_SECONDS: u64 = 10;
 const PPROF_MIN_SECONDS: u64 = 1;
 #[cfg(target_os = "linux")]
 const PPROF_MAX_SECONDS: u64 = 300;
+// Default matches Go's CPU profiler. Higher rates severely under-report on a
+// multi-core-busy process: SIGPROF is non-queuing, so expirations coalesce, and
+// pprof-rs's handler serializes all threads through one lock and drops samples
+// that arrive while it is held.
+#[cfg(target_os = "linux")]
+const PPROF_DEFAULT_FREQUENCY: i32 = 100;
+#[cfg(target_os = "linux")]
+const PPROF_MIN_FREQUENCY: i32 = 1;
+#[cfg(target_os = "linux")]
+const PPROF_MAX_FREQUENCY: i32 = 1000;
 
 struct AdminError(anyhow::Error);
 
@@ -232,7 +242,7 @@ async fn handle_dashboard(_req: Request) -> Response {
 	let apis = &[
 		(
 			"debug/pprof/profile",
-			"build profile using the pprof profiler (if supported). Use ?seconds=N to specify duration (1-300s, default: 10s)",
+			"build profile using the pprof profiler (if supported). Use ?seconds=N to specify duration (1-300s, default: 10s) and ?frequency=N the sampling rate in Hz (1-1000, default: 100)",
 		),
 		(
 			"debug/pprof/heap",
@@ -271,7 +281,7 @@ async fn handle_dashboard(_req: Request) -> Response {
 async fn handle_pprof(req: Request) -> Result<Response, AdminError> {
 	use pprof::protos::Message;
 
-	// Parse query parameters to extract optional "seconds" parameter
+	// Parse query parameters to extract optional "seconds" and "frequency" parameters
 	let qp: HashMap<String, String> = req
 		.uri()
 		.query()
@@ -292,8 +302,18 @@ async fn handle_pprof(req: Request) -> Result<Response, AdminError> {
 		PPROF_DEFAULT_SECONDS // Default if not provided
 	};
 
+	// Extract frequency parameter with validation
+	let frequency = if let Some(frequency_str) = qp.get("frequency") {
+		match frequency_str.parse::<i32>() {
+			Ok(f) if (PPROF_MIN_FREQUENCY..=PPROF_MAX_FREQUENCY).contains(&f) => f,
+			_ => PPROF_DEFAULT_FREQUENCY, // Default if invalid or out of range
+		}
+	} else {
+		PPROF_DEFAULT_FREQUENCY // Default if not provided
+	};
+
 	let guard = pprof::ProfilerGuardBuilder::default()
-		.frequency(1000)
+		.frequency(frequency)
 		// .blocklist(&["libc", "libgcc", "pthread", "vdso"])
 		.build()?;
 

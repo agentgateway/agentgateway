@@ -317,6 +317,10 @@ impl RequestType for Request {
 		&mut self.model
 	}
 
+	fn to_value(&self) -> serde_json::Result<serde_json::Value> {
+		serde_json::to_value(self)
+	}
+
 	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
 		let mut items = self.take_input_as_items();
 		let prepend_items: Vec<RawInputItem> = prompts
@@ -638,6 +642,7 @@ mod tests {
 			call_id: "call_123".to_string(),
 			namespace: None,
 			name: "get_weather".to_string(),
+			caller: None,
 			id: Some("fc_123".to_string()),
 			status: Some(OutputStatus::Completed),
 		})]);
@@ -667,6 +672,7 @@ mod tests {
 			call_id: "call_123".to_string(),
 			namespace: None,
 			name: "get_weather".to_string(),
+			caller: None,
 			id: Some("fc_123".to_string()),
 			status: Some(OutputStatus::Completed),
 		})]);

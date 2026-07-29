@@ -3336,6 +3336,7 @@ mod tests {
 			endpoints: Default::default(),
 			subject_alt_names: Vec::new(),
 			waypoint: None,
+			weighted_waypoints: Vec::new(),
 			load_balancer: None,
 			ip_families: None,
 			ingress_use_waypoint: false,

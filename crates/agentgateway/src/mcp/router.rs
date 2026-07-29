@@ -157,6 +157,7 @@ impl App {
 					.handle(
 						req,
 						RelayInputs {
+							backend_id: backend_group_name.clone(),
 							backend: backends.clone(),
 							policies: authorization_policies.clone(),
 							mcp_guardrails: mcp_guardrails.clone(),
@@ -178,6 +179,7 @@ impl App {
 					.handle(
 						req,
 						RelayInputs {
+							backend_id: backend_group_name,
 							backend: backends.clone(),
 							policies: authorization_policies.clone(),
 							mcp_guardrails: mcp_guardrails.clone(),

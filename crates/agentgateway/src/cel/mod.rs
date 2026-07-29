@@ -118,6 +118,7 @@ flagset::flags! {
 		ResponseBody,
 
 		Llm,
+		LlmRequest,
 		LlmPrompt,
 		LlmCompletion,
 		LlmToolCalls,
@@ -304,6 +305,10 @@ impl Expression {
 		self.expression.expression()
 	}
 
+	pub fn needs_llm_request(&self) -> bool {
+		self.attributes.contains(Attributes::LlmRequest)
+	}
+
 	/// new_permissive compiles the expression. If the expression cannot be compiled, its instead replaced
 	/// with an expression that always fails to evaluate. The returned error is the compilation error
 	/// from the original expression, if one was suppressed.
@@ -383,6 +388,9 @@ fn attributes_for(expression: &cel::IdedExpr) -> FlagSet<Attributes> {
 			},
 			["llm", ..] => {
 				attributes |= Attributes::Llm;
+			},
+			["llmRequest", ..] => {
+				attributes |= Attributes::LlmRequest;
 			},
 			["source", ..] => {
 				attributes |= Attributes::Source;

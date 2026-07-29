@@ -77,6 +77,19 @@ output:
           grpc: {}
 status:
 - apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: denied-chain-backend
+    namespace: backend-ns
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted
+- apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayPolicy
   metadata:
     name: denied-chain-tunnel
@@ -100,6 +113,19 @@ status:
         status: "False"
         type: Attached
       controllerName: agentgateway.dev/agentgateway
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: tunnel-target-backend
+    namespace: backend-ns
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayPolicy
   metadata:

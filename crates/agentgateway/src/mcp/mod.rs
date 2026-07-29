@@ -22,11 +22,11 @@ pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
 use rmcp::model::{
 	CallToolRequestMethod, CancelTaskMethod, CompleteRequestMethod, ConstString,
 	DiscoverRequestMethod, ErrorCode, ErrorData, GetPromptRequestMethod, GetTaskMethod,
-	GetTaskPayloadMethod, InitializeResultMethod, JsonRpcError, ListPromptsRequestMethod,
-	ListResourceTemplatesRequestMethod, ListResourcesRequestMethod, ListTasksMethod,
-	ListToolsRequestMethod, PingRequestMethod, ProtocolVersion, ReadResourceRequestMethod, RequestId,
-	SetLevelRequestMethod, SubscribeRequestMethod, SubscriptionsListenRequestMethod,
-	UnsubscribeRequestMethod,
+	InitializeResultMethod, JsonRpcError, ListPromptsRequestMethod,
+	ListResourceTemplatesRequestMethod, ListResourcesRequestMethod, ListToolsRequestMethod,
+	PingRequestMethod, ProtocolVersion, ReadResourceRequestMethod, RequestId, SetLevelRequestMethod,
+	SubscribeRequestMethod, SubscriptionsListenRequestMethod, UnsubscribeRequestMethod,
+	UpdateTaskMethod,
 };
 pub use router::App;
 use thiserror::Error;
@@ -73,8 +73,7 @@ pub(crate) fn is_known_client_request_method(method: &str) -> bool {
 			| CallToolRequestMethod::VALUE
 			| ListToolsRequestMethod::VALUE
 			| GetTaskMethod::VALUE
-			| ListTasksMethod::VALUE
-			| GetTaskPayloadMethod::VALUE
+			| UpdateTaskMethod::VALUE
 			| CancelTaskMethod::VALUE
 	)
 }

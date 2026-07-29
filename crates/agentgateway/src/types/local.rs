@@ -49,6 +49,25 @@ type LocalMcpGuardrails = crate::mcp::guardrails::McpGuardrails;
 const DEFAULT_LLM_PORT: u16 = 4000;
 const DEFAULT_MCP_PORT: u16 = 3000;
 
+/// Build the base configuration used by a standalone agentgateway instance.
+pub fn default_standalone_config(database_url: &str) -> serde_json::Value {
+	serde_json::json!({
+		"config": {
+			"database": {
+				"url": database_url,
+			},
+		},
+		"gateways": {
+			"default": {
+				"port": DEFAULT_LLM_PORT,
+			},
+		},
+		"ui": {
+			"gateways": "default",
+		},
+	})
+}
+
 // Windows has different output, for now easier to just not deal with it
 #[cfg(all(test, target_family = "unix"))]
 #[path = "local_tests.rs"]
@@ -2920,17 +2939,9 @@ async fn convert(
 		}
 	}
 
-	match (llm, mcp) {
-		(Some(llm_config), Some(mcp_config))
-			if llm_config.gateways.is_empty()
-				&& mcp_config.gateways.is_empty()
-				&& llm_config.port.unwrap_or(DEFAULT_LLM_PORT)
-					== mcp_config.port.unwrap_or(DEFAULT_MCP_PORT) =>
-		{
-			if llm_config.tls.is_some() {
-				bail!("top-level llm and mcp cannot share a port when llm.tls is configured");
-			}
-			let (llm_bind, mut llm_routes, llm_policies, llm_backends) = Box::pin(convert_llm_config(
+	if let Some(llm_config) = llm {
+		if llm_config.gateways.is_empty() {
+			let (llm_bind, llm_routes, llm_policies, llm_backends) = Box::pin(convert_llm_config(
 				resources,
 				config,
 				gateway.clone(),
@@ -2938,82 +2949,52 @@ async fn convert(
 				false,
 			))
 			.await?;
-			let (_mcp_bind, mcp_routes, mcp_policies, mcp_backends) = Box::pin(convert_mcp_config(
-				resources,
-				config,
-				gateway.clone(),
-				mcp_config,
-				true,
-			))
-			.await?;
-			llm_routes.extend(mcp_routes);
 			all_listener_routes.push((strng::new(llm::LOCAL_LISTENER_NAME), llm_routes));
 			all_listener_tcp_routes.push((strng::new(llm::LOCAL_LISTENER_NAME), Vec::new()));
 			all_binds.push(llm_bind);
 			all_policies.extend_from_slice(&llm_policies);
-			all_policies.extend_from_slice(&mcp_policies);
 			all_backends.extend_from_slice(&llm_backends);
+		} else {
+			Box::pin(convert_attached_llm(
+				resources,
+				config,
+				gateway.clone(),
+				llm_config,
+				&gateway_refs,
+				&mut all_listener_routes,
+				&mut all_policies,
+				&mut all_backends,
+			))
+			.await?;
+		}
+	}
+	if let Some(mcp_config) = mcp {
+		if mcp_config.gateways.is_empty() {
+			let (mcp_bind, mcp_routes, mcp_policies, mcp_backends) = Box::pin(convert_mcp_config(
+				resources,
+				config,
+				gateway.clone(),
+				mcp_config,
+				false,
+			))
+			.await?;
+			all_listener_routes.push((strng::new("mcp"), mcp_routes));
+			all_listener_tcp_routes.push((strng::new("mcp"), Vec::new()));
+			all_binds.push(mcp_bind);
+			all_policies.extend_from_slice(&mcp_policies);
 			all_backends.extend_from_slice(&mcp_backends);
-		},
-		(llm, mcp) => {
-			if let Some(llm_config) = llm {
-				if llm_config.gateways.is_empty() {
-					let (llm_bind, llm_routes, llm_policies, llm_backends) = Box::pin(convert_llm_config(
-						resources,
-						config,
-						gateway.clone(),
-						llm_config,
-						false,
-					))
-					.await?;
-					all_listener_routes.push((strng::new(llm::LOCAL_LISTENER_NAME), llm_routes));
-					all_listener_tcp_routes.push((strng::new(llm::LOCAL_LISTENER_NAME), Vec::new()));
-					all_binds.push(llm_bind);
-					all_policies.extend_from_slice(&llm_policies);
-					all_backends.extend_from_slice(&llm_backends);
-				} else {
-					Box::pin(convert_attached_llm(
-						resources,
-						config,
-						gateway.clone(),
-						llm_config,
-						&gateway_refs,
-						&mut all_listener_routes,
-						&mut all_policies,
-						&mut all_backends,
-					))
-					.await?;
-				}
-			}
-			if let Some(mcp_config) = mcp {
-				if mcp_config.gateways.is_empty() {
-					let (mcp_bind, mcp_routes, mcp_policies, mcp_backends) = Box::pin(convert_mcp_config(
-						resources,
-						config,
-						gateway.clone(),
-						mcp_config,
-						false,
-					))
-					.await?;
-					all_listener_routes.push((strng::new("mcp"), mcp_routes));
-					all_listener_tcp_routes.push((strng::new("mcp"), Vec::new()));
-					all_binds.push(mcp_bind);
-					all_policies.extend_from_slice(&mcp_policies);
-					all_backends.extend_from_slice(&mcp_backends);
-				} else {
-					Box::pin(convert_attached_mcp(
-						resources,
-						config,
-						gateway.clone(),
-						mcp_config,
-						&gateway_refs,
-						&mut all_listener_routes,
-						&mut all_backends,
-					))
-					.await?;
-				}
-			}
-		},
+		} else {
+			Box::pin(convert_attached_mcp(
+				resources,
+				config,
+				gateway.clone(),
+				mcp_config,
+				&gateway_refs,
+				&mut all_listener_routes,
+				&mut all_backends,
+			))
+			.await?;
+		}
 	}
 	if let Some(ui_config) = ui {
 		Box::pin(convert_attached_ui(
@@ -3220,43 +3201,39 @@ fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
 			wildcard_binds
 		);
 	}
-	match (&config.llm, &config.mcp) {
-		(Some(llm), Some(mcp))
-			if llm.gateways.is_empty()
-				&& mcp.gateways.is_empty()
-				&& llm.port.unwrap_or(DEFAULT_LLM_PORT) == mcp.port.unwrap_or(DEFAULT_MCP_PORT) =>
-		{
-			insert_local_listener_port(
-				llm.port.unwrap_or(DEFAULT_LLM_PORT),
-				"llm and mcp".to_string(),
-			)?;
-		},
-		(llm, mcp) => {
-			if let Some(llm) = llm
-				&& llm.gateways.is_empty()
-			{
-				insert_local_listener_port(
-					llm.port.unwrap_or(DEFAULT_LLM_PORT),
-					if llm.port.is_some() {
-						"llm".to_string()
-					} else {
-						"llm (default)".to_string()
-					},
-				)?;
-			}
-			if let Some(mcp) = mcp
-				&& mcp.gateways.is_empty()
-			{
-				insert_local_listener_port(
-					mcp.port.unwrap_or(DEFAULT_MCP_PORT),
-					if mcp.port.is_some() {
-						"mcp".to_string()
-					} else {
-						"mcp (default)".to_string()
-					},
-				)?;
-			}
-		},
+	if let (Some(llm), Some(mcp)) = (&config.llm, &config.mcp)
+		&& llm.gateways.is_empty()
+		&& mcp.gateways.is_empty()
+		&& llm.port.unwrap_or(DEFAULT_LLM_PORT) == mcp.port.unwrap_or(DEFAULT_MCP_PORT)
+	{
+		let port = llm.port.unwrap_or(DEFAULT_LLM_PORT);
+		bail!(
+			"top-level llm and mcp cannot use the same port {port}; attach both to the same gateway instead"
+		);
+	}
+	if let Some(llm) = &config.llm
+		&& llm.gateways.is_empty()
+	{
+		insert_local_listener_port(
+			llm.port.unwrap_or(DEFAULT_LLM_PORT),
+			if llm.port.is_some() {
+				"llm".to_string()
+			} else {
+				"llm (default)".to_string()
+			},
+		)?;
+	}
+	if let Some(mcp) = &config.mcp
+		&& mcp.gateways.is_empty()
+	{
+		insert_local_listener_port(
+			mcp.port.unwrap_or(DEFAULT_MCP_PORT),
+			if mcp.port.is_some() {
+				"mcp".to_string()
+			} else {
+				"mcp (default)".to_string()
+			},
+		)?;
 	}
 	Ok(())
 }

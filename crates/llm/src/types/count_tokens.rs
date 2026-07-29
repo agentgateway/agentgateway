@@ -24,6 +24,10 @@ impl RequestType for Request {
 		&mut self.model
 	}
 
+	fn to_value(&self) -> serde_json::Result<serde_json::Value> {
+		serde_json::to_value(self)
+	}
+
 	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
 		messages::prepend_prompts_helper(&mut self.messages, &mut self.system, prompts);
 	}

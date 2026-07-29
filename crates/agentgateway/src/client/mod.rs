@@ -488,6 +488,7 @@ impl Client {
 		let mut b = agent_pool::Client::<_, PoolKey>::builder(::hyper_util::rt::TokioExecutor::new());
 		b.pool_timer(hyper_util::rt::tokio::TokioTimer::new());
 		b.pool_idle_timeout(backend_config.pool_idle_timeout);
+		b.connect_timeout(backend_config.connect_timeout);
 		b.timer(hyper_util::rt::tokio::TokioTimer::new());
 		b.http1_preserve_header_case(true);
 		if let Some(pool_max) = backend_config.pool_max_size {
@@ -670,14 +671,21 @@ impl Client {
 			let buffer_limit = http::buffer_limit(&req);
 			let to = req.extensions().get::<BackendRequestTimeout>().cloned();
 			let call = client.request(req);
+			let map_error = |err: agent_pool::Error| {
+				if err.is_connect_timeout() {
+					ProxyError::UpstreamCallTimeout
+				} else {
+					ProxyError::UpstreamCallFailed(err)
+				}
+			};
 			let resp = if let Some(to) = to {
 				match tokio::time::timeout(to.0, call).await {
 					Err(_) => Err(ProxyError::UpstreamCallTimeout),
-					Ok(Err(e)) => Err(ProxyError::UpstreamCallFailed(e)),
+					Ok(Err(err)) => Err(map_error(err)),
 					Ok(Ok(resp)) => Ok(resp),
 				}
 			} else {
-				call.await.map_err(ProxyError::UpstreamCallFailed)
+				call.await.map_err(map_error)
 			};
 			let dur = format!("{}ms", start.elapsed().as_millis());
 			// If version changed due to ALPN negotiation, make sure we get the real version
