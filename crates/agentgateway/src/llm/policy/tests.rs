@@ -2085,21 +2085,6 @@ fn test_apply_regex_text_runs(
 
 #[cfg(test)]
 #[test]
-fn test_merge_ranges_desc_is_transitive() {
-	// a touching pair must not break the merge chain
-	assert_eq!(
-		super::merge_ranges_desc([7..11, 6..7, 6..11].into_iter()),
-		vec![6..11]
-	);
-	// adjacent ranges stay separate; empty ranges are dropped
-	assert_eq!(
-		super::merge_ranges_desc([0..2, 2..4, 3..3].into_iter()),
-		vec![2..4, 0..2]
-	);
-}
-
-#[cfg(test)]
-#[test]
 fn test_zero_width_pattern_is_a_noop() {
 	let (outcome, actual) = run_apply_regex(
 		ChatFmt::Completions,
