@@ -30,7 +30,7 @@ fn resp(v: Value) -> Value {
 fn llm_resp(v: Value) -> crate::LLMResponse {
 	to_completions::translate_response(&gemini_response_bytes(v))
 		.expect("translate_response ok")
-		.to_llm_response(false)
+		.to_llm_response(crate::LogContentFields::default())
 }
 
 // ---------- Request: roles, system, content ----------

@@ -398,7 +398,7 @@
           "minimum": 0
         },
         "cacheCreationInputTokens": {
-          "description": "Tokens written to cache (costs)\nNot present with OpenAI",
+          "description": "Tokens written to cache (costs)",
           "type": [
             "integer",
             "null"

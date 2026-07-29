@@ -1,3 +1,4 @@
+pub(super) mod import;
 // TODO: fix for unix not just linux
 pub(super) mod migrate;
 #[cfg(target_os = "linux")]

@@ -142,12 +142,12 @@ pub struct ConfigResourceUpsert {
 }
 
 pub async fn setup(cfg: &log_store::Config) -> anyhow::Result<ConfigResourceStore> {
-	ConfigResourceStore::connect(&cfg.url).await
+	ConfigResourceStore::connect(&cfg.url, cfg.max_connections).await
 }
 
 impl ConfigResourceStore {
-	async fn connect(url: &str) -> anyhow::Result<Self> {
-		Self::from_pool(DatabasePool::connect(url).await?).await
+	async fn connect(url: &str, max_connections: Option<u32>) -> anyhow::Result<Self> {
+		Self::from_pool(DatabasePool::connect_with_max_connections(url, max_connections).await?).await
 	}
 
 	async fn from_pool(pool: DatabasePool) -> anyhow::Result<Self> {
@@ -1849,7 +1849,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn renames_resources_atomically() {
-		let store = ConfigResourceStore::connect("sqlite::memory:")
+		let store = ConfigResourceStore::connect("sqlite::memory:", None)
 			.await
 			.expect("connect config resource store");
 		store

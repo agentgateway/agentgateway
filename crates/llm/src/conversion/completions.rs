@@ -1002,8 +1002,15 @@ pub mod from_messages {
 			})
 			.collect_vec();
 
-		// Function tools with reasoning_effort are not supported for GPT models.
-		let reasoning_effort = if !tools.is_empty() && model.starts_with("gpt-") {
+		// OpenAI rejects reasoning+tools+modern models+chat completions API combination.
+		// TODO: Move Messages requests with reasoning and function tools to the Responses API.
+		// Allow anything that is not a gpt model, unless its a known-allowed one.
+		let supports_reasoning_with_tools = !model.starts_with("gpt-")
+			|| model == "gpt-5"
+			|| model.starts_with("gpt-5-")
+			|| model.starts_with("gpt-5.1")
+			|| model.starts_with("gpt-5.2");
+		let reasoning_effort = if !tools.is_empty() && !supports_reasoning_with_tools {
 			Some(completions::ReasoningEffort::None)
 		} else {
 			reasoning_effort

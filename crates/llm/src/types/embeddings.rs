@@ -53,6 +53,10 @@ impl RequestType for Request {
 		&mut self.model
 	}
 
+	fn to_value(&self) -> serde_json::Result<serde_json::Value> {
+		serde_json::to_value(self)
+	}
+
 	fn prepend_prompts(&mut self, _prompts: Vec<SimpleChatCompletionMessage>) {
 		// Ignored
 	}
@@ -111,6 +115,7 @@ impl crate::types::ResponseType for Response {
 			output_text_tokens: None,
 			output_audio_tokens: None,
 			service_tier: None,
+			provider_model: Some(strng::new(&self.model)),
 			..Default::default()
 		}
 	}

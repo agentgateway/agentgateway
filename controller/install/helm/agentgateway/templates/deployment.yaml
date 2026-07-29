@@ -178,6 +178,14 @@ spec:
             {{- end }}
             - name: AGW_XDS_MODE
               value: {{ .Values.controller.xds.mode | quote }}
+            {{- if .Values.gatewayClassName }}
+            - name: AGW_AGENTGATEWAY_CLASS_NAME
+              value: {{ .Values.gatewayClassName | quote }}
+            {{- end }}
+            {{- if .Values.controllerName }}
+            - name: AGW_CONTROLLER_NAME
+              value: {{ .Values.controllerName | quote }}
+            {{- end }}
             - name: AGW_GATEWAY_CLASS_PARAMETERS_REFS
               value: {{ .Values.gatewayClassParametersRefs | toJson | quote }}
             - name: POD_NAMESPACE

@@ -45,6 +45,7 @@ pub trait RequestType: Send + Sync {
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError>;
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage>;
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>);
+	fn to_value(&self) -> serde_json::Result<serde_json::Value>;
 }
 
 /// SimpleChatCompletionMessage is a simplified chat message

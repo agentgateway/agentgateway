@@ -378,6 +378,7 @@ fn response_conversion_golden() {
 	for name in [
 		"basic",
 		"audio",
+		"cache_write",
 		"openrouter_reasoning",
 		"gemini_zero_completion_tokens",
 		"gemini_with_completion_tokens",
@@ -506,6 +507,7 @@ data: [DONE]
 		axum_core::body::Body::from(input),
 		1024 * 1024,
 		StreamingUsageGuard::default(),
+		crate::LogContentFields::default(),
 	)
 	.collect()
 	.await

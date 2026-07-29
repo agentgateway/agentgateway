@@ -31,7 +31,7 @@ use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, FailureMode, MCPInfo, apps, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
-use crate::types::agent::McpPrefixMode;
+use crate::types::agent::{McpPrefixMode, ResourceName};
 
 const DELIMITER: &str = "_";
 
@@ -221,6 +221,7 @@ pub struct Relay {
 }
 
 pub struct RelayInputs {
+	pub backend_id: ResourceName,
 	pub backend: McpBackendGroup,
 	pub policies: McpAuthorizationSet,
 	pub mcp_guardrails: Option<Arc<crate::mcp::guardrails::McpGuardrails>>,
@@ -740,7 +741,11 @@ impl Relay {
 				if let Some(dr) = res {
 					// Cache hints describe the gateway's presented server, not the upstream.
 					// Gateway routing/backend config can change without client invalidation.
-					return Ok(dr.with_cache(0, CacheScope::Private).into());
+					return Ok(
+						dr.with_ttl_ms(0)
+							.with_cache_scope(CacheScope::Private)
+							.into(),
+					);
 				}
 				// In FailOpen, a default discovery response lets the client continue negotiation
 				// when no upstream discovery response is available.
@@ -1385,12 +1390,15 @@ impl Relay {
 			upstream_instructions,
 			extensions,
 		);
-		DiscoverResult::new(ProtocolVersion::KNOWN_VERSIONS.to_vec(), info.capabilities)
-			.with_server_info(info.server_info)
-			.with_instructions(info.instructions.unwrap_or_default())
+		let mut result =
+			DiscoverResult::new(ProtocolVersion::KNOWN_VERSIONS.to_vec(), info.capabilities)
+				.with_server_info(info.server_info);
+		result.instructions = info.instructions;
+		result
 			// Discovery is immediately stale because the gateway has no way to
 			// invalidate clients when backend membership or routing config changes.
-			.with_cache(0, CacheScope::Private)
+			.with_ttl_ms(0)
+			.with_cache_scope(CacheScope::Private)
 	}
 }
 
@@ -1577,6 +1585,7 @@ fn server_request_method(request: &ServerRequest) -> &str {
 		ServerRequest::ListRootsRequest(r) => r.method.as_str(),
 		ServerRequest::ElicitRequest(r) => r.method.as_str(),
 		ServerRequest::CustomRequest(r) => r.method.as_str(),
+		_ => "unknown",
 	}
 }
 
@@ -1589,10 +1598,6 @@ fn normalize_outbound_for_protocol(
 	};
 
 	match &mut resp.result {
-		ServerResult::DiscoverResult(r) => {
-			normalize_result_type(&mut r.result_type, downstream_modern);
-			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
-		},
 		ServerResult::ListToolsResult(r) => {
 			normalize_result_type(&mut r.result_type, downstream_modern);
 			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
@@ -1613,40 +1618,13 @@ fn normalize_outbound_for_protocol(
 			normalize_result_type(&mut r.result_type, downstream_modern);
 			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
 		},
-		ServerResult::InitializeResult(r) => {
-			normalize_result_type(&mut r.result_type, downstream_modern)
-		},
 		ServerResult::CompleteResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
 		ServerResult::GetPromptResult(r) => {
 			normalize_result_type(&mut r.result_type, downstream_modern)
 		},
-		ServerResult::ElicitResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
-		ServerResult::CreateTaskResult(r) => {
-			normalize_result_type(&mut r.result_type, downstream_modern)
-		},
-		ServerResult::ListTasksResult(r) => {
-			normalize_result_type(&mut r.result_type, downstream_modern)
-		},
-		ServerResult::GetTaskResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
-		ServerResult::CancelTaskResult(r) => {
-			normalize_result_type(&mut r.result_type, downstream_modern)
-		},
-		ServerResult::SubscriptionsListenResult(r) => {
-			normalize_result_type(&mut r.result_type, downstream_modern)
-		},
 		ServerResult::CallToolResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
-		ServerResult::EmptyResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
-		ServerResult::GetTaskPayloadResult(r) => {
-			if !downstream_modern {
-				strip_protocol_result_fields(&mut r.0)
-			}
-		},
-		ServerResult::CustomResult(r) => {
-			if !downstream_modern {
-				strip_protocol_result_fields(&mut r.0)
-			}
-		},
-		ServerResult::InputRequiredResult(_) => {},
+		ServerResult::CustomResult(r) if !downstream_modern => strip_protocol_result_fields(&mut r.0),
+		_ => {},
 	}
 
 	msg
@@ -1692,8 +1670,8 @@ fn with_gateway_cache_policy(mut msg: ServerJsonRpcMessage) -> ServerJsonRpcMess
 	// per-user/authz-dependent filtering applies.
 	match &mut resp.result {
 		ServerResult::DiscoverResult(r) => {
-			r.ttl_ms = Some(0);
-			r.cache_scope = Some(CacheScope::Private);
+			r.ttl_ms = 0;
+			r.cache_scope = CacheScope::Private;
 		},
 		ServerResult::ListToolsResult(r) => {
 			r.ttl_ms = Some(0);

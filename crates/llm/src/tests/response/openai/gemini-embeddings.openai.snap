@@ -25,5 +25,7 @@ info:
       }
     ]
   },
-  "parsed": {}
+  "parsed": {
+    "provider_model": "gemini-embedding-001"
+  }
 }

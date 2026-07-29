@@ -398,6 +398,12 @@ impl crate::llm::RequestType for TextRequest {
 		false
 	}
 
+	fn to_value(&self) -> serde_json::Result<serde_json::Value> {
+		Ok(serde_json::json!({
+			"messages": self.get_messages(),
+		}))
+	}
+
 	fn model(&mut self) -> &mut Option<String> {
 		unimplemented!("TextRequest does not support model")
 	}
@@ -1171,9 +1177,16 @@ impl Policy {
 		webhook: &Webhook,
 		original: Option<&cel::RequestSnapshot>,
 	) -> anyhow::Result<GuardrailOutcome> {
+		let llm_request = webhook
+			.headers
+			.iter()
+			.any(|(_, expression)| expression.needs_llm_request())
+			.then(|| req.to_value())
+			.transpose()?;
+		let context = webhook::EvaluationContext::new(original, llm_request.as_ref());
 		let messsages = req.get_messages();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-		let whr = match webhook::send_request(client, webhook, original, &headers, messsages).await {
+		let whr = match webhook::send_request(client, webhook, context, &headers, messsages).await {
 			Ok(whr) => whr,
 			Err(e) => {
 				return match webhook.failure_mode {
@@ -1248,7 +1261,15 @@ impl Policy {
 	) -> anyhow::Result<GuardrailOutcome> {
 		let messsages = resp.to_webhook_choices();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-		let whr = match webhook::send_response(client, webhook, original, &headers, messsages).await {
+		let whr = match webhook::send_response(
+			client,
+			webhook,
+			webhook::EvaluationContext::new(original, None),
+			&headers,
+			messsages,
+		)
+		.await
+		{
 			Ok(whr) => whr,
 			Err(e) => {
 				return match webhook.failure_mode {

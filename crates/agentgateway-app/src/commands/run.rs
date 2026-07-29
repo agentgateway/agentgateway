@@ -60,9 +60,15 @@ pub(crate) fn execute(args: RunArgs) -> anyhow::Result<()> {
 			} else {
 				None
 			};
-			let request_log_store = match config.database.as_ref() {
+			let request_log_store = match config.logging.database.as_ref() {
 				Some(cfg) => {
-					let pool = config_resource_store.as_ref().map(|store| store.pool());
+					let pool = config_resource_store.as_ref().and_then(|store| {
+						config
+							.database
+							.as_ref()
+							.filter(|database| cfg == *database)
+							.map(|_| store.pool())
+					});
 					match agentgateway::telemetry::log_store::setup_with_pool(cfg, pool).await {
 						Ok(store) => Some(store),
 						Err(err) => {

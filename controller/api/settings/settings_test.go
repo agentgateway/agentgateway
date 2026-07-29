@@ -46,6 +46,8 @@ func allEnvVarsSet() map[string]string {
 		"AGW_PROXY_IMAGE_REGISTRY":                     "my-registry",
 		"AGW_PROXY_IMAGE_REPOSITORY":                   "my-repo",
 		"AGW_PROXY_IMAGE_TAG":                          "my-tag",
+		"AGW_CONTROLLER_NAME":                          "example.com/my-controller",
+		"AGW_AGENTGATEWAY_CLASS_NAME":                  "my-gateway-class",
 	}
 }
 
@@ -92,6 +94,8 @@ func TestSettings(t *testing.T) {
 				GatewayClassParametersRefs:           GatewayClassParametersRefs{},
 				ProxyImageRegistry:                   "cr.agentgateway.dev",
 				ProxyImageRepository:                 "agentgateway",
+				ControllerName:                       "agentgateway.dev/agentgateway",
+				AgentgatewayClassName:                "agentgateway",
 			},
 		},
 		{
@@ -127,6 +131,8 @@ func TestSettings(t *testing.T) {
 				ProxyImageRegistry:                   "my-registry",
 				ProxyImageRepository:                 "my-repo",
 				ProxyImageTag:                        new("my-tag"),
+				ControllerName:                       "example.com/my-controller",
+				AgentgatewayClassName:                "my-gateway-class",
 				GatewayClassParametersRefs: GatewayClassParametersRefs{
 					"kgateway": {
 						Name:      "custom-gwp",
@@ -217,6 +223,8 @@ func TestSettings(t *testing.T) {
 				GatewayClassParametersRefs:           GatewayClassParametersRefs{},
 				ProxyImageRegistry:                   "cr.agentgateway.dev",
 				ProxyImageRepository:                 "agentgateway",
+				ControllerName:                       "agentgateway.dev/agentgateway",
+				AgentgatewayClassName:                "agentgateway",
 			},
 		},
 	}

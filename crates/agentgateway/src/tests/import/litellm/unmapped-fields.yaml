@@ -1,0 +1,18 @@
+model_list:
+- model_name: chat
+  litellm_params:
+    model: openai/gpt-4o
+  model_info:
+    id: deployment-1
+  custom_model_field: true
+credential_list:
+- credential_name: shared
+  credential_values:
+    api_key: os.environ/OPENAI_API_KEY
+  credential_info: {}
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+environment_variables:
+  LOG_LEVEL: info
+custom_section:
+  enabled: true

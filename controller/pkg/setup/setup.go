@@ -34,6 +34,7 @@ import (
 	agwplugins "github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/policyselection"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/translator"
 	"github.com/agentgateway/agentgateway/controller/pkg/apiclient"
 	"github.com/agentgateway/agentgateway/controller/pkg/common"
 	"github.com/agentgateway/agentgateway/controller/pkg/controller"
@@ -100,16 +101,6 @@ func New(opts Options) (*setup, error) {
 		Options: opts,
 	}
 
-	if s.ControllerName == "" {
-		s.ControllerName = wellknown.DefaultAgwControllerName
-	}
-	if s.AgentgatewayClassName == "" {
-		s.AgentgatewayClassName = wellknown.DefaultAgwClassName
-	}
-	if s.LeaderElectionID == "" {
-		s.LeaderElectionID = wellknown.LeaderElectionID
-	}
-
 	if s.GlobalSettings == nil {
 		var err error
 		s.GlobalSettings, err = apisettings.BuildSettings()
@@ -117,6 +108,18 @@ func New(opts Options) (*setup, error) {
 			slog.Error("error loading settings from env", "error", err)
 			return nil, err
 		}
+	}
+
+	// An explicit setup.Options value takes precedence; otherwise fall back to the
+	// env-backed Settings value, which defaults to the wellknown name via its struct tag.
+	if s.ControllerName == "" {
+		s.ControllerName = s.GlobalSettings.ControllerName
+	}
+	if s.AgentgatewayClassName == "" {
+		s.AgentgatewayClassName = s.GlobalSettings.AgentgatewayClassName
+	}
+	if s.LeaderElectionID == "" {
+		s.LeaderElectionID = wellknown.LeaderElectionID
 	}
 
 	if err := SetupLogging(s.GlobalSettings.LogLevel); err != nil {
@@ -248,7 +251,15 @@ func (s *setup) Start(ctx context.Context) error {
 	if persistedJWKS == nil {
 		persistedJWKS = jwks.NewPersistedEntries(s.APIClient, krtOpts, jwks.DefaultJwksStorePrefix, namespaces.GetPodNamespace())
 	}
-	jwksLookup := jwks.NewLookup(persistedJWKS, jwks.NewResolver(resolver))
+	referenceTypes := agwplugins.DefaultReferenceTypes(agwCollections)
+	refGrants := translator.BuildReferenceGrants(translator.ReferenceGrantsCollection(
+		agwCollections.ReferenceGrants,
+		referenceTypes.KnownFromReferences,
+		referenceTypes.KnownToReferences,
+		krtOpts.WithPrefix("jwks"),
+	))
+	jwksResolver := jwks.NewResolver(resolver, refGrants, agwCollections.Settings.BackendRefGrantMode)
+	jwksLookup := jwks.NewLookup(persistedJWKS, jwksResolver)
 
 	for _, mgrCfgFunc := range s.ExtraManagerConfig {
 		err := mgrCfgFunc(mgr)
@@ -273,7 +284,7 @@ func (s *setup) Start(ctx context.Context) error {
 
 	// build jwks store if it doesn't exist
 	if !runnablesRegistry.Contains(jwks.RunnableName) {
-		if err := buildJwksStore(ctx, mgr, s.APIClient, agwCollections, persistedJWKS, resolver); err != nil {
+		if err := buildJwksStore(ctx, mgr, s.APIClient, agwCollections, persistedJWKS, jwksResolver); err != nil {
 			return fmt.Errorf("error creating jwks store %w", err)
 		}
 	}
@@ -459,12 +470,12 @@ func buildJwksStore(
 	apiClient apiclient.Client,
 	agwCollections *agwplugins.AgwCollections,
 	persistedJWKS *jwks.PersistedEntries,
-	resolver remotehttp.Resolver,
+	resolver jwks.Resolver,
 ) error {
 	jwksCollections := jwks.NewCollections(jwks.CollectionInputs{
 		AgentgatewayPolicies: agwCollections.AgentgatewayPolicies,
 		Backends:             agwCollections.Backends,
-		Resolver:             jwks.NewResolver(resolver),
+		Resolver:             resolver,
 		KrtOpts:              agwCollections.KrtOpts,
 	})
 

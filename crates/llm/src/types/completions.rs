@@ -303,6 +303,9 @@ impl super::RequestType for Request {
 	fn model(&mut self) -> &mut Option<String> {
 		&mut self.model
 	}
+	fn to_value(&self) -> serde_json::Result<serde_json::Value> {
+		serde_json::to_value(self)
+	}
 	fn prepend_prompts(&mut self, prompts: Vec<crate::types::SimpleChatCompletionMessage>) {
 		self
 			.messages

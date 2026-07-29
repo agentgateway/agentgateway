@@ -2155,6 +2155,21 @@ impl AIProvider {
 				let body = translated.serialize().map_err(AIError::ResponseParsing)?;
 				Ok((llm_resp, Bytes::from(body)))
 			},
+			AIProvider::Copilot(_) => {
+				let mut resp: serde_json::Map<String, serde_json::Value> =
+					serde_json::from_slice(&bytes).map_err(logged_response_parsing(&bytes))?;
+				resp
+					.entry("object".to_string())
+					.or_insert_with(|| serde_json::Value::String("list".to_string()));
+				resp
+					.entry("model".to_string())
+					.or_insert_with(|| serde_json::Value::String(req.request_model.to_string()));
+				let normalized = serde_json::to_vec(&resp).map_err(AIError::ResponseParsing)?;
+				let resp: types::embeddings::Response =
+					serde_json::from_slice(&normalized).map_err(logged_response_parsing(&normalized))?;
+				let llm_resp = resp.to_llm_response(LogContentFields::default());
+				Ok((llm_resp, Bytes::from(normalized)))
+			},
 			AIProvider::Vertex(p) if !p.is_anthropic_model(Some(&req.request_model)) => {
 				let translated =
 					conversion::vertex::from_embeddings::translate_response(&bytes, &req.request_model)?;

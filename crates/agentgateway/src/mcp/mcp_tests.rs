@@ -920,8 +920,8 @@ async fn modern_stateful_streamable_http_does_not_use_sessions() {
 	assert_eq!(with_session.status(), reqwest::StatusCode::BAD_REQUEST);
 }
 
-// TODO this test doesn't regress without downgrade_to_legacy_handshake
-// as our current rmcp fork doesn't replicate the strictness that the python SDK has
+// TODO this test doesn't regress without downgrade_to_legacy_handshake because rmcp does not
+// replicate the strictness that the Python SDK has.
 #[tokio::test]
 async fn stateless_vnext_tools_list_reaches_upstream() {
 	let mock = mock_streamable_http_server(false).await;
@@ -956,7 +956,7 @@ async fn stateless_vnext_tools_list_reaches_upstream() {
 
 #[tokio::test]
 async fn modern_client_multiplex_mixed_servers_falls_back_to_legacy_initialize() {
-	let old = mock_streamable_http_server(false).await;
+	let old = mock_streamable_http_server_without_discover().await;
 	let new = mock_modern_streamable_http_server().await;
 	let t = setup_proxy_test("{}")
 		.unwrap()
@@ -2113,6 +2113,86 @@ async fn authorization_denied_returns_unknown_tool_error() {
 	);
 }
 
+#[tokio::test]
+async fn stateful_session_cannot_cross_mcp_backends() {
+	let sensitive = mock_streamable_http_server(true).await;
+	let public = mock_streamable_http_server(true).await;
+	let deny_all = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(cel::Expression::new_strict("true").unwrap())],
+		vec![],
+	)));
+
+	let mut route_a = basic_named_route(strng::format!("/{}", sensitive.addr));
+	route_a.key = "route-a".into();
+	route_a.name.name = "route-a".into();
+	route_a.matches[0].path = crate::types::agent::PathMatch::Exact("/a".into());
+	let mut route_b = basic_named_route(strng::format!("/{}", public.addr));
+	route_b.key = "route-b".into();
+	route_b.name.name = "route-b".into();
+	route_b.matches[0].path = crate::types::agent::PathMatch::Exact("/b".into());
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_policies(
+			sensitive.addr,
+			true,
+			false,
+			vec![BackendTrafficPolicy::McpAuthorization(deny_all)],
+		)
+		.with_mcp_backend(public.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(route_a)
+		.with_route(route_b);
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+
+	let initialize = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {"name": "scope-test", "version": "0"}
+		}
+	});
+	let response = mcp_json_post(&client, &format!("http://{io}/a"), &initialize)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	let sid = response.headers()["mcp-session-id"]
+		.to_str()
+		.unwrap()
+		.to_owned();
+
+	let call = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 2,
+		"method": "tools/call",
+		"params": {"name": "echo", "arguments": {"hi": "world"}}
+	});
+	let denied = mcp_json_post(&client, &format!("http://{io}/a"), &call)
+		.header("mcp-protocol-version", "2025-06-18")
+		.header("mcp-session-id", &sid)
+		.send()
+		.await
+		.unwrap();
+	assert!(read_response_message(denied).await.get("error").is_some());
+
+	let cross_backend = mcp_json_post(&client, &format!("http://{io}/b"), &call)
+		.header("mcp-protocol-version", "2025-06-18")
+		.header("mcp-session-id", sid)
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(cross_backend.status(), reqwest::StatusCode::NOT_FOUND);
+	assert_eq!(sensitive.init_count().await, 1);
+	assert_eq!(public.init_count().await, 0);
+}
+
 /// Test that getting a prompt denied by MCP authorization policy returns proper JSON-RPC error
 /// with INVALID_PARAMS error code (-32602) and message "Unknown prompt: {prompt_name}"
 #[tokio::test]
@@ -2226,6 +2306,7 @@ async fn authorization_denied_returns_unknown_resource_error() {
 }
 
 #[tokio::test]
+#[allow(deprecated)] // Intentionally exercises the legacy resources/subscribe protocol.
 async fn resource_subscribe_and_unsubscribe_forward_to_single_backend() {
 	let mock = mock_streamable_http_server(true).await;
 	let (_bind, io) = setup_proxy(&mock, true, false).await;
@@ -2244,6 +2325,7 @@ async fn resource_subscribe_and_unsubscribe_forward_to_single_backend() {
 }
 
 #[tokio::test]
+#[allow(deprecated)] // Intentionally exercises the legacy resources/subscribe protocol.
 async fn multiplex_resource_subscribe_and_unsubscribe_route_to_target() {
 	let mock_a = mock_streamable_http_server(true).await;
 	let mock_b = mock_streamable_http_server(true).await;
@@ -2282,6 +2364,7 @@ async fn multiplex_resource_subscribe_and_unsubscribe_route_to_target() {
 }
 
 #[tokio::test]
+#[allow(deprecated)] // Intentionally exercises the legacy resources/subscribe protocol.
 async fn multiplex_resource_updated_notification_is_prefixed() {
 	let mock_a = mock_streamable_http_server(true).await;
 	let mock_b = mock_streamable_http_server(true).await;
@@ -2314,6 +2397,7 @@ async fn multiplex_resource_updated_notification_is_prefixed() {
 }
 
 #[tokio::test]
+#[allow(deprecated)] // Intentionally exercises the legacy resources/subscribe protocol.
 async fn single_resource_updated_notification_is_not_prefixed() {
 	let mock = mock_streamable_http_server(true).await;
 	let (_bind, io) = setup_proxy(&mock, true, false).await;
@@ -3250,14 +3334,29 @@ async fn mock_modern_streamable_http_server() -> MockServer {
 	mock_modern_streamable_http_server_with_versions(&["2025-06-18", "2026-07-28"]).await
 }
 
+async fn mock_streamable_http_server_without_discover() -> MockServer {
+	mock_streamable_http_server_with_discover_versions(None).await
+}
+
 // Variant of `mock_modern_streamable_http_server` for tests that need custom upstream
 // `server/discover` versions.
 async fn mock_modern_streamable_http_server_with_versions(versions: &[&str]) -> MockServer {
+	mock_streamable_http_server_with_discover_versions(Some(versions)).await
+}
+
+async fn mock_streamable_http_server_with_discover_versions(
+	versions: Option<&[&str]>,
+) -> MockServer {
 	agent_core::telemetry::testing::setup_test_logging();
 	let (tx, rx) = tokio::sync::oneshot::channel();
 	let init_counter = std::sync::Arc::new(tokio::sync::Mutex::new(0_i32));
 	let init_counter_clone = init_counter.clone();
-	let versions: Vec<String> = versions.iter().map(|v| v.to_string()).collect();
+	let versions = versions.map(|versions| {
+		versions
+			.iter()
+			.map(|version| version.to_string())
+			.collect::<Vec<_>>()
+	});
 	let router = axum::Router::new().route(
 		"/mcp",
 		axum::routing::post(move |body: axum::Json<serde_json::Value>| {
@@ -3267,17 +3366,31 @@ async fn mock_modern_streamable_http_server_with_versions(versions: &[&str]) -> 
 				let id = body.get("id").cloned().unwrap_or(serde_json::Value::Null);
 				let method = body.get("method").and_then(|m| m.as_str()).unwrap_or("");
 				let result = match method {
-					"server/discover" => serde_json::json!({
-						"resultType": "complete",
-						"supportedVersions": versions,
-						"capabilities": {
-							"tools": {}
-						},
-						"serverInfo": {
-							"name": "modern-mock",
-							"version": "0.0.1"
-						}
-					}),
+					"server/discover" => {
+						let Some(versions) = versions else {
+							return axum::Json(serde_json::json!({
+								"jsonrpc": "2.0",
+								"id": id,
+								"error": {
+									"code": -32601,
+									"message": method
+								}
+							}));
+						};
+						serde_json::json!({
+							"resultType": "complete",
+							"supportedVersions": versions,
+							"capabilities": {
+								"tools": {}
+							},
+							"serverInfo": {
+								"name": "modern-mock",
+								"version": "0.0.1"
+							},
+							"ttlMs": 0,
+							"cacheScope": "private"
+						})
+					},
 					"initialize" => {
 						*init_counter.lock().await += 1;
 						serde_json::json!({
@@ -3506,7 +3619,7 @@ async fn mock_streamable_http_server_inner(
 		StreamableHttpServerConfig::default()
 			.with_sse_retry(None)
 			.with_sse_keep_alive(None)
-			.with_stateful_mode(stateful)
+			.with_legacy_session_mode(stateful)
 			.with_json_response(false),
 	);
 
@@ -3552,7 +3665,7 @@ async fn mock_paging_streamable_http_server() -> MockServer {
 		StreamableHttpServerConfig::default()
 			.with_sse_retry(None)
 			.with_sse_keep_alive(None)
-			.with_stateful_mode(true)
+			.with_legacy_session_mode(true)
 			.with_json_response(false),
 	);
 
@@ -3595,7 +3708,7 @@ async fn mock_apps_streamable_http_server_with_init_capture()
 		StreamableHttpServerConfig::default()
 			.with_sse_retry(None)
 			.with_sse_keep_alive(None)
-			.with_stateful_mode(true)
+			.with_legacy_session_mode(true)
 			.with_json_response(false),
 	);
 
@@ -3663,8 +3776,8 @@ mod appsmockserver {
 	pub const DASHBOARD_HTML: &str = "<html>dashboard</html>";
 	pub const UI_MIME_TYPE: &str = "text/html;profile=mcp-app";
 
-	fn meta(v: serde_json::Value) -> Meta {
-		Meta(v.as_object().cloned().expect("meta must be an object"))
+	fn meta(v: serde_json::Value) -> MetaObject {
+		MetaObject(v.as_object().cloned().expect("meta must be an object"))
 	}
 
 	fn schema() -> Arc<JsonObject> {
@@ -3733,12 +3846,12 @@ mod appsmockserver {
 			&self,
 			request: CallToolRequestParams,
 			_: RequestContext<RoleServer>,
-		) -> Result<CallToolResult, McpError> {
+		) -> Result<CallToolResponse, McpError> {
 			match request.name.as_ref() {
-				"show_dashboard" => Ok(CallToolResult::success(vec![ContentBlock::text(
-					"dashboard data",
-				)])),
-				"plain" => Ok(CallToolResult::success(vec![ContentBlock::text("ok")])),
+				"show_dashboard" => {
+					Ok(CallToolResult::success(vec![ContentBlock::text("dashboard data")]).into())
+				},
+				"plain" => Ok(CallToolResult::success(vec![ContentBlock::text("ok")]).into()),
 				_ => Err(McpError::invalid_params("unknown tool", None)),
 			}
 		}
@@ -3767,15 +3880,18 @@ mod appsmockserver {
 			&self,
 			ReadResourceRequestParams { uri, .. }: ReadResourceRequestParams,
 			_: RequestContext<RoleServer>,
-		) -> Result<ReadResourceResult, McpError> {
+		) -> Result<ReadResourceResponse, McpError> {
 			match uri.as_str() {
-				DASHBOARD_URI => Ok(ReadResourceResult::new(vec![
-					ResourceContents::text(DASHBOARD_HTML, uri)
-						.with_mime_type(UI_MIME_TYPE)
-						.with_meta(meta(json!({
-							"ui": {"csp": {"connectDomains": ["https://api.example.com"]}}
-						}))),
-				])),
+				DASHBOARD_URI => Ok(
+					ReadResourceResult::new(vec![
+						ResourceContents::text(DASHBOARD_HTML, uri)
+							.with_mime_type(UI_MIME_TYPE)
+							.with_meta(meta(json!({
+								"ui": {"csp": {"connectDomains": ["https://api.example.com"]}}
+							}))),
+					])
+					.into(),
+				),
 				_ => Err(McpError::resource_not_found(
 					"resource_not_found",
 					Some(json!({ "uri": uri })),
@@ -4025,19 +4141,15 @@ mod mockserver {
 			&self,
 			ReadResourceRequestParams { uri, .. }: ReadResourceRequestParams,
 			_: RequestContext<RoleServer>,
-		) -> Result<ReadResourceResult, McpError> {
+		) -> Result<ReadResourceResponse, McpError> {
 			match uri.as_str() {
 				"str:////Users/to/some/path/" => {
 					let cwd = "/Users/to/some/path/";
-					Ok(ReadResourceResult::new(vec![ResourceContents::text(
-						cwd, uri,
-					)]))
+					Ok(ReadResourceResult::new(vec![ResourceContents::text(cwd, uri)]).into())
 				},
 				"memo://insights" => {
 					let memo = "Business Intelligence Memo\n\nAnalysis has revealed 5 key insights ...";
-					Ok(ReadResourceResult::new(vec![ResourceContents::text(
-						memo, uri,
-					)]))
+					Ok(ReadResourceResult::new(vec![ResourceContents::text(memo, uri)]).into())
 				},
 				_ => Err(McpError::resource_not_found(
 					"resource_not_found",
@@ -4138,12 +4250,10 @@ mod mockserver {
 			&self,
 			request: CallToolRequestParams,
 			_: RequestContext<RoleServer>,
-		) -> Result<CallToolResult, McpError> {
+		) -> Result<CallToolResponse, McpError> {
 			match request.name.as_ref() {
-				"paged_echo" => Ok(CallToolResult::success(vec![ContentBlock::text(
-					"paged ok",
-				)])),
-				"first_page_tool" => Ok(CallToolResult::success(vec![ContentBlock::text("first")])),
+				"paged_echo" => Ok(CallToolResult::success(vec![ContentBlock::text("paged ok")]).into()),
+				"first_page_tool" => Ok(CallToolResult::success(vec![ContentBlock::text("first")]).into()),
 				_ => Err(McpError::invalid_params("unknown tool", None)),
 			}
 		}

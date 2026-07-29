@@ -4294,6 +4294,16 @@ func (in *OAuthInMemoryTokenCache) DeepCopy() *OAuthInMemoryTokenCache {
 func (in *OAuthPrivateKeyJWT) DeepCopyInto(out *OAuthPrivateKeyJWT) {
 	*out = *in
 	in.SigningKeyRef.DeepCopyInto(&out.SigningKeyRef)
+	if in.CertificateRef != nil {
+		in, out := &in.CertificateRef, &out.CertificateRef
+		*out = new(LocalSecretKeyRef)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.CertificateHeader != nil {
+		in, out := &in.CertificateHeader, &out.CertificateHeader
+		*out = new(OAuthPrivateKeyJWTCertificateHeader)
+		**out = **in
+	}
 	if in.Alg != nil {
 		in, out := &in.Alg, &out.Alg
 		*out = new(OAuthPrivateKeyJWTSigningAlgorithm)
@@ -5504,6 +5514,13 @@ func (in *VirtualModel) DeepCopy() *VirtualModel {
 func (in *Webhook) DeepCopyInto(out *Webhook) {
 	*out = *in
 	in.BackendRef.DeepCopyInto(&out.BackendRef)
+	if in.Headers != nil {
+		in, out := &in.Headers, &out.Headers
+		*out = make(map[string]CELExpression, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	if in.ForwardHeaderMatches != nil {
 		in, out := &in.ForwardHeaderMatches, &out.ForwardHeaderMatches
 		*out = make([]apisv1.HTTPHeaderMatch, len(*in))

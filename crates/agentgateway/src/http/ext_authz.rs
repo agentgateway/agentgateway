@@ -359,7 +359,8 @@ impl ExtAuthz {
 		let chan = self
 			.target
 			.grpc_channel(client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtAuthz));
-		let mut grpc_client = AuthorizationClient::new(chan);
+		let mut grpc_client = AuthorizationClient::new(chan)
+			.max_decoding_message_size(defaults::GRPC_MAX_DECODING_MESSAGE_SIZE);
 		// Get connection info with proper error handling
 		// Clone the fields we need to avoid borrow checker issues
 		let (peer_addr, local_addr, connection_start_time) = {

@@ -656,6 +656,126 @@ async fn copilot_anthropic_model_uses_messages_route() {
 }
 
 #[test]
+fn copilot_embeddings_response_adds_missing_openai_fields() {
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let mut request = llm_request_with_tokens(None);
+	request.input_format = InputFormat::Embeddings;
+	request.request_model = "text-embedding-3-small".into();
+	let response = Bytes::from_static(
+		br#"{"data":[{"embedding":[0.5,-0.25],"index":0,"object":"embedding"}],"usage":{"prompt_tokens":2,"total_tokens":2}}"#,
+	);
+
+	let (llm_response, body) = provider
+		.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
+		.expect("Copilot embeddings response should normalize");
+	let body: Value = serde_json::from_slice(&body).expect("normalized response should be JSON");
+
+	assert_eq!(body["object"], json!("list"));
+	assert_eq!(body["model"], json!("text-embedding-3-small"));
+	assert_eq!(body["data"][0]["embedding"], json!([0.5, -0.25]));
+	assert_eq!(llm_response.input_tokens, Some(2));
+	assert_eq!(llm_response.total_tokens, Some(2));
+}
+
+#[test]
+fn copilot_embeddings_response_preserves_missing_usage() {
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let mut request = llm_request_with_tokens(None);
+	request.input_format = InputFormat::Embeddings;
+	request.request_model = "text-embedding-3-small".into();
+	let response =
+		Bytes::from_static(br#"{"data":[{"embedding":[0.5],"index":0,"object":"embedding"}]}"#);
+
+	let (_, body) = provider
+		.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
+		.expect("Copilot embeddings response should normalize");
+	let body: Value = serde_json::from_slice(&body).expect("normalized response should be JSON");
+
+	assert!(body.get("usage").is_none());
+}
+
+#[test]
+fn copilot_embeddings_response_preserves_explicit_openai_fields() {
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let mut request = llm_request_with_tokens(None);
+	request.input_format = InputFormat::Embeddings;
+	request.request_model = "requested-model".into();
+	let response = Bytes::from_static(
+		br#"{"object":"upstream-list","model":"upstream-model","data":[{"embedding":[0.5],"index":0,"object":"embedding"}],"usage":{"prompt_tokens":1,"total_tokens":1}}"#,
+	);
+
+	let (_, body) = provider
+		.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
+		.expect("Copilot embeddings response should preserve explicit fields");
+	let body: Value = serde_json::from_slice(&body).expect("normalized response should be JSON");
+
+	assert_eq!(body["object"], json!("upstream-list"));
+	assert_eq!(body["model"], json!("upstream-model"));
+}
+
+#[test]
+fn copilot_embeddings_parse_error_logs_normalized_response() {
+	#[derive(Clone)]
+	struct LogWriter(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+	impl std::io::Write for LogWriter {
+		fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+			self.0.lock().unwrap().extend_from_slice(buf);
+			Ok(buf.len())
+		}
+
+		fn flush(&mut self) -> std::io::Result<()> {
+			Ok(())
+		}
+	}
+
+	let logs = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+	let writer = LogWriter(logs.clone());
+	let subscriber = tracing_subscriber::fmt()
+		.with_ansi(false)
+		.without_time()
+		.with_writer(move || writer.clone())
+		.finish();
+
+	tracing::subscriber::with_default(subscriber, || {
+		let provider = AIProvider::Copilot(copilot::Provider { model: None });
+		let mut request = llm_request_with_tokens(None);
+		request.input_format = InputFormat::Embeddings;
+		request.request_model = "text-embedding-3-small".into();
+		let response = Bytes::from_static(br#"{"usage":"invalid"}"#);
+
+		assert!(
+			provider
+				.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
+				.is_err()
+		);
+	});
+
+	let logs = String::from_utf8(logs.lock().unwrap().clone()).unwrap();
+	assert!(logs.contains(r#""object":"list""#), "{logs}");
+	assert!(
+		logs.contains(r#""model":"text-embedding-3-small""#),
+		"{logs}"
+	);
+}
+
+#[test]
+fn non_copilot_embeddings_response_still_requires_openai_fields() {
+	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let mut request = llm_request_with_tokens(None);
+	request.input_format = InputFormat::Embeddings;
+	let response = Bytes::from_static(
+		br#"{"data":[{"embedding":[0.5],"index":0,"object":"embedding"}],"usage":{"prompt_tokens":1,"total_tokens":1}}"#,
+	);
+
+	assert!(
+		provider
+			.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
+			.is_err()
+	);
+}
+
+#[test]
 fn openai_token_limit_normalization_keeps_explicit_max_completion_tokens() {
 	let mut request: types::completions::Request = serde_json::from_value(json!({
 		"model": "gpt-5.4",

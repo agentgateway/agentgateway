@@ -160,7 +160,7 @@ func (g PortBindings) ResourceName() string {
 }
 
 func (g PortBindings) Equals(other PortBindings) bool {
-	return g.GatewayListener.Equals(other.GatewayListener) &&
+	return g.GatewayListener.Equals(&other.GatewayListener) &&
 		g.Port == other.Port
 }
 
@@ -182,7 +182,7 @@ func (g GatewayListener) ResourceName() string {
 	return g.Name
 }
 
-func (g GatewayListener) Equals(other GatewayListener) bool {
+func (g *GatewayListener) Equals(other *GatewayListener) bool {
 	if (g.TLSInfo != nil) != (other.TLSInfo != nil) {
 		return false
 	}

@@ -60,6 +60,13 @@ impl RequestType for Request {
 		false
 	}
 
+	fn to_value(&self) -> serde_json::Result<serde_json::Value> {
+		match self {
+			Self::Raw(body) => serde_json::from_slice(body),
+			Self::Json(body) => Ok(body.clone()),
+		}
+	}
+
 	fn model(&mut self) -> &mut Option<String> {
 		unimplemented!("model is not available");
 	}
@@ -298,7 +305,7 @@ mod tests {
 			"modelVersion": "gemini-2.5-flash"
 		}));
 
-		let llm_response = resp.to_llm_response(false);
+		let llm_response = resp.to_llm_response(crate::LogContentFields::default());
 
 		assert_eq!(llm_response.input_tokens, Some(8));
 		assert_eq!(llm_response.output_tokens, Some(14));
