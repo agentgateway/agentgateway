@@ -809,7 +809,7 @@ pub mod from_completions {
 			.as_ref()
 			.and_then(completions_response_format_to_bedrock_output_config);
 
-		let supports_caching = helpers::supports_prompt_caching(&model_id);
+		let supports_caching = helpers::supports_prompt_caching(&model_id, prompt_caching);
 		let system_content = if system_text.is_empty() {
 			None
 		} else {
@@ -1236,10 +1236,12 @@ pub mod from_messages {
 		req: &types::messages::Request,
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
+		prompt_caching: Option<&crate::PromptCachingConfig>,
 	) -> Result<super::BedrockRequest, AIError> {
 		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestParsing)?;
 		let model_id = typed.model.clone();
-		let (xlated, tool_name_map) = translate_internal(typed, model_id, provider, headers)?;
+		let (xlated, tool_name_map) =
+			translate_internal(typed, model_id, provider, headers, prompt_caching)?;
 		let body = serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)?;
 		Ok(super::BedrockRequest {
 			body,
@@ -1252,8 +1254,9 @@ pub mod from_messages {
 		model_id: String,
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
+		prompt_caching: Option<&crate::PromptCachingConfig>,
 	) -> Result<(bedrock::ConverseRequest, super::BedrockToolNameMap), AIError> {
-		let supports_caching = helpers::supports_prompt_caching(&model_id);
+		let supports_caching = helpers::supports_prompt_caching(&model_id, prompt_caching);
 		let mut tool_name_map = super::BedrockToolNameMap::default();
 		for tool in req.tools.iter().flatten() {
 			tool_name_map.register(&tool.name);
@@ -2216,7 +2219,10 @@ pub mod from_responses {
 			(vec![], None)
 		};
 
-		let supports_caching = req.model.as_deref().is_some_and(supports_prompt_caching);
+		let supports_caching = req
+			.model
+			.as_deref()
+			.is_some_and(|model| supports_prompt_caching(model, prompt_caching));
 
 		// Convert input to Bedrock messages and system content
 		let mut messages: Vec<bedrock::Message> = Vec::new();
@@ -3201,7 +3207,16 @@ mod helpers {
 		}
 	}
 
-	pub fn supports_prompt_caching(model_id: &str) -> bool {
+	pub fn supports_prompt_caching(
+		model_id: &str,
+		prompt_caching: Option<&crate::PromptCachingConfig>,
+	) -> bool {
+		// An explicit `supported` override always wins: it is the only way to get a
+		// correct answer when the model is addressed through an opaque reference
+		// (e.g. a Bedrock inference profile ARN) that hides the real model family.
+		if let Some(explicit) = prompt_caching.and_then(|c| c.supported) {
+			return explicit;
+		}
 		let model_lower = model_id.to_lowercase();
 		if model_lower.contains("anthropic.claude") {
 			let excluded = ["claude-instant", "claude-v1", "claude-v2"];

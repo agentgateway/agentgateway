@@ -2349,6 +2349,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`binds[].listeners[].routes[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`binds[].listeners[].routes[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`binds[].listeners[].routes[].policies.ai.promptCaching.supported`|boolean|Explicitly declare whether the target model supports provider-side prompt<br>caching, overriding the model-ID heuristic. Required when the model is<br>addressed through an opaque reference (e.g. a Bedrock inference profile<br>ARN) where the underlying model family cannot be determined from the ID.|
 |`binds[].listeners[].routes[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`binds[].listeners[].routes[].policies.backendTLS`|object|TLS settings used when connecting to the backend.|
 |`binds[].listeners[].routes[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -7612,6 +7613,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptCaching.supported`|boolean|Explicitly declare whether the target model supports provider-side prompt<br>caching, overriding the model-ID heuristic. Required when the model is<br>addressed through an opaque reference (e.g. a Bedrock inference profile<br>ARN) where the underlying model family cannot be determined from the ID.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`binds[].listeners[].routes[].backends[].ai.groups`|[]object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers`|[]object|LLM providers in this group, load balanced together.|
@@ -10473,6 +10475,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.supported`|boolean|Explicitly declare whether the target model supports provider-side prompt<br>caching, overriding the model-ID heuristic. Required when the model is<br>addressed through an opaque reference (e.g. a Bedrock inference profile<br>ARN) where the underlying model family cannot be determined from the ID.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`binds[].listeners[].routes[].backends[].aws`|object||
 |`binds[].listeners[].routes[].backends[].aws.agentCore`|object||
@@ -13304,6 +13307,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.supported`|boolean|Explicitly declare whether the target model supports provider-side prompt<br>caching, overriding the model-ID heuristic. Required when the model is<br>addressed through an opaque reference (e.g. a Bedrock inference profile<br>ARN) where the underlying model family cannot be determined from the ID.|
 |`binds[].listeners[].routes[].backends[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`binds[].listeners[].tcpRoutes`|[]object|TCP routes attached directly to this listener.|
 |`binds[].listeners[].tcpRoutes[].name`|string|Name identifying this route.|
@@ -17625,6 +17629,7 @@
 |`policies[].policy.ai.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`policies[].policy.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`policies[].policy.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`policies[].policy.ai.promptCaching.supported`|boolean|Explicitly declare whether the target model supports provider-side prompt<br>caching, overriding the model-ID heuristic. Required when the model is<br>addressed through an opaque reference (e.g. a Bedrock inference profile<br>ARN) where the underlying model family cannot be determined from the ID.|
 |`policies[].policy.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`policies[].policy.backendTLS`|object|TLS settings used when connecting to the backend.|
 |`policies[].policy.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -22885,6 +22890,7 @@
 |`backends[].ai.policies.ai.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`backends[].ai.policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`backends[].ai.policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`backends[].ai.policies.ai.promptCaching.supported`|boolean|Explicitly declare whether the target model supports provider-side prompt<br>caching, overriding the model-ID heuristic. Required when the model is<br>addressed through an opaque reference (e.g. a Bedrock inference profile<br>ARN) where the underlying model family cannot be determined from the ID.|
 |`backends[].ai.policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`backends[].ai.groups`|[]object||
 |`backends[].ai.groups[].providers`|[]object|LLM providers in this group, load balanced together.|
@@ -25746,6 +25752,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`backends[].ai.groups[].providers[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`backends[].ai.groups[].providers[].policies.ai.promptCaching.supported`|boolean|Explicitly declare whether the target model supports provider-side prompt<br>caching, overriding the model-ID heuristic. Required when the model is<br>addressed through an opaque reference (e.g. a Bedrock inference profile<br>ARN) where the underlying model family cannot be determined from the ID.|
 |`backends[].ai.groups[].providers[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`backends[].aws`|object||
 |`backends[].aws.agentCore`|object||
@@ -28575,6 +28582,7 @@
 |`backends[].policies.ai.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`backends[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`backends[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`backends[].policies.ai.promptCaching.supported`|boolean|Explicitly declare whether the target model supports provider-side prompt<br>caching, overriding the model-ID heuristic. Required when the model is<br>addressed through an opaque reference (e.g. a Bedrock inference profile<br>ARN) where the underlying model family cannot be determined from the ID.|
 |`backends[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`routeGroups`|[]object|routeGroups provides a set of route groups used for route delegation. This is an advanced feature<br>primarily used for testing.|
 |`routeGroups[].name`|string|Identifier for this route group, referenced by delegating routes.|
@@ -30807,6 +30815,7 @@
 |`routeGroups[].routes[].policies.ai.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`routeGroups[].routes[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`routeGroups[].routes[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`routeGroups[].routes[].policies.ai.promptCaching.supported`|boolean|Explicitly declare whether the target model supports provider-side prompt<br>caching, overriding the model-ID heuristic. Required when the model is<br>addressed through an opaque reference (e.g. a Bedrock inference profile<br>ARN) where the underlying model family cannot be determined from the ID.|
 |`routeGroups[].routes[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`routeGroups[].routes[].policies.backendTLS`|object|TLS settings used when connecting to the backend.|
 |`routeGroups[].routes[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -36070,6 +36079,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptCaching.supported`|boolean|Explicitly declare whether the target model supports provider-side prompt<br>caching, overriding the model-ID heuristic. Required when the model is<br>addressed through an opaque reference (e.g. a Bedrock inference profile<br>ARN) where the underlying model family cannot be determined from the ID.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`routeGroups[].routes[].backends[].ai.groups`|[]object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers`|[]object|LLM providers in this group, load balanced together.|
@@ -38931,6 +38941,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.supported`|boolean|Explicitly declare whether the target model supports provider-side prompt<br>caching, overriding the model-ID heuristic. Required when the model is<br>addressed through an opaque reference (e.g. a Bedrock inference profile<br>ARN) where the underlying model family cannot be determined from the ID.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`routeGroups[].routes[].backends[].aws`|object||
 |`routeGroups[].routes[].backends[].aws.agentCore`|object||
@@ -41762,6 +41773,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`routeGroups[].routes[].backends[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`routeGroups[].routes[].backends[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`routeGroups[].routes[].backends[].policies.ai.promptCaching.supported`|boolean|Explicitly declare whether the target model supports provider-side prompt<br>caching, overriding the model-ID heuristic. Required when the model is<br>addressed through an opaque reference (e.g. a Bedrock inference profile<br>ARN) where the underlying model family cannot be determined from the ID.|
 |`routeGroups[].routes[].backends[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`gateways`|object|gateways defines the entrypoint to the proxy, setting up ports and listeners that features (LLM, MCP, and UI) and routes can attach to.<br>Each gateway defines a port that proxy will listen on, and optionally TLS settings for that port.|
 |`gateways.*.port`|integer|port is the port to listen on for this gateway.|
@@ -46428,6 +46440,7 @@
 |`routes[].policies.ai.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`routes[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`routes[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`routes[].policies.ai.promptCaching.supported`|boolean|Explicitly declare whether the target model supports provider-side prompt<br>caching, overriding the model-ID heuristic. Required when the model is<br>addressed through an opaque reference (e.g. a Bedrock inference profile<br>ARN) where the underlying model family cannot be determined from the ID.|
 |`routes[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`routes[].policies.backendTLS`|object|TLS settings used when connecting to the backend.|
 |`routes[].policies.backendTLS.cert`|string|Client certificate file to present to the backend.|
@@ -51691,6 +51704,7 @@
 |`routes[].backends[].ai.policies.ai.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`routes[].backends[].ai.policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`routes[].backends[].ai.policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`routes[].backends[].ai.policies.ai.promptCaching.supported`|boolean|Explicitly declare whether the target model supports provider-side prompt<br>caching, overriding the model-ID heuristic. Required when the model is<br>addressed through an opaque reference (e.g. a Bedrock inference profile<br>ARN) where the underlying model family cannot be determined from the ID.|
 |`routes[].backends[].ai.policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`routes[].backends[].ai.groups`|[]object||
 |`routes[].backends[].ai.groups[].providers`|[]object|LLM providers in this group, load balanced together.|
@@ -54552,6 +54566,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptCaching.supported`|boolean|Explicitly declare whether the target model supports provider-side prompt<br>caching, overriding the model-ID heuristic. Required when the model is<br>addressed through an opaque reference (e.g. a Bedrock inference profile<br>ARN) where the underlying model family cannot be determined from the ID.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`routes[].backends[].aws`|object||
 |`routes[].backends[].aws.agentCore`|object||
@@ -57383,6 +57398,7 @@
 |`routes[].backends[].policies.ai.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`routes[].backends[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`routes[].backends[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`routes[].backends[].policies.ai.promptCaching.supported`|boolean|Explicitly declare whether the target model supports provider-side prompt<br>caching, overriding the model-ID heuristic. Required when the model is<br>addressed through an opaque reference (e.g. a Bedrock inference profile<br>ARN) where the underlying model family cannot be determined from the ID.|
 |`routes[].backends[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`tcpRoutes`|[]object|tcpRoutes defines TCP routes attached to one or more named TCP/TLS gateways.|
 |`tcpRoutes[].gateways`|string|gateways attaches this route to named TCP/TLS gateways or gateway listeners.<br>This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.<br>If unset, the 'default' gateway will be used.|
@@ -57861,6 +57877,7 @@
 |`llm.providers[].defaults.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`llm.providers[].defaults.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`llm.providers[].defaults.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`llm.providers[].defaults.promptCaching.supported`|boolean|Explicitly declare whether the target model supports provider-side prompt<br>caching, overriding the model-ID heuristic. Required when the model is<br>addressed through an opaque reference (e.g. a Bedrock inference profile<br>ARN) where the underlying model family cannot be determined from the ID.|
 |`llm.models`|[]object|models defines the set of models that can be served by this gateway. The model name refers to the<br>model in the users request that is matched; the model sent to the actual LLM can be overridden<br>on a per-model basis.|
 |`llm.models[].id`|string|id is a stable identity for this model config entry. The name field remains the model match pattern.|
 |`llm.models[].name`|string|name is the name of the model we are matching from a users request. If params.model is set, that<br>will be used in the request to the LLM provider. If not, the incoming model is used.|
@@ -60124,6 +60141,7 @@
 |`llm.models[].promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`llm.models[].promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`llm.models[].promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`llm.models[].promptCaching.supported`|boolean|Explicitly declare whether the target model supports provider-side prompt<br>caching, overriding the model-ID heuristic. Required when the model is<br>addressed through an opaque reference (e.g. a Bedrock inference profile<br>ARN) where the underlying model family cannot be determined from the ID.|
 |`llm.models[].matches`|[]object|matches specifies the conditions under which this model should be used in addition to matching the model name.|
 |`llm.models[].matches[].headers`|[]object|Request headers to match for conditional model routing.|
 |`llm.models[].matches[].headers[].name`|string|HTTP header or pseudo-header name (such as `:method`) to match.|
@@ -65947,6 +65965,7 @@
 |`mcp.policies.ai.promptCaching.cacheTools`|boolean|Add cache markers to tool definitions when supported by the provider.|
 |`mcp.policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`mcp.policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
+|`mcp.policies.ai.promptCaching.supported`|boolean|Explicitly declare whether the target model supports provider-side prompt<br>caching, overriding the model-ID heuristic. Required when the model is<br>addressed through an opaque reference (e.g. a Bedrock inference profile<br>ARN) where the underlying model family cannot be determined from the ID.|
 |`mcp.policies.ai.routes`|object|Route type overrides selected by request path suffix.|
 |`mcp.policies.backendTLS`|object|TLS settings used when connecting to the backend.|
 |`mcp.policies.backendTLS.cert`|string|Client certificate file to present to the backend.|

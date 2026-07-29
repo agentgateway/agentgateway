@@ -5308,6 +5308,14 @@
           "format": "uint",
           "minimum": 0,
           "default": 0
+        },
+        "supported": {
+          "description": "Explicitly declare whether the target model supports provider-side prompt\ncaching, overriding the model-ID heuristic. Required when the model is\naddressed through an opaque reference (e.g. a Bedrock inference profile\nARN) where the underlying model family cannot be determined from the ID.",
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "default": null
         }
       },
       "additionalProperties": false

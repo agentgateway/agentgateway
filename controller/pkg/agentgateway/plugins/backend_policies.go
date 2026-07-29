@@ -822,6 +822,7 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 		if aiSpec.PromptCaching.CacheMessageOffset > 0 {
 			translatedAIPolicy.PromptCaching.CacheMessageOffset = new(uint32(aiSpec.PromptCaching.CacheMessageOffset)) //nolint:gosec // G115: CacheMessageOffset is validated by kubebuilder to be >= 0
 		}
+		translatedAIPolicy.PromptCaching.Supported = aiSpec.PromptCaching.Supported
 	}
 
 	if aiSpec.Routes != nil {

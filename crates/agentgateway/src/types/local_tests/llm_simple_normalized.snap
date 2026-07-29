@@ -275,6 +275,7 @@ backends:
             cacheTools: false
             minTokens: 1
             cacheMessageOffset: 0
+            supported: ~
   - backend:
       ai:
         name: "llm:model:gpt-3.5-turbo:3"

@@ -391,9 +391,12 @@ fn render_bedrock_converse(
 			Some(ctx.headers),
 			ctx.prompt_caching,
 		),
-		types::ChatRequest::Messages(req) => {
-			conversion::bedrock::from_messages::translate(req, provider, Some(ctx.headers))
-		},
+		types::ChatRequest::Messages(req) => conversion::bedrock::from_messages::translate(
+			req,
+			provider,
+			Some(ctx.headers),
+			ctx.prompt_caching,
+		),
 		types::ChatRequest::Responses(req) => conversion::bedrock::from_responses::translate(
 			req,
 			provider,

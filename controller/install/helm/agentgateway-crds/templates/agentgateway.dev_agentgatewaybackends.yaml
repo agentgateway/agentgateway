@@ -608,6 +608,14 @@ spec:
                                               Bedrock requires at least 1,024 tokens for caching to be effective.
                                             minimum: 0
                                             type: integer
+                                          supported:
+                                            description: |-
+                                              Explicitly declares whether the target model supports provider-side
+                                              prompt caching, overriding the model-ID heuristic. Required when the
+                                              model is addressed through an opaque reference (e.g. a Bedrock
+                                              inference profile ARN) where the underlying model family cannot be
+                                              determined from the ID.
+                                            type: boolean
                                         type: object
                                       promptGuard:
                                         description: Guardrails for LLM requests and
@@ -9109,6 +9117,14 @@ spec:
                               Bedrock requires at least 1,024 tokens for caching to be effective.
                             minimum: 0
                             type: integer
+                          supported:
+                            description: |-
+                              Explicitly declares whether the target model supports provider-side
+                              prompt caching, overriding the model-ID heuristic. Required when the
+                              model is addressed through an opaque reference (e.g. a Bedrock
+                              inference profile ARN) where the underlying model family cannot be
+                              determined from the ID.
+                            type: boolean
                         type: object
                       promptGuard:
                         description: Guardrails for LLM requests and responses.

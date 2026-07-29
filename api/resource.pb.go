@@ -14642,8 +14642,14 @@ type BackendPolicySpec_Ai_PromptCaching struct {
 	CacheTools         bool                   `protobuf:"varint,3,opt,name=cache_tools,json=cacheTools,proto3" json:"cache_tools,omitempty"`
 	MinTokens          *uint32                `protobuf:"varint,4,opt,name=min_tokens,json=minTokens,proto3,oneof" json:"min_tokens,omitempty"`
 	CacheMessageOffset *uint32                `protobuf:"varint,5,opt,name=cache_message_offset,json=cacheMessageOffset,proto3,oneof" json:"cache_message_offset,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// Explicitly declare whether the target model supports provider-side
+	// prompt caching, overriding the model-ID heuristic. Required when the
+	// model is addressed through an opaque reference (e.g. a Bedrock
+	// inference profile ARN) where the underlying model family cannot be
+	// determined from the ID.
+	Supported     *bool `protobuf:"varint,6,opt,name=supported,proto3,oneof" json:"supported,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BackendPolicySpec_Ai_PromptCaching) Reset() {
@@ -14709,6 +14715,13 @@ func (x *BackendPolicySpec_Ai_PromptCaching) GetCacheMessageOffset() uint32 {
 		return *x.CacheMessageOffset
 	}
 	return 0
+}
+
+func (x *BackendPolicySpec_Ai_PromptCaching) GetSupported() bool {
+	if x != nil && x.Supported != nil {
+		return *x.Supported
+	}
+	return false
 }
 
 type BackendPolicySpec_McpAuthentication_ResourceMetadata struct {
@@ -17562,7 +17575,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\xd5Z\n" +
+	"\x04kind\"\x86[\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -17584,7 +17597,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x06health\x18\x0f \x01(\v23.agentgateway.dev.resource.BackendPolicySpec.HealthH\x00R\x06health\x12c\n" +
 	"\x0ebackend_tunnel\x18\x10 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.BackendTunnelH\x00R\rbackendTunnel\x12X\n" +
 	"\text_authz\x18\x11 \x01(\v29.agentgateway.dev.resource.TrafficPolicySpec.ExternalAuthH\x00R\bextAuthz\x12c\n" +
-	"\x0emcp_guardrails\x18\x12 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.McpGuardrailsH\x00R\rmcpGuardrails\x1a\xdd-\n" +
+	"\x0emcp_guardrails\x18\x12 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.McpGuardrailsH\x00R\rmcpGuardrails\x1a\x8e.\n" +
 	"\x02Ai\x12^\n" +
 	"\fprompt_guard\x18\x01 \x01(\v2;.agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuardR\vpromptGuard\x12Y\n" +
 	"\bdefaults\x18\x02 \x03(\v2=.agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntryR\bdefaults\x12\\\n" +
@@ -17684,7 +17697,7 @@ const file_resource_proto_rawDesc = "" +
 	"\tstreaming\x18\x03 \x01(\x0e2E.agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuard.StreamingR\tstreaming\"&\n" +
 	"\tStreaming\x12\f\n" +
 	"\bDISABLED\x10\x00\x12\v\n" +
-	"\aENABLED\x10\x01\x1a\xfd\x01\n" +
+	"\aENABLED\x10\x01\x1a\xae\x02\n" +
 	"\rPromptCaching\x12!\n" +
 	"\fcache_system\x18\x01 \x01(\bR\vcacheSystem\x12%\n" +
 	"\x0ecache_messages\x18\x02 \x01(\bR\rcacheMessages\x12\x1f\n" +
@@ -17692,9 +17705,12 @@ const file_resource_proto_rawDesc = "" +
 	"cacheTools\x12\"\n" +
 	"\n" +
 	"min_tokens\x18\x04 \x01(\rH\x00R\tminTokens\x88\x01\x01\x125\n" +
-	"\x14cache_message_offset\x18\x05 \x01(\rH\x01R\x12cacheMessageOffset\x88\x01\x01B\r\n" +
+	"\x14cache_message_offset\x18\x05 \x01(\rH\x01R\x12cacheMessageOffset\x88\x01\x01\x12!\n" +
+	"\tsupported\x18\x06 \x01(\bH\x02R\tsupported\x88\x01\x01B\r\n" +
 	"\v_min_tokensB\x17\n" +
-	"\x15_cache_message_offset\x1a;\n" +
+	"\x15_cache_message_offsetB\f\n" +
+	"\n" +
+	"_supported\x1a;\n" +
 	"\rDefaultsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a<\n" +
