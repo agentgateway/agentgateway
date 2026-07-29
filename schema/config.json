@@ -551,9 +551,13 @@
             "$ref": "#/$defs/Tier"
           }
         },
-        "mantle": {
-          "description": "For AWS Bedrock: this model is served only via the Mantle endpoint (routes there under `RuntimePreferred`).",
-          "type": "boolean"
+        "tags": {
+          "description": "Freeform capability/routing tags (e.g. `mantle` for AWS Bedrock Mantle-only models).",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false

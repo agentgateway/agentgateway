@@ -16,6 +16,9 @@ const bedrockMantleSourceName = "aws-bedrock-mantle"
 // bedrockProviderID is the cost-catalog provider key for AWS Bedrock models (matches modelsDevProviderIDs).
 const bedrockProviderID = "aws.bedrock"
 
+// mantleTag marks a model served only via the Bedrock Mantle endpoint (must match the proxy's MANTLE_TAG).
+const mantleTag = "mantle"
+
 const awsMDBaseURL = "https://docs.aws.amazon.com/bedrock/latest/userguide/"
 const awsMDAvailURL = awsMDBaseURL + "models-endpoint-availability.md"
 
@@ -58,7 +61,7 @@ func awsBedrockMantleFetch(ctx context.Context) (*ModelCatalog, []string, error)
 			continue
 		}
 		for _, id := range awsMDParseModelCard(cardBody) {
-			models[id] = Model{Mantle: true}
+			models[id] = Model{Tags: []string{mantleTag}}
 		}
 		cardBody.Close()
 	}

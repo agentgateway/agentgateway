@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::str::FromStr;
 
@@ -76,13 +76,9 @@ pub struct Model {
 	/// Context-length pricing tiers that override the base rates.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub tiers: Vec<Tier>,
-	/// For AWS Bedrock: this model is served only via the Mantle endpoint (routes there under `RuntimePreferred`).
-	#[serde(default, skip_serializing_if = "is_false")]
-	pub mantle: bool,
-}
-
-fn is_false(b: &bool) -> bool {
-	!*b
+	/// Freeform capability/routing tags (e.g. `mantle` for AWS Bedrock Mantle-only models).
+	#[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+	pub tags: BTreeSet<String>,
 }
 
 #[apply(schema!)]

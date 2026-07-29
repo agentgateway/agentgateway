@@ -21,6 +21,9 @@ pub mod refresh;
 
 const TRACE_POLICY_KIND: &str = "llm_cost";
 
+/// Catalog tag marking AWS Bedrock models served only via the Mantle endpoint.
+const MANTLE_TAG: &str = "mantle";
+
 pub struct ModelCatalog {
 	state: ArcSwap<ModelCatalogState>,
 }
@@ -174,14 +177,14 @@ impl CatalogSnapshot {
 		Ok(Self::from_catalogs([catalog::from_json(json)?]))
 	}
 
-	/// Model IDs flagged `mantle` across all providers.
+	/// Model IDs carrying the `mantle` tag across all providers.
 	fn mantle_models(&self) -> std::collections::HashSet<String> {
 		self
 			.catalog
 			.iter()
 			.flat_map(|c| c.providers.values())
 			.flat_map(|p| p.models.iter())
-			.filter(|(_, m)| m.mantle)
+			.filter(|(_, m)| m.tags.contains(MANTLE_TAG))
 			.map(|(id, _)| id.clone())
 			.collect()
 	}
@@ -721,7 +724,7 @@ mod tests {
 	#[test]
 	fn mantle_models_reads_the_flag_from_the_catalog() {
 		let json = r#"{"providers":{"bedrock":{"models":{
-			"openai.gpt-oss-120b":{"mantle":true},
+			"openai.gpt-oss-120b":{"tags":["mantle"]},
 			"anthropic.claude-3-5-sonnet-20241022-v2:0":{"rates":{"input":"3.00"}}
 		}}}}"#;
 		let snapshot = CatalogSnapshot::parse(json).unwrap();

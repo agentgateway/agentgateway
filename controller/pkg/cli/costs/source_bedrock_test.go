@@ -3,6 +3,7 @@ package costs
 import (
 	"context"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -107,8 +108,8 @@ func TestAwsBedrockMantleFetchLive(t *testing.T) {
 	models := cat.Providers[bedrockProviderID].Models
 	t.Logf("fetched %d Mantle-only models", len(models))
 	for id, m := range models {
-		if !m.Mantle {
-			t.Errorf("model %q not flagged mantle", id)
+		if !slices.Contains(m.Tags, mantleTag) {
+			t.Errorf("model %q missing mantle tag", id)
 		}
 		if !modelIDRe.MatchString(id) || !strings.Contains(id, ".") {
 			t.Errorf("model ID %q is not a valid base model ID", id)
