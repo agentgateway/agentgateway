@@ -4991,6 +4991,7 @@ spec:
                                             enum:
                                             - ES256
                                             - ES384
+                                            - PS256
                                             - RS256
                                             - RS384
                                             - RS512
@@ -8083,6 +8084,7 @@ spec:
                                           enum:
                                           - ES256
                                           - ES384
+                                          - PS256
                                           - RS256
                                           - RS384
                                           - RS512
@@ -13151,6 +13153,7 @@ spec:
                             enum:
                             - ES256
                             - ES384
+                            - PS256
                             - RS256
                             - RS384
                             - RS512
