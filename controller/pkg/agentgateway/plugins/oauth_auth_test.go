@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -191,6 +192,44 @@ func TestBuildCrossAppAccess(t *testing.T) {
 	}
 	if got := crossAppAccess.GetSubjectToken().GetSource().GetExpression(); got != "jwt.the_id_token" {
 		t.Fatalf("subject token expression = %q, want jwt.the_id_token", got)
+	}
+}
+
+func TestBuildCrossAppAccessPreservesAccessTokenScopePresence(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t)
+	empty := []string{}
+	override := []string{"backend.read"}
+
+	tests := []struct {
+		name   string
+		scopes *[]string
+		want   []string
+		set    bool
+	}{
+		{name: "absent"},
+		{name: "empty", scopes: &empty, want: []string{}, set: true},
+		{name: "override", scopes: &override, want: override, set: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := BuildCrossAppAccess(ctx, &agentgateway.CrossAppAccessAuth{
+				IdentityProvider:            crossAppAccessEndpoint("idp"),
+				ResourceAuthorizationServer: crossAppAccessEndpoint("resource-as"),
+				Audience:                    "https://resource.example.com",
+				Scopes:                      []string{"read"},
+				AccessTokenScopes:           tt.scopes,
+			}, "default")
+			if err != nil {
+				t.Fatalf("BuildCrossAppAccess() error = %v, want nil", err)
+			}
+			if (got.AccessTokenScopes != nil) != tt.set {
+				t.Fatalf("access token scopes presence = %t, want %t", got.AccessTokenScopes != nil, tt.set)
+			}
+			if tt.set && !slices.Equal(got.AccessTokenScopes.Values, tt.want) {
+				t.Fatalf("access token scopes = %v, want %v", got.AccessTokenScopes.Values, tt.want)
+			}
+		})
 	}
 }
 
