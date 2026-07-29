@@ -13,7 +13,7 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 use serde::Serialize;
 
-use crate::{apply, AIError, LLMRequest, LLMResponse};
+use crate::{AIError, LLMRequest, LLMResponse, apply};
 
 pub enum ChatRequest<'a> {
 	Completions(&'a completions::Request),
@@ -64,7 +64,7 @@ pub(crate) fn scan_text_runs<T>(
 		let mut joined = String::new();
 		let mut end = i;
 
-    // join until we hit non-text or the end of the list
+		// join until we hit non-text or the end of the list
 		while let Some(text) = parts.get_mut(end).and_then(&mut text_of) {
 			if end > i {
 				joined.push_str(sep);
@@ -77,7 +77,7 @@ pub(crate) fn scan_text_runs<T>(
 			continue;
 		}
 
-    // don't collapse the run into a single part if `f` wouldn't mutate it
+		// don't collapse the run into a single part if `f` wouldn't mutate it
 		let original = joined.clone();
 		f(&mut joined);
 		if joined == original {
@@ -85,7 +85,7 @@ pub(crate) fn scan_text_runs<T>(
 			continue;
 		}
 
-    // collapse the run's text into the last part, and remove the others
+		// collapse the run's text into the last part, and remove the others
 		if let Some(text) = text_of(&mut parts[end - 1]) {
 			*text = joined;
 		}
