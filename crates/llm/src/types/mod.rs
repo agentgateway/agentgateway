@@ -59,6 +59,13 @@ pub(crate) fn scan_text_runs<T>(
 	mut text_of: impl FnMut(&mut T) -> Option<&mut String>,
 	f: &mut dyn FnMut(&mut String),
 ) {
+	if let [part] = parts.as_mut_slice() {
+		if let Some(text) = text_of(part) {
+			f(text);
+		}
+		return;
+	}
+
 	let mut i = 0;
 	while i < parts.len() {
 		let mut joined = String::new();
