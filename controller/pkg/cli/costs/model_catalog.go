@@ -31,10 +31,12 @@ type Provider struct {
 type Model struct {
 	Rates Rates  `json:"rates,omitzero"`
 	Tiers []Tier `json:"tiers,omitempty"`
+	// Mantle marks an AWS Bedrock model that is served only via the Mantle endpoint.
+	Mantle bool `json:"mantle,omitempty"`
 }
 
 func (m Model) IsZero() bool {
-	return m.Rates.IsZero() && len(m.Tiers) == 0
+	return m.Rates.IsZero() && len(m.Tiers) == 0 && !m.Mantle
 }
 
 type Rates struct {

@@ -1,4 +1,4 @@
-package bedrock
+package costs
 
 import (
 	"bufio"
@@ -7,12 +7,15 @@ import (
 	"io"
 	"net/http"
 	"regexp"
-	"slices"
 	"strings"
 	"time"
 )
 
-const awsMDSourceName = "aws-docs-md"
+const bedrockMantleSourceName = "aws-bedrock-mantle"
+
+// bedrockProviderID is the cost-catalog provider key for AWS Bedrock models (matches modelsDevProviderIDs).
+const bedrockProviderID = "aws.bedrock"
+
 const awsMDBaseURL = "https://docs.aws.amazon.com/bedrock/latest/userguide/"
 const awsMDAvailURL = awsMDBaseURL + "models-endpoint-availability.md"
 
@@ -20,10 +23,14 @@ var modelIDRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*\.[a-z0-9]`)
 var mdLinkRe = regexp.MustCompile(`\[.*?\]\(([^)]+)\)`)
 
 func init() {
-	importSources[awsMDSourceName] = awsMDFetch
+	importSources[bedrockMantleSourceName] = func(ctx context.Context, _ importOptions) (*ModelCatalog, []string, error) {
+		return awsBedrockMantleFetch(ctx)
+	}
 }
 
-func awsMDFetch(ctx context.Context) (*ModelTable, []string, error) {
+// awsBedrockMantleFetch scrapes the AWS availability page for Mantle-only models
+// (bedrock-mantle=yes, bedrock-runtime=no) and returns them flagged in the catalog.
+func awsBedrockMantleFetch(ctx context.Context) (*ModelCatalog, []string, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 
 	body, err := awsMDGetBody(ctx, client, awsMDAvailURL)
@@ -43,29 +50,21 @@ func awsMDFetch(ctx context.Context) (*ModelTable, []string, error) {
 		}
 	}
 
-	ids := make(map[string]struct{})
+	models := make(map[string]Model)
 	for _, href := range unique {
 		cardBody, err := awsMDGetBody(ctx, client, awsMDBaseURL+href)
 		if err != nil {
 			warns = append(warns, fmt.Sprintf("fetch %s: %v", href, err))
 			continue
 		}
-		cardIDs := awsMDParseModelCard(cardBody)
-		cardBody.Close()
-		for _, id := range cardIDs {
-			ids[id] = struct{}{}
+		for _, id := range awsMDParseModelCard(cardBody) {
+			models[id] = Model{Mantle: true}
 		}
+		cardBody.Close()
 	}
 
-	models := make([]string, 0, len(ids))
-	for id := range ids {
-		models = append(models, id)
-	}
-	slices.Sort(models)
-
-	return &ModelTable{
-		Source: awsMDAvailURL,
-		Models: models,
+	return &ModelCatalog{
+		Providers: map[string]Provider{bedrockProviderID: {Models: models}},
 	}, warns, nil
 }
 

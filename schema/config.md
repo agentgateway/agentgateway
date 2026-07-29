@@ -32,9 +32,7 @@
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.reasoning`|string|Cost per 1M reasoning tokens. Falls back to the output rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.inputAudio`|string|Cost per 1M input audio tokens. Falls back to the input rate if unset.|
 |`config.modelCatalog[].inline.providers.*.models.*.tiers[].rates.outputAudio`|string|Cost per 1M output audio tokens. Falls back to the output rate if unset.|
-|`config.bedrockMantleModelCatalog`|[]object|Bedrock Mantle allow-list sources (model IDs that route to Mantle); merged over the embedded default.|
-|`config.bedrockMantleModelCatalog[].file`|string|Path to a JSON file listing Mantle model IDs.|
-|`config.bedrockMantleModelCatalog[].inline`|string|Mantle model IDs provided inline as a JSON string.|
+|`config.modelCatalog[].inline.providers.*.models.*.mantle`|boolean|For AWS Bedrock: this model is served only via the Mantle endpoint (routes there under `RuntimePreferred`).|
 |`config.database`|object|Primary database used by local runtime features.|
 |`config.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.|
 |`config.storage`|object|Controls whether UI-managed configuration is written to the config file or a DB overlay.|

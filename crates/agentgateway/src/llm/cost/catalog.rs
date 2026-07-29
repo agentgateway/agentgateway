@@ -76,6 +76,13 @@ pub struct Model {
 	/// Context-length pricing tiers that override the base rates.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub tiers: Vec<Tier>,
+	/// For AWS Bedrock: this model is served only via the Mantle endpoint (routes there under `RuntimePreferred`).
+	#[serde(default, skip_serializing_if = "is_false")]
+	pub mantle: bool,
+}
+
+fn is_false(b: &bool) -> bool {
+	!*b
 }
 
 #[apply(schema!)]
@@ -291,7 +298,11 @@ mod tests {
 	}
 
 	fn entry(rates: Rates, tiers: Vec<Tier>) -> Model {
-		Model { rates, tiers }
+		Model {
+			rates,
+			tiers,
+			..Default::default()
+		}
 	}
 
 	fn tier(context_over: u64, rates: Rates) -> Tier {

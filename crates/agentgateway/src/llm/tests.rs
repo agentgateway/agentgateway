@@ -644,6 +644,7 @@ async fn copilot_anthropic_model_uses_messages_route() {
 			None,
 			None,
 			false,
+			None,
 		)
 		.expect("setup_request should succeed");
 	assert_eq!(setup_req.uri().path(), "/v1/messages");
@@ -1037,6 +1038,7 @@ fn setup_request_openai_applies_prefixed_path_without_host_override() {
 			None,
 			Some("/v1/custom"),
 			false,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -1065,6 +1067,7 @@ fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
 			None,
 			Some("/v1/custom/"),
 			false,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -1107,6 +1110,7 @@ fn setup_request_custom_path_override_wins_over_format_path() {
 			Some("/override/messages"),
 			None,
 			true,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -1149,6 +1153,7 @@ fn assert_prefixed_host_override_path(
 			None,
 			Some("/proxy/"),
 			true,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -1218,7 +1223,15 @@ fn setup_bedrock_request(
 	let mut req =
 		crate::http::tests_common::request("https://proxy.example.com/in", http::Method::POST, &[]);
 	provider
-		.setup_request(&mut req, route_type, Some(&llm_request), None, None, false)
+		.setup_request(
+			&mut req,
+			route_type,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+			None,
+		)
 		.expect("setup_request should succeed");
 	req
 }
@@ -1278,6 +1291,49 @@ fn setup_request_bedrock_mantle_only_targets_native_host_path_and_signing() {
 		"some.model",
 	);
 	assert_eq!(req.uri().path(), "/v1/responses");
+}
+
+#[test]
+fn setup_request_bedrock_aligns_connection_target_with_model_host() {
+	// Bedrock's host is model-dependent, so setup_request updates the connection target
+	// (not just the request :authority) — the proxy no longer re-resolves it.
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		provider_preference: bedrock::BedrockProviderPreference::MantleOnly,
+	});
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Completions,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "some.model".into(),
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: None,
+	};
+	let mut req =
+		crate::http::tests_common::request("https://proxy.example.com/in", http::Method::POST, &[]);
+	// Placeholder target the proxy picks before the model is parsed.
+	let mut target = Target::Hostname(strng::new("placeholder.example.com"), 443);
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Completions,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+			Some(&mut target),
+		)
+		.expect("setup_request should succeed");
+	assert_eq!(
+		target,
+		Target::Hostname(strng::new("bedrock-mantle.us-east-1.api.aws"), 443)
+	);
 }
 
 #[test]

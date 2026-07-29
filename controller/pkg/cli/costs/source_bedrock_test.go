@@ -1,8 +1,7 @@
-package bedrock
+package costs
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -86,45 +85,33 @@ func TestParseMDModelCardSkipsInvalidIDs(t *testing.T) {
 	}
 }
 
-// TestAwsMDFetchLive calls the live AWS docs page. Run with go test (no -short).
-func TestAwsMDFetchLive(t *testing.T) {
+// TestAwsBedrockMantleFetchLive calls the live AWS docs page.
+func TestAwsBedrockMantleFetchLive(t *testing.T) {
 	if testing.Short() || os.Getenv("AGENTGATEWAY_E2E") == "" {
 		t.Skip("set AGENTGATEWAY_E2E=true to run the live AWS docs scrape")
 	}
 
-	table, warns, err := awsMDFetch(context.Background())
+	cat, warns, err := awsBedrockMantleFetch(context.Background())
 	if err != nil {
-		t.Fatalf("awsMDFetch: %v", err)
+		t.Fatalf("awsBedrockMantleFetch: %v", err)
 	}
 	for _, w := range warns {
 		t.Logf("warning: %s", w)
 	}
-
-	// The Mantle-only set is legitimately allowed to be small or empty, so we do
-	// not assert a lower bound; we only validate the shape of whatever is returned.
-	t.Logf("fetched %d Mantle-only models", len(table.Models))
-	if table.Source == "" {
-		t.Fatal("ModelTable.Source is empty")
+	if err := cat.Validate(); err != nil {
+		t.Fatalf("invalid catalog: %v", err)
 	}
 
-	for _, id := range table.Models {
-		if !modelIDRe.MatchString(id) {
-			t.Errorf("model ID %q does not match modelIDRe", id)
+	// The Mantle-only set is legitimately allowed to be small or empty, so we only
+	// validate the shape of whatever is returned.
+	models := cat.Providers[bedrockProviderID].Models
+	t.Logf("fetched %d Mantle-only models", len(models))
+	for id, m := range models {
+		if !m.Mantle {
+			t.Errorf("model %q not flagged mantle", id)
 		}
-		if !strings.Contains(id, ".") {
-			t.Errorf("model ID %q has no '.'", id)
+		if !modelIDRe.MatchString(id) || !strings.Contains(id, ".") {
+			t.Errorf("model ID %q is not a valid base model ID", id)
 		}
-	}
-
-	data, err := marshalTable(table, false)
-	if err != nil {
-		t.Fatalf("marshalTable: %v", err)
-	}
-	var roundTrip ModelTable
-	if err := json.Unmarshal(data, &roundTrip); err != nil {
-		t.Fatalf("unmarshal round-trip: %v", err)
-	}
-	if len(roundTrip.Models) != len(table.Models) {
-		t.Fatalf("round-trip model count %d != original %d", len(roundTrip.Models), len(table.Models))
 	}
 }

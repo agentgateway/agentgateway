@@ -33,7 +33,6 @@ use crate::*;
 pub mod model_router;
 pub use agent_llm::{azure, bedrock, vertex};
 
-pub mod bedrock_mantle_catalog;
 pub mod cost;
 pub mod policy;
 
@@ -998,6 +997,7 @@ impl AIProvider {
 		})
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	pub fn setup_request(
 		&self,
 		req: &mut Request,
@@ -1006,6 +1006,7 @@ impl AIProvider {
 		path_override: Option<&str>,
 		path_prefix: Option<&str>,
 		has_host_override: bool,
+		connection_target: Option<&mut Target>,
 	) -> anyhow::Result<()> {
 		if let Some(path_override) = path_override {
 			http::modify_req_uri(req, |uri| {
@@ -1017,7 +1018,7 @@ impl AIProvider {
 		}
 		if !has_host_override {
 			let model_id = llm_request.map(|l| l.request_model.as_str());
-			self.set_default_authority(req, route_type, model_id)?;
+			self.set_default_authority(req, route_type, model_id, connection_target)?;
 		}
 		self.set_required_fields(req, route_type, llm_request)?;
 		Ok(())
@@ -1213,6 +1214,7 @@ impl AIProvider {
 		req: &mut Request,
 		route_type: RouteType,
 		model_id: Option<&str>,
+		connection_target: Option<&mut Target>,
 	) -> anyhow::Result<()> {
 		let authority = match self {
 			AIProvider::OpenAI(_) => Authority::from_static(openai::DEFAULT_HOST_STR),
@@ -1226,6 +1228,10 @@ impl AIProvider {
 				// Resolve host + signing name for the model; stash region/signing in extensions for late signing.
 				let host = provider.get_host(route_type, model_id);
 				let signing_service = provider.signing_service_name(route_type, model_id);
+				// Bedrock's Mantle-vs-Runtime host is model-dependent, so align the connection target with it.
+				if let Some(Target::Hostname(target_host, _)) = connection_target {
+					*target_host = host.clone();
+				}
 				return http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
 						uri.authority = Some(Authority::from_str(&host)?);

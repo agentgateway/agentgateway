@@ -78,6 +78,7 @@ fn models_dev_transform(
 			let entry = catalog::Model {
 				rates: models_dev_rates(&cost.rates).with_context(|| format!("{gateway_id}/{model_id}"))?,
 				tiers: models_dev_tiers(&cost.tiers).with_context(|| format!("{gateway_id}/{model_id}"))?,
+				..Default::default()
 			};
 			if entry.rates.is_empty() && entry.tiers.is_empty() {
 				continue;

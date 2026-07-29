@@ -94,20 +94,23 @@ impl ModelCatalog {
 		self.state.load().snapshot.list_models()
 	}
 
+	fn refresh_state(snapshot: &CatalogSnapshot) {
+		agent_llm::bedrock_model_table::set_mantle_models(snapshot.mantle_models());
+	}
+
 	pub async fn replace_sources(&self, sources: Vec<ModelCatalogSource>) -> anyhow::Result<()> {
-		if sources.is_empty() {
-			self.state.store(Arc::new(ModelCatalogState {
-				snapshot: Arc::new(CatalogSnapshot::empty()),
-				sources,
-			}));
-			return Ok(());
-		}
-		let loaded = load_sources(&sources).await?;
-		log_loaded_catalog("model catalog reloaded", &loaded.snapshot, &loaded.missing);
+		let snapshot = if sources.is_empty() {
+			Arc::new(CatalogSnapshot::empty())
+		} else {
+			let loaded = load_sources(&sources).await?;
+			log_loaded_catalog("model catalog reloaded", &loaded.snapshot, &loaded.missing);
+			Arc::new(loaded.snapshot)
+		};
 		self.state.store(Arc::new(ModelCatalogState {
-			snapshot: Arc::new(loaded.snapshot),
+			snapshot: snapshot.clone(),
 			sources,
 		}));
+		Self::refresh_state(&snapshot);
 		Ok(())
 	}
 
@@ -122,6 +125,7 @@ impl ModelCatalog {
 			let previous = self.state.compare_and_swap(&current, next.clone());
 			if Arc::ptr_eq(&previous, &current) {
 				log_loaded_catalog("model catalog loaded", &next.snapshot, &loaded.missing);
+				Self::refresh_state(&next.snapshot);
 				return Ok(());
 			}
 		}
@@ -168,6 +172,18 @@ impl CatalogSnapshot {
 	#[cfg(test)]
 	pub fn parse(json: &str) -> anyhow::Result<Self> {
 		Ok(Self::from_catalogs([catalog::from_json(json)?]))
+	}
+
+	/// Model IDs flagged `mantle` across all providers.
+	fn mantle_models(&self) -> std::collections::HashSet<String> {
+		self
+			.catalog
+			.iter()
+			.flat_map(|c| c.providers.values())
+			.flat_map(|p| p.models.iter())
+			.filter(|(_, m)| m.mantle)
+			.map(|(id, _)| id.clone())
+			.collect()
 	}
 
 	fn from_catalogs(catalogs: impl IntoIterator<Item = CatalogData>) -> Self {
@@ -700,6 +716,18 @@ mod tests {
 			let p = self.project(provider, model, resp, convention);
 			(p.cost.and_then(|c| c.total().to_f64()), p.status)
 		}
+	}
+
+	#[test]
+	fn mantle_models_reads_the_flag_from_the_catalog() {
+		let json = r#"{"providers":{"bedrock":{"models":{
+			"openai.gpt-oss-120b":{"mantle":true},
+			"anthropic.claude-3-5-sonnet-20241022-v2:0":{"rates":{"input":"3.00"}}
+		}}}}"#;
+		let snapshot = CatalogSnapshot::parse(json).unwrap();
+		let mantle = snapshot.mantle_models();
+		assert!(mantle.contains("openai.gpt-oss-120b"));
+		assert!(!mantle.contains("anthropic.claude-3-5-sonnet-20241022-v2:0"));
 	}
 
 	#[test]
