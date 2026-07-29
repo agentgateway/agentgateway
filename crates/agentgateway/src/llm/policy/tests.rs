@@ -3406,8 +3406,7 @@ fn prompt_guard_scope_support() {
 		"id": "resp_01", "status": "completed", "model": "gpt-4o",
 		"output": [
 			{"type": "message", "id": "msg_01", "role": "assistant", "status": "completed", "content": [
-				{"type": "output_text", "annotations": [], "logprobs": null, "text": "Intro, all good."},
-				{"type": "output_text", "annotations": [], "logprobs": null, "text": "ssn <SSN>"}
+				{"type": "output_text", "annotations": [], "logprobs": null, "text": "Intro, all good.\nssn <SSN>"}
 			]},
 			{"type": "function_call", "arguments": "{}", "call_id": "call_01", "name": "list_pods"}
 		]

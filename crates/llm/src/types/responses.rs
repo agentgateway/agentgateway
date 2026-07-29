@@ -927,20 +927,45 @@ impl ResponseType for Response {
 	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
 		for o in &mut self.output {
 			if let OutputItem::Message(msg) = o {
-				for c in &mut msg.content {
-					if let Content::OutputText(t) = c {
-						if t.annotations.is_empty() && t.logprobs.is_none() {
-							f(&mut t.text);
-							continue;
-						}
-						// offset-based metadata cannot survive a text rewrite
-						let original = t.text.clone();
-						f(&mut t.text);
-						if t.text != original {
-							t.annotations.clear();
-							t.logprobs = None;
+				let original_text = msg
+					.content
+					.iter()
+					.map(|content| match content {
+						Content::OutputText(text) => (false, text.text.clone()),
+						Content::Refusal(refusal) => (true, refusal.refusal.clone()),
+					})
+					.collect::<Vec<_>>();
+				let had_refusal = msg.content.iter().any(|c| matches!(c, Content::Refusal(_)));
+				crate::types::scan_text_runs(
+					&mut msg.content,
+					"\n",
+					|content| match content {
+						Content::OutputText(text) => Some(&mut text.text),
+						Content::Refusal(refusal) => Some(&mut refusal.refusal),
+					},
+					f,
+				);
+				let text_changed = original_text
+					.iter()
+					.map(|(refusal, text)| (*refusal, text.as_str()))
+					.ne(msg.content.iter().map(|content| match content {
+						Content::OutputText(text) => (false, text.text.as_str()),
+						Content::Refusal(refusal) => (true, refusal.refusal.as_str()),
+					}));
+				if text_changed {
+					for content in &mut msg.content {
+						if let Content::OutputText(text) = content {
+							text.annotations.clear();
+							text.logprobs = None;
 						}
 					}
+				}
+				let collapsed_text = match msg.content.as_mut_slice() {
+					[Content::OutputText(text)] if had_refusal => Some(std::mem::take(&mut text.text)),
+					_ => None,
+				};
+				if let Some(refusal) = collapsed_text {
+					msg.content[0] = Content::Refusal(RefusalContent { refusal });
 				}
 			}
 		}
@@ -1126,6 +1151,160 @@ mod tests {
 			}]
 		}))
 		.expect("valid Response with a refusal message")
+	}
+
+	#[test]
+	fn request_visitor_visits_refusal_text() {
+		let mut request: Request = serde_json::from_value(serde_json::json!({
+			"input": [{
+				"type": "message",
+				"role": "assistant",
+				"content": [
+					{"type": "refusal", "refusal": "sensitive"},
+					{"type": "refusal", "refusal": "details"}
+				]
+			}]
+		}))
+		.expect("valid request with refusal history");
+
+		request.visit_text_mut(&mut |text| {
+			assert_eq!(text, "sensitive\ndetails");
+			*text = "[redacted]".to_owned();
+		});
+
+		let value = request.to_value().expect("request should serialize");
+		assert_eq!(value["input"][0]["content"].as_array().unwrap().len(), 1);
+		assert_eq!(value["input"][0]["content"][0]["refusal"], "[redacted]");
+	}
+
+	#[test]
+	fn request_visitor_merges_mixed_text_and_refusal() {
+		let mut request: Request = serde_json::from_value(serde_json::json!({
+			"input": [{
+				"type": "message",
+				"role": "assistant",
+				"content": [
+					{"type": "output_text", "text": "sensitive"},
+					{"type": "refusal", "refusal": "details"}
+				]
+			}]
+		}))
+		.expect("valid request with mixed assistant history");
+
+		request.visit_text_mut(&mut |text| {
+			assert_eq!(text, "sensitive\ndetails");
+			*text = "[redacted]".to_owned();
+		});
+
+		let value = request.to_value().expect("request should serialize");
+		assert_eq!(value["input"][0]["content"].as_array().unwrap().len(), 1);
+		assert_eq!(value["input"][0]["content"][0]["refusal"], "[redacted]");
+	}
+
+	#[test]
+	fn request_visitor_preserves_refusal_type_when_refusal_precedes_text() {
+		let mut request: Request = serde_json::from_value(serde_json::json!({
+			"input": [{
+				"type": "message",
+				"role": "assistant",
+				"content": [
+					{"type": "refusal", "refusal": "sensitive"},
+					{"type": "output_text", "text": "details"}
+				]
+			}]
+		}))
+		.expect("valid request with reverse mixed assistant history");
+
+		request.visit_text_mut(&mut |text| {
+			assert_eq!(text, "sensitive\ndetails");
+			*text = "[redacted]".to_owned();
+		});
+
+		let value = request.to_value().expect("request should serialize");
+		assert_eq!(value["input"][0]["content"].as_array().unwrap().len(), 1);
+		assert_eq!(value["input"][0]["content"][0]["type"], "refusal");
+		assert_eq!(value["input"][0]["content"][0]["refusal"], "[redacted]");
+	}
+
+	#[test]
+	fn response_visitor_visits_refusal_text() {
+		let mut response = refusal_response();
+
+		response.visit_text_mut(&mut |text| *text = "[redacted]".to_owned());
+
+		let OutputItem::Message(message) = &response.output[0] else {
+			panic!("expected message output");
+		};
+		let Content::Refusal(refusal) = &message.content[0] else {
+			panic!("expected refusal content");
+		};
+		assert_eq!(refusal.refusal, "[redacted]");
+	}
+
+	#[test]
+	fn response_visitor_merges_adjacent_text_parts() {
+		let mut response: Response = serde_json::from_value(serde_json::json!({
+			"id": "resp_1",
+			"status": "completed",
+			"model": "claude-sonnet-4-5",
+			"output": [{
+				"type": "message",
+				"id": "msg_1",
+				"role": "assistant",
+				"status": "completed",
+				"content": [
+					{
+						"type": "output_text",
+						"annotations": [],
+						"logprobs": null,
+						"text": "sensitive"
+					},
+					{"type": "refusal", "refusal": "details"}
+				]
+			}]
+		}))
+		.expect("valid response with adjacent text parts");
+
+		response.visit_text_mut(&mut |text| {
+			assert_eq!(text, "sensitive\ndetails");
+			*text = "[redacted]".to_owned();
+		});
+
+		let OutputItem::Message(message) = &response.output[0] else {
+			panic!("expected message output");
+		};
+		assert_eq!(message.content.len(), 1);
+		let Content::Refusal(refusal) = &message.content[0] else {
+			panic!("expected refusal content");
+		};
+		assert_eq!(refusal.refusal, "[redacted]");
+	}
+
+	#[test]
+	fn response_visitor_preserves_refusal_type_when_refusal_precedes_text() {
+		let mut response = refusal_response();
+		let OutputItem::Message(message) = &mut response.output[0] else {
+			panic!("expected message output");
+		};
+		message.content.push(Content::OutputText(OutputText {
+			annotations: vec![],
+			logprobs: None,
+			text: "sensitive details".to_owned(),
+		}));
+
+		response.visit_text_mut(&mut |text| {
+			assert_eq!(text, "I can't help with that.\nsensitive details");
+			*text = "[redacted]".to_owned();
+		});
+
+		let OutputItem::Message(message) = &response.output[0] else {
+			panic!("expected message output");
+		};
+		assert_eq!(message.content.len(), 1);
+		let Content::Refusal(refusal) = &message.content[0] else {
+			panic!("masked refusal must stay typed as a refusal");
+		};
+		assert_eq!(refusal.refusal, "[redacted]");
 	}
 
 	#[test]

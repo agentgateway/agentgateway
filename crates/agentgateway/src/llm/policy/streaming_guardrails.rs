@@ -294,9 +294,11 @@ impl GuardedSseBody {
 			return None;
 		}
 		if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&data) {
-			// OpenAI responses: response.output_text.delta
-			if v.get("type").and_then(|t| t.as_str()) == Some("response.output_text.delta")
-				&& let Some(text) = v.get("delta").and_then(|s| s.as_str())
+			// OpenAI responses: response.output_text.delta or response.refusal.delta
+			if matches!(
+				v.get("type").and_then(|t| t.as_str()),
+				Some("response.output_text.delta" | "response.refusal.delta")
+			) && let Some(text) = v.get("delta").and_then(|s| s.as_str())
 			{
 				return Some(text.to_string());
 			}
@@ -581,6 +583,13 @@ mod tests {
 		))
 	}
 
+	fn refusal_delta_bytes(text: &str) -> Bytes {
+		sse_bytes(&format!(
+			"{{\"type\":\"response.refusal.delta\",\"delta\":\"{}\"}}",
+			text
+		))
+	}
+
 	fn make_body(chunks: Vec<Bytes>) -> crate::http::Body {
 		use std::convert::Infallible;
 
@@ -763,6 +772,22 @@ mod tests {
 		let bytes = guarded.collect().await.unwrap().to_bytes();
 		assert!(bytes.starts_with(&chunk));
 		assert!(!contains(&bytes, b"guardrail_blocked"));
+	}
+
+	#[tokio::test]
+	async fn test_regex_blocks_matching_refusal_delta() {
+		let chunk = refusal_delta_bytes("my SSN is 123-45-6789");
+		let body = make_body(vec![chunk]);
+		let guarded = GuardedSseBody::new(
+			body,
+			vec![Box::new(pattern_evaluator("SSN"))],
+			1024 * 1024,
+			None,
+		);
+
+		let bytes = guarded.collect().await.unwrap().to_bytes();
+		assert!(contains(&bytes, b"guardrail_blocked"));
+		assert!(!contains(&bytes, b"SSN"));
 	}
 
 	#[tokio::test]
