@@ -31,6 +31,7 @@ pub trait ResponseType: Send + Sync {
 		resp: Vec<crate::webhook::ResponseChoice>,
 	) -> anyhow::Result<()>;
 	fn serialize(&self) -> serde_json::Result<Vec<u8>>;
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String));
 }
 
 /// RequestType is an abstraction over provider/endpoint specific request formats that enables
@@ -45,6 +46,8 @@ pub trait RequestType: Send + Sync {
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError>;
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage>;
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>);
+	fn to_value(&self) -> serde_json::Result<serde_json::Value>;
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String));
 }
 
 /// SimpleChatCompletionMessage is a simplified chat message

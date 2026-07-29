@@ -920,8 +920,8 @@ async fn modern_stateful_streamable_http_does_not_use_sessions() {
 	assert_eq!(with_session.status(), reqwest::StatusCode::BAD_REQUEST);
 }
 
-// TODO this test doesn't regress without downgrade_to_legacy_handshake
-// as our current rmcp fork doesn't replicate the strictness that the python SDK has
+// TODO this test doesn't regress without downgrade_to_legacy_handshake because rmcp does not
+// replicate the strictness that the Python SDK has.
 #[tokio::test]
 async fn stateless_vnext_tools_list_reaches_upstream() {
 	let mock = mock_streamable_http_server(false).await;
@@ -956,7 +956,7 @@ async fn stateless_vnext_tools_list_reaches_upstream() {
 
 #[tokio::test]
 async fn modern_client_multiplex_mixed_servers_falls_back_to_legacy_initialize() {
-	let old = mock_streamable_http_server(false).await;
+	let old = mock_streamable_http_server_without_discover().await;
 	let new = mock_modern_streamable_http_server().await;
 	let t = setup_proxy_test("{}")
 		.unwrap()
@@ -1183,32 +1183,43 @@ async fn mrtr_direct_server_request_fails_modern_call_cleanly() {
 	);
 }
 
-#[tokio::test]
-async fn legacy_meta_client_capabilities_are_stripped() {
+async fn assert_capability_forwarding(protocol_version: &str, modern: bool) {
 	let (mock, capture) = mock_mrtr_streamable_http_server().await;
 	let (_bind, io) = setup_proxy(&mock, false, false).await;
 	let client = reqwest::Client::new();
 	let url = format!("http://{io}/mcp");
+
+	// Modern requests need the full `_meta` block (SEP-2575); legacy doesn't.
+	let mut meta = serde_json::json!({
+		"io.modelcontextprotocol/clientCapabilities": {
+			"elicitation": {},
+			"tasks": {},
+			"extensions": {
+				"io.modelcontextprotocol/tasks": {},
+				"io.modelcontextprotocol/ui": {}
+			}
+		}
+	});
+	if modern {
+		meta["io.modelcontextprotocol/protocolVersion"] = protocol_version.into();
+		meta["io.modelcontextprotocol/clientInfo"] =
+			serde_json::json!({"name": "test-client", "version": "0.0.1"});
+	}
 
 	let body = serde_json::json!({
 		"jsonrpc": "2.0",
 		"id": 1,
 		"method": "tools/call",
 		"params": {
-			"_meta": {"io.modelcontextprotocol/clientCapabilities": {
-				"elicitation": {},
-				"tasks": {},
-				"extensions": {
-					"io.modelcontextprotocol/tasks": {},
-					"io.modelcontextprotocol/ui": {}
-				}
-			}},
+			"_meta": meta,
 			"name": "guarded_echo",
 			"arguments": {}
 		}
 	});
 	let resp = mcp_json_post(&client, &url, &body)
-		.header("mcp-protocol-version", "2025-06-18")
+		.header("mcp-protocol-version", protocol_version)
+		.header("mcp-method", "tools/call")
+		.header("mcp-name", "guarded_echo")
 		.send()
 		.await
 		.unwrap();
@@ -1220,26 +1231,233 @@ async fn legacy_meta_client_capabilities_are_stripped() {
 		.find(|b| b["method"] == "tools/call")
 		.expect("upstream should see the tools/call");
 	let caps = &call["params"]["_meta"]["io.modelcontextprotocol/clientCapabilities"];
-	assert!(
-		caps.get("elicitation").is_none(),
-		"legacy requests must still have elicitation stripped, got {call}"
+
+	assert_eq!(
+		caps.get("elicitation").is_some(),
+		modern,
+		"elicitation forwarding mismatch, got {call}"
 	);
 	assert!(
 		caps.get("tasks").is_none(),
-		"legacy tasks must be stripped, got {call}"
+		"legacy top-level `tasks` field is not a real capability, got {call}"
 	);
-	assert!(
+	assert_eq!(
 		caps
 			.pointer("/extensions/io.modelcontextprotocol~1tasks")
-			.is_none(),
-		"modern tasks extension must be stripped, got {call}"
+			.is_some(),
+		modern,
+		"tasks extension forwarding mismatch, got {call}"
 	);
 	assert!(
 		caps
 			.pointer("/extensions/io.modelcontextprotocol~1ui")
 			.is_some(),
-		"other extensions must be preserved, got {call}"
+		"unrelated extensions must always be preserved, got {call}"
 	);
+}
+
+#[tokio::test]
+async fn legacy_meta_client_capabilities_are_stripped() {
+	assert_capability_forwarding("2025-06-18", false).await;
+}
+
+#[tokio::test]
+async fn modern_meta_tasks_capability_is_forwarded() {
+	assert_capability_forwarding("2026-07-28", true).await;
+}
+
+fn task_meta() -> serde_json::Value {
+	serde_json::json!({
+		"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+		"io.modelcontextprotocol/clientInfo": {"name": "task-client", "version": "0.0.1"},
+		"io.modelcontextprotocol/clientCapabilities": {
+			"extensions": {"io.modelcontextprotocol/tasks": {}}
+		}
+	})
+}
+
+// Posts a modern request with SEP-2243 Mcp-Method/Mcp-Name headers set from `name`.
+async fn modern_request(
+	io: SocketAddr,
+	id: i64,
+	method: &str,
+	name: &str,
+	mut params: serde_json::Value,
+) -> serde_json::Value {
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	// Modern requests need the standard `_meta` block (SEP-2575).
+	params["_meta"] = task_meta();
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": id,
+		"method": method,
+		"params": params
+	});
+	let resp = mcp_json_post(&client, &url, &body)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", method)
+		.header("mcp-name", name)
+		.send()
+		.await
+		.unwrap();
+	let text = resp.text().await.unwrap();
+	terminal_message(&text, id)
+}
+
+#[tokio::test]
+async fn modern_task_round_trip_single_target() {
+	let mock = mock_task_streamable_http_server().await;
+	let (_bind, io) = setup_proxy(&mock, false, false).await;
+
+	let create = modern_request(
+		io,
+		1,
+		"tools/call",
+		"slow_job",
+		serde_json::json!({"_meta": task_meta(), "name": "slow_job", "arguments": {}}),
+	)
+	.await;
+	let result = &create["result"];
+	assert_eq!(result["resultType"], "task");
+	// Single-target (non-multiplexing): task IDs pass through unnamespaced.
+	assert_eq!(result["taskId"], "task-abc");
+
+	let get = modern_request(
+		io,
+		2,
+		"tasks/get",
+		"task-abc",
+		serde_json::json!({"taskId": "task-abc"}),
+	)
+	.await;
+	assert_eq!(get["result"]["status"], "completed");
+	assert_eq!(get["result"]["result"]["content"][0]["text"], "done");
+
+	let unknown = modern_request(
+		io,
+		3,
+		"tasks/get",
+		"nope",
+		serde_json::json!({"taskId": "nope"}),
+	)
+	.await;
+	assert_eq!(unknown["error"]["code"], -32602);
+
+	let cancel = modern_request(
+		io,
+		4,
+		"tasks/cancel",
+		"task-abc",
+		serde_json::json!({"taskId": "task-abc"}),
+	)
+	.await;
+	assert_eq!(cancel["result"]["resultType"], "complete");
+
+	let get_after_cancel = modern_request(
+		io,
+		5,
+		"tasks/get",
+		"task-abc",
+		serde_json::json!({"taskId": "task-abc"}),
+	)
+	.await;
+	assert_eq!(get_after_cancel["result"]["status"], "cancelled");
+}
+
+#[tokio::test]
+async fn modern_task_id_namespaced_when_multiplexing() {
+	let plain = mock_modern_streamable_http_server().await;
+	let tasks = mock_task_streamable_http_server().await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_multiplex_mcp_backend(
+			"mcp",
+			vec![("plain", plain.addr, false), ("tasks", tasks.addr, false)],
+			true,
+		)
+		.with_bind(simple_bind())
+		.with_route(basic_named_route(strng::new("/mcp")));
+	let io = t.serve_real_listener(strng::new("bind")).await;
+
+	let create = modern_request(
+		io,
+		1,
+		"tools/call",
+		"tasks_slow_job",
+		serde_json::json!({"_meta": task_meta(), "name": "tasks_slow_job", "arguments": {}}),
+	)
+	.await;
+	let result = &create["result"];
+	assert_eq!(result["resultType"], "task");
+	// Multiplexing: the owning target is namespaced into the task ID.
+	assert_eq!(result["taskId"], "tasks+task-abc");
+
+	let get = modern_request(
+		io,
+		2,
+		"tasks/get",
+		"tasks+task-abc",
+		serde_json::json!({"taskId": "tasks+task-abc"}),
+	)
+	.await;
+	assert_eq!(get["result"]["status"], "completed");
+	assert_eq!(get["result"]["taskId"], "tasks+task-abc");
+
+	// A syntactically valid but unknown service prefix is rejected locally.
+	let bogus_service = modern_request(
+		io,
+		3,
+		"tasks/get",
+		"doesnotexist+task-abc",
+		serde_json::json!({"taskId": "doesnotexist+task-abc"}),
+	)
+	.await;
+	assert_eq!(bogus_service["error"]["code"], -32602);
+
+	// A real service that isn't the task's owner never learns about it upstream.
+	let wrong_service = modern_request(
+		io,
+		4,
+		"tasks/get",
+		"plain+task-abc",
+		serde_json::json!({"taskId": "plain+task-abc"}),
+	)
+	.await;
+	assert!(
+		wrong_service.get("error").is_some(),
+		"the non-owning target must not resolve the task, got {wrong_service}"
+	);
+}
+
+// A caller denied access to a target by CEL policy must stay denied on tasks/*, not just
+// on the tools/call that created the task.
+#[tokio::test]
+async fn task_methods_respect_mcp_authorization_deny_policy() {
+	let mock = mock_task_streamable_http_server().await;
+	let deny_all_policy = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(cel::Expression::new_strict("true").unwrap())],
+		vec![],
+	)));
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		false,
+		false,
+		vec![BackendTrafficPolicy::McpAuthorization(deny_all_policy)],
+	)
+	.await;
+
+	let get = modern_request(
+		io,
+		1,
+		"tasks/get",
+		"task-abc",
+		serde_json::json!({"taskId": "task-abc"}),
+	)
+	.await;
+	assert_eq!(get["error"]["code"], -32602);
+	assert_eq!(get["error"]["message"], "Unknown task: task-abc");
 }
 
 #[tokio::test]
@@ -1535,8 +1753,8 @@ async fn modern_removed_and_unknown_methods_return_404() {
 	let client = reqwest::Client::new();
 	let url = format!("http://{io}/mcp");
 
-	// Removed and unknown methods 404 in transport validation; `tasks/list` is known but
-	// unimplemented and 404s via the InvalidMethod remap in session dispatch.
+	// Removed and unknown methods 404 in transport validation. `tasks/list` predates SEP-2663
+	// and is gone now, so it's genuinely unknown, same as any other unknown method.
 	for (i, method) in super::REMOVED_METHODS_2026_07_28
 		.iter()
 		.copied()
@@ -2113,6 +2331,86 @@ async fn authorization_denied_returns_unknown_tool_error() {
 	);
 }
 
+#[tokio::test]
+async fn stateful_session_cannot_cross_mcp_backends() {
+	let sensitive = mock_streamable_http_server(true).await;
+	let public = mock_streamable_http_server(true).await;
+	let deny_all = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(cel::Expression::new_strict("true").unwrap())],
+		vec![],
+	)));
+
+	let mut route_a = basic_named_route(strng::format!("/{}", sensitive.addr));
+	route_a.key = "route-a".into();
+	route_a.name.name = "route-a".into();
+	route_a.matches[0].path = crate::types::agent::PathMatch::Exact("/a".into());
+	let mut route_b = basic_named_route(strng::format!("/{}", public.addr));
+	route_b.key = "route-b".into();
+	route_b.name.name = "route-b".into();
+	route_b.matches[0].path = crate::types::agent::PathMatch::Exact("/b".into());
+
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_policies(
+			sensitive.addr,
+			true,
+			false,
+			vec![BackendTrafficPolicy::McpAuthorization(deny_all)],
+		)
+		.with_mcp_backend(public.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(route_a)
+		.with_route(route_b);
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+
+	let initialize = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {"name": "scope-test", "version": "0"}
+		}
+	});
+	let response = mcp_json_post(&client, &format!("http://{io}/a"), &initialize)
+		.header("mcp-protocol-version", "2025-06-18")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	let sid = response.headers()["mcp-session-id"]
+		.to_str()
+		.unwrap()
+		.to_owned();
+
+	let call = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 2,
+		"method": "tools/call",
+		"params": {"name": "echo", "arguments": {"hi": "world"}}
+	});
+	let denied = mcp_json_post(&client, &format!("http://{io}/a"), &call)
+		.header("mcp-protocol-version", "2025-06-18")
+		.header("mcp-session-id", &sid)
+		.send()
+		.await
+		.unwrap();
+	assert!(read_response_message(denied).await.get("error").is_some());
+
+	let cross_backend = mcp_json_post(&client, &format!("http://{io}/b"), &call)
+		.header("mcp-protocol-version", "2025-06-18")
+		.header("mcp-session-id", sid)
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(cross_backend.status(), reqwest::StatusCode::NOT_FOUND);
+	assert_eq!(sensitive.init_count().await, 1);
+	assert_eq!(public.init_count().await, 0);
+}
+
 /// Test that getting a prompt denied by MCP authorization policy returns proper JSON-RPC error
 /// with INVALID_PARAMS error code (-32602) and message "Unknown prompt: {prompt_name}"
 #[tokio::test]
@@ -2226,6 +2524,7 @@ async fn authorization_denied_returns_unknown_resource_error() {
 }
 
 #[tokio::test]
+#[allow(deprecated)] // Intentionally exercises the legacy resources/subscribe protocol.
 async fn resource_subscribe_and_unsubscribe_forward_to_single_backend() {
 	let mock = mock_streamable_http_server(true).await;
 	let (_bind, io) = setup_proxy(&mock, true, false).await;
@@ -2244,6 +2543,7 @@ async fn resource_subscribe_and_unsubscribe_forward_to_single_backend() {
 }
 
 #[tokio::test]
+#[allow(deprecated)] // Intentionally exercises the legacy resources/subscribe protocol.
 async fn multiplex_resource_subscribe_and_unsubscribe_route_to_target() {
 	let mock_a = mock_streamable_http_server(true).await;
 	let mock_b = mock_streamable_http_server(true).await;
@@ -2282,6 +2582,7 @@ async fn multiplex_resource_subscribe_and_unsubscribe_route_to_target() {
 }
 
 #[tokio::test]
+#[allow(deprecated)] // Intentionally exercises the legacy resources/subscribe protocol.
 async fn multiplex_resource_updated_notification_is_prefixed() {
 	let mock_a = mock_streamable_http_server(true).await;
 	let mock_b = mock_streamable_http_server(true).await;
@@ -2314,6 +2615,7 @@ async fn multiplex_resource_updated_notification_is_prefixed() {
 }
 
 #[tokio::test]
+#[allow(deprecated)] // Intentionally exercises the legacy resources/subscribe protocol.
 async fn single_resource_updated_notification_is_not_prefixed() {
 	let mock = mock_streamable_http_server(true).await;
 	let (_bind, io) = setup_proxy(&mock, true, false).await;
@@ -2989,6 +3291,8 @@ async fn tool_call_error_exposes_error_payload_to_access_log_cel() {
 	);
 	assert_eq!(log["mcp_args_cel"]["traceId"], trace_id);
 	assert_eq!(log["mcp_error_cel"]["code"], -32602);
+	assert_eq!(log["mcp.error.code"], -32602);
+	assert_eq!(log["mcp.error.message"], "tool not found");
 	assert!(
 		log["mcp_error_cel"]["message"]
 			.as_str()
@@ -3001,6 +3305,36 @@ async fn tool_call_error_exposes_error_payload_to_access_log_cel() {
 	);
 	assert!(log.get("gen_ai.tool.call.arguments").is_none());
 	assert!(log.get("gen_ai.tool.call.result").is_none());
+}
+
+#[tokio::test]
+async fn discover_error_is_recorded_in_access_log() {
+	let mock = mock_streamable_http_server_without_discover().await;
+	let (_t, io) = setup_access_log_mcp_proxy(&mock).await;
+	let body = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": "discover-log-test",
+		"method": "server/discover",
+		"params": { "_meta": modern_meta() }
+	});
+	let response = mcp_json_post(&reqwest::Client::new(), &format!("http://{io}/mcp"), &body)
+		.header("mcp-protocol-version", "2026-07-28")
+		.header("mcp-method", "server/discover")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+	let message = read_response_message(response).await;
+	assert_eq!(message["error"]["code"], -32601);
+
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("scope", "request"),
+		("mcp.method.name", "server/discover"),
+		("mcp.error.message", "server/discover"),
+	])
+	.await
+	.unwrap();
+	assert_eq!(log["mcp.error.code"], -32601);
 }
 
 #[tokio::test]
@@ -3250,14 +3584,29 @@ async fn mock_modern_streamable_http_server() -> MockServer {
 	mock_modern_streamable_http_server_with_versions(&["2025-06-18", "2026-07-28"]).await
 }
 
+async fn mock_streamable_http_server_without_discover() -> MockServer {
+	mock_streamable_http_server_with_discover_versions(None).await
+}
+
 // Variant of `mock_modern_streamable_http_server` for tests that need custom upstream
 // `server/discover` versions.
 async fn mock_modern_streamable_http_server_with_versions(versions: &[&str]) -> MockServer {
+	mock_streamable_http_server_with_discover_versions(Some(versions)).await
+}
+
+async fn mock_streamable_http_server_with_discover_versions(
+	versions: Option<&[&str]>,
+) -> MockServer {
 	agent_core::telemetry::testing::setup_test_logging();
 	let (tx, rx) = tokio::sync::oneshot::channel();
 	let init_counter = std::sync::Arc::new(tokio::sync::Mutex::new(0_i32));
 	let init_counter_clone = init_counter.clone();
-	let versions: Vec<String> = versions.iter().map(|v| v.to_string()).collect();
+	let versions = versions.map(|versions| {
+		versions
+			.iter()
+			.map(|version| version.to_string())
+			.collect::<Vec<_>>()
+	});
 	let router = axum::Router::new().route(
 		"/mcp",
 		axum::routing::post(move |body: axum::Json<serde_json::Value>| {
@@ -3267,17 +3616,31 @@ async fn mock_modern_streamable_http_server_with_versions(versions: &[&str]) -> 
 				let id = body.get("id").cloned().unwrap_or(serde_json::Value::Null);
 				let method = body.get("method").and_then(|m| m.as_str()).unwrap_or("");
 				let result = match method {
-					"server/discover" => serde_json::json!({
-						"resultType": "complete",
-						"supportedVersions": versions,
-						"capabilities": {
-							"tools": {}
-						},
-						"serverInfo": {
-							"name": "modern-mock",
-							"version": "0.0.1"
-						}
-					}),
+					"server/discover" => {
+						let Some(versions) = versions else {
+							return axum::Json(serde_json::json!({
+								"jsonrpc": "2.0",
+								"id": id,
+								"error": {
+									"code": -32601,
+									"message": method
+								}
+							}));
+						};
+						serde_json::json!({
+							"resultType": "complete",
+							"supportedVersions": versions,
+							"capabilities": {
+								"tools": {}
+							},
+							"serverInfo": {
+								"name": "modern-mock",
+								"version": "0.0.1"
+							},
+							"ttlMs": 0,
+							"cacheScope": "private"
+						})
+					},
 					"initialize" => {
 						*init_counter.lock().await += 1;
 						serde_json::json!({
@@ -3479,6 +3842,132 @@ async fn mock_mrtr_streamable_http_server() -> (MockServer, BodyCapture) {
 	)
 }
 
+// SEP-2663 mock: `slow_job` returns a task for id "task-abc"; cancel flips it to "cancelled".
+async fn mock_task_streamable_http_server() -> MockServer {
+	agent_core::telemetry::testing::setup_test_logging();
+	let (tx, rx) = tokio::sync::oneshot::channel();
+	let cancelled = std::sync::Arc::new(std::sync::Mutex::new(false));
+	let router = axum::Router::new().route(
+		"/mcp",
+		axum::routing::post(move |body: axum::Json<serde_json::Value>| {
+			let cancelled = cancelled.clone();
+			async move {
+				let id = body.get("id").cloned().unwrap_or(serde_json::Value::Null);
+				let method = body.get("method").and_then(|m| m.as_str()).unwrap_or("");
+				let params = body.get("params").cloned().unwrap_or(serde_json::json!({}));
+				let result = match method {
+					"server/discover" => serde_json::json!({
+						"resultType": "complete",
+						"supportedVersions": ["2026-07-28"],
+						"capabilities": {
+							"tools": {},
+							"extensions": {"io.modelcontextprotocol/tasks": {}}
+						},
+						"serverInfo": {"name": "task-mock", "version": "0.0.1"}
+					}),
+					"tools/list" => serde_json::json!({
+						"resultType": "complete",
+						"tools": [
+							{"name": "slow_job", "description": "A slow job", "inputSchema": {"type": "object"}}
+						]
+					}),
+					"tools/call" => {
+						let name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
+						if name != "slow_job" {
+							return axum::Json(serde_json::json!({
+								"jsonrpc": "2.0",
+								"id": id,
+								"error": {"code": -32602, "message": "unknown tool"}
+							}));
+						}
+						serde_json::json!({
+							"resultType": "task",
+							"taskId": "task-abc",
+							"status": "working",
+							"createdAt": "2025-11-25T10:30:00Z",
+							"lastUpdatedAt": "2025-11-25T10:30:00Z",
+							"ttlMs": 60000,
+							"pollIntervalMs": 1000
+						})
+					},
+					"tasks/get" => {
+						let task_id = params.get("taskId").and_then(|t| t.as_str()).unwrap_or("");
+						if task_id != "task-abc" {
+							return axum::Json(serde_json::json!({
+								"jsonrpc": "2.0",
+								"id": id,
+								"error": {"code": -32602, "message": "unknown task"}
+							}));
+						}
+						if *cancelled.lock().unwrap() {
+							serde_json::json!({
+								"resultType": "complete",
+								"taskId": "task-abc",
+								"status": "cancelled",
+								"createdAt": "2025-11-25T10:30:00Z",
+								"lastUpdatedAt": "2025-11-25T10:31:00Z",
+								"ttlMs": 60000
+							})
+						} else {
+							serde_json::json!({
+								"resultType": "complete",
+								"taskId": "task-abc",
+								"status": "completed",
+								"createdAt": "2025-11-25T10:30:00Z",
+								"lastUpdatedAt": "2025-11-25T10:31:00Z",
+								"ttlMs": 60000,
+								"result": {
+									"content": [{"type": "text", "text": "done"}],
+									"isError": false
+								}
+							})
+						}
+					},
+					"tasks/cancel" => {
+						let task_id = params.get("taskId").and_then(|t| t.as_str()).unwrap_or("");
+						if task_id != "task-abc" {
+							return axum::Json(serde_json::json!({
+								"jsonrpc": "2.0",
+								"id": id,
+								"error": {"code": -32602, "message": "unknown task"}
+							}));
+						}
+						*cancelled.lock().unwrap() = true;
+						serde_json::json!({"resultType": "complete"})
+					},
+					"tasks/update" => serde_json::json!({"resultType": "complete"}),
+					_ => {
+						return axum::Json(serde_json::json!({
+							"jsonrpc": "2.0",
+							"id": id,
+							"error": {"code": -32601, "message": method}
+						}));
+					},
+				};
+				axum::Json(serde_json::json!({
+					"jsonrpc": "2.0",
+					"id": id,
+					"result": result
+				}))
+			}
+		}),
+	);
+	let tcp_listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+	let addr = tcp_listener.local_addr().unwrap();
+	tokio::spawn(async move {
+		let _ = axum::serve(tcp_listener, router)
+			.with_graceful_shutdown(async {
+				let _ = rx.await;
+			})
+			.await;
+	});
+	MockServer {
+		addr,
+		init_counter: std::sync::Arc::new(tokio::sync::Mutex::new(0)),
+		_cancel: tx,
+	}
+}
+
 type HeaderCapture = std::sync::Arc<std::sync::Mutex<Vec<http::HeaderMap>>>;
 
 async fn mock_streamable_http_server_with_capture(stateful: bool) -> (MockServer, HeaderCapture) {
@@ -3506,7 +3995,7 @@ async fn mock_streamable_http_server_inner(
 		StreamableHttpServerConfig::default()
 			.with_sse_retry(None)
 			.with_sse_keep_alive(None)
-			.with_stateful_mode(stateful)
+			.with_legacy_session_mode(stateful)
 			.with_json_response(false),
 	);
 
@@ -3552,7 +4041,7 @@ async fn mock_paging_streamable_http_server() -> MockServer {
 		StreamableHttpServerConfig::default()
 			.with_sse_retry(None)
 			.with_sse_keep_alive(None)
-			.with_stateful_mode(true)
+			.with_legacy_session_mode(true)
 			.with_json_response(false),
 	);
 
@@ -3595,7 +4084,7 @@ async fn mock_apps_streamable_http_server_with_init_capture()
 		StreamableHttpServerConfig::default()
 			.with_sse_retry(None)
 			.with_sse_keep_alive(None)
-			.with_stateful_mode(true)
+			.with_legacy_session_mode(true)
 			.with_json_response(false),
 	);
 
@@ -3663,8 +4152,8 @@ mod appsmockserver {
 	pub const DASHBOARD_HTML: &str = "<html>dashboard</html>";
 	pub const UI_MIME_TYPE: &str = "text/html;profile=mcp-app";
 
-	fn meta(v: serde_json::Value) -> Meta {
-		Meta(v.as_object().cloned().expect("meta must be an object"))
+	fn meta(v: serde_json::Value) -> MetaObject {
+		MetaObject(v.as_object().cloned().expect("meta must be an object"))
 	}
 
 	fn schema() -> Arc<JsonObject> {
@@ -3733,12 +4222,12 @@ mod appsmockserver {
 			&self,
 			request: CallToolRequestParams,
 			_: RequestContext<RoleServer>,
-		) -> Result<CallToolResult, McpError> {
+		) -> Result<CallToolResponse, McpError> {
 			match request.name.as_ref() {
-				"show_dashboard" => Ok(CallToolResult::success(vec![ContentBlock::text(
-					"dashboard data",
-				)])),
-				"plain" => Ok(CallToolResult::success(vec![ContentBlock::text("ok")])),
+				"show_dashboard" => {
+					Ok(CallToolResult::success(vec![ContentBlock::text("dashboard data")]).into())
+				},
+				"plain" => Ok(CallToolResult::success(vec![ContentBlock::text("ok")]).into()),
 				_ => Err(McpError::invalid_params("unknown tool", None)),
 			}
 		}
@@ -3767,15 +4256,18 @@ mod appsmockserver {
 			&self,
 			ReadResourceRequestParams { uri, .. }: ReadResourceRequestParams,
 			_: RequestContext<RoleServer>,
-		) -> Result<ReadResourceResult, McpError> {
+		) -> Result<ReadResourceResponse, McpError> {
 			match uri.as_str() {
-				DASHBOARD_URI => Ok(ReadResourceResult::new(vec![
-					ResourceContents::text(DASHBOARD_HTML, uri)
-						.with_mime_type(UI_MIME_TYPE)
-						.with_meta(meta(json!({
-							"ui": {"csp": {"connectDomains": ["https://api.example.com"]}}
-						}))),
-				])),
+				DASHBOARD_URI => Ok(
+					ReadResourceResult::new(vec![
+						ResourceContents::text(DASHBOARD_HTML, uri)
+							.with_mime_type(UI_MIME_TYPE)
+							.with_meta(meta(json!({
+								"ui": {"csp": {"connectDomains": ["https://api.example.com"]}}
+							}))),
+					])
+					.into(),
+				),
 				_ => Err(McpError::resource_not_found(
 					"resource_not_found",
 					Some(json!({ "uri": uri })),
@@ -4025,19 +4517,15 @@ mod mockserver {
 			&self,
 			ReadResourceRequestParams { uri, .. }: ReadResourceRequestParams,
 			_: RequestContext<RoleServer>,
-		) -> Result<ReadResourceResult, McpError> {
+		) -> Result<ReadResourceResponse, McpError> {
 			match uri.as_str() {
 				"str:////Users/to/some/path/" => {
 					let cwd = "/Users/to/some/path/";
-					Ok(ReadResourceResult::new(vec![ResourceContents::text(
-						cwd, uri,
-					)]))
+					Ok(ReadResourceResult::new(vec![ResourceContents::text(cwd, uri)]).into())
 				},
 				"memo://insights" => {
 					let memo = "Business Intelligence Memo\n\nAnalysis has revealed 5 key insights ...";
-					Ok(ReadResourceResult::new(vec![ResourceContents::text(
-						memo, uri,
-					)]))
+					Ok(ReadResourceResult::new(vec![ResourceContents::text(memo, uri)]).into())
 				},
 				_ => Err(McpError::resource_not_found(
 					"resource_not_found",
@@ -4138,12 +4626,10 @@ mod mockserver {
 			&self,
 			request: CallToolRequestParams,
 			_: RequestContext<RoleServer>,
-		) -> Result<CallToolResult, McpError> {
+		) -> Result<CallToolResponse, McpError> {
 			match request.name.as_ref() {
-				"paged_echo" => Ok(CallToolResult::success(vec![ContentBlock::text(
-					"paged ok",
-				)])),
-				"first_page_tool" => Ok(CallToolResult::success(vec![ContentBlock::text("first")])),
+				"paged_echo" => Ok(CallToolResult::success(vec![ContentBlock::text("paged ok")]).into()),
+				"first_page_tool" => Ok(CallToolResult::success(vec![ContentBlock::text("first")]).into()),
 				_ => Err(McpError::invalid_params("unknown tool", None)),
 			}
 		}
@@ -5209,7 +5695,7 @@ async fn test_runtime_fanout_fail_open_skips_jsonrpc_error_frames() {
 #[tokio::test]
 async fn test_runtime_fanout_fail_open_all_fail() {
 	use futures_util::StreamExt;
-	use rmcp::model::{ListToolsResult, RequestId};
+	use rmcp::model::RequestId;
 
 	use crate::mcp::mergestream::{MergeStream, Messages};
 
@@ -5218,19 +5704,9 @@ async fn test_runtime_fanout_fail_open_all_fail() {
 
 	let streams = vec![("bad1".into(), err_stream1), ("bad2".into(), err_stream2)];
 
-	let merge = Box::new(
-		|results: Vec<(Strng, rmcp::model::ServerResult)>, _cel: &_| {
-			// All failed, so results should be empty.
-			// Return an empty success result (idiomatic for FailOpen).
-			assert!(results.is_empty());
-			Ok(rmcp::model::ServerResult::ListToolsResult(
-				ListToolsResult {
-					tools: vec![],
-					..Default::default()
-				},
-			))
-		},
-	);
+	let merge = Box::new(|_: Vec<(Strng, rmcp::model::ServerResult)>, _cel: &_| {
+		panic!("merge must not run without a successful upstream")
+	});
 
 	let mut ms = MergeStream::new(
 		streams,
@@ -5243,11 +5719,7 @@ async fn test_runtime_fanout_fail_open_all_fail() {
 	let res = ms.next().await;
 	assert!(res.is_some());
 	let res = res.unwrap();
-	assert!(
-		res.is_ok(),
-		"expected success with FailOpen even if ALL upstreams error mid-request: {:?}",
-		res.err()
-	);
+	assert!(res.is_err(), "expected an error when ALL upstreams fail");
 }
 
 #[tokio::test]

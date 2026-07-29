@@ -89,5 +89,20 @@ info:
   ],
   "inferenceConfig": {
     "maxTokens": 1024
+  },
+  "toolConfig": {
+    "tools": [
+      {
+        "toolSpec": {
+          "name": "agentgateway_dummy_do_not_call",
+          "description": null,
+          "inputSchema": {
+            "json": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    ]
   }
 }

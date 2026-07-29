@@ -1,0 +1,73 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/tool_history_without_tools.json
+info:
+  model: "anthropic.claude-sonnet-4-20250514-v1:0"
+  max_tokens: 1024
+  messages:
+    - role: assistant
+      content:
+        - type: tool_use
+          id: call_1
+          name: get_weather
+          input:
+            location: Seattle
+    - role: user
+      content:
+        - type: tool_result
+          tool_use_id: call_1
+          content: rain
+---
+{
+  "modelId": "anthropic.claude-sonnet-4-20250514-v1:0",
+  "messages": [
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "toolUse": {
+            "toolUseId": "call_1",
+            "name": "get_weather",
+            "input": {
+              "location": "Seattle"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "toolResult": {
+            "toolUseId": "call_1",
+            "content": [
+              {
+                "text": "rain"
+              }
+            ],
+            "status": null
+          }
+        }
+      ]
+    }
+  ],
+  "inferenceConfig": {
+    "maxTokens": 1024
+  },
+  "toolConfig": {
+    "tools": [
+      {
+        "toolSpec": {
+          "name": "agentgateway_dummy_do_not_call",
+          "description": null,
+          "inputSchema": {
+            "json": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

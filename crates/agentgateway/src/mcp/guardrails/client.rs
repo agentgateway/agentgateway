@@ -256,6 +256,7 @@ fn eval_to_value(
 
 fn build_client(remote: &Remote, client: PolicyClient) -> ExtMcpClient<GrpcReferenceChannel> {
 	ExtMcpClient::new(remote.target.grpc_channel(client))
+		.max_decoding_message_size(crate::defaults::GRPC_MAX_DECODING_MESSAGE_SIZE)
 }
 
 // Snapshot the incoming request headers for the policy server, applying the

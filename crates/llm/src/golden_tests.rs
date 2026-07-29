@@ -258,6 +258,11 @@ fn request_conversion_golden() {
 	test_request(BEDROCK, "requests/messages/reasoning_replay.json", |i| {
 		conversion::bedrock::from_messages::translate(&i, &bedrock_claude, None).map(|r| r.body)
 	});
+	test_request(
+		BEDROCK,
+		"requests/messages/tool_history_without_tools.json",
+		|i| conversion::bedrock::from_messages::translate(&i, &bedrock_claude, None).map(|r| r.body),
+	);
 
 	for name in ["basic", "instructions", "input-list", "parallel-tool-call"] {
 		let path = format!("requests/responses/{name}.json");
@@ -382,6 +387,7 @@ fn response_conversion_golden() {
 	for name in [
 		"basic",
 		"audio",
+		"cache_write",
 		"openrouter_reasoning",
 		"gemini_zero_completion_tokens",
 		"gemini_with_completion_tokens",

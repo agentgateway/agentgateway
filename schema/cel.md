@@ -56,7 +56,7 @@
 |`llm.inputTextTokens`|integer|The number of text tokens in the input/prompt.<br>Note: this field is only set in multi-modal calls where the total token count is split out by<br>text/image/audio; for standard all-text calls, this is unset.|
 |`llm.inputAudioTokens`|integer|The number of audio tokens in the input/prompt.|
 |`llm.cachedInputTokens`|integer|The number of tokens in the input/prompt read from cache (savings)|
-|`llm.cacheCreationInputTokens`|integer|Tokens written to cache (costs)<br>Not present with OpenAI|
+|`llm.cacheCreationInputTokens`|integer|Tokens written to cache (costs)|
 |`llm.outputTokens`|integer|The number of tokens in the output/completion.|
 |`llm.outputImageTokens`|integer|The number of image tokens in the output/completion.|
 |`llm.outputTextTokens`|integer|The number of text tokens in the output/completion.|
@@ -139,6 +139,9 @@
 |`mcp.resource`|object||
 |`mcp.resource.target`|string|The target of the resource|
 |`mcp.resource.name`|string|The name of the resource|
+|`mcp.task`|object||
+|`mcp.task.target`|string|The target handling the task.|
+|`mcp.task.name`|string|The task ID.|
 |`backend`|object|`backend` contains information about the backend being used.|
 |`backend.name`|string|The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.|
 |`backend.type`|enum|The type of backend.<br>Possible values: `ai`, `mcp`, `static`, `dynamic`, `service`, `unknown`.|

@@ -17,7 +17,6 @@ use crate::types::agent::{
 	SimpleBackendWithPolicies, TCPRoute, TCPRouteBackend, TCPRouteBackendReference, Target,
 	TransportProtocol,
 };
-use crate::types::discovery::gatewayaddress::Destination;
 use crate::types::discovery::{NetworkAddress, WaypointIdentity};
 use crate::types::{agent, frontend};
 use crate::{ProxyInputs, Stores, *};
@@ -386,24 +385,23 @@ fn resolve_waypoint_service(
 			address: dst.ip(),
 		})?;
 
-	let wp = svc.waypoint.as_ref()?;
-	let is_ours = match &wp.destination {
-		Destination::Address(addr) => {
-			let stores_ref = stores.clone();
-			self_id.matches_address(addr, |a| {
-				let discovery = stores_ref.read_discovery();
-				discovery
-					.services
-					.get_by_vip(a)
-					.map(|s| (s.name.clone(), s.namespace.clone()))
-			})
-		},
-		Destination::Hostname(n) => self_id.matches_hostname(n),
-	};
+	if !svc.has_fronting_waypoint() {
+		return None;
+	}
+	let is_ours = self_id.fronts_service(&svc, |a| {
+		stores
+			.read_discovery()
+			.services
+			.get_by_vip(a)
+			.map(|s| (s.name.clone(), s.namespace.clone()))
+	});
 	if !is_ours {
 		warn!(
-			"service {} is meant for waypoint {:?}, but we are {}.{}",
-			svc.hostname, wp.destination, self_id.gateway, self_id.namespace
+			"service {} is not fronted by waypoint {}.{}; its waypoints are {:?}",
+			svc.hostname,
+			self_id.gateway,
+			self_id.namespace,
+			svc.fronting_waypoint_destinations(),
 		);
 		return None;
 	}

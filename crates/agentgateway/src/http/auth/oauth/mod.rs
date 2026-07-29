@@ -759,25 +759,14 @@ pub(super) async fn apply_identity_assertion(
 	Ok(explicit)
 }
 
-/// Read a subject token for exchange. A JWT auth policy may have already stripped
-/// the configured credential after validation, so fall back to populated Claims.
 pub(super) fn extract_subject_token(
 	source: &AuthorizationLocation,
 	req: &Request,
 ) -> Option<String> {
 	source
 		.extract(req)
-		.map(|token| token.into_owned())
-		.filter(|token| !token.trim().is_empty())
-		.or_else(|| extract_validated_claims_token(req))
-		.filter(|token| !token.trim().is_empty())
-}
-
-fn extract_validated_claims_token(req: &Request) -> Option<String> {
-	req
-		.extensions()
-		.get::<Claims>()
-		.map(|claims| claims.jwt.expose_secret().to_string())
+		.filter(|t| !t.trim().is_empty())
+		.map(Cow::into_owned)
 }
 
 fn actor_token_from_request(

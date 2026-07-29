@@ -245,6 +245,14 @@ impl ResponseType for Response {
 	fn serialize(&self) -> serde_json::Result<Vec<u8>> {
 		serde_json::to_vec(&self)
 	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		for c in &mut self.choices {
+			if let Some(text) = &mut c.message.content {
+				f(text);
+			}
+		}
+	}
 }
 
 fn extract_output_messages(choices: &[Choice]) -> Option<Vec<OutputMessage>> {
@@ -302,6 +310,9 @@ fn extract_output_messages(choices: &[Choice]) -> Option<Vec<OutputMessage>> {
 impl super::RequestType for Request {
 	fn model(&mut self) -> &mut Option<String> {
 		&mut self.model
+	}
+	fn to_value(&self) -> serde_json::Result<serde_json::Value> {
+		serde_json::to_value(self)
 	}
 	fn prepend_prompts(&mut self, prompts: Vec<crate::types::SimpleChatCompletionMessage>) {
 		self
@@ -386,6 +397,26 @@ impl super::RequestType for Request {
 
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
 		self.messages = messages.into_iter().map(convert_message).collect();
+	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		for msg in &mut self.messages {
+			// TODO opt-in setting to apply guards to tool results
+			if msg.role == "tool" {
+				continue;
+			}
+			match &mut msg.content {
+				Some(Content::Text(text)) => f(text),
+				Some(Content::Array(parts)) => {
+					for part in parts {
+						if let Some(text) = &mut part.text {
+							f(text);
+						}
+					}
+				},
+				None => {},
+			}
+		}
 	}
 }
 

@@ -2,7 +2,7 @@
 
 |Field|Type|Description|
 |-|-|-|
-|`config`|object|config defines top-level settings for DNS, admin, networking, observability, and session<br>management. Unlike other sections, these are applied only at startup and are not dynamically reloaded.|
+|`config`|object|config defines top-level settings for DNS, admin, networking, observability, and session<br>management. Unlike other sections, these are applied only at startup, except modelCatalog,<br>which is dynamically reloaded.|
 |`config.enableIpv6`|boolean|Enable IPv6 address resolution and binding. Defaults to true.|
 |`config.dns`|object|DNS resolver settings.|
 |`config.dns.lookupFamily`|enum|Controls which IP address families the DNS resolver will query for<br>upstream connections.<br>Accepted values: All, Auto, V4Preferred, V4Only, V6Only.<br>Defaults to Auto (IPv4-only when enableIpv6 is false, both when true).|
@@ -35,6 +35,7 @@
 |`config.modelCatalog[].inline.providers.*.models.*.tags`|[]string|Freeform capability/routing tags (e.g. `mantle` for AWS Bedrock Mantle-only models).|
 |`config.database`|object|Primary database used by local runtime features.|
 |`config.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.|
+|`config.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5.<br>When the request log and config stores have matching database settings, they share one pool<br>with this limit.|
 |`config.storage`|object|Controls whether UI-managed configuration is written to the config file or a DB overlay.|
 |`config.storage.mode`|enum|Possible values: `file`, `hybrid`.|
 |`config.caAddress`|string|Address of the Certificate Authority used to issue SPIFFE certificates.|
@@ -82,6 +83,7 @@
 |`config.logging.format`|enum|Log output format: `text` or `json`.<br>Possible values: `text`, `json`, `null`.|
 |`config.logging.database`|object|Log-store database configuration; enables request logging to a database backend.|
 |`config.logging.database.url`|string|Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.|
+|`config.logging.database.maxConnections`|integer|Maximum number of connections to open in this database's connection pool. Defaults to 5.<br>When the request log and config stores have matching database settings, they share one pool<br>with this limit.|
 |`config.metrics`|object|Metrics configuration, including metric removal and custom fields.|
 |`config.metrics.remove`|[]string|Metric names to exclude from collection.|
 |`config.metrics.fields`|object|Custom fields to add to all metrics.|

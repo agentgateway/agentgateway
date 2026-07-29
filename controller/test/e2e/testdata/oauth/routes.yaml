@@ -34,6 +34,18 @@ spec:
   selector:
     app.kubernetes.io/name: testbox
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: oauth-jwt-subject-backend
+  namespace: agentgateway-base
+spec:
+  ports:
+  - name: http
+    port: 80
+  selector:
+    app.kubernetes.io/name: testbox
+---
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -77,6 +89,21 @@ spec:
   rules:
   - backendRefs:
     - name: oauth-jwt-bearer-backend
+      port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: oauth-jwt-subject
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+  - name: gateway
+  hostnames:
+  - "oauth-jwt-subject.com"
+  rules:
+  - backendRefs:
+    - name: oauth-jwt-subject-backend
       port: 80
 ---
 apiVersion: agentgateway.dev/v1alpha1
@@ -130,6 +157,61 @@ spec:
         - https://cross-app.example.com
         scopes:
         - cross-app.read
+        cache:
+          inMemory:
+            maxEntries: 0
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: oauth-jwt-subject-auth
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: oauth-jwt-subject
+  traffic:
+    jwtAuthentication:
+      mode: Strict
+      providers:
+      - issuer: https://agentgateway.dev
+        jwks:
+          remote:
+            jwksPath: org-one/keys
+            backendRef:
+              group: agentgateway.dev
+              kind: AgentgatewayBackend
+              name: oauth-dummy-idp
+              port: 8443
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: oauth-jwt-subject
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - group: ""
+    kind: Service
+    name: oauth-jwt-subject-backend
+  backend:
+    auth:
+      oauthTokenExchange:
+        backendRef:
+          group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: oauth-dummy-idp
+          port: 8443
+        path: /token-exchange
+        grantType: TokenExchange
+        subjectToken:
+          source:
+            expression: jwt.rawToken.unredacted()
+        requestedTokenType: AccessToken
+        clientAuth:
+          clientId: oauth-e2e-jwt-subject-client
+          method: ClientSecretPost
         cache:
           inMemory:
             maxEntries: 0

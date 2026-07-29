@@ -75,6 +75,29 @@ impl RawInputItem {
 
 		Some(SimpleChatCompletionMessage { role, content })
 	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		if self.0.get("role").is_some() {
+			match self.0.get_mut("content") {
+				Some(Value::String(text)) => f(text),
+				Some(Value::Array(parts)) => visit_text_parts(parts, f),
+				_ => {},
+			}
+		}
+		// TODO opt-in setting to apply guards to tool results
+	}
+}
+
+fn visit_text_parts(parts: &mut [Value], f: &mut dyn FnMut(&mut String)) {
+	for part in parts {
+		if matches!(
+			part.get("type").and_then(|t| t.as_str()),
+			Some("input_text" | "output_text")
+		) && let Some(Value::String(text)) = part.get_mut("text")
+		{
+			f(text);
+		}
+	}
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
@@ -317,6 +340,10 @@ impl RequestType for Request {
 		&mut self.model
 	}
 
+	fn to_value(&self) -> serde_json::Result<serde_json::Value> {
+		serde_json::to_value(self)
+	}
+
 	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
 		let mut items = self.take_input_as_items();
 		let prepend_items: Vec<RawInputItem> = prompts
@@ -386,6 +413,17 @@ impl RequestType for Request {
 				.map(RawInputItem::from_simple_message)
 				.collect(),
 		);
+	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		match &mut self.input {
+			RequestInput::Text(text) => f(text),
+			RequestInput::Items(items) => {
+				for item in items {
+					item.visit_text_mut(f);
+				}
+			},
+		}
 	}
 }
 
@@ -550,6 +588,18 @@ impl ResponseType for Response {
 	fn serialize(&self) -> serde_json::Result<Vec<u8>> {
 		serde_json::to_vec(&self)
 	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		for o in &mut self.output {
+			if let OutputItem::Message(msg) = o {
+				for c in &mut msg.content {
+					if let Content::OutputText(t) = c {
+						f(&mut t.text);
+					}
+				}
+			}
+		}
+	}
 }
 
 pub mod typed {
@@ -639,6 +689,7 @@ mod tests {
 			call_id: "call_123".to_string(),
 			namespace: None,
 			name: "get_weather".to_string(),
+			caller: None,
 			id: Some("fc_123".to_string()),
 			status: Some(OutputStatus::Completed),
 		})]);
@@ -669,6 +720,7 @@ mod tests {
 			call_id: "call_123".to_string(),
 			namespace: None,
 			name: "get_weather".to_string(),
+			caller: None,
 			id: Some("fc_123".to_string()),
 			status: Some(OutputStatus::Completed),
 		})]);

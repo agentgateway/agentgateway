@@ -869,6 +869,7 @@ pub mod from_completions {
 					.push(bedrock::Tool::CachePoint(helpers::create_cache_point()));
 			}
 		}
+		helpers::ensure_tool_config_for_history(&mut bedrock_request);
 
 		Ok((bedrock_request, tool_name_map))
 	}
@@ -1629,23 +1630,22 @@ pub mod from_messages {
 			Some(metadata)
 		};
 
-		Ok((
-			bedrock::ConverseRequest {
-				model_id: req.model,
-				messages,
-				system: system_content,
-				inference_config: Some(inference_config),
-				output_config,
-				tool_config,
-				guardrail_config,
-				additional_model_request_fields: additional_fields,
-				prompt_variables: None,
-				additional_model_response_field_paths: None,
-				request_metadata: metadata,
-				performance_config: None,
-			},
-			tool_name_map,
-		))
+		let mut bedrock_request = bedrock::ConverseRequest {
+			model_id: req.model,
+			messages,
+			system: system_content,
+			inference_config: Some(inference_config),
+			output_config,
+			tool_config,
+			guardrail_config,
+			additional_model_request_fields: additional_fields,
+			prompt_variables: None,
+			additional_model_response_field_paths: None,
+			request_metadata: metadata,
+			performance_config: None,
+		};
+		helpers::ensure_tool_config_for_history(&mut bedrock_request);
+		Ok((bedrock_request, tool_name_map))
 	}
 
 	fn messages_output_format_to_bedrock_output_config(
@@ -2633,6 +2633,7 @@ pub mod from_responses {
 					.push(bedrock::Tool::CachePoint(create_cache_point()));
 			}
 		}
+		ensure_tool_config_for_history(&mut bedrock_request);
 
 		tracing::debug!(
 			"Bedrock request - messages: {}, system blocks: {}, tools: {}, tool_choice: {:?}",
@@ -3191,6 +3192,34 @@ mod helpers {
 			.collect()
 	});
 	use crate::types::bedrock;
+
+	// Bedrock requires toolConfig when the conversation contains tool history. Use a
+	// static placeholder instead of advertising historical tool names the model could call.
+	pub fn ensure_tool_config_for_history(req: &mut bedrock::ConverseRequest) {
+		if req.tool_config.is_some() {
+			return;
+		}
+		let has_tool_blocks = req.messages.iter().any(|message| {
+			message.content.iter().any(|block| {
+				matches!(
+					block,
+					bedrock::ContentBlock::ToolUse(_) | bedrock::ContentBlock::ToolResult(_)
+				)
+			})
+		});
+		if has_tool_blocks {
+			req.tool_config = Some(bedrock::ToolConfiguration {
+				tools: vec![bedrock::Tool::ToolSpec(bedrock::ToolSpecification {
+					name: "agentgateway_dummy_do_not_call".to_string(),
+					description: None,
+					input_schema: Some(bedrock::ToolInputSchema::Json(
+						serde_json::json!({ "type": "object" }),
+					)),
+				})],
+				tool_choice: None,
+			});
+		}
+	}
 
 	pub fn create_cache_point() -> bedrock::CachePointBlock {
 		bedrock::CachePointBlock {

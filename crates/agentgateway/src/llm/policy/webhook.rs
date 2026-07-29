@@ -13,6 +13,31 @@ use crate::*;
 const REQUEST_PATH: &str = "request";
 const RESPONSE_PATH: &str = "response";
 
+#[derive(Clone, Copy)]
+pub(super) struct EvaluationContext<'a> {
+	request: Option<&'a RequestSnapshot>,
+	llm_request: Option<&'a serde_json::Value>,
+}
+
+impl<'a> EvaluationContext<'a> {
+	pub(super) fn new(
+		request: Option<&'a RequestSnapshot>,
+		llm_request: Option<&'a serde_json::Value>,
+	) -> Self {
+		Self {
+			request,
+			llm_request,
+		}
+	}
+
+	fn executor(self) -> cel::Executor<'a> {
+		match self.llm_request {
+			Some(llm_request) => cel::Executor::new_llm(self.request, llm_request),
+			None => cel::Executor::new_request_snapshot(self.request),
+		}
+	}
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct GuardrailsPromptRequest {
@@ -123,33 +148,33 @@ pub enum MaskActionBody {
 
 fn build_request_for_request(
 	webhook: &Webhook,
-	original: Option<&RequestSnapshot>,
+	context: EvaluationContext<'_>,
 	http_headers: &HeaderMap,
 	messages: Vec<Message>,
 ) -> anyhow::Result<crate::http::Request> {
 	let body = GuardrailsPromptRequest {
 		body: PromptMessages { messages },
 	};
-	build_request(&body, REQUEST_PATH, webhook, original, http_headers)
+	build_request(&body, REQUEST_PATH, webhook, context, http_headers)
 }
 
 fn build_request_for_response(
 	webhook: &Webhook,
-	original: Option<&RequestSnapshot>,
+	context: EvaluationContext<'_>,
 	http_headers: &HeaderMap,
 	choices: Vec<ResponseChoice>,
 ) -> anyhow::Result<crate::http::Request> {
 	let body = GuardrailsResponseRequest {
 		body: ResponseChoices { choices },
 	};
-	build_request(&body, RESPONSE_PATH, webhook, original, http_headers)
+	build_request(&body, RESPONSE_PATH, webhook, context, http_headers)
 }
 
 fn build_request<T: serde::Serialize>(
 	body: &T,
 	path: &str,
 	webhook: &Webhook,
-	original: Option<&RequestSnapshot>,
+	context: EvaluationContext<'_>,
 	http_headers: &HeaderMap,
 ) -> anyhow::Result<crate::http::Request> {
 	let body_bytes = serde_json::to_vec(body)?;
@@ -167,7 +192,7 @@ fn build_request<T: serde::Serialize>(
 	let mut req = rb
 		.header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
 		.body(crate::http::Body::from(body_bytes))?;
-	apply_header_expressions(&mut req, webhook, original);
+	apply_header_expressions(&mut req, webhook, context);
 	Ok(req)
 }
 
@@ -180,12 +205,12 @@ fn build_request<T: serde::Serialize>(
 fn apply_header_expressions(
 	req: &mut crate::http::Request,
 	webhook: &Webhook,
-	original: Option<&RequestSnapshot>,
+	context: EvaluationContext<'_>,
 ) {
 	if webhook.headers.is_empty() {
 		return;
 	}
-	let exec = cel::Executor::new_request_snapshot(original);
+	let exec = context.executor();
 	for (k, expr) in &webhook.headers {
 		let v = match exec.eval(expr) {
 			Ok(v) => Some(v),
@@ -206,16 +231,16 @@ fn apply_header_expressions(
 	}
 }
 
-pub async fn send_request(
+pub(super) async fn send_request(
 	client: &PolicyClient,
 	webhook: &Webhook,
-	original: Option<&RequestSnapshot>,
+	context: EvaluationContext<'_>,
 	http_headers: &HeaderMap,
 	messages: Vec<Message>,
 ) -> anyhow::Result<GuardrailsPromptResponse> {
 	let whr = with_default_timeout(build_request_for_request(
 		webhook,
-		original,
+		context,
 		http_headers,
 		messages,
 	)?);
@@ -229,16 +254,16 @@ pub async fn send_request(
 	Ok(parsed)
 }
 
-pub async fn send_response(
+pub(super) async fn send_response(
 	client: &PolicyClient,
 	webhook: &Webhook,
-	original: Option<&RequestSnapshot>,
+	context: EvaluationContext<'_>,
 	http_headers: &HeaderMap,
 	choices: Vec<ResponseChoice>,
 ) -> anyhow::Result<GuardrailsResponseResponse> {
 	let whr = with_default_timeout(build_request_for_response(
 		webhook,
-		original,
+		context,
 		http_headers,
 		choices,
 	)?);
@@ -300,9 +325,21 @@ mod tests {
 	#[test]
 	fn default_paths_are_preserved() {
 		let wh = webhook(vec![]);
-		let req = build_request_for_request(&wh, None, &HeaderMap::new(), vec![]).unwrap();
+		let req = build_request_for_request(
+			&wh,
+			EvaluationContext::new(None, None),
+			&HeaderMap::new(),
+			vec![],
+		)
+		.unwrap();
 		assert_eq!(req.uri().path(), "/request");
-		let resp = build_request_for_response(&wh, None, &HeaderMap::new(), vec![]).unwrap();
+		let resp = build_request_for_response(
+			&wh,
+			EvaluationContext::new(None, None),
+			&HeaderMap::new(),
+			vec![],
+		)
+		.unwrap();
 		assert_eq!(resp.uri().path(), "/response");
 	}
 
@@ -313,7 +350,13 @@ mod tests {
 			expr(r#""/v3/guardrails/agentgateway/request""#),
 		)]));
 		let snap = original(None);
-		let req = build_request_for_request(&wh, Some(&snap), &HeaderMap::new(), vec![]).unwrap();
+		let req = build_request_for_request(
+			&wh,
+			EvaluationContext::new(Some(&snap), None),
+			&HeaderMap::new(),
+			vec![],
+		)
+		.unwrap();
 		assert_eq!(req.uri().path(), "/v3/guardrails/agentgateway/request");
 	}
 
@@ -329,14 +372,25 @@ mod tests {
 				HeaderOrPseudo::Header(::http::HeaderName::from_static("x-tenant")),
 				expr(r#"request.headers["x-tenant"]"#),
 			),
+			(
+				HeaderOrPseudo::Header(::http::HeaderName::from_static("x-model")),
+				expr("llmRequest.model"),
+			),
 		]));
 		let snap = original(None);
-		let req = build_request_for_request(&wh, Some(&snap), &HeaderMap::new(), vec![]).unwrap();
+		let req = build_request_for_request(
+			&wh,
+			EvaluationContext::new(Some(&snap), Some(&serde_json::json!({"model": "llama3.2"}))),
+			&HeaderMap::new(),
+			vec![],
+		)
+		.unwrap();
 		assert_eq!(
 			req.headers().get("x-orig-path").unwrap(),
 			"/v1/chat/completions"
 		);
 		assert_eq!(req.headers().get("x-tenant").unwrap(), "acme");
+		assert_eq!(req.headers().get("x-model").unwrap(), "llama3.2");
 		// The webhook path itself is untouched by non-:path expressions.
 		assert_eq!(req.uri().path(), "/request");
 	}
@@ -348,7 +402,13 @@ mod tests {
 			expr("jwt.sub"),
 		)]));
 		let snap = original(Some(claims()));
-		let req = build_request_for_request(&wh, Some(&snap), &HeaderMap::new(), vec![]).unwrap();
+		let req = build_request_for_request(
+			&wh,
+			EvaluationContext::new(Some(&snap), None),
+			&HeaderMap::new(),
+			vec![],
+		)
+		.unwrap();
 		assert_eq!(req.headers().get("x-user").unwrap(), "user-123");
 	}
 
@@ -359,7 +419,13 @@ mod tests {
 			expr("jwt.sub"),
 		)]));
 		let snap = original(Some(claims()));
-		let req = build_request_for_request(&wh, Some(&snap), &HeaderMap::new(), vec![]).unwrap();
+		let req = build_request_for_request(
+			&wh,
+			EvaluationContext::new(Some(&snap), None),
+			&HeaderMap::new(),
+			vec![],
+		)
+		.unwrap();
 		// Claims are only exposed to CEL evaluation; leaking them onto the request
 		// would hand the raw JWT to the webhook backend's policy chain (e.g.
 		// backendAuth passthrough).
@@ -378,7 +444,13 @@ mod tests {
 			(HeaderOrPseudo::Path, expr("jwt.missing_claim")),
 		]));
 		let snap = original(None);
-		let req = build_request_for_request(&wh, Some(&snap), &HeaderMap::new(), vec![]).unwrap();
+		let req = build_request_for_request(
+			&wh,
+			EvaluationContext::new(Some(&snap), None),
+			&HeaderMap::new(),
+			vec![],
+		)
+		.unwrap();
 		assert!(req.headers().get("x-missing").is_none());
 		assert_eq!(req.uri().path(), "/request");
 	}
@@ -394,7 +466,13 @@ mod tests {
 				expr("jwt.sub"),
 			),
 		]));
-		let req = build_request_for_request(&wh, None, &HeaderMap::new(), vec![]).unwrap();
+		let req = build_request_for_request(
+			&wh,
+			EvaluationContext::new(None, None),
+			&HeaderMap::new(),
+			vec![],
+		)
+		.unwrap();
 		// Static expressions still work without a snapshot...
 		assert_eq!(req.uri().path(), "/prefixed/request");
 		// ...but context-dependent ones are skipped.

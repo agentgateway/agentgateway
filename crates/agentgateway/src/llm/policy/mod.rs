@@ -339,6 +339,10 @@ impl crate::llm::ResponseType for TextResponse {
 	fn serialize(&self) -> serde_json::Result<Vec<u8>> {
 		serde_json::to_vec(&self.to_webhook_choices())
 	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		f(&mut self.content);
+	}
 }
 
 /// Adapter that wraps plain text extracted from a realtime WebSocket event as a `RequestType`.
@@ -355,6 +359,12 @@ struct TextRequest {
 impl crate::llm::RequestType for TextRequest {
 	fn supports_model(&self) -> bool {
 		false
+	}
+
+	fn to_value(&self) -> serde_json::Result<serde_json::Value> {
+		Ok(serde_json::json!({
+			"messages": self.get_messages(),
+		}))
 	}
 
 	fn model(&mut self) -> &mut Option<String> {
@@ -383,6 +393,10 @@ impl crate::llm::RequestType for TextRequest {
 		if let Some(m) = msgs.into_iter().next() {
 			self.content = m.content.to_string();
 		}
+	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		f(&mut self.content);
 	}
 }
 
@@ -1014,22 +1028,27 @@ impl Policy {
 		rgx: &RegexRules,
 		rej: &RequestRejection,
 	) -> anyhow::Result<GuardrailOutcome> {
-		let mut msgs = req.get_messages();
 		let mut any_changed = false;
-		for msg in &mut msgs {
-			match Self::apply_prompt_guard_regex(&msg.content, rgx) {
+		let mut rejected = false;
+		req.visit_text_mut(&mut |text| {
+			if rejected {
+				return;
+			}
+			match Self::apply_prompt_guard_regex(text, rgx) {
 				Some(RegexResult::Reject) => {
-					return Ok(GuardrailOutcome::Rejected(rej.as_response()));
+					rejected = true;
 				},
-				Some(RegexResult::Mask(content)) => {
+				Some(RegexResult::Mask(masked)) => {
 					any_changed = true;
-					msg.content = content.into();
+					*text = masked;
 				},
 				None => {},
 			}
+		});
+		if rejected {
+			return Ok(GuardrailOutcome::Rejected(rej.as_response()));
 		}
 		if any_changed {
-			req.set_messages(msgs);
 			return Ok(GuardrailOutcome::Masked);
 		}
 		Ok(GuardrailOutcome::None)
@@ -1040,22 +1059,27 @@ impl Policy {
 		rgx: &RegexRules,
 		rej: &RequestRejection,
 	) -> anyhow::Result<GuardrailOutcome> {
-		let mut msgs = resp.to_webhook_choices();
 		let mut any_changed = false;
-		for msg in &mut msgs {
-			match Self::apply_prompt_guard_regex(&msg.message.content, rgx) {
+		let mut rejected = false;
+		resp.visit_text_mut(&mut |text| {
+			if rejected {
+				return;
+			}
+			match Self::apply_prompt_guard_regex(text, rgx) {
 				Some(RegexResult::Reject) => {
-					return Ok(GuardrailOutcome::Rejected(rej.as_response()));
+					rejected = true;
 				},
-				Some(RegexResult::Mask(content)) => {
+				Some(RegexResult::Mask(masked)) => {
 					any_changed = true;
-					msg.message.content = content.into();
+					*text = masked;
 				},
 				None => {},
 			}
+		});
+		if rejected {
+			return Ok(GuardrailOutcome::Rejected(rej.as_response()));
 		}
 		if any_changed {
-			resp.set_webhook_choices(msgs)?;
 			return Ok(GuardrailOutcome::Masked);
 		}
 		Ok(GuardrailOutcome::None)
@@ -1068,9 +1092,16 @@ impl Policy {
 		webhook: &Webhook,
 		original: Option<&cel::RequestSnapshot>,
 	) -> anyhow::Result<GuardrailOutcome> {
+		let llm_request = webhook
+			.headers
+			.iter()
+			.any(|(_, expression)| expression.needs_llm_request())
+			.then(|| req.to_value())
+			.transpose()?;
+		let context = webhook::EvaluationContext::new(original, llm_request.as_ref());
 		let messsages = req.get_messages();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-		let whr = match webhook::send_request(client, webhook, original, &headers, messsages).await {
+		let whr = match webhook::send_request(client, webhook, context, &headers, messsages).await {
 			Ok(whr) => whr,
 			Err(e) => {
 				return match webhook.failure_mode {
@@ -1130,7 +1161,15 @@ impl Policy {
 	) -> anyhow::Result<GuardrailOutcome> {
 		let messsages = resp.to_webhook_choices();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
-		let whr = match webhook::send_response(client, webhook, original, &headers, messsages).await {
+		let whr = match webhook::send_response(
+			client,
+			webhook,
+			webhook::EvaluationContext::new(original, None),
+			&headers,
+			messsages,
+		)
+		.await
+		{
 			Ok(whr) => whr,
 			Err(e) => {
 				return match webhook.failure_mode {

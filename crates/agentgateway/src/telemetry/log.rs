@@ -10,6 +10,7 @@ use agent_core::metrics::CustomField;
 use agent_core::strng::{RichStrng, Strng};
 use agent_core::telemetry::{
 	OptionExt, OtelLogSink, ValueBag, current_connection_id, current_request_id, debug, display,
+	quoted,
 };
 use agent_core::{Timestamp, strng};
 use bytes::Buf;
@@ -1272,7 +1273,7 @@ impl Drop for DropOnLog {
 						method: mcp.method_name.as_ref().map(RichStrng::from).into(),
 						resource_type: mcp.resource_type().into(),
 						server: mcp.target_name().map(RichStrng::from).into(),
-						resource: mcp.resource_name().map(RichStrng::from).into(),
+						resource: mcp.metric_resource_name().map(RichStrng::from).into(),
 
 						route: route_identifier.clone(),
 						custom: custom_metric_fields.clone(),
@@ -1443,6 +1444,20 @@ impl Drop for DropOnLog {
 						.as_ref()
 						.and_then(|m| m.session_id.as_ref())
 						.map(display),
+				),
+				(
+					"mcp.error.code",
+					mcp
+						.as_ref()
+						.and_then(|m| m.error.as_ref())
+						.map(|error| error.code.into()),
+				),
+				(
+					"mcp.error.message",
+					mcp
+						.as_ref()
+						.and_then(|m| m.error.as_ref())
+						.map(|error| quoted(&error.message)),
 				),
 				(
 					"inferencepool.selected_endpoint",
@@ -2344,6 +2359,7 @@ mod tests {
 		let catalog = ModelCatalog::new(vec![crate::ModelCatalogSource::File {
 			file: catalog_file.path().to_path_buf(),
 		}])
+		.await
 		.unwrap();
 		let request = llm::LLMRequest {
 			input_tokens: None,

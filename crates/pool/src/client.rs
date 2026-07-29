@@ -15,7 +15,8 @@ use std::task::{self, Context, Poll, ready};
 use std::time::Duration;
 
 use axum_core::BoxError;
-use futures_util::future::{FutureExt, TryFutureExt};
+use futures_util::future::{Either, FutureExt, TryFutureExt, select};
+use futures_util::pin_mut;
 use http::uri::Scheme;
 use hyper::body::{Body, Bytes, Frame, SizeHint};
 use hyper::header::{HOST, HeaderValue};
@@ -42,6 +43,8 @@ pub struct Client<C, PK: Key> {
 	h1_builder: hyper::client::conn::http1::Builder,
 	h2_builder: hyper::client::conn::http2::Builder<Exec>,
 	pool: pool::Pool<PK>,
+	connect_timeout: Option<Duration>,
+	timer: timer::Timer,
 }
 
 /// Client errors
@@ -55,6 +58,7 @@ pub struct Error {
 enum ErrorKind {
 	Canceled,
 	Connect,
+	ConnectTimeout,
 	SendRequest,
 	NoPoolKey,
 	WaitCanceled,
@@ -391,6 +395,29 @@ where
 	}
 
 	async fn connect_to(&self, version: Version, pk: PK) -> Result<pool::HttpConnection, Error> {
+		let Some(timeout) = self.connect_timeout else {
+			return self.connect_to_inner(version, pk).await;
+		};
+		let connect = self.connect_to_inner(version, pk);
+		let sleep = self.timer.sleep(timeout);
+		pin_mut!(connect);
+		match select(connect, sleep).await {
+			Either::Left((res, _)) => res,
+			Either::Right(_) => Err(e!(
+				ConnectTimeout,
+				std::io::Error::new(
+					std::io::ErrorKind::TimedOut,
+					format!("connection establishment timed out after {timeout:?}"),
+				)
+			)),
+		}
+	}
+
+	async fn connect_to_inner(
+		&self,
+		version: Version,
+		pk: PK,
+	) -> Result<pool::HttpConnection, Error> {
 		let executor = self.exec.clone();
 		let is_ver_h2 = if version == Version::HTTP_2 {
 			// Explicitly HTTP2
@@ -533,6 +560,8 @@ impl<C: Clone, PK: pool::Key> Clone for Client<C, PK> {
 			h2_builder: self.h2_builder.clone(),
 			connector: self.connector.clone(),
 			pool: self.pool.clone(),
+			connect_timeout: self.connect_timeout,
+			timer: self.timer.clone(),
 		}
 	}
 }
@@ -781,6 +810,7 @@ pub struct Builder {
 	h2_builder: hyper::client::conn::http2::Builder<Exec>,
 	pool_config: pool::Config,
 	pool_timer: Option<timer::Timer>,
+	connect_timeout: Option<Duration>,
 }
 
 impl Builder {
@@ -800,8 +830,22 @@ impl Builder {
 				expected_http2_capacity: pool::DEFAULT_EXPECTED_HTTP2_CAPACITY,
 			},
 			pool_timer: None,
+			connect_timeout: None,
 		}
 	}
+
+	/// Set a timeout for establishing a connection, including the connector,
+	/// HTTP handshake, and initial sender readiness.
+	///
+	/// The default is no timeout.
+	pub fn connect_timeout<D>(&mut self, val: D) -> &mut Self
+	where
+		D: Into<Option<Duration>>,
+	{
+		self.connect_timeout = val.into();
+		self
+	}
+
 	/// Set an optional timeout for idle sockets being kept-alive.
 	/// A `Timer` is required for this to take effect. See `Builder::pool_timer`
 	///
@@ -1221,7 +1265,9 @@ impl Builder {
 			h1_builder: self.h1_builder.clone(),
 			h2_builder: self.h2_builder.clone(),
 			connector,
-			pool: pool::Pool::<PK>::new(self.pool_config, exec, timer),
+			pool: pool::Pool::<PK>::new(self.pool_config, exec, timer.clone()),
+			connect_timeout: self.connect_timeout,
+			timer,
 		}
 	}
 }
@@ -1268,6 +1314,11 @@ impl StdError for Error {
 }
 
 impl Error {
+	/// Returns true if establishing the connection exceeded its configured timeout.
+	pub fn is_connect_timeout(&self) -> bool {
+		matches!(self.kind, ErrorKind::ConnectTimeout)
+	}
+
 	/// Returns the info of the client connection on which this error occurred.
 	pub fn connect_info(&self) -> Option<&Connected> {
 		self.connect_info.as_ref()

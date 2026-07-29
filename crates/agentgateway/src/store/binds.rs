@@ -1498,11 +1498,16 @@ impl Store {
 			.cloned()
 	}
 
+	/// Finds a wildcard-address bind by port.
+	///
+	/// This is used when a CONNECT authority contains a hostname rather than an IP address. Since
+	/// the hostname is not resolved here, it must not be allowed to select a bind scoped to a
+	/// concrete address (for example, a loopback-only listener) merely because the ports match.
 	pub fn find_bind_by_port(&self, port: u16) -> Option<Arc<Bind>> {
 		self
 			.binds
 			.values()
-			.find(|b| b.address.port() == port)
+			.find(|b| b.address.ip().is_unspecified() && b.address.port() == port)
 			.cloned()
 	}
 

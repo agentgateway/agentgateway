@@ -31,6 +31,7 @@ pub mod config_store;
 pub mod control;
 pub mod database;
 pub mod http;
+pub mod import;
 pub mod json;
 pub mod llm;
 pub mod management;
@@ -324,6 +325,13 @@ mod defaults {
 	pub fn max_buffer_size() -> usize {
 		2_097_152
 	}
+
+	/// Semi-trusted, controller-configured gRPC services that return body mutations do not impose
+	/// a message-size limit.
+	///
+	/// Tonic otherwise defaults to a 4 MiB receive limit, which is too small for services that may
+	/// legitimately return buffered HTTP or MCP bodies.
+	pub const GRPC_MAX_DECODING_MESSAGE_SIZE: usize = usize::MAX;
 
 	pub fn tls_handshake_timeout() -> Duration {
 		Duration::from_secs(15)
@@ -646,7 +654,7 @@ pub struct StorageConfig {
 }
 
 /// A source of model cost catalog data.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(untagged)]
 pub enum ModelCatalogSource {
