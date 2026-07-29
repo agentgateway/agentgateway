@@ -409,10 +409,11 @@ message JwtSign {
     RS512                   = 3;
     ES256                   = 4;
     ES384                   = 5;
+    PS256                   = 6;
   }
 
-  // PEM-encoded private signing key. RSA keys are used with RS* algorithms;
-  // EC keys are used with ES* algorithms.
+  // PEM-encoded private signing key. RSA keys are used with RS*/PS*
+  // algorithms; EC keys are used with ES* algorithms.
   string signing_key = 1;
   // JWS signing algorithm. Defaults to RS256.
   SigningAlg alg = 2;

@@ -58,7 +58,7 @@ library.
   and reference it as a file (see the comment in `config.yaml`); the upstream
   is registered with the corresponding public key. File-based keys are watched,
   so rotating the key on disk reloads it without a restart.
-* RSA (`RS256`/`RS384`/`RS512`) and EC (`ES256`/`ES384`) keys are supported.
+* RSA (`RS256`/`RS384`/`RS512`/`PS256`) and EC (`ES256`/`ES384`) keys are supported.
 * Static companion headers some upstreams expect next to the JWT (like
   Snowflake's `X-Snowflake-Authorization-Token-Type: KEYPAIR_JWT`) are plain
   request header modifications, shown in the config.

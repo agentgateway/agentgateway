@@ -576,6 +576,7 @@ const (
 	JwtSign_RS512                   JwtSign_SigningAlg = 3
 	JwtSign_ES256                   JwtSign_SigningAlg = 4
 	JwtSign_ES384                   JwtSign_SigningAlg = 5
+	JwtSign_PS256                   JwtSign_SigningAlg = 6
 )
 
 // Enum value maps for JwtSign_SigningAlg.
@@ -587,6 +588,7 @@ var (
 		3: "RS512",
 		4: "ES256",
 		5: "ES384",
+		6: "PS256",
 	}
 	JwtSign_SigningAlg_value = map[string]int32{
 		"SIGNING_ALG_UNSPECIFIED": 0,
@@ -595,6 +597,7 @@ var (
 		"RS512":                   3,
 		"ES256":                   4,
 		"ES384":                   5,
+		"PS256":                   6,
 	}
 )
 
@@ -5043,8 +5046,8 @@ func (x *Key) GetAuthorizationLocation() *AuthorizationLocation {
 // Snowflake SQL API) rather than a static credential.
 type JwtSign struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// PEM-encoded private signing key. RSA keys are used with RS* algorithms;
-	// EC keys are used with ES* algorithms.
+	// PEM-encoded private signing key. RSA keys are used with RS*/PS*
+	// algorithms; EC keys are used with ES* algorithms.
 	SigningKey string `protobuf:"bytes,1,opt,name=signing_key,json=signingKey,proto3" json:"signing_key,omitempty"`
 	// JWS signing algorithm. Defaults to RS256.
 	Alg JwtSign_SigningAlg `protobuf:"varint,2,opt,name=alg,proto3,enum=agentgateway.dev.resource.JwtSign_SigningAlg" json:"alg,omitempty"`
@@ -17169,7 +17172,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x16authorization_location\x18\x01 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\"\x86\x01\n" +
 	"\x03Key\x12\x16\n" +
 	"\x06secret\x18\x01 \x01(\tR\x06secret\x12g\n" +
-	"\x16authorization_location\x18\x02 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\"\xaa\x04\n" +
+	"\x16authorization_location\x18\x02 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\"\xb5\x04\n" +
 	"\aJwtSign\x12\x1f\n" +
 	"\vsigning_key\x18\x01 \x01(\tR\n" +
 	"signingKey\x12?\n" +
@@ -17180,7 +17183,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x16authorization_location\x18\x06 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\x1aQ\n" +
 	"\vClaimsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12,\n" +
-	"\x05value\x18\x02 \x01(\v2\x16.google.protobuf.ValueR\x05value:\x028\x01\"`\n" +
+	"\x05value\x18\x02 \x01(\v2\x16.google.protobuf.ValueR\x05value:\x028\x01\"k\n" +
 	"\n" +
 	"SigningAlg\x12\x1b\n" +
 	"\x17SIGNING_ALG_UNSPECIFIED\x10\x00\x12\t\n" +
@@ -17188,7 +17191,8 @@ const file_resource_proto_rawDesc = "" +
 	"\x05RS384\x10\x02\x12\t\n" +
 	"\x05RS512\x10\x03\x12\t\n" +
 	"\x05ES256\x10\x04\x12\t\n" +
-	"\x05ES384\x10\x05B\x06\n" +
+	"\x05ES384\x10\x05\x12\t\n" +
+	"\x05PS256\x10\x06B\x06\n" +
 	"\x04_kidB\x06\n" +
 	"\x04_ttl\"\xa5\x02\n" +
 	"\x03Gcp\x12#\n" +

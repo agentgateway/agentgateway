@@ -1357,6 +1357,7 @@ fn jwt_sign_alg_from_proto(alg: i32) -> Result<auth::oauth::SigningAlg, ProtoErr
 		Ok(ProtoSigningAlg::Rs512) => Ok(SigningAlg::Rs512),
 		Ok(ProtoSigningAlg::Es256) => Ok(SigningAlg::Es256),
 		Ok(ProtoSigningAlg::Es384) => Ok(SigningAlg::Es384),
+		Ok(ProtoSigningAlg::Ps256) => Ok(SigningAlg::Ps256),
 		Err(_) => Err(ProtoError::EnumParse("unknown jwt_sign signing alg".into())),
 	}
 }

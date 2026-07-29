@@ -1789,6 +1789,8 @@ func translateJwtSignSigningAlg(alg *agentgateway.OAuthPrivateKeyJWTSigningAlgor
 		return api.JwtSign_ES256, nil
 	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES384:
 		return api.JwtSign_ES384, nil
+	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmPS256:
+		return api.JwtSign_PS256, nil
 	default:
 		return api.JwtSign_SIGNING_ALG_UNSPECIFIED, fmt.Errorf("unsupported jwtSign signing algorithm %q", *alg)
 	}

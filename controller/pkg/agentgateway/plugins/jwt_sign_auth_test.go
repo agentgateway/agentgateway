@@ -7,8 +7,31 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 )
+
+// Every algorithm the CRD enum admits must translate to a proto value, or a
+// config that passes admission fails at translation time.
+func TestJwtSignTranslatesEveryCRDSigningAlg(t *testing.T) {
+	want := map[agentgateway.OAuthPrivateKeyJWTSigningAlgorithm]api.JwtSign_SigningAlg{
+		agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS256: api.JwtSign_RS256,
+		agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS384: api.JwtSign_RS384,
+		agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS512: api.JwtSign_RS512,
+		agentgateway.OAuthPrivateKeyJWTSigningAlgorithmPS256: api.JwtSign_PS256,
+		agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256: api.JwtSign_ES256,
+		agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES384: api.JwtSign_ES384,
+	}
+	for alg, expected := range want {
+		got, err := translateJwtSignSigningAlg(&alg)
+		if err != nil {
+			t.Fatalf("translateJwtSignSigningAlg(%q) error = %v, want nil", alg, err)
+		}
+		if got != expected {
+			t.Fatalf("translateJwtSignSigningAlg(%q) = %v, want %v", alg, got, expected)
+		}
+	}
+}
 
 // translateJwtSignSigningAlg is documented to reject unrecognized alg values
 // (guarding against version skew, since the CRD enum otherwise prevents this)
