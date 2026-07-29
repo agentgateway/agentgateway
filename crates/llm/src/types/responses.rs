@@ -80,23 +80,29 @@ impl RawInputItem {
 		if self.0.get("role").is_some() {
 			match self.0.get_mut("content") {
 				Some(Value::String(text)) => f(text),
-				Some(Value::Array(parts)) => visit_text_parts(parts, f),
+				Some(Value::Array(parts)) => {
+					crate::types::scan_text_runs(
+						parts,
+						"\n",
+						|part| {
+							if !matches!(
+								part.get("type").and_then(|t| t.as_str()),
+								Some("input_text" | "output_text")
+							) {
+								return None;
+							}
+							match part.get_mut("text") {
+								Some(Value::String(text)) => Some(text),
+								_ => None,
+							}
+						},
+						f,
+					);
+				},
 				_ => {},
 			}
 		}
 		// TODO opt-in setting to apply guards to tool results
-	}
-}
-
-fn visit_text_parts(parts: &mut [Value], f: &mut dyn FnMut(&mut String)) {
-	for part in parts {
-		if matches!(
-			part.get("type").and_then(|t| t.as_str()),
-			Some("input_text" | "output_text")
-		) && let Some(Value::String(text)) = part.get_mut("text")
-		{
-			f(text);
-		}
 	}
 }
 

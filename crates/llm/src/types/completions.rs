@@ -408,11 +408,7 @@ impl super::RequestType for Request {
 			match &mut msg.content {
 				Some(Content::Text(text)) => f(text),
 				Some(Content::Array(parts)) => {
-					for part in parts {
-						if let Some(text) = &mut part.text {
-							f(text);
-						}
-					}
+					super::scan_text_runs(parts, " ", |p| p.text.as_mut(), f);
 				},
 				None => {},
 			}
