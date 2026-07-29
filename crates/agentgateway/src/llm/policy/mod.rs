@@ -1309,8 +1309,7 @@ impl Policy {
 						}
 						continue;
 					}
-					// skip zero-width matches (e.g. `a*`): they mask nothing, and replacing them
-					// inserts placeholders at every position
+					// zero-width matches (e.g. `a*`) mask nothing; replacing them inserts placeholders
 					let ranges: Vec<std::ops::Range<usize>> = pattern
 						.find_iter(content)
 						.map(|m| m.range())
@@ -1413,9 +1412,8 @@ enum RegexResult {
 	Reject,
 }
 
-/// Merge overlapping ranges (a single recognizer's patterns can hit the same span) and return
-/// them end-of-text-first, so each replacement leaves the offsets of the still-pending (earlier)
-/// ranges valid.
+/// merge overlapping ranges, end-of-text-first so replacing doesn't shift pending offsets:
+/// `[1..3, 2..5, 7..9]` -> `[7..9, 1..5]`
 fn merge_ranges_desc(
 	ranges: impl Iterator<Item = std::ops::Range<usize>>,
 ) -> Vec<std::ops::Range<usize>> {

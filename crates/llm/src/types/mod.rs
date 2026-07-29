@@ -13,7 +13,7 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 use serde::Serialize;
 
-use crate::{AIError, LLMRequest, LLMResponse, apply};
+use crate::{apply, AIError, LLMRequest, LLMResponse};
 
 pub enum ChatRequest<'a> {
 	Completions(&'a completions::Request),
@@ -50,67 +50,48 @@ pub trait RequestType: Send + Sync {
 	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String));
 }
 
-/// Scan each maximal run of consecutive text parts as one `sep`-joined string, so guard patterns
-/// spanning adjacent text blocks still match. Parts where `text_of` returns `None` (images, tool
-/// blocks) are never scanned and act as run boundaries.
-///
-/// If the guard edits the joined text, the run collapses into its last part (where
-/// `cache_control` conventionally lives), which receives the edited text. Untouched runs keep
-/// their original parts byte-identical, and single-part runs are scanned in place with no copying.
+/// Scan runs of consecutive text parts as one `sep`-joined string: `[t1, t2, img, t3]` scans
+/// `"t1{sep}t2"` then `"t3"`. An edited run collapses into its last part (keeping its other
+/// fields, e.g. `cache_control`); untouched runs pass through unchanged.
 pub(crate) fn scan_text_runs<T>(
 	parts: &mut Vec<T>,
 	sep: &str,
 	mut text_of: impl FnMut(&mut T) -> Option<&mut String>,
 	f: &mut dyn FnMut(&mut String),
 ) {
-	fn flush<T>(
-		out: &mut Vec<T>,
-		run: &mut Vec<T>,
-		sep: &str,
-		text_of: &mut impl FnMut(&mut T) -> Option<&mut String>,
-		f: &mut dyn FnMut(&mut String),
-	) {
-		if run.len() == 1 {
-			let mut part = run.pop().expect("run has one part");
-			f(text_of(&mut part).expect("run parts have text"));
-			out.push(part);
-			return;
-		}
+	let mut i = 0;
+	while i < parts.len() {
 		let mut joined = String::new();
-		for part in run.iter_mut() {
-			if !joined.is_empty() {
+		let mut end = i;
+
+    // join until we hit non-text or the end of the list
+		while let Some(text) = parts.get_mut(end).and_then(&mut text_of) {
+			if end > i {
 				joined.push_str(sep);
 			}
-			joined.push_str(text_of(part).expect("run parts have text"));
+			joined.push_str(text);
+			end += 1;
 		}
+		if end == i {
+			i += 1;
+			continue;
+		}
+
+    // don't collapse the run into a single part if `f` wouldn't mutate it
 		let original = joined.clone();
 		f(&mut joined);
 		if joined == original {
-			out.append(run);
-			return;
+			i = end;
+			continue;
 		}
-		let mut last = run.pop().expect("run has parts");
-		run.clear();
-		*text_of(&mut last).expect("run parts have text") = joined;
-		out.push(last);
-	}
 
-	let mut out: Vec<T> = Vec::with_capacity(parts.len());
-	let mut run: Vec<T> = Vec::new();
-	for mut part in parts.drain(..) {
-		if text_of(&mut part).is_some() {
-			run.push(part);
-		} else {
-			if !run.is_empty() {
-				flush(&mut out, &mut run, sep, &mut text_of, f);
-			}
-			out.push(part);
+    // collapse the run's text into the last part, and remove the others
+		if let Some(text) = text_of(&mut parts[end - 1]) {
+			*text = joined;
 		}
+		parts.drain(i..end - 1);
+		i += 1;
 	}
-	if !run.is_empty() {
-		flush(&mut out, &mut run, sep, &mut text_of, f);
-	}
-	*parts = out;
 }
 
 /// SimpleChatCompletionMessage is a simplified chat message

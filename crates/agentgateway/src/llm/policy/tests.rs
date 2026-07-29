@@ -1906,9 +1906,6 @@ fn test_apply_regex_response_preserves_tool_structure(
 	}
 }
 
-// Runs of consecutive text blocks are scanned as one joined string, so guard patterns spanning
-// adjacent blocks are detected. Non-text blocks (images, tools) are never scanned and break runs.
-// A run is only rewritten (collapsed into its last block) when a mask actually edits it.
 #[cfg(test)]
 #[rstest::rstest]
 #[case::completions_reject_across_blocks(
@@ -2003,22 +2000,32 @@ fn test_apply_regex_response_preserves_tool_structure(
 		]
 	}))
 )]
-#[case::non_text_block_breaks_the_run(
+#[case::mask_preserves_non_text_block_between_runs(
 	ChatFmt::Anthropic,
-	Action::Reject,
+	Action::Mask,
 	ssn_only(),
 	serde_json::json!({
 		"model": "claude-sonnet-5",
 		"max_tokens": 1024,
 		"messages": [
 			{"role": "user", "content": [
-				{"type": "text", "text": "my ssn is 123-45"},
+				{"type": "text", "text": "my ssn is 123-45-6789"},
 				{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "aGk="}},
-				{"type": "text", "text": "6789 thanks"}
+				{"type": "text", "text": "thanks"}
 			]}
 		]
 	}),
-	Expect::Unchanged
+	Expect::Masked(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "my ssn is <SSN>"},
+				{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "aGk="}},
+				{"type": "text", "text": "thanks"}
+			]}
+		]
+	}))
 )]
 #[case::untouched_run_is_not_collapsed(
 	ChatFmt::Completions,
@@ -2076,12 +2083,10 @@ fn test_apply_regex_text_runs(
 	}
 }
 
-#[test]
 #[cfg(test)]
+#[test]
 fn test_merge_ranges_desc_is_transitive() {
-	// a touching pair plus an overlapping third must fully merge; the previous itertools
-	// coalesce was not transitive and emitted overlapping ranges here, which the replace loop
-	// then applied with stale offsets
+	// a touching pair must not break the merge chain
 	assert_eq!(
 		super::merge_ranges_desc([7..11, 6..7, 6..11].into_iter()),
 		vec![6..11]
@@ -2094,7 +2099,7 @@ fn test_merge_ranges_desc_is_transitive() {
 }
 
 #[cfg(test)]
-#[rstest::rstest]
+#[test]
 fn test_zero_width_pattern_is_a_noop() {
 	let (outcome, actual) = run_apply_regex(
 		ChatFmt::Completions,
