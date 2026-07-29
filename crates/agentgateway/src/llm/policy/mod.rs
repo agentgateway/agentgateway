@@ -1,7 +1,6 @@
 use ::http::HeaderMap;
 use bytes::Bytes;
 use http_body_util::BodyExt as _;
-use itertools::Itertools;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -1296,18 +1295,7 @@ impl Policy {
 						Action::Mask => {
 							let replacement = format!("<{}>", results[0].entity_type);
 							let buf = working.get_or_insert_with(|| original_content.to_string());
-							// Replace in reverse order to avoid index shifting, coalescing overlaps
-							for range in results
-								.into_iter()
-								.map(|r| r.start..r.end)
-								.sorted_unstable_by(|a, b| b.start.cmp(&a.start).then_with(|| a.end.cmp(&b.end)))
-								.coalesce(|a, b| {
-									if b.end > a.start {
-										Ok(b.start..std::cmp::max(a.end, b.end))
-									} else {
-										Err((a, b))
-									}
-								}) {
+							for range in merge_ranges_desc(results.into_iter().map(|r| r.start..r.end)) {
 								buf.replace_range(range, &replacement);
 							}
 						},
@@ -1321,8 +1309,13 @@ impl Policy {
 						}
 						continue;
 					}
-					let ranges: Vec<std::ops::Range<usize>> =
-						pattern.find_iter(content).map(|m| m.range()).collect();
+					// skip zero-width matches (e.g. `a*`): they mask nothing, and replacing them
+					// inserts placeholders at every position
+					let ranges: Vec<std::ops::Range<usize>> = pattern
+						.find_iter(content)
+						.map(|m| m.range())
+						.filter(|r| !r.is_empty())
+						.collect();
 					if ranges.is_empty() {
 						continue;
 					}
@@ -1418,6 +1411,25 @@ impl Policy {
 enum RegexResult {
 	Mask(String),
 	Reject,
+}
+
+/// Merge overlapping ranges (a single recognizer's patterns can hit the same span) and return
+/// them end-of-text-first, so each replacement leaves the offsets of the still-pending (earlier)
+/// ranges valid.
+fn merge_ranges_desc(
+	ranges: impl Iterator<Item = std::ops::Range<usize>>,
+) -> Vec<std::ops::Range<usize>> {
+	let mut rs: Vec<_> = ranges.filter(|r| !r.is_empty()).collect();
+	rs.sort_unstable_by(|a, b| a.start.cmp(&b.start).then_with(|| a.end.cmp(&b.end)));
+	let mut out: Vec<std::ops::Range<usize>> = Vec::new();
+	for r in rs {
+		match out.last_mut() {
+			Some(last) if r.start < last.end => last.end = last.end.max(r.end),
+			_ => out.push(r),
+		}
+	}
+	out.reverse();
+	out
 }
 
 #[apply(schema!)]
