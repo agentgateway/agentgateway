@@ -492,18 +492,23 @@ async fn stream_late_refusal_with_only_empty_text_block_still_fails() {
 }
 
 #[tokio::test]
-async fn stream_rejects_thinking_blocks_after_optional_completed_text() {
+async fn stream_drops_thinking_blocks_after_optional_completed_text() {
 	let cases = [
 		(
 			"thinking",
 			json!({"type":"thinking","thinking":"","signature":""}),
+			vec![
+				json!({"type":"thinking_delta","thinking":"SECRET_REASONING"}),
+				json!({"type":"signature_delta","signature":"SECRET_SIGNATURE"}),
+			],
 		),
 		(
 			"redacted",
 			json!({"type":"redacted_thinking","data":"opaque"}),
+			vec![],
 		),
 	];
-	for (case, block) in cases {
+	for (case, block, deltas) in cases {
 		for after_text in [false, true] {
 			let mut frames = vec![stream_message_start()];
 			if after_text {
@@ -513,10 +518,16 @@ async fn stream_rejects_thinking_blocks_after_optional_completed_text() {
 					block_stop(0),
 				]);
 			}
-			frames.push(block_start(usize::from(after_text), block.clone()));
+			let block_index = usize::from(after_text);
+			frames.push(block_start(block_index, block.clone()));
+			for delta in &deltas {
+				frames.push(block_delta(block_index, delta.clone()));
+			}
+			frames.push(block_stop(block_index));
+			frames.extend(stream_terminal("end_turn", 0));
 			let events = translated_stream(frames, State::default()).await;
-			// Completed content that streamed before the thinking block is real and already
-			// delivered; only content after the rejection point must never leak.
+			// Adaptive thinking is the default for several Copilot Claude models, so the block
+			// is absorbed and the stream completes normally instead of erroring.
 			let expected_types: Vec<&str> = if after_text {
 				vec![
 					"response.created",
@@ -526,10 +537,15 @@ async fn stream_rejects_thinking_blocks_after_optional_completed_text() {
 					"response.output_text.delta",
 					"response.output_text.done",
 					"response.content_part.done",
-					"error",
+					"response.output_item.done",
+					"response.completed",
 				]
 			} else {
-				vec!["response.created", "response.in_progress", "error"]
+				vec![
+					"response.created",
+					"response.in_progress",
+					"response.completed",
+				]
 			};
 			assert_eq!(
 				events
@@ -548,10 +564,20 @@ async fn stream_rejects_thinking_blocks_after_optional_completed_text() {
 				"{case} after_text={after_text}"
 			);
 			let serialized = serde_json::to_string(&events).unwrap();
+			// Reasoning content must never reach the client.
+			assert!(
+				!serialized.contains("SECRET_REASONING"),
+				"{case}: {events:?}"
+			);
+			assert!(
+				!serialized.contains("SECRET_SIGNATURE"),
+				"{case}: {events:?}"
+			);
+			assert!(!serialized.contains("opaque"), "{case}: {events:?}");
 			if after_text {
 				assert!(
 					serialized.contains("secret"),
-					"{case}: already-completed text must stream even though a later block is rejected"
+					"{case}: text before a dropped thinking block must still stream"
 				);
 			} else {
 				assert!(!serialized.contains("secret"), "{case}: {events:?}");
@@ -1611,18 +1637,18 @@ async fn stream_invalid_pre_terminal_sequences_emit_one_safe_error() {
 				block_delta(0, json!({"type":"text_delta","text":"bad"})),
 			],
 		),
-		(
-			"missing_signature",
-			vec![
+		("missing_signature", {
+			let mut frames = vec![
 				start.clone(),
 				block_start(0, json!({"type":"thinking","thinking":"","signature":""})),
 				block_delta(0, json!({"type":"thinking_delta","thinking":"plan"})),
 				block_stop(0),
-			],
-		),
-		(
-			"text_after_signature",
-			vec![
+			];
+			frames.extend(stream_terminal("end_turn", 1));
+			frames
+		}),
+		("text_after_signature", {
+			let mut frames = vec![
 				start.clone(),
 				block_start(0, json!({"type":"thinking","thinking":"","signature":""})),
 				block_delta(
@@ -1630,8 +1656,45 @@ async fn stream_invalid_pre_terminal_sequences_emit_one_safe_error() {
 					json!({"type":"signature_delta","signature":"signature-secret"}),
 				),
 				block_delta(0, json!({"type":"thinking_delta","thinking":"bad"})),
-			],
-		),
+				block_stop(0),
+			];
+			frames.extend(stream_terminal("end_turn", 1));
+			frames
+		}),
+		("empty_signature", {
+			let mut frames = vec![
+				start.clone(),
+				block_start(0, json!({"type":"thinking","thinking":"","signature":""})),
+				block_delta(0, json!({"type":"signature_delta","signature":""})),
+				block_stop(0),
+			];
+			frames.extend(stream_terminal("end_turn", 1));
+			frames
+		}),
+		("duplicate_signature", {
+			let mut frames = vec![
+				start.clone(),
+				block_start(0, json!({"type":"thinking","thinking":"","signature":""})),
+				block_delta(0, json!({"type":"signature_delta","signature":"first"})),
+				block_delta(0, json!({"type":"signature_delta","signature":"second"})),
+				block_stop(0),
+			];
+			frames.extend(stream_terminal("end_turn", 1));
+			frames
+		}),
+		("redacted_delta", {
+			let mut frames = vec![
+				start.clone(),
+				block_start(
+					0,
+					json!({"type":"redacted_thinking","data":"redacted-secret"}),
+				),
+				block_delta(0, json!({"type":"thinking_delta","thinking":"bad"})),
+				block_stop(0),
+			];
+			frames.extend(stream_terminal("end_turn", 1));
+			frames
+		}),
 		(
 			"message_delta_before_block_close",
 			vec![
@@ -2568,7 +2631,40 @@ fn buffered_refusal_maps_nonempty_text_to_refusal_content() {
 #[rstest::rstest]
 #[case::thinking(json!({"type":"thinking","thinking":"hidden","signature":"sig"}))]
 #[case::redacted(json!({"type":"redacted_thinking","data":"opaque"}))]
-fn buffered_rejects_unexpected_thinking_blocks(#[case] block: serde_json::Value) {
+#[case::empty_signature(json!({"type":"thinking","thinking":"hidden","signature":""}))]
+#[case::empty_redacted(json!({"type":"redacted_thinking","data":""}))]
+fn buffered_drops_thinking_blocks(#[case] block: serde_json::Value) {
+	// Adaptive thinking is the default for several Copilot-backed Claude models, so a
+	// thinking block is a valid upstream response. Reasoning cannot round-trip through the
+	// Responses bridge, so it is dropped rather than failing the whole response.
+	let value = buffered_value(
+		buffered_body(
+			json!([block, {"type":"text","text":"visible"}]),
+			"end_turn",
+			serde_json::Value::Null,
+			buffered_usage(),
+		),
+		&buffered_state(),
+	);
+	assert_eq!(value["output"].as_array().expect("output array").len(), 1);
+	assert_eq!(value["output"][0]["type"], "message");
+	assert_eq!(value["output"][0]["content"][0]["type"], "output_text");
+	assert_eq!(value["output"][0]["content"][0]["text"], "visible");
+	assert!(
+		!serde_json::to_string(&value["output"])
+			.expect("serialize output")
+			.contains("thinking")
+	);
+	// Reasoning content must never reach the client, redacted or not.
+	let rendered = serde_json::to_string(&value).expect("serialize response");
+	assert!(!rendered.contains("hidden"));
+	assert!(!rendered.contains("opaque"));
+}
+
+#[rstest::rstest]
+#[case::thinking(json!({"type":"thinking","thinking":"a","signature":"s","extra":1}))]
+#[case::redacted(json!({"type":"redacted_thinking","data":"opaque","extra":1}))]
+fn buffered_rejects_malformed_thinking_blocks(#[case] block: serde_json::Value) {
 	let body = buffered_body(
 		json!([block]),
 		"end_turn",
@@ -2578,11 +2674,35 @@ fn buffered_rejects_unexpected_thinking_blocks(#[case] block: serde_json::Value)
 	let bytes = Bytes::from(serde_json::to_vec(&body).expect("response fixture"));
 	let error = translate_response(&bytes, "claude-sonnet-4", &buffered_state(), 1024 * 1024)
 		.err()
-		.expect("thinking response must fail");
+		.expect("unknown thinking field must fail");
 	assert_eq!(
 		error.to_string(),
 		"invalid response: invalid Anthropic Messages response"
 	);
+}
+
+#[test]
+fn buffered_thinking_between_text_keeps_one_message_item() {
+	let value = buffered_value(
+		buffered_body(
+			json!([
+				{"type":"text","text":"before"},
+				{"type":"thinking","thinking":"hidden","signature":"sig"},
+				{"type":"text","text":"after"},
+			]),
+			"end_turn",
+			serde_json::Value::Null,
+			buffered_usage(),
+		),
+		&buffered_state(),
+	);
+	assert_eq!(value["output"].as_array().expect("output array").len(), 1);
+	let content = value["output"][0]["content"]
+		.as_array()
+		.expect("content array");
+	assert_eq!(content.len(), 2);
+	assert_eq!(content[0]["text"], "before");
+	assert_eq!(content[1]["text"], "after");
 }
 
 #[test]
@@ -2749,8 +2869,6 @@ fn buffered_absent_service_tier_stays_absent() {
 #[case::unknown_block("SENSITIVE_BLOCK", json!({"type":"message","role":"assistant","content":[{"type":"future","data":"SENSITIVE_BLOCK"}]}))]
 #[case::unknown_text_field("SENSITIVE_TEXT", json!({"type":"message","role":"assistant","content":[{"type":"text","text":"ok","future":"SENSITIVE_TEXT"}]}))]
 #[case::missing_signature("SENSITIVE_THINKING", json!({"type":"message","role":"assistant","content":[{"type":"thinking","thinking":"SENSITIVE_THINKING"}]}))]
-#[case::empty_signature("SENSITIVE_SIGNATURE", json!({"type":"message","role":"assistant","content":[{"type":"thinking","thinking":"SENSITIVE_SIGNATURE","signature":""}]}))]
-#[case::empty_redacted("SENSITIVE_REDACTED", json!({"type":"message","role":"assistant","content":[{"type":"redacted_thinking","data":""}]}))]
 #[case::empty_tool_id("SENSITIVE_EMPTY_ID", json!({"type":"message","role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"","name":"weather","input":{"marker":"SENSITIVE_EMPTY_ID"}}]}))]
 #[case::tool_json("SENSITIVE_TOOL_JSON", json!({"type":"message","role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"call_0","name":"weather","input":"SENSITIVE_TOOL_JSON"}]}))]
 #[case::undeclared_tool("SENSITIVE_UNDECLARED", json!({"type":"message","role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"call_0","name":"SENSITIVE_UNDECLARED","input":{}}]}))]
