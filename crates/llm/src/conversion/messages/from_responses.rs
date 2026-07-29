@@ -359,7 +359,20 @@ fn validate_response(raw: &serde_json::Value, state: &State) -> Result<(), AIErr
 					return Err(invalid_response());
 				}
 			},
-			Some("thinking" | "redacted_thinking") => return Err(invalid_response()),
+			// Copilot emits thinking blocks whenever adaptive thinking engages, which is the
+			// default for several Claude models. Reasoning is not representable on the Responses
+			// bridge (reasoning history is rejected on input), so validate the shape and let
+			// response_output drop them rather than failing an otherwise valid response.
+			Some("thinking") => {
+				if has_unknown_field(block, &["type", "thinking", "signature"]) {
+					return Err(invalid_response());
+				}
+			},
+			Some("redacted_thinking") => {
+				if has_unknown_field(block, &["type", "data"]) {
+					return Err(invalid_response());
+				}
+			},
 			Some("tool_use") => {
 				has_tool = true;
 				validate_response_tool(block, state, &mut tool_ids)?;
@@ -546,6 +559,13 @@ fn response_output(
 			});
 			continue;
 		}
+		// Drop reasoning before flushing so surrounding text stays in one message item.
+		if matches!(
+			block,
+			messages::ContentBlock::Thinking { .. } | messages::ContentBlock::RedactedThinking { .. }
+		) {
+			continue;
+		}
 		flush_response_text(
 			&mut output,
 			&mut pending_text,
@@ -555,9 +575,6 @@ fn response_output(
 			&mut retained_bytes,
 		)?;
 		match block {
-			messages::ContentBlock::Thinking { .. } | messages::ContentBlock::RedactedThinking { .. } => {
-				return Err(invalid_response());
-			},
 			messages::ContentBlock::ToolUse {
 				id, name, input, ..
 			} => {
@@ -740,6 +757,16 @@ struct StreamToolBlock {
 enum StreamBlock {
 	Text(StreamTextBlock),
 	Tool(StreamToolBlock),
+	/// A thinking block being discarded. Track only its lifecycle so reasoning never reaches the
+	/// client while malformed upstream streams are still rejected.
+	DroppedThinking {
+		index: usize,
+		signature_seen: bool,
+	},
+	/// A redacted_thinking block being discarded. These blocks have no deltas.
+	DroppedRedactedThinking {
+		index: usize,
+	},
 }
 
 #[derive(Default)]
@@ -899,6 +926,8 @@ impl ResponsesStreamState {
 		add(&mut total, self.tool_id_bytes)?;
 		if let Some(block) = &self.active_block {
 			match block {
+				// Dropped reasoning retains nothing.
+				StreamBlock::DroppedThinking { .. } | StreamBlock::DroppedRedactedThinking { .. } => {},
 				StreamBlock::Text(block) => {
 					add(&mut total, block.item_id.len())?;
 					add(&mut total, block.text.len())?;
@@ -1340,8 +1369,20 @@ pub fn translate_stream(
 								Ok(Vec::new())
 							}
 						},
-						messages::ContentBlock::Thinking { .. }
-						| messages::ContentBlock::RedactedThinking { .. } => Err(()),
+						// Adaptive thinking is the default for several Copilot Claude models, so a
+						// thinking block is valid upstream output. Absorb it and its deltas rather
+						// than terminating the stream. See response_output for the buffered path.
+						messages::ContentBlock::Thinking { .. } => {
+							stream.active_block = Some(StreamBlock::DroppedThinking {
+								index,
+								signature_seen: false,
+							});
+							Ok(Vec::new())
+						},
+						messages::ContentBlock::RedactedThinking { .. } => {
+							stream.active_block = Some(StreamBlock::DroppedRedactedThinking { index });
+							Ok(Vec::new())
+						},
 						_ => Err(()),
 					}
 				},
@@ -1401,6 +1442,23 @@ pub fn translate_stream(
 								DeclaredTool::Wrapped(_) => Vec::new(),
 							}
 						},
+						(
+							StreamBlock::DroppedThinking {
+								index: block_index,
+								signature_seen: false,
+							},
+							messages::ContentBlockDelta::ThinkingDelta { .. },
+						) if *block_index == index => Vec::new(),
+						(
+							StreamBlock::DroppedThinking {
+								index: block_index,
+								signature_seen,
+							},
+							messages::ContentBlockDelta::SignatureDelta { signature },
+						) if *block_index == index && !*signature_seen && !signature.is_empty() => {
+							*signature_seen = true;
+							Vec::new()
+						},
 						_ => return Err(()),
 					};
 					stream.active_block = Some(block);
@@ -1409,6 +1467,13 @@ pub fn translate_stream(
 				messages::MessagesStreamEvent::ContentBlockStop { index } => {
 					let block = stream.active_block.take().ok_or(())?;
 					match block {
+						StreamBlock::DroppedThinking {
+							index: block_index,
+							signature_seen: true,
+						} if block_index == index => Ok(Vec::new()),
+						StreamBlock::DroppedRedactedThinking { index: block_index } if block_index == index => {
+							Ok(Vec::new())
+						},
 						StreamBlock::Text(block) if block.index == index => {
 							stream.retain_text_part(&block)?;
 							Ok(vec![

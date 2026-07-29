@@ -29,6 +29,10 @@ The Responses converter is stateless and requires `store: false`. Streaming requ
 `stream_options.include_obfuscation: false`. It adds no provider configuration and covers the supported overlap
 between Responses and Messages, including streaming, tools, media, refusals, and usage.
 
+Copilot may emit adaptive-thinking blocks by default for some Claude models. Because reasoning content and
+history are not representable through this bridge, the converter validates those blocks and omits them from
+buffered and streaming Responses output. Malformed thinking blocks still return a conversion error.
+
 Reasoning requests, reasoning history, encrypted content, and hosted execution are rejected. Shell and patch tools
 run through fixed local schemas. Other unsupported Responses features return a conversion error instead of losing
 data during translation.
