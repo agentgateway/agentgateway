@@ -685,7 +685,6 @@ mod tests {
 	fn test_response_tool_calls_populated_when_flag_true() {
 		let response = response_with_output(vec![OutputItem::FunctionCall(FunctionToolCall {
 			arguments: r#"{"location":"San Francisco"}"#.to_string(),
-			caller: None,
 			call_id: "call_123".to_string(),
 			namespace: None,
 			name: "get_weather".to_string(),
@@ -716,7 +715,6 @@ mod tests {
 	fn test_response_output_messages_omitted_when_flag_false() {
 		let response = response_with_output(vec![OutputItem::FunctionCall(FunctionToolCall {
 			arguments: "{}".to_string(),
-			caller: None,
 			call_id: "call_123".to_string(),
 			namespace: None,
 			name: "get_weather".to_string(),
