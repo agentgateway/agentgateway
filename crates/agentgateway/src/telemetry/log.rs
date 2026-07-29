@@ -1272,7 +1272,7 @@ impl Drop for DropOnLog {
 						method: mcp.method_name.as_ref().map(RichStrng::from).into(),
 						resource_type: mcp.resource_type().into(),
 						server: mcp.target_name().map(RichStrng::from).into(),
-						resource: mcp.resource_name().map(RichStrng::from).into(),
+						resource: mcp.metric_resource_name().map(RichStrng::from).into(),
 
 						route: route_identifier.clone(),
 						custom: custom_metric_fields.clone(),

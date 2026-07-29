@@ -388,6 +388,17 @@ impl MCPInfo {
 			.or_else(|| self.task.as_ref().map(MCPTask::name))
 	}
 
+	/// Like [`Self::resource_name`], but omits task IDs, which are unique per request and would
+	/// grow the metric label set without bound.
+	pub fn metric_resource_name(&self) -> Option<&str> {
+		self
+			.tool
+			.as_ref()
+			.map(|tool| tool.name.as_str())
+			.or_else(|| self.prompt.as_ref().map(ResourceId::name))
+			.or_else(|| self.resource.as_ref().map(ResourceId::name))
+	}
+
 	pub fn set_tool(&mut self, target: String, name: String) {
 		self.prompt = None;
 		self.resource = None;
