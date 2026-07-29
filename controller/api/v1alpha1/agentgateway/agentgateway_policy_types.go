@@ -1687,11 +1687,17 @@ type CrossAppAccessAuth struct {
 	// +optional
 	Resources []string `json:"resources,omitempty"`
 
-	// Scopes sent to the token endpoint.
+	// Scopes requested when obtaining the ID-JAG from the identity provider.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
 	// +optional
 	Scopes []string `json:"scopes,omitempty"`
+
+	// Scopes requested when exchanging the ID-JAG for an access token.
+	// When omitted, defaults to Scopes. Set to an empty list to omit scope.
+	// +kubebuilder:validation:MaxItems=64
+	// +optional
+	AccessTokenScopes *[]string `json:"accessTokenScopes,omitempty"`
 
 	// Subject token sent to the identity provider. Defaults to an OpenID Connect
 	// ID token read from the Authorization Bearer header.

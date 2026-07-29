@@ -2167,6 +2167,15 @@ func (in *CrossAppAccessAuth) DeepCopyInto(out *CrossAppAccessAuth) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.AccessTokenScopes != nil {
+		in, out := &in.AccessTokenScopes, &out.AccessTokenScopes
+		*out = new([]string)
+		if **in != nil {
+			in, out := *in, *out
+			*out = make([]string, len(*in))
+			copy(*out, *in)
+		}
+	}
 	if in.SubjectToken != nil {
 		in, out := &in.SubjectToken, &out.SubjectToken
 		*out = new(CrossAppAccessSubjectToken)

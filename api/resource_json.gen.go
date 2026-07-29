@@ -1997,6 +1997,17 @@ func (this *CrossAppAccessAuth) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for CrossAppAccessAuth_ScopeOverride
+func (this *CrossAppAccessAuth_ScopeOverride) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for CrossAppAccessAuth_ScopeOverride
+func (this *CrossAppAccessAuth_ScopeOverride) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for CrossAppAccessAuth_Endpoint
 func (this *CrossAppAccessAuth_Endpoint) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
