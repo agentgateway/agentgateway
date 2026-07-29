@@ -1671,6 +1671,7 @@ pub fn translate_stream(
 					// Once any text has actually streamed, it cannot be retyped, so a late refusal
 					// must fail the stream rather than silently relabel already-emitted content.
 					if matches!(stop_reason, messages::StopReason::Refusal) && !stream.output.is_empty() {
+						commit_stream_telemetry(&stream, &log)?;
 						stream.late_refusal = true;
 						return Err(());
 					}
@@ -3536,6 +3537,7 @@ fn assistant_text_content(content: &serde_json::Value) -> Result<Vec<String>, AI
 						object
 							.get("text")
 							.and_then(serde_json::Value::as_str)
+							.filter(|text| !text.is_empty())
 							.map(ToOwned::to_owned)
 							.ok_or_else(|| {
 								AIError::UnsupportedConversion(strng::literal!(
@@ -3605,6 +3607,7 @@ fn user_content(content: &serde_json::Value) -> Result<Vec<messages::ContentBloc
 						object
 							.get("text")
 							.and_then(serde_json::Value::as_str)
+							.filter(|text| !text.is_empty())
 							.map(|text| text_block(text.to_string()))
 							.ok_or_else(|| {
 								AIError::UnsupportedConversion(strng::literal!(
@@ -3818,6 +3821,7 @@ fn text_content(content: &serde_json::Value, expected_type: &str) -> Result<Vec<
 				object
 					.get("text")
 					.and_then(serde_json::Value::as_str)
+					.filter(|text| !text.is_empty())
 					.map(ToOwned::to_owned)
 					.ok_or_else(|| {
 						AIError::UnsupportedConversion(strng::literal!("Responses text content is required"))

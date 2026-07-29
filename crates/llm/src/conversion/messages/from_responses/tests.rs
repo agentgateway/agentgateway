@@ -433,6 +433,7 @@ async fn stream_late_refusal_after_streamed_text_fails_instead_of_rewriting() {
 	// output_text vs refusal typing as soon as content_part.added is sent. Once text has actually
 	// streamed to the client, it cannot be retyped, so a late refusal must fail the stream instead
 	// of silently relabeling already-emitted content as a refusal.
+	let (logger, info, first_token_updates, updates) = test_logger();
 	let mut frames = vec![
 		stream_message_start(),
 		block_start(0, json!({"type":"text","text":""})),
@@ -441,7 +442,7 @@ async fn stream_late_refusal_after_streamed_text_fails_instead_of_rewriting() {
 		block_stop(0),
 	];
 	frames.extend(stream_terminal("refusal", 2));
-	let events = translated_stream(frames, State::default()).await;
+	let events = translated_stream_with(frames, State::default(), logger, true).await;
 	assert_eq!(
 		events
 			.iter()
@@ -471,6 +472,20 @@ async fn stream_late_refusal_after_streamed_text_fails_instead_of_rewriting() {
 	assert_eq!(events[6]["text"], "cannot comply");
 	let error = events.last().expect("error event");
 	assert_eq!(error["code"], "refusal_after_streaming");
+	assert_eq!(*updates.lock().expect("updates lock"), 1);
+	assert_eq!(*first_token_updates.lock().expect("first-token lock"), 1);
+	let info = info.lock().expect("test reporter lock");
+	assert_eq!(info.response.input_tokens, Some(2));
+	assert_eq!(info.response.output_tokens, Some(2));
+	assert_eq!(info.response.total_tokens, Some(4));
+	assert_eq!(
+		info.response.provider_model.as_deref(),
+		Some("claude-upstream")
+	);
+	assert_eq!(
+		info.response.completion,
+		Some(vec!["cannot comply".to_string()])
+	);
 }
 
 #[tokio::test]
@@ -2194,6 +2209,24 @@ fn buffered_value(body: serde_json::Value, state: &State) -> serde_json::Value {
 }
 
 #[test]
+fn buffered_response_visits_output_text() {
+	let body = buffered_body(
+		json!([{"type":"text","text":"sensitive"}]),
+		"end_turn",
+		serde_json::Value::Null,
+		buffered_usage(),
+	);
+	let mut translated = buffered_translate(body, &buffered_state());
+
+	translated.visit_text_mut(&mut |text| *text = "masked".to_owned());
+
+	let value: serde_json::Value =
+		serde_json::from_slice(&translated.serialize().expect("response should serialize"))
+			.expect("serialized Responses response");
+	assert_eq!(value["output"][0]["content"][0]["text"], "masked");
+}
+
+#[test]
 fn retain_response_item_rejects_incrementally_without_the_final_serialization_check() {
 	// Isolates the per-item accounting in retain_response_item from translate_response's
 	// separate final-serialization re-check (see
@@ -3787,14 +3820,26 @@ fn raw_item_shape_policy(#[case] role: &str, #[case] extra: &str, #[case] accept
 #[rstest::rstest]
 #[case::user_string_empty("user", json!(""), false)]
 #[case::user_array_empty("user", json!([]), false)]
+#[case::user_input_text_empty("user", json!([{"type": "input_text", "text": ""}]), false)]
 #[case::user_string_nonempty("user", json!("hello"), true)]
 #[case::assistant_string_empty("assistant", json!(""), false)]
 #[case::assistant_array_empty("assistant", json!([]), false)]
+#[case::assistant_output_text_empty(
+	"assistant",
+	json!([{"type": "output_text", "text": ""}]),
+	false
+)]
 #[case::assistant_string_nonempty("assistant", json!("hello"), true)]
 #[case::system_string_empty("system", json!(""), false)]
 #[case::system_array_empty("system", json!([]), false)]
+#[case::system_input_text_empty("system", json!([{"type": "input_text", "text": ""}]), false)]
 #[case::system_string_nonempty("system", json!("hello"), true)]
 #[case::developer_string_empty("developer", json!(""), false)]
+#[case::developer_input_text_empty(
+	"developer",
+	json!([{"type": "input_text", "text": ""}]),
+	false
+)]
 fn message_content_rejects_empty_and_accepts_nonempty(
 	#[case] role: &str,
 	#[case] content: serde_json::Value,

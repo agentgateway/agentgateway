@@ -1515,8 +1515,7 @@ async fn count_tokens_resolves_model_alias_once_for_upstream_request() {
 	assert_eq!(llm_request.request_model, "middle-name");
 }
 
-#[tokio::test]
-async fn copilot_count_tokens_uses_local_fallback() {
+async fn copilot_local_token_count(body: Value) -> u64 {
 	use crate::http::auth::BackendInfo;
 	use crate::test_helpers::proxymock::setup_proxy_test;
 	use crate::types::agent::BackendTarget;
@@ -1531,13 +1530,7 @@ async fn copilot_count_tokens_uses_local_fallback() {
 	let req = ::http::Request::builder()
 		.uri("/v1/messages/count_tokens")
 		.header(::http::header::CONTENT_TYPE, "application/json")
-		.body(Body::from(
-			br#"{
-				"model": "claude-sonnet-5",
-				"messages": [{"role": "user", "content": "hello"}]
-			}"#
-				.to_vec(),
-		))
+		.body(Body::from(serde_json::to_vec(&body).unwrap()))
 		.unwrap();
 
 	let RequestResult::Rejected(response) = provider
@@ -1552,7 +1545,48 @@ async fn copilot_count_tokens_uses_local_fallback() {
 	let body = response.into_body().collect().await.unwrap().to_bytes();
 	let response: types::count_tokens::Response =
 		serde_json::from_slice(&body).expect("valid count_tokens response");
-	assert!(response.input_tokens > 0);
+	response.input_tokens
+}
+
+#[tokio::test]
+async fn copilot_count_tokens_uses_local_fallback() {
+	let count = copilot_local_token_count(json!({
+		"model": "claude-sonnet-5",
+		"messages": [{"role": "user", "content": "hello"}]
+	}))
+	.await;
+
+	assert!(count > 0);
+}
+
+#[tokio::test]
+async fn copilot_local_count_tokens_includes_tool_schemas() {
+	let without_tools = copilot_local_token_count(json!({
+		"model": "claude-sonnet-5",
+		"messages": [{"role": "user", "content": "hello"}]
+	}))
+	.await;
+	let with_tools = copilot_local_token_count(json!({
+		"model": "claude-sonnet-5",
+		"messages": [{"role": "user", "content": "hello"}],
+		"tools": [{
+			"name": "lookup",
+			"description": "Look up a customer record by its unique account identifier",
+			"input_schema": {
+				"type": "object",
+				"properties": {
+					"account_id": {
+						"type": "string",
+						"description": "The unique customer account identifier"
+					}
+				},
+				"required": ["account_id"]
+			}
+		}]
+	}))
+	.await;
+
+	assert!(with_tools > without_tools);
 }
 
 #[tokio::test]

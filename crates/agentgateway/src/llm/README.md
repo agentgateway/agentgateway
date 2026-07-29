@@ -28,6 +28,9 @@ subagents, context compaction near the limit, and long-running sessions have not
 The Responses converter is stateless and requires `store: false`. Streaming requests must also set
 `stream_options.include_obfuscation: false`. It adds no provider configuration and covers the supported overlap
 between Responses and Messages, including streaming, tools, media, refusals, and usage.
+Text is forwarded incrementally. Anthropic reports refusal status only at the end of a stream, so
+a refusal reported after text has already been emitted terminates with `refusal_after_streaming`
+instead of retyping the earlier `output_text` events or emitting `response.completed`.
 
 Copilot may emit adaptive-thinking blocks by default for some Claude models. Because reasoning content and
 history are not representable through this bridge, the converter validates those blocks and omits them from
