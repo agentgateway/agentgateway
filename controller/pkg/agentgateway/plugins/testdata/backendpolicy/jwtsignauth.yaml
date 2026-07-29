@@ -82,26 +82,6 @@ output:
           jwtSign:
             claims:
               iss: acct.user
-      key: backend/default/jwt-sign-secret-not-found:backend-auth:default/test
-      name:
-        kind: AgentgatewayPolicy
-        name: jwt-sign-secret-not-found
-        namespace: default
-      target:
-        route:
-          kind: HTTPRoute
-          name: test
-          namespace: default
-- gateway:
-    Name: test
-    Namespace: default
-  resource:
-    policy:
-      backend:
-        auth:
-          jwtSign:
-            claims:
-              iss: acct.user
             signingKey: pem-value
             ttl: 1.500s
       key: backend/default/jwt-sign-sub-second-ttl:backend-auth:default/test
@@ -185,9 +165,14 @@ status:
       conditions:
       - lastTransitionTime: fake
         message: secret default/jwt-sign-secret-missing not found
-        reason: PartiallyValid
-        status: "True"
+        reason: Invalid
+        status: "False"
         type: Accepted
+      - lastTransitionTime: fake
+        message: Policy is not attached due to invalid status
+        reason: Pending
+        status: "False"
+        type: Attached
       controllerName: agentgateway.dev/agentgateway
 - apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayPolicy

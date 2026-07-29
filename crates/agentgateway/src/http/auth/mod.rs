@@ -254,7 +254,6 @@ async fn apply_backend_auth_kind(
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
 		},
 		BackendAuthKind::JwtSign(cfg) => {
-			let explicit = cfg.location.is_some();
 			let token = cfg
 				.sign()
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
@@ -267,9 +266,13 @@ async fn apply_backend_auth_kind(
 			// alongside (or instead of, if `location` differs) the signed JWT.
 			DEFAULT_AUTHORIZATION_LOCATION.remove(req)?;
 			resolved.insert(req, &token)?;
+			// The signed JWT must stay exactly where jwtSign put it, even when
+			// `location` was defaulted: providers rewrite non-explicit Bearer
+			// tokens (e.g. Anthropic relocates them to x-api-key), which would
+			// break a keypair JWT.
 			req
 				.extensions_mut()
-				.insert(AppliedBackendAuthLocation { explicit });
+				.insert(AppliedBackendAuthLocation { explicit: true });
 		},
 		BackendAuthKind::OAuthTokenExchange(te_auth) => {
 			let explicit = oauth::apply_token_exchange(&backend_info.inputs, te_auth, req).await?;

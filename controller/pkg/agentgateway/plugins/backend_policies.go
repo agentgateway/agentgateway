@@ -1743,7 +1743,24 @@ func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, names
 	if err != nil {
 		errs = append(errs, err)
 	}
+
+	var signingKey string
+	data, err := ctx.ResolveCredentialRef(auth.SigningKeyRef, namespace)
+	if err != nil {
+		errs = append(errs, err)
+	} else if value, exists := kubeutils.GetSecretDataValue(data, wellknown.SigningKey); !exists || value == "" {
+		errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SigningKeyRef.Name, wellknown.SigningKey))
+	} else {
+		signingKey = value
+	}
+	// A jwtSign policy without its signing key cannot mint tokens; drop the
+	// policy entirely instead of shipping it with an empty key.
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
+
 	jwtSign := &api.JwtSign{
+		SigningKey:            signingKey,
 		Alg:                   alg,
 		Kid:                   auth.KeyID,
 		Claims:                claims,
@@ -1754,20 +1771,11 @@ func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, names
 		jwtSign.Ttl = durationpb.New(auth.TTL.Duration)
 	}
 
-	data, err := ctx.ResolveCredentialRef(auth.SigningKeyRef, namespace)
-	if err != nil {
-		errs = append(errs, err)
-	} else if value, exists := kubeutils.GetSecretDataValue(data, wellknown.SigningKey); !exists || value == "" {
-		errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SigningKeyRef.Name, wellknown.SigningKey))
-	} else {
-		jwtSign.SigningKey = value
-	}
-
 	return &api.BackendAuthPolicy{
 		Kind: &api.BackendAuthPolicy_JwtSign{
 			JwtSign: jwtSign,
 		},
-	}, errors.Join(errs...)
+	}, nil
 }
 
 // translateJwtSignSigningAlg maps a nil alg to UNSPECIFIED so the data plane

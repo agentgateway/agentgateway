@@ -1260,8 +1260,9 @@ async fn test_backend_auth_jwt_sign() {
 		.get::<AppliedBackendAuthLocation>()
 		.expect("extension must be set");
 	assert!(
-		!ext.explicit,
-		"default location must not be marked explicit"
+		ext.explicit,
+		"jwtSign must mark the location explicit even when defaulted, so \
+		 providers never relocate the signed JWT"
 	);
 }
 
