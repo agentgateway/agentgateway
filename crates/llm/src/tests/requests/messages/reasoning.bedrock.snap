@@ -26,11 +26,6 @@ info:
       "content": [
         {
           "text": "Give one concise insight about distributed consensus."
-        },
-        {
-          "cachePoint": {
-            "type": "default"
-          }
         }
       ]
     }

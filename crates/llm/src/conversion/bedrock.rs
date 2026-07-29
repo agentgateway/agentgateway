@@ -1238,7 +1238,8 @@ pub mod from_messages {
 		headers: Option<&http::HeaderMap>,
 	) -> Result<super::BedrockRequest, AIError> {
 		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestParsing)?;
-		let (xlated, tool_name_map) = translate_internal(typed, provider, headers)?;
+		let model_id = typed.model.clone();
+		let (xlated, tool_name_map) = translate_internal(typed, model_id, provider, headers)?;
 		let body = serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)?;
 		Ok(super::BedrockRequest {
 			body,
@@ -1248,9 +1249,11 @@ pub mod from_messages {
 
 	pub(super) fn translate_internal(
 		req: messages::Request,
+		model_id: String,
 		provider: &Provider,
 		headers: Option<&http::HeaderMap>,
 	) -> Result<(bedrock::ConverseRequest, super::BedrockToolNameMap), AIError> {
+		let supports_caching = helpers::supports_prompt_caching(&model_id);
 		let mut tool_name_map = super::BedrockToolNameMap::default();
 		for tool in req.tools.iter().flatten() {
 			tool_name_map.register(&tool.name);
@@ -1369,7 +1372,7 @@ pub mod from_messages {
 							} => {
 								result.push(bedrock::SystemContentBlock::Text { text: text.clone() });
 								// Insert cache point if this block has cache_control
-								if cache_control.is_some() && cache_points_used < 4 {
+								if cache_control.is_some() && supports_caching && cache_points_used < 4 {
 									result.push(bedrock::SystemContentBlock::CachePoint {
 										cache_point: helpers::create_cache_point(),
 									});
@@ -1399,7 +1402,7 @@ pub mod from_messages {
 						{
 							let system_content = system_content.get_or_insert_with(Vec::new);
 							system_content.push(bedrock::SystemContentBlock::Text { text });
-							if cache_control.is_some() && cache_points_used < 4 {
+							if cache_control.is_some() && supports_caching && cache_points_used < 4 {
 								system_content.push(bedrock::SystemContentBlock::CachePoint {
 									cache_point: helpers::create_cache_point(),
 								});
@@ -1521,7 +1524,7 @@ pub mod from_messages {
 
 				content.push(bedrock_block);
 
-				if has_cache_control && cache_points_used < 4 {
+				if has_cache_control && supports_caching && cache_points_used < 4 {
 					content.push(bedrock::ContentBlock::CachePoint(
 						helpers::create_cache_point(),
 					));
@@ -1550,7 +1553,7 @@ pub mod from_messages {
 			let mut bedrock_tools = Vec::with_capacity(tools.len() * 2);
 			for (tool, has_cache_control) in tools {
 				bedrock_tools.push(tool);
-				if has_cache_control && cache_points_used < 4 {
+				if has_cache_control && supports_caching && cache_points_used < 4 {
 					bedrock_tools.push(bedrock::Tool::CachePoint(helpers::create_cache_point()));
 					cache_points_used += 1;
 				}

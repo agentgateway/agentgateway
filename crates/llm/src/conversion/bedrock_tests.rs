@@ -172,7 +172,9 @@ fn test_metadata_from_header() {
 		output_config: None,
 	};
 
-	let (out, _) = super::from_messages::translate_internal(req, &provider, Some(&headers)).unwrap();
+	let model_id = req.model.clone();
+	let (out, _) =
+		super::from_messages::translate_internal(req, model_id, &provider, Some(&headers)).unwrap();
 	let metadata = out.request_metadata.unwrap();
 
 	assert_eq!(metadata.get("user_id"), Some(&"user123".to_string()));
@@ -225,7 +227,8 @@ fn test_messages_metadata_is_preserved_in_additional_model_request_fields() {
 		output_config: None,
 	};
 
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let model_id = req.model.clone();
+	let (out, _) = super::from_messages::translate_internal(req, model_id, &provider, None).unwrap();
 	let additional_fields = out.additional_model_request_fields.unwrap();
 	let metadata = additional_fields.get("metadata").unwrap();
 
@@ -272,7 +275,8 @@ fn test_output_config_effort_without_thinking_is_passed_through() {
 		}),
 	};
 
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let model_id = req.model.clone();
+	let (out, _) = super::from_messages::translate_internal(req, model_id, &provider, None).unwrap();
 	assert_eq!(
 		out.additional_model_request_fields,
 		Some(json!({
@@ -335,7 +339,8 @@ fn test_output_config_format_maps_to_converse_output_config() {
 		}),
 	};
 
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let model_id = req.model.clone();
+	let (out, _) = super::from_messages::translate_internal(req, model_id, &provider, None).unwrap();
 	assert_eq!(
 		out.additional_model_request_fields,
 		Some(json!({
@@ -399,7 +404,8 @@ fn test_explicit_empty_output_config_is_preserved() {
 		}),
 	};
 
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let model_id = req.model.clone();
+	let (out, _) = super::from_messages::translate_internal(req, model_id, &provider, None).unwrap();
 	assert_eq!(
 		out.additional_model_request_fields,
 		Some(json!({
@@ -456,7 +462,8 @@ fn test_thinking_and_output_config_are_both_passed_through() {
 		}),
 	};
 
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let model_id = req.model.clone();
+	let (out, _) = super::from_messages::translate_internal(req, model_id, &provider, None).unwrap();
 	assert_eq!(
 		out.additional_model_request_fields,
 		Some(json!({
@@ -520,7 +527,8 @@ fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
 		output_config: None,
 	};
 
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let model_id = req.model.clone();
+	let (out, _) = super::from_messages::translate_internal(req, model_id, &provider, None).unwrap();
 	let inference = out.inference_config.unwrap();
 	assert_eq!(inference.temperature, Some(0.7));
 	assert_eq!(inference.top_p, Some(0.8));
@@ -595,7 +603,8 @@ fn test_enabled_thinking_applies_sampling_and_tool_choice_constraints() {
 		output_config: None,
 	};
 
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let model_id = req.model.clone();
+	let (out, _) = super::from_messages::translate_internal(req, model_id, &provider, None).unwrap();
 	let inference = out.inference_config.unwrap();
 	assert_eq!(inference.temperature, None);
 	assert_eq!(inference.top_p, None);
@@ -645,7 +654,8 @@ fn test_messages_image_url_to_bedrock_returns_error() {
 		output_config: None,
 	};
 
-	let err = super::from_messages::translate_internal(req, &provider, None).unwrap_err();
+	let model_id = req.model.clone();
+	let err = super::from_messages::translate_internal(req, model_id, &provider, None).unwrap_err();
 	assert!(matches!(err, crate::AIError::UnsupportedConversion(_)));
 	assert!(
 		err
@@ -1602,7 +1612,9 @@ fn test_messages_long_tool_names_fit_bedrock_tool_config() {
 		output_config: None,
 	};
 
-	let (out, tool_map) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let model_id = req.model.clone();
+	let (out, tool_map) =
+		super::from_messages::translate_internal(req, model_id, &provider, None).unwrap();
 	let bedrock_name = out
 		.tool_config
 		.as_ref()
@@ -1658,8 +1670,9 @@ fn test_messages_long_tool_name_round_trip_response() {
 		output_config: None,
 	};
 
+	let model_id = req.model.clone();
 	let (bedrock_req, tool_map) =
-		super::from_messages::translate_internal(req, &provider, None).unwrap();
+		super::from_messages::translate_internal(req, model_id, &provider, None).unwrap();
 	let bedrock_name = bedrock_req
 		.tool_config
 		.as_ref()
