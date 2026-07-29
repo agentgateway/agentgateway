@@ -1238,6 +1238,7 @@ pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
 }
 
 pub fn setup_proxy_test_with_config(config: crate::Config) -> TestBind {
+	crate::crypto::init();
 	let encoder = config.session_encoder.clone();
 	let stores = Stores::new(config.ipv6_enabled, config.threading_mode);
 	let client = client::Client::new(&config.dns, None, Default::default(), None);
