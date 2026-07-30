@@ -180,12 +180,15 @@ impl agent_llm::model_catalog::ModelCatalogHandle for ModelCatalog {
 	fn model_has_tag(&self, model_id: &str, tag: &str) -> bool {
 		self.state.load().snapshot.model_has_tag(model_id, tag)
 	}
+	fn get_model_tags(&self, model_id: &str) -> Option<Arc<std::collections::BTreeSet<String>>> {
+		self.state.load().snapshot.get_model_tags(model_id)
+	}
 }
 
 pub struct CatalogSnapshot {
 	catalog: Option<CatalogData>,
 	/// Precomputed `model_id -> tags` (merged across providers) for O(1) attribute lookups.
-	model_tags: std::collections::HashMap<String, std::collections::BTreeSet<String>>,
+	model_tags: std::collections::HashMap<String, Arc<std::collections::BTreeSet<String>>>,
 }
 
 impl fmt::Debug for CatalogSnapshot {
@@ -210,6 +213,11 @@ impl CatalogSnapshot {
 			.is_some_and(|t| t.contains(tag))
 	}
 
+	/// Return the tags for `model_id` if known.
+	fn get_model_tags(&self, model_id: &str) -> Option<Arc<std::collections::BTreeSet<String>>> {
+		self.model_tags.get(model_id).cloned()
+	}
+
 	fn from_catalogs(catalogs: impl IntoIterator<Item = CatalogData>) -> Self {
 		let merged = catalogs
 			.into_iter()
@@ -219,7 +227,7 @@ impl CatalogSnapshot {
 			.values()
 			.flat_map(|p| p.models.iter())
 			.filter(|(_, m)| !m.tags.is_empty())
-			.map(|(id, m)| (id.clone(), m.tags.clone()))
+			.map(|(id, m)| (id.clone(), Arc::new(m.tags.clone())))
 			.collect();
 		CatalogSnapshot {
 			catalog: Some(merged),

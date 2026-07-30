@@ -1,6 +1,7 @@
 //! Process-wide handle to the model catalog, letting `agent_llm` query model attributes without
 //! depending on agentgateway (which owns the catalog). Installed once; tracks hot-reloads on its own.
 
+use std::collections::BTreeSet;
 use std::sync::{Arc, LazyLock};
 
 use arc_swap::ArcSwap;
@@ -8,6 +9,7 @@ use arc_swap::ArcSwap;
 /// Read handle to the model catalog; implemented in agentgateway on the cost `ModelCatalog`.
 pub trait ModelCatalogHandle: Send + Sync {
 	fn model_has_tag(&self, model_id: &str, tag: &str) -> bool;
+	fn get_model_tags(&self, model_id: &str) -> Option<Arc<BTreeSet<String>>>;
 }
 
 // `Option<Arc<dyn ..>>` is `Sized`, so it fits in an `ArcSwap` (an `ArcSwap<dyn ..>` does not).
@@ -30,6 +32,12 @@ pub fn model_has_tag(model_id: &str, tag: &str) -> bool {
 		.is_some_and(|c| c.model_has_tag(model_id, tag))
 }
 
+pub fn get_model_tags(model_id: &str) -> Option<Arc<BTreeSet<String>>> {
+	let guard = MODEL_CATALOG.load();
+	let slot: &Slot = &guard;
+	slot.as_ref().and_then(|c| c.get_model_tags(model_id))
+}
+
 #[cfg(test)]
 pub(crate) use test_support::{CATALOG_LOCK, clear, install};
 
@@ -50,6 +58,13 @@ mod test_support {
 	impl ModelCatalogHandle for TestCatalog {
 		fn model_has_tag(&self, model_id: &str, tag: &str) -> bool {
 			tag == self.tag && self.models.contains(model_id)
+		}
+		fn get_model_tags(&self, model_id: &str) -> Option<Arc<BTreeSet<String>>> {
+			if self.models.contains(model_id) {
+				Some(Arc::new(BTreeSet::from([self.tag.to_string()])))
+			} else {
+				None
+			}
 		}
 	}
 

@@ -150,6 +150,28 @@ pub enum ChatFormat {
 	VertexGemini,
 }
 
+impl ChatFormat {
+	pub const fn tag(&self) -> &'static str {
+		match self {
+			ChatFormat::OpenAICompletions => "openai-completions",
+			ChatFormat::OpenAIResponses => "openai-responses",
+			ChatFormat::AnthropicMessages => "anthropic-messages",
+			ChatFormat::BedrockConverse => "bedrock-converse",
+			ChatFormat::VertexGemini => "vertex-gemini",
+		}
+	}
+	pub fn from_tag(tag: &str) -> Option<Self> {
+		match tag {
+			"openai-completions" => Some(ChatFormat::OpenAICompletions),
+			"openai-responses" => Some(ChatFormat::OpenAIResponses),
+			"anthropic-messages" => Some(ChatFormat::AnthropicMessages),
+			"bedrock-converse" => Some(ChatFormat::BedrockConverse),
+			"vertex-gemini" => Some(ChatFormat::VertexGemini),
+			_ => None,
+		}
+	}
+}
+
 #[derive(Debug, Clone)]
 pub struct LLMRequest {
 	pub input_tokens: Option<u64>,

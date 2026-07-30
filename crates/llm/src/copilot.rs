@@ -24,6 +24,23 @@ impl Provider {
 			// If we have no model not much we can do...
 			return vec![ChatFormat::OpenAICompletions];
 		};
+		// TODO: also support endpoint parsing from copilot models and add a tool to grab specific setups in agctl
+		if let Some(tags) = crate::model_catalog::get_model_tags(m) {
+			let formats: Vec<ChatFormat> = [
+				ChatFormat::OpenAICompletions,
+				ChatFormat::OpenAIResponses,
+				ChatFormat::AnthropicMessages,
+				ChatFormat::BedrockConverse,
+				ChatFormat::VertexGemini,
+			]
+			.into_iter()
+			.filter(|f| tags.contains(f.tag()))
+			.collect();
+			if !formats.is_empty() {
+				tracing::info!(model = %m, ?formats, "copilot formats from modelcatalog tags");
+				return formats;
+			}
+		}
 		// Truth table from `curl https://api.githubcopilot.com/models -H "Authorization: Bearer ghu_..." | '.data[] | {id,supported_endpoints}'`
 		match m {
 			m if m.starts_with("claude-") => {
