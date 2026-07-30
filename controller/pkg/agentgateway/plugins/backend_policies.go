@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 
 	jsonpb "google.golang.org/protobuf/encoding/protojson"
@@ -640,7 +641,7 @@ func translateMCPAuthenticationSpec(
 		errs = append(errs, err)
 	}
 
-	extraResourceMetadata, metadataErr := translateJSONValueMap(authnPolicy.ResourceMetadata)
+	extraResourceMetadata, metadataErr := translateJSONValueMap("resourceMetadata field", authnPolicy.ResourceMetadata)
 	if metadataErr != nil {
 		errs = append(errs, metadataErr)
 	}
@@ -672,7 +673,7 @@ func translateMCPAuthenticationSpec(
 }
 
 func translateJWTMCPConfig(mcp *agentgateway.JWTMCPConfig) (*api.TrafficPolicySpec_JWT_MCP, error) {
-	extraResourceMetadata, err := translateJSONValueMap(mcp.ResourceMetadata)
+	extraResourceMetadata, err := translateJSONValueMap("resourceMetadata field", mcp.ResourceMetadata)
 	if err != nil {
 		return nil, err
 	}
@@ -711,23 +712,28 @@ func translateMcpIDP(provider *agentgateway.McpIDP) api.BackendPolicySpec_McpAut
 	return api.BackendPolicySpec_McpAuthentication_UNSPECIFIED
 }
 
-func translateJSONValueMap(values map[string]apiextensionsv1.JSON) (map[string]*structpb.Value, error) {
+func translateJSONValueMap(valueContext string, values map[string]apiextensionsv1.JSON) (map[string]*structpb.Value, error) {
 	var errs []error
 	var translated map[string]*structpb.Value
-	for k, v := range values {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
 		if translated == nil {
 			translated = make(map[string]*structpb.Value)
 		}
 
 		proto := &structpb.Value{}
-		err := jsonpb.Unmarshal(v.Raw, proto)
-		if err != nil {
-			logger.Error("error converting json value", "key", k, "error", err)
-			errs = append(errs, err)
+		if err := jsonpb.Unmarshal(values[key].Raw, proto); err != nil {
+			logger.Error("error converting JSON value", "context", valueContext, "key", key)
+			errs = append(errs, fmt.Errorf("%s %q contains invalid JSON", valueContext, key))
 			continue
 		}
 
-		translated[k] = proto
+		translated[key] = proto
 	}
 	return translated, errors.Join(errs...)
 }
@@ -938,10 +944,17 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 		}
 	} else if auth.JwtSign != nil {
 		jwtSignAuth, err := buildJwtSignAuthPolicy(ctx, auth.JwtSign, policy.Namespace)
-		translatedAuth = jwtSignAuth
 		if err != nil {
 			errs = append(errs, err)
+			jwtSignAuth = &api.BackendAuthPolicy{
+				Kind: &api.BackendAuthPolicy_JwtSign{
+					JwtSign: &api.JwtSign{
+						TranslationError: ptr.Of(err.Error()),
+					},
+				},
+			}
 		}
+		translatedAuth = jwtSignAuth
 	} else if auth.Passthrough != nil {
 		translatedAuth = &api.BackendAuthPolicy{
 			Kind: &api.BackendAuthPolicy_Passthrough{
@@ -1731,7 +1744,7 @@ func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, names
 			return nil, fmt.Errorf("jwtSign claim %q is reserved for the signer and cannot be configured", reserved)
 		}
 	}
-	claims, err := translateJSONValueMap(auth.Claims)
+	claims, err := translateJSONValueMap("jwtSign claim", auth.Claims)
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -1739,14 +1752,16 @@ func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, names
 	var signingKey string
 	data, err := ctx.ResolveCredentialRef(auth.SigningKeyRef, namespace)
 	if err != nil {
-		errs = append(errs, err)
+		errs = append(errs, fmt.Errorf(
+			"failed to resolve jwtSign signing secret %s/%s",
+			namespace,
+			auth.SigningKeyRef.Name,
+		))
 	} else if value, exists := kubeutils.GetSecretDataValue(data, wellknown.SigningKey); !exists || value == "" {
 		errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SigningKeyRef.Name, wellknown.SigningKey))
 	} else {
 		signingKey = value
 	}
-	// A jwtSign policy without its signing key cannot mint tokens; drop the
-	// policy entirely instead of shipping it with an empty key.
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}

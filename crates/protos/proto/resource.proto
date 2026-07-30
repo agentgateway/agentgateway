@@ -427,6 +427,10 @@ message JwtSign {
   // Where the signed token is written. Defaults to the Authorization header
   // with a "Bearer " prefix.
   AuthorizationLocation authorization_location = 6;
+  // Set by the control plane when jwtSign configuration cannot be translated.
+  // Control-plane-only: never set from user-facing config. When present, the
+  // data plane accepts the policy but rejects every request that uses it.
+  optional string translation_error = 7;
 }
 
 // GCP-specific backend authentication.

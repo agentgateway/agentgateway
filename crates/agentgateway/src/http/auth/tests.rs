@@ -1,3 +1,4 @@
+use http_body_util::BodyExt;
 use secrecy::SecretString;
 use serde_json::Map;
 
@@ -1467,6 +1468,75 @@ fn test_jwt_sign_serialize_rounds_up_sub_second_ttl() {
 	let auth = jwt_sign_auth(None, Some(std::time::Duration::from_millis(1500)), None);
 	let value = serde_json::to_value(&auth).expect("jwtSign auth should serialize");
 	assert_eq!(value["jwtSign"]["ttl"], "2s");
+}
+
+#[tokio::test]
+async fn test_invalid_jwt_sign_rejects_before_request_mutation() {
+	const DIAGNOSTIC_MARKER: &str = "secret default/private-signing-key not found";
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	req.headers_mut().insert(
+		http::header::AUTHORIZATION,
+		http::HeaderValue::from_static("Bearer client-supplied-token"),
+	);
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+		target: BackendTarget::Backend {
+			name: Default::default(),
+			namespace: Default::default(),
+			section: None,
+		},
+		inputs: t.inputs(),
+	};
+	let auth = BackendAuth {
+		kind: Some(BackendAuthKind::JwtSign(Box::new(
+			JwtSignAuth::new_invalid(DIAGNOSTIC_MARKER.to_string()),
+		))),
+		credentials: vec![credential("x-api-key", "secondary-credential", None)],
+	};
+
+	let err = apply_backend_auth(&backend_info, &auth, &mut req)
+		.await
+		.expect_err("invalid jwtSign must reject the request");
+	assert!(matches!(err, ProxyError::BackendAuthenticationFailed(_)));
+	assert_eq!(
+		req.headers().get(http::header::AUTHORIZATION),
+		Some(&http::HeaderValue::from_static(
+			"Bearer client-supplied-token"
+		))
+	);
+	assert!(
+		req.headers().get("x-api-key").is_none(),
+		"additional credentials must not be applied after jwtSign rejects"
+	);
+
+	let rendered = err.to_string();
+	assert!(rendered.contains("jwtSign configuration is invalid"));
+	assert!(
+		!rendered.contains(DIAGNOSTIC_MARKER),
+		"client-facing error leaked the translation diagnostic: {rendered}"
+	);
+	let response = err.into_response_with_grpc(false);
+	let body = response
+		.into_body()
+		.collect()
+		.await
+		.expect("error response body should collect")
+		.to_bytes();
+	let body = String::from_utf8(body.to_vec()).expect("error response should be UTF-8");
+	assert!(
+		!body.contains(DIAGNOSTIC_MARKER),
+		"client-facing response leaked the translation diagnostic: {body}"
+	);
+}
+
+#[test]
+fn test_invalid_jwt_sign_serializes_only_translation_error() {
+	let auth = JwtSignAuth::new_invalid("recognizable diagnostic".to_string());
+	assert_eq!(
+		serde_json::to_value(auth).expect("invalid jwtSign should serialize"),
+		serde_json::json!({"translationError": "recognizable diagnostic"})
+	);
 }
 
 #[tokio::test]

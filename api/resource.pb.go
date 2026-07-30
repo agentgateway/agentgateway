@@ -5000,8 +5000,12 @@ type JwtSign struct {
 	// Where the signed token is written. Defaults to the Authorization header
 	// with a "Bearer " prefix.
 	AuthorizationLocation *AuthorizationLocation `protobuf:"bytes,6,opt,name=authorization_location,json=authorizationLocation,proto3" json:"authorization_location,omitempty"`
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
+	// Set by the control plane when jwtSign configuration cannot be translated.
+	// Control-plane-only: never set from user-facing config. When present, the
+	// data plane accepts the policy but rejects every request that uses it.
+	TranslationError *string `protobuf:"bytes,7,opt,name=translation_error,json=translationError,proto3,oneof" json:"translation_error,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *JwtSign) Reset() {
@@ -5074,6 +5078,13 @@ func (x *JwtSign) GetAuthorizationLocation() *AuthorizationLocation {
 		return x.AuthorizationLocation
 	}
 	return nil
+}
+
+func (x *JwtSign) GetTranslationError() string {
+	if x != nil && x.TranslationError != nil {
+		return *x.TranslationError
+	}
+	return ""
 }
 
 // GCP-specific backend authentication.
@@ -17109,7 +17120,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x16authorization_location\x18\x01 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\"\x86\x01\n" +
 	"\x03Key\x12\x16\n" +
 	"\x06secret\x18\x01 \x01(\tR\x06secret\x12g\n" +
-	"\x16authorization_location\x18\x02 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\"\xc3\x03\n" +
+	"\x16authorization_location\x18\x02 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\"\x8b\x04\n" +
 	"\aJwtSign\x12\x1f\n" +
 	"\vsigning_key\x18\x01 \x01(\tR\n" +
 	"signingKey\x12:\n" +
@@ -17117,12 +17128,14 @@ const file_resource_proto_rawDesc = "" +
 	"\x03kid\x18\x03 \x01(\tH\x00R\x03kid\x88\x01\x01\x12F\n" +
 	"\x06claims\x18\x04 \x03(\v2..agentgateway.dev.resource.JwtSign.ClaimsEntryR\x06claims\x120\n" +
 	"\x03ttl\x18\x05 \x01(\v2\x19.google.protobuf.DurationH\x01R\x03ttl\x88\x01\x01\x12g\n" +
-	"\x16authorization_location\x18\x06 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\x1aQ\n" +
+	"\x16authorization_location\x18\x06 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\x120\n" +
+	"\x11translation_error\x18\a \x01(\tH\x02R\x10translationError\x88\x01\x01\x1aQ\n" +
 	"\vClaimsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12,\n" +
 	"\x05value\x18\x02 \x01(\v2\x16.google.protobuf.ValueR\x05value:\x028\x01B\x06\n" +
 	"\x04_kidB\x06\n" +
-	"\x04_ttl\"\xa5\x02\n" +
+	"\x04_ttlB\x14\n" +
+	"\x12_translation_error\"\xa5\x02\n" +
 	"\x03Gcp\x12#\n" +
 	"\n" +
 	"credential\x18\x03 \x01(\tH\x01R\n" +

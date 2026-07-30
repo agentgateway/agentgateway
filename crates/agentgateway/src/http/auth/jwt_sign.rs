@@ -33,13 +33,11 @@ fn ttl_secs_ceil(ttl: Duration) -> u64 {
 	ttl.as_secs() + u64::from(ttl.subsec_nanos() > 0)
 }
 
-/// The signing key, either parsed eagerly (inline PEM) or deferred to
-/// [`JwtSignAuth::resolve`] (file paths), so file-based keys register with the
-/// resource manager and reload when the file changes.
 #[derive(Clone)]
-enum ResolvableSigningKey {
+enum JwtSignState {
 	Parsed(SigningKey),
 	File(PathBuf),
+	Invalid(String),
 }
 
 /// Signs a short-lived JWT with a private key on each request and sends it to
@@ -51,7 +49,7 @@ enum ResolvableSigningKey {
 pub struct JwtSignAuth {
 	#[serde(skip)]
 	#[cfg_attr(feature = "schema", schemars(skip))]
-	signing_key: ResolvableSigningKey,
+	state: JwtSignState,
 	#[serde(default)]
 	alg: JwtSigningAlg,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -65,14 +63,22 @@ pub struct JwtSignAuth {
 
 impl fmt::Debug for JwtSignAuth {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("JwtSignAuth")
-			.field("signing_key", &"<redacted>")
-			.field("alg", &self.alg)
-			.field("kid", &self.kid)
-			.field("claims", &self.claims)
-			.field("ttl", &self.ttl)
-			.field("location", &self.location)
-			.finish()
+		let mut debug = f.debug_struct("JwtSignAuth");
+		match &self.state {
+			JwtSignState::Invalid(error) => {
+				debug.field("translation_error", error);
+			},
+			JwtSignState::Parsed(_) | JwtSignState::File(_) => {
+				debug
+					.field("signing_key", &"<redacted>")
+					.field("alg", &self.alg)
+					.field("kid", &self.kid)
+					.field("claims", &self.claims)
+					.field("ttl", &self.ttl)
+					.field("location", &self.location);
+			},
+		}
+		debug.finish()
 	}
 }
 
@@ -82,6 +88,12 @@ impl serde::Serialize for JwtSignAuth {
 		S: serde::Serializer,
 	{
 		use serde::ser::SerializeStruct;
+
+		if let JwtSignState::Invalid(error) = &self.state {
+			let mut state = serializer.serialize_struct("JwtSignAuth", 1)?;
+			state.serialize_field("translationError", error)?;
+			return state.end();
+		}
 
 		let mut state = serializer.serialize_struct("JwtSignAuth", 5)?;
 		state.serialize_field("alg", &self.alg)?;
@@ -136,14 +148,12 @@ impl TryFrom<RawJwtSignAuth> for JwtSignAuth {
 		// Inline keys are parsed eagerly so misconfigurations fail at parse
 		// time. File keys are deferred to `resolve`, which fetches through the
 		// resource manager so the file is watched and changes reload the config.
-		let signing_key = match raw.signing_key {
-			FileOrInline::Inline(pem) => {
-				ResolvableSigningKey::Parsed(parse_signing_key(raw.alg, pem.trim())?)
-			},
-			FileOrInline::File { file } => ResolvableSigningKey::File(file),
+		let state = match raw.signing_key {
+			FileOrInline::Inline(pem) => JwtSignState::Parsed(parse_signing_key(raw.alg, pem.trim())?),
+			FileOrInline::File { file } => JwtSignState::File(file),
 		};
 		Ok(Self {
-			signing_key,
+			state,
 			alg: raw.alg,
 			kid: raw.kid,
 			claims: raw.claims,
@@ -181,6 +191,18 @@ fn parse_signing_key(alg: JwtSigningAlg, pem: &str) -> Result<SigningKey, String
 }
 
 impl JwtSignAuth {
+	/// Returns a jwtSign configuration that always rejects requests
+	pub(crate) fn new_invalid(error: String) -> Self {
+		Self {
+			state: JwtSignState::Invalid(error),
+			alg: JwtSigningAlg::default(),
+			kid: None,
+			claims: BTreeMap::new(),
+			ttl: None,
+			location: None,
+		}
+	}
+
 	pub fn try_new(
 		signing_key_pem: &str,
 		alg: JwtSigningAlg,
@@ -190,9 +212,9 @@ impl JwtSignAuth {
 		location: Option<AuthorizationLocation>,
 	) -> Result<Self, String> {
 		validate_config(&claims, ttl)?;
-		let signing_key = ResolvableSigningKey::Parsed(parse_signing_key(alg, signing_key_pem)?);
+		let state = JwtSignState::Parsed(parse_signing_key(alg, signing_key_pem)?);
 		Ok(Self {
-			signing_key,
+			state,
 			alg,
 			kid,
 			claims,
@@ -205,22 +227,32 @@ impl JwtSignAuth {
 	/// registers the file so changes trigger a config reload. Inline keys are
 	/// already parsed and are left untouched.
 	pub async fn resolve(&mut self, resources: &ResourceFetcher) -> anyhow::Result<()> {
-		if let ResolvableSigningKey::File(path) = &self.signing_key {
-			let pem = resources
-				.fetch(ResourceRef::File(path.clone()))
-				.await
-				.context("failed to load jwtSign signingKey")?;
-			let pem = std::str::from_utf8(&pem).context("jwtSign signingKey is not valid UTF-8")?;
-			self.signing_key = ResolvableSigningKey::Parsed(
-				parse_signing_key(self.alg, pem.trim()).map_err(anyhow::Error::msg)?,
-			);
-		}
+		let JwtSignState::File(path) = &self.state else {
+			return Ok(());
+		};
+		let pem = resources
+			.fetch(ResourceRef::File(path.clone()))
+			.await
+			.context("failed to load jwtSign signingKey")?;
+		let pem = std::str::from_utf8(&pem).context("jwtSign signingKey is not valid UTF-8")?;
+		self.state =
+			JwtSignState::Parsed(parse_signing_key(self.alg, pem.trim()).map_err(anyhow::Error::msg)?);
 		Ok(())
 	}
 
 	pub(super) fn sign(&self) -> anyhow::Result<String> {
-		let ResolvableSigningKey::Parsed(signing_key) = &self.signing_key else {
-			anyhow::bail!("jwtSign file-based signingKey was not resolved at config load");
+		let signing_key = match &self.state {
+			JwtSignState::Parsed(signing_key) => signing_key,
+			JwtSignState::File(_) => {
+				anyhow::bail!("jwtSign file-based signingKey was not resolved at config load");
+			},
+			JwtSignState::Invalid(error) => {
+				tracing::debug!(
+					error = %error,
+					"rejecting request: jwtSign configuration is invalid"
+				);
+				anyhow::bail!("jwtSign configuration is invalid");
+			},
 		};
 		let now = SystemTime::now()
 			.duration_since(UNIX_EPOCH)
