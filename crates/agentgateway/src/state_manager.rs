@@ -250,7 +250,7 @@ impl LocalClient {
 			.unwrap_or_else(|| self.config.model_catalog.sources.clone());
 		self.model_catalog.replace_sources(model_catalog).await?;
 		info!("loaded config from {:?}", self.cfg);
-		
+
 		// Sync the state
 		let next_binds = self.stores.binds.sync_local(
 			config.binds,
