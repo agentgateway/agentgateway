@@ -524,7 +524,6 @@ type BedrockSettings struct {
 	// `RuntimePreferred` (the default) uses Runtime and routes to Mantle only for
 	// allow-listed models; `MantleOnly` and `RuntimeOnly` force one endpoint.
 	// +optional
-	// +kubebuilder:validation:Enum=RuntimePreferred;MantleOnly;RuntimeOnly
 	ProviderPreference BedrockProviderPreference `json:"providerPreference,omitempty"`
 }
 

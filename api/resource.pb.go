@@ -7,15 +7,14 @@
 package api
 
 import (
-	reflect "reflect"
-	sync "sync"
-	unsafe "unsafe"
-
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	durationpb "google.golang.org/protobuf/types/known/durationpb"
 	structpb "google.golang.org/protobuf/types/known/structpb"
 	workloadapi "istio.io/istio/pkg/workloadapi"
+	reflect "reflect"
+	sync "sync"
+	unsafe "unsafe"
 )
 
 const (
