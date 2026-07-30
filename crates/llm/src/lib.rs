@@ -63,6 +63,21 @@ pub mod webhook {
 
 	use crate::{SimpleChatCompletionMessage, ToolCall};
 
+	/// The output of one tool invocation, as it comes back into the conversation.
+	///
+	/// This is where indirect prompt injection actually lands: the agent fetched
+	/// a page or read a channel and the returned content carries a directive
+	/// aimed at the model. A guardrail that cannot see tool results cannot see
+	/// the injection.
+	#[derive(Debug, Clone, Serialize, Deserialize)]
+	#[serde(rename_all = "snake_case")]
+	pub struct ToolResult {
+		/// Id of the tool call this answers (Anthropic `tool_use_id`).
+		pub tool_call_id: Strng,
+		/// Flattened text of the result.
+		pub content: Strng,
+	}
+
 	/// Message is the guardrail webhook's view of one chat message.
 	///
 	/// Deliberately NOT `SimpleChatCompletionMessage`. That type is text-only
@@ -85,6 +100,11 @@ pub mod webhook {
 		/// turns and for providers whose request type does not surface them.
 		#[serde(default, skip_serializing_if = "Vec::is_empty")]
 		pub tool_calls: Vec<ToolCall>,
+		/// Tool outputs this turn carries back, in order. Anthropic puts
+		/// `tool_result` blocks in a *user* message, so this is normally
+		/// populated on a user turn whose `content` is empty.
+		#[serde(default, skip_serializing_if = "Vec::is_empty")]
+		pub tool_results: Vec<ToolResult>,
 	}
 
 	impl Message {
@@ -94,11 +114,17 @@ pub mod webhook {
 				role,
 				content,
 				tool_calls: Vec::new(),
+				tool_results: Vec::new(),
 			}
 		}
 
 		pub fn with_tool_calls(mut self, tool_calls: Vec<ToolCall>) -> Self {
 			self.tool_calls = tool_calls;
+			self
+		}
+
+		pub fn with_tool_results(mut self, tool_results: Vec<ToolResult>) -> Self {
+			self.tool_results = tool_results;
 			self
 		}
 	}

@@ -561,6 +561,7 @@ impl ResponseType for Response {
 							// Left for a follow-up; Messages and Completions carry
 							// tool calls today.
 							tool_calls: Vec::new(),
+							tool_results: Vec::new(),
 						},
 					})
 				},

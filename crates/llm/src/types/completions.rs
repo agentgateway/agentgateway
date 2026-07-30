@@ -242,6 +242,9 @@ impl ResponseType for Response {
 						// An assistant turn that calls a tool has null content, so
 						// without this the guard saw an empty string.
 						tool_calls: message_tool_calls(&c.message.rest),
+						// A response never carries tool results; they come back on the
+						// NEXT request.
+						tool_results: Vec::new(),
 					},
 				}
 			})
