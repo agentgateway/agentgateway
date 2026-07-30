@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"google.golang.org/protobuf/proto"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
@@ -572,37 +573,152 @@ func TestOAuthTokenExchangeRejectsUnsupportedConfigurations(t *testing.T) {
 	}
 }
 
-func TestTranslateBackendAuthPreservesInvalidOAuthPolicy(t *testing.T) {
+func TestTranslateBackendAuthStoresOAuthTranslationErrors(t *testing.T) {
 	ctx := oauthTestPolicyCtx(t)
-	policy := &agentgateway.AgentgatewayPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: "default",
-			Name:      "oauth",
+	tests := []struct {
+		name      string
+		auth      agentgateway.OAuthTokenExchange
+		wantErr   string
+		forbidden string
+	}{
+		{
+			name: "missing client secret",
+			auth: agentgateway.OAuthTokenExchange{
+				BackendRef: oauthTokenEndpointRef(),
+				ClientAuth: &agentgateway.OAuthClientAuth{
+					ClientID: "gateway",
+					SecretRef: &agentgateway.LocalSecretKeyRef{
+						Name: "missing-client-secret",
+					},
+				},
+			},
+			wantErr: "missing-client-secret",
 		},
-		Spec: agentgateway.AgentgatewayPolicySpec{
-			Backend: &agentgateway.BackendFull{
-				BackendSimple: agentgateway.BackendSimple{
-					Auth: &agentgateway.BackendAuth{
-						OAuthTokenExchange: &agentgateway.OAuthTokenExchange{
-							BackendRef: oauthTokenEndpointRef(),
-							SubjectToken: &agentgateway.OAuthTokenSpec{
-								Source: &agentgateway.AuthorizationExtractionLocation{
-									Expression: ptr.Of(agentgateway.CELExpression("((")),
-								},
-							},
+		{
+			name: "missing private key jwt signing key",
+			auth: agentgateway.OAuthTokenExchange{
+				BackendRef: oauthTokenEndpointRef(),
+				ClientAuth: &agentgateway.OAuthClientAuth{
+					ClientID: "gateway",
+					Method:   ptr.Of(agentgateway.OAuthClientAuthMethodPrivateKeyJWT),
+					PrivateKeyJWT: &agentgateway.OAuthPrivateKeyJWT{
+						SigningKeyRef: agentgateway.LocalSecretKeyRef{
+							Name: "missing-signing-key",
+						},
+						AssertionAudience: "https://issuer.example/token",
+					},
+				},
+			},
+			wantErr: "missing-signing-key",
+		},
+		{
+			name: "invalid token endpoint path",
+			auth: agentgateway.OAuthTokenExchange{
+				BackendRef: oauthTokenEndpointRef(),
+				Path:       new("invalid-path"),
+			},
+			wantErr: "must start with /",
+		},
+		{
+			name: "reserved additional parameter",
+			auth: agentgateway.OAuthTokenExchange{
+				BackendRef: oauthTokenEndpointRef(),
+				AdditionalParams: map[string]agentgateway.CELExpression{
+					"client_secret": `"safe-expression"`,
+				},
+			},
+			wantErr: "reserved OAuth parameter",
+		},
+		{
+			name: "invalid additional parameter expression",
+			auth: agentgateway.OAuthTokenExchange{
+				BackendRef: oauthTokenEndpointRef(),
+				AdditionalParams: map[string]agentgateway.CELExpression{
+					"tenant": `"sensitive-literal" +`,
+				},
+			},
+			wantErr:   `additionalParams "tenant" is not a valid CEL expression`,
+			forbidden: "sensitive-literal",
+		},
+		{
+			name: "invalid grant actor combination",
+			auth: agentgateway.OAuthTokenExchange{
+				BackendRef: oauthTokenEndpointRef(),
+				GrantType:  ptr.Of(agentgateway.OAuthGrantTypeJwtBearer),
+				ActorToken: &agentgateway.OAuthActorToken{
+					Source: agentgateway.AuthorizationExtractionLocation{
+						AuthorizationLocationFields: agentgateway.AuthorizationLocationFields{
+							Header: &agentgateway.AuthorizationHeaderLocation{Name: "X-Actor-Token"},
 						},
 					},
 				},
 			},
+			wantErr: "actorToken is only valid with TokenExchange",
+		},
+		{
+			name: "invalid requested token type",
+			auth: agentgateway.OAuthTokenExchange{
+				BackendRef:         oauthTokenEndpointRef(),
+				RequestedTokenType: ptr.Of(agentgateway.OAuthTokenTypeIDJAG),
+			},
+			wantErr: "IdJag is only supported by crossAppAccess",
+		},
+		{
+			name: "valid configuration",
+			auth: agentgateway.OAuthTokenExchange{
+				BackendRef: oauthTokenEndpointRef(),
+				Path:       new("/token"),
+			},
 		},
 	}
 
-	p, err := translateBackendAuth(ctx, policy, "default/oauth")
-	if err == nil || !strings.Contains(err.Error(), "oauth subjectToken source expression is not a valid CEL expression") {
-		t.Fatalf("translateBackendAuth() error = %v, want invalid CEL error", err)
-	}
-	if p.GetBackend().GetAuth().GetOauthTokenExchange() == nil {
-		t.Fatalf("translateBackendAuth() policy = %v, want oauth token exchange auth", p)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			policy := &agentgateway.AgentgatewayPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "default",
+					Name:      "oauth",
+				},
+				Spec: agentgateway.AgentgatewayPolicySpec{
+					Backend: &agentgateway.BackendFull{
+						BackendSimple: agentgateway.BackendSimple{
+							Auth: &agentgateway.BackendAuth{
+								OAuthTokenExchange: &tt.auth,
+							},
+						},
+					},
+				},
+			}
+
+			translated, err := translateBackendAuth(ctx, policy, "default/oauth")
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Fatalf("translateBackendAuth() error = %v, want nil", err)
+				}
+				oauth := translated.GetBackend().GetAuth().GetOauthTokenExchange()
+				if oauth == nil || oauth.TranslationError != nil {
+					t.Fatalf("translated OAuth policy = %v, want valid configuration", oauth)
+				}
+				return
+			}
+
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("translateBackendAuth() error = %v, want containing %q", err, tt.wantErr)
+			}
+			oauth := translated.GetBackend().GetAuth().GetOauthTokenExchange()
+			if oauth == nil {
+				t.Fatalf("translateBackendAuth() policy = %v, want oauth token exchange auth", translated)
+			}
+			want := &api.OAuthTokenExchange{TranslationError: new(err.Error())}
+			if !proto.Equal(oauth, want) {
+				t.Fatalf("translated OAuth policy = %v, want error-only policy %v", oauth, want)
+			}
+			for _, forbidden := range []string{"safe-expression", tt.forbidden} {
+				if forbidden != "" && strings.Contains(oauth.GetTranslationError(), forbidden) {
+					t.Fatalf("translation diagnostic contains configured value: %q", oauth.GetTranslationError())
+				}
+			}
+		})
 	}
 }
 

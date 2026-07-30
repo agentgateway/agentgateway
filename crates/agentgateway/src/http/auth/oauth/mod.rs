@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use secrecy::{ExposeSecret, SecretString};
 use serde::de::DeserializeOwned;
+use serde::ser::SerializeStruct;
 use serde_json::{Map, Value};
 use tracing::{debug, trace, warn};
 
@@ -34,7 +35,9 @@ pub use client_auth::{OAuthClientAuth, OAuthClientAuthMethod, PrivateKeyJwt, Sig
 pub use cross_app_access::CrossAppAccessAuth;
 pub(super) use transport::FetchError;
 
-#[apply(schema!)]
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub struct OAuthTokenExchangeAuth {
 	// ----- Token endpoint -----
 	/// Backend serving the RFC 8693 token endpoint and policies used when connecting to it.
@@ -101,6 +104,71 @@ pub struct OAuthTokenExchangeAuth {
 	// Optional RFC 7523 jwt-bearer hop used internally by ID-JAG.
 	#[serde(skip)]
 	chained_exchange: Option<ChainedExchange>,
+	#[serde(skip)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	state: OAuthTokenExchangeState,
+}
+
+#[derive(Clone, Debug, Default)]
+enum OAuthTokenExchangeState {
+	#[default]
+	Ready,
+	Invalid(String),
+}
+
+impl serde::Serialize for OAuthTokenExchangeAuth {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		if let OAuthTokenExchangeState::Invalid(error) = &self.state {
+			let mut state = serializer.serialize_struct("OAuthTokenExchangeAuth", 1)?;
+			state.serialize_field("translationError", error)?;
+			return state.end();
+		}
+
+		#[derive(serde::Serialize)]
+		#[serde(rename_all = "camelCase")]
+		struct Ready<'a> {
+			#[serde(flatten)]
+			target: &'a SimpleBackendReferenceWithPolicies,
+			#[serde(skip_serializing_if = "String::is_empty")]
+			path: &'a String,
+			grant_type: &'a OAuthGrantType,
+			subject_token: &'a TokenSpec,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			actor_token: &'a Option<ActorTokenSpec>,
+			#[serde(skip_serializing_if = "Vec::is_empty")]
+			audiences: &'a Vec<String>,
+			#[serde(skip_serializing_if = "Vec::is_empty")]
+			scopes: &'a Vec<String>,
+			#[serde(skip_serializing_if = "Vec::is_empty")]
+			resources: &'a Vec<String>,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			requested_token_type: &'a Option<OAuthTokenType>,
+			#[serde(skip_serializing_if = "Option::is_none")]
+			client_auth: &'a Option<OAuthClientAuth>,
+			#[serde(skip_serializing_if = "BTreeMap::is_empty")]
+			additional_params: &'a BTreeMap<String, Arc<cel::Expression>>,
+			authorization_location: &'a AuthorizationLocation,
+		}
+
+		Ready {
+			target: &self.target,
+			path: &self.path,
+			grant_type: &self.grant_type,
+			subject_token: &self.subject_token,
+			actor_token: &self.actor_token,
+			audiences: &self.audiences,
+			scopes: &self.scopes,
+			resources: &self.resources,
+			requested_token_type: &self.requested_token_type,
+			client_auth: &self.client_auth,
+			additional_params: &self.additional_params,
+			authorization_location: &self.authorization_location,
+		}
+		.serialize(serializer)
+	}
 }
 
 #[serde_with::serde_as]
@@ -172,6 +240,30 @@ const RESERVED_FORM_PARAMS: &[&str] = &[
 ];
 
 impl OAuthTokenExchangeAuth {
+	/// Only for xDS conversion. Local configuration remains strict.
+	pub(crate) fn new_invalid(error: String) -> Self {
+		Self {
+			target: SimpleBackendReferenceWithPolicies {
+				target: Arc::new(crate::types::agent::SimpleBackendReference::Invalid),
+				policies: Vec::new(),
+			},
+			path: String::new(),
+			grant_type: OAuthGrantType::default(),
+			subject_token: TokenSpec::default(),
+			actor_token: None,
+			audiences: Vec::new(),
+			scopes: Vec::new(),
+			resources: Vec::new(),
+			requested_token_type: None,
+			client_auth: None,
+			additional_params: BTreeMap::new(),
+			authorization_location: AuthorizationLocation::default(),
+			cache: None,
+			chained_exchange: None,
+			state: OAuthTokenExchangeState::Invalid(error),
+		}
+	}
+
 	pub(crate) fn validate_load(&self) -> Result<(), String> {
 		if !self.path.is_empty() && !self.path.starts_with('/') {
 			return Err(format!("path {:?} must start with /", self.path));
@@ -243,10 +335,19 @@ impl OAuthTokenExchangeAuth {
 	}
 
 	pub(crate) fn from_proto(
-		t: proto::OAuthTokenExchange,
+		mut t: proto::OAuthTokenExchange,
 		diagnostics: &mut Diagnostics,
 	) -> Result<Self, ProtoError> {
 		use proto::o_auth_token_exchange::GrantType;
+
+		if let Some(error) = t.translation_error.take() {
+			let error = if error.trim().is_empty() {
+				"OAuth token exchange configuration is invalid".to_string()
+			} else {
+				error
+			};
+			return Err(ProtoError::Generic(error));
+		}
 
 		let target = resolve_simple_reference(t.token_endpoint.as_ref());
 		let path = t.token_endpoint_path.unwrap_or_default();
@@ -321,6 +422,7 @@ impl OAuthTokenExchangeAuth {
 			chained_exchange: None,
 			authorization_location,
 			cache,
+			state: OAuthTokenExchangeState::Ready,
 		};
 		auth.validate_load().map_err(ProtoError::Generic)?;
 		Ok(auth)
@@ -730,6 +832,16 @@ pub(super) async fn apply_token_exchange(
 	auth: &OAuthTokenExchangeAuth,
 	req: &mut Request,
 ) -> Result<bool, ProxyError> {
+	if let OAuthTokenExchangeState::Invalid(error) = &auth.state {
+		debug!(
+			error = %error,
+			"rejecting request: OAuth token exchange configuration is invalid"
+		);
+		return Err(ProxyError::BackendAuthenticationFailed(anyhow::anyhow!(
+			"OAuth token exchange configuration is invalid"
+		)));
+	}
+
 	let client = PolicyClient::new(inputs.clone());
 
 	let access_token = fetch_token(&client, auth, auth.build_exchange_request(req)?)

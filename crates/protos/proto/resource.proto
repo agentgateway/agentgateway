@@ -2014,6 +2014,12 @@ message OAuthTokenExchange {
   }
   // Response cache configuration. When unset uses InMemory cache with defaults
   TokenCache cache = 14;
+
+  // Set by the control plane when OAuth token-exchange configuration cannot
+  // be translated. Control-plane-only: never set from user-facing config.
+  // When present, the data plane accepts the policy but rejects every request
+  // that uses it.
+  optional string translation_error = 15;
 }
 
 // Cross App Access / ID-JAG backend authentication.

@@ -8881,9 +8881,14 @@ type OAuthTokenExchange struct {
 	// matching the behavior of the Passthrough and Key auth policies.
 	AuthorizationLocation *AuthorizationLocation `protobuf:"bytes,13,opt,name=authorization_location,json=authorizationLocation,proto3" json:"authorization_location,omitempty"`
 	// Response cache configuration. When unset uses InMemory cache with defaults
-	Cache         *OAuthTokenExchange_TokenCache `protobuf:"bytes,14,opt,name=cache,proto3" json:"cache,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Cache *OAuthTokenExchange_TokenCache `protobuf:"bytes,14,opt,name=cache,proto3" json:"cache,omitempty"`
+	// Set by the control plane when OAuth token-exchange configuration cannot
+	// be translated. Control-plane-only: never set from user-facing config.
+	// When present, the data plane accepts the policy but rejects every request
+	// that uses it.
+	TranslationError *string `protobuf:"bytes,15,opt,name=translation_error,json=translationError,proto3,oneof" json:"translation_error,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *OAuthTokenExchange) Reset() {
@@ -9005,6 +9010,13 @@ func (x *OAuthTokenExchange) GetCache() *OAuthTokenExchange_TokenCache {
 		return x.Cache
 	}
 	return nil
+}
+
+func (x *OAuthTokenExchange) GetTranslationError() string {
+	if x != nil && x.TranslationError != nil {
+		return *x.TranslationError
+	}
+	return ""
 }
 
 // Cross App Access / ID-JAG backend authentication.
@@ -18255,7 +18267,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x13CLIENT_SECRET_BASIC\x10\x01\x12\x16\n" +
 	"\x12CLIENT_SECRET_POST\x10\x02\x12\x13\n" +
 	"\x0fPRIVATE_KEY_JWT\x10\x03B\x10\n" +
-	"\x0e_client_secret\"\x82\r\n" +
+	"\x0e_client_secret\"\xca\r\n" +
 	"\x12OAuthTokenExchange\x12R\n" +
 	"\x0etoken_endpoint\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\rtokenEndpoint\x123\n" +
 	"\x13token_endpoint_path\x18\a \x01(\tH\x00R\x11tokenEndpointPath\x88\x01\x01\x12V\n" +
@@ -18273,7 +18285,8 @@ const file_resource_proto_rawDesc = "" +
 	"\vclient_auth\x18\x06 \x01(\v2*.agentgateway.dev.resource.OAuthClientAuthR\n" +
 	"clientAuth\x12g\n" +
 	"\x16authorization_location\x18\r \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\x12N\n" +
-	"\x05cache\x18\x0e \x01(\v28.agentgateway.dev.resource.OAuthTokenExchange.TokenCacheR\x05cache\x1at\n" +
+	"\x05cache\x18\x0e \x01(\v28.agentgateway.dev.resource.OAuthTokenExchange.TokenCacheR\x05cache\x120\n" +
+	"\x11translation_error\x18\x0f \x01(\tH\x02R\x10translationError\x88\x01\x01\x1at\n" +
 	"\tTokenSpec\x12H\n" +
 	"\x06source\x18\x01 \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x06source\x12\x1d\n" +
 	"\n" +
@@ -18303,7 +18316,8 @@ const file_resource_proto_rawDesc = "" +
 	"\n" +
 	"JWT_BEARER\x10\x02B\x16\n" +
 	"\x14_token_endpoint_pathB\x17\n" +
-	"\x15_requested_token_type\"\xcd\x06\n" +
+	"\x15_requested_token_typeB\x14\n" +
+	"\x12_translation_error\"\xcd\x06\n" +
 	"\x12CrossAppAccessAuth\x12c\n" +
 	"\x11identity_provider\x18\x01 \x01(\v26.agentgateway.dev.resource.CrossAppAccessAuth.EndpointR\x10identityProvider\x12z\n" +
 	"\x1dresource_authorization_server\x18\x02 \x01(\v26.agentgateway.dev.resource.CrossAppAccessAuth.EndpointR\x1bresourceAuthorizationServer\x12\x1a\n" +

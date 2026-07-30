@@ -113,7 +113,7 @@ func validateExtractionAuthorizationLocation(loc *agentgateway.AuthorizationExtr
 	if loc == nil || loc.Expression == nil || isCEL(*loc.Expression) {
 		return nil
 	}
-	return fmt.Errorf("%s expression is not a valid CEL expression: %s", context, *loc.Expression)
+	return fmt.Errorf("%s expression is not a valid CEL expression", context)
 }
 
 func TranslateInlineBackendPolicy(
@@ -926,10 +926,17 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 		}
 	} else if auth.OAuthTokenExchange != nil {
 		oauthAuth, err := buildOAuthTokenExchangePolicy(ctx, auth.OAuthTokenExchange, policy.Namespace)
-		translatedAuth = oauthAuth
 		if err != nil {
 			errs = append(errs, err)
+			oauthAuth = &api.BackendAuthPolicy{
+				Kind: &api.BackendAuthPolicy_OauthTokenExchange{
+					OauthTokenExchange: &api.OAuthTokenExchange{
+						TranslationError: new(err.Error()),
+					},
+				},
+			}
 		}
+		translatedAuth = oauthAuth
 	} else if auth.CrossAppAccess != nil {
 		crossAppAccessAuth, err := buildCrossAppAccessPolicy(ctx, auth.CrossAppAccess, policy.Namespace)
 		translatedAuth = crossAppAccessAuth
@@ -1102,8 +1109,8 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 		}
 	}
 
-	additionalParams := castCELMap(auth.AdditionalParams, func(key string, expr agentgateway.CELExpression) {
-		errs = append(errs, fmt.Errorf("oauth additionalParams %q is not a valid CEL expression: %s", key, expr))
+	additionalParams := castCELMap(auth.AdditionalParams, func(key string, _ agentgateway.CELExpression) {
+		errs = append(errs, fmt.Errorf("oauth additionalParams %q is not a valid CEL expression", key))
 	})
 	for key := range auth.AdditionalParams {
 		if isOAuthReservedAdditionalParam(key) {

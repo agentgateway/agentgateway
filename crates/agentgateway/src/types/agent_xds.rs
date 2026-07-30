@@ -1310,9 +1310,17 @@ fn backend_auth_kind_from_proto(
 			BackendAuthKind::Azure(azure_auth)
 		},
 		Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(s)) => {
-			BackendAuthKind::OAuthTokenExchange(Box::new(
-				auth::oauth::OAuthTokenExchangeAuth::from_proto(s, diagnostics)?,
-			))
+			let oauth = match auth::oauth::OAuthTokenExchangeAuth::from_proto(s, diagnostics) {
+				Ok(oauth) => oauth,
+				Err(error) => {
+					let error = error.to_string();
+					diagnostics.add_warning(format!(
+						"OAuth token exchange configuration is invalid; requests using this policy will be rejected: {error}"
+					));
+					auth::oauth::OAuthTokenExchangeAuth::new_invalid(error)
+				},
+			};
+			BackendAuthKind::OAuthTokenExchange(Box::new(oauth))
 		},
 		Some(proto::agent::backend_auth_policy::Kind::CrossAppAccess(s)) => {
 			BackendAuthKind::CrossAppAccess(Box::new(auth::oauth::CrossAppAccessAuth::from_proto(
@@ -3960,6 +3968,103 @@ mod tests {
 					kind: "HTTPRoute".to_string(),
 				},
 			)),
+		}
+	}
+
+	#[test]
+	fn invalid_oauth_xds_configuration_is_stored_with_one_warning() {
+		let detail = "missing Secret default/oauth-client";
+		let mut diagnostics = Diagnostics::default();
+		let kind = backend_auth_kind_from_proto(
+			proto::agent::BackendAuthPolicy {
+				kind: Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(
+					proto::agent::OAuthTokenExchange {
+						translation_error: Some(detail.to_string()),
+						token_endpoint_path: Some("/valid-looking".to_string()),
+						..Default::default()
+					},
+				)),
+				..Default::default()
+			},
+			&mut diagnostics,
+		)
+		.expect("invalid OAuth policy must be accepted")
+		.expect("backend auth kind must be retained");
+
+		let BackendAuthKind::OAuthTokenExchange(oauth) = kind else {
+			panic!("expected OAuth token exchange");
+		};
+		assert_eq!(
+			serde_json::to_value(oauth).unwrap(),
+			json!({"translationError": format!("error: {detail}")})
+		);
+		let warnings = diagnostics.into_warnings();
+		assert_eq!(warnings.len(), 1, "{warnings:?}");
+		assert!(warnings[0].contains(detail));
+	}
+
+	#[test]
+	fn oauth_proto_validation_failures_become_invalid_runtime_state() {
+		let invalid_private_key = proto::agent::OAuthTokenExchange {
+			client_auth: Some(proto::agent::OAuthClientAuth {
+				client_id: "gateway-client".to_string(),
+				method: proto::agent::o_auth_client_auth::Method::PrivateKeyJwt as i32,
+				private_key_jwt: Some(proto::agent::o_auth_client_auth::PrivateKeyJwt {
+					signing_key: "not a PEM key".to_string(),
+					assertion_audience: "https://issuer.example/token".to_string(),
+					..Default::default()
+				}),
+				..Default::default()
+			}),
+			..Default::default()
+		};
+		let invalid_configs = [
+			invalid_private_key,
+			proto::agent::OAuthTokenExchange {
+				token_endpoint_path: Some("missing-leading-slash".to_string()),
+				..Default::default()
+			},
+			proto::agent::OAuthTokenExchange {
+				authorization_location: Some(proto::agent::AuthorizationLocation {
+					kind: Some(proto::agent::authorization_location::Kind::Expression(
+						"request.path".to_string(),
+					)),
+				}),
+				..Default::default()
+			},
+			proto::agent::OAuthTokenExchange {
+				client_auth: Some(proto::agent::OAuthClientAuth {
+					client_id: "gateway-client".to_string(),
+					client_secret: Some("secret".to_string()),
+					method: proto::agent::o_auth_client_auth::Method::PrivateKeyJwt as i32,
+					..Default::default()
+				}),
+				..Default::default()
+			},
+		];
+
+		for oauth in invalid_configs {
+			let mut diagnostics = Diagnostics::default();
+			let kind = backend_auth_kind_from_proto(
+				proto::agent::BackendAuthPolicy {
+					kind: Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(
+						oauth,
+					)),
+					..Default::default()
+				},
+				&mut diagnostics,
+			)
+			.expect("invalid OAuth policy must be accepted")
+			.expect("backend auth kind must be retained");
+			let BackendAuthKind::OAuthTokenExchange(oauth) = kind else {
+				panic!("expected OAuth token exchange");
+			};
+			assert!(
+				serde_json::to_value(oauth).unwrap()["translationError"]
+					.as_str()
+					.is_some_and(|error| !error.is_empty())
+			);
+			assert_eq!(diagnostics.into_warnings().len(), 1);
 		}
 	}
 
