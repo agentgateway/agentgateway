@@ -11,21 +11,24 @@ import (
 
 // Shared transport used for common requests so we reuse connections and TLS sessions.
 // Only cloned/overridden when a custom TLS config is provided.
-var sharedTransport *http.Transport
+var sharedTransport http.RoundTripper
 
 func init() {
 	// Attempt to use default transport as basis and tune keep-alive settings.
 	if t, ok := http.DefaultTransport.(*http.Transport); ok {
-		sharedTransport = t.Clone()
-	} else {
-		sharedTransport = &http.Transport{}
+		st := t.Clone()
+		// Tune sensible defaults for connection reuse. These can be adjusted later if needed.
+		st.MaxIdleConns = 100
+		st.MaxIdleConnsPerHost = 100
+		st.IdleConnTimeout = 90 * time.Second
+		// other fields (TLSHandshakeTimeout, ExpectContinueTimeout) remain as DefaultTransport's values
+		sharedTransport = st
+		return
 	}
 
-	// Tune sensible defaults for connection reuse. These can be adjusted later if needed.
-	sharedTransport.MaxIdleConns = 100
-	sharedTransport.MaxIdleConnsPerHost = 100
-	sharedTransport.IdleConnTimeout = 90 * time.Second
-	// other fields (TLSHandshakeTimeout, ExpectContinueTimeout) remain as DefaultTransport's values
+	// Preserve proxy/dial behavior of the default transport instead of falling back to a zero-value Transport.
+	// http.DefaultTransport already implements http.RoundTripper, so use it as the safe fallback.
+	sharedTransport = http.DefaultTransport
 }
 
 // ExecuteRequest accepts a set of Option and executes a native Go HTTP request
