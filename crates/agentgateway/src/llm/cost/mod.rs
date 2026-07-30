@@ -21,9 +21,6 @@ pub mod refresh;
 
 const TRACE_POLICY_KIND: &str = "llm_cost";
 
-/// Catalog tag marking AWS Bedrock models served only via the Mantle endpoint.
-const MANTLE_TAG: &str = "mantle";
-
 pub struct ModelCatalog {
 	state: ArcSwap<ModelCatalogState>,
 	file_watch: Mutex<Option<tokio::task::AbortHandle>>,
@@ -84,10 +81,6 @@ impl ModelCatalog {
 		self.state.load().snapshot.list_models()
 	}
 
-	fn refresh_state(snapshot: &CatalogSnapshot) {
-		agent_llm::bedrock_model_table::set_mantle_models(snapshot.mantle_models());
-	}
-
 	pub async fn replace_sources(
 		self: &Arc<Self>,
 		sources: Vec<ModelCatalogSource>,
@@ -96,23 +89,19 @@ impl ModelCatalog {
 			return Ok(());
 		}
 		if sources.is_empty() {
-			let snapshot = Arc::new(CatalogSnapshot::empty());
 			self.state.store(Arc::new(ModelCatalogState {
-				snapshot: snapshot.clone(),
+				snapshot: Arc::new(CatalogSnapshot::empty()),
 				sources,
 			}));
-			Self::refresh_state(&snapshot);
 			self.update_file_watch()?;
 			return Ok(());
 		}
 		let loaded = load_sources(&sources).await?;
 		log_loaded_catalog("model catalog reloaded", &loaded.snapshot, &loaded.missing);
-		let snapshot = Arc::new(loaded.snapshot);
 		self.state.store(Arc::new(ModelCatalogState {
-			snapshot: snapshot.clone(),
+			snapshot: Arc::new(loaded.snapshot),
 			sources,
 		}));
-		Self::refresh_state(&snapshot);
 		self.update_file_watch()?;
 		Ok(())
 	}
@@ -157,7 +146,6 @@ impl ModelCatalog {
 			let previous = self.state.compare_and_swap(&current, next.clone());
 			if Arc::ptr_eq(&previous, &current) {
 				log_loaded_catalog("model catalog loaded", &next.snapshot, &loaded.missing);
-				Self::refresh_state(&next.snapshot);
 				return Ok(());
 			}
 		}
@@ -188,8 +176,16 @@ impl ModelCatalog {
 	}
 }
 
+impl agent_llm::model_catalog::ModelCatalogHandle for ModelCatalog {
+	fn model_has_tag(&self, model_id: &str, tag: &str) -> bool {
+		self.state.load().snapshot.model_has_tag(model_id, tag)
+	}
+}
+
 pub struct CatalogSnapshot {
 	catalog: Option<CatalogData>,
+	/// Precomputed `model_id -> tags` (merged across providers) for O(1) attribute lookups.
+	model_tags: std::collections::HashMap<String, std::collections::BTreeSet<String>>,
 }
 
 impl fmt::Debug for CatalogSnapshot {
@@ -206,29 +202,36 @@ impl CatalogSnapshot {
 		Ok(Self::from_catalogs([catalog::from_json(json)?]))
 	}
 
-	/// Model IDs carrying the `mantle` tag across all providers.
-	fn mantle_models(&self) -> std::collections::HashSet<String> {
+	/// Whether `model_id` carries `tag` (used by the `ModelCatalogHandle` impl).
+	fn model_has_tag(&self, model_id: &str, tag: &str) -> bool {
 		self
-			.catalog
-			.iter()
-			.flat_map(|c| c.providers.values())
-			.flat_map(|p| p.models.iter())
-			.filter(|(_, m)| m.tags.contains(MANTLE_TAG))
-			.map(|(id, _)| id.clone())
-			.collect()
+			.model_tags
+			.get(model_id)
+			.is_some_and(|t| t.contains(tag))
 	}
 
 	fn from_catalogs(catalogs: impl IntoIterator<Item = CatalogData>) -> Self {
 		let merged = catalogs
 			.into_iter()
 			.fold(CatalogData::default(), CatalogData::override_with);
+		let model_tags = merged
+			.providers
+			.values()
+			.flat_map(|p| p.models.iter())
+			.filter(|(_, m)| !m.tags.is_empty())
+			.map(|(id, m)| (id.clone(), m.tags.clone()))
+			.collect();
 		CatalogSnapshot {
 			catalog: Some(merged),
+			model_tags,
 		}
 	}
 
 	fn empty() -> Self {
-		CatalogSnapshot { catalog: None }
+		CatalogSnapshot {
+			catalog: None,
+			model_tags: std::collections::HashMap::new(),
+		}
 	}
 
 	fn list_models(&self) -> ModelCatalogModels {
@@ -810,15 +813,16 @@ mod tests {
 	}
 
 	#[test]
-	fn mantle_models_reads_the_flag_from_the_catalog() {
+	fn model_has_tag_reads_tags_from_the_catalog() {
 		let json = r#"{"providers":{"bedrock":{"models":{
 			"openai.gpt-oss-120b":{"tags":["mantle"]},
 			"anthropic.claude-3-5-sonnet-20241022-v2:0":{"rates":{"input":"3.00"}}
 		}}}}"#;
 		let snapshot = CatalogSnapshot::parse(json).unwrap();
-		let mantle = snapshot.mantle_models();
-		assert!(mantle.contains("openai.gpt-oss-120b"));
-		assert!(!mantle.contains("anthropic.claude-3-5-sonnet-20241022-v2:0"));
+		assert!(snapshot.model_has_tag("openai.gpt-oss-120b", "mantle"));
+		assert!(!snapshot.model_has_tag("anthropic.claude-3-5-sonnet-20241022-v2:0", "mantle"));
+		assert!(!snapshot.model_has_tag("openai.gpt-oss-120b", "other"));
+		assert!(!snapshot.model_has_tag("unknown.model", "mantle"));
 	}
 
 	#[test]

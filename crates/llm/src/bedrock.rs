@@ -30,6 +30,8 @@ pub enum BedrockEndpoint {
 // Mantle signs SigV4 under this name instead of the default "bedrock".
 const MANTLE_SIGNING_SERVICE_NAME: &str = "bedrock-mantle";
 
+const MANTLE_TAG: &str = "mantle";
+
 #[apply(schema!)]
 #[cfg_attr(feature = "schema", schemars(rename = "BedrockProviderConfig"))]
 pub struct Provider {
@@ -90,10 +92,9 @@ impl Provider {
 		match self.provider_preference {
 			RuntimeOnly => BedrockEndpoint::Runtime,
 			MantleOnly => BedrockEndpoint::Mantle,
-			// Mantle only if the effective model (provider override, else request) is on the allow-list.
 			RuntimePreferred => {
 				let effective = self.model.as_deref().or(model_id);
-				if effective.is_some_and(crate::bedrock_model_table::is_mantle_only) {
+				if effective.is_some_and(|m| crate::model_catalog::model_has_tag(m, MANTLE_TAG)) {
 					BedrockEndpoint::Mantle
 				} else {
 					BedrockEndpoint::Runtime
@@ -226,9 +227,9 @@ mod tests {
 
 	#[test]
 	fn resolve_endpoint_runtime_preferred_uses_allow_list() {
-		let _lock = crate::bedrock_model_table::MODELS_LOCK.lock().unwrap();
+		let _lock = crate::model_catalog::CATALOG_LOCK.lock().unwrap();
 		let p = provider(BedrockProviderPreference::RuntimePreferred);
-		crate::bedrock_model_table::set_mantle_models(["openai.gpt-oss-120b".to_string()].into());
+		crate::model_catalog::install(MANTLE_TAG, ["openai.gpt-oss-120b"]);
 		assert_eq!(
 			p.resolve_endpoint(RouteType::Completions, Some("openai.gpt-oss-120b")),
 			BedrockEndpoint::Mantle
@@ -240,7 +241,7 @@ mod tests {
 			),
 			BedrockEndpoint::Runtime
 		);
-		crate::bedrock_model_table::restore_default();
+		crate::model_catalog::clear();
 	}
 
 	#[test]
