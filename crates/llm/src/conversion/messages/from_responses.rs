@@ -1917,19 +1917,6 @@ fn validate_top_level(raw: &serde_json::Value) -> Result<State, AIError> {
 			"Responses server-side conversation state is unsupported"
 		)));
 	}
-	if [
-		"client_metadata",
-		"metadata",
-		"prompt_cache_key",
-		"prompt_cache_retention",
-	]
-	.into_iter()
-	.any(|field| object.get(field).is_some_and(has_effect))
-	{
-		return Err(AIError::UnsupportedConversion(strng::literal!(
-			"Responses configuration is unsupported"
-		)));
-	}
 	if !absent_or_false(object.get("background")) {
 		return Err(AIError::UnsupportedConversion(strng::literal!(
 			"Responses background mode is unsupported"
@@ -2029,7 +2016,14 @@ fn validate_top_level(raw: &serde_json::Value) -> Result<State, AIError> {
 		.as_object_mut()
 		.expect("request object validated above");
 	typed_object.retain(|key, _| known.contains(&key.as_str()));
-	typed_object.remove("client_metadata");
+	for field in [
+		"client_metadata",
+		"metadata",
+		"prompt_cache_key",
+		"prompt_cache_retention",
+	] {
+		typed_object.remove(field);
+	}
 	typed_object.insert("input".to_string(), serde_json::Value::Array(Vec::new()));
 	typed_object.insert("tools".to_string(), serde_json::Value::Array(Vec::new()));
 	typed_object.insert("tool_choice".to_string(), serde_json::Value::Null);

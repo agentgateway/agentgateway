@@ -4131,9 +4131,9 @@ fn assistant_content_free_refusal_history_is_rejected_instead_of_replayed_as_emp
 	r#"{"stream":true,"stream_options":{"include_obfuscation":false}}"#,
 	true
 )]
-#[case::prompt_cache_key(r#"{"prompt_cache_key":"cache"}"#, false)]
-#[case::prompt_cache_retention(r#"{"prompt_cache_retention":"24h"}"#, false)]
-#[case::metadata(r#"{"metadata":{"key":"value"}}"#, false)]
+#[case::prompt_cache_key(r#"{"prompt_cache_key":"cache"}"#, true)]
+#[case::prompt_cache_retention(r#"{"prompt_cache_retention":"24h"}"#, true)]
+#[case::metadata(r#"{"metadata":{"key":"value"}}"#, true)]
 #[case::user_absent("{}", true)]
 #[case::user_null(r#"{"user":null}"#, true)]
 #[case::user_empty_string(r#"{"user":""}"#, true)]
@@ -4194,7 +4194,7 @@ fn assistant_content_free_refusal_history_is_rejected_instead_of_replayed_as_emp
 #[case::parallel_tool_calls_null(r#"{"parallel_tool_calls":null}"#, true)]
 #[case::parallel_tool_calls_false(r#"{"parallel_tool_calls":false}"#, true)]
 #[case::parallel_tool_calls_true(r#"{"parallel_tool_calls":true}"#, true)]
-#[case::client_metadata(r#"{"client_metadata":{"session_id":"local-session"}}"#, false)]
+#[case::client_metadata(r#"{"client_metadata":{"session_id":"local-session"}}"#, true)]
 #[case::unknown_null(r#"{"future_field":null}"#, false)]
 #[case::unknown_false(r#"{"future_field":false}"#, false)]
 #[case::unknown_empty_string(r#"{"future_field":""}"#, false)]
@@ -4215,6 +4215,26 @@ fn top_level_policy(#[case] extra: &str, #[case] accepted: bool) {
 
 	let result = translate(&raw_request(value));
 	assert_eq!(result.is_ok(), accepted);
+}
+
+#[rstest::rstest]
+#[case::client_metadata(r#"{"client_metadata":{"session_id":"local-session"}}"#)]
+#[case::metadata(r#"{"metadata":{"key":"value"}}"#)]
+#[case::prompt_cache_key(r#"{"prompt_cache_key":"cache"}"#)]
+#[case::prompt_cache_retention(r#"{"prompt_cache_retention":"24h"}"#)]
+fn metadata_and_cache_hints_do_not_change_translated_request(#[case] extra: &str) {
+	let baseline = json!({
+		"input": "hello",
+		"model": "claude-sonnet-4-5"
+	});
+	let mut with_hint = baseline.clone();
+	let extra: serde_json::Value = serde_json::from_str(extra).expect("valid test JSON");
+	with_hint
+		.as_object_mut()
+		.expect("request object")
+		.extend(extra.as_object().expect("extra object").clone());
+
+	assert_eq!(translated(with_hint), translated(baseline));
 }
 
 #[rstest::rstest]
