@@ -349,7 +349,7 @@ impl OAuthTokenExchangeAuth {
 		// Extract everything up front so a bad request fails before we touch it.
 		let subject_token =
 			extract_subject_token(&self.subject_token.source, req).ok_or_else(|| {
-				debug!("oauth token exchange subject token missing");
+				debug!(source=?self.subject_token.source, "oauth token exchange subject token missing");
 				ProxyError::InvalidRequest
 			})?;
 		let actor = self
