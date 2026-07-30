@@ -6,7 +6,27 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
+
+// Shared transport used for common requests so we reuse connections and TLS sessions.
+// Only cloned/overridden when a custom TLS config is provided.
+var sharedTransport *http.Transport
+
+func init() {
+	// Attempt to use default transport as basis and tune keep-alive settings.
+	if t, ok := http.DefaultTransport.(*http.Transport); ok {
+		sharedTransport = t.Clone()
+	} else {
+		sharedTransport = &http.Transport{}
+	}
+
+	// Tune sensible defaults for connection reuse. These can be adjusted later if needed.
+	sharedTransport.MaxIdleConns = 100
+	sharedTransport.MaxIdleConnsPerHost = 100
+	sharedTransport.IdleConnTimeout = 90 * time.Second
+	// other fields (TLSHandshakeTimeout, ExpectContinueTimeout) remain as DefaultTransport's values
+}
 
 // ExecuteRequest accepts a set of Option and executes a native Go HTTP request
 // If multiple Option modify the same parameter, the last defined one will win
@@ -23,6 +43,7 @@ func ExecuteRequest(options ...Option) (*http.Response, error) {
 		port:    80,
 		headers: make(map[string][]string),
 		scheme:  "http",
+		timeout: 0, // zero means no timeout (default behaviour)
 	}
 
 	for _, opt := range options {
@@ -35,20 +56,29 @@ func ExecuteRequest(options ...Option) (*http.Response, error) {
 func (c *requestConfig) executeNative() (*http.Response, error) {
 	fullURL := c.buildURL()
 
+	// Start with a client that uses the shared transport (connection reuse).
 	client := &http.Client{
-		Timeout: c.timeout,
-		Transport: &http.Transport{
-			DisableKeepAlives: true,
-		},
+		Timeout:   c.timeout,
+		Transport: sharedTransport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}
 
+	// If caller provided a TLS config, clone default transport and set TLSClientConfig.
+	// This preserves previous behavior (per-request TLS transport) while keeping the
+	// common path efficient.
 	if c.tlsConfig != nil {
-		transport := http.DefaultTransport.(*http.Transport).Clone()
-		transport.TLSClientConfig = c.tlsConfig
-		client.Transport = transport
+		if t, ok := http.DefaultTransport.(*http.Transport); ok {
+			transport := t.Clone()
+			transport.TLSClientConfig = c.tlsConfig
+			client.Transport = transport
+		} else {
+			// Fall back to a fresh transport
+			client.Transport = &http.Transport{
+				TLSClientConfig: c.tlsConfig,
+			}
+		}
 	}
 
 	method := c.method
