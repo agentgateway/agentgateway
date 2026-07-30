@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"google.golang.org/protobuf/proto"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
@@ -332,6 +333,60 @@ func TestBuildCrossAppAccessRejectsInvalidConfig(t *testing.T) {
 	}
 	if crossAppAccess.GetIdentityProvider().GetTokenEndpoint() == nil {
 		t.Fatal("identity provider token endpoint is nil, want partial config preserved")
+	}
+}
+
+func TestTranslateBackendAuthPreservesInvalidCrossAppAccessPolicy(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t)
+	identityProvider := crossAppAccessEndpoint("idp")
+	identityProvider.ClientAuth = agentgateway.OAuthClientAuth{
+		ClientID: "gateway",
+		Method:   ptr.Of(agentgateway.OAuthClientAuthMethodPrivateKeyJWT),
+		PrivateKeyJWT: &agentgateway.OAuthPrivateKeyJWT{
+			SigningKeyRef:     agentgateway.LocalSecretKeyRef{Name: "idp-signing-key"},
+			AssertionAudience: "https://idp.example.com/oauth/token",
+		},
+	}
+	policy := &agentgateway.AgentgatewayPolicy{
+		Namespace: "default",
+		Name:      "cross-app",
+		Spec: agentgateway.AgentgatewayPolicySpec{
+			Backend: &agentgateway.BackendFull{
+				Auth: &agentgateway.BackendAuth{
+					CrossAppAccess: &agentgateway.CrossAppAccessAuth{
+						IdentityProvider:            identityProvider,
+						ResourceAuthorizationServer: crossAppAccessEndpoint("resource-as"),
+						Audience:                    "https://resource.example.com",
+					},
+				},
+			},
+		},
+	}
+
+	p, err := translateBackendAuth(ctx, policy, "default/cross-app")
+	if err == nil || !strings.Contains(err.Error(), "idp-signing-key") {
+		t.Fatalf("translateBackendAuth() error = %v, want missing idp-signing-key error", err)
+	}
+	crossAppAccess := p.GetBackend().GetAuth().GetCrossAppAccess()
+	if crossAppAccess == nil {
+		t.Fatalf("translateBackendAuth() policy = %v, want cross-app access auth", p)
+	}
+	if crossAppAccess.TranslationError == nil || !strings.Contains(crossAppAccess.GetTranslationError(), "idp-signing-key") {
+		t.Fatalf("translationError = %q, want missing idp-signing-key error", crossAppAccess.GetTranslationError())
+	}
+	if crossAppAccess.IdentityProvider != nil || crossAppAccess.ResourceAuthorizationServer != nil {
+		t.Fatal("error-bearing crossAppAccess must not contain partial endpoints")
+	}
+}
+
+func TestValidateOAuthTokenTypeDoesNotLeakValue(t *testing.T) {
+	const marker = "token-type-secret-marker"
+	err := validateOAuthTokenType(agentgateway.OAuthTokenType(marker), "oauth subjectToken tokenType")
+	if err == nil || !strings.Contains(err.Error(), "oauth subjectToken tokenType") {
+		t.Fatalf("validateOAuthTokenType() error = %v, want field-specific validation error", err)
+	}
+	if strings.Contains(err.Error(), marker) {
+		t.Fatalf("validateOAuthTokenType() error leaked token type value %q", marker)
 	}
 }
 
@@ -705,8 +760,13 @@ func TestTranslateBackendAuthPreservesInvalidOAuthPolicy(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "oauth subjectToken source expression is not a valid CEL expression") {
 		t.Fatalf("translateBackendAuth() error = %v, want invalid CEL error", err)
 	}
-	if p.GetBackend().GetAuth().GetOauthTokenExchange() == nil {
+	oauth := p.GetBackend().GetAuth().GetOauthTokenExchange()
+	if oauth == nil {
 		t.Fatalf("translateBackendAuth() policy = %v, want oauth token exchange auth", p)
+	}
+	want := &api.OAuthTokenExchange{TranslationError: new(err.Error())}
+	if !proto.Equal(oauth, want) {
+		t.Fatalf("translated OAuth policy = %v, want error-only policy %v", oauth, want)
 	}
 }
 

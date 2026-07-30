@@ -38,6 +38,9 @@ impl serde::Serialize for CrossAppAccessAuth {
 	where
 		S: serde::Serializer,
 	{
+		if self.oauth.invalid_reason().is_some() {
+			return serde::Serialize::serialize(&self.oauth, serializer);
+		}
 		serde::Serialize::serialize(
 			&self
 				.config_for_serialize()
@@ -149,12 +152,19 @@ impl From<CrossAppAccessAuthConfig> for CrossAppAccessAuth {
 			chained_exchange: Some(chained_exchange),
 			authorization_location: AuthorizationLocation::default(),
 			cache,
+			state: Default::default(),
 		};
 		Self { oauth }
 	}
 }
 
 impl CrossAppAccessAuth {
+	pub(crate) fn new_invalid(error: String) -> Self {
+		Self {
+			oauth: OAuthTokenExchangeAuth::new_invalid(error),
+		}
+	}
+
 	pub(crate) fn validate_load(&self) -> Result<(), String> {
 		if self.audience().is_empty() {
 			return Err("crossAppAccess audience must not be empty".into());
@@ -275,9 +285,18 @@ impl CrossAppAccessAuth {
 	}
 
 	pub(crate) fn from_proto(
-		t: agent::CrossAppAccessAuth,
+		mut t: agent::CrossAppAccessAuth,
 		diagnostics: &mut Diagnostics,
 	) -> Result<Self, ProtoError> {
+		if let Some(error) = t.translation_error.take() {
+			let error = if error.trim().is_empty() {
+				"crossAppAccess configuration is invalid".to_string()
+			} else {
+				error
+			};
+			return Err(ProtoError::Generic(error));
+		}
+
 		let subject_token = match t.subject_token.as_ref() {
 			Some(subject_token) => Some(CrossAppAccessSubjectToken {
 				source: authorization_location(
