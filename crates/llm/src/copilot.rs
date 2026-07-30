@@ -32,7 +32,7 @@ impl Provider {
 				// If we add native Responses --> Anthropic we should drop this
 				vec![ChatFormat::AnthropicMessages, ChatFormat::OpenAICompletions]
 			},
-			m if m.starts_with("mai-") => {
+			m if m.starts_with("grok-") || m.starts_with("mai-") => {
 				vec![ChatFormat::OpenAIResponses]
 			},
 			m if m.starts_with("gemini-") => {
