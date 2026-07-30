@@ -74,15 +74,18 @@ impl Provider {
 		match route_type {
 			// These routes are only served by the Runtime endpoint.
 			RT::Embeddings | RT::AnthropicTokenCount | RT::Rerank | RT::Realtime => {
-				return BedrockEndpoint::Runtime;
+				BedrockEndpoint::Runtime
 			},
 			// Model listing is a Mantle-native route.
-			RT::Models => return BedrockEndpoint::Mantle,
+			RT::Models => BedrockEndpoint::Mantle,
 			// Passthrough/detect stay on Runtime; we cannot reason about the wire format.
-			RT::Detect | RT::Passthrough => return BedrockEndpoint::Runtime,
-			RT::Completions | RT::Messages | RT::Responses => {},
+			RT::Detect | RT::Passthrough => BedrockEndpoint::Runtime,
+			// Chat routes all resolve identically, from the preference + allow-list.
+			RT::Completions | RT::Messages | RT::Responses => self.chat_endpoint(model_id),
 		}
+	}
 
+	fn chat_endpoint(&self, model_id: Option<&str>) -> BedrockEndpoint {
 		use BedrockProviderPreference::*;
 		match self.provider_preference {
 			RuntimeOnly => BedrockEndpoint::Runtime,
@@ -114,8 +117,7 @@ impl Provider {
 	/// Chat formats for `request_model`: native passthrough on Mantle, Converse on Runtime.
 	pub fn supported_chat_formats(&self, request_model: Option<&str>) -> Vec<super::ChatFormat> {
 		use super::ChatFormat;
-		// Completions is representative; all chat routes resolve the same for a model.
-		match self.resolve_endpoint(super::RouteType::Completions, request_model) {
+		match self.chat_endpoint(request_model) {
 			BedrockEndpoint::Mantle => vec![
 				ChatFormat::OpenAICompletions,
 				ChatFormat::AnthropicMessages,
