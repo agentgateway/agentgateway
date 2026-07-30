@@ -75,6 +75,7 @@ fn base_auth(endpoint: Arc<SimpleBackendReference>) -> OAuthTokenExchangeAuth {
 		chained_exchange: None,
 		authorization_location: AuthorizationLocation::default(),
 		cache: Some(InMemoryTokenCache::default()),
+		state: OAuthTokenExchangeState::Ready,
 	}
 }
 
@@ -1345,6 +1346,7 @@ fn cross_app_access_from_proto_derives_oauth_chain(
 				token_type: token_type.to_string(),
 			}),
 			cache: None,
+			translation_error: None,
 		},
 		&mut Diagnostics::default(),
 	)
@@ -1728,6 +1730,61 @@ fn rejects_reserved_additional_param() {
 		matches!(err, ProtoError::Generic(ref m) if m.contains("reserved")),
 		"got: {err:?}"
 	);
+}
+
+#[test]
+fn translation_error_precedes_other_proto_fields() {
+	let proto = proto::OAuthTokenExchange {
+		translation_error: Some("missing Secret default/oauth-client".to_string()),
+		token_endpoint_path: Some("invalid-path".to_string()),
+		requested_token_type: Some("invalid-token-type".to_string()),
+		..Default::default()
+	};
+	let err = OAuthTokenExchangeAuth::from_proto(proto, &mut Diagnostics::default()).unwrap_err();
+	assert!(
+		matches!(
+			err,
+			ProtoError::Generic(ref message)
+				if message == "missing Secret default/oauth-client"
+		),
+		"got: {err:?}"
+	);
+}
+
+#[test]
+fn empty_translation_error_uses_fixed_fallback() {
+	let proto = proto::OAuthTokenExchange {
+		translation_error: Some("  ".to_string()),
+		..Default::default()
+	};
+	let err = OAuthTokenExchangeAuth::from_proto(proto, &mut Diagnostics::default()).unwrap_err();
+	assert!(
+		matches!(
+			err,
+			ProtoError::Generic(ref message)
+				if message == "OAuth token exchange configuration is invalid"
+		),
+		"got: {err:?}"
+	);
+}
+
+#[test]
+fn invalid_runtime_state_serializes_only_translation_error() {
+	let auth = OAuthTokenExchangeAuth::new_invalid("missing Secret default/oauth-client".to_string());
+	assert_eq!(
+		serde_json::to_value(auth).unwrap(),
+		json!({"translationError": "missing Secret default/oauth-client"})
+	);
+}
+
+#[test]
+fn local_config_rejects_translation_error() {
+	let err = serde_json::from_value::<OAuthTokenExchangeAuth>(json!({
+		"host": "localhost:8080",
+		"translationError": "not allowed in local configuration"
+	}))
+	.unwrap_err();
+	assert!(err.to_string().contains("unknown field `translationError`"));
 }
 
 #[test]
@@ -2455,6 +2512,46 @@ async fn dispatch_inserts_default_bearer_and_marks_explicit() {
 		.get::<crate::http::auth::AppliedBackendAuthLocation>()
 		.unwrap();
 	assert!(applied.explicit, "oauth output must be marked explicit");
+}
+
+#[tokio::test]
+async fn invalid_runtime_policy_rejects_before_reading_or_mutating_credentials() {
+	let detailed = "missing Secret default/oauth-client";
+	let auth = OAuthTokenExchangeAuth::new_invalid(detailed.to_string());
+	let mut req = incoming_request();
+
+	let err = apply_token_exchange(&backend_info().inputs, &auth, &mut req)
+		.await
+		.unwrap_err();
+
+	assert!(matches!(err, ProxyError::BackendAuthenticationFailed(_)));
+	let message = err.to_string();
+	assert!(message.contains("OAuth token exchange configuration is invalid"));
+	assert!(!message.contains(detailed));
+	assert_eq!(
+		req.headers().get(::http::header::AUTHORIZATION).unwrap(),
+		"Bearer subj"
+	);
+}
+
+#[tokio::test]
+async fn invalid_cross_app_runtime_policy_rejects_before_reading_or_mutating_credentials() {
+	let detailed = "missing Secret default/cross-app-signing-key";
+	let auth = CrossAppAccessAuth::new_invalid(detailed.to_string());
+	let mut req = incoming_request();
+
+	let err = apply_identity_assertion(&backend_info().inputs, &auth, &mut req)
+		.await
+		.unwrap_err();
+
+	assert!(matches!(err, ProxyError::BackendAuthenticationFailed(_)));
+	let message = err.to_string();
+	assert!(message.contains("OAuth token exchange configuration is invalid"));
+	assert!(!message.contains(detailed));
+	assert_eq!(
+		req.headers().get(::http::header::AUTHORIZATION).unwrap(),
+		"Bearer subj"
+	);
 }
 
 #[tokio::test]
