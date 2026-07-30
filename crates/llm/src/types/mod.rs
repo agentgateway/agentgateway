@@ -45,6 +45,16 @@ pub trait RequestType: Send + Sync {
 	fn append_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>);
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError>;
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage>;
+	/// Messages as the guardrail webhook should see them.
+	///
+	/// Defaults to the text-only `get_messages` view. Providers whose request
+	/// format carries tool calls should override this so a guardrail can inspect
+	/// the actions an agent has taken, not just its narration. Kept separate from
+	/// `get_messages` because that feeds the tokenizer, where tool calls do not
+	/// belong.
+	fn get_webhook_messages(&self) -> Vec<crate::webhook::Message> {
+		self.get_messages().into_iter().map(Into::into).collect()
+	}
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>);
 	fn to_value(&self) -> serde_json::Result<serde_json::Value>;
 	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String));

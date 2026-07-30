@@ -236,7 +236,13 @@ impl ResponseType for Response {
 				let role = c.message.role.clone().unwrap_or_default().into();
 				let content = c.message.content.clone().unwrap_or_default().into();
 				ResponseChoice {
-					message: Message { role, content },
+					message: Message {
+						role,
+						content,
+						// An assistant turn that calls a tool has null content, so
+						// without this the guard saw an empty string.
+						tool_calls: message_tool_calls(&c.message.rest),
+					},
 				}
 			})
 			.collect()
@@ -253,6 +259,39 @@ impl ResponseType for Response {
 			}
 		}
 	}
+}
+
+/// Tool calls carried by an OpenAI assistant message, read out of its untyped
+/// `rest`. `arguments` is a JSON *string* on the wire; parse it so a guardrail
+/// sees structure, and fall back to the raw string when it will not parse
+/// (streamed-and-reassembled arguments can be truncated).
+fn message_tool_calls(rest: &serde_json::Value) -> Vec<crate::types::ToolCall> {
+	let Some(tc_array) = rest.get("tool_calls").and_then(|v| v.as_array()) else {
+		return Vec::new();
+	};
+	tc_array
+		.iter()
+		.enumerate()
+		.filter_map(|(idx, tc_item)| {
+			let function = tc_item.get("function")?;
+			let id = tc_item
+				.get("id")
+				.and_then(|v| v.as_str())
+				.map(strng::new)
+				.unwrap_or_else(|| format!("tool_call_{idx}").into());
+			let name = function.get("name").and_then(|v| v.as_str()).unwrap_or("");
+			let raw = function.get("arguments").and_then(|v| v.as_str());
+			let arguments = raw
+				.and_then(|s| serde_json::from_str(s).ok())
+				.or_else(|| raw.map(|s| serde_json::Value::String(s.to_string())))
+				.unwrap_or(serde_json::Value::Object(Default::default()));
+			Some(crate::types::ToolCall {
+				id,
+				name: strng::new(name),
+				arguments,
+			})
+		})
+		.collect()
 }
 
 fn extract_output_messages(choices: &[Choice]) -> Option<Vec<OutputMessage>> {

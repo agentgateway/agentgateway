@@ -322,10 +322,7 @@ impl crate::llm::ResponseType for TextResponse {
 
 	fn to_webhook_choices(&self) -> Vec<webhook::ResponseChoice> {
 		vec![webhook::ResponseChoice {
-			message: crate::llm::SimpleChatCompletionMessage {
-				role: "assistant".into(),
-				content: self.content.clone().into(),
-			},
+			message: webhook::Message::text("assistant".into(), self.content.clone().into()),
 		}]
 	}
 
@@ -1099,7 +1096,7 @@ impl Policy {
 			.then(|| req.to_value())
 			.transpose()?;
 		let context = webhook::EvaluationContext::new(original, llm_request.as_ref());
-		let messsages = req.get_messages();
+		let messsages = req.get_webhook_messages();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
 		let whr = match webhook::send_request(client, webhook, context, &headers, messsages).await {
 			Ok(whr) => whr,
@@ -1124,7 +1121,11 @@ impl Policy {
 				let MaskActionBody::PromptMessages(body) = mask.body else {
 					anyhow::bail!("invalid webhook response");
 				};
-				req.set_messages(body.messages);
+				// Mask only ever rewrites text, so dropping tool_calls on the way
+				// back in is intentional: `set_messages` has no way to represent
+				// them, and a webhook that wants to alter an action should reject
+				// rather than mask.
+				req.set_messages(body.messages.into_iter().map(Into::into).collect());
 				Ok(GuardrailOutcome::Masked)
 			},
 			RequestAction::Reject(rej) => {
