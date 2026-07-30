@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use agent_core::prelude::{AssertSize, Strng};
 use agent_core::version::BuildInfo;
+use base64::Engine;
 use futures_core::Stream;
 use futures_util::StreamExt;
 use http::StatusCode;
@@ -1920,7 +1921,10 @@ fn accepted_response() -> Response {
 fn downstream_server_request_id(upstream: &str, original: &RequestId) -> RequestId {
 	match original {
 		RequestId::Number(n) => RequestId::String(format!("agw:{upstream}:n:{n}").into()),
-		RequestId::String(s) => RequestId::String(format!("agw:{upstream}:s:{s}").into()),
+		RequestId::String(s) => {
+			let encoded = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(s.as_bytes());
+			RequestId::String(format!("agw:{upstream}:s:{encoded}").into())
+		},
 	}
 }
 
@@ -1929,23 +1933,29 @@ fn parse_downstream_server_request_id(id: &RequestId) -> Option<PendingServerReq
 		return None;
 	};
 	let rest = encoded.as_ref().strip_prefix("agw:")?;
-	if let Some(idx) = rest.rfind(":n:") {
-		let upstream = &rest[..idx];
-		let n: i64 = rest[idx + 3..].parse().ok()?;
+	if let Some((upstream, n_str)) = rest.rsplit_once(":n:") {
+		let n: i64 = n_str.parse().ok()?;
 		return Some(PendingServerRequest {
 			upstream: upstream.into(),
 			original_id: RequestId::Number(n),
 		});
 	}
-	if let Some(idx) = rest.rfind(":s:") {
-		let upstream = &rest[..idx];
-		let original = &rest[idx + 3..];
+	if let Some((upstream, payload)) = rest.split_once(":s:") {
+		let original = decode_downstream_string_request_id(payload)?;
 		return Some(PendingServerRequest {
 			upstream: upstream.into(),
 			original_id: RequestId::String(original.into()),
 		});
 	}
 	None
+}
+
+fn decode_downstream_string_request_id(payload: &str) -> Option<String> {
+	if let Ok(decoded) = base64::engine::general_purpose::URL_SAFE_NO_PAD.decode(payload) {
+		return String::from_utf8(decoded).ok();
+	}
+	// Legacy remapped ids stored the raw string after the first `:s:` delimiter.
+	Some(payload.to_string())
 }
 
 /// Remap server-initiated requests only when the downstream client can reply
@@ -2334,6 +2344,16 @@ mod tests {
 	fn parse_downstream_server_request_id_roundtrips_string_ids_with_colons() {
 		let upstream = "post-backend";
 		let original_id = RequestId::String("part:a:part".into());
+		let remapped = downstream_server_request_id(upstream, &original_id);
+		let parsed = parse_downstream_server_request_id(&remapped).expect("parsed");
+		assert_eq!(parsed.upstream.as_str(), upstream);
+		assert_eq!(parsed.original_id, original_id);
+	}
+
+	#[test]
+	fn parse_downstream_server_request_id_roundtrips_string_ids_with_numeric_delimiter() {
+		let upstream = "backend";
+		let original_id = RequestId::String("part:n:7".into());
 		let remapped = downstream_server_request_id(upstream, &original_id);
 		let parsed = parse_downstream_server_request_id(&remapped).expect("parsed");
 		assert_eq!(parsed.upstream.as_str(), upstream);
