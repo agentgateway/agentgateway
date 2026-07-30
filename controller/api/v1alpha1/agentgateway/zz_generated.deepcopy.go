@@ -3320,7 +3320,7 @@ func (in *JwtSignAuth) DeepCopyInto(out *JwtSignAuth) {
 	out.SigningKeyRef = in.SigningKeyRef
 	if in.Alg != nil {
 		in, out := &in.Alg, &out.Alg
-		*out = new(OAuthPrivateKeyJWTSigningAlgorithm)
+		*out = new(JwtSigningAlg)
 		**out = **in
 	}
 	if in.KeyID != nil {
@@ -4344,7 +4344,7 @@ func (in *OAuthPrivateKeyJWT) DeepCopyInto(out *OAuthPrivateKeyJWT) {
 	}
 	if in.Alg != nil {
 		in, out := &in.Alg, &out.Alg
-		*out = new(OAuthPrivateKeyJWTSigningAlgorithm)
+		*out = new(JwtSigningAlg)
 		**out = **in
 	}
 	if in.KeyID != nil {

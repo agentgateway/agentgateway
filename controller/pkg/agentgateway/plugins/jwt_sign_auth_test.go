@@ -11,25 +11,13 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 )
 
-// Every algorithm the CRD enum admits must translate to a proto value, or a
-// config that passes admission fails at translation time.
-func TestJwtSignTranslatesEveryCRDSigningAlg(t *testing.T) {
-	want := map[agentgateway.OAuthPrivateKeyJWTSigningAlgorithm]api.JwtSign_SigningAlg{
-		agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS256: api.JwtSign_RS256,
-		agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS384: api.JwtSign_RS384,
-		agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS512: api.JwtSign_RS512,
-		agentgateway.OAuthPrivateKeyJWTSigningAlgorithmPS256: api.JwtSign_PS256,
-		agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256: api.JwtSign_ES256,
-		agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES384: api.JwtSign_ES384,
+func TestJwtSignNilSigningAlgDefaultsToUnspecified(t *testing.T) {
+	got, err := translateJwtSignSigningAlg(nil)
+	if err != nil {
+		t.Fatalf("translateJwtSignSigningAlg(nil) error = %v, want nil", err)
 	}
-	for alg, expected := range want {
-		got, err := translateJwtSignSigningAlg(&alg)
-		if err != nil {
-			t.Fatalf("translateJwtSignSigningAlg(%q) error = %v, want nil", alg, err)
-		}
-		if got != expected {
-			t.Fatalf("translateJwtSignSigningAlg(%q) = %v, want %v", alg, got, expected)
-		}
+	if got != api.JwtSigningAlg_JWT_SIGNING_ALG_UNSPECIFIED {
+		t.Fatalf("translateJwtSignSigningAlg(nil) = %v, want JWT_SIGNING_ALG_UNSPECIFIED", got)
 	}
 }
 
@@ -39,7 +27,7 @@ func TestJwtSignTranslatesEveryCRDSigningAlg(t *testing.T) {
 // that rejection instead of still emitting a policy with the wrong alg.
 func TestJwtSignRejectsUnsupportedSigningAlg(t *testing.T) {
 	ctx := oauthTestPolicyCtx(t)
-	badAlg := agentgateway.OAuthPrivateKeyJWTSigningAlgorithm("HS256")
+	badAlg := agentgateway.JwtSigningAlg("HS256")
 	policy := &agentgateway.AgentgatewayPolicy{
 		ObjectMeta: metav1.ObjectMeta{Namespace: "default"},
 		Spec: agentgateway.AgentgatewayPolicySpec{

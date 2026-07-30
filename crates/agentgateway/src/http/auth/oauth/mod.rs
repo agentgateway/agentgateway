@@ -30,7 +30,7 @@ mod transport;
 
 use cache::{InMemoryTokenCache, TokenCacheResult};
 use client_auth::sign_client_assertion;
-pub use client_auth::{OAuthClientAuth, OAuthClientAuthMethod, PrivateKeyJwt, SigningAlg};
+pub use client_auth::{OAuthClientAuth, OAuthClientAuthMethod, PrivateKeyJwt};
 pub use cross_app_access::CrossAppAccessAuth;
 pub(super) use transport::FetchError;
 

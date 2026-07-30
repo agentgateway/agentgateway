@@ -4,11 +4,9 @@ use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::Context;
-use jsonwebtoken::Header;
 
 use super::AuthorizationLocation;
-use super::oauth::SigningAlg;
-use super::oauth::client_auth::ParsedEncodingKey;
+use super::jws::{JwtSigningAlg, SigningKey};
 use crate::resource_manager::{ResourceFetcher, ResourceRef};
 use crate::serdes::FileOrInline;
 use crate::*;
@@ -39,8 +37,8 @@ fn ttl_secs_ceil(ttl: Duration) -> u64 {
 /// [`JwtSignAuth::resolve`] (file paths), so file-based keys register with the
 /// resource manager and reload when the file changes.
 #[derive(Clone)]
-enum SigningKey {
-	Parsed(ParsedEncodingKey),
+enum ResolvableSigningKey {
+	Parsed(SigningKey),
 	File(PathBuf),
 }
 
@@ -53,9 +51,9 @@ enum SigningKey {
 pub struct JwtSignAuth {
 	#[serde(skip)]
 	#[cfg_attr(feature = "schema", schemars(skip))]
-	signing_key: SigningKey,
+	signing_key: ResolvableSigningKey,
 	#[serde(default)]
-	alg: SigningAlg,
+	alg: JwtSigningAlg,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	kid: Option<String>,
 	claims: BTreeMap<String, serde_json::Value>,
@@ -107,7 +105,7 @@ struct RawJwtSignAuth {
 	signing_key: FileOrInline,
 	/// JWS signing algorithm. Defaults to RS256.
 	#[serde(default)]
-	alg: SigningAlg,
+	alg: JwtSigningAlg,
 	/// Optional JWS key ID header.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	kid: Option<String>,
@@ -139,8 +137,10 @@ impl TryFrom<RawJwtSignAuth> for JwtSignAuth {
 		// time. File keys are deferred to `resolve`, which fetches through the
 		// resource manager so the file is watched and changes reload the config.
 		let signing_key = match raw.signing_key {
-			FileOrInline::Inline(pem) => SigningKey::Parsed(parse_signing_key(raw.alg, pem.trim())?),
-			FileOrInline::File { file } => SigningKey::File(file),
+			FileOrInline::Inline(pem) => {
+				ResolvableSigningKey::Parsed(parse_signing_key(raw.alg, pem.trim())?)
+			},
+			FileOrInline::File { file } => ResolvableSigningKey::File(file),
 		};
 		Ok(Self {
 			signing_key,
@@ -175,24 +175,22 @@ fn validate_config(
 	Ok(())
 }
 
-fn parse_signing_key(alg: SigningAlg, pem: &str) -> Result<ParsedEncodingKey, String> {
-	alg
-		.encoding_key(pem.as_bytes())
-		.map(ParsedEncodingKey)
+fn parse_signing_key(alg: JwtSigningAlg, pem: &str) -> Result<SigningKey, String> {
+	SigningKey::from_pem(alg, pem.as_bytes())
 		.map_err(|e| format!("failed to parse jwtSign signingKey: {e}"))
 }
 
 impl JwtSignAuth {
 	pub fn try_new(
 		signing_key_pem: &str,
-		alg: SigningAlg,
+		alg: JwtSigningAlg,
 		kid: Option<String>,
 		claims: BTreeMap<String, serde_json::Value>,
 		ttl: Option<Duration>,
 		location: Option<AuthorizationLocation>,
 	) -> Result<Self, String> {
 		validate_config(&claims, ttl)?;
-		let signing_key = SigningKey::Parsed(parse_signing_key(alg, signing_key_pem)?);
+		let signing_key = ResolvableSigningKey::Parsed(parse_signing_key(alg, signing_key_pem)?);
 		Ok(Self {
 			signing_key,
 			alg,
@@ -207,20 +205,21 @@ impl JwtSignAuth {
 	/// registers the file so changes trigger a config reload. Inline keys are
 	/// already parsed and are left untouched.
 	pub async fn resolve(&mut self, resources: &ResourceFetcher) -> anyhow::Result<()> {
-		if let SigningKey::File(path) = &self.signing_key {
+		if let ResolvableSigningKey::File(path) = &self.signing_key {
 			let pem = resources
 				.fetch(ResourceRef::File(path.clone()))
 				.await
 				.context("failed to load jwtSign signingKey")?;
 			let pem = std::str::from_utf8(&pem).context("jwtSign signingKey is not valid UTF-8")?;
-			self.signing_key =
-				SigningKey::Parsed(parse_signing_key(self.alg, pem.trim()).map_err(anyhow::Error::msg)?);
+			self.signing_key = ResolvableSigningKey::Parsed(
+				parse_signing_key(self.alg, pem.trim()).map_err(anyhow::Error::msg)?,
+			);
 		}
 		Ok(())
 	}
 
 	pub(super) fn sign(&self) -> anyhow::Result<String> {
-		let SigningKey::Parsed(signing_key) = &self.signing_key else {
+		let ResolvableSigningKey::Parsed(signing_key) = &self.signing_key else {
 			anyhow::bail!("jwtSign file-based signingKey was not resolved at config load");
 		};
 		let now = SystemTime::now()
@@ -242,9 +241,9 @@ impl JwtSignAuth {
 		claims.insert("iat".to_string(), iat.into());
 		claims.insert("exp".to_string(), exp.into());
 
-		let mut header = Header::new(self.alg.algorithm());
-		header.kid = self.kid.clone();
-		jsonwebtoken::encode(&header, &serde_json::Value::Object(claims), &signing_key.0)
+		let header = self.alg.header(self.kid.clone());
+		signing_key
+			.encode(&header, &serde_json::Value::Object(claims))
 			.context("failed to sign backend JWT")
 	}
 }

@@ -1869,7 +1869,7 @@ type OAuthPrivateKeyJWT struct {
 
 	// JWS signing algorithm. Defaults to RS256.
 	// +optional
-	Alg *OAuthPrivateKeyJWTSigningAlgorithm `json:"alg,omitempty"`
+	Alg *JwtSigningAlg `json:"alg,omitempty"`
 
 	// Optional JWS key ID header.
 	// +optional
@@ -1890,15 +1890,15 @@ const (
 )
 
 // +k8s:enum
-type OAuthPrivateKeyJWTSigningAlgorithm string
+type JwtSigningAlg string
 
 const (
-	OAuthPrivateKeyJWTSigningAlgorithmRS256 OAuthPrivateKeyJWTSigningAlgorithm = "RS256"
-	OAuthPrivateKeyJWTSigningAlgorithmRS384 OAuthPrivateKeyJWTSigningAlgorithm = "RS384"
-	OAuthPrivateKeyJWTSigningAlgorithmRS512 OAuthPrivateKeyJWTSigningAlgorithm = "RS512"
-	OAuthPrivateKeyJWTSigningAlgorithmPS256 OAuthPrivateKeyJWTSigningAlgorithm = "PS256"
-	OAuthPrivateKeyJWTSigningAlgorithmES256 OAuthPrivateKeyJWTSigningAlgorithm = "ES256"
-	OAuthPrivateKeyJWTSigningAlgorithmES384 OAuthPrivateKeyJWTSigningAlgorithm = "ES384"
+	JwtSigningAlgRS256 JwtSigningAlg = "RS256"
+	JwtSigningAlgRS384 JwtSigningAlg = "RS384"
+	JwtSigningAlgRS512 JwtSigningAlg = "RS512"
+	JwtSigningAlgPS256 JwtSigningAlg = "PS256"
+	JwtSigningAlgES256 JwtSigningAlg = "ES256"
+	JwtSigningAlgES384 JwtSigningAlg = "ES384"
 )
 
 // JwtSignAuth signs a short-lived JWT with a private key on each request and
@@ -1911,7 +1911,7 @@ type JwtSignAuth struct {
 
 	// JWS signing algorithm. Defaults to RS256.
 	// +optional
-	Alg *OAuthPrivateKeyJWTSigningAlgorithm `json:"alg,omitempty"`
+	Alg *JwtSigningAlg `json:"alg,omitempty"`
 
 	// Optional JWS key ID header.
 	// +optional

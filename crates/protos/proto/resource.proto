@@ -398,25 +398,25 @@ message Key {
   AuthorizationLocation authorization_location = 2;
 }
 
+enum JwtSigningAlg {
+  JWT_SIGNING_ALG_UNSPECIFIED = 0;
+  RS256                   = 1;
+  RS384                   = 2;
+  RS512                   = 3;
+  ES256                   = 4;
+  ES384                   = 5;
+  PS256                   = 6;
+}
+
 // Signs a short-lived JWT with a private key on each request and sends it to
 // the backend. For upstreams that require per-request keypair JWTs (e.g. the
 // Snowflake SQL API) rather than a static credential.
 message JwtSign {
-  enum SigningAlg {
-    SIGNING_ALG_UNSPECIFIED = 0; // defaults to RS256
-    RS256                   = 1;
-    RS384                   = 2;
-    RS512                   = 3;
-    ES256                   = 4;
-    ES384                   = 5;
-    PS256                   = 6;
-  }
-
   // PEM-encoded private signing key. RSA keys are used with RS*/PS*
   // algorithms; EC keys are used with ES* algorithms.
   string signing_key = 1;
   // JWS signing algorithm. Defaults to RS256.
-  SigningAlg alg = 2;
+  JwtSigningAlg alg = 2;
   // Optional JWS key ID header.
   optional string kid = 3;
   // Static claims added to every token (e.g. iss, sub, aud). iat, exp, and
@@ -1875,16 +1875,6 @@ message OAuthClientAuth {
   }
 
   message PrivateKeyJwt {
-    enum SigningAlg {
-      SIGNING_ALG_UNSPECIFIED = 0; // defaults to RS256
-      RS256                   = 1;
-      RS384                   = 2;
-      RS512                   = 3;
-      ES256                   = 4;
-      ES384                   = 5;
-      PS256                   = 6;
-    }
-
     enum CertificateHeader {
       CERTIFICATE_HEADER_UNSPECIFIED = 0;
       X5C                            = 1;
@@ -1895,7 +1885,7 @@ message OAuthClientAuth {
     // algorithms; EC keys are used with ES* algorithms.
     string signing_key = 1;
     // JWS signing algorithm. Defaults to RS256.
-    SigningAlg alg = 2;
+    JwtSigningAlg alg = 2;
     // Optional JWS key ID header.
     optional string kid = 3;
     // Audience for the client assertion, typically the token endpoint URL.

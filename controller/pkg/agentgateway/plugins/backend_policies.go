@@ -1268,7 +1268,7 @@ func buildOAuthPrivateKeyJWT(ctx PolicyCtx, auth *agentgateway.OAuthPrivateKeyJW
 
 	var errs []error
 	res := &api.OAuthClientAuth_PrivateKeyJwt{
-		Alg:               translateOAuthPrivateKeyJWTSigningAlg(auth.Alg),
+		Alg:               translateJWTSigningAlg(auth.Alg),
 		Kid:               auth.KeyID,
 		AssertionAudience: auth.AssertionAudience,
 		CertificateHeader: translateOAuthPrivateKeyJWTCertificateHeader(auth.CertificateHeader),
@@ -1356,26 +1356,18 @@ func translateOAuthClientAuthMethod(method *agentgateway.OAuthClientAuthMethod) 
 	}
 }
 
-func translateOAuthPrivateKeyJWTSigningAlg(alg *agentgateway.OAuthPrivateKeyJWTSigningAlgorithm) api.OAuthClientAuth_PrivateKeyJwt_SigningAlg {
+func translateJWTSigningAlg(alg *agentgateway.JwtSigningAlg) api.JwtSigningAlg {
 	if alg == nil {
-		return api.OAuthClientAuth_PrivateKeyJwt_SIGNING_ALG_UNSPECIFIED
+		return api.JwtSigningAlg_JWT_SIGNING_ALG_UNSPECIFIED
 	}
-	switch *alg {
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS256:
-		return api.OAuthClientAuth_PrivateKeyJwt_RS256
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS384:
-		return api.OAuthClientAuth_PrivateKeyJwt_RS384
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS512:
-		return api.OAuthClientAuth_PrivateKeyJwt_RS512
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmPS256:
-		return api.OAuthClientAuth_PrivateKeyJwt_PS256
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256:
-		return api.OAuthClientAuth_PrivateKeyJwt_ES256
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES384:
-		return api.OAuthClientAuth_PrivateKeyJwt_ES384
-	default:
-		return api.OAuthClientAuth_PrivateKeyJwt_SIGNING_ALG_UNSPECIFIED
-	}
+	translated, _ := translateJWTSigningAlgValue(*alg)
+	return translated
+}
+
+func translateJWTSigningAlgValue(alg agentgateway.JwtSigningAlg) (api.JwtSigningAlg, bool) {
+	value, ok := api.JwtSigningAlg_value[string(alg)]
+	translated := api.JwtSigningAlg(value)
+	return translated, ok && translated != api.JwtSigningAlg_JWT_SIGNING_ALG_UNSPECIFIED
 }
 
 func translateOAuthPrivateKeyJWTCertificateHeader(header *agentgateway.OAuthPrivateKeyJWTCertificateHeader) api.OAuthClientAuth_PrivateKeyJwt_CertificateHeader {
@@ -1782,24 +1774,13 @@ func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, names
 // applies its RS256 default, but rejects unrecognized values instead of
 // silently signing with the wrong algorithm. Unrecognized values are normally
 // unreachable behind the CRD enum validation; this guards against version skew.
-func translateJwtSignSigningAlg(alg *agentgateway.OAuthPrivateKeyJWTSigningAlgorithm) (api.JwtSign_SigningAlg, error) {
+func translateJwtSignSigningAlg(alg *agentgateway.JwtSigningAlg) (api.JwtSigningAlg, error) {
 	if alg == nil {
-		return api.JwtSign_SIGNING_ALG_UNSPECIFIED, nil
+		return api.JwtSigningAlg_JWT_SIGNING_ALG_UNSPECIFIED, nil
 	}
-	switch *alg {
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS256:
-		return api.JwtSign_RS256, nil
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS384:
-		return api.JwtSign_RS384, nil
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS512:
-		return api.JwtSign_RS512, nil
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256:
-		return api.JwtSign_ES256, nil
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES384:
-		return api.JwtSign_ES384, nil
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmPS256:
-		return api.JwtSign_PS256, nil
-	default:
-		return api.JwtSign_SIGNING_ALG_UNSPECIFIED, fmt.Errorf("unsupported jwtSign signing algorithm %q", *alg)
+	translated, ok := translateJWTSigningAlgValue(*alg)
+	if !ok {
+		return api.JwtSigningAlg_JWT_SIGNING_ALG_UNSPECIFIED, fmt.Errorf("unsupported jwtSign signing algorithm %q", *alg)
 	}
+	return translated, nil
 }

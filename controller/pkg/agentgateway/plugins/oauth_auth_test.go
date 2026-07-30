@@ -371,7 +371,7 @@ func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 					Name: "oauth-signing-key",
 				},
 				CertificateHeader: ptr.Of(agentgateway.OAuthPrivateKeyJWTCertificateHeaderX5TS256),
-				Alg:               ptr.Of(agentgateway.OAuthPrivateKeyJWTSigningAlgorithmPS256),
+				Alg:               ptr.Of(agentgateway.JwtSigningAlgPS256),
 				KeyID:             new("kid-1"),
 				AssertionAudience: "https://issuer.example.com/oauth/token",
 			},
@@ -401,7 +401,7 @@ func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 	if privateKeyJWT.GetCertificateHeader() != api.OAuthClientAuth_PrivateKeyJwt_X5T_S256 {
 		t.Fatalf("certificate header = %v, want X5T_S256", privateKeyJWT.GetCertificateHeader())
 	}
-	if privateKeyJWT.GetAlg() != api.OAuthClientAuth_PrivateKeyJwt_PS256 {
+	if privateKeyJWT.GetAlg() != api.JwtSigningAlg_PS256 {
 		t.Fatalf("privateKeyJwt alg = %v, want PS256", privateKeyJWT.GetAlg())
 	}
 	if privateKeyJWT.GetKid() != "kid-1" {
@@ -409,6 +409,14 @@ func TestOAuthTokenExchangeClientAuthPrivateKeyJWT(t *testing.T) {
 	}
 	if privateKeyJWT.GetAssertionAudience() != "https://issuer.example.com/oauth/token" {
 		t.Fatalf("privateKeyJwt assertion audience = %q, want token endpoint URL", privateKeyJWT.GetAssertionAudience())
+	}
+}
+
+func TestOAuthPrivateKeyJWTUnknownSigningAlgDefaultsToUnspecified(t *testing.T) {
+	unknown := agentgateway.JwtSigningAlg("HS256")
+	got := translateJWTSigningAlg(&unknown)
+	if got != api.JwtSigningAlg_JWT_SIGNING_ALG_UNSPECIFIED {
+		t.Fatalf("translateJWTSigningAlg(%q) = %v, want JWT_SIGNING_ALG_UNSPECIFIED", unknown, got)
 	}
 }
 

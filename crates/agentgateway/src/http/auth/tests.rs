@@ -1179,7 +1179,7 @@ fn jwt_sign_auth(
 	BackendAuth::new(BackendAuthKind::JwtSign(Box::new(
 		JwtSignAuth::try_new(
 			TEST_JWT_SIGN_EC_KEY,
-			oauth::SigningAlg::Es256,
+			JwtSigningAlg::Es256,
 			kid,
 			claims,
 			ttl,
@@ -1325,7 +1325,7 @@ async fn test_backend_auth_jwt_sign_explicit_location() {
 fn test_jwt_sign_rejects_reserved_and_empty_claims() {
 	let reserved = JwtSignAuth::try_new(
 		TEST_JWT_SIGN_EC_KEY,
-		oauth::SigningAlg::Es256,
+		JwtSigningAlg::Es256,
 		None,
 		[("exp".to_string(), "123".into())].into_iter().collect(),
 		None,
@@ -1338,7 +1338,7 @@ fn test_jwt_sign_rejects_reserved_and_empty_claims() {
 
 	let reserved_nbf = JwtSignAuth::try_new(
 		TEST_JWT_SIGN_EC_KEY,
-		oauth::SigningAlg::Es256,
+		JwtSigningAlg::Es256,
 		None,
 		[("nbf".to_string(), "123".into())].into_iter().collect(),
 		None,
@@ -1351,7 +1351,7 @@ fn test_jwt_sign_rejects_reserved_and_empty_claims() {
 
 	let reserved_iat = JwtSignAuth::try_new(
 		TEST_JWT_SIGN_EC_KEY,
-		oauth::SigningAlg::Es256,
+		JwtSigningAlg::Es256,
 		None,
 		[("iat".to_string(), "123".into())].into_iter().collect(),
 		None,
@@ -1364,7 +1364,7 @@ fn test_jwt_sign_rejects_reserved_and_empty_claims() {
 
 	let empty = JwtSignAuth::try_new(
 		TEST_JWT_SIGN_EC_KEY,
-		oauth::SigningAlg::Es256,
+		JwtSigningAlg::Es256,
 		None,
 		Default::default(),
 		None,
@@ -1380,7 +1380,7 @@ fn test_jwt_sign_rejects_zero_ttl_and_bad_key() {
 
 	let zero_ttl = JwtSignAuth::try_new(
 		TEST_JWT_SIGN_EC_KEY,
-		oauth::SigningAlg::Es256,
+		JwtSigningAlg::Es256,
 		None,
 		claims.clone(),
 		Some(std::time::Duration::ZERO),
@@ -1392,7 +1392,7 @@ fn test_jwt_sign_rejects_zero_ttl_and_bad_key() {
 	// exp == iat, so they must be rejected too.
 	let sub_second_ttl = JwtSignAuth::try_new(
 		TEST_JWT_SIGN_EC_KEY,
-		oauth::SigningAlg::Es256,
+		JwtSigningAlg::Es256,
 		None,
 		claims.clone(),
 		Some(std::time::Duration::from_millis(500)),
@@ -1400,14 +1400,7 @@ fn test_jwt_sign_rejects_zero_ttl_and_bad_key() {
 	);
 	assert!(sub_second_ttl.is_err(), "sub-second ttl must be rejected");
 
-	let bad_key = JwtSignAuth::try_new(
-		"not a pem",
-		oauth::SigningAlg::Es256,
-		None,
-		claims,
-		None,
-		None,
-	);
+	let bad_key = JwtSignAuth::try_new("not a pem", JwtSigningAlg::Es256, None, claims, None, None);
 	assert!(bad_key.is_err(), "invalid PEM must be rejected");
 }
 
@@ -1495,7 +1488,7 @@ async fn test_backend_auth_jwt_sign_rsa() {
 	let auth = BackendAuth::new(BackendAuthKind::JwtSign(Box::new(
 		JwtSignAuth::try_new(
 			TEST_JWT_SIGN_RSA_KEY,
-			oauth::SigningAlg::Rs256,
+			JwtSigningAlg::Rs256,
 			None,
 			[
 				("iss".to_string(), "acct.user".into()),

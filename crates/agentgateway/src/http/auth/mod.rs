@@ -2,6 +2,7 @@ pub mod aws;
 pub mod azure;
 mod copilot;
 pub mod gcp;
+pub(crate) mod jws;
 pub mod jwt_sign;
 pub mod oauth;
 
@@ -13,6 +14,8 @@ pub use aws::{AwsAssumeRole, AwsAuth};
 pub use azure::AzureAuth;
 use cookie::Cookie;
 pub use gcp::GcpAuth;
+pub use jws::JwtSigningAlg;
+pub(crate) use jws::signing_alg_from_proto;
 pub use jwt_sign::JwtSignAuth;
 pub use oauth::{
 	CrossAppAccessAuth, OAuthClientAuth, OAuthClientAuthMethod, OAuthGrantType,

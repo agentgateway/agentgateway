@@ -1333,7 +1333,8 @@ fn backend_auth_kind_from_proto(
 			BackendAuthKind::JwtSign(Box::new(
 				auth::jwt_sign::JwtSignAuth::try_new(
 					j.signing_key.trim(),
-					jwt_sign_alg_from_proto(j.alg)?,
+					auth::signing_alg_from_proto(j.alg)
+						.ok_or_else(|| ProtoError::EnumParse("unknown jwt_sign signing alg".into()))?,
 					j.kid,
 					claims,
 					j.ttl.map(convert_duration),
@@ -1344,22 +1345,6 @@ fn backend_auth_kind_from_proto(
 		},
 		None => return Ok(None),
 	}))
-}
-
-fn jwt_sign_alg_from_proto(alg: i32) -> Result<auth::oauth::SigningAlg, ProtoError> {
-	use auth::oauth::SigningAlg;
-	use proto::agent::jwt_sign::SigningAlg as ProtoSigningAlg;
-
-	match ProtoSigningAlg::try_from(alg) {
-		Ok(ProtoSigningAlg::Unspecified) => Ok(SigningAlg::Rs256),
-		Ok(ProtoSigningAlg::Rs256) => Ok(SigningAlg::Rs256),
-		Ok(ProtoSigningAlg::Rs384) => Ok(SigningAlg::Rs384),
-		Ok(ProtoSigningAlg::Rs512) => Ok(SigningAlg::Rs512),
-		Ok(ProtoSigningAlg::Es256) => Ok(SigningAlg::Es256),
-		Ok(ProtoSigningAlg::Es384) => Ok(SigningAlg::Es384),
-		Ok(ProtoSigningAlg::Ps256) => Ok(SigningAlg::Ps256),
-		Err(_) => Err(ProtoError::EnumParse("unknown jwt_sign signing alg".into())),
-	}
 }
 
 fn listener_protocol_from_proto(
