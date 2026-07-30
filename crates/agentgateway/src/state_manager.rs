@@ -245,22 +245,12 @@ impl LocalClient {
 			config_content.as_str(),
 		)
 		.await?;
-		// Mirror the load path (app.rs): the env-resolved configured sources (`MODEL_CATALOG_PATHS`,
-		// else the file's `modelCatalog`) are the base, with config-store resources merged on top.
-		// Rebuilding from the materialized file config would drop the env-provided sources.
-		let model_catalog = if let Some(store) = &self.config_resource_store {
-			config_store::merge_model_catalog_sources(
-				&store
-					.list(Some(config_store::ConfigResourceKind::ModelCatalog))
-					.await?,
-				self.config.model_catalog.sources.clone(),
-			)?
-		} else {
-			self.config.model_catalog.sources.clone()
-		};
+		let model_catalog = config
+			.model_catalog
+			.unwrap_or_else(|| self.config.model_catalog.sources.clone());
 		self.model_catalog.replace_sources(model_catalog).await?;
 		info!("loaded config from {:?}", self.cfg);
-
+		
 		// Sync the state
 		let next_binds = self.stores.binds.sync_local(
 			config.binds,
