@@ -8,6 +8,52 @@ use crate::llm::bedrock::AwsRegion;
 use crate::test_helpers::proxymock::setup_proxy_test;
 
 #[test]
+fn test_jwt_claim_times() {
+	let cases = [
+		(
+			100,
+			Duration::from_secs(300),
+			Duration::from_secs(10),
+			JwtClaimTimes {
+				issued_at: 90,
+				expires_at: 400,
+			},
+		),
+		(
+			100,
+			Duration::from_millis(1500),
+			Duration::from_secs(10),
+			JwtClaimTimes {
+				issued_at: 90,
+				expires_at: 102,
+			},
+		),
+		(
+			5,
+			Duration::from_secs(30),
+			Duration::from_secs(10),
+			JwtClaimTimes {
+				issued_at: 0,
+				expires_at: 35,
+			},
+		),
+	];
+
+	for (now, lifetime, issued_at_backdate, expected) in cases {
+		assert_eq!(
+			jwt_claim_times(now, lifetime, issued_at_backdate).unwrap(),
+			expected
+		);
+	}
+}
+
+#[test]
+fn test_jwt_claim_times_rejects_expiration_overflow() {
+	assert!(jwt_claim_times(u64::MAX, Duration::from_secs(1), Duration::from_secs(10)).is_err());
+	assert!(jwt_claim_times(1, Duration::new(u64::MAX, 1), Duration::from_secs(10)).is_err());
+}
+
+#[test]
 fn test_aws_auth_deserializes_assume_role() {
 	let implicit: AwsAuth = serde_json::from_value(serde_json::json!({
 		"assumeRole": {
@@ -1246,8 +1292,8 @@ async fn test_backend_auth_jwt_sign() {
 	assert_eq!(payload["sub"], "ACCT.USER");
 	let iat = payload["iat"].as_u64().expect("iat must be set");
 	let exp = payload["exp"].as_u64().expect("exp must be set");
-	// iat is backdated and exp extended by the 10s clock-skew fudge.
-	assert_eq!(exp - iat, 600 + 20);
+	// The lifetime starts at signing time while iat is backdated by 10s.
+	assert_eq!(exp - iat, 600 + 10);
 	assert!(
 		payload.get("nbf").is_none(),
 		"nbf must not be emitted; iat already conveys the issue time"
@@ -1303,11 +1349,10 @@ async fn test_backend_auth_jwt_sign_explicit_location() {
 	let (header, payload) = decode_jwt_parts(header_value.to_str().unwrap());
 	assert_eq!(header["alg"], "ES256");
 	assert!(header.get("kid").is_none_or(|kid| kid.is_null()));
-	// Default 300s lifetime applies when ttl is unset, plus the 10s
-	// clock-skew fudge on both iat and exp.
+	// Default 300s lifetime starts at signing time; iat is backdated 10s.
 	let iat = payload["iat"].as_u64().unwrap();
 	let exp = payload["exp"].as_u64().unwrap();
-	assert_eq!(exp - iat, 300 + 20);
+	assert_eq!(exp - iat, 300 + 10);
 	assert!(payload.get("nbf").is_none());
 
 	assert!(
@@ -1439,8 +1484,8 @@ async fn test_backend_auth_jwt_sign_rounds_up_sub_second_ttl() {
 	let exp = payload["exp"].as_u64().expect("exp must be set");
 	assert_eq!(
 		exp - iat,
-		2 + 20,
-		"a 1500ms ttl must round up to 2s (plus the clock-skew fudge on both ends), not truncate to 1s"
+		2 + 10,
+		"a 1500ms ttl must round up to 2s and iat must be backdated by 10s"
 	);
 }
 
@@ -1464,10 +1509,10 @@ fn test_jwt_sign_deserializes() {
 }
 
 #[test]
-fn test_jwt_sign_serialize_rounds_up_sub_second_ttl() {
+fn test_jwt_sign_serialization_preserves_fractional_ttl() {
 	let auth = jwt_sign_auth(None, Some(std::time::Duration::from_millis(1500)), None);
 	let value = serde_json::to_value(&auth).expect("jwtSign auth should serialize");
-	assert_eq!(value["jwtSign"]["ttl"], "2s");
+	assert_eq!(value["jwtSign"]["ttl"], "1.5s");
 }
 
 #[tokio::test]

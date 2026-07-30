@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use anyhow::Context;
 
-use super::AuthorizationLocation;
 use super::jws::{JwtSigningAlg, SigningKey};
+use super::{AuthorizationLocation, jwt_claim_times, unix_timestamp_now};
 use crate::resource_manager::{ResourceFetcher, ResourceRef};
 use crate::serdes::FileOrInline;
 use crate::*;
@@ -15,23 +15,15 @@ use crate::*;
 /// exposure; upstreams like Snowflake cap `exp` at one hour anyway.
 const DEFAULT_TTL: Duration = Duration::from_secs(300);
 
-/// Backdate `iat` and extend `exp` by this amount so validators with slightly
-/// skewed clocks do not reject freshly minted tokens, matching Google's auth
-/// library behavior.
-const CLOCK_SKEW_FUDGE: Duration = Duration::from_secs(10);
+/// Backdate `iat` to tolerate validators whose clocks trail the gateway.
+/// Expiration still uses the configured lifetime measured from signing time.
+const ISSUED_AT_BACKDATE: Duration = Duration::from_secs(10);
 
 /// Time-based claims the signer owns; user-configured claims must not collide
 /// with these. `iat` and `exp` are always set by the signer. `nbf` is not
 /// emitted (validators treat `iat` as the issue time and a static `nbf` makes
 /// no sense for per-request tokens) but stays reserved.
 const RESERVED_CLAIMS: &[&str] = &["iat", "exp", "nbf"];
-
-/// Rounds a ttl up to the next whole second so a sub-second component (e.g.
-/// 1500ms) never yields a shorter lifetime than configured, in both the
-/// signed token and any serialized/debug representation of the config.
-fn ttl_secs_ceil(ttl: Duration) -> u64 {
-	ttl.as_secs() + u64::from(ttl.subsec_nanos() > 0)
-}
 
 #[derive(Clone)]
 enum JwtSignState {
@@ -99,14 +91,14 @@ impl serde::Serialize for JwtSignAuth {
 		state.serialize_field("alg", &self.alg)?;
 		state.serialize_field("kid", &self.kid)?;
 		state.serialize_field("claims", &self.claims)?;
-		state.serialize_field(
-			"ttl",
-			&self.ttl.map(|ttl| format!("{}s", ttl_secs_ceil(ttl))),
-		)?;
+		state.serialize_field("ttl", &self.ttl.map(SerializableDuration))?;
 		state.serialize_field("location", &self.location)?;
 		state.end()
 	}
 }
+
+#[derive(serde::Serialize)]
+struct SerializableDuration(#[serde(with = "crate::serdes::serde_dur")] Duration);
 
 #[derive(Clone, Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -254,24 +246,16 @@ impl JwtSignAuth {
 				anyhow::bail!("jwtSign configuration is invalid");
 			},
 		};
-		let now = SystemTime::now()
-			.duration_since(UNIX_EPOCH)
-			.context("system clock is before the unix epoch")?
-			.as_secs();
+		let now = unix_timestamp_now()?;
 		let ttl = self.ttl.unwrap_or(DEFAULT_TTL);
-		let skew = CLOCK_SKEW_FUDGE.as_secs();
+		let times = jwt_claim_times(now, ttl, ISSUED_AT_BACKDATE)?;
 
 		let mut claims = serde_json::Map::with_capacity(self.claims.len() + RESERVED_CLAIMS.len());
 		for (key, value) in &self.claims {
 			claims.insert(key.clone(), value.clone());
 		}
-		let iat = now.saturating_sub(skew);
-		let exp = now
-			.checked_add(skew)
-			.and_then(|t| t.checked_add(ttl_secs_ceil(ttl)))
-			.context("jwtSign ttl overflows the exp timestamp")?;
-		claims.insert("iat".to_string(), iat.into());
-		claims.insert("exp".to_string(), exp.into());
+		claims.insert("iat".to_string(), times.issued_at.into());
+		claims.insert("exp".to_string(), times.expires_at.into());
 
 		let header = self.alg.header(self.kid.clone());
 		signing_key

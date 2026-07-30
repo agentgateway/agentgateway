@@ -25,8 +25,13 @@ func TestBackendAuth(tt *testing.T) {
 	t.Run("Credentials", func(t base.Test) {
 		testBackendAuthCredentials(t)
 	})
-	t.Run("InvalidJwtSign", func(t base.Test) {
-		testInvalidJwtSign(t)
+	t.Run("JwtSign", func(t base.Test) {
+		t.Run("Valid", func(t base.Test) {
+			testValidJwtSign(t)
+		})
+		t.Run("Invalid", func(t base.Test) {
+			testInvalidJwtSign(t)
+		})
 	})
 }
 
@@ -39,6 +44,22 @@ func testBackendAuthCredentials(t base.Test) {
 			gomega.And(
 				gomega.HaveKeyWithValue("Dd-Api-Key", "primary-api-key"),
 				gomega.HaveKeyWithValue("Dd-Application-Key", "application-key"),
+			),
+		),
+	})
+}
+
+func testValidJwtSign(t base.Test) {
+	t.Apply(manifest("backendauth", "valid-jwt-sign.yaml"))
+	t.HTTPRouteAccepted("route-backendauth-valid-jwt-sign", base.Namespace)
+
+	t.Send("valid-jwt-sign.example.com", &testmatchers.HttpResponse{
+		StatusCode: http.StatusOK,
+		Body: gomega.WithTransform(
+			transforms.WithEchoHeaders(),
+			gomega.HaveKeyWithValue(
+				"Authorization",
+				gomega.MatchRegexp(`^Bearer [^.]+\.[^.]+\.[^.]+$`),
 			),
 		),
 	})

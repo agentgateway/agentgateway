@@ -1,5 +1,5 @@
 use std::fmt;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use anyhow::Context;
 use base64::Engine;
@@ -11,6 +11,7 @@ use sha2::{Digest, Sha256};
 use tracing::warn;
 
 use super::super::jws::{JwtSigningAlg, SigningKey, signing_alg_from_proto};
+use super::super::{jwt_claim_times, unix_timestamp_now};
 use crate::serdes::FileOrInline;
 use crate::types::proto::{ProtoError, agent as proto};
 use crate::{apply, schema_enum, ser_redact};
@@ -556,19 +557,16 @@ pub(super) fn sign_client_assertion(
 		exp: u64,
 	}
 
-	let now = SystemTime::now()
-		.duration_since(UNIX_EPOCH)
-		.context("system clock is before the unix epoch")?
-		.as_secs();
-	let issued_at = now.saturating_sub(CLIENT_ASSERTION_CLOCK_SKEW.as_secs());
+	let now = unix_timestamp_now()?;
+	let times = jwt_claim_times(now, CLIENT_ASSERTION_LIFETIME, CLIENT_ASSERTION_CLOCK_SKEW)?;
 	let claims = ClientAssertionClaims {
 		iss: client_id,
 		sub: client_id,
 		aud: &private_key.assertion_audience,
 		jti: uuid::Uuid::new_v4().to_string(),
-		nbf: issued_at,
-		iat: issued_at,
-		exp: now + CLIENT_ASSERTION_LIFETIME.as_secs(),
+		nbf: times.issued_at,
+		iat: times.issued_at,
+		exp: times.expires_at,
 	};
 
 	let mut header = private_key.alg.header(private_key.kid.clone());
