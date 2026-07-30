@@ -261,11 +261,15 @@ impl RequestType for Request {
 		match &mut self.system {
 			Some(TextBlock::Text(text)) => f(text),
 			Some(TextBlock::Array(parts)) => {
-				for part in parts {
-					if let TextPart::Text { text, .. } = part {
-						f(text);
-					}
-				}
+				crate::types::scan_text_runs(
+					parts,
+					"\n",
+					|p| match p {
+						TextPart::Text { text, .. } => Some(text),
+						TextPart::Unknown(_) => None,
+					},
+					f,
+				);
 			},
 			None => {},
 		}
@@ -273,13 +277,16 @@ impl RequestType for Request {
 			match &mut msg.content {
 				Some(ContentBlock::Text(text)) => f(text),
 				Some(ContentBlock::Array(parts)) => {
-					for part in parts {
-						match part {
-							ContentPart::Text { text, .. } => f(text),
+					crate::types::scan_text_runs(
+						parts,
+						" ",
+						|p| match p {
+							ContentPart::Text { text, .. } => Some(text),
 							// TODO opt-in setting to apply guards to tool results
-							ContentPart::Unknown(_) => {},
-						}
-					}
+							ContentPart::Unknown(_) => None,
+						},
+						f,
+					);
 				},
 				None => {},
 			}

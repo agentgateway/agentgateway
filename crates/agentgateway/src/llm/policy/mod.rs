@@ -1321,8 +1321,12 @@ impl Policy {
 						}
 						continue;
 					}
-					let ranges: Vec<std::ops::Range<usize>> =
-						pattern.find_iter(content).map(|m| m.range()).collect();
+					// zero-width matches (e.g. `a*`) mask nothing; replacing them inserts placeholders
+					let ranges: Vec<std::ops::Range<usize>> = pattern
+						.find_iter(content)
+						.map(|m| m.range())
+						.filter(|r| !r.is_empty())
+						.collect();
 					if ranges.is_empty() {
 						continue;
 					}

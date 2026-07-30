@@ -1905,3 +1905,204 @@ fn test_apply_regex_response_preserves_tool_structure(
 		None => assert!(matches!(outcome, GuardrailOutcome::Rejected(_))),
 	}
 }
+
+#[cfg(test)]
+#[rstest::rstest]
+#[case::completions_reject_across_blocks(
+	ChatFmt::Completions,
+	Action::Reject,
+	vec![RegexRule::Regex { pattern: regex::Regex::new("secret token").unwrap() }],
+	serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "Please use this secret"},
+				{"type": "text", "text": "token to authenticate"}
+			]}
+		]
+	}),
+	Expect::Rejected
+)]
+#[case::anthropic_reject_across_blocks(
+	ChatFmt::Anthropic,
+	Action::Reject,
+	vec![RegexRule::Regex { pattern: regex::Regex::new("secret token").unwrap() }],
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "Please use this secret"},
+				{"type": "text", "text": "token to authenticate"}
+			]}
+		]
+	}),
+	Expect::Rejected
+)]
+#[case::responses_reject_across_blocks(
+	ChatFmt::Responses,
+	Action::Reject,
+	vec![RegexRule::Regex { pattern: regex::Regex::new("secret\ntoken").unwrap() }],
+	serde_json::json!({
+		"model": "gpt-4o",
+		"input": [
+			{"role": "user", "content": [
+				{"type": "input_text", "text": "Please use this secret"},
+				{"type": "input_text", "text": "token to authenticate"}
+			]}
+		]
+	}),
+	Expect::Rejected
+)]
+#[case::completions_mask_collapses_run(
+	ChatFmt::Completions,
+	Action::Mask,
+	vec![RegexRule::Regex { pattern: regex::Regex::new("secret token").unwrap() }],
+	serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "Please use this secret"},
+				{"type": "text", "text": "token to authenticate"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "Please use this <masked> to authenticate"}
+			]}
+		]
+	}))
+)]
+#[case::anthropic_mask_collapsed_run_keeps_last_blocks_cache_control(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	email_and_ssn(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact admin@example.com"},
+				{"type": "text", "text": "for help", "cache_control": {"type": "ephemeral"}}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact <EMAIL_ADDRESS> for help", "cache_control": {"type": "ephemeral"}}
+			]}
+		]
+	}))
+)]
+#[case::mask_preserves_non_text_block_between_runs(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	ssn_only(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "my ssn is 123-45-6789"},
+				{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "aGk="}},
+				{"type": "text", "text": "thanks"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "my ssn is <SSN>"},
+				{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "aGk="}},
+				{"type": "text", "text": "thanks"}
+			]}
+		]
+	}))
+)]
+#[case::untouched_run_is_not_collapsed(
+	ChatFmt::Completions,
+	Action::Mask,
+	ssn_only(),
+	serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "no pii"},
+				{"type": "text", "text": "in here"}
+			]},
+			{"role": "user", "content": "my ssn is 123-45-6789"}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "no pii"},
+				{"type": "text", "text": "in here"}
+			]},
+			{"role": "user", "content": "my ssn is <SSN>"}
+		]
+	}))
+)]
+#[case::no_match_across_separate_messages(
+	ChatFmt::Completions,
+	Action::Reject,
+	vec![RegexRule::Regex { pattern: regex::Regex::new("secret token").unwrap() }],
+	serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": "Please use this secret"},
+			{"role": "user", "content": "token to authenticate"}
+		]
+	}),
+	Expect::Unchanged
+)]
+fn test_apply_regex_text_runs(
+	#[case] fmt: ChatFmt,
+	#[case] action: Action,
+	#[case] rules: Vec<RegexRule>,
+	#[case] input: serde_json::Value,
+	#[case] expected: Expect,
+) {
+	let (outcome, actual) = run_apply_regex(fmt, action, rules, input);
+	match expected {
+		Expect::Masked(expected) => {
+			assert!(matches!(outcome, GuardrailOutcome::Masked));
+			assert_eq!(actual, expected);
+		},
+		Expect::Rejected => assert!(matches!(outcome, GuardrailOutcome::Rejected(_))),
+		Expect::Unchanged => assert!(matches!(outcome, GuardrailOutcome::None)),
+	}
+}
+
+#[cfg(test)]
+#[test]
+fn test_zero_width_pattern_is_a_noop() {
+	let (outcome, actual) = run_apply_regex(
+		ChatFmt::Completions,
+		Action::Mask,
+		vec![RegexRule::Regex {
+			pattern: regex::Regex::new("z*").unwrap(),
+		}],
+		serde_json::json!({
+			"model": "gpt-4o",
+			"messages": [{"role": "user", "content": "hello world"}]
+		}),
+	);
+	assert!(matches!(outcome, GuardrailOutcome::None));
+	assert_eq!(
+		actual,
+		serde_json::json!({
+			"model": "gpt-4o",
+			"messages": [{"role": "user", "content": "hello world"}]
+		})
+	);
+}
