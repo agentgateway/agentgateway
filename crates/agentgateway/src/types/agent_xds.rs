@@ -1198,11 +1198,12 @@ fn jwt_sign_from_proto(
 	mut jwt_sign: proto::agent::JwtSign,
 ) -> Result<auth::jwt_sign::JwtSignAuth, String> {
 	if let Some(error) = jwt_sign.translation_error.take() {
-		return Err(if error.trim().is_empty() {
+		let error = if error.trim().is_empty() {
 			"jwtSign configuration is invalid".to_string()
 		} else {
 			error
-		});
+		};
+		return Ok(auth::jwt_sign::JwtSignAuth::new_invalid(error));
 	}
 
 	let ttl = convert_jwt_sign_ttl(jwt_sign.ttl.take())?;
@@ -1441,15 +1442,30 @@ fn backend_auth_kind_from_proto(
 			})
 		},
 		Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(s)) => {
-			BackendAuthKind::OAuthTokenExchange(Box::new(
-				auth::oauth::OAuthTokenExchangeAuth::from_proto(s, diagnostics)?,
-			))
+			let oauth = match auth::oauth::OAuthTokenExchangeAuth::from_proto(s, diagnostics) {
+				Ok(oauth) => oauth,
+				Err(error) => {
+					let error = proto_error_detail(error);
+					diagnostics.add_warning(format!(
+						"OAuth token exchange configuration is invalid; requests using this policy will be rejected: {error}"
+					));
+					auth::oauth::OAuthTokenExchangeAuth::new_invalid(error)
+				},
+			};
+			BackendAuthKind::OAuthTokenExchange(Box::new(oauth))
 		},
 		Some(proto::agent::backend_auth_policy::Kind::CrossAppAccess(s)) => {
-			BackendAuthKind::CrossAppAccess(Box::new(auth::oauth::CrossAppAccessAuth::from_proto(
-				s,
-				diagnostics,
-			)?))
+			let cross_app_access = match auth::oauth::CrossAppAccessAuth::from_proto(s, diagnostics) {
+				Ok(cross_app_access) => cross_app_access,
+				Err(error) => {
+					let error = proto_error_detail(error);
+					diagnostics.add_warning(format!(
+						"crossAppAccess configuration is invalid; requests using this policy will be rejected: {error}"
+					));
+					auth::oauth::CrossAppAccessAuth::new_invalid(error)
+				},
+			};
+			BackendAuthKind::CrossAppAccess(Box::new(cross_app_access))
 		},
 		Some(proto::agent::backend_auth_policy::Kind::JwtSign(jwt_sign)) => {
 			let jwt_sign = match jwt_sign_from_proto(jwt_sign) {
@@ -1467,6 +1483,13 @@ fn backend_auth_kind_from_proto(
 		},
 		None => return Ok(None),
 	}))
+}
+
+fn proto_error_detail(error: ProtoError) -> String {
+	match error {
+		ProtoError::Generic(detail) => detail,
+		other => other.to_string(),
+	}
 }
 
 fn listener_protocol_from_proto(
@@ -4439,6 +4462,127 @@ mod tests {
 		}
 	}
 
+	#[rstest::rstest]
+	#[case::oauth_error_preserved(
+		proto::agent::backend_auth_policy::Kind::OauthTokenExchange(proto::agent::OAuthTokenExchange {
+			translation_error: Some("missing Secret default/oauth-client".to_string()),
+			token_endpoint_path: Some("/valid-looking".to_string()),
+			..Default::default()
+		}),
+		"oauthTokenExchange",
+		"missing Secret default/oauth-client",
+		0
+	)]
+	#[case::cross_app_access_missing_field(
+		proto::agent::backend_auth_policy::Kind::CrossAppAccess(
+			proto::agent::CrossAppAccessAuth::default()
+		),
+		"crossAppAccess",
+		"missing required field",
+		1
+	)]
+	#[case::cross_app_access_error_preserved(
+		proto::agent::backend_auth_policy::Kind::CrossAppAccess(proto::agent::CrossAppAccessAuth {
+			translation_error: Some("secret default/idp-signing-key not found".to_string()),
+			..Default::default()
+		}),
+		"crossAppAccess",
+		"secret default/idp-signing-key not found",
+		0
+	)]
+	fn invalid_backend_auth_xds_configuration_is_stored(
+		#[case] kind: proto::agent::backend_auth_policy::Kind,
+		#[case] variant: &str,
+		#[case] detail: &str,
+		#[case] warning_count: usize,
+	) {
+		let mut diagnostics = Diagnostics::default();
+		let kind = backend_auth_kind_from_proto(
+			proto::agent::BackendAuthPolicy {
+				kind: Some(kind),
+				..Default::default()
+			},
+			&mut diagnostics,
+		)
+		.expect("invalid policy must be accepted")
+		.expect("backend auth kind must be retained");
+
+		assert_eq!(
+			serde_json::to_value(&kind).unwrap(),
+			json!({variant: {"translationError": detail}})
+		);
+		let warnings = diagnostics.into_warnings();
+		assert_eq!(warnings.len(), warning_count, "{warnings:?}");
+		if let Some(warning) = warnings.first() {
+			assert!(warning.contains(detail), "{warnings:?}");
+		}
+	}
+
+	#[test]
+	fn oauth_proto_validation_failures_become_invalid_runtime_state() {
+		let invalid_private_key = proto::agent::OAuthTokenExchange {
+			client_auth: Some(proto::agent::OAuthClientAuth {
+				client_id: "gateway-client".to_string(),
+				method: proto::agent::o_auth_client_auth::Method::PrivateKeyJwt as i32,
+				private_key_jwt: Some(proto::agent::o_auth_client_auth::PrivateKeyJwt {
+					signing_key: "not a PEM key".to_string(),
+					assertion_audience: "https://issuer.example/token".to_string(),
+					..Default::default()
+				}),
+				..Default::default()
+			}),
+			..Default::default()
+		};
+		let invalid_configs = [
+			invalid_private_key,
+			proto::agent::OAuthTokenExchange {
+				token_endpoint_path: Some("missing-leading-slash".to_string()),
+				..Default::default()
+			},
+			proto::agent::OAuthTokenExchange {
+				authorization_location: Some(proto::agent::AuthorizationLocation {
+					kind: Some(proto::agent::authorization_location::Kind::Expression(
+						"request.path".to_string(),
+					)),
+				}),
+				..Default::default()
+			},
+			proto::agent::OAuthTokenExchange {
+				client_auth: Some(proto::agent::OAuthClientAuth {
+					client_id: "gateway-client".to_string(),
+					client_secret: Some("secret".to_string()),
+					method: proto::agent::o_auth_client_auth::Method::PrivateKeyJwt as i32,
+					..Default::default()
+				}),
+				..Default::default()
+			},
+		];
+
+		for oauth in invalid_configs {
+			let mut diagnostics = Diagnostics::default();
+			let kind = backend_auth_kind_from_proto(
+				proto::agent::BackendAuthPolicy {
+					kind: Some(proto::agent::backend_auth_policy::Kind::OauthTokenExchange(
+						oauth,
+					)),
+					..Default::default()
+				},
+				&mut diagnostics,
+			)
+			.expect("invalid OAuth policy must be accepted")
+			.expect("backend auth kind must be retained");
+			let BackendAuthKind::OAuthTokenExchange(oauth) = kind else {
+				panic!("expected OAuth token exchange");
+			};
+			assert!(
+				serde_json::to_value(oauth).unwrap()["translationError"]
+					.as_str()
+					.is_some_and(|error| !error.is_empty())
+			);
+			assert_eq!(diagnostics.into_warnings().len(), 1);
+		}
+	}
+
 	fn conditional_traffic_policy(
 		condition: &str,
 		kind: proto::agent::traffic_policy_spec::Kind,
@@ -5216,9 +5360,7 @@ mod tests {
 			serde_json::to_value(jwt_sign).expect("invalid jwtSign should serialize"),
 			json!({"translationError": expected})
 		);
-		let warnings = diagnostics.into_warnings();
-		assert_eq!(warnings.len(), 1);
-		assert!(warnings[0].contains(expected));
+		assert!(diagnostics.is_empty());
 	}
 
 	#[test]

@@ -34,8 +34,23 @@ pub use client_auth::{OAuthClientAuth, OAuthClientAuthMethod, PrivateKeyJwt};
 pub use cross_app_access::CrossAppAccessAuth;
 pub(super) use transport::FetchError;
 
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(untagged)]
+enum OAuthTokenExchangeState {
+	Valid(Box<OAuthTokenExchangeConfig>),
+	Invalid {
+		#[serde(rename = "translationError")]
+		reason: String,
+	},
+}
+
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(transparent)]
+pub struct OAuthTokenExchangeAuth(OAuthTokenExchangeState);
+
 #[apply(schema!)]
-pub struct OAuthTokenExchangeAuth {
+#[cfg_attr(feature = "schema", schemars(rename = "OAuthTokenExchangeAuth"))]
+struct OAuthTokenExchangeConfig {
 	// ----- Token endpoint -----
 	/// Backend serving the RFC 8693 token endpoint and policies used when connecting to it.
 	#[serde(flatten)]
@@ -102,6 +117,32 @@ pub struct OAuthTokenExchangeAuth {
 	// Optional RFC 7523 jwt-bearer hop used internally by ID-JAG.
 	#[serde(skip)]
 	chained_exchange: Option<ChainedExchange>,
+}
+
+impl<'de> serde::Deserialize<'de> for OAuthTokenExchangeAuth {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		OAuthTokenExchangeConfig::deserialize(deserializer).map(Into::into)
+	}
+}
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for OAuthTokenExchangeAuth {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		"OAuthTokenExchangeAuth".into()
+	}
+
+	fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		OAuthTokenExchangeConfig::json_schema(generator)
+	}
+}
+
+impl From<OAuthTokenExchangeConfig> for OAuthTokenExchangeAuth {
+	fn from(config: OAuthTokenExchangeConfig) -> Self {
+		Self(OAuthTokenExchangeState::Valid(Box::new(config)))
+	}
 }
 
 #[serde_with::serde_as]
@@ -173,6 +214,143 @@ const RESERVED_FORM_PARAMS: &[&str] = &[
 ];
 
 impl OAuthTokenExchangeAuth {
+	pub(crate) fn new_invalid(error: String) -> Self {
+		Self(OAuthTokenExchangeState::Invalid { reason: error })
+	}
+
+	fn invalid_reason(&self) -> Option<&str> {
+		match &self.0 {
+			OAuthTokenExchangeState::Valid(_) => None,
+			OAuthTokenExchangeState::Invalid { reason } => Some(reason),
+		}
+	}
+
+	fn config(&self) -> Option<&OAuthTokenExchangeConfig> {
+		match &self.0 {
+			OAuthTokenExchangeState::Valid(config) => Some(config),
+			OAuthTokenExchangeState::Invalid { .. } => None,
+		}
+	}
+
+	fn require_config(
+		&self,
+		config_kind: &'static str,
+	) -> Result<&OAuthTokenExchangeConfig, ProxyError> {
+		match &self.0 {
+			OAuthTokenExchangeState::Valid(config) => Ok(config),
+			OAuthTokenExchangeState::Invalid { .. } => {
+				debug!("rejecting request: {config_kind} configuration is invalid");
+				Err(ProxyError::BackendAuthenticationFailed(
+					BackendAuthError::local(anyhow::anyhow!("{config_kind} configuration is invalid")),
+				))
+			},
+		}
+	}
+
+	pub(crate) fn validate_load(&self) -> Result<(), String> {
+		match &self.0 {
+			OAuthTokenExchangeState::Valid(config) => config.validate_load(),
+			OAuthTokenExchangeState::Invalid { .. } => {
+				Err("OAuth token exchange configuration is invalid".into())
+			},
+		}
+	}
+
+	pub(crate) fn from_proto(
+		mut t: proto::OAuthTokenExchange,
+		diagnostics: &mut Diagnostics,
+	) -> Result<Self, ProtoError> {
+		use proto::o_auth_token_exchange::GrantType;
+
+		if let Some(error) = t.translation_error.take() {
+			let error = if error.trim().is_empty() {
+				"OAuth token exchange configuration is invalid".to_string()
+			} else {
+				error
+			};
+			return Ok(Self::new_invalid(error));
+		}
+
+		let target = resolve_simple_reference(t.token_endpoint.as_ref());
+		let policies =
+			crate::types::agent_xds::backend_policies_from_proto(&t.inline_policies, diagnostics)?;
+		let path = t.token_endpoint_path.unwrap_or_default();
+
+		let grant_type = match GrantType::try_from(t.grant_type) {
+			Ok(GrantType::Unspecified | GrantType::TokenExchange) => OAuthGrantType::TokenExchange,
+			Ok(GrantType::JwtBearer) => OAuthGrantType::JwtBearer,
+			Err(_) => return Err(ProtoError::EnumParse("unknown oauth grant type".into())),
+		};
+
+		let subject_token = t
+			.subject_token
+			.map(|s| token_spec_from_proto(s, diagnostics))
+			.transpose()?
+			.unwrap_or_default();
+
+		let actor_token = t
+			.actor_token
+			.map(|s| actor_token_from_proto(s, diagnostics))
+			.transpose()?;
+
+		let requested_token_type = match t.requested_token_type {
+			Some(token_type) if !token_type.is_empty() => Some(proto_requested_token_type(
+				"requested_token_type",
+				&token_type,
+			)?),
+			_ => None,
+		};
+		if requested_token_type == Some(OAuthTokenType::IdJag) {
+			return Err(ProtoError::Generic(
+				"requested_token_type id-jag is only supported by local backendAuth.crossAppAccess".into(),
+			));
+		}
+
+		let client_auth = t.client_auth.map(OAuthClientAuth::try_from).transpose()?;
+
+		let authorization_location =
+			optional_authorization_location(t.authorization_location.as_ref())?.unwrap_or_default();
+
+		let additional_params = t
+			.additional_params
+			.into_iter()
+			.map(|(k, v)| {
+				let expr = permissive_cel_expression_arc(
+					diagnostics,
+					format!("backendAuth.oauth.additionalParams.{k}"),
+					v,
+				);
+				(k, expr)
+			})
+			.collect::<BTreeMap<_, _>>();
+
+		let cache = token_cache_from_proto(t.cache)?;
+
+		let config = OAuthTokenExchangeConfig {
+			target: SimpleBackendReferenceWithPolicies {
+				target: Arc::new(target),
+				policies,
+			},
+			path,
+			grant_type,
+			subject_token,
+			actor_token,
+			audiences: t.audiences,
+			scopes: t.scopes,
+			resources: t.resources,
+			requested_token_type,
+			client_auth,
+			additional_params,
+			chained_exchange: None,
+			authorization_location,
+			cache,
+		};
+		config.validate_load().map_err(ProtoError::Generic)?;
+		Ok(config.into())
+	}
+}
+
+impl OAuthTokenExchangeConfig {
 	pub(crate) fn validate_load(&self) -> Result<(), String> {
 		if !self.path.is_empty() && !self.path.starts_with('/') {
 			return Err(format!("path {:?} must start with /", self.path));
@@ -236,90 +414,6 @@ impl OAuthTokenExchangeAuth {
 			);
 		}
 		Ok(())
-	}
-
-	pub(crate) fn from_proto(
-		t: proto::OAuthTokenExchange,
-		diagnostics: &mut Diagnostics,
-	) -> Result<Self, ProtoError> {
-		use proto::o_auth_token_exchange::GrantType;
-
-		let target = resolve_simple_reference(t.token_endpoint.as_ref());
-		let policies =
-			crate::types::agent_xds::backend_policies_from_proto(&t.inline_policies, diagnostics)?;
-		let path = t.token_endpoint_path.unwrap_or_default();
-
-		let grant_type = match GrantType::try_from(t.grant_type) {
-			Ok(GrantType::Unspecified | GrantType::TokenExchange) => OAuthGrantType::TokenExchange,
-			Ok(GrantType::JwtBearer) => OAuthGrantType::JwtBearer,
-			Err(_) => return Err(ProtoError::EnumParse("unknown oauth grant type".into())),
-		};
-
-		let subject_token = t
-			.subject_token
-			.map(|s| token_spec_from_proto(s, diagnostics))
-			.transpose()?
-			.unwrap_or_default();
-
-		let actor_token = t
-			.actor_token
-			.map(|s| actor_token_from_proto(s, diagnostics))
-			.transpose()?;
-
-		let requested_token_type = match t.requested_token_type {
-			Some(token_type) if !token_type.is_empty() => Some(proto_requested_token_type(
-				"requested_token_type",
-				&token_type,
-			)?),
-			_ => None,
-		};
-		if requested_token_type == Some(OAuthTokenType::IdJag) {
-			return Err(ProtoError::Generic(
-				"requested_token_type id-jag is only supported by local backendAuth.crossAppAccess".into(),
-			));
-		}
-
-		let client_auth = t.client_auth.map(OAuthClientAuth::try_from).transpose()?;
-
-		let authorization_location =
-			optional_authorization_location(t.authorization_location.as_ref())?.unwrap_or_default();
-
-		let additional_params = t
-			.additional_params
-			.into_iter()
-			.map(|(k, v)| {
-				let expr = permissive_cel_expression_arc(
-					diagnostics,
-					format!("backendAuth.oauth.additionalParams.{k}"),
-					v,
-				);
-				(k, expr)
-			})
-			.collect::<BTreeMap<_, _>>();
-
-		let cache = token_cache_from_proto(t.cache)?;
-
-		let auth = Self {
-			target: SimpleBackendReferenceWithPolicies {
-				target: Arc::new(target),
-				policies,
-			},
-			path,
-			grant_type,
-			subject_token,
-			actor_token,
-			audiences: t.audiences,
-			scopes: t.scopes,
-			resources: t.resources,
-			requested_token_type,
-			client_auth,
-			additional_params,
-			chained_exchange: None,
-			authorization_location,
-			cache,
-		};
-		auth.validate_load().map_err(ProtoError::Generic)?;
-		Ok(auth)
 	}
 
 	fn requested_token_type_param(&self) -> Option<OAuthTokenType> {
@@ -732,6 +826,8 @@ pub(super) async fn apply_token_exchange(
 	auth: &OAuthTokenExchangeAuth,
 	req: &mut Request,
 ) -> Result<bool, ProxyError> {
+	let auth = auth.require_config("OAuth token exchange")?;
+
 	let client = PolicyClient::new(inputs.clone()).with_parent(req);
 
 	let access_token = fetch_token(&client, auth, auth.build_exchange_request(req)?)
@@ -748,7 +844,9 @@ pub(super) async fn apply_identity_assertion(
 	auth: &CrossAppAccessAuth,
 	req: &mut Request,
 ) -> Result<bool, ProxyError> {
-	let oauth = auth.oauth_token_exchange();
+	let oauth = auth
+		.oauth_token_exchange()
+		.require_config("crossAppAccess")?;
 	let client = PolicyClient::new(inputs.clone()).with_parent(req);
 
 	trace!(audience = %auth.audience(), "performing ID-JAG identity assertion exchange");
@@ -864,7 +962,7 @@ fn proto_requested_token_type(field: &str, token_type: &str) -> Result<OAuthToke
 
 async fn fetch_token(
 	client: &PolicyClient,
-	auth: &OAuthTokenExchangeAuth,
+	auth: &OAuthTokenExchangeConfig,
 	req: ExchangeRequest,
 ) -> Result<SecretString, FetchError> {
 	let result = match auth.cache.as_ref() {
@@ -890,7 +988,7 @@ async fn fetch_token(
 
 async fn fetch_token_uncached(
 	client: &PolicyClient,
-	auth: &OAuthTokenExchangeAuth,
+	auth: &OAuthTokenExchangeConfig,
 	req: &ExchangeRequest,
 ) -> Result<transport::TokenEndpointResponse, FetchError> {
 	let first =
