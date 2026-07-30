@@ -7,50 +7,31 @@ use crate::http::jwt::Claims;
 use crate::llm::bedrock::AwsRegion;
 use crate::test_helpers::proxymock::setup_proxy_test;
 
-#[test]
-fn test_jwt_claim_times() {
-	let cases = [
-		(
-			100,
-			Duration::from_secs(300),
-			Duration::from_secs(10),
-			JwtClaimTimes {
-				issued_at: 90,
-				expires_at: 400,
-			},
-		),
-		(
-			100,
-			Duration::from_millis(1500),
-			Duration::from_secs(10),
-			JwtClaimTimes {
-				issued_at: 90,
-				expires_at: 102,
-			},
-		),
-		(
-			5,
-			Duration::from_secs(30),
-			Duration::from_secs(10),
-			JwtClaimTimes {
-				issued_at: 0,
-				expires_at: 35,
-			},
-		),
-	];
-
-	for (now, lifetime, issued_at_backdate, expected) in cases {
-		assert_eq!(
-			jwt_claim_times(now, lifetime, issued_at_backdate).unwrap(),
-			expected
-		);
-	}
+#[rstest::rstest]
+#[case::normal(100, Duration::from_secs(300), Duration::from_secs(10), 90, 400)]
+#[case::fractional_lifetime(100, Duration::from_millis(1500), Duration::from_secs(10), 90, 102)]
+#[case::issued_at_underflow(5, Duration::from_secs(30), Duration::from_secs(10), 0, 35)]
+fn test_jwt_claim_times(
+	#[case] now: u64,
+	#[case] lifetime: Duration,
+	#[case] issued_at_backdate: Duration,
+	#[case] expected_issued_at: u64,
+	#[case] expected_expires_at: u64,
+) {
+	assert_eq!(
+		jwt_claim_times(now, lifetime, issued_at_backdate).unwrap(),
+		JwtClaimTimes {
+			issued_at: expected_issued_at,
+			expires_at: expected_expires_at,
+		}
+	);
 }
 
-#[test]
-fn test_jwt_claim_times_rejects_expiration_overflow() {
-	assert!(jwt_claim_times(u64::MAX, Duration::from_secs(1), Duration::from_secs(10)).is_err());
-	assert!(jwt_claim_times(1, Duration::new(u64::MAX, 1), Duration::from_secs(10)).is_err());
+#[rstest::rstest]
+#[case::timestamp(u64::MAX, Duration::from_secs(1))]
+#[case::rounded_lifetime(1, Duration::new(u64::MAX, 1))]
+fn test_jwt_claim_times_rejects_expiration_overflow(#[case] now: u64, #[case] lifetime: Duration) {
+	assert!(jwt_claim_times(now, lifetime, Duration::from_secs(10)).is_err());
 }
 
 #[test]

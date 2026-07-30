@@ -66,7 +66,7 @@ func testValidJwtSign(t base.Test) {
 }
 
 func testInvalidJwtSign(t base.Test) {
-	const missingSecret = "jwt-sign-secret-missing"
+	const missingKeyRef = "jwt-sign-secret-missing"
 	t.Apply(manifest("backendauth", "invalid-jwt-sign.yaml"))
 	t.HTTPRouteAccepted("route-backendauth-invalid-jwt-sign", base.Namespace)
 
@@ -84,7 +84,7 @@ func testInvalidJwtSign(t base.Test) {
 				if condition.Type == string(agentgateway.PolicyConditionAccepted) &&
 					condition.Status == metav1.ConditionTrue &&
 					condition.Reason == string(agentgateway.PolicyReasonPartiallyValid) &&
-					strings.Contains(condition.Message, missingSecret) {
+					strings.Contains(condition.Message, missingKeyRef) {
 					return nil
 				}
 			}
@@ -96,7 +96,7 @@ func testInvalidJwtSign(t base.Test) {
 		StatusCode: http.StatusInternalServerError,
 		Body: gomega.And(
 			gomega.ContainSubstring("backend authentication failed: jwtSign configuration is invalid"),
-			gomega.Not(gomega.ContainSubstring(missingSecret)),
+			gomega.Not(gomega.ContainSubstring(missingKeyRef)),
 		),
 	})
 }

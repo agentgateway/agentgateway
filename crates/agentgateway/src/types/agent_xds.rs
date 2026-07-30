@@ -1117,6 +1117,41 @@ fn backend_auth_credentials_from_proto(
 		.collect()
 }
 
+fn jwt_sign_from_proto(
+	mut jwt_sign: proto::agent::JwtSign,
+) -> Result<auth::jwt_sign::JwtSignAuth, String> {
+	if let Some(error) = jwt_sign.translation_error.take() {
+		return Err(if error.trim().is_empty() {
+			"jwtSign configuration is invalid".to_string()
+		} else {
+			error
+		});
+	}
+
+	let ttl = convert_jwt_sign_ttl(jwt_sign.ttl.take())?;
+	let location = optional_authorization_location(jwt_sign.authorization_location.as_ref())
+		.map_err(|error| error.to_string())?;
+	let alg = auth::signing_alg_from_proto(jwt_sign.alg)
+		.ok_or_else(|| "unknown jwt_sign signing alg".to_string())?;
+	let claims = jwt_sign
+		.claims
+		.into_iter()
+		.map(|(key, value)| {
+			let value = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
+			(key, value)
+		})
+		.collect();
+
+	auth::jwt_sign::JwtSignAuth::try_new(
+		jwt_sign.signing_key.trim(),
+		alg,
+		jwt_sign.kid,
+		claims,
+		ttl,
+		location,
+	)
+}
+
 fn backend_auth_kind_from_proto(
 	s: proto::agent::BackendAuthPolicy,
 	diagnostics: &mut Diagnostics,
@@ -1320,50 +1355,19 @@ fn backend_auth_kind_from_proto(
 				diagnostics,
 			)?))
 		},
-		Some(proto::agent::backend_auth_policy::Kind::JwtSign(mut j)) => {
-			let jwt_sign = if let Some(error) = j.translation_error.take() {
-				Err(if error.trim().is_empty() {
-					"jwtSign configuration is invalid".to_string()
-				} else {
-					error
-				})
-			} else {
-				(|| {
-					let ttl = convert_jwt_sign_ttl(j.ttl.take())?;
-					let location = optional_authorization_location(j.authorization_location.as_ref())
-						.map_err(|error| error.to_string())?;
-					let alg = auth::signing_alg_from_proto(j.alg)
-						.ok_or_else(|| "unknown jwt_sign signing alg".to_string())?;
-					let claims = j
-						.claims
-						.into_iter()
-						.map(|(key, value)| {
-							let value = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
-							(key, value)
-						})
-						.collect();
-					auth::jwt_sign::JwtSignAuth::try_new(
-						j.signing_key.trim(),
-						alg,
-						j.kid,
-						claims,
-						ttl,
-						location,
-					)
-				})()
-			};
-
-			match jwt_sign {
-				Ok(jwt_sign) => BackendAuthKind::JwtSign(Box::new(jwt_sign)),
+		Some(proto::agent::backend_auth_policy::Kind::JwtSign(jwt_sign)) => {
+			let jwt_sign = match jwt_sign_from_proto(jwt_sign) {
+				Ok(jwt_sign) => jwt_sign,
 				Err(error) => {
 					// Match invalid TLS handling: accept the xDS resource with a warning,
 					// but retain a runtime configuration that rejects when used.
 					diagnostics.add_warning(format!(
 						"jwtSign configuration is invalid; requests using this policy will be rejected: {error}"
 					));
-					BackendAuthKind::JwtSign(Box::new(auth::jwt_sign::JwtSignAuth::new_invalid(error)))
+					auth::jwt_sign::JwtSignAuth::new_invalid(error)
 				},
-			}
+			};
+			BackendAuthKind::JwtSign(Box::new(jwt_sign))
 		},
 		None => return Ok(None),
 	}))
@@ -4636,39 +4640,38 @@ mod tests {
 		Ok(())
 	}
 
-	#[test]
-	fn jwt_sign_translation_error_becomes_runtime_invalid() {
-		let cases = [
-			(
-				"secret default/recognizable-marker not found",
-				"secret default/recognizable-marker not found",
-			),
-			(" \t", "jwtSign configuration is invalid"),
-		];
-		for (translation_error, expected) in cases {
-			let mut diagnostics = Diagnostics::default();
-			let jwt_sign = jwt_sign_from_proto_for_test(
-				proto::agent::JwtSign {
-					signing_key: "not a PEM key".to_string(),
-					alg: i32::MAX,
-					// translation_error takes precedence over normal field validation.
-					ttl: Some(prost_types::Duration {
-						seconds: -1,
-						nanos: 0,
-					}),
-					translation_error: Some(translation_error.to_string()),
-					..Default::default()
-				},
-				&mut diagnostics,
-			);
-			assert_eq!(
-				serde_json::to_value(jwt_sign).expect("invalid jwtSign should serialize"),
-				json!({"translationError": expected})
-			);
-			let warnings = diagnostics.into_warnings();
-			assert_eq!(warnings.len(), 1);
-			assert!(warnings[0].contains(expected));
-		}
+	#[rstest::rstest]
+	#[case::diagnostic(
+		"secret default/recognizable-marker not found",
+		"secret default/recognizable-marker not found"
+	)]
+	#[case::empty(" \t", "jwtSign configuration is invalid")]
+	fn jwt_sign_translation_error_becomes_runtime_invalid(
+		#[case] translation_error: &str,
+		#[case] expected: &str,
+	) {
+		let mut diagnostics = Diagnostics::default();
+		let jwt_sign = jwt_sign_from_proto_for_test(
+			proto::agent::JwtSign {
+				signing_key: "not a PEM key".to_string(),
+				alg: i32::MAX,
+				// translation_error takes precedence over normal field validation.
+				ttl: Some(prost_types::Duration {
+					seconds: -1,
+					nanos: 0,
+				}),
+				translation_error: Some(translation_error.to_string()),
+				..Default::default()
+			},
+			&mut diagnostics,
+		);
+		assert_eq!(
+			serde_json::to_value(jwt_sign).expect("invalid jwtSign should serialize"),
+			json!({"translationError": expected})
+		);
+		let warnings = diagnostics.into_warnings();
+		assert_eq!(warnings.len(), 1);
+		assert!(warnings[0].contains(expected));
 	}
 
 	#[test]
@@ -4729,36 +4732,25 @@ mod tests {
 		);
 	}
 
-	#[test]
-	fn invalid_jwt_sign_ttl_becomes_runtime_invalid() {
-		let cases = [
-			prost_types::Duration {
-				seconds: -1,
-				nanos: 0,
+	#[rstest::rstest]
+	#[case::negative(-1, 0)]
+	#[case::invalid_nanos(1, 1_000_000_000)]
+	fn invalid_jwt_sign_ttl_becomes_runtime_invalid(#[case] seconds: i64, #[case] nanos: i32) {
+		let mut diagnostics = Diagnostics::default();
+		let jwt_sign = jwt_sign_from_proto_for_test(
+			proto::agent::JwtSign {
+				ttl: Some(prost_types::Duration { seconds, nanos }),
+				..Default::default()
 			},
-			prost_types::Duration {
-				seconds: 1,
-				nanos: 1_000_000_000,
-			},
-		];
-
-		for ttl in cases {
-			let mut diagnostics = Diagnostics::default();
-			let jwt_sign = jwt_sign_from_proto_for_test(
-				proto::agent::JwtSign {
-					ttl: Some(ttl),
-					..Default::default()
-				},
-				&mut diagnostics,
-			);
-			let serialized = serde_json::to_value(jwt_sign).expect("invalid jwtSign should serialize");
-			assert!(
-				serialized["translationError"]
-					.as_str()
-					.is_some_and(|error| error.contains("ttl"))
-			);
-			assert_eq!(diagnostics.into_warnings().len(), 1);
-		}
+			&mut diagnostics,
+		);
+		let serialized = serde_json::to_value(jwt_sign).expect("invalid jwtSign should serialize");
+		assert!(
+			serialized["translationError"]
+				.as_str()
+				.is_some_and(|error| error.contains("ttl"))
+		);
+		assert_eq!(diagnostics.into_warnings().len(), 1);
 	}
 
 	#[test]

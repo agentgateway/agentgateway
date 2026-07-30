@@ -3,8 +3,9 @@ package plugins
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
-	"sort"
+	slices0 "slices"
 	"strings"
 
 	jsonpb "google.golang.org/protobuf/encoding/protojson"
@@ -715,13 +716,7 @@ func translateMcpIDP(provider *agentgateway.McpIDP) api.BackendPolicySpec_McpAut
 func translateJSONValueMap(valueContext string, values map[string]apiextensionsv1.JSON) (map[string]*structpb.Value, error) {
 	var errs []error
 	var translated map[string]*structpb.Value
-	keys := make([]string, 0, len(values))
-	for key := range values {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-
-	for _, key := range keys {
+	for _, key := range slices0.Sorted(maps.Keys(values)) {
 		if translated == nil {
 			translated = make(map[string]*structpb.Value)
 		}
@@ -949,7 +944,7 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 			jwtSignAuth = &api.BackendAuthPolicy{
 				Kind: &api.BackendAuthPolicy_JwtSign{
 					JwtSign: &api.JwtSign{
-						TranslationError: ptr.Of(err.Error()),
+						TranslationError: new(err.Error()),
 					},
 				},
 			}
