@@ -26,8 +26,10 @@ aliases also passed short Responses, Chat Completions, and Messages probes. Back
 subagents, context compaction near the limit, and long-running sessions have not been tested.
 
 The Responses converter is stateless and requires `store: false`. Streaming requests must also set
-`stream_options.include_obfuscation: false`. It adds no provider configuration and covers the supported overlap
-between Responses and Messages, including streaming, tools, media, refusals, and usage.
+`stream_options.include_obfuscation: false`. Caller metadata and cache hints (`client_metadata`,
+`metadata`, `prompt_cache_key`, and `prompt_cache_retention`) are discarded because Messages has no
+equivalent and they do not change the converted request. It adds no provider configuration and covers
+the supported overlap between Responses and Messages, including streaming, tools, media, refusals, and usage.
 Text is forwarded incrementally. Anthropic reports refusal status only at the end of a stream, so
 a refusal reported after text has already been emitted terminates with `refusal_after_streaming`
 instead of retyping the earlier `output_text` events or emitting `response.completed`.
