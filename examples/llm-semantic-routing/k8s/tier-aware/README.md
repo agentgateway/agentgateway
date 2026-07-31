@@ -155,6 +155,7 @@ for tier in basic standard pro; do
     --set-json \
       "args=[\"--secure=false\",\"--namespace=semantic-router-${tier}\"]"
 done
+```
 
 Wait for the ExtProc deployments:
 
