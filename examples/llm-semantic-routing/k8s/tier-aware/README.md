@@ -54,7 +54,8 @@ providers.
 This example requires:
 
 - agentgateway v1.4.0 or later, including the matching CRDs, for conditional
-  ExtProc and `AgentgatewayModel` support.
+  ExtProc and `AgentgatewayModel` support. Enable the experimental model API
+  with the agentgateway Helm value `agentgatewayModels.enabled=true`.
 - A running `Gateway` named `agentgateway-proxy` in the
   `agentgateway-system` namespace.
 - OpenAI and Anthropic API credentials.
@@ -64,6 +65,20 @@ Follow the agentgateway guides to
 [install agentgateway](https://agentgateway.dev/docs/kubernetes/main/install/helm/)
 and
 [set up a Gateway](https://agentgateway.dev/docs/kubernetes/main/setup/gateway/).
+
+For example, enable model routing on an existing Helm installation while
+retaining its other values:
+
+```bash
+export AGENTGATEWAY_VERSION=v1.4.1
+
+helm upgrade agentgateway \
+  oci://ghcr.io/agentgateway/charts/agentgateway \
+  --version "${AGENTGATEWAY_VERSION}" \
+  --namespace agentgateway-system \
+  --reuse-values \
+  --set agentgatewayModels.enabled=true
+```
 
 Create provider credentials in the Gateway namespace:
 
