@@ -4,7 +4,7 @@ use http::HeaderMap;
 use serde::Serialize;
 
 use crate::cel::{ContextBuilder, Expression};
-use crate::http::Response;
+use crate::http::{PolicyResponseExt, Response};
 use crate::proxy;
 use crate::proxy::dtrace;
 use crate::proxy::httpproxy::PolicyClient;

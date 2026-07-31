@@ -74,16 +74,15 @@ pub mod proto {
 }
 
 mod buffering;
-mod channel;
 mod headers;
 mod mutation;
 mod processing;
 
+pub use crate::proxy::httpproxy::GrpcReferenceChannel;
 use buffering::{
 	BufferedBodyPhase, PendingBufferedBody, attach_request_body_channel,
 	debug_assert_preserved_request_body, start_buffered_request_body, start_buffered_response_body,
 };
-pub use channel::GrpcReferenceChannel;
 use headers::{req_to_header_map, resp_to_header_map, to_header_map};
 #[cfg(test)]
 use mutation::extract_dynamic_metadata;

@@ -8,8 +8,8 @@ use http_body::{Frame, SizeHint};
 use http_body_util::BodyExt;
 use pin_project_lite::pin_project;
 
-use crate::http::Body;
-use crate::http::buflist::BufList;
+use crate::Body;
+use crate::buflist::BufList;
 
 pin_project! {
 	struct PartiallyBufferedBody {
@@ -24,7 +24,7 @@ pin_project! {
 
 impl http_body::Body for PartiallyBufferedBody {
 	type Data = Bytes;
-	type Error = crate::http::Error;
+	type Error = crate::Error;
 
 	fn poll_frame(
 		mut self: Pin<&mut Self>,
@@ -49,10 +49,6 @@ impl http_body::Body for PartiallyBufferedBody {
 			&& self.trailers.is_none()
 	}
 
-	/// Returns the bounds on the remaining length of the stream.
-	///
-	/// When the **exact** remaining length of the stream is known, the upper bound will be set and
-	/// will equal the lower bound.
 	fn size_hint(&self) -> SizeHint {
 		let rem = self.buffer.remaining();
 		let mut rest = self.inner.size_hint();
@@ -64,8 +60,9 @@ impl http_body::Body for PartiallyBufferedBody {
 	}
 }
 
-/// inspect_body inspects up to `limit` bytes from the Body. The original body (should be) unchanged.
-/// Warning: you MUST poll the returned future to completion, or the original body will be missing data.
+/// Inspects up to `limit` bytes from the body and restores the original body stream.
+///
+/// The returned future must be polled to completion, otherwise the original body may be missing data.
 pub async fn inspect_body(body: &mut Body, limit: usize) -> anyhow::Result<Bytes> {
 	let mut orig = std::mem::replace(body, Body::empty());
 	let mut buffer = BufList::default();
@@ -81,7 +78,7 @@ pub async fn inspect_body(body: &mut Body, limit: usize) -> anyhow::Result<Bytes
 						break;
 					}
 					buffer.push(data.clone());
-					want -= cmp::max(want_this_read, 0);
+					want -= want_this_read;
 					if want == 0 {
 						break;
 					}
@@ -99,8 +96,6 @@ pub async fn inspect_body(body: &mut Body, limit: usize) -> anyhow::Result<Bytes
 		}
 	}
 
-	// Despite the name, 'copy_to_bytes' takes the data, not copies it.
-	// So we send a clone.
 	let mut blc = buffer.clone();
 	let ret = blc.copy_to_bytes(cmp::min(buffer.remaining(), limit));
 	let nb = PartiallyBufferedBody {
@@ -122,17 +117,12 @@ mod tests {
 	use http_body::Body as _;
 
 	use super::*;
-	use crate::http::Body;
+	use crate::Body;
 
 	pub async fn read(body: Body) -> Bytes {
-		crate::http::read_body_with_limit(body, 1_097_152)
-			.await
-			.unwrap()
+		crate::read_body_with_limit(body, 1_097_152).await.unwrap()
 	}
 
-	// -----------------------------------------------------------------
-	// 4.1  Simple sanity checks
-	// -----------------------------------------------------------------
 	#[tokio::test]
 	async fn inspect_empty_body() {
 		let mut original = Body::empty();
@@ -179,7 +169,6 @@ mod tests {
 
 	#[tokio::test]
 	async fn inspect_partial() {
-		// 100 repeated 'a' bytes
 		let payload = Bytes::from_iter(std::iter::repeat_n(b'a', 100));
 		let mut original = Body::from(payload.clone());
 
@@ -195,7 +184,6 @@ mod tests {
 	#[tokio::test]
 	async fn trailers_buffered() {
 		use http_body_util::BodyExt;
-		// 10 repeated 'a' bytes, each their own chunk, with trailers
 		let payload = Bytes::from_iter(std::iter::repeat_n(b'a', 10));
 		let trailers =
 			HeaderMap::try_from(&HashMap::from([("k".to_string(), "v".to_string())])).unwrap();
@@ -204,13 +192,12 @@ mod tests {
 			.chain(std::iter::once(Ok::<_, std::io::Error>(
 				http_body::Frame::trailers(trailers.clone()),
 			)));
-		let mut original = crate::http::Body::new(http_body_util::StreamBody::new(
-			futures_util::stream::iter(frames),
-		));
+		let mut original = Body::new(http_body_util::StreamBody::new(futures_util::stream::iter(
+			frames,
+		)));
 
 		let hint = original.size_hint();
 		let inspected = inspect_body(&mut original, 99).await.unwrap();
-		// Here we intentionally change the hint, since we have some more info
 		assert_eq!(10, original.size_hint().lower());
 		assert_eq!(hint.upper(), original.size_hint().upper());
 
@@ -224,7 +211,6 @@ mod tests {
 	#[tokio::test]
 	async fn inspect_long_body_multiple_chunks() {
 		use http_body_util::BodyExt;
-		// 100 repeated 'a' bytes, each their own chunk, with trailers
 		let payload = Bytes::from_iter(std::iter::repeat_n(b'a', 100));
 		let trailers =
 			HeaderMap::try_from(&HashMap::from([("k".to_string(), "v".to_string())])).unwrap();
@@ -233,13 +219,12 @@ mod tests {
 			.chain(std::iter::once(Ok::<_, std::io::Error>(
 				http_body::Frame::trailers(trailers.clone()),
 			)));
-		let mut original = crate::http::Body::new(http_body_util::StreamBody::new(
-			futures_util::stream::iter(frames),
-		));
+		let mut original = Body::new(http_body_util::StreamBody::new(futures_util::stream::iter(
+			frames,
+		)));
 
 		let hint = original.size_hint();
 		let inspected = inspect_body(&mut original, 99).await.unwrap();
-		// Here we intentionally change the hint, since we have some more info
 		assert_eq!(99, original.size_hint().lower());
 		assert_eq!(hint.upper(), original.size_hint().upper());
 

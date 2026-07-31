@@ -4,7 +4,7 @@ pub mod timeout;
 
 pub mod buffer;
 pub mod bufferbody;
-mod buflist;
+pub use agent_http::buflist;
 pub mod cors;
 pub mod delay;
 pub mod jwt;
@@ -25,7 +25,6 @@ pub mod ext_proc;
 pub(crate) mod oauth;
 pub mod oidc;
 pub mod outlierdetection;
-mod peekbody;
 mod recordbody;
 pub mod remoteratelimit;
 pub mod sessionpersistence;
@@ -33,8 +32,14 @@ pub mod tests_common;
 pub mod transformation_cel;
 
 pub use agent_http::{
-	Body, BufferLimit, Error, Request, Response, buffer_limit, read_body_with_limit,
-	response_buffer_limit, x_headers,
+	Authority, Body, BodyInspection, BufferLimit, BufferedBody, Error, HeaderMap,
+	HeaderMutationAction, HeaderName, HeaderOrPseudo, HeaderOrPseudoValue, HeaderValue, Method,
+	PolicyResponse, Request, RequestOrResponse, Response, Scheme, StatusCode, Uri, buffer_limit,
+	get_path_and_query, get_pseudo_header_value, get_pseudo_or_header_value,
+	get_request_pseudo_headers, inspect_body, inspect_body_with_limit, inspect_response_body,
+	merge_in_headers, modify_query_parameters, modify_req, modify_req_uri, modify_uri,
+	read_body_with_limit, read_req_body, read_resp_body, read_response_body, response_buffer_limit,
+	version_str, x_headers,
 };
 pub use recordbody::{RecordedBody, RecordedBodyHandle};
 
@@ -102,352 +107,24 @@ impl SendDirectResponse {
 	}
 }
 
-pub fn version_str(v: &http::Version) -> &'static str {
-	match *v {
-		http::Version::HTTP_09 => "HTTP/0.9",
-		http::Version::HTTP_10 => "HTTP/1.0",
-		http::Version::HTTP_11 => "HTTP/1.1",
-		http::Version::HTTP_2 => "HTTP/2",
-		http::Version::HTTP_3 => "HTTP/3",
-		_ => "unknown",
-	}
-}
-
-/// A mutable handle that can represent either a request or a response
-#[derive(Debug)]
-pub enum RequestOrResponse<'a> {
-	Request(&'a mut Request),
-	Response(&'a mut Response),
-}
-
-impl<'a> From<&'a mut Request> for RequestOrResponse<'a> {
-	fn from(req: &'a mut Request) -> Self {
-		RequestOrResponse::Request(req)
-	}
-}
-
-impl<'a> From<&'a mut Response> for RequestOrResponse<'a> {
-	fn from(req: &'a mut Response) -> RequestOrResponse<'a> {
-		RequestOrResponse::Response(req)
-	}
-}
-
-impl RequestOrResponse<'_> {
-	pub fn headers(&mut self) -> &mut http::HeaderMap {
-		match self {
-			RequestOrResponse::Request(r) => r.headers_mut(),
-			RequestOrResponse::Response(r) => r.headers_mut(),
-		}
-	}
-	pub fn body(&mut self) -> &mut Body {
-		match self {
-			RequestOrResponse::Request(r) => r.body_mut(),
-			RequestOrResponse::Response(r) => r.body_mut(),
-		}
-	}
-	pub fn apply_header(
-		&mut self,
-		k: &HeaderOrPseudo,
-		v: Option<HeaderOrPseudoValue>,
-		action: HeaderMutationAction,
-	) {
-		match (k, v) {
-			(HeaderOrPseudo::Header(k), Some(HeaderOrPseudoValue::Header(v))) => {
-				// Normalize modification of host header to authority header.
-				if k == header::HOST && matches!(self, RequestOrResponse::Request(_)) {
-					let Some(value) = HeaderOrPseudoValue::from_raw(&HeaderOrPseudo::Authority, v.as_bytes())
-					else {
-						return;
-					};
-					self.headers().remove(header::HOST);
-					self.apply_header(&HeaderOrPseudo::Authority, Some(value), action);
-					return;
-				}
-
-				let exists = self.headers().contains_key(k);
-				if !action.should_apply(exists) {
-					return;
-				}
-				if action.should_append() {
-					self.headers().append(k.clone(), v);
-				} else {
-					self.headers().insert(k.clone(), v);
-				}
-			},
-			(HeaderOrPseudo::Header(k), None) => {
-				// Need to sanitize it, so a failed execution cannot mean the user can set arbitrary headers.
-				self.headers().remove(k);
-			},
-			(_, Some(HeaderOrPseudoValue::Method(v))) => {
-				if let RequestOrResponse::Request(r) = self {
-					*r.method_mut() = v;
-				}
-			},
-			(_, Some(HeaderOrPseudoValue::Scheme(v))) => {
-				if let RequestOrResponse::Request(r) = self {
-					let _ = modify_req_uri(r, |uri| {
-						uri.scheme = Some(v);
-						Ok(())
-					});
-				}
-			},
-			(_, Some(HeaderOrPseudoValue::Authority(v))) => {
-				if let RequestOrResponse::Request(r) = self {
-					let _ = modify_req_uri(r, |uri| {
-						uri.authority = Some(v);
-						if uri.scheme.is_none() {
-							// When authority is set, scheme must also be set
-							// TODO: do the same for HeaderOrPseudo::Scheme
-							uri.scheme = Some(Scheme::HTTP);
-						}
-						Ok(())
-					});
-				}
-			},
-			(_, Some(HeaderOrPseudoValue::Path(v))) => {
-				if let RequestOrResponse::Request(r) = self {
-					let _ = modify_req_uri(r, |uri| {
-						uri.path_and_query = Some(v);
-						Ok(())
-					});
-				}
-			},
-			(_, Some(HeaderOrPseudoValue::Status(v))) => {
-				if let RequestOrResponse::Response(r) = self {
-					*r.status_mut() = v;
-				}
-			},
-			(_, None) => {
-				// Invalid, do nothing
-			},
-			(_, _) => {
-				unreachable!("invalid k/v pair")
-			},
-		}
-	}
-}
-
 use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
 use std::ops::Deref;
 use std::pin::Pin;
-use std::str::FromStr;
 use std::task::{Context, Poll};
 
-pub use ::http::uri::{Authority, Scheme};
-pub use ::http::{
-	HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header, status, uri,
-};
+pub use ::http::{header, status, uri};
 use axum_core::BoxError;
 use bytes::Bytes;
-use cel::Value;
-use http::uri::PathAndQuery;
 use http_body::{Frame, SizeHint};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tower_serve_static::private::mime;
-use url::{Url, form_urlencoded};
+use url::Url;
 
 use crate::cel::{BackendContext, DestinationContext, LLMContext, RequestTime, SourceContext};
 use crate::client::PoolKey;
 use crate::proxy::{ProxyError, ProxyResponse};
 use crate::transport::stream::TCPConnectionInfo;
 use crate::types::agent::{HeaderValueMatch, PathMatch};
-
-/// Represents either an HTTP header or an HTTP/2 pseudo-header
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum HeaderOrPseudo {
-	Header(HeaderName),
-	Method,
-	Scheme,
-	Authority,
-	Path,
-	Status,
-}
-
-/// Represents a value for an HTTP header or an HTTP/2 pseudo-header
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum HeaderOrPseudoValue {
-	Header(HeaderValue),
-	Method(Method),
-	Scheme(Scheme),
-	Authority(Authority),
-	Path(PathAndQuery),
-	Status(StatusCode),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum HeaderMutationAction {
-	AppendIfExistsOrAdd,
-	AddIfAbsent,
-	OverwriteIfExistsOrAdd,
-	OverwriteIfExists,
-}
-
-impl HeaderMutationAction {
-	pub fn should_apply(self, exists: bool) -> bool {
-		match self {
-			HeaderMutationAction::AppendIfExistsOrAdd | HeaderMutationAction::OverwriteIfExistsOrAdd => {
-				true
-			},
-			HeaderMutationAction::AddIfAbsent => !exists,
-			HeaderMutationAction::OverwriteIfExists => exists,
-		}
-	}
-
-	pub fn should_append(self) -> bool {
-		matches!(self, HeaderMutationAction::AppendIfExistsOrAdd)
-	}
-}
-
-impl HeaderOrPseudoValue {
-	pub fn from_raw(k: &HeaderOrPseudo, raw: &[u8]) -> Option<HeaderOrPseudoValue> {
-		match k {
-			HeaderOrPseudo::Header(_) => HeaderValue::from_bytes(raw)
-				.ok()
-				.map(HeaderOrPseudoValue::Header),
-			HeaderOrPseudo::Status => std::str::from_utf8(raw)
-				.ok()
-				.and_then(|s| s.parse::<u16>().ok())
-				.and_then(|s| StatusCode::from_u16(s).ok())
-				.map(HeaderOrPseudoValue::Status),
-			HeaderOrPseudo::Method => ::http::Method::from_bytes(raw)
-				.ok()
-				.map(HeaderOrPseudoValue::Method),
-			HeaderOrPseudo::Scheme => ::http::uri::Scheme::try_from(raw)
-				.ok()
-				.map(HeaderOrPseudoValue::Scheme),
-			HeaderOrPseudo::Authority => ::http::uri::Authority::try_from(raw)
-				.ok()
-				.map(HeaderOrPseudoValue::Authority),
-			HeaderOrPseudo::Path => ::http::uri::PathAndQuery::try_from(raw)
-				.ok()
-				.map(HeaderOrPseudoValue::Path),
-		}
-	}
-
-	pub fn from_cel_result(k: &HeaderOrPseudo, res: Option<Value>) -> Option<HeaderOrPseudoValue> {
-		match (res?.always_materialize_owned(), k) {
-			(v, HeaderOrPseudo::Header(_)) => v
-				.as_bytes_pre_materialized()
-				.ok()
-				.and_then(|b| HeaderValue::from_bytes(b).ok())
-				.map(HeaderOrPseudoValue::Header),
-			(v, HeaderOrPseudo::Status) => v
-				.as_unsigned()
-				.ok()
-				.and_then(|v| u16::try_from(v).ok())
-				.and_then(|v| StatusCode::from_u16(v).ok())
-				.map(HeaderOrPseudoValue::Status),
-			(v, HeaderOrPseudo::Method) => v
-				.as_bytes_pre_materialized()
-				.ok()
-				.and_then(|b| ::http::Method::from_bytes(b).ok())
-				.map(HeaderOrPseudoValue::Method),
-			(v, HeaderOrPseudo::Scheme) => v
-				.as_bytes_pre_materialized()
-				.ok()
-				.and_then(|b| ::http::uri::Scheme::try_from(b).ok())
-				.map(HeaderOrPseudoValue::Scheme),
-			(v, HeaderOrPseudo::Authority) => v
-				.as_bytes_pre_materialized()
-				.ok()
-				.and_then(|b| ::http::uri::Authority::try_from(b).ok())
-				.map(HeaderOrPseudoValue::Authority),
-			(v, HeaderOrPseudo::Path) => v
-				.as_bytes_pre_materialized()
-				.ok()
-				.and_then(|b| ::http::uri::PathAndQuery::try_from(b).ok())
-				.map(HeaderOrPseudoValue::Path),
-		}
-	}
-}
-
-impl TryFrom<&str> for HeaderOrPseudo {
-	type Error = ::http::header::InvalidHeaderName;
-
-	fn try_from(value: &str) -> Result<Self, Self::Error> {
-		match value {
-			":method" => Ok(HeaderOrPseudo::Method),
-			":scheme" => Ok(HeaderOrPseudo::Scheme),
-			":authority" => Ok(HeaderOrPseudo::Authority),
-			":path" => Ok(HeaderOrPseudo::Path),
-			":status" => Ok(HeaderOrPseudo::Status),
-			_ => HeaderName::try_from(value).map(HeaderOrPseudo::Header),
-		}
-	}
-}
-
-impl Serialize for HeaderOrPseudo {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: Serializer,
-	{
-		match self {
-			HeaderOrPseudo::Header(h) => h.as_str().serialize(serializer),
-			HeaderOrPseudo::Method => ":method".serialize(serializer),
-			HeaderOrPseudo::Scheme => ":scheme".serialize(serializer),
-			HeaderOrPseudo::Authority => ":authority".serialize(serializer),
-			HeaderOrPseudo::Path => ":path".serialize(serializer),
-			HeaderOrPseudo::Status => ":status".serialize(serializer),
-		}
-	}
-}
-
-impl<'de> Deserialize<'de> for HeaderOrPseudo {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-	where
-		D: Deserializer<'de>,
-	{
-		let s = String::deserialize(deserializer)?;
-
-		match s.as_str() {
-			":method" => Ok(HeaderOrPseudo::Method),
-			":scheme" => Ok(HeaderOrPseudo::Scheme),
-			":authority" => Ok(HeaderOrPseudo::Authority),
-			":path" => Ok(HeaderOrPseudo::Path),
-			":status" => Ok(HeaderOrPseudo::Status),
-			_ => Ok(HeaderOrPseudo::Header(
-				HeaderName::from_str(&s).map_err(serde::de::Error::custom)?,
-			)),
-		}
-	}
-}
-
-#[cfg(feature = "schema")]
-impl schemars::JsonSchema for HeaderOrPseudo {
-	fn schema_name() -> std::borrow::Cow<'static, str> {
-		"HeaderOrPseudo".into()
-	}
-
-	fn json_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
-		schemars::json_schema!({ "type": "string" })
-	}
-}
-
-impl std::fmt::Display for HeaderOrPseudo {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			HeaderOrPseudo::Header(h) => write!(f, "{}", h.as_str()),
-			HeaderOrPseudo::Method => write!(f, ":method"),
-			HeaderOrPseudo::Scheme => write!(f, ":scheme"),
-			HeaderOrPseudo::Authority => write!(f, ":authority"),
-			HeaderOrPseudo::Path => write!(f, ":path"),
-			HeaderOrPseudo::Status => write!(f, ":status"),
-		}
-	}
-}
-
-/// Extract the value for a pseudo header or header from the request
-pub fn get_pseudo_or_header_value<'a>(
-	pseudo: &HeaderOrPseudo,
-	req: &'a Request,
-) -> Option<std::borrow::Cow<'a, HeaderValue>> {
-	match pseudo {
-		HeaderOrPseudo::Header(v) => req.headers().get(v).map(std::borrow::Cow::Borrowed),
-		_ => get_pseudo_header_value(pseudo, req)
-			.and_then(|v| HeaderValue::try_from(&v).ok().map(std::borrow::Cow::Owned)),
-	}
-}
 
 /// Match repeated header fields independently without splitting commas within a field value.
 pub(crate) fn request_header_matches(
@@ -463,81 +140,6 @@ pub(crate) fn request_header_matches(
 			.any(|have| value.matches(have)),
 		_ => get_pseudo_or_header_value(name, req).is_some_and(|have| value.matches(have.as_ref())),
 	}
-}
-
-/// Extract the value for a pseudo header from the request
-pub fn get_pseudo_header_value(pseudo: &HeaderOrPseudo, req: &Request) -> Option<String> {
-	match pseudo {
-		HeaderOrPseudo::Method => Some(req.method().to_string()),
-		HeaderOrPseudo::Scheme => req.uri().scheme().map(|s| s.to_string()),
-		HeaderOrPseudo::Authority => req.uri().authority().map(|a| a.to_string()).or_else(|| {
-			req
-				.headers()
-				.get("host")
-				.and_then(|h| h.to_str().ok().map(|s| s.to_string()))
-		}),
-		HeaderOrPseudo::Path => req
-			.uri()
-			.path_and_query()
-			.map(|pq| pq.to_string())
-			.or_else(|| Some(req.uri().path().to_string())),
-		HeaderOrPseudo::Status => None,    // no status for requests
-		HeaderOrPseudo::Header(_) => None, // skip regular headers
-	}
-}
-
-/// Return all present request pseudo headers without introducing defaults
-pub fn get_request_pseudo_headers(req: &Request) -> Vec<(HeaderOrPseudo, String)> {
-	let mut out = Vec::with_capacity(4);
-	if let Some(v) = get_pseudo_header_value(&HeaderOrPseudo::Method, req) {
-		out.push((HeaderOrPseudo::Method, v));
-	}
-	if let Some(v) = get_pseudo_header_value(&HeaderOrPseudo::Scheme, req) {
-		out.push((HeaderOrPseudo::Scheme, v));
-	}
-	if let Some(v) = get_pseudo_header_value(&HeaderOrPseudo::Authority, req) {
-		out.push((HeaderOrPseudo::Authority, v));
-	}
-	if let Some(v) = get_pseudo_header_value(&HeaderOrPseudo::Path, req) {
-		out.push((HeaderOrPseudo::Path, v));
-	}
-	out
-}
-
-pub fn modify_req(
-	req: &mut Request,
-	f: impl FnOnce(&mut ::http::request::Parts) -> anyhow::Result<()>,
-) -> anyhow::Result<()> {
-	let nreq = std::mem::take(req);
-	let (mut head, body) = nreq.into_parts();
-	f(&mut head)?;
-	*req = Request::from_parts(head, body);
-	Ok(())
-}
-
-pub fn modify_req_uri(
-	req: &mut Request,
-	f: impl FnOnce(&mut uri::Parts) -> anyhow::Result<()>,
-) -> anyhow::Result<()> {
-	let nreq = std::mem::take(req);
-	let (mut head, body) = nreq.into_parts();
-	let mut parts = head.uri.into_parts();
-	f(&mut parts)?;
-	head.uri = Uri::from_parts(parts)?;
-	*req = Request::from_parts(head, body);
-	Ok(())
-}
-
-pub fn modify_uri(
-	head: &mut http::request::Parts,
-	f: impl FnOnce(&mut uri::Parts) -> anyhow::Result<()>,
-) -> anyhow::Result<()> {
-	let nreq = std::mem::take(&mut head.uri);
-
-	let mut parts = nreq.into_parts();
-	f(&mut parts)?;
-	head.uri = Uri::from_parts(parts)?;
-	Ok(())
 }
 
 pub fn as_url(uri: &Uri) -> anyhow::Result<Url> {
@@ -577,87 +179,6 @@ pub fn modify_url(
 	f(&mut url)?;
 	*uri = url_to_uri(&url)?;
 	Ok(())
-}
-
-pub fn modify_query_parameters<S, R, KSet, VSet, KRemove>(
-	uri: &mut Uri,
-	query_parameters_to_set: S,
-	query_parameters_to_remove: R,
-) -> anyhow::Result<()>
-where
-	S: IntoIterator<Item = (KSet, VSet)>,
-	R: IntoIterator<Item = KRemove>,
-	KSet: AsRef<str>,
-	VSet: AsRef<str>,
-	KRemove: AsRef<str>,
-{
-	let query_parameters_to_set = query_parameters_to_set
-		.into_iter()
-		.map(|(key, value)| (key.as_ref().to_owned(), value.as_ref().to_owned()))
-		.collect::<Vec<_>>();
-	let query_parameters_to_remove = query_parameters_to_remove
-		.into_iter()
-		.map(|key| key.as_ref().to_owned())
-		.collect::<Vec<_>>();
-
-	if query_parameters_to_set.is_empty() && query_parameters_to_remove.is_empty() {
-		return Ok(());
-	}
-
-	let mut parts = std::mem::take(uri).into_parts();
-	let path = parts
-		.path_and_query
-		.as_ref()
-		.map(|pq| pq.path())
-		.filter(|path| !path.is_empty())
-		.unwrap_or("/");
-	let query = parts
-		.path_and_query
-		.as_ref()
-		.and_then(|pq| pq.query())
-		.unwrap_or_default();
-	let mut pairs = form_urlencoded::parse(query.as_bytes())
-		.map(|(key, value)| (key.into_owned(), value.into_owned()))
-		.collect::<Vec<_>>();
-
-	for (key, value) in query_parameters_to_set {
-		pairs.retain(|(current_key, _)| current_key != &key);
-		pairs.push((key, value));
-	}
-
-	if !query_parameters_to_remove.is_empty() {
-		pairs.retain(|(key, _)| {
-			!query_parameters_to_remove
-				.iter()
-				.any(|remove| remove == key)
-		});
-	}
-
-	let mut updated = form_urlencoded::Serializer::new(String::new());
-	for (key, value) in pairs {
-		updated.append_pair(&key, &value);
-	}
-
-	let updated = updated.finish();
-	let new_path: Result<PathAndQuery, _> = if updated.is_empty() {
-		path.to_string()
-	} else {
-		format!("{path}?{updated}")
-	}
-	.parse();
-	match new_path {
-		Ok(p) => {
-			parts.path_and_query = Some(p);
-			*uri = Uri::from_parts(parts)?;
-			Ok(())
-		},
-		Err(e) => {
-			// Just a backup, in the event that somehow our new param was invalid we still set the URI
-			// so its not wiped out
-			*uri = Uri::from_parts(parts)?;
-			Err(e.into())
-		},
-	}
 }
 
 #[derive(Debug)]
@@ -701,13 +222,6 @@ pub fn is_grpc_content_type(headers: &HeaderMap) -> bool {
 			.is_some_and(|prefix| prefix.eq_ignore_ascii_case("application/grpc+"))
 }
 
-pub fn get_path_and_query(req: &Uri) -> &str {
-	req
-		.path_and_query()
-		.map(|pq| pq.as_str())
-		.unwrap_or_else(|| req.path())
-}
-
 pub fn get_host(req: &Request) -> Result<&str, ProxyError> {
 	// We expect a normalized request, so this will always be in the URI
 	// TODO: handle absolute HTTP/1.1 form
@@ -726,108 +240,18 @@ pub fn get_host_with_port(req: &Request) -> Result<&str, ProxyError> {
 	Ok(host)
 }
 
-pub async fn read_req_body(req: Request) -> Result<Bytes, axum_core::Error> {
-	let lim = buffer_limit(&req);
-	read_body_with_limit(req.into_body(), lim).await
+pub trait PolicyResponseExt {
+	fn apply(self, hm: &mut HeaderMap) -> Result<(), ProxyResponse>;
 }
 
-pub async fn read_resp_body(resp: Response) -> Result<Bytes, axum_core::Error> {
-	let lim = response_buffer_limit(&resp);
-	read_body_with_limit(resp.into_body(), lim).await
-}
-
-pub async fn read_response_body(
-	resp: Response,
-) -> Result<(::http::response::Parts, Bytes), axum_core::Error> {
-	let lim = response_buffer_limit(&resp);
-	let (h, b) = resp.into_parts();
-	read_body_with_limit(b, lim).await.map(|b| (h, b))
-}
-
-/// Result of inspecting a body without consuming it from the caller's perspective.
-#[derive(Debug)]
-#[must_use]
-pub enum BodyInspection {
-	/// The complete body fit within the configured limit.
-	Complete(Bytes),
-	/// The body exceeded the limit. Contains the first `limit` bytes.
-	Partial(Bytes),
-}
-
-pub async fn inspect_body(req: &mut Request) -> anyhow::Result<BodyInspection> {
-	let lim = buffer_limit(req);
-	inspect_body_with_limit(req.body_mut(), lim).await
-}
-
-pub async fn inspect_response_body(resp: &mut Response) -> anyhow::Result<BodyInspection> {
-	let lim = response_buffer_limit(resp);
-	inspect_body_with_limit(resp.body_mut(), lim).await
-}
-
-pub async fn inspect_body_with_limit(
-	body: &mut Body,
-	limit: usize,
-) -> anyhow::Result<BodyInspection> {
-	let mut bytes = peekbody::inspect_body(body, limit.saturating_add(1)).await?;
-	if bytes.len() > limit {
-		bytes.truncate(limit);
-		Ok(BodyInspection::Partial(bytes))
-	} else {
-		Ok(BodyInspection::Complete(bytes))
-	}
-}
-
-#[derive(Debug, Default)]
-#[must_use]
-pub struct PolicyResponse {
-	pub direct_response: Option<Response>,
-	pub response_headers: Option<crate::http::HeaderMap>,
-}
-
-impl PolicyResponse {
-	pub fn apply(self, hm: &mut HeaderMap) -> Result<(), ProxyResponse> {
+impl PolicyResponseExt for PolicyResponse {
+	fn apply(self, hm: &mut HeaderMap) -> Result<(), ProxyResponse> {
 		if let Some(mut dr) = self.direct_response {
 			merge_in_headers(self.response_headers, dr.headers_mut());
 			Err(ProxyResponse::DirectResponse(Box::new(dr)))
 		} else {
 			merge_in_headers(self.response_headers, hm);
 			Ok(())
-		}
-	}
-	pub fn should_short_circuit(&self) -> bool {
-		self.direct_response.is_some()
-	}
-	pub fn with_response(self, other: Response) -> Self {
-		PolicyResponse {
-			direct_response: Some(other),
-			response_headers: self.response_headers,
-		}
-	}
-	pub fn merge(self, other: Self) -> Self {
-		if other.direct_response.is_some() {
-			other
-		} else {
-			match (self.response_headers, other.response_headers) {
-				(None, None) => PolicyResponse::default(),
-				(a, b) => PolicyResponse {
-					direct_response: None,
-					response_headers: Some({
-						let mut hm = HeaderMap::new();
-						merge_in_headers(a, &mut hm);
-						merge_in_headers(b, &mut hm);
-						hm
-					}),
-				},
-			}
-		}
-	}
-}
-
-pub fn merge_in_headers(additional_headers: Option<HeaderMap>, dest: &mut HeaderMap) {
-	if let Some(rh) = additional_headers {
-		for (k, v) in rh.into_iter() {
-			let Some(k) = k else { continue };
-			dest.insert(k, v);
 		}
 	}
 }

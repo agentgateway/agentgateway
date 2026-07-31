@@ -15,7 +15,7 @@ mimalloc = ["pprof-alloc/allocator-mimalloc", "dep:mimalloc"]
 tls-aws-lc = ["rustls/aws_lc_rs", "tokio-rustls/aws_lc_rs"]
 tls-openssl = ["dep:openssl", "dep:rustls-openssl"]
 ui = []
-schema = ["schemars", "agent-core/schema", "agent-llm/schema"]
+schema = ["schemars", "agent-core/schema", "agent-http/schema", "agent-llm/schema", "agent-policy/schema"]
 internal_benches = ["divan"]
 assert_size_runtime = ["agent-core/assert_size_runtime"]
 
@@ -25,6 +25,7 @@ agent-celx.workspace = true
 agent-hbone.workspace = true
 agent-http.workspace = true
 agent-llm.workspace = true
+agent-policy.workspace = true
 agent-xds.workspace = true
 agent-pool.workspace = true
 anyhow.workspace = true

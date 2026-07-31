@@ -1,5 +1,5 @@
 [package]
-name = "agent-http"
+name = "agent-policy-simple"
 version = { workspace = true }
 license = { workspace = true }
 edition = { workspace = true }
@@ -9,11 +9,12 @@ publish = { workspace = true }
 path = "src/lib.rs"
 
 [dependencies]
-axum.workspace = true
-axum-core.workspace = true
-bytes.workspace = true
-http.workspace = true
+agent-http.workspace = true
+agent-policy.workspace = true
+
+[dev-dependencies]
+agent-policy = { workspace = true, features = ["testing"] }
+tokio.workspace = true
 
 [lints.rust]
-# This rule makes code more confusing
 mismatched_lifetime_syntaxes = "allow"

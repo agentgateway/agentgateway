@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 use agent_core::env::ENV;
 use agent_core::strng::Strng;
+use agent_http::BufferedBody;
 use bytes::Bytes;
 use cel::common::ast::OptimizedExpr;
 use cel::context::VariableResolver;
@@ -480,8 +481,7 @@ static DUMP: Lazy<Expression> =
 impl ExecutorResolver<'_> {
 	pub fn slow_debug(&self) -> serde_json::Value {
 		let expr = &DUMP;
-		let cel_value =
-			Value::resolve(expr.expression.expression(), context(), self).unwrap_or(Value::Null);
+		let cel_value = Value::resolve(expr.ast(), context(), self).unwrap_or(Value::Null);
 		let mut v = cel_value.json().unwrap_or(serde_json::Value::Null);
 		// Filter nulls which are just noisy
 		if let serde_json::Value::Object(obj) = &mut v {
@@ -716,7 +716,7 @@ impl<'a> Executor<'a> {
 	pub fn eval(&'a self, expr: &'a Expression) -> Result<Value<'a>, Error> {
 		let resolver = ExecutorResolver { executor: self };
 		let start = dtrace::timed_start();
-		let res = Value::resolve(expr.expression.expression(), context(), &resolver);
+		let res = Value::resolve(expr.ast(), context(), &resolver);
 		dtrace::trace(|t| {
 			t.cel_eval(
 				start,
@@ -1128,97 +1128,6 @@ impl<'a> From<&'a crate::http::Response> for ResponseRef<'a> {
 			headers: Headers::new(resp.headers()),
 			body: BodyExtensionOrDirect::Extension(resp.extensions()),
 			body_prefix: BodyPrefixExtensionOrDirect(BodyExtensionOrDirect::Extension(resp.extensions())),
-		}
-	}
-}
-
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub struct BufferedBody(
-	#[cfg_attr(feature = "schema", schemars(with = "String"))] BufferedBodyState,
-);
-
-#[derive(Debug, Clone)]
-enum BufferedBodyState {
-	Complete(Bytes),
-	ExceededLimit(Bytes),
-}
-
-impl BufferedBody {
-	pub fn complete(bytes: Bytes) -> Self {
-		Self(BufferedBodyState::Complete(bytes))
-	}
-
-	pub fn exceeded_limit(bytes: Bytes) -> Self {
-		Self(BufferedBodyState::ExceededLimit(bytes))
-	}
-
-	pub fn bytes(&self) -> Option<&Bytes> {
-		match &self.0 {
-			BufferedBodyState::Complete(bytes) => Some(bytes),
-			BufferedBodyState::ExceededLimit(_) => None,
-		}
-	}
-
-	fn prefix_bytes(&self) -> &Bytes {
-		match &self.0 {
-			BufferedBodyState::Complete(bytes) | BufferedBodyState::ExceededLimit(bytes) => bytes,
-		}
-	}
-
-	fn is_too_large(&self) -> bool {
-		matches!(&self.0, BufferedBodyState::ExceededLimit(_))
-	}
-}
-
-impl From<crate::http::BodyInspection> for BufferedBody {
-	fn from(inspection: crate::http::BodyInspection) -> Self {
-		match inspection {
-			crate::http::BodyInspection::Complete(bytes) => Self::complete(bytes),
-			crate::http::BodyInspection::Partial(bytes) => Self::exceeded_limit(bytes),
-		}
-	}
-}
-
-impl Serialize for BufferedBody {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		use base64::Engine;
-		match &self.0 {
-			BufferedBodyState::Complete(bytes) => {
-				let encoded = base64::engine::general_purpose::STANDARD.encode(bytes);
-				serializer.serialize_str(&encoded)
-			},
-			BufferedBodyState::ExceededLimit(_) => serializer.serialize_none(),
-		}
-	}
-}
-
-impl<'de> Deserialize<'de> for BufferedBody {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-	where
-		D: serde::Deserializer<'de>,
-	{
-		use base64::Engine;
-		let s = String::deserialize(deserializer)?;
-		let bytes = base64::engine::general_purpose::STANDARD
-			.decode(&s)
-			.map_err(serde::de::Error::custom)?;
-		Ok(BufferedBody::complete(Bytes::from(bytes)))
-	}
-}
-
-impl DynamicType for BufferedBody {
-	fn auto_materialize(&self) -> bool {
-		true
-	}
-
-	fn materialize(&self) -> Value<'_> {
-		match &self.0 {
-			BufferedBodyState::Complete(bytes) => Value::Bytes(BytesValue::Bytes(bytes.clone())),
-			BufferedBodyState::ExceededLimit(_) => Value::Null,
 		}
 	}
 }

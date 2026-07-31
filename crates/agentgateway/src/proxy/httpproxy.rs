@@ -28,8 +28,8 @@ use crate::http::filters::{AutoHostname, BackendRequestTimeout};
 use crate::http::transformation_cel::Transformation;
 use crate::http::x_headers::TRACEPARENT;
 use crate::http::{
-	Authority, HeaderName, HeaderValue, Request, Response, Scheme, StatusCode, Uri, auth, filters,
-	merge_in_headers, retry,
+	Authority, HeaderName, HeaderValue, PolicyResponseExt, Request, Response, Scheme, StatusCode,
+	Uri, auth, filters, merge_in_headers, retry,
 };
 use crate::llm::{
 	InputFormat, LLMInfo, LLMRequest, LLMResponse, RequestResult, RouteType, model_router,
@@ -3952,6 +3952,9 @@ pub struct PolicyClient {
 	pub outbound: Option<OutboundCallLabels>,
 }
 
+pub type GrpcReferenceChannel =
+	agent_policy::GrpcReferenceChannel<PolicyClient, SimpleBackendReference, BackendTrafficPolicy>;
+
 impl PolicyClient {
 	pub fn new(inputs: Arc<ProxyInputs>) -> PolicyClient {
 		PolicyClient {
@@ -4104,6 +4107,28 @@ impl PolicyClient {
 		let res = Box::pin(self.inputs.upstream.simple_call(req)).await;
 		self.observe_outbound(start);
 		res
+	}
+}
+
+impl agent_policy::BackendReferenceClient<SimpleBackendReference, BackendTrafficPolicy>
+	for PolicyClient
+{
+	type Error = ProxyError;
+
+	fn with_policy_call(&self, call: agent_policy::PolicyCall) -> Self {
+		let subtype = match call {
+			agent_policy::PolicyCall::ExtAuthz => OutboundCallSubtype::ExtAuthz,
+		};
+		self.with_outbound(OutboundCallKind::Policy, subtype)
+	}
+
+	async fn call_reference_with_policies(
+		&self,
+		req: Request,
+		backend_ref: &SimpleBackendReference,
+		policies: &[BackendTrafficPolicy],
+	) -> Result<Response, Self::Error> {
+		PolicyClient::call_reference_with_policies(self, req, backend_ref, policies).await
 	}
 }
 

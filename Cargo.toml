@@ -15,7 +15,10 @@ members = [
     "crates/llm",
     "crates/pool",
     "crates/core",
-    "crates/http",
+    "crates/http-core",
+    "crates/policy-core",
+    "crates/policies/simple",
+    "crates/policies/advanced",
     "crates/hbone",
     "crates/htpasswd-verify-fork",
     "crates/protos",
@@ -31,7 +34,7 @@ default-members = [
     "crates/llm",
     "crates/pool",
     "crates/core",
-    "crates/http",
+    "crates/http-core",
     "crates/hbone",
     "crates/htpasswd-verify-fork",
     "crates/protos",
@@ -49,8 +52,11 @@ publish = false
 agent-core = { path = "crates/core" }
 agent-celx = { path = "crates/celx" }
 agent-hbone = { path = "crates/hbone" }
-agent-http = { path = "crates/http" }
+agent-http = { path = "crates/http-core" }
 agent-llm = { path = "crates/llm" }
+agent-policy = { path = "crates/policy-core" }
+agent-policy-advanced = { path = "crates/policies/advanced" }
+agent-policy-simple = { path = "crates/policies/simple" }
 agent-pool = { path = "crates/pool" }
 agent-xds = { path = "crates/xds" }
 agentgateway = { path = "crates/agentgateway" }

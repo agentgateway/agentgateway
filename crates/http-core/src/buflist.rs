@@ -3,8 +3,8 @@ use std::io::IoSlice;
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 
-// Liberated from http_body
-// BufList is a list of buffers. It is clone-able, but *not* cheaply
+// Liberated from http_body.
+// BufList is a list of buffers. It is clone-able, but not cheaply.
 #[derive(Clone, Debug)]
 pub struct BufList<T = Bytes> {
 	bufs: VecDeque<T>,
@@ -12,7 +12,7 @@ pub struct BufList<T = Bytes> {
 
 impl<T: Buf> BufList<T> {
 	#[inline]
-	pub(crate) fn push(&mut self, buf: T) {
+	pub fn push(&mut self, buf: T) {
 		debug_assert!(buf.has_remaining());
 		self.bufs.push_back(buf);
 	}
@@ -79,8 +79,6 @@ impl<T: Buf> Buf for BufList<T> {
 
 	#[inline]
 	fn copy_to_bytes(&mut self, len: usize) -> Bytes {
-		// Our inner buffer may have an optimized version of copy_to_bytes, and if the whole
-		// request can be fulfilled by the front buffer, we can take advantage.
 		match self.bufs.front_mut() {
 			Some(front) if front.remaining() == len => {
 				let b = front.copy_to_bytes(len);
@@ -93,7 +91,6 @@ impl<T: Buf> Buf for BufList<T> {
 				assert!(len <= rem, "`len` greater than remaining");
 				let mut bm = BytesMut::with_capacity(len);
 				if rem == len {
-					// .take() costs a lot more, so skip it if we don't need it
 					bm.put(self);
 				} else {
 					bm.put(self.take(len));
