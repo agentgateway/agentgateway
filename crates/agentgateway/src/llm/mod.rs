@@ -262,7 +262,7 @@ fn cache_convention_for(
 	provider_format: Option<custom::ProviderFormat>,
 	chat_output: Option<ChatFormat>,
 	request_model: &str,
-	path: &str,
+	input_format: InputFormat,
 ) -> CacheTokenConvention {
 	use CacheTokenConvention::*;
 	use custom::ProviderFormat::{AnthropicTokenCount, Messages};
@@ -286,6 +286,11 @@ fn cache_convention_for(
 			InputExcludesCache
 		},
 		AIProvider::Vertex(p) if p.is_anthropic_model(request_model) => InputExcludesCache,
+		AIProvider::Vertex(p)
+			if p.is_gemini_model(request_model) && input_format == InputFormat::Messages =>
+		{
+			InputExcludesCache
+		},
 		AIProvider::Azure(p)
 			if matches!(p.resource_type, azure::AzureResourceType::Foundry)
 				&& p.is_anthropic_model(request_model) =>
@@ -2334,7 +2339,7 @@ impl AIProvider {
 			provider_format,
 			chat_output,
 			&llm_info.request_model,
-			parts.uri.path(),
+			original_format,
 		);
 		if let Some(log) = log
 			&& original_format.supports_prompt_guard()

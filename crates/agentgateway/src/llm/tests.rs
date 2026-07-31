@@ -4207,7 +4207,7 @@ fn custom_provider_override_drives_provider_name() {
 fn vertex_anthropic_model_uses_exclusive_convention() {
 	let provider = vertex_provider("anthropic/claude-sonnet-4-5");
 	assert_eq!(
-		cache_convention_for(&provider, None, None, "anthropic/claude-sonnet-4-5", ""),
+		cache_convention_for(&provider, None, None, "anthropic/claude-sonnet-4-5", InputFormat::Completions),
 		CacheTokenConvention::InputExcludesCache,
 	);
 }
@@ -4216,8 +4216,17 @@ fn vertex_anthropic_model_uses_exclusive_convention() {
 fn vertex_non_anthropic_model_uses_inclusive_convention() {
 	let provider = vertex_provider("gemini-2.0-flash");
 	assert_eq!(
-		cache_convention_for(&provider, None, None, "gemini-2.0-flash", ""),
+		cache_convention_for(&provider, None, None, "gemini-2.0-flash", InputFormat::Completions),
 		CacheTokenConvention::InputIncludesCache,
+	);
+}
+
+#[test]
+fn vertex_gemini_messages_uses_exclusive_convention() {
+	let provider = vertex_provider("gemini-2.0-flash");
+	assert_eq!(
+		cache_convention_for(&provider, None, None, "gemini-2.0-flash", InputFormat::Messages),
+		CacheTokenConvention::InputExcludesCache,
 	);
 }
 
@@ -4230,7 +4239,7 @@ fn custom_messages_backend_uses_exclusive_convention() {
 			Some(custom::ProviderFormat::Messages),
 			None,
 			"some-model",
-			""
+			InputFormat::Completions
 		),
 		CacheTokenConvention::InputExcludesCache,
 	);
@@ -4245,7 +4254,7 @@ fn custom_completions_backend_uses_inclusive_convention() {
 			Some(custom::ProviderFormat::Completions),
 			None,
 			"some-model",
-			""
+			InputFormat::Completions
 		),
 		CacheTokenConvention::InputIncludesCache,
 	);
@@ -4261,7 +4270,7 @@ fn fixed_providers_classify_by_family() {
 			None,
 			None,
 			"claude-sonnet-4-5",
-			""
+			InputFormat::Completions
 		),
 		CacheTokenConvention::InputExcludesCache,
 	);
@@ -4274,7 +4283,7 @@ fn fixed_providers_classify_by_family() {
 			Some(custom::ProviderFormat::Completions),
 			None,
 			"gpt-4o",
-			""
+			InputFormat::Completions
 		),
 		CacheTokenConvention::InputIncludesCache,
 	);
