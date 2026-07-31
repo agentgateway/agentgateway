@@ -23,7 +23,7 @@ fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 }
 
 #[test]
-fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
+fn vertex_gemini_uses_native_for_completions_and_messages_compat_for_responses() {
 	let provider = AIProvider::Vertex(vertex::Provider {
 		project_id: strng::new("test-project"),
 		model: None,
@@ -38,12 +38,61 @@ fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
 			.output,
 		ChatFormat::VertexGemini
 	);
-	for input in [InputFormat::Messages, InputFormat::Responses] {
-		assert_eq!(
-			provider.chat_translation(input, model).unwrap().output,
-			ChatFormat::OpenAICompletions
-		);
-	}
+	// Anthropic Messages input also translates natively: we do a better job than Google's
+	// OpenAI-compatible endpoint, and the double hop (Anthropic -> OpenAI -> compat shim) drops
+	// thinking signatures, cache_control and tool_result.is_error.
+	assert_eq!(
+		provider
+			.chat_translation(InputFormat::Messages, model)
+			.unwrap()
+			.output,
+		ChatFormat::VertexGemini
+	);
+
+	// Responses input has no native translator yet and stays on the compat shim.
+	assert_eq!(
+		provider
+			.chat_translation(InputFormat::Responses, model)
+			.unwrap()
+			.output,
+		ChatFormat::OpenAICompletions
+	);
+}
+
+/// Guard, not a red test: today this passes via the compat shim, because `chat_translation` sends
+/// Messages input to `OpenAICompletions`, whose error arm already handles Google -> Anthropic. It
+/// starts failing the moment Messages selects `ChatFormat::VertexGemini`, because that arm has no
+/// `self.input` match and unconditionally emits an OpenAI envelope. Keep it green through the switch.
+#[test]
+fn vertex_gemini_messages_error_uses_anthropic_shape() {
+	let provider = AIProvider::Vertex(vertex::Provider {
+		project_id: strng::new("test-project"),
+		model: None,
+		region: None,
+	});
+	let mut req = llm_request_with_tokens(None);
+	req.input_format = InputFormat::Messages;
+	req.request_model = "gemini-2.5-flash".into();
+
+	let error = Bytes::from_static(
+		br#"{"error":{"code":400,"message":"bad request","status":"INVALID_ARGUMENT"}}"#,
+	);
+	let translated = provider
+		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error)
+		.expect("Google error should translate for a messages client");
+	let body: Value = serde_json::from_slice(&translated).expect("translated error should be JSON");
+
+	// The Anthropic envelope has a top-level "type":"error"; the OpenAI one does not.
+	assert_eq!(
+		body["type"],
+		json!("error"),
+		"messages client must get an Anthropic-shaped error, got: {body}"
+	);
+	assert_eq!(body["error"]["message"], json!("bad request"));
+	assert!(
+		body["error"]["type"].is_string(),
+		"Anthropic errors carry an error.type string, got: {body}"
+	);
 }
 
 #[test]
@@ -1886,7 +1935,12 @@ fn custom_provider_override_drives_provider_name() {
 fn vertex_anthropic_model_uses_exclusive_convention() {
 	let provider = vertex_provider("anthropic/claude-sonnet-4-5");
 	assert_eq!(
-		cache_convention_for(&provider, None, "anthropic/claude-sonnet-4-5"),
+		cache_convention_for(
+			&provider,
+			None,
+			"anthropic/claude-sonnet-4-5",
+			InputFormat::Completions
+		),
 		CacheTokenConvention::InputExcludesCache,
 	);
 }
@@ -1895,8 +1949,22 @@ fn vertex_anthropic_model_uses_exclusive_convention() {
 fn vertex_non_anthropic_model_uses_inclusive_convention() {
 	let provider = vertex_provider("gemini-2.0-flash");
 	assert_eq!(
-		cache_convention_for(&provider, None, "gemini-2.0-flash"),
+		cache_convention_for(
+			&provider,
+			None,
+			"gemini-2.0-flash",
+			InputFormat::Completions
+		),
 		CacheTokenConvention::InputIncludesCache,
+	);
+}
+
+#[test]
+fn vertex_gemini_messages_uses_exclusive_convention() {
+	let provider = vertex_provider("gemini-2.0-flash");
+	assert_eq!(
+		cache_convention_for(&provider, None, "gemini-2.0-flash", InputFormat::Messages),
+		CacheTokenConvention::InputExcludesCache,
 	);
 }
 
@@ -1907,7 +1975,8 @@ fn custom_messages_backend_uses_exclusive_convention() {
 		cache_convention_for(
 			&provider,
 			Some(custom::ProviderFormat::Messages),
-			"some-model"
+			"some-model",
+			InputFormat::Completions
 		),
 		CacheTokenConvention::InputExcludesCache,
 	);
@@ -1920,7 +1989,8 @@ fn custom_completions_backend_uses_inclusive_convention() {
 		cache_convention_for(
 			&provider,
 			Some(custom::ProviderFormat::Completions),
-			"some-model"
+			"some-model",
+			InputFormat::Completions
 		),
 		CacheTokenConvention::InputIncludesCache,
 	);
@@ -1932,7 +2002,8 @@ fn fixed_providers_classify_by_family() {
 		cache_convention_for(
 			&AIProvider::Anthropic(anthropic::Provider { model: None }),
 			None,
-			"claude-sonnet-4-5"
+			"claude-sonnet-4-5",
+			InputFormat::Completions
 		),
 		CacheTokenConvention::InputExcludesCache,
 	);
@@ -1940,8 +2011,127 @@ fn fixed_providers_classify_by_family() {
 		cache_convention_for(
 			&AIProvider::OpenAI(openai::Provider { model: None }),
 			Some(custom::ProviderFormat::Completions),
-			"gpt-4o"
+			"gpt-4o",
+			InputFormat::Completions
 		),
 		CacheTokenConvention::InputIncludesCache,
+	);
+}
+
+// T7.1: Messages input on Vertex + Gemini model routes to Completions (native Gemini body shape).
+#[tokio::test]
+async fn vertex_gemini_messages_routes_natively_with_gemini_body() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::Vertex(vertex::Provider {
+		model: None,
+		region: Some(strng::new("us-central1")),
+		project_id: strng::new("test-project"),
+	});
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("us-central1-aiplatform.googleapis.com", 443)),
+		inputs,
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/messages")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "google/gemini-2.5-flash-lite",
+				"max_tokens": 64,
+				"messages": [{"role": "user", "content": "say hi"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		upstream_route_type,
+		llm_request,
+	} = provider
+		.process_messages_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("Vertex Gemini Messages request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	// Native Gemini path re-uses the Completions route slot.
+	assert_eq!(upstream_route_type, RouteType::Completions);
+	// The provider_state must be VertexGemini so setup_request adds ?alt=sse.
+	assert!(
+		matches!(
+			llm_request.provider_state,
+			Some(ProviderState::VertexGemini)
+		),
+		"provider_state must be VertexGemini for native path, got {:?}",
+		llm_request.provider_state
+	);
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	// Body must be Gemini-shaped, not the Anthropic Vertex envelope.
+	assert!(
+		forwarded_json.get("anthropic_version").is_none(),
+		"Gemini native body must not have anthropic_version, got: {forwarded_json}"
+	);
+	assert!(
+		forwarded_json.get("contents").is_some(),
+		"Gemini native body must have 'contents' field, got: {forwarded_json}"
+	);
+}
+
+// T7.2: setup_request appends ?alt=sse when streaming + ProviderState::VertexGemini.
+#[test]
+fn vertex_gemini_messages_streaming_setup_request_adds_alt_sse() {
+	let provider = AIProvider::Vertex(vertex::Provider {
+		model: None,
+		region: Some(strng::new("us-central1")),
+		project_id: strng::new("test-project"),
+	});
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Messages,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "google/gemini-2.5-flash-lite".into(),
+		provider: Default::default(),
+		streaming: true,
+		params: Default::default(),
+		prompt: None,
+		provider_state: Some(ProviderState::VertexGemini),
+	};
+	let mut req = crate::http::tests_common::request(
+		"https://us-central1-aiplatform.googleapis.com/v1/messages",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Completions,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+		)
+		.expect("setup_request should succeed");
+
+	let query = req.uri().query().unwrap_or("");
+	assert!(
+		query.contains("alt=sse"),
+		"streaming Vertex Gemini path must include ?alt=sse, got query: {query:?}"
+	);
+	assert!(
+		req.uri().path().contains(":streamGenerateContent"),
+		"streaming path must end in :streamGenerateContent, got: {}",
+		req.uri().path()
 	);
 }

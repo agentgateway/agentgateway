@@ -198,9 +198,10 @@ pub mod from_messages {
 			.map(|r| match r {
 				completions::FinishReason::Stop => messages::StopReason::EndTurn,
 				completions::FinishReason::Length => messages::StopReason::MaxTokens,
-				completions::FinishReason::ToolCalls => messages::StopReason::ToolUse,
+				completions::FinishReason::ToolCalls | completions::FinishReason::FunctionCall => {
+					messages::StopReason::ToolUse
+				},
 				completions::FinishReason::ContentFilter => messages::StopReason::EndTurn,
-				completions::FinishReason::FunctionCall => messages::StopReason::ToolUse,
 			})
 			.unwrap_or(messages::StopReason::EndTurn);
 
@@ -627,9 +628,10 @@ pub mod from_messages {
 							let stop_reason = match finish_reason {
 								completions::FinishReason::Stop => messages::StopReason::EndTurn,
 								completions::FinishReason::Length => messages::StopReason::MaxTokens,
-								completions::FinishReason::ToolCalls => messages::StopReason::ToolUse,
-								completions::FinishReason::ContentFilter => messages::StopReason::Refusal,
-								completions::FinishReason::FunctionCall => messages::StopReason::ToolUse,
+								completions::FinishReason::ToolCalls | completions::FinishReason::FunctionCall => {
+									messages::StopReason::ToolUse
+								},
+								completions::FinishReason::ContentFilter => messages::StopReason::EndTurn,
 							};
 							state.pending_stop_reason = Some(stop_reason);
 						}
@@ -670,7 +672,7 @@ pub mod from_messages {
 
 	/// Convert an Anthropic image source JSON value into an OpenAI-compatible URL string.
 	/// Base64 sources become `data:` URIs; URL sources pass through directly.
-	fn anthropic_source_to_url(source: &serde_json::Value) -> Option<String> {
+	pub(crate) fn anthropic_source_to_url(source: &serde_json::Value) -> Option<String> {
 		let source_type = source.get("type")?.as_str()?;
 		match source_type {
 			"base64" => {

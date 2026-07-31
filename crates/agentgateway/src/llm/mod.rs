@@ -228,6 +228,7 @@ fn cache_convention_for(
 	provider: &AIProvider,
 	provider_format: Option<custom::ProviderFormat>,
 	request_model: &str,
+	input_format: InputFormat,
 ) -> CacheTokenConvention {
 	use CacheTokenConvention::*;
 	use custom::ProviderFormat::{AnthropicTokenCount, Messages};
@@ -237,6 +238,11 @@ fn cache_convention_for(
 			InputExcludesCache
 		},
 		AIProvider::Vertex(p) if p.is_anthropic_model(Some(request_model)) => InputExcludesCache,
+		AIProvider::Vertex(p)
+			if p.is_gemini_model(Some(request_model)) && input_format == InputFormat::Messages =>
+		{
+			InputExcludesCache
+		},
 		AIProvider::Custom(_) => match provider_format {
 			Some(Messages | AnthropicTokenCount) => InputExcludesCache,
 			_ => InputIncludesCache,
@@ -304,10 +310,10 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 	&[
 		// Direct passthrough
 		chat(InputFormat::Responses, ChatFormat::OpenAIResponses),
-		// Quirk: normally we prefer direct passthrough. However, for Gemini, we can do a better job of
-		// the conversion than Google's OpenAI compatible endpoint, so we put this first. This will
-		// only actually be used for Vertex + Gemini models.
+		// Native Completions api to Vertex Gemini
 		chat(InputFormat::Completions, ChatFormat::VertexGemini),
+		// Native Messages api to Vertex Gemini
+		chat(InputFormat::Messages, ChatFormat::VertexGemini),
 		chat(InputFormat::Completions, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Messages, ChatFormat::AnthropicMessages),
 		// Missing: Bedrock --> Bedrock
@@ -369,8 +375,11 @@ fn render_vertex_gemini(
 		types::ChatRequest::Completions(req) => {
 			conversion::vertex_gemini::from_completions::translate(req, provider.model.as_deref())
 		},
+		types::ChatRequest::Messages(req) => {
+			conversion::vertex_gemini::from_messages::translate(req, provider.model.as_deref())
+		},
 		_ => Err(AIError::UnsupportedConversion(strng::literal!(
-			"vertex gemini only supports completions input"
+			"vertex gemini does not support this input format"
 		))),
 	}
 }
@@ -524,6 +533,7 @@ impl ChatTranslation {
 				InputFormat::Completions => {
 					conversion::vertex_gemini::to_completions::translate_response(bytes)
 				},
+				InputFormat::Messages => conversion::vertex_gemini::to_messages::translate_response(bytes),
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
 					"from {:?} to {:?}",
 					self.output,
@@ -631,6 +641,14 @@ impl ChatTranslation {
 						ctx.logger,
 					)
 				}),
+				InputFormat::Messages => resp.map(|b| {
+					conversion::vertex_gemini::to_messages::translate_stream(
+						b,
+						ctx.buffer_limit,
+						strng::new(&ctx.model),
+						ctx.logger,
+					)
+				}),
 				_ => resp,
 			},
 		}
@@ -711,7 +729,10 @@ impl ChatTranslation {
 			},
 
 			ChatFormat::VertexGemini => match format {
-				ChatErrorFormat::Google => conversion::completions::translate_google_error(bytes),
+				ChatErrorFormat::Google => match self.input {
+					InputFormat::Messages => conversion::messages::translate_google_error(bytes),
+					_ => conversion::completions::translate_google_error(bytes),
+				},
 				_ => unsupported(),
 			},
 		}
@@ -1381,7 +1402,7 @@ impl AIProvider {
 			.await?;
 		self.apply_model_alias(policies, &mut req);
 
-		self
+		let result = self
 			.process_chat_request(
 				backend_info,
 				policies,
@@ -1392,7 +1413,26 @@ impl AIProvider {
 				log,
 				|req| types::ChatRequest::Messages(req),
 			)
-			.await
+			.await;
+
+		// BadRequest errors from the translation layer (e.g. unknown tool_use_id) are
+		// client mistakes, not upstream failures. Return a 400 directly so the proxy
+		// layer sees a Rejected result rather than a Processing error (503).
+		match result {
+			Err(AIError::BadRequest(msg)) => {
+				let body = serde_json::json!({
+					"type": "error",
+					"error": { "type": "invalid_request_error", "message": msg.as_str() }
+				});
+				let resp = ::http::Response::builder()
+					.status(::http::StatusCode::BAD_REQUEST)
+					.header(::http::header::CONTENT_TYPE, "application/json")
+					.body(Body::from(body.to_string()))
+					.expect("static response is always valid");
+				Ok(RequestResult::Rejected(resp))
+			},
+			other => other,
+		}
 	}
 
 	pub async fn process_embeddings_request(
@@ -1695,8 +1735,12 @@ impl AIProvider {
 		if original_format == InputFormat::Detect {
 			types::detect::amend_request_info(&mut llm_info, parts.uri.path());
 		}
-		llm_info.cache_convention =
-			cache_convention_for(self, provider_format, &llm_info.request_model);
+		llm_info.cache_convention = cache_convention_for(
+			self,
+			provider_format,
+			&llm_info.request_model,
+			original_format,
+		);
 		if let Some(log) = log
 			&& log.cel.cel_context.needs_llm_prompt()
 			&& original_format.supports_prompt_guard()
