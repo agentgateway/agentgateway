@@ -313,10 +313,11 @@ The request header is directly supplied by `curl` only to keep this example
 focused on routing. Do not trust a client-provided entitlement header in
 production.
 
-Use agentgateway JWT, API key, or external authorization policies to
-authenticate the caller. Derive or overwrite `x-entitlement-tier` from trusted
-identity context before the conditional ExtProc policy runs. Retain model
-authorization as defense in depth.
+Use [agentgateway policies](https://agentgateway.dev/docs/kubernetes/latest/about/policies/)
+for JWT, API key, or external authorization to authenticate the caller. Derive
+or overwrite `x-entitlement-tier` from trusted identity context before the
+conditional ExtProc policy runs. Retain model authorization as defense in
+depth.
 
 ## Troubleshooting
 
