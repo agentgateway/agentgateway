@@ -236,7 +236,7 @@ fn request_conversion_golden() {
 			conversion::completions::from_messages::translate(&i)
 		});
 		test_request(BEDROCK, &path, |i| {
-			conversion::bedrock::from_messages::translate(&i, &bedrock_claude, None).map(|r| r.body)
+			conversion::bedrock::from_messages::translate(&i, &bedrock_claude, None, None).map(|r| r.body)
 		});
 		test_request(VERTEX, &path, |input: types::messages::Request| {
 			let body = serde_json::to_vec(&input).map_err(AIError::RequestMarshal)?;
@@ -252,7 +252,7 @@ fn request_conversion_golden() {
 		|i| conversion::completions::from_messages::translate(&i),
 	);
 	test_request(BEDROCK, "requests/messages/reasoning_replay.json", |i| {
-		conversion::bedrock::from_messages::translate(&i, &bedrock_claude, None).map(|r| r.body)
+		conversion::bedrock::from_messages::translate(&i, &bedrock_claude, None, None).map(|r| r.body)
 	});
 	test_request(
 		BEDROCK,

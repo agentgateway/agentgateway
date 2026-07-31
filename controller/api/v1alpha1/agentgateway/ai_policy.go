@@ -427,4 +427,12 @@ type PromptCachingConfig struct {
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:default=0
 	CacheMessageOffset int `json:"cacheMessageOffset,omitempty"`
+
+	// Explicitly declares whether the target model supports provider-side
+	// prompt caching, overriding the model-ID heuristic. Required when the
+	// model is addressed through an opaque reference (e.g. a Bedrock
+	// inference profile ARN) where the underlying model family cannot be
+	// determined from the ID.
+	// +optional
+	Supported *bool `json:"supported,omitempty"`
 }

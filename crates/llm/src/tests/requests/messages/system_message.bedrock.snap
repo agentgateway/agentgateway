@@ -27,11 +27,6 @@ info:
         },
         {
           "text": "hola"
-        },
-        {
-          "cachePoint": {
-            "type": "default"
-          }
         }
       ]
     }

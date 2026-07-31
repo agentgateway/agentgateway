@@ -1389,6 +1389,12 @@ message BackendPolicySpec {
       bool cache_tools = 3;
       optional uint32 min_tokens = 4;
       optional uint32 cache_message_offset = 5;
+      // Explicitly declare whether the target model supports provider-side
+      // prompt caching, overriding the model-ID heuristic. Required when the
+      // model is addressed through an opaque reference (e.g. a Bedrock
+      // inference profile ARN) where the underlying model family cannot be
+      // determined from the ID.
+      optional bool supported = 6;
     }
 
     map<string, string> defaults = 2;

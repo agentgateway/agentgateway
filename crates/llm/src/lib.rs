@@ -400,6 +400,13 @@ pub struct PromptCachingConfig {
 	/// Message offset used when choosing where to place cache markers.
 	#[serde(rename = "cacheMessageOffset")]
 	pub cache_message_offset: usize,
+
+	/// Explicitly declare whether the target model supports provider-side prompt
+	/// caching, overriding the model-ID heuristic. Required when the model is
+	/// addressed through an opaque reference (e.g. a Bedrock inference profile
+	/// ARN) where the underlying model family cannot be determined from the ID.
+	#[serde(rename = "supported")]
+	pub supported: Option<bool>,
 }
 
 impl Default for PromptCachingConfig {
@@ -410,6 +417,7 @@ impl Default for PromptCachingConfig {
 			cache_tools: false,
 			min_tokens: Some(1024),
 			cache_message_offset: 0,
+			supported: None,
 		}
 	}
 }

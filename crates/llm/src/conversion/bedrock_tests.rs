@@ -172,7 +172,10 @@ fn test_metadata_from_header() {
 		output_config: None,
 	};
 
-	let (out, _) = super::from_messages::translate_internal(req, &provider, Some(&headers)).unwrap();
+	let model_id = req.model.clone();
+	let (out, _) =
+		super::from_messages::translate_internal(req, model_id, &provider, Some(&headers), None)
+			.unwrap();
 	let metadata = out.request_metadata.unwrap();
 
 	assert_eq!(metadata.get("user_id"), Some(&"user123".to_string()));
@@ -225,7 +228,9 @@ fn test_messages_metadata_is_preserved_in_additional_model_request_fields() {
 		output_config: None,
 	};
 
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let model_id = req.model.clone();
+	let (out, _) =
+		super::from_messages::translate_internal(req, model_id, &provider, None, None).unwrap();
 	let additional_fields = out.additional_model_request_fields.unwrap();
 	let metadata = additional_fields.get("metadata").unwrap();
 
@@ -272,7 +277,9 @@ fn test_output_config_effort_without_thinking_is_passed_through() {
 		}),
 	};
 
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let model_id = req.model.clone();
+	let (out, _) =
+		super::from_messages::translate_internal(req, model_id, &provider, None, None).unwrap();
 	assert_eq!(
 		out.additional_model_request_fields,
 		Some(json!({
@@ -335,7 +342,9 @@ fn test_output_config_format_maps_to_converse_output_config() {
 		}),
 	};
 
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let model_id = req.model.clone();
+	let (out, _) =
+		super::from_messages::translate_internal(req, model_id, &provider, None, None).unwrap();
 	assert_eq!(
 		out.additional_model_request_fields,
 		Some(json!({
@@ -399,7 +408,9 @@ fn test_explicit_empty_output_config_is_preserved() {
 		}),
 	};
 
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let model_id = req.model.clone();
+	let (out, _) =
+		super::from_messages::translate_internal(req, model_id, &provider, None, None).unwrap();
 	assert_eq!(
 		out.additional_model_request_fields,
 		Some(json!({
@@ -456,7 +467,9 @@ fn test_thinking_and_output_config_are_both_passed_through() {
 		}),
 	};
 
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let model_id = req.model.clone();
+	let (out, _) =
+		super::from_messages::translate_internal(req, model_id, &provider, None, None).unwrap();
 	assert_eq!(
 		out.additional_model_request_fields,
 		Some(json!({
@@ -520,7 +533,9 @@ fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
 		output_config: None,
 	};
 
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let model_id = req.model.clone();
+	let (out, _) =
+		super::from_messages::translate_internal(req, model_id, &provider, None, None).unwrap();
 	let inference = out.inference_config.unwrap();
 	assert_eq!(inference.temperature, Some(0.7));
 	assert_eq!(inference.top_p, Some(0.8));
@@ -595,7 +610,9 @@ fn test_enabled_thinking_applies_sampling_and_tool_choice_constraints() {
 		output_config: None,
 	};
 
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let model_id = req.model.clone();
+	let (out, _) =
+		super::from_messages::translate_internal(req, model_id, &provider, None, None).unwrap();
 	let inference = out.inference_config.unwrap();
 	assert_eq!(inference.temperature, None);
 	assert_eq!(inference.top_p, None);
@@ -645,7 +662,9 @@ fn test_messages_image_url_to_bedrock_returns_error() {
 		output_config: None,
 	};
 
-	let err = super::from_messages::translate_internal(req, &provider, None).unwrap_err();
+	let model_id = req.model.clone();
+	let err =
+		super::from_messages::translate_internal(req, model_id, &provider, None, None).unwrap_err();
 	assert!(matches!(err, crate::AIError::UnsupportedConversion(_)));
 	assert!(
 		err
@@ -1529,6 +1548,131 @@ fn test_insert_cache_point_empty_messages_noop() {
 }
 
 #[test]
+fn test_supports_prompt_caching_heuristic_without_override() {
+	// Anthropic Claude models are assumed to support caching, apart from a few
+	// legacy exclusions.
+	assert!(helpers::supports_prompt_caching(
+		"anthropic.claude-3-5-sonnet-20241022-v2:0",
+		None
+	));
+	assert!(!helpers::supports_prompt_caching(
+		"anthropic.claude-instant-v1",
+		None
+	));
+	// Inference profile ARNs hide the real model family, so the heuristic
+	// assumes support by default.
+	assert!(helpers::supports_prompt_caching(
+		"arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/abc123",
+		None
+	));
+	// Unknown model families default to unsupported.
+	assert!(!helpers::supports_prompt_caching(
+		"mistral.mistral-large-2407-v1:0",
+		None
+	));
+}
+
+#[test]
+fn test_supports_prompt_caching_explicit_override_beats_inference_profile_heuristic() {
+	// Without an override, an inference profile ARN is assumed to support
+	// caching because the real model behind it is opaque.
+	let arn = "arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/grufmu57tnz2";
+	assert!(helpers::supports_prompt_caching(arn, None));
+
+	// An explicit `supported: false` override must win, since the operator
+	// knows the ARN actually points at a model (e.g. Mistral) that doesn't
+	// support Bedrock's Converse prompt caching.
+	let disabled = crate::PromptCachingConfig {
+		supported: Some(false),
+		..Default::default()
+	};
+	assert!(!helpers::supports_prompt_caching(arn, Some(&disabled)));
+
+	// An explicit `supported: true` override also wins, even for a model the
+	// heuristic would otherwise reject.
+	let enabled = crate::PromptCachingConfig {
+		supported: Some(true),
+		..Default::default()
+	};
+	assert!(helpers::supports_prompt_caching(
+		"mistral.mistral-large-2407-v1:0",
+		Some(&enabled)
+	));
+}
+
+#[test]
+fn test_messages_cache_control_dropped_when_caching_explicitly_unsupported() {
+	use types::messages::typed as messages;
+
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let arn =
+		"arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/grufmu57tnz2".to_string();
+	let req = messages::Request {
+		model: arn.clone(),
+		max_tokens: 1024,
+		messages: vec![messages::Message {
+			role: messages::Role::User,
+			content: vec![messages::ContentBlock::Text(messages::ContentTextBlock {
+				text: "hello".to_string(),
+				citations: None,
+				cache_control: Some(messages::CacheControlEphemeral::Ephemeral { ttl: None }),
+			})],
+		}],
+		tools: Some(vec![messages::Tool {
+			name: "lookup".to_string(),
+			description: Some("test".to_string()),
+			input_schema: serde_json::json!({"type": "object"}),
+			cache_control: Some(messages::CacheControlEphemeral::Ephemeral { ttl: None }),
+		}]),
+		tool_choice: None,
+		system: Some(messages::SystemPrompt::Text("be helpful".to_string())),
+		metadata: None,
+		stop_sequences: vec![],
+		stream: false,
+		temperature: None,
+		top_p: None,
+		top_k: None,
+		thinking: None,
+		output_config: None,
+	};
+
+	let disabled = crate::PromptCachingConfig {
+		supported: Some(false),
+		..Default::default()
+	};
+
+	let (out, _) =
+		super::from_messages::translate_internal(req, arn, &provider, None, Some(&disabled)).unwrap();
+
+	assert!(
+		!out
+			.system
+			.iter()
+			.flatten()
+			.any(|b| matches!(b, types::bedrock::SystemContentBlock::CachePoint { .. })),
+		"system cache point must be suppressed when caching is explicitly unsupported"
+	);
+	assert!(
+		!out.messages.iter().any(has_cache_point),
+		"message cache point must be suppressed when caching is explicitly unsupported"
+	);
+	assert!(
+		!out
+			.tool_config
+			.iter()
+			.flat_map(|tc| &tc.tools)
+			.any(|t| matches!(t, types::bedrock::Tool::CachePoint(_))),
+		"tool cache point must be suppressed when caching is explicitly unsupported"
+	);
+}
+
+#[test]
 fn test_bedrock_tool_name_sanitizes_long_mcp_names() {
 	let long_name = "mcp__plugin_atlassian_atlassian__createCompassComponentRelationship";
 	assert!(long_name.len() > super::BEDROCK_TOOL_NAME_MAX_LEN);
@@ -1602,7 +1746,9 @@ fn test_messages_long_tool_names_fit_bedrock_tool_config() {
 		output_config: None,
 	};
 
-	let (out, tool_map) = super::from_messages::translate_internal(req, &provider, None).unwrap();
+	let model_id = req.model.clone();
+	let (out, tool_map) =
+		super::from_messages::translate_internal(req, model_id, &provider, None, None).unwrap();
 	let bedrock_name = out
 		.tool_config
 		.as_ref()
@@ -1658,8 +1804,9 @@ fn test_messages_long_tool_name_round_trip_response() {
 		output_config: None,
 	};
 
+	let model_id = req.model.clone();
 	let (bedrock_req, tool_map) =
-		super::from_messages::translate_internal(req, &provider, None).unwrap();
+		super::from_messages::translate_internal(req, model_id, &provider, None, None).unwrap();
 	let bedrock_name = bedrock_req
 		.tool_config
 		.as_ref()
