@@ -9,20 +9,36 @@ info:
   reasoning_effort: medium
 ---
 {
-  "contents": [
-    {
-      "role": "user",
-      "parts": [
-        {
-          "text": "How is the current weather in Columbus?"
-        }
-      ]
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "How is the current weather in Columbus?"
+          }
+        ]
+      }
+    ],
+    "generationConfig": {
+      "thinkingConfig": {
+        "thinkingBudget": 2048,
+        "includeThoughts": true
+      }
     }
-  ],
-  "generationConfig": {
-    "thinkingConfig": {
-      "thinkingBudget": 2048,
-      "includeThoughts": true
-    }
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-3.5-turbo",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "How is the current weather in Columbus?"
+      }
+    ]
   }
 }

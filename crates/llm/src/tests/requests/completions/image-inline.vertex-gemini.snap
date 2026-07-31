@@ -13,20 +13,36 @@ info:
             url: "data:image/jpg;base64,/9j/4AAQSkZJRgABAQ=="
 ---
 {
-  "contents": [
-    {
-      "role": "user",
-      "parts": [
-        {
-          "text": "What's in this image?"
-        },
-        {
-          "inlineData": {
-            "mimeType": "image/jpeg",
-            "data": "/9j/4AAQSkZJRgABAQ=="
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "What's in this image?"
+          },
+          {
+            "inlineData": {
+              "mimeType": "image/jpeg",
+              "data": "/9j/4AAQSkZJRgABAQ=="
+            }
           }
-        }
-      ]
-    }
-  ]
+        ]
+      }
+    ]
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gemini-2.5-pro",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "What's in this image?"
+      }
+    ]
+  }
 }

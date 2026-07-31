@@ -39,65 +39,92 @@ info:
             - location
 ---
 {
-  "contents": [
-    {
-      "role": "user",
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "What is the weather?"
+          }
+        ]
+      }
+    ],
+    "systemInstruction": {
       "parts": [
         {
-          "text": "What is the weather?"
+          "text": "You are a helpful assistant."
         }
       ]
-    }
-  ],
-  "systemInstruction": {
-    "parts": [
+    },
+    "tools": [
       {
-        "text": "You are a helpful assistant."
+        "functionDeclarations": [
+          {
+            "name": "get_weather",
+            "description": "Get the current weather in a location",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "location"
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "toolConfig": {
+      "functionCallingConfig": {
+        "mode": "ANY",
+        "allowedFunctionNames": [
+          "get_weather"
+        ]
+      }
+    },
+    "generationConfig": {
+      "temperature": 0.7,
+      "topP": 0.9,
+      "topK": 40,
+      "frequencyPenalty": 0.2,
+      "presencePenalty": 0.1,
+      "maxOutputTokens": 1000,
+      "stopSequences": [
+        "\n\n",
+        "END"
+      ],
+      "candidateCount": 3,
+      "seed": 42,
+      "responseMimeType": "application/json"
+    }
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gemini-2.5-pro",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {
+      "temperature": 0.699999988079071,
+      "top_p": 0.8999999761581421,
+      "frequency_penalty": 0.20000000298023224,
+      "presence_penalty": 0.10000000149011612,
+      "seed": 42,
+      "max_tokens": 1000
+    },
+    "prompt": [
+      {
+        "role": "system",
+        "content": "You are a helpful assistant."
+      },
+      {
+        "role": "user",
+        "content": "What is the weather?"
       }
     ]
-  },
-  "tools": [
-    {
-      "functionDeclarations": [
-        {
-          "name": "get_weather",
-          "description": "Get the current weather in a location",
-          "parameters": {
-            "type": "object",
-            "properties": {
-              "location": {
-                "type": "string"
-              }
-            },
-            "required": [
-              "location"
-            ]
-          }
-        }
-      ]
-    }
-  ],
-  "toolConfig": {
-    "functionCallingConfig": {
-      "mode": "ANY",
-      "allowedFunctionNames": [
-        "get_weather"
-      ]
-    }
-  },
-  "generationConfig": {
-    "temperature": 0.7,
-    "topP": 0.9,
-    "topK": 40,
-    "frequencyPenalty": 0.2,
-    "presencePenalty": 0.1,
-    "maxOutputTokens": 1000,
-    "stopSequences": [
-      "\n\n",
-      "END"
-    ],
-    "candidateCount": 3,
-    "seed": 42,
-    "responseMimeType": "application/json"
   }
 }

@@ -46,19 +46,37 @@ mod requests {
 	fn test_request<I>(
 		provider: &str,
 		relative_path: &str,
-		xlate: impl Fn(I) -> Result<Vec<u8>, AIError>,
+		xlate: impl FnOnce(&mut I) -> Result<Vec<u8>, AIError>,
 	) where
-		I: DeserializeOwned,
+		I: DeserializeOwned + RequestType,
 	{
 		let input_path = fixture_path(relative_path);
 		let input_str = fs::read_to_string(&input_path).expect("failed to read input file");
 		let input_raw: Value = serde_json::from_str(&input_str).expect("failed to parse input JSON");
-		let input_typed: I = serde_json::from_str(&input_str).expect("failed to parse input JSON");
-
+		let mut input_typed: I = serde_json::from_str(&input_str).expect("failed to parse input JSON");
 		let provider_response =
-			xlate(input_typed).expect("failed to translate input format to provider request");
+			xlate(&mut input_typed).expect("failed to translate input format to provider request");
+		let mut llm_request = input_typed
+			.to_llm_request(
+				strng::new(match provider {
+					COMPLETIONS => OPENAI,
+					BEDROCK_TITAN | BEDROCK_COHERE => BEDROCK,
+					VERTEX_GEMINI => VERTEX,
+					provider => provider,
+				}),
+				false,
+			)
+			.expect("failed to extract LLM request metadata");
+		if llm_request.input_format.supports_prompt_guard() {
+			llm_request.prompt = Some(input_typed.get_messages().into());
+		}
+
 		let provider_value =
 			serde_json::from_slice::<Value>(&provider_response).expect("failed to parse provider JSON");
+		let report = json!({
+			"request": provider_value,
+			"parsed": llm_request,
+		});
 		let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
 
 		insta::with_settings!({
@@ -68,14 +86,14 @@ mod requests {
 			prepend_module_to_snapshot => false,
 			snapshot_path => snapshot_path,
 		}, {
-			insta::assert_json_snapshot!(snapshot_name, provider_value, {
-				".id" => "[id]",
-				".created" => "[date]",
+			insta::assert_json_snapshot!(snapshot_name, report, {
+				".request.id" => "[id]",
+				".request.created" => "[date]",
 			});
 		});
 	}
 
-	fn apply_test_prompts<R: RequestType + Serialize>(mut r: R) -> Result<Vec<u8>, AIError> {
+	fn apply_test_prompts<R: RequestType + Serialize>(r: &mut R) -> Result<Vec<u8>, AIError> {
 		r.prepend_prompts(vec![
 			SimpleChatCompletionMessage {
 				role: strng::new("system"),
@@ -104,7 +122,7 @@ mod requests {
 				content: strng::new("append assistant prompt"),
 			},
 		]);
-		serde_json::to_vec(&r).map_err(AIError::RequestMarshal)
+		serde_json::to_vec(r).map_err(AIError::RequestMarshal)
 	}
 
 	const COMPLETION_REQUESTS: &[(&str, &[&str])] = &[
@@ -167,14 +185,14 @@ mod requests {
 			for provider in *providers {
 				match *provider {
 					ANTHROPIC => test_request(ANTHROPIC, &path, |i| {
-						conversion::messages::from_completions::translate(&i)
+						conversion::messages::from_completions::translate(i)
 					}),
 					BEDROCK => test_request(BEDROCK, &path, |i| {
-						conversion::bedrock::from_completions::translate(&i, &bedrock, None, None)
+						conversion::bedrock::from_completions::translate(i, &bedrock, None, None)
 							.map(|r| r.body)
 					}),
 					VERTEX_GEMINI => test_request(VERTEX_GEMINI, &path, |i| {
-						conversion::vertex_gemini::from_completions::translate(&i, Some("gemini-2.5-pro"))
+						conversion::vertex_gemini::from_completions::translate(i, Some("gemini-2.5-pro"))
 					}),
 					other => panic!("unsupported provider in COMPLETION_REQUESTS: {other}"),
 				}
@@ -200,17 +218,17 @@ mod requests {
 			let path = format!("requests/messages/{name}.json");
 			for provider in *providers {
 				match *provider {
-					ANTHROPIC => test_request(ANTHROPIC, &path, |i: types::messages::Request| {
-						serde_json::to_vec(&i).map_err(AIError::RequestMarshal)
+					ANTHROPIC => test_request(ANTHROPIC, &path, |i: &mut types::messages::Request| {
+						serde_json::to_vec(i).map_err(AIError::RequestMarshal)
 					}),
 					COMPLETIONS => test_request(COMPLETIONS, &path, |i| {
-						conversion::completions::from_messages::translate(&i)
+						conversion::completions::from_messages::translate(i)
 					}),
 					BEDROCK => test_request(BEDROCK, &path, |i| {
-						conversion::bedrock::from_messages::translate(&i, &bedrock, None).map(|r| r.body)
+						conversion::bedrock::from_messages::translate(i, &bedrock, None).map(|r| r.body)
 					}),
-					VERTEX => test_request(VERTEX, &path, |i: types::messages::Request| {
-						let body = serde_json::to_vec(&i).map_err(AIError::RequestMarshal)?;
+					VERTEX => test_request(VERTEX, &path, |i: &mut types::messages::Request| {
+						let body = serde_json::to_vec(i).map_err(AIError::RequestMarshal)?;
 						vertex.prepare_anthropic_message_body(body)
 					}),
 					other => panic!("unsupported provider in MESSAGES_REQUESTS: {other}"),
@@ -233,10 +251,10 @@ mod requests {
 			for provider in *providers {
 				match *provider {
 					BEDROCK => test_request(BEDROCK, &path, |i| {
-						conversion::bedrock::from_responses::translate(&i, &bedrock, None, None).map(|r| r.body)
+						conversion::bedrock::from_responses::translate(i, &bedrock, None, None).map(|r| r.body)
 					}),
 					GEMINI => test_request(GEMINI, &path, |i| {
-						conversion::openai_compat::from_responses::translate(&i)
+						conversion::openai_compat::from_responses::translate(i)
 					}),
 					other => panic!("unsupported provider in RESPONSES_REQUESTS: {other}"),
 				}
@@ -264,17 +282,17 @@ mod requests {
 			let path = format!("requests/embeddings/{name}.json");
 			for provider in *providers {
 				match *provider {
-					OPENAI => test_request(OPENAI, &path, |i: types::embeddings::Request| {
-						serde_json::to_vec(&i).map_err(AIError::RequestMarshal)
+					OPENAI => test_request(OPENAI, &path, |i: &mut types::embeddings::Request| {
+						serde_json::to_vec(i).map_err(AIError::RequestMarshal)
 					}),
 					BEDROCK_TITAN => test_request(BEDROCK_TITAN, &path, |i| {
-						conversion::bedrock::from_embeddings::translate(&i, &titan)
+						conversion::bedrock::from_embeddings::translate(i, &titan)
 					}),
 					BEDROCK_COHERE => test_request(BEDROCK_COHERE, &path, |i| {
-						conversion::bedrock::from_embeddings::translate(&i, &cohere)
+						conversion::bedrock::from_embeddings::translate(i, &cohere)
 					}),
-					VERTEX => test_request(VERTEX, &path, |i: types::embeddings::Request| {
-						conversion::vertex::from_embeddings::translate(&i)
+					VERTEX => test_request(VERTEX, &path, |i: &mut types::embeddings::Request| {
+						conversion::vertex::from_embeddings::translate(i)
 					}),
 					other => panic!("unsupported provider in EMBEDDINGS_REQUESTS: {other}"),
 				}
@@ -300,14 +318,14 @@ mod requests {
 			let path = format!("requests/rerank/{name}.json");
 			for provider in *providers {
 				match *provider {
-					COHERE => test_request(COHERE, &path, |i: types::rerank::Request| {
-						serde_json::to_vec(&i).map_err(AIError::RequestMarshal)
+					COHERE => test_request(COHERE, &path, |i: &mut types::rerank::Request| {
+						serde_json::to_vec(i).map_err(AIError::RequestMarshal)
 					}),
-					BEDROCK => test_request(BEDROCK, &path, |i: types::rerank::Request| {
-						conversion::bedrock::from_rerank::translate(&i, &bedrock)
+					BEDROCK => test_request(BEDROCK, &path, |i: &mut types::rerank::Request| {
+						conversion::bedrock::from_rerank::translate(i, &bedrock)
 					}),
-					VERTEX => test_request(VERTEX, &path, |i: types::rerank::Request| {
-						conversion::vertex::from_rerank::translate(&i, &vertex)
+					VERTEX => test_request(VERTEX, &path, |i: &mut types::rerank::Request| {
+						conversion::vertex::from_rerank::translate(i, &vertex)
 					}),
 					other => panic!("unsupported provider in RERANK_REQUESTS: {other}"),
 				}
@@ -328,14 +346,14 @@ mod requests {
 			let path = format!("requests/count-tokens/{name}.json");
 			for provider in *providers {
 				match *provider {
-					ANTHROPIC => test_request(ANTHROPIC, &path, |i: types::count_tokens::Request| {
-						serde_json::to_vec(&i).map_err(AIError::RequestMarshal)
+					ANTHROPIC => test_request(ANTHROPIC, &path, |i: &mut types::count_tokens::Request| {
+						serde_json::to_vec(i).map_err(AIError::RequestMarshal)
 					}),
-					BEDROCK => test_request(BEDROCK, &path, |i: types::count_tokens::Request| {
-						conversion::bedrock::from_anthropic_token_count::translate(&i, &headers)
+					BEDROCK => test_request(BEDROCK, &path, |i: &mut types::count_tokens::Request| {
+						conversion::bedrock::from_anthropic_token_count::translate(i, &headers)
 					}),
-					VERTEX => test_request(VERTEX, &path, |i: types::count_tokens::Request| {
-						let body = serde_json::to_vec(&i).map_err(AIError::RequestMarshal)?;
+					VERTEX => test_request(VERTEX, &path, |i: &mut types::count_tokens::Request| {
+						let body = serde_json::to_vec(i).map_err(AIError::RequestMarshal)?;
 						vertex.prepare_anthropic_count_tokens_body(body)
 					}),
 					other => panic!("unsupported provider in COUNT_TOKENS_REQUESTS: {other}"),

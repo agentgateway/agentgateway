@@ -27,59 +27,87 @@ info:
       content: "{ \"temperature\": 22, \"condition\": \"Sunny\" }"
 ---
 {
-  "contents": [
-    {
-      "role": "user",
-      "parts": [
-        {
-          "text": "How is the weather in Columbus and New York?"
-        }
-      ]
-    },
-    {
-      "role": "model",
-      "parts": [
-        {
-          "functionCall": {
-            "name": "get_weather",
-            "args": {
-              "location": "Columbus, OH"
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "How is the weather in Columbus and New York?"
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "functionCall": {
+              "name": "get_weather",
+              "args": {
+                "location": "Columbus, OH"
+              }
+            }
+          },
+          {
+            "functionCall": {
+              "name": "get_weather",
+              "args": {
+                "location": "New York, NY"
+              }
             }
           }
-        },
-        {
-          "functionCall": {
-            "name": "get_weather",
-            "args": {
-              "location": "New York, NY"
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "functionResponse": {
+              "name": "get_weather",
+              "response": {
+                "content": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+              }
+            }
+          },
+          {
+            "text": " "
+          },
+          {
+            "functionResponse": {
+              "name": "get_weather",
+              "response": {
+                "content": "{ \"temperature\": 22, \"condition\": \"Sunny\" }"
+              }
             }
           }
-        }
-      ]
-    },
-    {
-      "role": "user",
-      "parts": [
-        {
-          "functionResponse": {
-            "name": "get_weather",
-            "response": {
-              "content": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
-            }
-          }
-        },
-        {
-          "text": " "
-        },
-        {
-          "functionResponse": {
-            "name": "get_weather",
-            "response": {
-              "content": "{ \"temperature\": 22, \"condition\": \"Sunny\" }"
-            }
-          }
-        }
-      ]
-    }
-  ]
+        ]
+      }
+    ]
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-3.5-turbo",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "How is the weather in Columbus and New York?"
+      },
+      {
+        "role": "assistant",
+        "content": ""
+      },
+      {
+        "role": "tool",
+        "content": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+      },
+      {
+        "role": "tool",
+        "content": "{ \"temperature\": 22, \"condition\": \"Sunny\" }"
+      }
+    ]
+  }
 }

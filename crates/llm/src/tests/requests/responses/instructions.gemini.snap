@@ -7,18 +7,36 @@ info:
   input: What is the weather like in San Francisco? Use the get_weather tool.
 ---
 {
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "type": "text",
-          "text": "What is the weather like in San Francisco? Use the get_weather tool."
-        }
-      ]
-    }
-  ],
-  "model": "gpt-4o",
-  "max_completion_tokens": 1024,
-  "stream": false
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "What is the weather like in San Francisco? Use the get_weather tool."
+          }
+        ]
+      }
+    ],
+    "model": "gpt-4o",
+    "max_completion_tokens": 1024,
+    "stream": false
+  },
+  "parsed": {
+    "input_format": "Responses",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-4o",
+    "provider": "gemini",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "What is the weather like in San Francisco? Use the get_weather tool."
+      }
+    ]
+  }
 }

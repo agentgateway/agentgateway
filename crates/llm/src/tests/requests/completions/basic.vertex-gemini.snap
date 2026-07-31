@@ -10,20 +10,40 @@ info:
       content: What is the name of the LLM provider?
 ---
 {
-  "contents": [
-    {
-      "role": "user",
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "What is the name of the LLM provider?"
+          }
+        ]
+      }
+    ],
+    "systemInstruction": {
       "parts": [
         {
-          "text": "What is the name of the LLM provider?"
+          "text": "You are a helpful assistant."
         }
       ]
     }
-  ],
-  "systemInstruction": {
-    "parts": [
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "replaceme",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {},
+    "prompt": [
       {
-        "text": "You are a helpful assistant."
+        "role": "system",
+        "content": "You are a helpful assistant."
+      },
+      {
+        "role": "user",
+        "content": "What is the name of the LLM provider?"
       }
     ]
   }

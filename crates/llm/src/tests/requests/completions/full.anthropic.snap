@@ -74,90 +74,125 @@ info:
   function_call: auto
 ---
 {
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "type": "text",
-          "text": "Please analyze this code snippet and explain what it does: function fibonacci(n) { return n <= 1 ? n : fibonacci(n-1) + fibonacci(n-2); }"
-        }
-      ]
-    },
-    {
-      "role": "assistant",
-      "content": [
-        {
-          "type": "text",
-          "text": "This is a recursive implementation of the Fibonacci sequence. It calculates the nth Fibonacci number by adding the previous two numbers."
-        }
-      ]
-    },
-    {
-      "role": "user",
-      "content": [
-        {
-          "type": "text",
-          "text": "What's in this image?"
-        },
-        {
-          "type": "image",
-          "source": {
-            "type": "url",
-            "url": "https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png"
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Please analyze this code snippet and explain what it does: function fibonacci(n) { return n <= 1 ? n : fibonacci(n-1) + fibonacci(n-2); }"
           }
-        }
-      ]
-    }
-  ],
-  "system": "You are a helpful assistant that specializes in technical documentation and code analysis.",
-  "model": "gpt-4-turbo-preview",
-  "max_tokens": 1000,
-  "stop_sequences": [
-    "\n\n",
-    "END"
-  ],
-  "temperature": 0.7,
-  "top_p": 0.9,
-  "tools": [
-    {
-      "name": "get_weather",
-      "description": "Get the current weather in a given location",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "location": {
-            "type": "string",
-            "description": "The city and state, e.g. San Francisco, CA"
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "This is a recursive implementation of the Fibonacci sequence. It calculates the nth Fibonacci number by adding the previous two numbers."
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "What's in this image?"
           },
-          "unit": {
-            "type": "string",
-            "enum": [
-              "celsius",
-              "fahrenheit"
-            ]
+          {
+            "type": "image",
+            "source": {
+              "type": "url",
+              "url": "https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png"
+            }
           }
-        },
-        "required": [
-          "location"
         ]
       }
-    }
-  ],
-  "tool_choice": {
-    "type": "tool",
-    "name": "my_function"
-  },
-  "metadata": {
-    "user_id": "user_12345"
-  },
-  "output_config": {
-    "format": {
-      "type": "json_schema",
-      "schema": {
-        "type": "object",
-        "additionalProperties": true
+    ],
+    "system": "You are a helpful assistant that specializes in technical documentation and code analysis.",
+    "model": "gpt-4-turbo-preview",
+    "max_tokens": 1000,
+    "stop_sequences": [
+      "\n\n",
+      "END"
+    ],
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "tools": [
+      {
+        "name": "get_weather",
+        "description": "Get the current weather in a given location",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string",
+              "description": "The city and state, e.g. San Francisco, CA"
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "celsius",
+                "fahrenheit"
+              ]
+            }
+          },
+          "required": [
+            "location"
+          ]
+        }
+      }
+    ],
+    "tool_choice": {
+      "type": "tool",
+      "name": "my_function"
+    },
+    "metadata": {
+      "user_id": "user_12345"
+    },
+    "output_config": {
+      "format": {
+        "type": "json_schema",
+        "schema": {
+          "type": "object",
+          "additionalProperties": true
+        }
       }
     }
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-4-turbo-preview",
+    "provider": "anthropic",
+    "streaming": false,
+    "params": {
+      "temperature": 0.699999988079071,
+      "top_p": 0.8999999761581421,
+      "frequency_penalty": 0.20000000298023224,
+      "presence_penalty": 0.10000000149011612,
+      "seed": 42,
+      "max_tokens": 1000
+    },
+    "prompt": [
+      {
+        "role": "system",
+        "content": "You are a helpful assistant that specializes in technical documentation and code analysis."
+      },
+      {
+        "role": "user",
+        "content": "Please analyze this code snippet and explain what it does: function fibonacci(n) { return n <= 1 ? n : fibonacci(n-1) + fibonacci(n-2); }"
+      },
+      {
+        "role": "assistant",
+        "content": "This is a recursive implementation of the Fibonacci sequence. It calculates the nth Fibonacci number by adding the previous two numbers."
+      },
+      {
+        "role": "user",
+        "content": "What's in this image?"
+      }
+    ]
   }
 }

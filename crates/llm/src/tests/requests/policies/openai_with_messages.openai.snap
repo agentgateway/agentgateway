@@ -9,36 +9,78 @@ info:
       content: "Hello, world"
 ---
 {
-  "messages": [
-    {
-      "role": "system",
-      "content": "prepend system prompt"
+  "request": {
+    "messages": [
+      {
+        "role": "system",
+        "content": "prepend system prompt"
+      },
+      {
+        "role": "user",
+        "content": "prepend user message"
+      },
+      {
+        "role": "assistant",
+        "content": "prepend assistant message"
+      },
+      {
+        "role": "user",
+        "content": "Hello, world"
+      },
+      {
+        "role": "user",
+        "content": "append user message"
+      },
+      {
+        "role": "system",
+        "content": "append system prompt"
+      },
+      {
+        "role": "assistant",
+        "content": "append assistant prompt"
+      }
+    ],
+    "model": "gpt-4o",
+    "max_tokens": 1024
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-4o",
+    "provider": "openai",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
     },
-    {
-      "role": "user",
-      "content": "prepend user message"
-    },
-    {
-      "role": "assistant",
-      "content": "prepend assistant message"
-    },
-    {
-      "role": "user",
-      "content": "Hello, world"
-    },
-    {
-      "role": "user",
-      "content": "append user message"
-    },
-    {
-      "role": "system",
-      "content": "append system prompt"
-    },
-    {
-      "role": "assistant",
-      "content": "append assistant prompt"
-    }
-  ],
-  "model": "gpt-4o",
-  "max_tokens": 1024
+    "prompt": [
+      {
+        "role": "system",
+        "content": "prepend system prompt"
+      },
+      {
+        "role": "user",
+        "content": "prepend user message"
+      },
+      {
+        "role": "assistant",
+        "content": "prepend assistant message"
+      },
+      {
+        "role": "user",
+        "content": "Hello, world"
+      },
+      {
+        "role": "user",
+        "content": "append user message"
+      },
+      {
+        "role": "system",
+        "content": "append system prompt"
+      },
+      {
+        "role": "assistant",
+        "content": "append assistant prompt"
+      }
+    ]
+  }
 }

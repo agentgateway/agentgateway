@@ -18,32 +18,52 @@ info:
             mode: explicit
 ---
 {
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "type": "text",
-          "text": "Cached user input",
-          "prompt_cache_breakpoint": {
-            "mode": "explicit"
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Cached user input",
+            "prompt_cache_breakpoint": {
+              "mode": "explicit"
+            }
           }
-        }
-      ]
-    },
-    {
-      "role": "developer",
-      "content": [
-        {
-          "type": "text",
-          "text": "Cached system input",
-          "prompt_cache_breakpoint": {
-            "mode": "explicit"
+        ]
+      },
+      {
+        "role": "developer",
+        "content": [
+          {
+            "type": "text",
+            "text": "Cached system input",
+            "prompt_cache_breakpoint": {
+              "mode": "explicit"
+            }
           }
-        }
-      ]
-    }
-  ],
-  "model": "gpt-5",
-  "stream": false
+        ]
+      }
+    ],
+    "model": "gpt-5",
+    "stream": false
+  },
+  "parsed": {
+    "input_format": "Responses",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-5",
+    "provider": "gemini",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Cached user input"
+      },
+      {
+        "role": "system",
+        "content": "Cached system input"
+      }
+    ]
+  }
 }

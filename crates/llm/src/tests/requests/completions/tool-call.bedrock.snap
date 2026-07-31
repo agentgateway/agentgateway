@@ -20,63 +20,87 @@ info:
       content: "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
 ---
 {
-  "modelId": "gpt-3.5-turbo",
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "text": "How is the current weather in Columbus?"
-        }
-      ]
-    },
-    {
-      "role": "assistant",
-      "content": [
-        {
-          "toolUse": {
-            "toolUseId": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
-            "name": "get_weather",
-            "input": {
-              "format": "celsius",
-              "location": "Columbus, OH"
+  "request": {
+    "modelId": "gpt-3.5-turbo",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "How is the current weather in Columbus?"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "toolUse": {
+              "toolUseId": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
+              "name": "get_weather",
+              "input": {
+                "format": "celsius",
+                "location": "Columbus, OH"
+              }
             }
           }
-        }
-      ]
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "toolResult": {
+              "toolUseId": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
+              "content": [
+                {
+                  "text": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+                }
+              ],
+              "status": null
+            }
+          }
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 4096
     },
-    {
-      "role": "user",
-      "content": [
+    "toolConfig": {
+      "tools": [
         {
-          "toolResult": {
-            "toolUseId": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
-            "content": [
-              {
-                "text": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+          "toolSpec": {
+            "name": "agentgateway_dummy_do_not_call",
+            "description": null,
+            "inputSchema": {
+              "json": {
+                "type": "object"
               }
-            ],
-            "status": null
+            }
           }
         }
       ]
     }
-  ],
-  "inferenceConfig": {
-    "maxTokens": 4096
   },
-  "toolConfig": {
-    "tools": [
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-3.5-turbo",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {},
+    "prompt": [
       {
-        "toolSpec": {
-          "name": "agentgateway_dummy_do_not_call",
-          "description": null,
-          "inputSchema": {
-            "json": {
-              "type": "object"
-            }
-          }
-        }
+        "role": "user",
+        "content": "How is the current weather in Columbus?"
+      },
+      {
+        "role": "assistant",
+        "content": ""
+      },
+      {
+        "role": "tool",
+        "content": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
       }
     ]
   }

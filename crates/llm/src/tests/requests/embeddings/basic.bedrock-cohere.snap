@@ -7,8 +7,20 @@ info:
   dimensions: 1024
 ---
 {
-  "texts": [
-    "hello world"
-  ],
-  "input_type": "search_query"
+  "request": {
+    "texts": [
+      "hello world"
+    ],
+    "input_type": "search_query"
+  },
+  "parsed": {
+    "input_format": "Embeddings",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "text-embedding-3-small",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {
+      "dimensions": 1024
+    }
+  }
 }

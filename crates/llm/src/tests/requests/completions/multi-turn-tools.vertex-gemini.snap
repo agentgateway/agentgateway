@@ -44,93 +44,125 @@ info:
             - location
 ---
 {
-  "contents": [
-    {
-      "role": "user",
-      "parts": [
-        {
-          "text": "Weather in Columbus and Berlin?"
-        }
-      ]
-    },
-    {
-      "role": "model",
-      "parts": [
-        {
-          "functionCall": {
-            "name": "get_weather",
-            "args": {
-              "location": "Columbus"
-            }
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Weather in Columbus and Berlin?"
           }
-        }
-      ]
-    },
-    {
-      "role": "user",
-      "parts": [
-        {
-          "functionResponse": {
-            "name": "get_weather",
-            "response": {
-              "content": "{\"temp\":15}"
-            }
-          }
-        },
-        {
-          "text": " "
-        }
-      ]
-    },
-    {
-      "role": "model",
-      "parts": [
-        {
-          "functionCall": {
-            "name": "get_weather",
-            "args": {
-              "location": "Berlin"
-            }
-          }
-        }
-      ]
-    },
-    {
-      "role": "user",
-      "parts": [
-        {
-          "functionResponse": {
-            "name": "get_weather",
-            "response": {
-              "content": "{\"temp\":9}"
-            }
-          }
-        },
-        {
-          "text": " "
-        }
-      ]
-    }
-  ],
-  "tools": [
-    {
-      "functionDeclarations": [
-        {
-          "name": "get_weather",
-          "description": "Get the current weather in a location",
-          "parameters": {
-            "type": "object",
-            "properties": {
-              "location": {
-                "type": "string"
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "functionCall": {
+              "name": "get_weather",
+              "args": {
+                "location": "Columbus"
               }
-            },
-            "required": [
-              "location"
-            ]
+            }
           }
-        }
-      ]
-    }
-  ]
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "functionResponse": {
+              "name": "get_weather",
+              "response": {
+                "content": "{\"temp\":15}"
+              }
+            }
+          },
+          {
+            "text": " "
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "functionCall": {
+              "name": "get_weather",
+              "args": {
+                "location": "Berlin"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "functionResponse": {
+              "name": "get_weather",
+              "response": {
+                "content": "{\"temp\":9}"
+              }
+            }
+          },
+          {
+            "text": " "
+          }
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "functionDeclarations": [
+          {
+            "name": "get_weather",
+            "description": "Get the current weather in a location",
+            "parameters": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "location"
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gemini-2.5-pro",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Weather in Columbus and Berlin?"
+      },
+      {
+        "role": "assistant",
+        "content": ""
+      },
+      {
+        "role": "tool",
+        "content": "{\"temp\":15}"
+      },
+      {
+        "role": "assistant",
+        "content": ""
+      },
+      {
+        "role": "tool",
+        "content": "{\"temp\":9}"
+      }
+    ]
+  }
 }

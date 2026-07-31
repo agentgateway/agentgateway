@@ -26,82 +26,100 @@ info:
       output: "{ \"temperature\": 22, \"condition\": \"Sunny\" }"
 ---
 {
-  "modelId": "gpt-4o",
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "text": "How is the weather in Columbus and New York?"
-        }
-      ]
-    },
-    {
-      "role": "assistant",
-      "content": [
-        {
-          "toolUse": {
-            "toolUseId": "call_1",
-            "name": "get_weather",
-            "input": {
-              "location": "Columbus, OH"
+  "request": {
+    "modelId": "gpt-4o",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "How is the weather in Columbus and New York?"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "toolUse": {
+              "toolUseId": "call_1",
+              "name": "get_weather",
+              "input": {
+                "location": "Columbus, OH"
+              }
+            }
+          },
+          {
+            "toolUse": {
+              "toolUseId": "call_2",
+              "name": "get_weather",
+              "input": {
+                "location": "New York, NY"
+              }
             }
           }
-        },
-        {
-          "toolUse": {
-            "toolUseId": "call_2",
-            "name": "get_weather",
-            "input": {
-              "location": "New York, NY"
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "toolResult": {
+              "toolUseId": "call_1",
+              "content": [
+                {
+                  "text": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+                }
+              ],
+              "status": null
+            }
+          },
+          {
+            "toolResult": {
+              "toolUseId": "call_2",
+              "content": [
+                {
+                  "text": "{ \"temperature\": 22, \"condition\": \"Sunny\" }"
+                }
+              ],
+              "status": null
             }
           }
-        }
-      ]
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 1024
     },
-    {
-      "role": "user",
-      "content": [
+    "toolConfig": {
+      "tools": [
         {
-          "toolResult": {
-            "toolUseId": "call_1",
-            "content": [
-              {
-                "text": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+          "toolSpec": {
+            "name": "agentgateway_dummy_do_not_call",
+            "description": null,
+            "inputSchema": {
+              "json": {
+                "type": "object"
               }
-            ],
-            "status": null
-          }
-        },
-        {
-          "toolResult": {
-            "toolUseId": "call_2",
-            "content": [
-              {
-                "text": "{ \"temperature\": 22, \"condition\": \"Sunny\" }"
-              }
-            ],
-            "status": null
+            }
           }
         }
       ]
     }
-  ],
-  "inferenceConfig": {
-    "maxTokens": 1024
   },
-  "toolConfig": {
-    "tools": [
+  "parsed": {
+    "input_format": "Responses",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-4o",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
       {
-        "toolSpec": {
-          "name": "agentgateway_dummy_do_not_call",
-          "description": null,
-          "inputSchema": {
-            "json": {
-              "type": "object"
-            }
-          }
-        }
+        "role": "user",
+        "content": "How is the weather in Columbus and New York?"
       }
     ]
   }

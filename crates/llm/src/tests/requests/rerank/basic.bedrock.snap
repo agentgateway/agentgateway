@@ -11,50 +11,60 @@ info:
   top_n: 2
 ---
 {
-  "queries": [
-    {
-      "type": "TEXT",
-      "textQuery": {
-        "text": "What is the capital of the United States?"
-      }
-    }
-  ],
-  "sources": [
-    {
-      "type": "INLINE",
-      "inlineDocumentSource": {
+  "request": {
+    "queries": [
+      {
         "type": "TEXT",
-        "textDocument": {
-          "text": "Carson City is the capital city of the American state of Nevada."
+        "textQuery": {
+          "text": "What is the capital of the United States?"
         }
       }
-    },
-    {
-      "type": "INLINE",
-      "inlineDocumentSource": {
-        "type": "TEXT",
-        "textDocument": {
-          "text": "Washington, D.C. is the capital of the United States."
+    ],
+    "sources": [
+      {
+        "type": "INLINE",
+        "inlineDocumentSource": {
+          "type": "TEXT",
+          "textDocument": {
+            "text": "Carson City is the capital city of the American state of Nevada."
+          }
         }
-      }
-    },
-    {
-      "type": "INLINE",
-      "inlineDocumentSource": {
-        "type": "TEXT",
-        "textDocument": {
-          "text": "Capital punishment has existed in the United States since colonial times."
-        }
-      }
-    }
-  ],
-  "rerankingConfiguration": {
-    "type": "BEDROCK_RERANKING_MODEL",
-    "bedrockRerankingConfiguration": {
-      "modelConfiguration": {
-        "modelArn": "arn:aws:bedrock:us-west-2::foundation-model/cohere.rerank-v3-5:0"
       },
-      "numberOfResults": 2
+      {
+        "type": "INLINE",
+        "inlineDocumentSource": {
+          "type": "TEXT",
+          "textDocument": {
+            "text": "Washington, D.C. is the capital of the United States."
+          }
+        }
+      },
+      {
+        "type": "INLINE",
+        "inlineDocumentSource": {
+          "type": "TEXT",
+          "textDocument": {
+            "text": "Capital punishment has existed in the United States since colonial times."
+          }
+        }
+      }
+    ],
+    "rerankingConfiguration": {
+      "type": "BEDROCK_RERANKING_MODEL",
+      "bedrockRerankingConfiguration": {
+        "modelConfiguration": {
+          "modelArn": "arn:aws:bedrock:us-west-2::foundation-model/cohere.rerank-v3-5:0"
+        },
+        "numberOfResults": 2
+      }
     }
+  },
+  "parsed": {
+    "input_format": "Rerank",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "rerank-v3.5",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {}
   }
 }

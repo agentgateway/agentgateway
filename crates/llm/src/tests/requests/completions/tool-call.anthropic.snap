@@ -20,41 +20,65 @@ info:
       content: "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
 ---
 {
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "type": "text",
-          "text": "How is the current weather in Columbus?"
-        }
-      ]
-    },
-    {
-      "role": "assistant",
-      "content": [
-        {
-          "type": "tool_use",
-          "id": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
-          "name": "get_weather",
-          "input": {
-            "format": "celsius",
-            "location": "Columbus, OH"
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "How is the current weather in Columbus?"
           }
-        }
-      ]
-    },
-    {
-      "role": "user",
-      "content": [
-        {
-          "type": "tool_result",
-          "tool_use_id": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
-          "content": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
-        }
-      ]
-    }
-  ],
-  "model": "gpt-3.5-turbo",
-  "max_tokens": 4096
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
+            "name": "get_weather",
+            "input": {
+              "format": "celsius",
+              "location": "Columbus, OH"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "tool_result",
+            "tool_use_id": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
+            "content": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+          }
+        ]
+      }
+    ],
+    "model": "gpt-3.5-turbo",
+    "max_tokens": 4096
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-3.5-turbo",
+    "provider": "anthropic",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "How is the current weather in Columbus?"
+      },
+      {
+        "role": "assistant",
+        "content": ""
+      },
+      {
+        "role": "tool",
+        "content": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+      }
+    ]
+  }
 }

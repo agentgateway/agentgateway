@@ -9,20 +9,36 @@ info:
   reasoning_effort: xhigh
 ---
 {
-  "contents": [
-    {
-      "role": "user",
-      "parts": [
-        {
-          "text": "Deeply analyze quantum gravity"
-        }
-      ]
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Deeply analyze quantum gravity"
+          }
+        ]
+      }
+    ],
+    "generationConfig": {
+      "thinkingConfig": {
+        "thinkingBudget": 2048,
+        "includeThoughts": true
+      }
     }
-  ],
-  "generationConfig": {
-    "thinkingConfig": {
-      "thinkingBudget": 2048,
-      "includeThoughts": true
-    }
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-opus-4-6",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Deeply analyze quantum gravity"
+      }
+    ]
   }
 }

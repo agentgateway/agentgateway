@@ -107,7 +107,7 @@ pub enum RouteType {
 	Rerank,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
 pub enum InputFormat {
 	Completions,
 	Messages,
@@ -150,30 +150,9 @@ pub enum ChatFormat {
 	VertexGemini,
 }
 
-impl ChatFormat {
-	pub const fn tag(&self) -> &'static str {
-		match self {
-			ChatFormat::OpenAICompletions => "openai-completions",
-			ChatFormat::OpenAIResponses => "openai-responses",
-			ChatFormat::AnthropicMessages => "anthropic-messages",
-			ChatFormat::BedrockConverse => "bedrock-converse",
-			ChatFormat::VertexGemini => "vertex-gemini",
-		}
-	}
-	pub fn from_tag(tag: &str) -> Option<Self> {
-		match tag {
-			"openai-completions" => Some(ChatFormat::OpenAICompletions),
-			"openai-responses" => Some(ChatFormat::OpenAIResponses),
-			"anthropic-messages" => Some(ChatFormat::AnthropicMessages),
-			"bedrock-converse" => Some(ChatFormat::BedrockConverse),
-			"vertex-gemini" => Some(ChatFormat::VertexGemini),
-			_ => None,
-		}
-	}
-}
-
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct LLMRequest {
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub input_tokens: Option<u64>,
 	pub input_format: InputFormat,
 	pub cache_convention: CacheTokenConvention,
@@ -181,7 +160,9 @@ pub struct LLMRequest {
 	pub provider: Strng,
 	pub streaming: bool,
 	pub params: LLMRequestParams,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub prompt: Option<Arc<Vec<SimpleChatCompletionMessage>>>,
+	#[serde(skip)]
 	pub provider_state: Option<ProviderState>,
 }
 
@@ -193,7 +174,7 @@ pub enum ProviderState {
 	VertexGemini,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
 pub enum CacheTokenConvention {
 	#[default]
 	InputIncludesCache,

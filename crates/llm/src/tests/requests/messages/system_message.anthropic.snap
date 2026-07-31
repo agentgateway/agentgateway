@@ -17,28 +17,50 @@ info:
       content: The following skills are available for use.
 ---
 {
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "type": "text",
-          "text": "<system-reminder>\nAs you answer, be concise."
-        },
-        {
-          "type": "text",
-          "text": "hola",
-          "cache_control": {
-            "type": "ephemeral"
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "<system-reminder>\nAs you answer, be concise."
+          },
+          {
+            "type": "text",
+            "text": "hola",
+            "cache_control": {
+              "type": "ephemeral"
+            }
           }
-        }
-      ]
+        ]
+      },
+      {
+        "role": "system",
+        "content": "The following skills are available for use."
+      }
+    ],
+    "model": "claude-opus-4-8",
+    "max_tokens": 1024
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-opus-4-8",
+    "provider": "anthropic",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
     },
-    {
-      "role": "system",
-      "content": "The following skills are available for use."
-    }
-  ],
-  "model": "claude-opus-4-8",
-  "max_tokens": 1024
+    "prompt": [
+      {
+        "role": "user",
+        "content": "<system-reminder>\nAs you answer, be concise. hola"
+      },
+      {
+        "role": "system",
+        "content": "The following skills are available for use."
+      }
+    ]
+  }
 }
