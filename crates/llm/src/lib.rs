@@ -150,6 +150,18 @@ pub enum ChatFormat {
 	VertexGemini,
 }
 
+impl ChatFormat {
+	pub fn tag(&self) -> &'static str {
+		match self {
+			ChatFormat::OpenAICompletions => "openai_completions",
+			ChatFormat::OpenAIResponses => "openai_responses",
+			ChatFormat::AnthropicMessages => "anthropic_messages",
+			ChatFormat::BedrockConverse => "bedrock_converse",
+			ChatFormat::VertexGemini => "vertex_gemini",
+		}
+	}
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct LLMRequest {
 	#[serde(skip_serializing_if = "Option::is_none")]
