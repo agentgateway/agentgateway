@@ -1928,6 +1928,8 @@ type JwtSignAuth struct {
 	Claims map[string]apiextensionsv1.JSON `json:"claims"`
 
 	// Token lifetime used for exp. Defaults to 300s.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="ttl must be at least 1 second"
 	// +optional
@@ -1950,6 +1952,9 @@ type OAuthInMemoryTokenCache struct {
 	MaxEntries *uint32 `json:"maxEntries,omitempty"`
 
 	// TTL used when the token endpoint omits expires_in. Default 300s.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
+	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +optional
 	DefaultTTL *metav1.Duration `json:"defaultTtl,omitempty"`
 }

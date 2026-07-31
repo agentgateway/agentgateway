@@ -1,6 +1,5 @@
 ---
 source: crates/llm/src/golden_tests.rs
-assertion_line: 205
 description: src/tests/response/bedrock/tool.bin
 ---
 data: {"id":"request_id","choices":[{"index":0,"delta":{"content":null,"role":"assistant"}}],"created":123,"model":"input-model","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}

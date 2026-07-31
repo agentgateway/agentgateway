@@ -1,6 +1,6 @@
 ---
-source: crates/agentgateway/src/llm/tests.rs
-description: src/llm/tests/requests/completions/basic.json
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/completions/basic.json
 info:
   model: replaceme
   messages:

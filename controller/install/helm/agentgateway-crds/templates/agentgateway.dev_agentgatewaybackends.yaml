@@ -4266,7 +4266,11 @@ spec:
                                                     description: TTL used when the
                                                       token endpoint omits expires_in.
                                                       Default 300s.
+                                                    maxLength: 32
                                                     type: string
+                                                    x-kubernetes-validations:
+                                                    - message: invalid duration value
+                                                      rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                                   maxEntries:
                                                     description: Default 8192; 0 disables
                                                       the cache.
@@ -5104,6 +5108,7 @@ spec:
                                           ttl:
                                             description: Token lifetime used for exp.
                                               Defaults to 300s.
+                                            maxLength: 32
                                             type: string
                                             x-kubernetes-validations:
                                             - message: invalid duration value
@@ -5336,7 +5341,11 @@ spec:
                                                     description: TTL used when the
                                                       token endpoint omits expires_in.
                                                       Default 300s.
+                                                    maxLength: 32
                                                     type: string
+                                                    x-kubernetes-validations:
+                                                    - message: invalid duration value
+                                                      rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                                   maxEntries:
                                                     description: Default 8192; 0 disables
                                                       the cache.
@@ -7388,7 +7397,11 @@ spec:
                                                   description: TTL used when the token
                                                     endpoint omits expires_in. Default
                                                     300s.
+                                                  maxLength: 32
                                                   type: string
+                                                  x-kubernetes-validations:
+                                                  - message: invalid duration value
+                                                    rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                                 maxEntries:
                                                   description: Default 8192; 0 disables
                                                     the cache.
@@ -8205,6 +8218,7 @@ spec:
                                         ttl:
                                           description: Token lifetime used for exp.
                                             Defaults to 300s.
+                                          maxLength: 32
                                           type: string
                                           x-kubernetes-validations:
                                           - message: invalid duration value
@@ -8433,7 +8447,11 @@ spec:
                                                   description: TTL used when the token
                                                     endpoint omits expires_in. Default
                                                     300s.
+                                                  maxLength: 32
                                                   type: string
+                                                  x-kubernetes-validations:
+                                                  - message: invalid duration value
+                                                    rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                                 maxEntries:
                                                   description: Default 8192; 0 disables
                                                     the cache.
@@ -12540,7 +12558,11 @@ spec:
                                   defaultTtl:
                                     description: TTL used when the token endpoint
                                       omits expires_in. Default 300s.
+                                    maxLength: 32
                                     type: string
+                                    x-kubernetes-validations:
+                                    - message: invalid duration value
+                                      rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                   maxEntries:
                                     description: Default 8192; 0 disables the cache.
                                     format: int32
@@ -13269,6 +13291,7 @@ spec:
                           ttl:
                             description: Token lifetime used for exp. Defaults to
                               300s.
+                            maxLength: 32
                             type: string
                             x-kubernetes-validations:
                             - message: invalid duration value
@@ -13481,7 +13504,11 @@ spec:
                                   defaultTtl:
                                     description: TTL used when the token endpoint
                                       omits expires_in. Default 300s.
+                                    maxLength: 32
                                     type: string
+                                    x-kubernetes-validations:
+                                    - message: invalid duration value
+                                      rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                   maxEntries:
                                     description: Default 8192; 0 disables the cache.
                                     format: int32

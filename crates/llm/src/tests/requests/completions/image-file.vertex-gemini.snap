@@ -1,6 +1,6 @@
 ---
-source: crates/agentgateway/src/llm/tests.rs
-description: src/llm/tests/requests/completions/image-file.json
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/completions/image-file.json
 info:
   model: gemini-2.5-pro
   messages:

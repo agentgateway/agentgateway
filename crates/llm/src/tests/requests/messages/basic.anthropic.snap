@@ -12,15 +12,9 @@ info:
   "messages": [
     {
       "role": "user",
-      "content": [
-        {
-          "type": "text",
-          "text": "Hello, world"
-        }
-      ]
+      "content": "Hello, world"
     }
   ],
   "model": "claude-sonnet-4-20250514",
-  "max_completion_tokens": 1024,
-  "stream": false
+  "max_tokens": 1024
 }
