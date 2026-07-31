@@ -1,3 +1,4 @@
+# Optional model:auto enforcement for the cost-based example.
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:

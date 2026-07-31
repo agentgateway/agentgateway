@@ -19,6 +19,7 @@ This directory contains examples of how to use agentgateway. Each example is nam
 * [llm-ollama-postgres](llm-ollama-postgres/README.md): proxy local Ollama models and store request logs in Postgres.
 * [llm-prompt-enrichment](llm-prompt-enrichment/README.md): append or prepend prompts to agentgateway AI requests.
 * [llm-prompt-guard](llm-prompt-guard/README.md): configure prompt guards for LLM requests and responses.
+* [llm-semantic-routing](llm-semantic-routing/README.md): use vLLM Semantic Router for cost-based or tier-aware semantic model selection.
 * [llm-standalone-epp](llm-standalone-epp/README.md): run agentgateway as the sidecar proxy next to a standalone EPP deployment on Kubernetes.
 * [llm-telemetry](llm-telemetry/README.md): export traces for LLM backend calls.
 
