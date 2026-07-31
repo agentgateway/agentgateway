@@ -2024,7 +2024,7 @@ pub mod to_messages {
 		let cached = um.cached_content_token_count.unwrap_or(0) as usize;
 		let completion = um.candidates_token_count.unwrap_or(0) as usize;
 		messages::Usage {
-			input_tokens: prompt,
+			input_tokens: prompt.saturating_sub(cached),
 			output_tokens: completion,
 			cache_creation_input_tokens: None,
 			cache_read_input_tokens: (cached > 0).then_some(cached),

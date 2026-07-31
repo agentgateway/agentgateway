@@ -228,6 +228,7 @@ fn cache_convention_for(
 	provider: &AIProvider,
 	provider_format: Option<custom::ProviderFormat>,
 	request_model: &str,
+	input_format: InputFormat,
 ) -> CacheTokenConvention {
 	use CacheTokenConvention::*;
 	use custom::ProviderFormat::{AnthropicTokenCount, Messages};
@@ -237,6 +238,11 @@ fn cache_convention_for(
 			InputExcludesCache
 		},
 		AIProvider::Vertex(p) if p.is_anthropic_model(Some(request_model)) => InputExcludesCache,
+		AIProvider::Vertex(p)
+			if p.is_gemini_model(Some(request_model)) && input_format == InputFormat::Messages =>
+		{
+			InputExcludesCache
+		},
 		AIProvider::Custom(_) => match provider_format {
 			Some(Messages | AnthropicTokenCount) => InputExcludesCache,
 			_ => InputIncludesCache,
@@ -1729,8 +1735,12 @@ impl AIProvider {
 		if original_format == InputFormat::Detect {
 			types::detect::amend_request_info(&mut llm_info, parts.uri.path());
 		}
-		llm_info.cache_convention =
-			cache_convention_for(self, provider_format, &llm_info.request_model);
+		llm_info.cache_convention = cache_convention_for(
+			self,
+			provider_format,
+			&llm_info.request_model,
+			original_format,
+		);
 		if let Some(log) = log
 			&& log.cel.cel_context.needs_llm_prompt()
 			&& original_format.supports_prompt_guard()

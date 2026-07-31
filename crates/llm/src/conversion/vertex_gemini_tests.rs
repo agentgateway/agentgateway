@@ -1607,6 +1607,25 @@ fn msg_resp_usage_subtracts_cached_tokens() {
 	assert_eq!(r["usage"]["cache_read_input_tokens"], 30);
 }
 
+#[test]
+fn msg_resp_llm_response_usage_matches_wire_usage() {
+	let r = to_messages::translate_response(&gemini_response_bytes(json!({
+		"candidates": [{ "content": { "role": "model", "parts": [{ "text": "hi" }] }, "finishReason": "STOP" }],
+		"usageMetadata": {
+			"promptTokenCount": 100,
+			"candidatesTokenCount": 20,
+			"totalTokenCount": 120,
+			"cachedContentTokenCount": 30
+		}
+	})))
+	.expect("translate_response ok")
+	.to_llm_response(crate::LogContentFields::default());
+
+	assert_eq!(r.input_tokens, Some(70), "cache-excluded, matches the wire");
+	assert_eq!(r.output_tokens, Some(20));
+	assert_eq!(r.cached_input_tokens, Some(30));
+}
+
 // ---------- Streaming: Messages (to_messages) ----------
 
 /// Feed one Gemini stream chunk through the Messages stream state and return all emitted
