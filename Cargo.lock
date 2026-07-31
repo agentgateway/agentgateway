@@ -373,6 +373,7 @@ dependencies = [
  "libc",
  "mimalloc",
  "pprof-alloc",
+ "tempfile",
  "tikv-jemallocator",
  "tokio",
  "tracing",

@@ -60,6 +60,28 @@ mod tests {
 	use super::*;
 
 	#[test]
+	fn writes_config_with_reusable_litellm_provider() {
+		let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+			.join("../agentgateway/src/tests/import/litellm/centralized-credentials.yaml");
+		let output_dir = tempfile::tempdir().expect("create output directory");
+		let output = output_dir.path().join("config.yaml");
+		import_file(fixture, Some(output.clone()), "litellm").expect("import LiteLLM config");
+
+		let generated = fs_err::read_to_string(output).expect("read generated config");
+		assert!(
+			generated.contains("reference: imported/litellm/shared-openai/openAI"),
+			"generated model should reference the reusable provider"
+		);
+		assert!(
+			generated.contains(&format!(
+				"url: sqlite://{}/data.db",
+				output_dir.path().display()
+			)),
+			"generated database should be beside the config"
+		);
+	}
+
+	#[test]
 	fn places_database_beside_generated_config() {
 		assert_eq!(
 			import_database_url(Some(Path::new("/tmp/imported/config.yaml"))),

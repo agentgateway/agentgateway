@@ -38,6 +38,9 @@ tracing.workspace = true
 [target.'cfg(target_os = "linux")'.dependencies]
 tikv-jemallocator = { workspace = true, optional = true }
 
+[dev-dependencies]
+tempfile.workspace = true
+
 [lints.clippy]
 # This rule makes code more confusing
 assigning_clones = "allow"
