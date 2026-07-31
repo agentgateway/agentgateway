@@ -2437,15 +2437,49 @@ pub struct LocalBackendPolicies {
 	pub ai: Option<llm::Policy>,
 }
 
-#[apply(schema_de!)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+	feature = "schema",
+	schemars(rename_all = "camelCase", deny_unknown_fields)
+)]
 pub struct LocalRouteBackendPolicies {
-	#[serde(flatten)]
+	#[cfg_attr(feature = "schema", serde(flatten))]
 	backend: LocalBackendPolicies,
 
 	/// Keep requests whose CEL expression produces the same value on one service endpoint.
-	#[serde(default)]
+	#[cfg_attr(feature = "schema", schemars(default))]
 	pub session_persistence: Option<http::sessionpersistence::Policy>,
+}
+
+impl<'de> Deserialize<'de> for LocalRouteBackendPolicies {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let value = serde_json::Value::deserialize(deserializer)?;
+		let serde_json::Value::Object(mut fields) = value else {
+			return Err(serde::de::Error::custom(
+				"route backend policies must be an object",
+			));
+		};
+
+		// Deserialize the route-only policy separately, then pass every existing field through the
+		// original LocalBackendPolicies deserializer. This avoids nested serde(flatten), which causes
+		// the inner policy fields to be treated as unknown, while preserving its strict unknown-field
+		// validation and all existing wire formats.
+		let session_persistence = match fields.remove("sessionPersistence") {
+			None | Some(serde_json::Value::Null) => None,
+			Some(value) => Some(serde_json::from_value(value).map_err(serde::de::Error::custom)?),
+		};
+		let backend = serde_json::from_value(serde_json::Value::Object(fields))
+			.map_err(serde::de::Error::custom)?;
+
+		Ok(Self {
+			backend,
+			session_persistence,
+		})
+	}
 }
 
 enum InferenceRoutingScope {

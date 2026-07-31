@@ -281,6 +281,15 @@ fn test_local_backend_policies_reject_unknown_fields() {
 	assert!(err.to_string().contains("unknown field"), "{err}");
 }
 
+#[test]
+fn test_local_route_backend_policies_reject_unknown_fields() {
+	let err = crate::serdes::yamlviajson::from_str::<super::LocalRouteBackendPolicies>(
+		"mcpAuthorizatoin: {}",
+	)
+	.unwrap_err();
+	assert!(err.to_string().contains("unknown field"), "{err}");
+}
+
 #[tokio::test]
 async fn test_multiple_wildcard_binds_rejected() {
 	let err = normalize_test_yaml(
