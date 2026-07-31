@@ -124,6 +124,8 @@ func enqueueStatus[T any](sw WorkerQueue, obj controllers.Object, ws T, extraGVK
 		res.GroupVersionKind = wellknown.AgentgatewayPolicyGVK
 	case *agentgateway.AgentgatewayBackend:
 		res.GroupVersionKind = wellknown.AgentgatewayBackendGVK
+	case *agentgateway.AgentgatewayModel:
+		res.GroupVersionKind = wellknown.AgentgatewayModelGVK
 	case *gwv1.ListenerSet:
 		res.GroupVersionKind = wellknown.ListenerSetGVK
 	case *gwv1.BackendTLSPolicy:

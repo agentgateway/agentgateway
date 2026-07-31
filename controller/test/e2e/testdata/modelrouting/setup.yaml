@@ -223,3 +223,21 @@ spec:
       - modelRef:
           name: internal-fast
         priority: 1
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: invalid-target
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  virtualModel:
+    weighted:
+      targets:
+      - modelRef:
+          name: does-not-exist
+        weight: 1
