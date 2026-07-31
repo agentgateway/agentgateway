@@ -759,8 +759,10 @@ fn translate_stop_reason(resp: &messages::StopReason) -> completions::FinishReas
 	}
 }
 
-/// Map a completions `FinishReason` to an Anthropic Messages `StopReason`.
-/// Used by native-provider response translators (e.g. Vertex Gemini → Messages).
+/// Map a completions `FinishReason` to an Anthropic Messages `StopReason` for native Gemini on Vertex.
+/// `ContentFilter` maps to `Refusal` because Gemini's safety-block finish reasons are surfaced here.
+/// The completions-path translators (OpenAI and compat providers) keep their own mapping
+/// where `ContentFilter` maps to `EndTurn`.
 pub(crate) fn finish_reason_to_stop_reason(
 	reason: completions::FinishReason,
 ) -> messages::StopReason {

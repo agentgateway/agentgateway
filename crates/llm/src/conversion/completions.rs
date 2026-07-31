@@ -195,7 +195,14 @@ pub mod from_messages {
 
 		let stop_reason = choice
 			.finish_reason
-			.map(crate::conversion::messages::finish_reason_to_stop_reason)
+			.map(|r| match r {
+				completions::FinishReason::Stop => messages::StopReason::EndTurn,
+				completions::FinishReason::Length => messages::StopReason::MaxTokens,
+				completions::FinishReason::ToolCalls | completions::FinishReason::FunctionCall => {
+					messages::StopReason::ToolUse
+				},
+				completions::FinishReason::ContentFilter => messages::StopReason::EndTurn,
+			})
 			.unwrap_or(messages::StopReason::EndTurn);
 
 		let cache_creation_input_tokens = usage.as_ref().and_then(|u| {
@@ -618,8 +625,14 @@ pub mod from_messages {
 						}
 
 						if let Some(finish_reason) = &choice.finish_reason {
-							let stop_reason =
-								crate::conversion::messages::finish_reason_to_stop_reason(*finish_reason);
+							let stop_reason = match finish_reason {
+								completions::FinishReason::Stop => messages::StopReason::EndTurn,
+								completions::FinishReason::Length => messages::StopReason::MaxTokens,
+								completions::FinishReason::ToolCalls | completions::FinishReason::FunctionCall => {
+									messages::StopReason::ToolUse
+								},
+								completions::FinishReason::ContentFilter => messages::StopReason::EndTurn,
+							};
 							state.pending_stop_reason = Some(stop_reason);
 						}
 					}
