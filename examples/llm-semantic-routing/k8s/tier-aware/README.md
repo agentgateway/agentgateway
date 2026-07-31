@@ -42,6 +42,16 @@ ExtProc service, not an `IntelligentPool` or `IntelligentRoute`. A vSR process
 using Kubernetes configuration expects one pool and one route in its watched
 namespace, so this example runs one vSR release per tier.
 
+The `semantic-router-basic`, `semantic-router-standard`, and
+`semantic-router-pro` namespaces isolate the watched configuration objects;
+they do not isolate the vSR runtimes. All three vSR Deployments and Services
+run in `agentgateway-system` and each process watches one of those configuration
+namespaces. Namespace-per-runtime isolation is not required for this pattern.
+Deploy each vSR runtime into its own namespace only when you also need separate
+RBAC, resource quotas, network policies, or operational ownership. In that
+case, update the ExtProc service references and any required cross-namespace
+permissions accordingly.
+
 The provider selection deliberately uses `AgentgatewayModel` instead of an
 `HTTPRoute` header match. Gateway API route matching happens before a
 `PreRouting` ExtProc can inspect and rewrite the request body, so a header
