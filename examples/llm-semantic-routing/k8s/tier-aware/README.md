@@ -210,12 +210,28 @@ checks as defense in depth.
 
 ## Run Requests
 
-Set the Gateway address:
+In an environment where a load balancer assigns the Gateway an address, set
+the endpoint from Gateway status:
 
 ```bash
 export INGRESS_GW_ADDRESS="http://$(kubectl get gateway agentgateway-proxy \
   -n agentgateway-system \
   -o jsonpath='{.status.addresses[0].value}')"
+```
+
+A local kind cluster does not assign a load-balancer address by default, so
+`.status.addresses` is empty. Port-forward the generated Service instead:
+
+```bash
+kubectl port-forward \
+  -n agentgateway-system \
+  service/agentgateway-proxy 8080:80
+```
+
+In another terminal, set the local endpoint:
+
+```bash
+export INGRESS_GW_ADDRESS=http://127.0.0.1:8080
 ```
 
 Use `model: auto` so vSR performs semantic model selection. The debug header
