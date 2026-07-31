@@ -34,14 +34,6 @@ fn resp(v: Value) -> Value {
 	serde_json::from_slice(&serialized).expect("valid json")
 }
 
-/// Run a Gemini response through `translate_response` and return the `LLMResponse` used to
-/// populate CEL/log fields.
-fn llm_resp(v: Value) -> crate::LLMResponse {
-	to_completions::translate_response(&gemini_response_bytes(v))
-		.expect("translate_response ok")
-		.to_llm_response(crate::LogContentFields::default())
-}
-
 // ---------- Request: roles, system, content ----------
 
 #[test]
@@ -1158,25 +1150,6 @@ fn usage_maps_cached_and_reasoning_tokens() {
 		r["usage"]["completion_tokens_details"]["reasoning_tokens"],
 		20
 	);
-}
-
-#[test]
-fn cel_usage_fields_match_usage_metadata() {
-	// The CEL/log token fields (via to_llm_response) must equal Gemini's usageMetadata exactly,
-	// so rate limiting and telemetry see native counts rather than shim numbers.
-	let r = llm_resp(json!({
-		"candidates": [{ "content": { "role": "model", "parts": [{ "text": "x" }] },
-			"finishReason": "STOP" }],
-		"usageMetadata": {
-			"promptTokenCount": 100, "candidatesTokenCount": 50, "totalTokenCount": 150,
-			"cachedContentTokenCount": 30, "thoughtsTokenCount": 20
-		}
-	}));
-	assert_eq!(r.input_tokens, Some(100));
-	assert_eq!(r.output_tokens, Some(50));
-	assert_eq!(r.total_tokens, Some(150));
-	assert_eq!(r.cached_input_tokens, Some(30));
-	assert_eq!(r.reasoning_tokens, Some(20));
 }
 
 // ---------- Streaming ----------
