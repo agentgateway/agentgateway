@@ -263,7 +263,7 @@ pub mod from_completions {
 		serde_json::to_vec(&out).map_err(AIError::RequestMarshal)
 	}
 
-	pub(super) fn build_request(
+	fn build_request(
 		req: &types::completions::Request,
 	) -> Result<vg::GenerateContentRequest, AIError> {
 		let model = req
