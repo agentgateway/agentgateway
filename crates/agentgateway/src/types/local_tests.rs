@@ -1360,6 +1360,57 @@ binds:
 }
 
 #[tokio::test]
+async fn test_session_persistence_requires_service_backend() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8000
+        policies:
+          sessionPersistence:
+            source: request.headers["x-session-id"]
+"#;
+
+	let err = normalize_test_config(input).await.unwrap_err();
+	assert!(
+		err
+			.to_string()
+			.contains("sessionPersistence is only supported on service route backends"),
+		"unexpected error: {err}"
+	);
+}
+
+#[tokio::test]
+async fn test_session_persistence_service_backend_config() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - service:
+          name: default/my-model
+          port: 8000
+        policies:
+          sessionPersistence:
+            source: request.headers["x-session-id"]
+"#;
+
+	let normalized = normalize_test_config(input)
+		.await
+		.expect("service backends should allow session persistence");
+	let policies = &normalized.listener_routes[0].1[0].backends[0].inline_policies;
+	assert!(
+		policies
+			.iter()
+			.any(|policy| matches!(policy, BackendTrafficPolicy::SessionPersistence(_))),
+		"expected a normalized session persistence policy"
+	);
+}
+
+#[tokio::test]
 async fn test_local_ext_authz_conditional_policy() {
 	let input = r#"
 binds:

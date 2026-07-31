@@ -1319,7 +1319,7 @@ pub struct LocalRouteBackend {
 	pub backend: LocalBackend,
 	/// Backend-level policies such as TLS, authentication, and transformations.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub policies: Option<LocalBackendPolicies>,
+	pub policies: Option<LocalRouteBackendPolicies>,
 }
 
 fn default_weight() -> usize {
@@ -2437,6 +2437,17 @@ pub struct LocalBackendPolicies {
 	pub ai: Option<llm::Policy>,
 }
 
+#[apply(schema_de!)]
+#[derive(Default)]
+pub struct LocalRouteBackendPolicies {
+	#[serde(flatten)]
+	backend: LocalBackendPolicies,
+
+	/// Keep requests whose CEL expression produces the same value on one service endpoint.
+	#[serde(default)]
+	pub session_persistence: Option<http::sessionpersistence::Policy>,
+}
+
 enum InferenceRoutingScope {
 	ServiceRouteBackend,
 	NonServiceRouteBackend,
@@ -2464,6 +2475,42 @@ fn validate_inference_routing_scope(
 				"inferenceRouting is only supported on service route backends, not AI provider policies"
 			)
 		},
+	}
+}
+
+fn validate_route_backend_policy_scope(
+	backend: &LocalBackend,
+	policies: Option<&LocalRouteBackendPolicies>,
+) -> anyhow::Result<()> {
+	let is_service = matches!(backend, LocalBackend::Service { .. });
+	validate_inference_routing_scope(
+		policies.map(|p| &p.backend),
+		if is_service {
+			InferenceRoutingScope::ServiceRouteBackend
+		} else {
+			InferenceRoutingScope::NonServiceRouteBackend
+		},
+	)?;
+	if !is_service && policies.is_some_and(|p| p.session_persistence.is_some()) {
+		bail!("sessionPersistence is only supported on service route backends")
+	}
+	Ok(())
+}
+
+impl LocalRouteBackendPolicies {
+	pub async fn translate(
+		self,
+		resources: &crate::resource_manager::ResourceFetcher,
+	) -> anyhow::Result<Vec<BackendTrafficPolicy>> {
+		let LocalRouteBackendPolicies {
+			backend,
+			session_persistence,
+		} = self;
+		let mut policies = backend.translate(resources).await?;
+		if let Some(policy) = session_persistence {
+			policies.push(BackendTrafficPolicy::SessionPersistence(policy));
+		}
+		Ok(policies)
 	}
 }
 
@@ -4741,14 +4788,7 @@ pub async fn convert_route(
 	let mut backend_refs = Vec::new();
 	let mut external_backends = Vec::new();
 	for (idx, b) in backends.iter().enumerate() {
-		validate_inference_routing_scope(
-			b.policies.as_ref(),
-			if matches!(b.backend, LocalBackend::Service { .. }) {
-				InferenceRoutingScope::ServiceRouteBackend
-			} else {
-				InferenceRoutingScope::NonServiceRouteBackend
-			},
-		)?;
+		validate_route_backend_policy_scope(&b.backend, b.policies.as_ref())?;
 		let backend_key = strng::format!("{key}/backend{idx}");
 		let policies = b
 			.policies

@@ -348,6 +348,9 @@ impl BackendPolicies {
 		if let Some(health) = self.health.as_ref() {
 			health.register_expressions(ctx);
 		}
+		if let Some(session_persistence) = self.session_persistence.as_ref() {
+			session_persistence.register_expressions(ctx);
+		}
 	}
 }
 
