@@ -160,6 +160,7 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			provider_preference: Default::default(),
 		};
 		for (name, providers) in COMPLETION_REQUESTS {
 			let path = format!("requests/completions/{name}.json");
@@ -188,6 +189,7 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			provider_preference: Default::default(),
 		};
 		let vertex = vertex::Provider {
 			model: Some(strng::new("anthropic/claude-sonnet-4-5")),
@@ -224,6 +226,7 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			provider_preference: Default::default(),
 		};
 		for (name, providers) in RESPONSES_REQUESTS {
 			let path = format!("requests/responses/{name}.json");
@@ -248,12 +251,14 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			provider_preference: Default::default(),
 		};
 		let cohere = bedrock::Provider {
 			model: Some(strng::new("cohere.embed-english-v3")),
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			provider_preference: Default::default(),
 		};
 		for (name, providers) in EMBEDDINGS_REQUESTS {
 			let path = format!("requests/embeddings/{name}.json");
@@ -284,6 +289,7 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			provider_preference: Default::default(),
 		};
 		let vertex = vertex::Provider {
 			model: Some(strng::new("semantic-ranker-default@latest")),
