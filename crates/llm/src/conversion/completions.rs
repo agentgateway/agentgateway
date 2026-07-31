@@ -721,7 +721,7 @@ pub mod from_messages {
 								completions::FinishReason::Stop => messages::StopReason::EndTurn,
 								completions::FinishReason::Length => messages::StopReason::MaxTokens,
 								completions::FinishReason::ToolCalls => messages::StopReason::ToolUse,
-								completions::FinishReason::ContentFilter => messages::StopReason::Refusal,
+								completions::FinishReason::ContentFilter => messages::StopReason::EndTurn,
 								completions::FinishReason::FunctionCall => messages::StopReason::ToolUse,
 							};
 							// Same contract as the buffered path: a named stop sequence is
