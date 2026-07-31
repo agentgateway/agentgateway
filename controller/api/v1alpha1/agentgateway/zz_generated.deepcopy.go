@@ -1546,7 +1546,7 @@ func (in *BackendEviction) DeepCopyInto(out *BackendEviction) {
 	*out = *in
 	if in.Duration != nil {
 		in, out := &in.Duration, &out.Duration
-		*out = new(v1.Duration)
+		*out = new(Duration)
 		**out = **in
 	}
 	if in.RestoreHealth != nil {
@@ -1627,7 +1627,7 @@ func (in *BackendHTTP) DeepCopyInto(out *BackendHTTP) {
 	}
 	if in.RequestTimeout != nil {
 		in, out := &in.RequestTimeout, &out.RequestTimeout
-		*out = new(v1.Duration)
+		*out = new(Duration)
 		**out = **in
 	}
 }
@@ -1722,7 +1722,7 @@ func (in *BackendTCP) DeepCopyInto(out *BackendTCP) {
 	}
 	if in.ConnectTimeout != nil {
 		in, out := &in.ConnectTimeout, &out.ConnectTimeout
-		*out = new(v1.Duration)
+		*out = new(Duration)
 		**out = **in
 	}
 }
@@ -2773,7 +2773,7 @@ func (in *FrontendHTTP) DeepCopyInto(out *FrontendHTTP) {
 	}
 	if in.HTTP1IdleTimeout != nil {
 		in, out := &in.HTTP1IdleTimeout, &out.HTTP1IdleTimeout
-		*out = new(v1.Duration)
+		*out = new(Duration)
 		**out = **in
 	}
 	if in.HTTP1HeaderCase != nil {
@@ -2803,17 +2803,17 @@ func (in *FrontendHTTP) DeepCopyInto(out *FrontendHTTP) {
 	}
 	if in.HTTP2KeepaliveInterval != nil {
 		in, out := &in.HTTP2KeepaliveInterval, &out.HTTP2KeepaliveInterval
-		*out = new(v1.Duration)
+		*out = new(Duration)
 		**out = **in
 	}
 	if in.HTTP2KeepaliveTimeout != nil {
 		in, out := &in.HTTP2KeepaliveTimeout, &out.HTTP2KeepaliveTimeout
-		*out = new(v1.Duration)
+		*out = new(Duration)
 		**out = **in
 	}
 	if in.MaxConnectionDuration != nil {
 		in, out := &in.MaxConnectionDuration, &out.MaxConnectionDuration
-		*out = new(v1.Duration)
+		*out = new(Duration)
 		**out = **in
 	}
 }
@@ -2868,7 +2868,7 @@ func (in *FrontendTLS) DeepCopyInto(out *FrontendTLS) {
 	*out = *in
 	if in.HandshakeTimeout != nil {
 		in, out := &in.HandshakeTimeout, &out.HandshakeTimeout
-		*out = new(v1.Duration)
+		*out = new(Duration)
 		**out = **in
 	}
 	if in.AlpnProtocols != nil {
@@ -3329,7 +3329,7 @@ func (in *JwtSignAuth) DeepCopyInto(out *JwtSignAuth) {
 	}
 	if in.TTL != nil {
 		in, out := &in.TTL, &out.TTL
-		*out = new(v1.Duration)
+		*out = new(Duration)
 		**out = **in
 	}
 	if in.Location != nil {
@@ -3359,12 +3359,12 @@ func (in *Keepalive) DeepCopyInto(out *Keepalive) {
 	}
 	if in.Time != nil {
 		in, out := &in.Time, &out.Time
-		*out = new(v1.Duration)
+		*out = new(Duration)
 		**out = **in
 	}
 	if in.Interval != nil {
 		in, out := &in.Interval, &out.Interval
-		*out = new(v1.Duration)
+		*out = new(Duration)
 		**out = **in
 	}
 }
@@ -4320,7 +4320,7 @@ func (in *OAuthInMemoryTokenCache) DeepCopyInto(out *OAuthInMemoryTokenCache) {
 	}
 	if in.DefaultTTL != nil {
 		in, out := &in.DefaultTTL, &out.DefaultTTL
-		*out = new(v1.Duration)
+		*out = new(Duration)
 		**out = **in
 	}
 }
@@ -5163,7 +5163,7 @@ func (in *RemoteJWKS) DeepCopyInto(out *RemoteJWKS) {
 	}
 	if in.CacheDuration != nil {
 		in, out := &in.CacheDuration, &out.CacheDuration
-		*out = new(v1.Duration)
+		*out = new(Duration)
 		**out = **in
 	}
 	in.PolicyBackendEndpoint.DeepCopyInto(&out.PolicyBackendEndpoint)
@@ -5286,7 +5286,7 @@ func (in *Timeouts) DeepCopyInto(out *Timeouts) {
 	*out = *in
 	if in.Request != nil {
 		in, out := &in.Request, &out.Request
-		*out = new(v1.Duration)
+		*out = new(Duration)
 		**out = **in
 	}
 }

@@ -134,8 +134,13 @@ func backendMCPAuthenticationOwner(namespace, name string, remote agentgateway.R
 }
 
 func TTLForRemote(remote agentgateway.RemoteJWKS) time.Duration {
+	defaultTTL := 5 * time.Minute
 	if remote.CacheDuration == nil {
-		return 5 * time.Minute
+		return defaultTTL
 	}
-	return remote.CacheDuration.Duration
+	ttl, err := time.ParseDuration(*remote.CacheDuration)
+	if err != nil {
+		return defaultTTL
+	}
+	return ttl
 }

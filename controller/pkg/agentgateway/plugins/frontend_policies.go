@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"google.golang.org/protobuf/types/known/durationpb"
 	"istio.io/istio/pkg/ptr"
 
 	"github.com/agentgateway/agentgateway/api"
@@ -50,7 +49,7 @@ func translateFrontendPolicyToAgw(
 	}
 
 	if s := frontend.HTTP; s != nil {
-		appendPolicy("http")(translateFrontendHTTP(policy, policyName), nil)
+		appendPolicy("http")(translateFrontendHTTP(policy, policyName))
 	}
 
 	if s := frontend.ProxyProtocol; s != nil {
@@ -62,11 +61,11 @@ func translateFrontendPolicyToAgw(
 	}
 
 	if s := frontend.TLS; s != nil {
-		appendPolicy("tls")(translateFrontendTLS(policy, policyName), nil)
+		appendPolicy("tls")(translateFrontendTLS(policy, policyName))
 	}
 
 	if s := frontend.TCP; s != nil {
-		appendPolicy("tcp")(translateFrontendTCP(policy, policyName), nil)
+		appendPolicy("tcp")(translateFrontendTCP(policy, policyName))
 	}
 
 	if s := frontend.NetworkAuthorization; s != nil {
@@ -304,16 +303,25 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 	return loggingPolicy, errors.Join(errs...)
 }
 
-func translateFrontendTCP(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
+func translateFrontendTCP(policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
 	tcp := policy.Spec.Frontend.TCP
 	spec := &api.FrontendPolicySpec_TCP{}
+	var errs []error
 	if ka := tcp.KeepAlive; ka != nil {
 		spec.Keepalives = &api.KeepaliveConfig{}
 		if ka.Time != nil {
-			spec.Keepalives.Time = durationpb.New(ka.Time.Duration)
+			var err error
+			spec.Keepalives.Time, err = durationToProto("frontend.tcp.keepAlive.time", *ka.Time)
+			if err != nil {
+				errs = append(errs, err)
+			}
 		}
 		if ka.Interval != nil {
-			spec.Keepalives.Interval = durationpb.New(ka.Interval.Duration)
+			var err error
+			spec.Keepalives.Interval, err = durationToProto("frontend.tcp.keepAlive.interval", *ka.Interval)
+			if err != nil {
+				errs = append(errs, err)
+			}
 		}
 		if ka.Retries != nil {
 			spec.Keepalives.Retries = castUint32(ka.Retries) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
@@ -336,7 +344,7 @@ func translateFrontendTCP(policy *agentgateway.AgentgatewayPolicy, name string) 
 		"policy", policy.Name,
 		"agentgateway_policy", tcpPolicy.Name)
 
-	return tcpPolicy
+	return tcpPolicy, errors.Join(errs...)
 }
 
 func translateFrontendProxyProtocol(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
@@ -458,11 +466,16 @@ func quantityUint32(ka *agentgateway.ByteSize) *uint32 {
 	return ka.ClampedValue()
 }
 
-func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
+func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
 	tls := policy.Spec.Frontend.TLS
 	spec := &api.FrontendPolicySpec_TLS{}
+	var errs []error
 	if ka := tls.HandshakeTimeout; ka != nil {
-		spec.HandshakeTimeout = durationpb.New(ka.Duration)
+		var err error
+		spec.HandshakeTimeout, err = durationToProto("frontend.tls.handshakeTimeout", *ka)
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
 
 	if tls.AlpnProtocols != nil {
@@ -540,7 +553,7 @@ func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) 
 		"policy", policy.Name,
 		"agentgateway_policy", tlsPolicy.Name)
 
-	return tlsPolicy
+	return tlsPolicy, errors.Join(errs...)
 }
 
 func convertTLSKeyExchangeGroups(groups []agentgateway.KeyExchangeGroup) []api.TLSConfig_KeyExchangeGroup {
@@ -563,9 +576,10 @@ func convertTLSKeyExchangeGroups(groups []agentgateway.KeyExchangeGroup) []api.T
 	return out
 }
 
-func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
+func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
 	http := policy.Spec.Frontend.HTTP
 	spec := &api.FrontendPolicySpec_HTTP{}
+	var errs []error
 	if v := http.MaxBufferSize; v != nil {
 		spec.MaxBufferSize = quantityUint32(v)
 	}
@@ -573,7 +587,11 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 		spec.Http1MaxHeaders = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
 	}
 	if v := http.HTTP1IdleTimeout; v != nil {
-		spec.Http1IdleTimeout = durationpb.New(v.Duration)
+		var err error
+		spec.Http1IdleTimeout, err = durationToProto("frontend.http.http1IdleTimeout", *v)
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
 	if v := http.HTTP1HeaderCase; v != nil {
 		switch *v {
@@ -596,13 +614,25 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 		spec.Http2MaxHeaderSize = quantityUint32(v)
 	}
 	if v := http.HTTP2KeepaliveInterval; v != nil {
-		spec.Http2KeepaliveInterval = durationpb.New(v.Duration)
+		var err error
+		spec.Http2KeepaliveInterval, err = durationToProto("frontend.http.http2KeepaliveInterval", *v)
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
 	if v := http.HTTP2KeepaliveTimeout; v != nil {
-		spec.Http2KeepaliveTimeout = durationpb.New(v.Duration)
+		var err error
+		spec.Http2KeepaliveTimeout, err = durationToProto("frontend.http.http2KeepaliveTimeout", *v)
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
 	if v := http.MaxConnectionDuration; v != nil {
-		spec.MaxConnectionDuration = durationpb.New(v.Duration)
+		var err error
+		spec.MaxConnectionDuration, err = durationToProto("frontend.http.maxConnectionDuration", *v)
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
 
 	httpPolicy := &api.Policy{
@@ -621,7 +651,7 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 		"policy", policy.Name,
 		"agentgateway_policy", httpPolicy.Name)
 
-	return httpPolicy
+	return httpPolicy, errors.Join(errs...)
 }
 
 func translateFrontendMetrics(policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {

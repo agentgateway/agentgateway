@@ -553,7 +553,7 @@ func translateTrafficPolicyToAgw(
 	}
 
 	if traffic.Timeouts != nil {
-		appendPolicy("timeouts")(processTimeoutPolicy(traffic.Timeouts, basePolicyName, policyName), nil)
+		appendPolicy("timeouts")(processTimeoutPolicy(traffic.Timeouts, basePolicyName, policyName))
 	}
 
 	if traffic.Retry != nil {
@@ -1021,15 +1021,20 @@ func processAPIKeyAuthenticationPolicy(
 	return apiKeyPolicy, errors.Join(errs...)
 }
 
-func processTimeoutPolicy(timeout *agentgateway.Timeouts, basePolicyName string, policy types.NamespacedName) *api.Policy {
+func processTimeoutPolicy(timeout *agentgateway.Timeouts, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
+	if timeout.Request == nil {
+		return nil, nil
+	}
+	request, err := durationToProto("traffic.timeouts.request", *timeout.Request)
+	if err != nil {
+		return nil, err
+	}
 	timeoutPolicy := &api.Policy{
 		Key:  basePolicyName + timeoutPolicySuffix,
 		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
-				Kind: &api.TrafficPolicySpec_Timeout{Timeout: &api.Timeout{
-					Request: durationpb.New(timeout.Request.Duration),
-				}},
+				Kind: &api.TrafficPolicySpec_Timeout{Timeout: &api.Timeout{Request: request}},
 			},
 		},
 	}
@@ -1038,7 +1043,7 @@ func processTimeoutPolicy(timeout *agentgateway.Timeouts, basePolicyName string,
 		"policy", basePolicyName,
 		"agentgateway_policy", timeoutPolicy.Name)
 
-	return timeoutPolicy
+	return timeoutPolicy, nil
 }
 
 func processDelayPolicy(delay *agentgateway.Delay, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
@@ -1542,6 +1547,14 @@ func castCEL(item agentgateway.CELExpression, invalid func(agentgateway.CELExpre
 		invalid(item)
 	}
 	return string(item)
+}
+
+func durationToProto(field string, value agentgateway.Duration) (*durationpb.Duration, error) {
+	duration, err := time.ParseDuration(value)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", field, err)
+	}
+	return durationpb.New(duration), nil
 }
 
 // processAuthorizationPolicy processes Authorization configuration and creates corresponding Agw policies
