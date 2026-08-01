@@ -5,15 +5,361 @@ use async_compression::tokio::bufread::{
 use bytes::Bytes;
 use futures_util::TryStreamExt;
 use headers::{ContentEncoding, Header};
+use http::header::{
+	ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_TYPE,
+};
 use http_body::Body;
 use http_body_util::BodyExt;
 use tokio::io::{AsyncRead, AsyncReadExt, BufReader};
 use tokio_util::io::{ReaderStream, StreamReader};
+use tower::ServiceExt;
+use tower_http::compression::Compression as CompressionService;
+use tower_http::compression::predicate::SizeAbove;
+use tower_http::decompression::RequestDecompression as RequestDecompressionService;
+
+use crate::{apply, schema};
 
 const GZIP: &str = "gzip";
 const DEFLATE: &str = "deflate";
 const BR: &str = "br";
 const ZSTD: &str = "zstd";
+// Compression framing can make very small payloads larger; 30 bytes avoids that common case.
+const MIN_CONTENT_LENGTH: u64 = 30;
+
+// Restrict transparent compression to textual formats that generally benefit from it. Binary
+// media is commonly already compressed, while latency-sensitive SSE should avoid encoder buffering.
+const COMPRESSIBLE_CONTENT_TYPES: &[&str] = &[
+	"application/javascript",
+	"application/json",
+	"application/xhtml+xml",
+	"image/svg+xml",
+	"text/css",
+	"text/html",
+	"text/plain",
+	"text/xml",
+];
+
+/// An HTTP compression algorithm, named after the token used in the `Content-Encoding` and
+/// `Accept-Encoding` headers.
+#[apply(schema!)]
+#[derive(Copy, Eq, PartialEq)]
+pub enum CompressionAlgorithm {
+	Gzip,
+	Brotli,
+	Deflate,
+	Zstd,
+}
+
+impl CompressionAlgorithm {
+	fn as_str(self) -> &'static str {
+		match self {
+			Self::Gzip => GZIP,
+			Self::Brotli => BR,
+			Self::Deflate => DEFLATE,
+			Self::Zstd => ZSTD,
+		}
+	}
+}
+
+#[apply(schema!)]
+#[derive(Default)]
+pub struct Compression {
+	/// Compress response bodies sent to the client.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub response_compression: Option<ResponseCompression>,
+	/// Decompress request bodies before other policies inspect them and before forwarding.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub request_decompression: Option<RequestDecompression>,
+}
+
+#[apply(schema!)]
+pub struct ResponseCompression {
+	/// Algorithms offered when negotiating against the client's Accept-Encoding header.
+	/// Defaults to gzip.
+	#[serde(default = "default_algorithms")]
+	pub preferred_algorithms: Vec<CompressionAlgorithm>,
+}
+
+impl Default for ResponseCompression {
+	fn default() -> Self {
+		Self {
+			preferred_algorithms: default_algorithms(),
+		}
+	}
+}
+
+impl ResponseCompression {
+	pub fn for_request(&self, req: &crate::http::Request) -> Option<ResponseCompressor> {
+		if req.method() == http::Method::HEAD || self.preferred_algorithms.is_empty() {
+			return None;
+		}
+		let mut accept_encoding = http::HeaderMap::new();
+		for value in req.headers().get_all(ACCEPT_ENCODING) {
+			accept_encoding.append(ACCEPT_ENCODING, value.clone());
+		}
+		Some(ResponseCompressor {
+			preferred_algorithms: self.preferred_algorithms.clone(),
+			accept_encoding,
+		})
+	}
+}
+
+#[apply(schema!)]
+pub struct RequestDecompression {
+	/// Algorithms decoded from request bodies. Bodies encoded with any other algorithm are
+	/// forwarded untouched. Defaults to gzip.
+	#[serde(default = "default_algorithms")]
+	pub accepted_algorithms: Vec<CompressionAlgorithm>,
+}
+
+impl Default for RequestDecompression {
+	fn default() -> Self {
+		Self {
+			accepted_algorithms: default_algorithms(),
+		}
+	}
+}
+
+impl RequestDecompression {
+	pub async fn apply_to_request(&self, req: &mut crate::http::Request) -> Result<(), Error> {
+		let Some(raw) = sole_content_encoding(req.headers()) else {
+			return Ok(());
+		};
+		let Some(algorithm) = compression_algorithm(raw) else {
+			return Ok(());
+		};
+		if !self.accepted_algorithms.contains(&algorithm) {
+			return Ok(());
+		};
+		req.headers_mut().insert(
+			CONTENT_ENCODING,
+			http::HeaderValue::from_static(algorithm.as_str()),
+		);
+
+		let request = std::mem::replace(req, crate::http::Request::new(crate::http::Body::empty()));
+		let (sender, receiver) = tokio::sync::oneshot::channel();
+		let mut sender = Some(sender);
+		let service = RequestDecompressionService::new(tower::service_fn(
+			move |request: ::http::Request<
+				tower_http::decompression::DecompressionBody<crate::http::Body>,
+			>| {
+				let sender = sender.take().expect("decompression service called once");
+				async move {
+					let (parts, body) = request.into_parts();
+					sender
+						.send(crate::http::Request::from_parts(
+							parts,
+							crate::http::Body::new(body),
+						))
+						.expect("decompressed request receiver is open");
+					Ok::<_, std::convert::Infallible>(crate::http::Response::new(crate::http::Body::empty()))
+				}
+			},
+		))
+		.pass_through_unaccepted(true)
+		.gzip(
+			self
+				.accepted_algorithms
+				.contains(&CompressionAlgorithm::Gzip),
+		)
+		.br(
+			self
+				.accepted_algorithms
+				.contains(&CompressionAlgorithm::Brotli),
+		)
+		.deflate(
+			self
+				.accepted_algorithms
+				.contains(&CompressionAlgorithm::Deflate),
+		)
+		.zstd(
+			self
+				.accepted_algorithms
+				.contains(&CompressionAlgorithm::Zstd),
+		);
+		service
+			.oneshot(request)
+			.await
+			.expect("decompression service is infallible");
+		*req = receiver
+			.await
+			.expect("decompression service forwards the request");
+		Ok(())
+	}
+}
+
+impl crate::store::RequestPolicyTrait for Compression {
+	async fn apply(
+		&self,
+		_client: &crate::proxy::httpproxy::PolicyClient,
+		_log: &mut crate::telemetry::log::RequestLog,
+		req: &mut crate::http::Request,
+	) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse> {
+		if let Some(decompression) = &self.request_decompression {
+			decompression
+				.apply_to_request(req)
+				.await
+				.map_err(|error| crate::proxy::ProxyError::Processing(error.into()))?;
+		}
+		Ok(Default::default())
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct ResponseCompressor {
+	preferred_algorithms: Vec<CompressionAlgorithm>,
+	accept_encoding: http::HeaderMap,
+}
+
+impl ResponseCompressor {
+	pub async fn apply(self, resp: &mut crate::http::Response) -> Result<(), Error> {
+		if !should_compress_response(resp) {
+			return Ok(());
+		}
+		// The encoder sets its own Content-Encoding, so drop a no-op identity value first.
+		if matches!(
+			content_encoding_state(resp.headers()),
+			ContentEncodingState::Identity
+		) {
+			resp.headers_mut().remove(CONTENT_ENCODING);
+		}
+
+		let response = std::mem::replace(resp, crate::http::Response::new(crate::http::Body::empty()));
+		let mut response = Some(response);
+		let service = CompressionService::new(tower::service_fn(move |_| {
+			std::future::ready(Ok::<_, std::convert::Infallible>(
+				response.take().expect("compression service called once"),
+			))
+		}))
+		.gzip(
+			self
+				.preferred_algorithms
+				.contains(&CompressionAlgorithm::Gzip),
+		)
+		.br(
+			self
+				.preferred_algorithms
+				.contains(&CompressionAlgorithm::Brotli),
+		)
+		.deflate(
+			self
+				.preferred_algorithms
+				.contains(&CompressionAlgorithm::Deflate),
+		)
+		.zstd(
+			self
+				.preferred_algorithms
+				.contains(&CompressionAlgorithm::Zstd),
+		)
+		.compress_when(SizeAbove::new(0));
+		let mut request = crate::http::Request::new(crate::http::Body::empty());
+		*request.headers_mut() = self.accept_encoding;
+		let response = service
+			.oneshot(request)
+			.await
+			.expect("compression service is infallible");
+		let (parts, body) = response.into_parts();
+		*resp = crate::http::Response::from_parts(parts, crate::http::Body::new(body));
+		Ok(())
+	}
+}
+
+fn default_algorithms() -> Vec<CompressionAlgorithm> {
+	vec![CompressionAlgorithm::Gzip]
+}
+
+/// Returns the sole `Content-Encoding` value, if the message carries exactly one.
+///
+/// Repeated headers describe layered encodings, which this policy leaves untouched: decoding or
+/// replacing a single layer would misrepresent the body.
+fn sole_content_encoding(headers: &http::HeaderMap) -> Option<&str> {
+	let mut values = headers.get_all(CONTENT_ENCODING).into_iter();
+	let value = values.next()?;
+	if values.next().is_some() {
+		return None;
+	}
+	value.to_str().ok()
+}
+
+enum ContentEncodingState {
+	Absent,
+	Identity,
+	Encoded,
+}
+
+fn content_encoding_state(headers: &http::HeaderMap) -> ContentEncodingState {
+	if !headers.contains_key(CONTENT_ENCODING) {
+		return ContentEncodingState::Absent;
+	}
+	match sole_content_encoding(headers) {
+		Some(value) if value.trim().eq_ignore_ascii_case("identity") => ContentEncodingState::Identity,
+		// A comma-separated list, repeated headers, or a non-UTF-8 value all mean the body is
+		// already encoded in some way we should not layer on top of.
+		_ => ContentEncodingState::Encoded,
+	}
+}
+
+fn compression_algorithm(raw: &str) -> Option<CompressionAlgorithm> {
+	let raw = raw.trim();
+	if raw.eq_ignore_ascii_case(GZIP) {
+		Some(CompressionAlgorithm::Gzip)
+	} else if raw.eq_ignore_ascii_case(BR) {
+		Some(CompressionAlgorithm::Brotli)
+	} else if raw.eq_ignore_ascii_case(DEFLATE) {
+		Some(CompressionAlgorithm::Deflate)
+	} else if raw.eq_ignore_ascii_case(ZSTD) {
+		Some(CompressionAlgorithm::Zstd)
+	} else {
+		None
+	}
+}
+
+fn should_compress_response(resp: &crate::http::Response) -> bool {
+	let status = resp.status();
+	if status.is_informational()
+		|| status == http::StatusCode::NO_CONTENT
+		|| status == http::StatusCode::NOT_MODIFIED
+	{
+		return false;
+	}
+	if matches!(
+		content_encoding_state(resp.headers()),
+		ContentEncodingState::Encoded
+	) {
+		return false;
+	}
+	if resp
+		.headers()
+		.get_all(CACHE_CONTROL)
+		.iter()
+		.filter_map(|value| value.to_str().ok())
+		.flat_map(|value| value.split(','))
+		.any(|directive| directive.trim().eq_ignore_ascii_case("no-transform"))
+	{
+		return false;
+	}
+	if resp
+		.headers()
+		.get(CONTENT_LENGTH)
+		.and_then(|value| value.to_str().ok())
+		.and_then(|value| value.parse::<u64>().ok())
+		.is_some_and(|length| length < MIN_CONTENT_LENGTH)
+	{
+		return false;
+	}
+
+	resp
+		.headers()
+		.get(CONTENT_TYPE)
+		.and_then(|value| value.to_str().ok())
+		.and_then(|value| value.split(';').next())
+		.map(str::trim)
+		.is_some_and(|content_type| {
+			COMPRESSIBLE_CONTENT_TYPES
+				.iter()
+				.any(|allowed| content_type.eq_ignore_ascii_case(allowed))
+		})
+}
 
 /// Errors that can occur during compression/decompression operations.
 #[derive(Debug, thiserror::Error)]
@@ -239,6 +585,7 @@ fn is_length_limit_error(err: &axum_core::Error) -> bool {
 #[cfg(test)]
 mod tests {
 	use headers::HeaderMapExt;
+	use http::header::VARY;
 	use http_body_util::BodyExt;
 
 	use super::*;
@@ -381,5 +728,238 @@ mod tests {
 		let ce = make_content_encoding(GZIP);
 		let result = to_bytes_with_decompression(body, Some(&ce), 10).await;
 		assert!(matches!(result, Err(Error::LimitExceeded)));
+	}
+
+	fn response_compressor(
+		accept_encoding: &'static str,
+		preferred_algorithms: Vec<CompressionAlgorithm>,
+	) -> ResponseCompressor {
+		let request = ::http::Request::builder()
+			.header(ACCEPT_ENCODING, accept_encoding)
+			.body(crate::http::Body::empty())
+			.unwrap();
+		ResponseCompression {
+			preferred_algorithms,
+		}
+		.for_request(&request)
+		.unwrap()
+	}
+
+	fn compressible_response() -> crate::http::Response {
+		::http::Response::builder()
+			.header(CONTENT_TYPE, "application/json")
+			.header(CONTENT_LENGTH, "64")
+			.body(crate::http::Body::from(
+				r#"{"message":"a sufficiently long response body for compression"}"#,
+			))
+			.unwrap()
+	}
+
+	#[tokio::test]
+	async fn negotiates_highest_quality_and_server_preference() {
+		let preferred_algorithms = vec![
+			CompressionAlgorithm::Gzip,
+			CompressionAlgorithm::Brotli,
+			CompressionAlgorithm::Deflate,
+			CompressionAlgorithm::Zstd,
+		];
+		let mut response = compressible_response();
+		response_compressor(
+			"zstd;q=0.5, br, gzip, deflate",
+			preferred_algorithms.clone(),
+		)
+		.apply(&mut response)
+		.await
+		.unwrap();
+		assert_eq!(response.headers()[CONTENT_ENCODING], BR);
+
+		let mut response = compressible_response();
+		response_compressor("zstd, gzip, br", preferred_algorithms)
+			.apply(&mut response)
+			.await
+			.unwrap();
+		assert_eq!(response.headers()[CONTENT_ENCODING], ZSTD);
+	}
+
+	#[tokio::test]
+	async fn explicit_rejection_overrides_wildcard() {
+		let mut response = compressible_response();
+		response_compressor("gzip;q=0, *;q=0.5", vec![CompressionAlgorithm::Gzip])
+			.apply(&mut response)
+			.await
+			.unwrap();
+		assert!(!response.headers().contains_key(CONTENT_ENCODING));
+
+		let mut response = compressible_response();
+		response_compressor("gzip;q=0, *;q=0.5", vec![CompressionAlgorithm::Brotli])
+			.apply(&mut response)
+			.await
+			.unwrap();
+		assert_eq!(response.headers()[CONTENT_ENCODING], BR);
+	}
+
+	#[tokio::test]
+	async fn response_compression_supports_all_encodings() {
+		for (algorithm, name) in [
+			(CompressionAlgorithm::Gzip, GZIP),
+			(CompressionAlgorithm::Brotli, BR),
+			(CompressionAlgorithm::Deflate, DEFLATE),
+			(CompressionAlgorithm::Zstd, ZSTD),
+		] {
+			let mut response = compressible_response();
+			response_compressor(name, vec![algorithm])
+				.apply(&mut response)
+				.await
+				.unwrap();
+
+			assert_eq!(response.headers()[CONTENT_ENCODING], name);
+			assert!(
+				response.headers()[VARY]
+					.to_str()
+					.unwrap()
+					.eq_ignore_ascii_case("Accept-Encoding")
+			);
+			assert!(!response.headers().contains_key(CONTENT_LENGTH));
+			let content_encoding = make_content_encoding(name);
+			let (body, _) = decompress_body(response.into_body(), Some(&content_encoding)).unwrap();
+			let decoded = body.collect().await.unwrap().to_bytes();
+			assert_eq!(
+				decoded,
+				r#"{"message":"a sufficiently long response body for compression"}"#
+			);
+		}
+	}
+
+	#[tokio::test]
+	async fn response_compression_skips_small_or_ineligible_responses() {
+		for (content_type, content_length) in [
+			("application/json", "20"),
+			("application/octet-stream", "100"),
+			("text/event-stream", "100"),
+		] {
+			let mut response = ::http::Response::builder()
+				.header(CONTENT_TYPE, content_type)
+				.header(CONTENT_LENGTH, content_length)
+				.body(crate::http::Body::from("not compressed"))
+				.unwrap();
+			response_compressor("gzip", vec![CompressionAlgorithm::Gzip])
+				.apply(&mut response)
+				.await
+				.unwrap();
+			assert!(!response.headers().contains_key(CONTENT_ENCODING));
+		}
+	}
+
+	#[tokio::test]
+	async fn response_compression_replaces_identity_encoding() {
+		let mut response = ::http::Response::builder()
+			.header(CONTENT_TYPE, "application/json")
+			.header(CONTENT_ENCODING, "identity")
+			.body(crate::http::Body::from(
+				r#"{"message":"a sufficiently long response body for compression"}"#,
+			))
+			.unwrap();
+		response_compressor("gzip", vec![CompressionAlgorithm::Gzip])
+			.apply(&mut response)
+			.await
+			.unwrap();
+
+		assert_eq!(response.headers()[CONTENT_ENCODING], GZIP);
+		assert_eq!(
+			response.headers().get_all(CONTENT_ENCODING).iter().count(),
+			1
+		);
+	}
+
+	#[tokio::test]
+	async fn response_compression_skips_layered_content_encoding() {
+		let mut response = ::http::Response::builder()
+			.header(CONTENT_TYPE, "application/json")
+			.header(CONTENT_ENCODING, "identity")
+			.header(CONTENT_ENCODING, GZIP)
+			.body(crate::http::Body::from("already encoded"))
+			.unwrap();
+		response_compressor("br", vec![CompressionAlgorithm::Brotli])
+			.apply(&mut response)
+			.await
+			.unwrap();
+
+		let encodings = response
+			.headers()
+			.get_all(CONTENT_ENCODING)
+			.iter()
+			.collect::<Vec<_>>();
+		assert_eq!(encodings, vec!["identity", GZIP]);
+	}
+
+	#[tokio::test]
+	async fn request_decompression_skips_layered_content_encoding() {
+		let encoded = encode_body(b"layered request body", GZIP).await.unwrap();
+		let mut request = ::http::Request::builder()
+			.header(CONTENT_ENCODING, GZIP)
+			.header(CONTENT_ENCODING, GZIP)
+			.body(crate::http::Body::from(encoded.clone()))
+			.unwrap();
+		RequestDecompression::default()
+			.apply_to_request(&mut request)
+			.await
+			.unwrap();
+
+		assert_eq!(
+			request.headers().get_all(CONTENT_ENCODING).iter().count(),
+			2
+		);
+		assert_eq!(
+			request.into_body().collect().await.unwrap().to_bytes(),
+			encoded
+		);
+	}
+
+	#[tokio::test]
+	async fn request_decompression_supports_all_encodings() {
+		let original = b"request body decompression";
+		for (algorithm, name) in [
+			(CompressionAlgorithm::Gzip, GZIP),
+			(CompressionAlgorithm::Brotli, BR),
+			(CompressionAlgorithm::Deflate, DEFLATE),
+			(CompressionAlgorithm::Zstd, ZSTD),
+		] {
+			let encoded = encode_body(original, name).await.unwrap();
+			let mut request = ::http::Request::builder()
+				.header(CONTENT_ENCODING, name)
+				.header(CONTENT_LENGTH, encoded.len())
+				.body(crate::http::Body::from(encoded))
+				.unwrap();
+			RequestDecompression {
+				accepted_algorithms: vec![algorithm],
+			}
+			.apply_to_request(&mut request)
+			.await
+			.unwrap();
+
+			assert!(!request.headers().contains_key(CONTENT_ENCODING));
+			assert!(!request.headers().contains_key(CONTENT_LENGTH));
+			let decoded = request.into_body().collect().await.unwrap().to_bytes();
+			assert_eq!(decoded, original.as_slice());
+		}
+	}
+
+	#[tokio::test]
+	async fn request_decompression_passes_unconfigured_encoding_through() {
+		let encoded = encode_body(b"leave compressed", BR).await.unwrap();
+		let mut request = ::http::Request::builder()
+			.header(CONTENT_ENCODING, BR)
+			.body(crate::http::Body::from(encoded.clone()))
+			.unwrap();
+		RequestDecompression::default()
+			.apply_to_request(&mut request)
+			.await
+			.unwrap();
+
+		assert_eq!(request.headers()[CONTENT_ENCODING], BR);
+		assert_eq!(
+			request.into_body().collect().await.unwrap().to_bytes(),
+			encoded
+		);
 	}
 }
