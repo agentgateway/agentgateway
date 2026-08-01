@@ -500,18 +500,20 @@ fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
 		temperature: Some(0.7),
 		top_k: Some(50),
 		top_p: Some(0.8),
-		tools: Some(vec![messages::typed::Tool {
-			name: "lookup".to_string(),
-			description: Some("Lookup tool".to_string()),
-			input_schema: json!({
-				"type": "object",
-				"properties": {
-					"q": { "type": "string" }
-				},
-				"required": ["q"]
-			}),
-			cache_control: None,
-		}]),
+		tools: Some(vec![messages::typed::Tool::Custom(
+			messages::typed::CustomTool {
+				name: "lookup".to_string(),
+				description: Some("Lookup tool".to_string()),
+				input_schema: json!({
+					"type": "object",
+					"properties": {
+						"q": { "type": "string" }
+					},
+					"required": ["q"]
+				}),
+				cache_control: None,
+			},
+		)]),
 		tool_choice: Some(messages::typed::ToolChoice::Tool {
 			name: "lookup".to_string(),
 			disable_parallel_tool_use: None,
@@ -574,18 +576,20 @@ fn test_enabled_thinking_applies_sampling_and_tool_choice_constraints() {
 		temperature: Some(0.7),
 		top_k: Some(50),
 		top_p: Some(0.8),
-		tools: Some(vec![messages::typed::Tool {
-			name: "lookup".to_string(),
-			description: Some("Lookup tool".to_string()),
-			input_schema: json!({
-				"type": "object",
-				"properties": {
-					"q": { "type": "string" }
-				},
-				"required": ["q"]
-			}),
-			cache_control: None,
-		}]),
+		tools: Some(vec![messages::typed::Tool::Custom(
+			messages::typed::CustomTool {
+				name: "lookup".to_string(),
+				description: Some("Lookup tool".to_string()),
+				input_schema: json!({
+					"type": "object",
+					"properties": {
+						"q": { "type": "string" }
+					},
+					"required": ["q"]
+				}),
+				cache_control: None,
+			},
+		)]),
 		tool_choice: Some(messages::typed::ToolChoice::Auto {
 			disable_parallel_tool_use: None,
 		}),
@@ -1608,12 +1612,12 @@ fn test_messages_long_tool_names_fit_bedrock_tool_config() {
 				cache_control: None,
 			})],
 		}],
-		tools: Some(vec![messages::Tool {
+		tools: Some(vec![messages::Tool::Custom(messages::CustomTool {
 			name: long_name.to_string(),
 			description: Some("test".to_string()),
 			input_schema: serde_json::json!({"type": "object"}),
 			cache_control: None,
-		}]),
+		})]),
 		tool_choice: None,
 		system: None,
 		metadata: None,
@@ -1642,6 +1646,58 @@ fn test_messages_long_tool_names_fit_bedrock_tool_config() {
 }
 
 #[test]
+fn test_messages_request_with_server_tool_deserializes() {
+	use types::messages::typed as messages;
+
+	// Regression test for https://github.com/agentgateway/agentgateway/issues/2803:
+	// an Anthropic server tool (e.g. Claude Code's built-in web_search) has no
+	// `input_schema` and must not fail deserialization of the whole request.
+	let raw = serde_json::json!({
+		"model": "anthropic.claude-sonnet-4-20250514-v1:0",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [{"type": "text", "text": "search the web"}]}
+		],
+		"tools": [
+			{"type": "web_search_20250305", "name": "web_search", "max_uses": 5},
+			{
+				"name": "get_weather",
+				"description": "Get the weather",
+				"input_schema": {"type": "object"}
+			}
+		]
+	});
+
+	let req: messages::Request =
+		serde_json::from_value(raw).expect("request with a server tool must deserialize");
+	{
+		let tools = req.tools.as_ref().expect("tools present");
+		assert_eq!(tools.len(), 2);
+		assert!(matches!(tools[0], messages::Tool::Server(_)));
+		assert_eq!(tools[0].name(), "web_search");
+		assert!(matches!(tools[1], messages::Tool::Custom(_)));
+		assert_eq!(tools[1].name(), "get_weather");
+	}
+
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-west-2"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+	let (out, _tool_map) = super::from_messages::translate_internal(req, &provider, None)
+		.expect("Bedrock conversion must not fail on a server tool");
+
+	// The server tool has no Bedrock equivalent and is dropped; the custom tool remains.
+	let tools = out.tool_config.expect("tool config present").tools;
+	assert_eq!(tools.len(), 1);
+	match &tools[0] {
+		types::bedrock::Tool::ToolSpec(spec) => assert_eq!(spec.name, "get_weather"),
+		other => panic!("expected a tool spec, got {other:?}"),
+	}
+}
+
+#[test]
 fn test_messages_long_tool_name_round_trip_response() {
 	use types::messages::typed as messages;
 
@@ -1664,12 +1720,12 @@ fn test_messages_long_tool_name_round_trip_response() {
 				cache_control: None,
 			})],
 		}],
-		tools: Some(vec![messages::Tool {
+		tools: Some(vec![messages::Tool::Custom(messages::CustomTool {
 			name: long_name.to_string(),
 			description: Some("test".to_string()),
 			input_schema: serde_json::json!({"type": "object"}),
 			cache_control: None,
-		}]),
+		})]),
 		tool_choice: None,
 		system: None,
 		metadata: None,

@@ -296,16 +296,18 @@ pub mod from_completions {
 			let mapped_tools: Vec<_> = tools
 				.iter()
 				.filter_map(|tool| match tool {
-					completions::Tool::Function(function_tool) => Some(messages::Tool {
-						name: function_tool.function.name.clone(),
-						description: function_tool.function.description.clone(),
-						input_schema: function_tool
-							.function
-							.parameters
-							.clone()
-							.unwrap_or_default(),
-						cache_control: None,
-					}),
+					completions::Tool::Function(function_tool) => {
+						Some(messages::Tool::Custom(messages::CustomTool {
+							name: function_tool.function.name.clone(),
+							description: function_tool.function.description.clone(),
+							input_schema: function_tool
+								.function
+								.parameters
+								.clone()
+								.unwrap_or_default(),
+							cache_control: None,
+						}))
+					},
 					_ => None,
 				})
 				.collect();

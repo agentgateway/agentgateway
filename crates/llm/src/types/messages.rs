@@ -1025,9 +1025,36 @@ pub mod typed {
 		pub service_tier: Option<String>,
 	}
 
-	/// Tool definition
+	/// Tool definition. A client-defined custom tool always carries `input_schema` and no `type`
+	/// tag. An Anthropic server tool (`web_search_20250305`, `bash_20250124`, `computer_20250124`,
+	/// `text_editor_20250728`, `code_execution_20250522`, etc.) is tagged with `type` and never
+	/// carries `input_schema` since it runs server-side. `Custom` is tried first so existing custom
+	/// tool payloads (no `type` field) keep matching without a discriminant lookup.
 	#[derive(Debug, Serialize, Deserialize)]
-	pub struct Tool {
+	#[serde(untagged)]
+	pub enum Tool {
+		Custom(CustomTool),
+		Server(ServerTool),
+	}
+
+	impl Tool {
+		pub fn name(&self) -> &str {
+			match self {
+				Tool::Custom(tool) => &tool.name,
+				Tool::Server(tool) => &tool.name,
+			}
+		}
+
+		pub fn cache_control(&self) -> Option<&CacheControlEphemeral> {
+			match self {
+				Tool::Custom(tool) => tool.cache_control.as_ref(),
+				Tool::Server(tool) => tool.cache_control.as_ref(),
+			}
+		}
+	}
+
+	#[derive(Debug, Serialize, Deserialize)]
+	pub struct CustomTool {
 		/// Name of the tool
 		pub name: String,
 		/// Description of the tool
@@ -1038,6 +1065,25 @@ pub mod typed {
 		/// Create a cache control breakpoint at this content block
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub cache_control: Option<CacheControlEphemeral>,
+	}
+
+	/// An Anthropic server-executed tool (runs upstream of the provider, e.g. `web_search_20250305`).
+	/// We don't model every server tool's specific fields — just enough to round-trip the block
+	/// without failing deserialization. Providers that can't execute a server tool (e.g. Bedrock)
+	/// drop it rather than crash the whole request; see `conversion::bedrock`.
+	#[derive(Debug, Serialize, Deserialize)]
+	pub struct ServerTool {
+		/// Discriminant, e.g. "web_search_20250305"
+		#[serde(rename = "type")]
+		pub tool_type: String,
+		/// Name of the tool
+		pub name: String,
+		/// Create a cache control breakpoint at this content block
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_control: Option<CacheControlEphemeral>,
+		/// Any other server-tool-specific fields (max_uses, allowed_domains, etc.)
+		#[serde(flatten)]
+		pub extra: std::collections::HashMap<String, serde_json::Value>,
 	}
 
 	/// Tool choice configuration
