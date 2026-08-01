@@ -72,11 +72,13 @@ mod tests {
 			generated.contains("reference: imported/litellm/shared-openai/openAI"),
 			"generated model should reference the reusable provider"
 		);
+		let database_path = output_dir
+			.path()
+			.join("data.db")
+			.to_string_lossy()
+			.replace(std::path::MAIN_SEPARATOR, "/");
 		assert!(
-			generated.contains(&format!(
-				"url: sqlite://{}/data.db",
-				output_dir.path().display()
-			)),
+			generated.contains(&format!("url: sqlite://{database_path}")),
 			"generated database should be beside the config"
 		);
 	}
