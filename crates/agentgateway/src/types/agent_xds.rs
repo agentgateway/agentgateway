@@ -2871,6 +2871,49 @@ fn traffic_policy_from_proto(
 				response: to_body(buffer.response),
 			}))
 		},
+		Some(tps::Kind::Compression(compression)) => {
+			use proto::agent::traffic_policy_spec::compression;
+
+			let algorithms = |values: &[i32]| -> Result<_, ProtoError> {
+				if values.is_empty() {
+					return Ok(vec![http::compression::CompressionAlgorithm::Gzip]);
+				}
+				values
+					.iter()
+					.map(|algorithm| {
+						Ok(match compression::Algorithm::try_from(*algorithm)? {
+							compression::Algorithm::Gzip => http::compression::CompressionAlgorithm::Gzip,
+							compression::Algorithm::Brotli => http::compression::CompressionAlgorithm::Brotli,
+							compression::Algorithm::Deflate => http::compression::CompressionAlgorithm::Deflate,
+							compression::Algorithm::Zstd => http::compression::CompressionAlgorithm::Zstd,
+						})
+					})
+					.collect()
+			};
+			let response_compression = compression
+				.response_compression
+				.as_ref()
+				.map(|response| -> Result<_, ProtoError> {
+					Ok(http::compression::ResponseCompression {
+						preferred_algorithms: algorithms(&response.preferred_algorithms)?,
+					})
+				})
+				.transpose()?;
+			let request_decompression = compression
+				.request_decompression
+				.as_ref()
+				.map(|request| -> Result<_, ProtoError> {
+					Ok(http::compression::RequestDecompression {
+						accepted_algorithms: algorithms(&request.accepted_algorithms)?,
+					})
+				})
+				.transpose()?;
+
+			TrafficPolicy::Compression(http::compression::Compression {
+				response_compression,
+				request_decompression,
+			})
+		},
 		None => return Err(ProtoError::MissingRequiredField),
 	})
 }
@@ -3685,6 +3728,7 @@ fn traffic_policy_kind_name(policy: &TrafficPolicy) -> &'static str {
 		TrafficPolicy::RequestMirror(_) => "requestMirror",
 		TrafficPolicy::DirectResponse(_) => "directResponse",
 		TrafficPolicy::Buffer(_) => "buffer",
+		TrafficPolicy::Compression(_) => "compression",
 		TrafficPolicy::CORS(_) => "cors",
 	}
 }

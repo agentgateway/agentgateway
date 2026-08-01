@@ -7380,6 +7380,68 @@ spec:
                         be set
                       rule: '[has(self.request),has(self.response)].filter(x,x==true).size()
                         >= 1'
+                  compression:
+                    description: Configures HTTP response compression and request
+                      decompression behavior.
+                    properties:
+                      requestDecompression:
+                        description: Controls request decompression before forwarding
+                          to the backend.
+                        properties:
+                          acceptedAlgorithms:
+                            default:
+                            - Gzip
+                            description: HTTP compression algorithms accepted for
+                              request body decompression. Defaults to Gzip.
+                            items:
+                              description: CompressionAlgorithm identifies an HTTP
+                                compression algorithm.
+                              enum:
+                              - Brotli
+                              - Deflate
+                              - Gzip
+                              - Zstd
+                              type: string
+                            maxItems: 4
+                            minItems: 1
+                            type: array
+                            x-kubernetes-list-type: atomic
+                            x-kubernetes-validations:
+                            - message: acceptedAlgorithms must not contain duplicates
+                              rule: self.all(x, self.exists_one(y, y == x))
+                        type: object
+                      responseCompression:
+                        description: Controls response compression to the downstream.
+                        properties:
+                          preferredAlgorithms:
+                            default:
+                            - Gzip
+                            description: |-
+                              HTTP compression algorithms available for response negotiation against
+                              the downstream request's Accept-Encoding header. Defaults to Gzip.
+                            items:
+                              description: CompressionAlgorithm identifies an HTTP
+                                compression algorithm.
+                              enum:
+                              - Brotli
+                              - Deflate
+                              - Gzip
+                              - Zstd
+                              type: string
+                            maxItems: 4
+                            minItems: 1
+                            type: array
+                            x-kubernetes-list-type: atomic
+                            x-kubernetes-validations:
+                            - message: preferredAlgorithms must not contain duplicates
+                              rule: self.all(x, self.exists_one(y, y == x))
+                        type: object
+                    type: object
+                    x-kubernetes-validations:
+                    - message: at least one of the fields in [requestDecompression
+                        responseCompression] must be set
+                      rule: '[has(self.requestDecompression),has(self.responseCompression)].filter(x,x==true).size()
+                        >= 1'
                   cors:
                     description: CORS configuration for the policy.
                     properties:
@@ -10161,7 +10223,7 @@ spec:
                 - message: phase PreRouting only supports extAuth, authorization,
                     transformation, extProc, jwtAuthentication, basicAuthentication,
                     apiKeyAuthentication and cors
-                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.buffer),has(self.csrf),has(self.delay),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
+                  rule: 'has(self.phase) && self.phase == ''PreRouting'' ? [has(self.buffer),has(self.compression),has(self.csrf),has(self.delay),has(self.directResponse),has(self.headerModifiers),has(self.hostRewrite),has(self.rateLimit),has(self.retry),has(self.timeouts)].filter(x,x==true).size()
                     == 0 : true'
             type: object
             x-kubernetes-validations:

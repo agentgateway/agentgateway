@@ -1907,6 +1907,18 @@
           ],
           "default": null
         },
+        "compression": {
+          "description": "Compress responses and decompress request bodies.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Compression"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "timeout": {
           "description": "Set request timeout limits.",
           "anyOf": [
@@ -7230,6 +7242,76 @@
         "failClosed",
         "failOpen"
       ]
+    },
+    "Compression": {
+      "type": "object",
+      "properties": {
+        "responseCompression": {
+          "description": "Compress response bodies sent to the client.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResponseCompression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requestDecompression": {
+          "description": "Decompress request bodies before other policies inspect them and before forwarding.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RequestDecompression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ResponseCompression": {
+      "type": "object",
+      "properties": {
+        "preferredAlgorithms": {
+          "description": "Algorithms offered when negotiating against the client's Accept-Encoding header.\nDefaults to gzip.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CompressionAlgorithm"
+          },
+          "default": [
+            "gzip"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "CompressionAlgorithm": {
+      "description": "An HTTP compression algorithm, named after the token used in the `Content-Encoding` and\n`Accept-Encoding` headers.",
+      "type": "string",
+      "enum": [
+        "gzip",
+        "brotli",
+        "deflate",
+        "zstd"
+      ]
+    },
+    "RequestDecompression": {
+      "type": "object",
+      "properties": {
+        "acceptedAlgorithms": {
+          "description": "Algorithms decoded from request bodies. Bodies encoded with any other algorithm are\nforwarded untouched. Defaults to gzip.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CompressionAlgorithm"
+          },
+          "default": [
+            "gzip"
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "TimeoutPolicy": {
       "type": "object",

@@ -963,10 +963,62 @@ type Traffic struct {
 	// +optional
 	Buffer *Buffer `json:"buffer,omitempty"`
 
+	// Configures HTTP response compression and request decompression behavior.
+	// +optional
+	Compression *Compression `json:"compression,omitempty"`
+
 	// Injects artificial latency before forwarding requests, for
 	// fault-injection testing.
 	// +optional
 	Delay *Delay `json:"delay,omitempty"`
+}
+
+// Compression configures HTTP response compression and request decompression behavior.
+// +kubebuilder:validation:AtLeastOneFieldSet:fields=responseCompression;requestDecompression
+type Compression struct {
+	// Controls response compression to the downstream.
+	// +optional
+	ResponseCompression *ResponseCompression `json:"responseCompression,omitempty"`
+
+	// Controls request decompression before forwarding to the backend.
+	// +optional
+	RequestDecompression *RequestDecompression `json:"requestDecompression,omitempty"`
+}
+
+// CompressionAlgorithm identifies an HTTP compression algorithm.
+// +k8s:enum
+type CompressionAlgorithm string
+
+const (
+	CompressionAlgorithmGzip    CompressionAlgorithm = "Gzip"
+	CompressionAlgorithmBrotli  CompressionAlgorithm = "Brotli"
+	CompressionAlgorithmDeflate CompressionAlgorithm = "Deflate"
+	CompressionAlgorithmZstd    CompressionAlgorithm = "Zstd"
+)
+
+// ResponseCompression configures response compression.
+type ResponseCompression struct {
+	// HTTP compression algorithms available for response negotiation against
+	// the downstream request's Accept-Encoding header. Defaults to Gzip.
+	// +optional
+	// +listType=atomic
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=4
+	// +kubebuilder:validation:XValidation:rule="self.all(x, self.exists_one(y, y == x))",message="preferredAlgorithms must not contain duplicates"
+	// +kubebuilder:default={Gzip}
+	PreferredAlgorithms []CompressionAlgorithm `json:"preferredAlgorithms,omitempty"`
+}
+
+// RequestDecompression configures request decompression.
+type RequestDecompression struct {
+	// HTTP compression algorithms accepted for request body decompression. Defaults to Gzip.
+	// +optional
+	// +listType=atomic
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=4
+	// +kubebuilder:validation:XValidation:rule="self.all(x, self.exists_one(y, y == x))",message="acceptedAlgorithms must not contain duplicates"
+	// +kubebuilder:default={Gzip}
+	AcceptedAlgorithms []CompressionAlgorithm `json:"acceptedAlgorithms,omitempty"`
 }
 
 // Direct response policy.

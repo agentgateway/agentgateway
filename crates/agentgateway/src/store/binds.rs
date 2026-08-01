@@ -381,6 +381,8 @@ pub struct RoutePolicies {
 	pub request_mirror: RequestPolicy<Vec<filters::RequestMirror>>,
 	pub cors: RequestPolicy<http::cors::Cors>,
 	pub buffer: RequestPolicy<http::buffer::Buffer>,
+	pub response_compression: RequestPolicy<http::compression::ResponseCompression>,
+	pub request_decompression: RequestPolicy<http::compression::RequestDecompression>,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -1067,6 +1069,18 @@ impl Store {
 				},
 				TrafficPolicy::Buffer(p) => {
 					pol.buffer.set_if_unset(p);
+				},
+				TrafficPolicy::Compression(p) => {
+					if let Some(response) = &p.response_compression {
+						pol
+							.response_compression
+							.merge_with_inheritance(&RequestPolicy::single(response.clone()), lock_inheritance);
+					}
+					if let Some(request) = &p.request_decompression {
+						pol
+							.request_decompression
+							.merge_with_inheritance(&RequestPolicy::single(request.clone()), lock_inheritance);
+					}
 				},
 			}
 		}

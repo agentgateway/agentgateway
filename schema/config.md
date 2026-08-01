@@ -4690,6 +4690,11 @@
 |`binds[].listeners[].routes[].policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`binds[].listeners[].routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`binds[].listeners[].routes[].policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].policies.compression`|object|Compress responses and decompress request bodies.|
+|`binds[].listeners[].routes[].policies.compression.responseCompression`|object|Compress response bodies sent to the client.|
+|`binds[].listeners[].routes[].policies.compression.responseCompression.preferredAlgorithms`|[]enum|Algorithms offered when negotiating against the client's Accept-Encoding header.<br>Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`binds[].listeners[].routes[].policies.compression.requestDecompression`|object|Decompress request bodies before other policies inspect them and before forwarding.|
+|`binds[].listeners[].routes[].policies.compression.requestDecompression.acceptedAlgorithms`|[]enum|Algorithms decoded from request bodies. Bodies encoded with any other algorithm are<br>forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`binds[].listeners[].routes[].policies.timeout`|object|Set request timeout limits.|
 |`binds[].listeners[].routes[].policies.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
 |`binds[].listeners[].routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -20814,6 +20819,11 @@
 |`policies[].policy.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`policies[].policy.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`policies[].policy.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`policies[].policy.compression`|object|Compress responses and decompress request bodies.|
+|`policies[].policy.compression.responseCompression`|object|Compress response bodies sent to the client.|
+|`policies[].policy.compression.responseCompression.preferredAlgorithms`|[]enum|Algorithms offered when negotiating against the client's Accept-Encoding header.<br>Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`policies[].policy.compression.requestDecompression`|object|Decompress request bodies before other policies inspect them and before forwarding.|
+|`policies[].policy.compression.requestDecompression.acceptedAlgorithms`|[]enum|Algorithms decoded from request bodies. Bodies encoded with any other algorithm are<br>forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`policies[].policy.timeout`|object|Set request timeout limits.|
 |`policies[].policy.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
 |`policies[].policy.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -34732,6 +34742,11 @@
 |`routeGroups[].routes[].policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`routeGroups[].routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`routeGroups[].routes[].policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].policies.compression`|object|Compress responses and decompress request bodies.|
+|`routeGroups[].routes[].policies.compression.responseCompression`|object|Compress response bodies sent to the client.|
+|`routeGroups[].routes[].policies.compression.responseCompression.preferredAlgorithms`|[]enum|Algorithms offered when negotiating against the client's Accept-Encoding header.<br>Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`routeGroups[].routes[].policies.compression.requestDecompression`|object|Decompress request bodies before other policies inspect them and before forwarding.|
+|`routeGroups[].routes[].policies.compression.requestDecompression.acceptedAlgorithms`|[]enum|Algorithms decoded from request bodies. Bodies encoded with any other algorithm are<br>forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`routeGroups[].routes[].policies.timeout`|object|Set request timeout limits.|
 |`routeGroups[].routes[].policies.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
 |`routeGroups[].routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -51217,6 +51232,11 @@
 |`routes[].policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`routes[].policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`routes[].policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].policies.compression`|object|Compress responses and decompress request bodies.|
+|`routes[].policies.compression.responseCompression`|object|Compress response bodies sent to the client.|
+|`routes[].policies.compression.responseCompression.preferredAlgorithms`|[]enum|Algorithms offered when negotiating against the client's Accept-Encoding header.<br>Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`routes[].policies.compression.requestDecompression`|object|Decompress request bodies before other policies inspect them and before forwarding.|
+|`routes[].policies.compression.requestDecompression.acceptedAlgorithms`|[]enum|Algorithms decoded from request bodies. Bodies encoded with any other algorithm are<br>forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`routes[].policies.timeout`|object|Set request timeout limits.|
 |`routes[].policies.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
 |`routes[].policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
@@ -71824,6 +71844,11 @@
 |`mcp.policies.buffer.response`|object|Buffer upstream response bodies before sending them to the client.|
 |`mcp.policies.buffer.response.maxBytes`|integer|Maximum body size to buffer in bytes.|
 |`mcp.policies.buffer.response.failureMode`|enum|Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).<br>Possible values: `failClosed`, `failOpen`.|
+|`mcp.policies.compression`|object|Compress responses and decompress request bodies.|
+|`mcp.policies.compression.responseCompression`|object|Compress response bodies sent to the client.|
+|`mcp.policies.compression.responseCompression.preferredAlgorithms`|[]enum|Algorithms offered when negotiating against the client's Accept-Encoding header.<br>Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
+|`mcp.policies.compression.requestDecompression`|object|Decompress request bodies before other policies inspect them and before forwarding.|
+|`mcp.policies.compression.requestDecompression.acceptedAlgorithms`|[]enum|Algorithms decoded from request bodies. Bodies encoded with any other algorithm are<br>forwarded untouched. Defaults to gzip.<br>Possible values: `gzip`, `brotli`, `deflate`, `zstd`.|
 |`mcp.policies.timeout`|object|Set request timeout limits.|
 |`mcp.policies.timeout.requestTimeout`|string|Maximum time allowed for the full downstream request and response.|
 |`mcp.policies.timeout.backendRequestTimeout`|string|Maximum time allowed for the upstream backend request.|
