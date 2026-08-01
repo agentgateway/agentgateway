@@ -1,6 +1,7 @@
 mod auth;
 mod auto_protocol;
 mod basic;
+mod compression;
 #[cfg(feature = "ui")]
 mod config_store;
 mod connect;

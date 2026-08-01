@@ -381,8 +381,7 @@ pub struct RoutePolicies {
 	pub request_mirror: RequestPolicy<Vec<filters::RequestMirror>>,
 	pub cors: RequestPolicy<http::cors::Cors>,
 	pub buffer: RequestPolicy<http::buffer::Buffer>,
-	pub response_compression: RequestPolicy<http::compression::ResponseCompression>,
-	pub request_decompression: RequestPolicy<http::compression::RequestDecompression>,
+	pub compression: RequestPolicy<http::compression::Compression>,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -424,16 +423,24 @@ impl GatewayPolicies {
 }
 
 impl RoutePolicies {
-	pub fn iter(&self) -> impl Iterator<Item = &dyn PolicyExpressions> {
+	pub fn register_pre_auth_cel_expressions(&self, ctx: &mut ContextBuilder) {
 		[
-			&self.local_rate_limit as &dyn PolicyExpressions,
-			&self.remote_rate_limit as &dyn PolicyExpressions,
 			&self.authorization as &dyn PolicyExpressions,
 			&self.jwt as &dyn PolicyExpressions,
 			&self.oidc as &dyn PolicyExpressions,
 			&self.basic_auth as &dyn PolicyExpressions,
 			&self.api_key as &dyn PolicyExpressions,
 			&self.ext_authz as &dyn PolicyExpressions,
+			&self.cors as &dyn PolicyExpressions,
+		]
+		.into_iter()
+		.for_each(|policy| policy.register_expressions(ctx));
+	}
+
+	pub fn register_post_auth_cel_expressions(&self, ctx: &mut ContextBuilder) {
+		[
+			&self.local_rate_limit as &dyn PolicyExpressions,
+			&self.remote_rate_limit as &dyn PolicyExpressions,
 			&self.ext_proc as &dyn PolicyExpressions,
 			&self.transformation as &dyn PolicyExpressions,
 			&self.csrf as &dyn PolicyExpressions,
@@ -444,15 +451,9 @@ impl RoutePolicies {
 			&self.delay as &dyn PolicyExpressions,
 			&self.request_redirect as &dyn PolicyExpressions,
 			&self.url_rewrite as &dyn PolicyExpressions,
-			&self.cors as &dyn PolicyExpressions,
 		]
 		.into_iter()
-	}
-
-	pub fn register_cel_expressions(&self, ctx: &mut ContextBuilder) {
-		for policy in self.iter() {
-			policy.register_expressions(ctx);
-		}
+		.for_each(|policy| policy.register_expressions(ctx));
 	}
 }
 
@@ -1071,16 +1072,9 @@ impl Store {
 					pol.buffer.set_if_unset(p);
 				},
 				TrafficPolicy::Compression(p) => {
-					if let Some(response) = &p.response_compression {
-						pol
-							.response_compression
-							.merge_with_inheritance(&RequestPolicy::single(response.clone()), lock_inheritance);
-					}
-					if let Some(request) = &p.request_decompression {
-						pol
-							.request_decompression
-							.merge_with_inheritance(&RequestPolicy::single(request.clone()), lock_inheritance);
-					}
+					pol
+						.compression
+						.merge_with_inheritance(&RequestPolicy::single(p.clone()), lock_inheritance);
 				},
 			}
 		}
