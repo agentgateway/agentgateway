@@ -1824,7 +1824,7 @@ pub(crate) fn backend_with_policies_from_proto(
 						Some(provider::Provider::Gemini(gemini)) => AIProvider::Gemini(llm::gemini::Provider {
 							model: gemini.model.as_deref().map(strng::new),
 						}),
-						Some(provider::Provider::Vertex(vertex)) => AIProvider::Vertex(llm::vertex::Provider {
+						Some(provider::Provider::Vertex(vertex)) => AIProvider::vertex(llm::vertex::Provider {
 							model: vertex.model.as_deref().map(strng::new),
 							region: (!vertex.region.is_empty()).then(|| strng::new(&vertex.region)),
 							project_id: strng::new(&vertex.project_id),

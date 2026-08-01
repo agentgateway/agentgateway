@@ -348,6 +348,13 @@ impl BackendPolicies {
 				ctx.register_expression(expr);
 			}
 		}
+		if let Some(provider) = self.llm_provider.as_ref()
+			&& let llm::AIProvider::Vertex(vertex) = &provider.provider
+		{
+			for expr in vertex.cel_expressions() {
+				ctx.register_expression(expr);
+			}
+		}
 		if let Some(health) = self.health.as_ref() {
 			health.register_expressions(ctx);
 		}

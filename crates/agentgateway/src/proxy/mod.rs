@@ -300,7 +300,8 @@ impl ProxyError {
 				| llm::AIError::UnsupportedModel
 				| llm::AIError::UnsupportedContent
 				| llm::AIError::UnsupportedConversion(_)
-				| llm::AIError::RequestParsing(_) => StatusCode::BAD_REQUEST,
+				| llm::AIError::RequestParsing(_)
+				| llm::AIError::LabelResolution(_) => StatusCode::BAD_REQUEST,
 				llm::AIError::ModelNotFound => StatusCode::NOT_FOUND,
 				llm::AIError::RequestTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
 				llm::AIError::UnsupportedEncoding(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,

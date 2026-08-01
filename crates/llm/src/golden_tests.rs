@@ -204,7 +204,7 @@ mod requests {
 							.map(|r| r.body)
 					}),
 					VERTEX_GEMINI => test_request(VERTEX_GEMINI, &path, |i| {
-						conversion::vertex_gemini::from_completions::translate(i, Some("gemini-2.5-pro"))
+						conversion::vertex_gemini::from_completions::translate(i, Some("gemini-2.5-pro"), None)
 					}),
 					other => panic!("unsupported provider in COMPLETION_REQUESTS: {other}"),
 				}

@@ -8160,11 +8160,49 @@
         "projectId": {
           "description": "Google Cloud project ID for Vertex AI.",
           "type": "string"
+        },
+        "labels": {
+          "description": "Billing labels attached to native Gemini `generateContent` requests for cost\nattribution. Labels sent by the client are preserved unless a key conflicts,\nin which case the operator-configured value wins. A label value is either\nstatic (`value`) or a CEL expression evaluated against each request\n(`expression`).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/VertexLabel"
+          }
+        }
+      },
+      "required": [
+        "projectId"
+      ]
+    },
+    "VertexLabel": {
+      "description": "A billing label attached to native Vertex Gemini `generateContent` requests for\ncost attribution. Exactly one of `value` and `expression` must be set.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "Label key.",
+          "type": "string"
+        },
+        "value": {
+          "description": "Static label value.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expression": {
+          "description": "CEL expression evaluated against each request to produce the label value, for\nexample `jwt.sub` or `request.headers[\"x-team\"]`. If the expression does not\nproduce a valid label value at request time, the request is rejected.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
       "required": [
-        "projectId"
+        "key"
       ]
     },
     "AnthropicProvider": {

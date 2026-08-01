@@ -24,7 +24,7 @@ fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 
 #[test]
 fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
-	let provider = AIProvider::Vertex(vertex::Provider {
+	let provider = AIProvider::vertex(vertex::Provider {
 		project_id: strng::new("test-project"),
 		model: None,
 		region: None,
@@ -691,7 +691,7 @@ async fn count_tokens_uses_native_endpoint_after_model_alias() {
 	use crate::test_helpers::proxymock::setup_proxy_test;
 	use crate::types::agent::BackendTarget;
 
-	let provider = AIProvider::Vertex(vertex::Provider {
+	let provider = AIProvider::vertex(vertex::Provider {
 		model: None,
 		region: None,
 		project_id: strng::new("test-project"),
@@ -749,7 +749,7 @@ async fn vertex_anthropic_messages_prepares_vertex_body() {
 	use crate::test_helpers::proxymock::setup_proxy_test;
 	use crate::types::agent::BackendTarget;
 
-	let provider = AIProvider::Vertex(vertex::Provider {
+	let provider = AIProvider::vertex(vertex::Provider {
 		model: None,
 		region: Some(strng::new("us-central1")),
 		project_id: strng::new("test-project"),
@@ -1768,7 +1768,7 @@ fn setup_request_gemini_applies_path_prefix_with_host_override() {
 #[test]
 fn setup_request_vertex_applies_path_prefix_with_host_override() {
 	assert_prefixed_host_override_path(
-		AIProvider::Vertex(vertex::Provider {
+		AIProvider::vertex(vertex::Provider {
 			model: None,
 			region: Some(strng::new("us-central1")),
 			project_id: strng::new("example-project"),
@@ -2306,7 +2306,7 @@ async fn responses_passthrough_stream_skips_completion_when_disabled() {
 }
 
 fn vertex_provider(model: &str) -> AIProvider {
-	AIProvider::Vertex(vertex::Provider {
+	AIProvider::vertex(vertex::Provider {
 		model: Some(strng::new(model)),
 		region: None,
 		project_id: strng::new("test-project"),
@@ -2468,4 +2468,164 @@ fn fixed_providers_classify_by_family() {
 		),
 		CacheTokenConvention::InputIncludesCache,
 	);
+}
+
+// ---------- Vertex operator labels ----------
+
+fn vertex_label(key: &str, value: Option<&str>, expression: Option<&str>) -> VertexLabel {
+	VertexLabel {
+		key: key.to_string(),
+		value: value.map(str::to_string),
+		expression: expression
+			.map(|e| Arc::new(crate::cel::Expression::new_strict(e).expect("valid CEL expression"))),
+	}
+}
+
+#[test]
+fn vertex_labels_are_validated_at_config_time() {
+	// A static and a dynamic label together are valid
+	assert!(
+		VertexLabels::try_new(vec![
+			vertex_label("team", Some("ai"), None),
+			vertex_label("tenant", None, Some(r#"request.headers["x-tenant"]"#)),
+		])
+		.is_ok()
+	);
+
+	// Keys must match Google Cloud's label requirements
+	let too_long = "a".repeat(64);
+	for bad_key in ["", "Uppercase", "1starts-with-digit", too_long.as_str()] {
+		assert!(
+			VertexLabels::try_new(vec![vertex_label(bad_key, Some("v"), None)]).is_err(),
+			"key {bad_key:?} must be rejected"
+		);
+	}
+
+	// Static values are validated at config time
+	assert!(VertexLabels::try_new(vec![vertex_label("team", Some("Not Valid"), None)]).is_err());
+
+	// Duplicate keys are rejected
+	assert!(
+		VertexLabels::try_new(vec![
+			vertex_label("team", Some("a"), None),
+			vertex_label("team", Some("b"), None),
+		])
+		.is_err()
+	);
+
+	// Exactly one of value/expression must be set
+	assert!(VertexLabels::try_new(vec![vertex_label("team", Some("a"), Some(r#""b""#))]).is_err());
+	assert!(VertexLabels::try_new(vec![vertex_label("team", None, None)]).is_err());
+}
+
+#[test]
+fn vertex_provider_config_parses_labels() {
+	let yaml = r#"
+projectId: test-project
+labels:
+- key: team
+  value: ai
+- key: tenant
+  expression: request.headers["x-tenant"]
+"#;
+	let p: VertexProvider = serdes::yamlviajson::from_str(yaml).unwrap();
+	assert_eq!(p.project_id.as_str(), "test-project");
+	assert!(!p.labels.is_empty());
+	assert_eq!(p.cel_expressions().count(), 1);
+
+	// Invalid labels are rejected at config load
+	let yaml = r#"
+projectId: test-project
+labels:
+- key: Team
+  value: ai
+"#;
+	assert!(serdes::yamlviajson::from_str::<VertexProvider>(yaml).is_err());
+}
+
+/// Snapshot of an original client request with an x-tenant header.
+fn vertex_label_request_snapshot() -> crate::cel::RequestSnapshot {
+	let mut req = ::http::Request::builder()
+		.method(::http::Method::POST)
+		.uri("http://example.com/v1/chat/completions")
+		.header("x-tenant", "acme")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	crate::cel::snapshot_request(&mut req, false)
+}
+
+#[test]
+fn vertex_operator_labels_merge_into_generate_content_request() {
+	let provider = AIProvider::Vertex(VertexProvider {
+		provider: vertex::Provider {
+			project_id: strng::new("test-project"),
+			model: None,
+			region: None,
+		},
+		labels: VertexLabels::try_new(vec![
+			vertex_label("team", Some("ai"), None),
+			vertex_label("tenant", None, Some(r#"request.headers["x-tenant"]"#)),
+		])
+		.unwrap(),
+	});
+	let snap = vertex_label_request_snapshot();
+
+	let chat_req: types::completions::Request = serde_json::from_value(serde_json::json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{"role": "user", "content": "hi"}],
+		"labels": {"team": "client-spoofed", "env": "client"}
+	}))
+	.unwrap();
+
+	let body = render_vertex_gemini(
+		types::ChatRequest::Completions(chat_req),
+		&ChatRequestContext {
+			provider: &provider,
+			headers: &HeaderMap::new(),
+			prompt_caching: None,
+			request_snapshot: Some(&snap),
+		},
+	)
+	.unwrap();
+	let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+	// Operator values win on conflict; other client labels are preserved.
+	assert_eq!(body["labels"]["team"], "ai");
+	assert_eq!(body["labels"]["tenant"], "acme");
+	assert_eq!(body["labels"]["env"], "client");
+}
+
+#[test]
+fn vertex_operator_labels_fail_closed() {
+	let provider = AIProvider::Vertex(VertexProvider {
+		provider: vertex::Provider {
+			project_id: strng::new("test-project"),
+			model: None,
+			region: None,
+		},
+		labels: VertexLabels::try_new(vec![vertex_label(
+			"tenant",
+			None,
+			Some(r#"request.headers["x-missing"]"#),
+		)])
+		.unwrap(),
+	});
+	let snap = vertex_label_request_snapshot();
+
+	let chat_req: types::completions::Request = serde_json::from_value(serde_json::json!({
+		"model": "gemini-2.5-flash",
+		"messages": [{"role": "user", "content": "hi"}]
+	}))
+	.unwrap();
+
+	let err = render_vertex_gemini(
+		types::ChatRequest::Completions(chat_req),
+		&ChatRequestContext {
+			provider: &provider,
+			headers: &HeaderMap::new(),
+			prompt_caching: None,
+			request_snapshot: Some(&snap),
+		},
+	)
+	.expect_err("an expression that cannot be resolved must reject the request");
+	assert!(matches!(err, AIError::LabelResolution(_)), "got {err}");
 }

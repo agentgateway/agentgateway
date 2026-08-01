@@ -83,14 +83,32 @@ pub mod from_completions {
 	pub fn translate(
 		req: &types::completions::Request,
 		configured_model: Option<&str>,
+		operator_labels: Option<&serde_json::Map<String, Value>>,
 	) -> Result<Vec<u8>, AIError> {
-		let out = build_request(req, configured_model)?;
+		let out = build_request(req, configured_model, operator_labels)?;
 		serde_json::to_vec(&out).map_err(AIError::RequestMarshal)
+	}
+
+	/// Merge operator-configured labels over client-sent labels. On a key conflict the
+	/// operator's value wins, so a caller cannot override the gateway's billing attribution.
+	fn merge_labels(
+		client_labels: Option<serde_json::Map<String, Value>>,
+		operator_labels: Option<&serde_json::Map<String, Value>>,
+	) -> Option<serde_json::Map<String, Value>> {
+		let Some(operator_labels) = operator_labels.filter(|l| !l.is_empty()) else {
+			return client_labels;
+		};
+		let mut merged = client_labels.unwrap_or_default();
+		for (key, value) in operator_labels {
+			merged.insert(key.clone(), value.clone());
+		}
+		Some(merged)
 	}
 
 	pub(super) fn build_request(
 		req: &types::completions::Request,
 		configured_model: Option<&str>,
+		operator_labels: Option<&serde_json::Map<String, Value>>,
 	) -> Result<vg::GenerateContentRequest, AIError> {
 		let model = configured_model
 			.or(req.model.as_deref())
@@ -139,7 +157,10 @@ pub mod from_completions {
 			None => Vec::new(),
 		};
 
-		let labels = req.rest.get("labels").and_then(|v| v.as_object().cloned());
+		let labels = merge_labels(
+			req.rest.get("labels").and_then(|v| v.as_object().cloned()),
+			operator_labels,
+		);
 
 		let (system_instruction, tools, tool_config) = if cached_content.is_some() {
 			let dropped: Vec<&str> = [

@@ -7,7 +7,7 @@ fn req(v: Value) -> types::completions::Request {
 }
 
 fn to_gemini(v: Value) -> Value {
-	let bytes = from_completions::translate(&req(v), None).expect("translate ok");
+	let bytes = from_completions::translate(&req(v), None, None).expect("translate ok");
 	serde_json::from_slice(&bytes).expect("valid json")
 }
 
@@ -71,6 +71,7 @@ fn gs_url_without_extension_or_hint_is_rejected() {
 			]}]
 		})),
 		None,
+		None,
 	);
 	assert!(
 		err.is_err(),
@@ -113,6 +114,7 @@ fn http_image_url_is_rejected() {
 				{ "type": "image_url", "image_url": { "url": "https://example.com/cat.png" } }
 			]}]
 		})),
+		None,
 		None,
 	);
 	assert!(err.is_err(), "http(s) image_url must be rejected");
@@ -1073,6 +1075,79 @@ fn labels_pass_through_at_top_level() {
 		"labels": { "team": "ai" }
 	}));
 	assert_eq!(g["labels"]["team"], "ai");
+}
+
+/// Translate with operator labels and return the outbound JSON.
+fn to_gemini_with_operator_labels(v: Value, operator_labels: Value) -> Value {
+	let labels = operator_labels
+		.as_object()
+		.expect("operator labels are an object")
+		.clone();
+	let bytes = from_completions::translate(&req(v), None, Some(&labels)).expect("translate ok");
+	serde_json::from_slice(&bytes).expect("valid json")
+}
+
+#[test]
+fn operator_labels_are_added_without_client_labels() {
+	let g = to_gemini_with_operator_labels(
+		json!({
+			"model": "gemini-2.5-flash",
+			"messages": [{ "role": "user", "content": "x" }]
+		}),
+		json!({ "cost-center": "platform" }),
+	);
+	assert_eq!(g["labels"]["cost-center"], "platform");
+}
+
+#[test]
+fn operator_labels_merge_with_client_labels() {
+	let g = to_gemini_with_operator_labels(
+		json!({
+			"model": "gemini-2.5-flash",
+			"messages": [{ "role": "user", "content": "x" }],
+			"labels": { "team": "ai" }
+		}),
+		json!({ "cost-center": "platform" }),
+	);
+	assert_eq!(g["labels"]["team"], "ai");
+	assert_eq!(g["labels"]["cost-center"], "platform");
+}
+
+#[test]
+fn operator_labels_win_over_client_labels() {
+	let g = to_gemini_with_operator_labels(
+		json!({
+			"model": "gemini-2.5-flash",
+			"messages": [{ "role": "user", "content": "x" }],
+			"labels": { "team": "spoofed", "env": "client" }
+		}),
+		json!({ "team": "ai" }),
+	);
+	// The operator's value wins on conflict; other client labels are preserved.
+	assert_eq!(g["labels"]["team"], "ai");
+	assert_eq!(g["labels"]["env"], "client");
+}
+
+#[test]
+fn empty_operator_labels_leave_client_labels_untouched() {
+	let g = to_gemini_with_operator_labels(
+		json!({
+			"model": "gemini-2.5-flash",
+			"messages": [{ "role": "user", "content": "x" }],
+			"labels": { "team": "ai" }
+		}),
+		json!({}),
+	);
+	assert_eq!(g["labels"]["team"], "ai");
+
+	let g = to_gemini_with_operator_labels(
+		json!({
+			"model": "gemini-2.5-flash",
+			"messages": [{ "role": "user", "content": "x" }]
+		}),
+		json!({}),
+	);
+	assert!(g.get("labels").is_none() || g["labels"].is_null());
 }
 
 // ---------- Response: content / reasoning / tool calls ----------

@@ -366,8 +366,8 @@ backends:
                     provider:
                       vertex:
                         model: claude-haiku-4-5-20251001
-                        region: global
                         projectId: my-vertex-project
+                        region: global
                     hostOverride: ~
                     pathOverride: ~
                     pathPrefix: ~

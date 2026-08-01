@@ -4249,7 +4249,7 @@ async fn convert_llm_config(
 			},
 			LocalModelAIProvider::Preset(preset) => AIProvider::Custom(preset.provider(model.clone())),
 			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Vertex) => {
-				AIProvider::Vertex(crate::llm::vertex::Provider {
+				AIProvider::vertex(crate::llm::vertex::Provider {
 					model,
 					region: p.vertex_region,
 					project_id: p.vertex_project.context("vertex requires vertex_project")?,

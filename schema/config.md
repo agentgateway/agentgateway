@@ -5304,6 +5304,10 @@
 |`binds[].listeners[].routes[].backends[].ai.provider.vertex.model`|string|Model ID to send to Vertex AI, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.provider.vertex.region`|string|Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`<br>use restricted multi-region endpoints. Other values are treated as regional locations.|
 |`binds[].listeners[].routes[].backends[].ai.provider.vertex.projectId`|string|Google Cloud project ID for Vertex AI.|
+|`binds[].listeners[].routes[].backends[].ai.provider.vertex.labels`|[]object|Billing labels attached to native Gemini `generateContent` requests for cost<br>attribution. Labels sent by the client are preserved unless a key conflicts,<br>in which case the operator-configured value wins. A label value is either<br>static (`value`) or a CEL expression evaluated against each request<br>(`expression`).|
+|`binds[].listeners[].routes[].backends[].ai.provider.vertex.labels[].key`|string|Label key.|
+|`binds[].listeners[].routes[].backends[].ai.provider.vertex.labels[].value`|string|Static label value.|
+|`binds[].listeners[].routes[].backends[].ai.provider.vertex.labels[].expression`|string|CEL expression evaluated against each request to produce the label value, for<br>example `jwt.sub` or `request.headers["x-team"]`. If the expression does not<br>produce a valid label value at request time, the request is rejected.|
 |`binds[].listeners[].routes[].backends[].ai.provider.anthropic`|object||
 |`binds[].listeners[].routes[].backends[].ai.provider.anthropic.model`|string|Model ID to send to Anthropic, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.provider.bedrock`|object||
@@ -8605,6 +8609,10 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.vertex.model`|string|Model ID to send to Vertex AI, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.vertex.region`|string|Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`<br>use restricted multi-region endpoints. Other values are treated as regional locations.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.vertex.projectId`|string|Google Cloud project ID for Vertex AI.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.vertex.labels`|[]object|Billing labels attached to native Gemini `generateContent` requests for cost<br>attribution. Labels sent by the client are preserved unless a key conflicts,<br>in which case the operator-configured value wins. A label value is either<br>static (`value`) or a CEL expression evaluated against each request<br>(`expression`).|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.vertex.labels[].key`|string|Label key.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.vertex.labels[].value`|string|Static label value.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.vertex.labels[].expression`|string|CEL expression evaluated against each request to produce the label value, for<br>example `jwt.sub` or `request.headers["x-team"]`. If the expression does not<br>produce a valid label value at request time, the request is rejected.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.anthropic`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.anthropic.model`|string|Model ID to send to Anthropic, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock`|object||
@@ -22801,6 +22809,10 @@
 |`backends[].ai.provider.vertex.model`|string|Model ID to send to Vertex AI, overriding the model in the client request.|
 |`backends[].ai.provider.vertex.region`|string|Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`<br>use restricted multi-region endpoints. Other values are treated as regional locations.|
 |`backends[].ai.provider.vertex.projectId`|string|Google Cloud project ID for Vertex AI.|
+|`backends[].ai.provider.vertex.labels`|[]object|Billing labels attached to native Gemini `generateContent` requests for cost<br>attribution. Labels sent by the client are preserved unless a key conflicts,<br>in which case the operator-configured value wins. A label value is either<br>static (`value`) or a CEL expression evaluated against each request<br>(`expression`).|
+|`backends[].ai.provider.vertex.labels[].key`|string|Label key.|
+|`backends[].ai.provider.vertex.labels[].value`|string|Static label value.|
+|`backends[].ai.provider.vertex.labels[].expression`|string|CEL expression evaluated against each request to produce the label value, for<br>example `jwt.sub` or `request.headers["x-team"]`. If the expression does not<br>produce a valid label value at request time, the request is rejected.|
 |`backends[].ai.provider.anthropic`|object||
 |`backends[].ai.provider.anthropic.model`|string|Model ID to send to Anthropic, overriding the model in the client request.|
 |`backends[].ai.provider.bedrock`|object||
@@ -26102,6 +26114,10 @@
 |`backends[].ai.groups[].providers[].provider.vertex.model`|string|Model ID to send to Vertex AI, overriding the model in the client request.|
 |`backends[].ai.groups[].providers[].provider.vertex.region`|string|Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`<br>use restricted multi-region endpoints. Other values are treated as regional locations.|
 |`backends[].ai.groups[].providers[].provider.vertex.projectId`|string|Google Cloud project ID for Vertex AI.|
+|`backends[].ai.groups[].providers[].provider.vertex.labels`|[]object|Billing labels attached to native Gemini `generateContent` requests for cost<br>attribution. Labels sent by the client are preserved unless a key conflicts,<br>in which case the operator-configured value wins. A label value is either<br>static (`value`) or a CEL expression evaluated against each request<br>(`expression`).|
+|`backends[].ai.groups[].providers[].provider.vertex.labels[].key`|string|Label key.|
+|`backends[].ai.groups[].providers[].provider.vertex.labels[].value`|string|Static label value.|
+|`backends[].ai.groups[].providers[].provider.vertex.labels[].expression`|string|CEL expression evaluated against each request to produce the label value, for<br>example `jwt.sub` or `request.headers["x-team"]`. If the expression does not<br>produce a valid label value at request time, the request is rejected.|
 |`backends[].ai.groups[].providers[].provider.anthropic`|object||
 |`backends[].ai.groups[].providers[].provider.anthropic.model`|string|Model ID to send to Anthropic, overriding the model in the client request.|
 |`backends[].ai.groups[].providers[].provider.bedrock`|object||
@@ -37832,6 +37848,10 @@
 |`routeGroups[].routes[].backends[].ai.provider.vertex.model`|string|Model ID to send to Vertex AI, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.provider.vertex.region`|string|Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`<br>use restricted multi-region endpoints. Other values are treated as regional locations.|
 |`routeGroups[].routes[].backends[].ai.provider.vertex.projectId`|string|Google Cloud project ID for Vertex AI.|
+|`routeGroups[].routes[].backends[].ai.provider.vertex.labels`|[]object|Billing labels attached to native Gemini `generateContent` requests for cost<br>attribution. Labels sent by the client are preserved unless a key conflicts,<br>in which case the operator-configured value wins. A label value is either<br>static (`value`) or a CEL expression evaluated against each request<br>(`expression`).|
+|`routeGroups[].routes[].backends[].ai.provider.vertex.labels[].key`|string|Label key.|
+|`routeGroups[].routes[].backends[].ai.provider.vertex.labels[].value`|string|Static label value.|
+|`routeGroups[].routes[].backends[].ai.provider.vertex.labels[].expression`|string|CEL expression evaluated against each request to produce the label value, for<br>example `jwt.sub` or `request.headers["x-team"]`. If the expression does not<br>produce a valid label value at request time, the request is rejected.|
 |`routeGroups[].routes[].backends[].ai.provider.anthropic`|object||
 |`routeGroups[].routes[].backends[].ai.provider.anthropic.model`|string|Model ID to send to Anthropic, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.provider.bedrock`|object||
@@ -41133,6 +41153,10 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.vertex.model`|string|Model ID to send to Vertex AI, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.vertex.region`|string|Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`<br>use restricted multi-region endpoints. Other values are treated as regional locations.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.vertex.projectId`|string|Google Cloud project ID for Vertex AI.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.vertex.labels`|[]object|Billing labels attached to native Gemini `generateContent` requests for cost<br>attribution. Labels sent by the client are preserved unless a key conflicts,<br>in which case the operator-configured value wins. A label value is either<br>static (`value`) or a CEL expression evaluated against each request<br>(`expression`).|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.vertex.labels[].key`|string|Label key.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.vertex.labels[].value`|string|Static label value.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.vertex.labels[].expression`|string|CEL expression evaluated against each request to produce the label value, for<br>example `jwt.sub` or `request.headers["x-team"]`. If the expression does not<br>produce a valid label value at request time, the request is rejected.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.anthropic`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.anthropic.model`|string|Model ID to send to Anthropic, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.bedrock`|object||
@@ -55435,6 +55459,10 @@
 |`routes[].backends[].ai.provider.vertex.model`|string|Model ID to send to Vertex AI, overriding the model in the client request.|
 |`routes[].backends[].ai.provider.vertex.region`|string|Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`<br>use restricted multi-region endpoints. Other values are treated as regional locations.|
 |`routes[].backends[].ai.provider.vertex.projectId`|string|Google Cloud project ID for Vertex AI.|
+|`routes[].backends[].ai.provider.vertex.labels`|[]object|Billing labels attached to native Gemini `generateContent` requests for cost<br>attribution. Labels sent by the client are preserved unless a key conflicts,<br>in which case the operator-configured value wins. A label value is either<br>static (`value`) or a CEL expression evaluated against each request<br>(`expression`).|
+|`routes[].backends[].ai.provider.vertex.labels[].key`|string|Label key.|
+|`routes[].backends[].ai.provider.vertex.labels[].value`|string|Static label value.|
+|`routes[].backends[].ai.provider.vertex.labels[].expression`|string|CEL expression evaluated against each request to produce the label value, for<br>example `jwt.sub` or `request.headers["x-team"]`. If the expression does not<br>produce a valid label value at request time, the request is rejected.|
 |`routes[].backends[].ai.provider.anthropic`|object||
 |`routes[].backends[].ai.provider.anthropic.model`|string|Model ID to send to Anthropic, overriding the model in the client request.|
 |`routes[].backends[].ai.provider.bedrock`|object||
@@ -58736,6 +58764,10 @@
 |`routes[].backends[].ai.groups[].providers[].provider.vertex.model`|string|Model ID to send to Vertex AI, overriding the model in the client request.|
 |`routes[].backends[].ai.groups[].providers[].provider.vertex.region`|string|Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`<br>use restricted multi-region endpoints. Other values are treated as regional locations.|
 |`routes[].backends[].ai.groups[].providers[].provider.vertex.projectId`|string|Google Cloud project ID for Vertex AI.|
+|`routes[].backends[].ai.groups[].providers[].provider.vertex.labels`|[]object|Billing labels attached to native Gemini `generateContent` requests for cost<br>attribution. Labels sent by the client are preserved unless a key conflicts,<br>in which case the operator-configured value wins. A label value is either<br>static (`value`) or a CEL expression evaluated against each request<br>(`expression`).|
+|`routes[].backends[].ai.groups[].providers[].provider.vertex.labels[].key`|string|Label key.|
+|`routes[].backends[].ai.groups[].providers[].provider.vertex.labels[].value`|string|Static label value.|
+|`routes[].backends[].ai.groups[].providers[].provider.vertex.labels[].expression`|string|CEL expression evaluated against each request to produce the label value, for<br>example `jwt.sub` or `request.headers["x-team"]`. If the expression does not<br>produce a valid label value at request time, the request is rejected.|
 |`routes[].backends[].ai.groups[].providers[].provider.anthropic`|object||
 |`routes[].backends[].ai.groups[].providers[].provider.anthropic.model`|string|Model ID to send to Anthropic, overriding the model in the client request.|
 |`routes[].backends[].ai.groups[].providers[].provider.bedrock`|object||
