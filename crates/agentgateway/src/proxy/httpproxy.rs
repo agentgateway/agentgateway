@@ -59,6 +59,22 @@ fn select_backend(route: &Route, _req: &Request) -> Option<RouteBackendReference
 		.cloned()
 }
 
+fn provider_backend_has_endpoints(
+	inputs: &ProxyInputs,
+	provider: &crate::llm::NamedAIProvider,
+) -> bool {
+	let Some(SimpleBackendReference::Service { name, port }) = &provider.provider_backend else {
+		return true;
+	};
+	let discovery = inputs.stores.read_discovery();
+	let Some(svc) = discovery.services.get_by_namespaced_host(name) else {
+		return false;
+	};
+	svc
+		.endpoints
+		.has_available_endpoint(&discovery.workloads, svc.as_ref(), *port)
+}
+
 #[derive(Debug)]
 struct SelectedRouteChain {
 	routes: Vec<Arc<Route>>,
@@ -2024,7 +2040,9 @@ async fn make_backend_call(
 
 	let (mut backend_call, mut maybe_inference) = match backend {
 		Backend::AI(n, ai) => {
-			let (provider, handle) = ai.select_provider().ok_or(ProxyError::NoHealthyEndpoints)?;
+			let (provider, handle) = ai
+				.select_provider_if(|provider| provider_backend_has_endpoints(&inputs, provider))
+				.ok_or(ProxyError::NoHealthyEndpoints)?;
 			log.add(move |l| l.request_handle = Some(handle));
 			let sub_backend_name = BackendTargetRef::Backend {
 				name: n.name.as_ref(),
