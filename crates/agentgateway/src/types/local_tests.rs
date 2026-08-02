@@ -1369,7 +1369,7 @@ binds:
 }
 
 #[tokio::test]
-async fn test_session_persistence_requires_service_backend() {
+async fn test_session_affinity_requires_service_backend() {
 	let input = r#"
 binds:
 - port: 3000
@@ -1378,7 +1378,7 @@ binds:
     - backends:
       - host: 127.0.0.1:8000
         policies:
-          sessionPersistence:
+          sessionAffinity:
             source: request.headers["x-session-id"]
 "#;
 
@@ -1386,13 +1386,13 @@ binds:
 	assert!(
 		err
 			.to_string()
-			.contains("sessionPersistence is only supported on service route backends"),
+			.contains("sessionAffinity is only supported on service route backends"),
 		"unexpected error: {err}"
 	);
 }
 
 #[tokio::test]
-async fn test_session_persistence_service_backend_config() {
+async fn test_session_affinity_service_backend_config() {
 	let input = r#"
 binds:
 - port: 3000
@@ -1403,19 +1403,19 @@ binds:
           name: default/my-model
           port: 8000
         policies:
-          sessionPersistence:
+          sessionAffinity:
             source: request.headers["x-session-id"]
 "#;
 
 	let normalized = normalize_test_config(input)
 		.await
-		.expect("service backends should allow session persistence");
+		.expect("service backends should allow session affinity");
 	let policies = &normalized.listener_routes[0].1[0].backends[0].inline_policies;
 	assert!(
 		policies
 			.iter()
-			.any(|policy| matches!(policy, BackendTrafficPolicy::SessionPersistence(_))),
-		"expected a normalized session persistence policy"
+			.any(|policy| matches!(policy, BackendTrafficPolicy::SessionAffinity(_))),
+		"expected a normalized session affinity policy"
 	);
 }
 

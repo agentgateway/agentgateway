@@ -350,6 +350,7 @@ dependencies = [
  "tower-serve-static",
  "tracing",
  "tracing-subscriber",
+ "twox-hash",
  "typespec_client_core",
  "url",
  "uuid",
@@ -7785,6 +7786,12 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+
+[[package]]
+name = "twox-hash"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7b17f197b3050ba473acf9181f7b1d3b66d1cf7356c6cc57886662276e65908"
 
 [[package]]
 name = "typed-arena"

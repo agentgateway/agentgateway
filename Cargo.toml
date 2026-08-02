@@ -239,6 +239,7 @@ tracing-subscriber = { version = "0.3", features = [
     "registry",
     "json",
 ] }
+twox-hash = { version = "2.1", default-features = false, features = ["std", "xxhash3_64"] }
 url = "2.5"
 uuid = { version = "1.23", features = ["v4", "v7"] }
 wiremock = { version = "0.6", features = ["tls"] }

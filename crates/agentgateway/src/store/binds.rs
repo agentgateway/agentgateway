@@ -257,7 +257,7 @@ pub struct BackendPolicies {
 	pub request_mirror: Vec<filters::RequestMirror>,
 	pub transformation: BackendPolicy<http::transformation_cel::Transformation>,
 
-	pub session_persistence: Option<http::sessionpersistence::Policy>,
+	pub session_affinity: Option<http::sessionaffinity::Policy>,
 
 	pub health: Option<health::Policy>,
 
@@ -312,7 +312,7 @@ impl BackendPolicies {
 				other.request_mirror
 			},
 			transformation: other.transformation.or(self.transformation),
-			session_persistence: other.session_persistence.or(self.session_persistence),
+			session_affinity: other.session_affinity.or(self.session_affinity),
 			health: other.health.or(self.health),
 			override_dest: other.override_dest.or(self.override_dest),
 		}
@@ -348,8 +348,8 @@ impl BackendPolicies {
 		if let Some(health) = self.health.as_ref() {
 			health.register_expressions(ctx);
 		}
-		if let Some(session_persistence) = self.session_persistence.as_ref() {
-			session_persistence.register_expressions(ctx);
+		if let Some(session_affinity) = self.session_affinity.as_ref() {
+			session_affinity.register_expressions(ctx);
 		}
 	}
 }
@@ -1319,8 +1319,8 @@ impl Store {
 				BackendTrafficPolicy::Transformation(p) => {
 					pol.transformation.set_if_unset(p);
 				},
-				BackendTrafficPolicy::SessionPersistence(p) => {
-					pol.session_persistence.get_or_insert_with(|| p.clone());
+				BackendTrafficPolicy::SessionAffinity(p) => {
+					pol.session_affinity.get_or_insert_with(|| p.clone());
 				},
 				BackendTrafficPolicy::Health(p) => {
 					pol.health.get_or_insert_with(|| p.clone());

@@ -2449,7 +2449,7 @@ pub struct LocalRouteBackendPolicies {
 
 	/// Keep requests whose CEL expression produces the same value on one service endpoint.
 	#[cfg_attr(feature = "schema", schemars(default))]
-	pub session_persistence: Option<http::sessionpersistence::Policy>,
+	pub session_affinity: Option<http::sessionaffinity::Policy>,
 }
 
 impl<'de> Deserialize<'de> for LocalRouteBackendPolicies {
@@ -2468,7 +2468,7 @@ impl<'de> Deserialize<'de> for LocalRouteBackendPolicies {
 		// original LocalBackendPolicies deserializer. This avoids nested serde(flatten), which causes
 		// the inner policy fields to be treated as unknown, while preserving its strict unknown-field
 		// validation and all existing wire formats.
-		let session_persistence = match fields.remove("sessionPersistence") {
+		let session_affinity = match fields.remove("sessionAffinity") {
 			None | Some(serde_json::Value::Null) => None,
 			Some(value) => Some(serde_json::from_value(value).map_err(serde::de::Error::custom)?),
 		};
@@ -2477,7 +2477,7 @@ impl<'de> Deserialize<'de> for LocalRouteBackendPolicies {
 
 		Ok(Self {
 			backend,
-			session_persistence,
+			session_affinity,
 		})
 	}
 }
@@ -2525,8 +2525,8 @@ fn validate_route_backend_policy_scope(
 			InferenceRoutingScope::NonServiceRouteBackend
 		},
 	)?;
-	if !is_service && policies.is_some_and(|p| p.session_persistence.is_some()) {
-		bail!("sessionPersistence is only supported on service route backends")
+	if !is_service && policies.is_some_and(|p| p.session_affinity.is_some()) {
+		bail!("sessionAffinity is only supported on service route backends")
 	}
 	Ok(())
 }
@@ -2538,11 +2538,11 @@ impl LocalRouteBackendPolicies {
 	) -> anyhow::Result<Vec<BackendTrafficPolicy>> {
 		let LocalRouteBackendPolicies {
 			backend,
-			session_persistence,
+			session_affinity,
 		} = self;
 		let mut policies = backend.translate(resources).await?;
-		if let Some(policy) = session_persistence {
-			policies.push(BackendTrafficPolicy::SessionPersistence(policy));
+		if let Some(policy) = session_affinity {
+			policies.push(BackendTrafficPolicy::SessionAffinity(policy));
 		}
 		Ok(policies)
 	}

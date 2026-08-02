@@ -11,8 +11,8 @@ use rand::RngExt;
 use rand::distr::Distribution;
 use rand::distr::weighted::WeightedIndex;
 use serde::ser::SerializeSeq;
-use sha2::{Digest, Sha256};
 use tokio::time::sleep_until;
+use twox_hash::XxHash3_64;
 
 use crate::types::discovery::{
 	Endpoint, LoadBalancer, LoadBalancerMode, LoadBalancerScopes, Service, Workload,
@@ -223,7 +223,7 @@ impl EndpointSet<Endpoint> {
 		svc: &Service,
 		svc_port: u16,
 		override_dest: Option<SocketAddr>,
-		affinity_key: Option<&[u8; 32]>,
+		affinity_key: Option<&u64>,
 	) -> Option<(Arc<Endpoint>, ActiveHandle, Arc<Workload>)> {
 		let Some(target_port) = svc.ports.get(&svc_port).copied() else {
 			debug!("service {} does not have port {}", svc.hostname, svc_port);
@@ -254,7 +254,7 @@ impl EndpointSet<Endpoint> {
 		workloads: &store::WorkloadStore,
 		svc_port: u16,
 		target_port: u16,
-		affinity_key: &[u8; 32],
+		affinity_key: &u64,
 	) -> Option<Candidate> {
 		for active_phase in [true, false] {
 			for bucket in &self.buckets {
@@ -392,14 +392,8 @@ impl EndpointSet<Endpoint> {
 	}
 }
 
-fn weighted_rendezvous_score(affinity_key: &[u8; 32], endpoint: &[u8], weight: u32) -> f64 {
-	let mut hasher = Sha256::new();
-	hasher.update(affinity_key);
-	hasher.update(endpoint);
-	let digest = hasher.finalize();
-	let mut hash_bytes = [0_u8; 8];
-	hash_bytes.copy_from_slice(&digest[..8]);
-	let hash = u64::from_be_bytes(hash_bytes);
+fn weighted_rendezvous_score(affinity_key: &u64, endpoint: &[u8], weight: u32) -> f64 {
+	let hash = XxHash3_64::oneshot_with_seed(*affinity_key, endpoint);
 	// Map into (0, 1], avoiding ln(0). Weighted HRW chooses max(weight / -ln(u)).
 	let uniform = ((hash >> 11) as f64 + 0.5) / ((1_u64 << 53) as f64);
 	f64::from(weight) / -uniform.ln()
@@ -1163,13 +1157,11 @@ impl<T> ActiveEndpointsIter<T> {
 
 #[cfg(test)]
 mod tests {
-	use sha2::{Digest, Sha256};
-
 	use super::*;
 
 	#[test]
 	fn rendezvous_score_is_stable_and_respects_weight() {
-		let affinity_key: [u8; 32] = Sha256::digest(b"client-a").into();
+		let affinity_key = 1234;
 		let first = weighted_rendezvous_score(&affinity_key, b"endpoint-a", 1);
 		assert_eq!(
 			first,

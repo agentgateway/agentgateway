@@ -8822,11 +8822,11 @@
           ],
           "default": null
         },
-        "sessionPersistence": {
+        "sessionAffinity": {
           "description": "Keep requests whose CEL expression produces the same value on one service endpoint.",
           "anyOf": [
             {
-              "$ref": "#/$defs/SessionPersistencePolicy"
+              "$ref": "#/$defs/SessionAffinityPolicy"
             },
             {
               "type": "null"
@@ -8837,7 +8837,7 @@
       },
       "additionalProperties": false
     },
-    "SessionPersistencePolicy": {
+    "SessionAffinityPolicy": {
       "description": "Pins requests that carry the same affinity value to the same healthy service endpoint.\n\nThis policy is intentionally stateless. Every gateway replica computes the same rendezvous\nhash from the request affinity value and the currently available endpoint set.",
       "type": "object",
       "properties": {

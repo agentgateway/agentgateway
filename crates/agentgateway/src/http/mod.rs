@@ -28,6 +28,7 @@ pub mod outlierdetection;
 mod peekbody;
 mod recordbody;
 pub mod remoteratelimit;
+pub mod sessionaffinity;
 pub mod sessionpersistence;
 pub mod tests_common;
 pub mod transformation_cel;

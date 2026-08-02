@@ -322,7 +322,7 @@ async fn apply_backend_policies(
 		request_redirect,
 		transformation,
 		// Applied during service endpoint selection
-		session_persistence: _,
+		session_affinity: _,
 		// Applied elsewhere
 		request_mirror: _,
 		// Applied elsewhere
@@ -1844,7 +1844,7 @@ async fn apply_inference_routing(
 	let destination = inference_result.destination.or(policies.override_dest);
 	let affinity_key = if destination.is_none() {
 		policies
-			.session_persistence
+			.session_affinity
 			.as_ref()
 			.and_then(|policy| policy.affinity_key(req))
 	} else {
@@ -2671,7 +2671,7 @@ fn build_connect_backend_call(
 			let mut maybe_log = Some(log);
 			let service_override = ServiceCallOverride {
 				affinity_key: policies
-					.session_persistence
+					.session_affinity
 					.as_ref()
 					.and_then(|policy| policy.affinity_key(req)),
 				..Default::default()
@@ -3869,7 +3869,7 @@ pub struct ServiceCallOverride {
 	pub destination: Option<SocketAddr>,
 	pub destination_passthrough: bool,
 	pub inference_failed_open: bool,
-	pub affinity_key: Option<[u8; 32]>,
+	pub affinity_key: Option<u64>,
 }
 
 #[derive(Debug, Default)]
