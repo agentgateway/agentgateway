@@ -35,6 +35,33 @@ fn test_deserialize_missing_jwt_validation_options_defaults_to_exp() {
 	}
 }
 
+#[test]
+fn test_deserialize_remote_jwks_with_tunnel() {
+	let json = r#"{
+		"issuer": "https://example.com",
+		"jwks": {
+			"url": "https://example.com/.well-known/jwks.json",
+			"tunnel": {
+				"proxy": {
+					"host": "corporate-proxy.example.com:8080"
+				}
+			}
+		}
+	}"#;
+	let config: LocalJwtConfig = serde_json::from_str(json).unwrap();
+	match config {
+		LocalJwtConfig::Single { jwks, .. } => match jwks {
+			crate::serdes::FileInlineOrRemote::Remote { url, tunnel } => {
+				assert_eq!(url.to_string(), "https://example.com/.well-known/jwks.json");
+				let tunnel = tunnel.expect("tunnel should be present");
+				assert_eq!(tunnel.proxy.host, "corporate-proxy.example.com:8080");
+			},
+			other => panic!("expected remote JWKS, got {other:?}"),
+		},
+		_ => panic!("expected Single variant"),
+	}
+}
+
 // Deserialization: jwtValidationOptions present but requiredClaims omitted defaults to ["exp"]
 #[test]
 fn test_deserialize_jwt_validation_options_without_required_claims_defaults_to_exp() {

@@ -506,6 +506,16 @@ impl Client {
 	}
 
 	pub async fn simple_call(&self, req: http::Request) -> Result<http::Response, ProxyError> {
+		self.simple_call_with_tunnel(req, None).await
+	}
+
+	/// Like [`Self::simple_call`], optionally tunneling through an HTTP CONNECT /
+	/// absolute-form proxy (same transport as backend `backendTunnel`).
+	pub async fn simple_call_with_tunnel(
+		&self,
+		req: http::Request,
+		tunnel: Option<Target>,
+	) -> Result<http::Response, ProxyError> {
 		let host = req
 			.uri()
 			.host()
@@ -519,10 +529,21 @@ impl Client {
 			.port()
 			.map(|p| p.as_u16())
 			.unwrap_or_else(|| if scheme == &Scheme::HTTPS { 443 } else { 80 });
-		let transport = if scheme == &Scheme::HTTPS {
-			ApplicationTransport::Tls(http::backendtls::SYSTEM_TRUST.base_config()).into()
+		let application = if scheme == &Scheme::HTTPS {
+			ApplicationTransport::Tls(http::backendtls::SYSTEM_TRUST.base_config())
 		} else {
-			ApplicationTransport::Plaintext.into()
+			ApplicationTransport::Plaintext
+		};
+		let transport = match tunnel {
+			Some(proxy) => Transport::Tunnel(
+				application,
+				TunnelConfig {
+					target: proxy,
+					transport: Box::new(Transport::Plain(ApplicationTransport::Plaintext)),
+					token: None,
+				},
+			),
+			None => application.into(),
 		};
 		let target = Target::from((host, port));
 		self

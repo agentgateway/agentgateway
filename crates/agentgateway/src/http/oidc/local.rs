@@ -145,6 +145,7 @@ impl LocalOidcConfig {
 					Some(discovery) => discovery,
 					None => FileInlineOrRemote::Remote {
 						url: default_discovery_url(&issuer)?,
+						tunnel: None,
 					},
 				};
 				let discovered = discover_provider_metadata(resources, &issuer, discovery).await?;
@@ -224,6 +225,12 @@ async fn discover_provider_metadata(
 			.jwks_uri
 			.parse()
 			.map_err(|e| Error::Config(format!("invalid jwks uri: {e}")))?,
+		// Discovery-derived JWKS inherits no tunnel; operators who need a proxy
+		// should set an explicit jwks remote with tunnel, or set tunnel on discovery.
+		tunnel: match &discovery {
+			FileInlineOrRemote::Remote { tunnel, .. } => tunnel.clone(),
+			_ => None,
+		},
 	};
 	Ok(DiscoveredProviderMetadata {
 		authorization_endpoint: document
@@ -354,6 +361,6 @@ fn describe_file_inline_or_remote(source: &FileInlineOrRemote) -> String {
 	match source {
 		FileInlineOrRemote::File { file } => format!("file '{}'", file.display()),
 		FileInlineOrRemote::Inline(_) => "inline configuration".into(),
-		FileInlineOrRemote::Remote { url } => format!("uri '{url}'"),
+		FileInlineOrRemote::Remote { url, .. } => format!("uri '{url}'"),
 	}
 }

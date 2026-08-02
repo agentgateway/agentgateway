@@ -497,6 +497,9 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.url`|string||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.mode`|enum|Controls whether MCP requests must include a valid JWT.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation`|object|Where to read the JWT from in incoming MCP requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.authorizationLocation.header`|object|Read the credential from an HTTP header.|
@@ -3443,6 +3446,9 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks.url`|string||
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].routes[].policies.jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -3450,6 +3456,9 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`binds[].listeners[].routes[].policies.jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].policies.jwtAuth.jwks.url`|string||
+|`binds[].listeners[].routes[].policies.jwtAuth.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`binds[].listeners[].routes[].policies.jwtAuth.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`binds[].listeners[].routes[].policies.jwtAuth.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`binds[].listeners[].routes[].policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].routes[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].routes[].policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
@@ -3457,12 +3466,18 @@
 |`binds[].listeners[].routes[].policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
 |`binds[].listeners[].routes[].policies.oidc.discovery.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].policies.oidc.discovery.url`|string||
+|`binds[].listeners[].routes[].policies.oidc.discovery.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`binds[].listeners[].routes[].policies.oidc.discovery.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`binds[].listeners[].routes[].policies.oidc.discovery.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`binds[].listeners[].routes[].policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
 |`binds[].listeners[].routes[].policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
 |`binds[].listeners[].routes[].policies.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `null`.|
 |`binds[].listeners[].routes[].policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`binds[].listeners[].routes[].policies.oidc.jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].policies.oidc.jwks.url`|string||
+|`binds[].listeners[].routes[].policies.oidc.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`binds[].listeners[].routes[].policies.oidc.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`binds[].listeners[].routes[].policies.oidc.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`binds[].listeners[].routes[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`binds[].listeners[].routes[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`binds[].listeners[].routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
@@ -4740,6 +4755,9 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.schema`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.schema.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.schema.url`|string||
+|`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.schema.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.schema.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].openapi.schema.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies`|object|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
@@ -14088,12 +14106,18 @@
 |`binds[].listeners[].policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
 |`binds[].listeners[].policies.oidc.discovery.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].policies.oidc.discovery.url`|string||
+|`binds[].listeners[].policies.oidc.discovery.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`binds[].listeners[].policies.oidc.discovery.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`binds[].listeners[].policies.oidc.discovery.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`binds[].listeners[].policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
 |`binds[].listeners[].policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
 |`binds[].listeners[].policies.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `null`.|
 |`binds[].listeners[].policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`binds[].listeners[].policies.oidc.jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].policies.oidc.jwks.url`|string||
+|`binds[].listeners[].policies.oidc.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`binds[].listeners[].policies.oidc.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`binds[].listeners[].policies.oidc.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`binds[].listeners[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`binds[].listeners[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`binds[].listeners[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
@@ -14115,6 +14139,9 @@
 |`binds[].listeners[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwks.url`|string||
+|`binds[].listeners[].policies.jwtAuth.providers[].jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`binds[].listeners[].policies.jwtAuth.providers[].jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`binds[].listeners[].policies.jwtAuth.providers[].jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].policies.jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -14122,6 +14149,9 @@
 |`binds[].listeners[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`binds[].listeners[].policies.jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`binds[].listeners[].policies.jwtAuth.jwks.url`|string||
+|`binds[].listeners[].policies.jwtAuth.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`binds[].listeners[].policies.jwtAuth.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`binds[].listeners[].policies.jwtAuth.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`binds[].listeners[].policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`binds[].listeners[].policies.authorization`|object|Authorization rules for incoming HTTP requests.|
@@ -16621,6 +16651,9 @@
 |`policies[].policy.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`policies[].policy.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`policies[].policy.mcpAuthentication.jwks.url`|string||
+|`policies[].policy.mcpAuthentication.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`policies[].policy.mcpAuthentication.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`policies[].policy.mcpAuthentication.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`policies[].policy.mcpAuthentication.mode`|enum|Controls whether MCP requests must include a valid JWT.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`policies[].policy.mcpAuthentication.authorizationLocation`|object|Where to read the JWT from in incoming MCP requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`policies[].policy.mcpAuthentication.authorizationLocation.header`|object|Read the credential from an HTTP header.|
@@ -19567,6 +19600,9 @@
 |`policies[].policy.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`policies[].policy.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`policies[].policy.jwtAuth.providers[].jwks.url`|string||
+|`policies[].policy.jwtAuth.providers[].jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`policies[].policy.jwtAuth.providers[].jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`policies[].policy.jwtAuth.providers[].jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`policies[].policy.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`policies[].policy.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`policies[].policy.jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -19574,6 +19610,9 @@
 |`policies[].policy.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`policies[].policy.jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`policies[].policy.jwtAuth.jwks.url`|string||
+|`policies[].policy.jwtAuth.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`policies[].policy.jwtAuth.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`policies[].policy.jwtAuth.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`policies[].policy.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`policies[].policy.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`policies[].policy.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
@@ -19581,12 +19620,18 @@
 |`policies[].policy.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
 |`policies[].policy.oidc.discovery.file`|string|Path to a file on disk to load the value from.|
 |`policies[].policy.oidc.discovery.url`|string||
+|`policies[].policy.oidc.discovery.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`policies[].policy.oidc.discovery.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`policies[].policy.oidc.discovery.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`policies[].policy.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
 |`policies[].policy.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
 |`policies[].policy.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `null`.|
 |`policies[].policy.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`policies[].policy.oidc.jwks.file`|string|Path to a file on disk to load the value from.|
 |`policies[].policy.oidc.jwks.url`|string||
+|`policies[].policy.oidc.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`policies[].policy.oidc.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`policies[].policy.oidc.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`policies[].policy.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`policies[].policy.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`policies[].policy.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
@@ -20861,6 +20906,9 @@
 |`backends[].mcp.targets[].openapi.schema`|object||
 |`backends[].mcp.targets[].openapi.schema.file`|string|Path to a file on disk to load the value from.|
 |`backends[].mcp.targets[].openapi.schema.url`|string||
+|`backends[].mcp.targets[].openapi.schema.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`backends[].mcp.targets[].openapi.schema.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`backends[].mcp.targets[].openapi.schema.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`backends[].mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
 |`backends[].mcp.targets[].policies`|object|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
 |`backends[].mcp.targets[].policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
@@ -30539,6 +30587,9 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].policies.mcpAuthentication.jwks.url`|string||
+|`routeGroups[].routes[].policies.mcpAuthentication.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`routeGroups[].routes[].policies.mcpAuthentication.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`routeGroups[].routes[].policies.mcpAuthentication.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`routeGroups[].routes[].policies.mcpAuthentication.mode`|enum|Controls whether MCP requests must include a valid JWT.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation`|object|Where to read the JWT from in incoming MCP requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`routeGroups[].routes[].policies.mcpAuthentication.authorizationLocation.header`|object|Read the credential from an HTTP header.|
@@ -33485,6 +33536,9 @@
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwks.url`|string||
+|`routeGroups[].routes[].policies.jwtAuth.providers[].jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`routeGroups[].routes[].policies.jwtAuth.providers[].jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`routeGroups[].routes[].policies.jwtAuth.providers[].jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`routeGroups[].routes[].policies.jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -33492,6 +33546,9 @@
 |`routeGroups[].routes[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`routeGroups[].routes[].policies.jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].policies.jwtAuth.jwks.url`|string||
+|`routeGroups[].routes[].policies.jwtAuth.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`routeGroups[].routes[].policies.jwtAuth.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`routeGroups[].routes[].policies.jwtAuth.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`routeGroups[].routes[].policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routeGroups[].routes[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`routeGroups[].routes[].policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
@@ -33499,12 +33556,18 @@
 |`routeGroups[].routes[].policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
 |`routeGroups[].routes[].policies.oidc.discovery.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].policies.oidc.discovery.url`|string||
+|`routeGroups[].routes[].policies.oidc.discovery.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`routeGroups[].routes[].policies.oidc.discovery.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`routeGroups[].routes[].policies.oidc.discovery.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`routeGroups[].routes[].policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
 |`routeGroups[].routes[].policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
 |`routeGroups[].routes[].policies.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `null`.|
 |`routeGroups[].routes[].policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`routeGroups[].routes[].policies.oidc.jwks.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].policies.oidc.jwks.url`|string||
+|`routeGroups[].routes[].policies.oidc.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`routeGroups[].routes[].policies.oidc.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`routeGroups[].routes[].policies.oidc.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`routeGroups[].routes[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`routeGroups[].routes[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`routeGroups[].routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
@@ -34782,6 +34845,9 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.schema`|object||
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.schema.file`|string|Path to a file on disk to load the value from.|
 |`routeGroups[].routes[].backends[].mcp.targets[].openapi.schema.url`|string||
+|`routeGroups[].routes[].backends[].mcp.targets[].openapi.schema.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`routeGroups[].routes[].backends[].mcp.targets[].openapi.schema.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`routeGroups[].routes[].backends[].mcp.targets[].openapi.schema.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`routeGroups[].routes[].backends[].mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies`|object|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
@@ -44106,12 +44172,18 @@
 |`gateways.*.listeners[].oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
 |`gateways.*.listeners[].oidc.discovery.file`|string|Path to a file on disk to load the value from.|
 |`gateways.*.listeners[].oidc.discovery.url`|string||
+|`gateways.*.listeners[].oidc.discovery.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`gateways.*.listeners[].oidc.discovery.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`gateways.*.listeners[].oidc.discovery.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`gateways.*.listeners[].oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
 |`gateways.*.listeners[].oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
 |`gateways.*.listeners[].oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `null`.|
 |`gateways.*.listeners[].oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`gateways.*.listeners[].oidc.jwks.file`|string|Path to a file on disk to load the value from.|
 |`gateways.*.listeners[].oidc.jwks.url`|string||
+|`gateways.*.listeners[].oidc.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`gateways.*.listeners[].oidc.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`gateways.*.listeners[].oidc.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`gateways.*.listeners[].oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`gateways.*.listeners[].oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`gateways.*.listeners[].oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
@@ -44133,6 +44205,9 @@
 |`gateways.*.listeners[].jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`gateways.*.listeners[].jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`gateways.*.listeners[].jwtAuth.providers[].jwks.url`|string||
+|`gateways.*.listeners[].jwtAuth.providers[].jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`gateways.*.listeners[].jwtAuth.providers[].jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`gateways.*.listeners[].jwtAuth.providers[].jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`gateways.*.listeners[].jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.listeners[].jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`gateways.*.listeners[].jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -44140,6 +44215,9 @@
 |`gateways.*.listeners[].jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`gateways.*.listeners[].jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`gateways.*.listeners[].jwtAuth.jwks.url`|string||
+|`gateways.*.listeners[].jwtAuth.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`gateways.*.listeners[].jwtAuth.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`gateways.*.listeners[].jwtAuth.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`gateways.*.listeners[].jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.listeners[].jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`gateways.*.listeners[].authorization`|object|Authorization rules for incoming HTTP requests.|
@@ -45384,12 +45462,18 @@
 |`gateways.*.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
 |`gateways.*.oidc.discovery.file`|string|Path to a file on disk to load the value from.|
 |`gateways.*.oidc.discovery.url`|string||
+|`gateways.*.oidc.discovery.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`gateways.*.oidc.discovery.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`gateways.*.oidc.discovery.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`gateways.*.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
 |`gateways.*.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
 |`gateways.*.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `null`.|
 |`gateways.*.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`gateways.*.oidc.jwks.file`|string|Path to a file on disk to load the value from.|
 |`gateways.*.oidc.jwks.url`|string||
+|`gateways.*.oidc.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`gateways.*.oidc.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`gateways.*.oidc.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`gateways.*.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`gateways.*.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`gateways.*.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
@@ -45411,6 +45495,9 @@
 |`gateways.*.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`gateways.*.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`gateways.*.jwtAuth.providers[].jwks.url`|string||
+|`gateways.*.jwtAuth.providers[].jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`gateways.*.jwtAuth.providers[].jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`gateways.*.jwtAuth.providers[].jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`gateways.*.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`gateways.*.jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -45418,6 +45505,9 @@
 |`gateways.*.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`gateways.*.jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`gateways.*.jwtAuth.jwks.url`|string||
+|`gateways.*.jwtAuth.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`gateways.*.jwtAuth.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`gateways.*.jwtAuth.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`gateways.*.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`gateways.*.authorization`|object|Authorization rules for incoming HTTP requests.|
@@ -47024,6 +47114,9 @@
 |`routes[].policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`routes[].policies.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`routes[].policies.mcpAuthentication.jwks.url`|string||
+|`routes[].policies.mcpAuthentication.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`routes[].policies.mcpAuthentication.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`routes[].policies.mcpAuthentication.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`routes[].policies.mcpAuthentication.mode`|enum|Controls whether MCP requests must include a valid JWT.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`routes[].policies.mcpAuthentication.authorizationLocation`|object|Where to read the JWT from in incoming MCP requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`routes[].policies.mcpAuthentication.authorizationLocation.header`|object|Read the credential from an HTTP header.|
@@ -49970,6 +50063,9 @@
 |`routes[].policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`routes[].policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`routes[].policies.jwtAuth.providers[].jwks.url`|string||
+|`routes[].policies.jwtAuth.providers[].jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`routes[].policies.jwtAuth.providers[].jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`routes[].policies.jwtAuth.providers[].jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`routes[].policies.jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -49977,6 +50073,9 @@
 |`routes[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`routes[].policies.jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`routes[].policies.jwtAuth.jwks.url`|string||
+|`routes[].policies.jwtAuth.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`routes[].policies.jwtAuth.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`routes[].policies.jwtAuth.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`routes[].policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routes[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`routes[].policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
@@ -49984,12 +50083,18 @@
 |`routes[].policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
 |`routes[].policies.oidc.discovery.file`|string|Path to a file on disk to load the value from.|
 |`routes[].policies.oidc.discovery.url`|string||
+|`routes[].policies.oidc.discovery.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`routes[].policies.oidc.discovery.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`routes[].policies.oidc.discovery.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`routes[].policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
 |`routes[].policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
 |`routes[].policies.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `null`.|
 |`routes[].policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`routes[].policies.oidc.jwks.file`|string|Path to a file on disk to load the value from.|
 |`routes[].policies.oidc.jwks.url`|string||
+|`routes[].policies.oidc.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`routes[].policies.oidc.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`routes[].policies.oidc.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`routes[].policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`routes[].policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`routes[].policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
@@ -51267,6 +51372,9 @@
 |`routes[].backends[].mcp.targets[].openapi.schema`|object||
 |`routes[].backends[].mcp.targets[].openapi.schema.file`|string|Path to a file on disk to load the value from.|
 |`routes[].backends[].mcp.targets[].openapi.schema.url`|string||
+|`routes[].backends[].mcp.targets[].openapi.schema.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`routes[].backends[].mcp.targets[].openapi.schema.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`routes[].backends[].mcp.targets[].openapi.schema.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`routes[].backends[].mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
 |`routes[].backends[].mcp.targets[].policies`|object|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
 |`routes[].backends[].mcp.targets[].policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
@@ -63479,12 +63587,18 @@
 |`llm.policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
 |`llm.policies.oidc.discovery.file`|string|Path to a file on disk to load the value from.|
 |`llm.policies.oidc.discovery.url`|string||
+|`llm.policies.oidc.discovery.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`llm.policies.oidc.discovery.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`llm.policies.oidc.discovery.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`llm.policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
 |`llm.policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
 |`llm.policies.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `null`.|
 |`llm.policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`llm.policies.oidc.jwks.file`|string|Path to a file on disk to load the value from.|
 |`llm.policies.oidc.jwks.url`|string||
+|`llm.policies.oidc.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`llm.policies.oidc.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`llm.policies.oidc.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`llm.policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`llm.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`llm.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
@@ -63506,6 +63620,9 @@
 |`llm.policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`llm.policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`llm.policies.jwtAuth.providers[].jwks.url`|string||
+|`llm.policies.jwtAuth.providers[].jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`llm.policies.jwtAuth.providers[].jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`llm.policies.jwtAuth.providers[].jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`llm.policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`llm.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`llm.policies.jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -63513,6 +63630,9 @@
 |`llm.policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`llm.policies.jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`llm.policies.jwtAuth.jwks.url`|string||
+|`llm.policies.jwtAuth.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`llm.policies.jwtAuth.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`llm.policies.jwtAuth.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`llm.policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`llm.policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`llm.policies.authorization`|object|Authorization rules for incoming HTTP requests.|
@@ -67006,6 +67126,9 @@
 |`mcp.targets[].openapi.schema`|object||
 |`mcp.targets[].openapi.schema.file`|string|Path to a file on disk to load the value from.|
 |`mcp.targets[].openapi.schema.url`|string||
+|`mcp.targets[].openapi.schema.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`mcp.targets[].openapi.schema.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`mcp.targets[].openapi.schema.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`mcp.targets[].name`|string|Name identifying this MCP target, used to prefix tool and resource names when multiplexing.|
 |`mcp.targets[].policies`|object|Transport policies for connecting to this target's backend. Not supported<br>on stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to<br>the full target set and belong on the route or `mcp.policies`.|
 |`mcp.targets[].policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
@@ -67631,6 +67754,9 @@
 |`mcp.policies.mcpAuthentication.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.<br>If omitted, the JWKS URL is derived from the issuer and provider.|
 |`mcp.policies.mcpAuthentication.jwks.file`|string|Path to a file on disk to load the value from.|
 |`mcp.policies.mcpAuthentication.jwks.url`|string||
+|`mcp.policies.mcpAuthentication.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`mcp.policies.mcpAuthentication.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`mcp.policies.mcpAuthentication.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`mcp.policies.mcpAuthentication.mode`|enum|Controls whether MCP requests must include a valid JWT.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`mcp.policies.mcpAuthentication.authorizationLocation`|object|Where to read the JWT from in incoming MCP requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
 |`mcp.policies.mcpAuthentication.authorizationLocation.header`|object|Read the credential from an HTTP header.|
@@ -70577,6 +70703,9 @@
 |`mcp.policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`mcp.policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`mcp.policies.jwtAuth.providers[].jwks.url`|string||
+|`mcp.policies.jwtAuth.providers[].jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`mcp.policies.jwtAuth.providers[].jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`mcp.policies.jwtAuth.providers[].jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`mcp.policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`mcp.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`mcp.policies.jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -70584,6 +70713,9 @@
 |`mcp.policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`mcp.policies.jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`mcp.policies.jwtAuth.jwks.url`|string||
+|`mcp.policies.jwtAuth.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`mcp.policies.jwtAuth.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`mcp.policies.jwtAuth.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`mcp.policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`mcp.policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`mcp.policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
@@ -70591,12 +70723,18 @@
 |`mcp.policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
 |`mcp.policies.oidc.discovery.file`|string|Path to a file on disk to load the value from.|
 |`mcp.policies.oidc.discovery.url`|string||
+|`mcp.policies.oidc.discovery.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`mcp.policies.oidc.discovery.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`mcp.policies.oidc.discovery.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`mcp.policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
 |`mcp.policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
 |`mcp.policies.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `null`.|
 |`mcp.policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`mcp.policies.oidc.jwks.file`|string|Path to a file on disk to load the value from.|
 |`mcp.policies.oidc.jwks.url`|string||
+|`mcp.policies.oidc.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`mcp.policies.oidc.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`mcp.policies.oidc.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`mcp.policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`mcp.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`mcp.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
@@ -71850,12 +71988,18 @@
 |`ui.policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
 |`ui.policies.oidc.discovery.file`|string|Path to a file on disk to load the value from.|
 |`ui.policies.oidc.discovery.url`|string||
+|`ui.policies.oidc.discovery.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`ui.policies.oidc.discovery.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`ui.policies.oidc.discovery.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`ui.policies.oidc.authorizationEndpoint`|string|Authorization endpoint used to start the browser login flow.|
 |`ui.policies.oidc.tokenEndpoint`|string|Token endpoint used to exchange the authorization code.|
 |`ui.policies.oidc.tokenEndpointAuth`|enum|Token endpoint client authentication method for explicit provider configuration.<br><br>Discovery mode derives this from provider metadata. Explicit mode defaults to<br>`clientSecretBasic` when omitted.<br>Possible values: `clientSecretBasic`, `clientSecretPost`, `null`.|
 |`ui.policies.oidc.jwks`|object|JWKS source used to validate returned ID tokens.|
 |`ui.policies.oidc.jwks.file`|string|Path to a file on disk to load the value from.|
 |`ui.policies.oidc.jwks.url`|string||
+|`ui.policies.oidc.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`ui.policies.oidc.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`ui.policies.oidc.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`ui.policies.oidc.clientId`|string|OAuth2 client identifier used for authorization and token exchange.|
 |`ui.policies.oidc.clientSecret`|string|OAuth2 client secret used for token exchange.|
 |`ui.policies.oidc.redirectURI`|string|Absolute callback URI handled by the gateway.<br>This policy always redirects unauthenticated non-callback requests back through this login<br>flow.|
@@ -71877,6 +72021,9 @@
 |`ui.policies.jwtAuth.providers[].jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`ui.policies.jwtAuth.providers[].jwks.file`|string|Path to a file on disk to load the value from.|
 |`ui.policies.jwtAuth.providers[].jwks.url`|string||
+|`ui.policies.jwtAuth.providers[].jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`ui.policies.jwtAuth.providers[].jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`ui.policies.jwtAuth.providers[].jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`ui.policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`ui.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`ui.policies.jwtAuth.issuer`|string|Expected token issuer, matched against the JWT `iss` claim.|
@@ -71884,6 +72031,9 @@
 |`ui.policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
 |`ui.policies.jwtAuth.jwks.file`|string|Path to a file on disk to load the value from.|
 |`ui.policies.jwtAuth.jwks.url`|string||
+|`ui.policies.jwtAuth.jwks.tunnel`|object|Optional HTTP CONNECT / absolute-form proxy for this remote URL.<br>When set, the fetch is tunneled through the proxy (same transport as<br>backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.|
+|`ui.policies.jwtAuth.jwks.tunnel.proxy`|object|Proxy used to reach the remote URL.|
+|`ui.policies.jwtAuth.jwks.tunnel.proxy.host`|string|Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).|
 |`ui.policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`ui.policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to require no claims.|
 |`ui.policies.authorization`|object|Authorization rules for incoming HTTP requests.|

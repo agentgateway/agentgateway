@@ -1543,6 +1543,7 @@ async fn test_openapi_from_url() {
 		backend,
 		schema: FileInlineOrRemote::Remote {
 			url: schema_url.parse().unwrap(),
+			tunnel: None,
 		},
 	};
 

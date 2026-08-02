@@ -8,6 +8,28 @@ use crate::resource_manager::{ResourceFetcher, ResourceKind, ResourceRef};
 
 define_schema_aliases!();
 
+/// Optional HTTP CONNECT / absolute-form proxy for a remote resource URL.
+///
+/// Mirrors backend `backendTunnel` semantics for control-plane style fetches
+/// (JWKS, OIDC discovery, remote OpenAPI schemas). Only inline `host:port`
+/// proxies are supported; named backends are out of scope for resource fetches.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteHttpTunnel {
+	/// Proxy used to reach the remote URL.
+	pub proxy: RemoteHttpTunnelProxy,
+}
+
+/// Inline proxy address for [`RemoteHttpTunnel`].
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct RemoteHttpTunnelProxy {
+	/// Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).
+	pub host: String,
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(untagged)]
@@ -21,6 +43,12 @@ pub enum FileInlineOrRemote {
 		#[serde(deserialize_with = "de_parse")]
 		#[cfg_attr(feature = "schema", schemars(with = "String"))]
 		url: http::Uri,
+		/// Optional HTTP CONNECT / absolute-form proxy for this remote URL.
+		/// When set, the fetch is tunneled through the proxy (same transport as
+		/// backend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.
+		#[serde(default)]
+		#[cfg_attr(feature = "schema", schemars(default))]
+		tunnel: Option<RemoteHttpTunnel>,
 	},
 }
 
@@ -61,10 +89,58 @@ impl FileInlineOrRemote {
 		match self {
 			FileInlineOrRemote::File { file } => Some(ResourceRef::File(file.clone())),
 			FileInlineOrRemote::Inline(_) => None,
-			FileInlineOrRemote::Remote { url } => Some(ResourceRef::Http {
+			FileInlineOrRemote::Remote { url, tunnel } => Some(ResourceRef::Http {
 				url: url.clone(),
 				kind,
+				tunnel: tunnel.as_ref().map(|t| t.proxy.host.clone()),
 			}),
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn remote_without_tunnel_deserializes() {
+		let v: FileInlineOrRemote = serde_json::from_value(serde_json::json!({
+			"url": "https://idp.example.com/.well-known/jwks.json"
+		}))
+		.unwrap();
+		match v {
+			FileInlineOrRemote::Remote { url, tunnel } => {
+				assert_eq!(
+					url.to_string(),
+					"https://idp.example.com/.well-known/jwks.json"
+				);
+				assert!(tunnel.is_none());
+			},
+			other => panic!("expected Remote, got {other:?}"),
+		}
+	}
+
+	#[test]
+	fn remote_with_tunnel_deserializes() {
+		let v: FileInlineOrRemote = serde_json::from_value(serde_json::json!({
+			"url": "https://idp.example.com/.well-known/jwks.json",
+			"tunnel": {
+				"proxy": {
+					"host": "corporate-proxy.example.com:8080"
+				}
+			}
+		}))
+		.unwrap();
+		match v {
+			FileInlineOrRemote::Remote { url, tunnel } => {
+				assert_eq!(
+					url.to_string(),
+					"https://idp.example.com/.well-known/jwks.json"
+				);
+				let tunnel = tunnel.expect("tunnel");
+				assert_eq!(tunnel.proxy.host, "corporate-proxy.example.com:8080");
+			},
+			other => panic!("expected Remote, got {other:?}"),
 		}
 	}
 }

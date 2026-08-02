@@ -4613,12 +4613,49 @@
           "properties": {
             "url": {
               "type": "string"
+            },
+            "tunnel": {
+              "description": "Optional HTTP CONNECT / absolute-form proxy for this remote URL.\nWhen set, the fetch is tunneled through the proxy (same transport as\nbackend `backendTunnel`). Does not honor `HTTP_PROXY` / `HTTPS_PROXY`.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/RemoteHttpTunnel"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
             "url"
           ]
         }
+      ]
+    },
+    "RemoteHttpTunnel": {
+      "description": "Optional HTTP CONNECT / absolute-form proxy for a remote resource URL.\n\nMirrors backend `backendTunnel` semantics for control-plane style fetches\n(JWKS, OIDC discovery, remote OpenAPI schemas). Only inline `host:port`\nproxies are supported; named backends are out of scope for resource fetches.",
+      "type": "object",
+      "properties": {
+        "proxy": {
+          "description": "Proxy used to reach the remote URL.",
+          "$ref": "#/$defs/RemoteHttpTunnelProxy"
+        }
+      },
+      "required": [
+        "proxy"
+      ]
+    },
+    "RemoteHttpTunnelProxy": {
+      "description": "Inline proxy address for [`RemoteHttpTunnel`].",
+      "type": "object",
+      "properties": {
+        "host": {
+          "description": "Proxy address as `host:port` (for example `corporate-proxy.example.com:8080`).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "host"
       ]
     },
     "McpAuthenticationMode": {
