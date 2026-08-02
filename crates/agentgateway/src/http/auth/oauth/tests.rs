@@ -210,6 +210,20 @@ fn incoming_request() -> crate::http::Request {
 		.unwrap()
 }
 
+#[test]
+fn missing_subject_token_is_invalid_request() {
+	let auth = auth(Arc::new(SimpleBackendReference::Invalid));
+	let req = ::http::Request::builder()
+		.uri("http://upstream/")
+		.body(Body::empty())
+		.unwrap();
+
+	assert!(matches!(
+		auth.build_exchange_request(&req),
+		Err(ProxyError::InvalidRequest)
+	));
+}
+
 async fn sent_form_params(mock: &MockServer) -> HashMap<String, String> {
 	let req = &mock.received_requests().await.unwrap()[0];
 	form_urlencoded::parse(&req.body).into_owned().collect()

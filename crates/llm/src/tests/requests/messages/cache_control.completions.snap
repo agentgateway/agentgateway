@@ -93,157 +93,195 @@ info:
             type: ephemeral
 ---
 {
-  "messages": [
-    {
-      "role": "system",
-      "content": [
-        {
-          "type": "text",
-          "text": "First system block"
-        },
-        {
-          "type": "text",
-          "text": "Second system block",
-          "prompt_cache_breakpoint": {
-            "mode": "explicit"
+  "request": {
+    "messages": [
+      {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "First system block"
+          },
+          {
+            "type": "text",
+            "text": "Second system block",
+            "prompt_cache_breakpoint": {
+              "mode": "explicit"
+            }
           }
-        }
-      ]
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "text",
+            "text": "First assistant block"
+          },
+          {
+            "type": "text",
+            "text": "Second assistant block",
+            "prompt_cache_breakpoint": {
+              "mode": "explicit"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "image_url",
+            "image_url": {
+              "url": "data:image/png;base64,aGVsbG8="
+            }
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "id": "call_text",
+            "function": {
+              "name": "lookup",
+              "arguments": "{}"
+            }
+          },
+          {
+            "type": "function",
+            "id": "call_array",
+            "function": {
+              "name": "lookup",
+              "arguments": "{}"
+            }
+          },
+          {
+            "type": "function",
+            "id": "call_image",
+            "function": {
+              "name": "lookup",
+              "arguments": "{}"
+            }
+          },
+          {
+            "type": "function",
+            "id": "call_mixed",
+            "function": {
+              "name": "lookup",
+              "arguments": "{}"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": [
+          {
+            "type": "text",
+            "text": "text result",
+            "prompt_cache_breakpoint": {
+              "mode": "explicit"
+            }
+          }
+        ],
+        "tool_call_id": "call_text"
+      },
+      {
+        "role": "tool",
+        "content": [
+          {
+            "type": "text",
+            "text": "array result",
+            "prompt_cache_breakpoint": {
+              "mode": "explicit"
+            }
+          }
+        ],
+        "tool_call_id": "call_array"
+      },
+      {
+        "role": "tool",
+        "content": [
+          {
+            "type": "text",
+            "text": "",
+            "prompt_cache_breakpoint": {
+              "mode": "explicit"
+            }
+          }
+        ],
+        "tool_call_id": "call_image"
+      },
+      {
+        "role": "tool",
+        "content": [
+          {
+            "type": "text",
+            "text": "before image"
+          },
+          {
+            "type": "text",
+            "text": "after image",
+            "prompt_cache_breakpoint": {
+              "mode": "explicit"
+            }
+          }
+        ],
+        "tool_call_id": "call_mixed"
+      },
+      {
+        "role": "system",
+        "content": [
+          {
+            "type": "text",
+            "text": "System-role block",
+            "prompt_cache_breakpoint": {
+              "mode": "explicit"
+            }
+          }
+        ]
+      }
+    ],
+    "model": "gpt-5.6-terra",
+    "max_completion_tokens": 1024,
+    "stream": false
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-5.6-terra",
+    "provider": "openai",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
     },
-    {
-      "role": "assistant",
-      "content": [
-        {
-          "type": "text",
-          "text": "First assistant block"
-        },
-        {
-          "type": "text",
-          "text": "Second assistant block",
-          "prompt_cache_breakpoint": {
-            "mode": "explicit"
-          }
-        }
-      ]
-    },
-    {
-      "role": "user",
-      "content": [
-        {
-          "type": "image_url",
-          "image_url": {
-            "url": "data:image/png;base64,aGVsbG8="
-          }
-        }
-      ]
-    },
-    {
-      "role": "assistant",
-      "tool_calls": [
-        {
-          "type": "function",
-          "id": "call_text",
-          "function": {
-            "name": "lookup",
-            "arguments": "{}"
-          }
-        },
-        {
-          "type": "function",
-          "id": "call_array",
-          "function": {
-            "name": "lookup",
-            "arguments": "{}"
-          }
-        },
-        {
-          "type": "function",
-          "id": "call_image",
-          "function": {
-            "name": "lookup",
-            "arguments": "{}"
-          }
-        },
-        {
-          "type": "function",
-          "id": "call_mixed",
-          "function": {
-            "name": "lookup",
-            "arguments": "{}"
-          }
-        }
-      ]
-    },
-    {
-      "role": "tool",
-      "content": [
-        {
-          "type": "text",
-          "text": "text result",
-          "prompt_cache_breakpoint": {
-            "mode": "explicit"
-          }
-        }
-      ],
-      "tool_call_id": "call_text"
-    },
-    {
-      "role": "tool",
-      "content": [
-        {
-          "type": "text",
-          "text": "array result",
-          "prompt_cache_breakpoint": {
-            "mode": "explicit"
-          }
-        }
-      ],
-      "tool_call_id": "call_array"
-    },
-    {
-      "role": "tool",
-      "content": [
-        {
-          "type": "text",
-          "text": "",
-          "prompt_cache_breakpoint": {
-            "mode": "explicit"
-          }
-        }
-      ],
-      "tool_call_id": "call_image"
-    },
-    {
-      "role": "tool",
-      "content": [
-        {
-          "type": "text",
-          "text": "before image"
-        },
-        {
-          "type": "text",
-          "text": "after image",
-          "prompt_cache_breakpoint": {
-            "mode": "explicit"
-          }
-        }
-      ],
-      "tool_call_id": "call_mixed"
-    },
-    {
-      "role": "system",
-      "content": [
-        {
-          "type": "text",
-          "text": "System-role block",
-          "prompt_cache_breakpoint": {
-            "mode": "explicit"
-          }
-        }
-      ]
-    }
-  ],
-  "model": "gpt-5.6-terra",
-  "max_completion_tokens": 1024,
-  "stream": false
+    "prompt": [
+      {
+        "role": "system",
+        "content": "First system block\nSecond system block"
+      },
+      {
+        "role": "assistant",
+        "content": "First assistant block Second assistant block"
+      },
+      {
+        "role": "user",
+        "content": ""
+      },
+      {
+        "role": "assistant",
+        "content": ""
+      },
+      {
+        "role": "user",
+        "content": ""
+      },
+      {
+        "role": "system",
+        "content": "System-role block"
+      }
+    ]
+  }
 }

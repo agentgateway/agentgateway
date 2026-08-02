@@ -14,6 +14,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 	"github.com/agentgateway/agentgateway/controller/test/gomega/transforms"
+	"github.com/agentgateway/agentgateway/controller/test/testutils/testjwt"
 )
 
 func TestOAuthTokenExchange(tt *testing.T) {
@@ -22,6 +23,7 @@ func TestOAuthTokenExchange(tt *testing.T) {
 
 	t.HTTPRouteAccepted("cross-app-access", base.Namespace)
 	t.HTTPRouteAccepted("oauth-token-exchange", base.Namespace)
+	t.HTTPRouteAccepted("oauth-jwt-subject", base.Namespace)
 	t.HTTPRouteAccepted("oauth-jwt-bearer", base.Namespace)
 
 	assertions.EventuallyAgwPolicyCondition(t, "cross-app-access", base.Namespace, "Accepted", metav1.ConditionTrue)
@@ -57,6 +59,20 @@ func TestOAuthTokenExchange(tt *testing.T) {
 			base.Expect(http.StatusBadRequest),
 			curl.WithHeader("X-Actor-Token", "actor-token"),
 			curl.WithHeader("X-Tenant", "tenant-a"),
+		)
+	})
+
+	assertions.EventuallyAgwPolicyCondition(t, "oauth-jwt-subject-auth", base.Namespace, "Accepted", metav1.ConditionTrue)
+	assertions.EventuallyAgwPolicyCondition(t, "oauth-jwt-subject", base.Namespace, "Accepted", metav1.ConditionTrue)
+	t.Run("ValidatedJWTSubject", func(t base.Test) {
+		t.Send("oauth-jwt-subject.com",
+			&testmatchers.HttpResponse{
+				StatusCode: http.StatusOK,
+				Body: gomega.WithTransform(transforms.WithEchoHeaders(),
+					gomega.HaveKeyWithValue("Authorization", "Bearer jwt-subject-token-exchange-access"),
+				),
+			},
+			curl.WithHeader("Authorization", "Bearer "+testjwt.OrgOneJWT),
 		)
 	})
 

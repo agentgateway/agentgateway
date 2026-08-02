@@ -9,15 +9,31 @@ info:
   stream: true
 ---
 {
-  "messages": [
-    {
-      "role": "user",
-      "content": "Hello"
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello"
+      }
+    ],
+    "model": "gpt-4o",
+    "stream": true,
+    "stream_options": {
+      "include_usage": true
     }
-  ],
-  "model": "gpt-4o",
-  "stream": true,
-  "stream_options": {
-    "include_usage": true
+  },
+  "parsed": {
+    "input_format": "Responses",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-4o",
+    "provider": "gemini",
+    "streaming": true,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Hello"
+      }
+    ]
   }
 }

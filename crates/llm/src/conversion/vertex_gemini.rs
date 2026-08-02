@@ -888,12 +888,6 @@ pub mod from_completions {
 		model.contains("gemini-3")
 	}
 
-	// Conservative `reasoning_effort` -> Gemini 2.5 `thinkingBudget` mapping, chosen to
-	// be valid for both Flash and Pro (Pro's documented range is 128..=32768).
-	const THINKING_BUDGET_LOW: i32 = 1024;
-	const THINKING_BUDGET_MEDIUM: i32 = 2048;
-	const THINKING_BUDGET_HIGH: i32 = 4096;
-
 	fn thinking_config(req: &types::completions::Request, model: &str) -> Option<vg::ThinkingConfig> {
 		if let Some(tc) = req
 			.rest
@@ -903,31 +897,27 @@ pub mod from_completions {
 			return vg::ThinkingConfig::deserialize(tc).ok();
 		}
 
-		let effort = req.rest.get("reasoning_effort").and_then(Value::as_str)?;
-		if effort == "none" {
-			// Omit thinkingConfig; on Gemini 2.5 Pro emitting budget 0 is rejected.
-			return None;
-		}
-
+		let effort = req.reasoning_effort.as_ref()?;
 		if uses_thinking_levels(model) {
 			let level = match effort {
-				"minimal" | "low" | "medium" | "high" => effort,
-				_ => "medium",
+				types::completions::typed::ReasoningEffort::None => return None,
+				types::completions::typed::ReasoningEffort::Minimal => "minimal",
+				types::completions::typed::ReasoningEffort::Low => "low",
+				types::completions::typed::ReasoningEffort::Medium => "medium",
+				types::completions::typed::ReasoningEffort::High
+				| types::completions::typed::ReasoningEffort::Xhigh
+				| types::completions::typed::ReasoningEffort::Max => "high",
 			};
 			Some(vg::ThinkingConfig {
-				thinking_level: Some(level.to_string()),
+				thinking_level: Some(level.into()),
 				thinking_budget: None,
 				include_thoughts: Some(true),
 			})
 		} else {
-			// Gemini 2.5: map to a conservative integer budget valid for Flash and Pro.
-			// "minimal" is coerced to "low" (no 2.5 analogue).
-			let budget = match effort {
-				"minimal" | "low" => THINKING_BUDGET_LOW,
-				"medium" => THINKING_BUDGET_MEDIUM,
-				"high" => THINKING_BUDGET_HIGH,
-				_ => THINKING_BUDGET_MEDIUM,
-			};
+			// Gemini 2.5 takes the shared conservative budget scale. Some models cap the
+			// thinking budget at 32K; check every target model's limit before raising it.
+			// `none` omits thinkingConfig instead of sending budget 0.
+			let budget = crate::types::thinking_budget_for_reasoning_effort(effort)? as i32;
 			Some(vg::ThinkingConfig {
 				thinking_level: None,
 				thinking_budget: Some(budget),
@@ -938,6 +928,7 @@ pub mod from_completions {
 }
 
 pub mod to_completions {
+	use std::collections::HashMap;
 	use std::time::Instant;
 
 	use axum_core::body::Body;
@@ -948,6 +939,9 @@ pub mod to_completions {
 	use super::*;
 	use crate::types::completions::typed as completions;
 	use crate::{StreamingUsageGuard, json, parse};
+
+	type LoggedToolCall = (Option<String>, Option<String>, String);
+	type LoggedToolCalls = HashMap<u32, LoggedToolCall>;
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp: vg::GenerateContentResponse =
@@ -1308,9 +1302,12 @@ pub mod to_completions {
 		buffer_limit: usize,
 		model: Strng,
 		log: StreamingUsageGuard,
+		log_content: crate::LogContentFields,
 	) -> Body {
 		let mut state = StreamState::new();
 		let mut saw_token = false;
+		let mut completion = log_content.completion.then(String::new);
+		let mut tool_calls: Option<LoggedToolCalls> = log_content.tool_calls.then(HashMap::new);
 		let body = parse::sse::json_transform_multi::<
 			vg::GenerateContentResponse,
 			completions::StreamResponse,
@@ -1352,6 +1349,56 @@ pub mod to_completions {
 				Some(mut sr) => {
 					if sr.model.is_empty() {
 						sr.model = model.to_string();
+					}
+					if let Some(choice) = sr.choices.first() {
+						if let Some(content) = &choice.delta.content
+							&& let Some(completion) = completion.as_mut()
+						{
+							completion.push_str(content);
+						}
+						if let Some(calls) = &choice.delta.tool_calls {
+							for call in calls {
+								if let Some(tool_calls) = tool_calls.as_mut() {
+									let entry = tool_calls.entry(call.index).or_default();
+									if let Some(id) = &call.id {
+										entry.0 = Some(id.clone());
+									}
+									if let Some(function) = &call.function {
+										if let Some(name) = &function.name {
+											entry.1 = Some(name.clone());
+										}
+										if let Some(arguments) = &function.arguments {
+											entry.2.push_str(arguments);
+										}
+									}
+								}
+							}
+						}
+						if let Some(finish_reason) = choice
+							.finish_reason
+							.as_ref()
+							.and_then(crate::types::serialize_str)
+						{
+							let tool_parts = tool_calls.as_mut().and_then(|tool_calls| {
+								crate::conversion::completions::finalize_streaming_tool_calls(
+									tool_calls
+										.drain()
+										.map(|(idx, (id, name, arguments))| (idx, id, name, arguments)),
+								)
+							});
+							let mut tool_parts = tool_parts;
+							let mut finish_reason = Some(finish_reason);
+							log.update(|r| {
+								if let Some(completion) = completion.take() {
+									r.response.completion = Some(vec![completion]);
+								}
+								crate::conversion::completions::build_output_messages(
+									&mut r.response,
+									tool_parts.take(),
+									finish_reason.take(),
+								);
+							});
+						}
 					}
 					vec![("", sr)]
 				},

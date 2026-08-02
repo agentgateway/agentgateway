@@ -39,6 +39,9 @@ pub struct Session {
 	relay: Arc<Relay>,
 	pub id: Arc<str>,
 	tx: Option<Sender<ServerJsonRpcMessage>>,
+	// Stateless requests still use Session internally, but this ID is not an MCP protocol session
+	// ID: it is neither registered nor sent to the client and must not appear in access logs.
+	synthetic: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -238,6 +241,35 @@ impl Session {
 		Ok(())
 	}
 
+	// task_id here is the resolved upstream id, not the client-visible `target+id` form.
+	fn authorize_task_request(
+		&self,
+		service_name: &str,
+		task_id: &str,
+		method: &str,
+		span: &mut SpanWriteOnDrop,
+		log: &AsyncLog<mcp::MCPInfo>,
+		cel: &rbac::CelExecWrapper,
+	) -> Result<(), UpstreamError> {
+		span.rename_span(format!("{method} {service_name}"));
+		log.non_atomic_mutate(|l| {
+			l.set_task(service_name.to_string(), task_id.to_string());
+		});
+		if !self.relay.policies.validate(
+			&rbac::ResourceType::Task(rbac::ResourceId::new(
+				service_name.to_string(),
+				task_id.to_string(),
+			)),
+			cel,
+		) {
+			return Err(UpstreamError::Authorization {
+				resource_type: "task".to_string(),
+				resource_name: task_id.to_string(),
+			});
+		}
+		Ok(())
+	}
+
 	#[allow(clippy::too_many_arguments)]
 	async fn authorize_with_ctx<P>(
 		&self,
@@ -278,10 +310,10 @@ impl Session {
 	pub async fn delete_session(&self, parts: Parts) -> Result<Response, ProxyError> {
 		let ctx = IncomingRequestContext::new(&parts);
 		let (_span, log, _cel) = mcp::handler::setup_request_log(parts, "delete_session");
-		let session_id = self.id.to_string();
+		let session_id = (!self.synthetic).then(|| self.id.to_string());
 		log.non_atomic_mutate(|l| {
 			// NOTE: l.method_name keep None to respect the metrics logic: not handle GET, DELETE.
-			l.session_id = Some(session_id);
+			l.session_id = session_id;
 		});
 		Self::handle_error(None, self.relay.send_fanout_deletion(ctx).await, false).await
 	}
@@ -335,10 +367,10 @@ impl Session {
 	pub async fn get_stream(&self, parts: Parts) -> Result<Response, ProxyError> {
 		let ctx = IncomingRequestContext::new(&parts);
 		let (_span, log, _cel) = mcp::handler::setup_request_log(parts, "get_stream");
-		let session_id = self.id.to_string();
+		let session_id = (!self.synthetic).then(|| self.id.to_string());
 		log.non_atomic_mutate(|l| {
 			// NOTE: l.method_name keep None to respect the metrics logic: which do not want to handle GET, DELETE.
-			l.session_id = Some(session_id);
+			l.session_id = session_id;
 		});
 		Self::handle_error(None, self.relay.send_fanout_get(ctx).await, false).await
 	}
@@ -386,10 +418,10 @@ impl Session {
 		let method = init_request.method.as_str().to_string();
 		let ctx = IncomingRequestContext::new(&parts);
 		let (_, log, _) = mcp::handler::setup_request_log(parts, &method);
-		let session_id = self.id.to_string();
+		let session_id = (!self.synthetic).then(|| self.id.to_string());
 		log.non_atomic_mutate(|l| {
 			l.method_name = Some(method.clone());
-			l.session_id = Some(session_id);
+			l.session_id = session_id;
 		});
 
 		self.strip_unsupported_client_capabilities(&mut init_request.params.capabilities, &ctx);
@@ -416,10 +448,10 @@ impl Session {
 		let method = initialized.method.as_str().to_string();
 		let ctx = IncomingRequestContext::new(&parts);
 		let (_, log, _) = mcp::handler::setup_request_log(parts, &method);
-		let session_id = self.id.to_string();
+		let session_id = (!self.synthetic).then(|| self.id.to_string());
 		log.non_atomic_mutate(|l| {
 			l.method_name = Some(method.clone());
-			l.session_id = Some(session_id);
+			l.session_id = session_id;
 		});
 
 		self
@@ -445,10 +477,10 @@ impl Session {
 				let method = r.request.method().to_string();
 				let mut ctx = IncomingRequestContext::new(&parts);
 				let (mut span, log, cel) = mcp::handler::setup_request_log(parts, &method);
-				let session_id = self.id.to_string();
+				let session_id = (!self.synthetic).then(|| self.id.to_string());
 				log.non_atomic_mutate(|l| {
 					l.method_name = Some(method.clone());
-					l.session_id = Some(session_id);
+					l.session_id = session_id;
 				});
 				self.strip_unsupported_client_capabilities_from_meta(&mut r.request, &ctx);
 				match &mut r.request {
@@ -656,11 +688,47 @@ impl Session {
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 
-					ClientRequest::GetTaskRequest(_)
-					| ClientRequest::UpdateTaskRequest(_)
-					| ClientRequest::CancelTaskRequest(_) => {
-						// TODO(https://github.com/agentgateway/agentgateway/issues/404)
-						Err(UpstreamError::InvalidMethod(r.request.method().to_string()))
+					ClientRequest::GetTaskRequest(gtr) => {
+						let (service_name, original_id) =
+							mcp::handler::parse_task_id(&self.relay.upstreams, &gtr.params.task_id)?;
+						self.authorize_task_request(
+							service_name,
+							&original_id,
+							&method,
+							&mut span,
+							&log,
+							&cel,
+						)?;
+						gtr.params.task_id = original_id;
+						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
+					},
+					ClientRequest::UpdateTaskRequest(utr) => {
+						let (service_name, original_id) =
+							mcp::handler::parse_task_id(&self.relay.upstreams, &utr.params.task_id)?;
+						self.authorize_task_request(
+							service_name,
+							&original_id,
+							&method,
+							&mut span,
+							&log,
+							&cel,
+						)?;
+						utr.params.task_id = original_id;
+						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
+					},
+					ClientRequest::CancelTaskRequest(ctr) => {
+						let (service_name, original_id) =
+							mcp::handler::parse_task_id(&self.relay.upstreams, &ctr.params.task_id)?;
+						self.authorize_task_request(
+							service_name,
+							&original_id,
+							&method,
+							&mut span,
+							&log,
+							&cel,
+						)?;
+						ctr.params.task_id = original_id;
+						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::CustomRequest(_) => {
 						let method = r.request.method();
@@ -712,10 +780,10 @@ impl Session {
 				};
 				let ctx = IncomingRequestContext::new(&parts);
 				let (_span, log, _cel) = mcp::handler::setup_request_log(parts, method);
-				let session_id = self.id.to_string();
+				let session_id = (!self.synthetic).then(|| self.id.to_string());
 				log.non_atomic_mutate(|l| {
 					l.method_name = Some(method.to_string());
-					l.session_id = Some(session_id);
+					l.session_id = session_id;
 				});
 				// TODO: the notification needs to be fanned out in some cases and sent to a single one in others
 				// however, we don't have a way to map to the correct service yet
@@ -733,19 +801,18 @@ impl Session {
 		capabilities: &mut rmcp::model::ClientCapabilities,
 		ctx: &IncomingRequestContext,
 	) {
-		// TODO implement MCP tasks
-		if let Some(extensions) = capabilities.extensions.as_mut() {
-			extensions.remove("io.modelcontextprotocol/tasks");
-			if extensions.is_empty() {
-				capabilities.extensions = None;
-			}
-		}
-
 		if !mcp::handler::ctx_downstream_modern(ctx) {
 			// Legacy clients require reverse JSON-RPC routing for these capabilities.
 			capabilities.roots = None;
 			capabilities.sampling = None;
 			capabilities.elicitation = None;
+			// The tasks extension (SEP-2663) is undefined for legacy protocol versions.
+			if let Some(extensions) = capabilities.extensions.as_mut() {
+				extensions.remove(rmcp::model::TASKS_EXTENSION_ID);
+				if extensions.is_empty() {
+					capabilities.extensions = None;
+				}
+			}
 		}
 	}
 
@@ -829,6 +896,7 @@ impl SessionManager {
 			id: id.into(),
 			relay: Arc::new(relay),
 			tx: None,
+			synthetic: false,
 			encoder: self.encoder.clone(),
 		};
 		let mut sm = self.sessions.write().expect("write lock");
@@ -853,6 +921,7 @@ impl SessionManager {
 			id: id.clone(),
 			relay: Arc::new(relay),
 			tx: None,
+			synthetic: false,
 			encoder: self.encoder.clone(),
 		}
 	}
@@ -880,6 +949,7 @@ impl SessionManager {
 			id,
 			relay: Arc::new(relay),
 			tx: None,
+			synthetic: true,
 			encoder: self.encoder.clone(),
 		}
 	}
@@ -898,6 +968,7 @@ impl SessionManager {
 			id: id.clone(),
 			relay: Arc::new(relay),
 			tx: Some(tx),
+			synthetic: false,
 			encoder: self.encoder.clone(),
 		};
 		let mut sm = self.sessions.write().expect("write lock");

@@ -119,6 +119,17 @@ func EventuallyGRPCRouteCondition(t Test, routeName string, routeNamespace strin
 	})
 }
 
+func EventuallyAgentgatewayModelCondition(t Test, modelName string, modelNamespace string, cond gwv1.RouteConditionType, expect metav1.ConditionStatus) {
+	t.Helper()
+	retry.UntilSuccessOrFail(t, func() error {
+		model := &agentgateway.AgentgatewayModel{}
+		if err := t.E2EClusterContext().ControllerClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: modelName, Namespace: modelNamespace}, model); err != nil {
+			return fmt.Errorf("failed to get AgentgatewayModel %s/%s: %w", modelNamespace, modelName, err)
+		}
+		return expectMatch(extractParentConditions(model.Status.Parents), matchers.HaveAnyParentCondition(string(cond), expect), "AgentgatewayModel %s/%s parent condition %s=%s", modelNamespace, modelName, cond, expect)
+	})
+}
+
 func EventuallyInferencePoolCondition(t Test, poolName string, poolNamespace string, cond inf.InferencePoolConditionType, expect metav1.ConditionStatus) {
 	t.Helper()
 	retry.UntilSuccessOrFail(t, func() error {

@@ -53,6 +53,3 @@ const (
 	// resources are not valid.
 	PolicyReasonPartiallyValid PolicyConditionReason = "PartiallyValid"
 )
-
-// PolicyDisable is used to disable a policy.
-type PolicyDisable struct{}

@@ -12,8 +12,21 @@ data:
     {{- /* Start with rawConfig as base, then merge typed config on top */ -}}
     {{- $baseConfig := $gateway.rawConfig | default dict }}
     {{- $typedConfig := dict }}
+    {{- $typedRuntimeConfig := dict }}
     {{- with ($gateway.logging).format }}
-    {{- $typedConfig = dict "config" (dict "logging" (dict "format" .)) }}
+    {{- $_ := set $typedRuntimeConfig "logging" (dict "format" .) }}
+    {{- end }}
+    {{- $catalogSources := list }}
+    {{- range ($gateway.modelCatalog).sources }}
+    {{- if .configMap }}
+    {{- $catalogSources = append $catalogSources (dict "file" (printf "/etc/agentgateway/model-catalog/%s/%s.json" .configMap.name .configMap.name)) }}
+    {{- end }}
+    {{- end }}
+    {{- if $catalogSources }}
+    {{- $_ := set $typedRuntimeConfig "modelCatalog" $catalogSources }}
+    {{- end }}
+    {{- if $typedRuntimeConfig }}
+    {{- $_ := set $typedConfig "config" $typedRuntimeConfig }}
     {{- end }}
     {{- /* Merge: typed config takes precedence over rawConfig */ -}}
     {{- $finalConfig := merge $typedConfig $baseConfig }}

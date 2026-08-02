@@ -102,6 +102,25 @@ Edit `config.yaml` and re-`curl` (hot-reloaded):
 - **Custom subject source** — `subjectToken: { source: { ... }, tokenType: ... }`
   to read the subject from a non-default header, query param, cookie, or CEL
   expression.
+- **Validated JWT subject** — validate the inbound bearer token at the route,
+  then read that validated token explicitly during backend token exchange:
+
+  ```yaml
+  routes:
+    policies:
+      jwtAuth:
+        issuer: https://idp.example.com
+        audiences: [example-api]
+        jwks:
+          url: https://idp.example.com/.well-known/jwks.json
+    backends:
+      policies:
+        backendAuth:
+          oauthTokenExchange:
+            subjectToken:
+              source:
+                expression: jwt.rawToken.unredacted()
+  ```
 
 ## Cleanup
 

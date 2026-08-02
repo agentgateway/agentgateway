@@ -985,6 +985,27 @@
             }
           },
           "additionalProperties": false
+        },
+        "task": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "target": {
+              "description": "The target handling the task.",
+              "type": "string"
+            },
+            "name": {
+              "description": "The task ID.",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "target",
+            "name"
+          ]
         }
       },
       "additionalProperties": false

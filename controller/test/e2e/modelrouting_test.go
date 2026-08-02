@@ -7,10 +7,13 @@ import (
 	"testing"
 
 	"github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 	testmatchers "github.com/agentgateway/agentgateway/controller/test/gomega/matchers"
 )
 
@@ -28,6 +31,9 @@ func TestAgentgatewayModelRouting(tt *testing.T) {
 
 	gw := modelRoutingGateway(t)
 
+	t.Run("Status", func(t base.Test) {
+		testAgentgatewayModelStatus(t)
+	})
 	t.Run("Visibility", func(t base.Test) {
 		testAgentgatewayModelVisibility(t, gw)
 	})
@@ -43,6 +49,13 @@ func TestAgentgatewayModelRouting(tt *testing.T) {
 	t.Run("FailoverVirtualModel", func(t base.Test) {
 		testAgentgatewayModelFailoverRouting(t, gw)
 	})
+}
+
+func testAgentgatewayModelStatus(t base.Test) {
+	assertions.EventuallyAgentgatewayModelCondition(t, "public-direct", modelRoutingNamespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue)
+	assertions.EventuallyAgentgatewayModelCondition(t, "public-direct", modelRoutingNamespace, gwv1.RouteConditionResolvedRefs, metav1.ConditionTrue)
+	assertions.EventuallyAgentgatewayModelCondition(t, "invalid-target", modelRoutingNamespace, gwv1.RouteConditionAccepted, metav1.ConditionTrue)
+	assertions.EventuallyAgentgatewayModelCondition(t, "invalid-target", modelRoutingNamespace, gwv1.RouteConditionResolvedRefs, metav1.ConditionFalse)
 }
 
 func testAgentgatewayModelVisibility(t base.Test, gw base.Gateway) {

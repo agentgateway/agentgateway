@@ -155,6 +155,7 @@ pub struct MergeStream {
 	// Present iff `merge` is; supplied to the merge fn for RBAC filtering.
 	cel: Option<CelExecWrapper>,
 	failure_mode: FailureMode,
+	first_failure: Option<Result<ServerJsonRpcMessage, ClientError>>,
 }
 
 impl MergeStream {
@@ -186,6 +187,7 @@ impl MergeStream {
 			merge,
 			cel,
 			failure_mode,
+			first_failure: None,
 		}
 	}
 
@@ -242,6 +244,9 @@ impl Stream for MergeStream {
 									"upstream JSON-RPC error, skipping (failure_mode=FailOpen): {:?}",
 									e
 								);
+								if self.first_failure.is_none() {
+									self.first_failure = Some(Ok(ServerJsonRpcMessage::Error(e)));
+								}
 								drop = true;
 							} else {
 								self.complete = true;
@@ -254,6 +259,9 @@ impl Stream for MergeStream {
 									"upstream stream error, skipping (failure_mode=FailOpen): {}",
 									e
 								);
+								if self.first_failure.is_none() {
+									self.first_failure = Some(Err(e));
+								}
 								drop = true;
 							} else {
 								self.complete = true;
@@ -267,6 +275,11 @@ impl Stream for MergeStream {
 					// Long-lived streams can end without a terminal response.
 					if self.failure_mode == FailureMode::FailOpen {
 						warn!("upstream stream ended unexpectedly, skipping (failure_mode=FailOpen)");
+						if self.first_failure.is_none() {
+							self.first_failure = Some(Err(ClientError::new(anyhow::anyhow!(
+								"upstream stream ended unexpectedly"
+							))));
+						}
 						drop = true;
 					} else {
 						self.complete = true;
@@ -292,6 +305,13 @@ impl Stream for MergeStream {
 		self.complete = true;
 
 		if self.merge.is_some() {
+			if self.terminal_messages.iter().all(Option::is_none) {
+				return Poll::Ready(Some(self.first_failure.take().unwrap_or_else(|| {
+					Err(ClientError::new(anyhow::anyhow!(
+						"all upstream streams failed"
+					)))
+				})));
+			}
 			Poll::Ready(Some(self.merge_terminal_messages()))
 		} else {
 			Poll::Ready(None)

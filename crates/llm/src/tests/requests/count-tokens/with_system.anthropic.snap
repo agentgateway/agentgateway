@@ -9,12 +9,22 @@ info:
       content: What is the weather today?
 ---
 {
-  "messages": [
-    {
-      "role": "user",
-      "content": "What is the weather today?"
-    }
-  ],
-  "model": "claude-3-5-sonnet-20241022",
-  "system": "You are a helpful assistant."
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "What is the weather today?"
+      }
+    ],
+    "model": "claude-3-5-sonnet-20241022",
+    "system": "You are a helpful assistant."
+  },
+  "parsed": {
+    "input_format": "CountTokens",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-3-5-sonnet-20241022",
+    "provider": "anthropic",
+    "streaming": false,
+    "params": {}
+  }
 }

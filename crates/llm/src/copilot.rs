@@ -24,15 +24,16 @@ impl Provider {
 			// If we have no model not much we can do...
 			return vec![ChatFormat::OpenAICompletions];
 		};
+		let normalized_model = m.to_ascii_lowercase();
 		// Truth table from `curl https://api.githubcopilot.com/models -H "Authorization: Bearer ghu_..." | '.data[] | {id,supported_endpoints}'`
-		match m {
+		match normalized_model.as_str() {
 			m if m.starts_with("claude-") => {
 				// Copilot supports Completions even for Anthropic
 				// This is enabled so we can do Responses --> Completions [--> Anthropic, within copilot, presumably].
 				// If we add native Responses --> Anthropic we should drop this
 				vec![ChatFormat::AnthropicMessages, ChatFormat::OpenAICompletions]
 			},
-			m if m.starts_with("mai-") => {
+			m if m.starts_with("grok-") || m.starts_with("mai-") => {
 				vec![ChatFormat::OpenAIResponses]
 			},
 			m if m.starts_with("gemini-") => {

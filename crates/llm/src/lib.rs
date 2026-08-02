@@ -106,7 +106,7 @@ pub enum RouteType {
 	Rerank,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
 pub enum InputFormat {
 	Completions,
 	Messages,
@@ -149,8 +149,9 @@ pub enum ChatFormat {
 	VertexGemini,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct LLMRequest {
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub input_tokens: Option<u64>,
 	pub input_format: InputFormat,
 	pub cache_convention: CacheTokenConvention,
@@ -158,7 +159,9 @@ pub struct LLMRequest {
 	pub provider: Strng,
 	pub streaming: bool,
 	pub params: LLMRequestParams,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub prompt: Option<Arc<Vec<SimpleChatCompletionMessage>>>,
+	#[serde(skip)]
 	pub provider_state: Option<ProviderState>,
 }
 
@@ -170,7 +173,7 @@ pub enum ProviderState {
 	VertexGemini,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
 pub enum CacheTokenConvention {
 	#[default]
 	InputIncludesCache,

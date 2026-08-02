@@ -9,18 +9,36 @@ info:
       content: "Hello, world"
 ---
 {
-  "modelId": "claude-sonnet-4-20250514",
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "text": "Hello, world"
-        }
-      ]
+  "request": {
+    "modelId": "claude-sonnet-4-20250514",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "Hello, world"
+          }
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 1024
     }
-  ],
-  "inferenceConfig": {
-    "maxTokens": 1024
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-sonnet-4-20250514",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Hello, world"
+      }
+    ]
   }
 }

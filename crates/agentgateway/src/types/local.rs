@@ -300,6 +300,8 @@ fn parse_deprecated_tracing_endpoint(endpoint: &str) -> anyhow::Result<(Target, 
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct NormalizedLocalConfig {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub model_catalog: Option<Vec<crate::ModelCatalogSource>>,
 	pub binds: Vec<Bind>,
 	pub listener_routes: Vec<(ListenerKey, Vec<Route>)>,
 	pub listener_tcp_routes: Vec<(ListenerKey, Vec<TCPRoute>)>,
@@ -315,7 +317,8 @@ pub struct NormalizedLocalConfig {
 #[apply(schema_de!)]
 pub struct LocalConfig {
 	/// config defines top-level settings for DNS, admin, networking, observability, and session
-	/// management. Unlike other sections, these are applied only at startup and are not dynamically reloaded.
+	/// management. Unlike other sections, these are applied only at startup, except modelCatalog,
+	/// which is dynamically reloaded.
 	#[serde(default)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<RawConfig>"))]
 	#[allow(unused)]
@@ -966,6 +969,13 @@ impl LocalLLMModels {
 			self.params.model = Some(model_override);
 		}
 		self.provider = provider.provider.clone();
+		if let LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Custom(custom)) =
+			&mut self.provider
+		{
+			custom
+				.provider_override
+				.get_or_insert_with(|| provider.name.clone());
+		}
 		if let Some(defaults) = provider.defaults.clone() {
 			self.defaults = merge_optional_maps(defaults.defaults, self.defaults.take());
 			self.overrides = merge_optional_maps(defaults.overrides, self.overrides.take());
@@ -2526,7 +2536,8 @@ impl LocalBackendPolicies {
 				p.try_into(resources).await?,
 			))
 		}
-		if let Some(p) = backend_auth {
+		if let Some(mut p) = backend_auth {
+			p.resolve(resources).await?;
 			pols.push(BackendTrafficPolicy::BackendAuth(p))
 		}
 		if let Some(p) = ext_authz {
@@ -2742,7 +2753,7 @@ async fn convert(
 	apply_implicit_default_gateway(&mut i);
 	validate_local_listener_ports(&i)?;
 	let LocalConfig {
-		config: _,
+		config: local_runtime_config,
 		mut frontend_policies,
 		binds,
 		policies,
@@ -2757,6 +2768,13 @@ async fn convert(
 		mcp,
 		ui,
 	} = i;
+	let model_catalog = local_runtime_config
+		.as_ref()
+		.as_ref()
+		.and_then(|config| config.get("modelCatalog"))
+		.cloned()
+		.map(serde_json::from_value)
+		.transpose()?;
 	merge_deprecated_frontend_policies(config, &mut frontend_policies)?;
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
@@ -3033,6 +3051,7 @@ async fn convert(
 	all_policies.extend_from_slice(&split_frontend_policies(gateway, frontend_policies).await?);
 
 	let normalized = NormalizedLocalConfig {
+		model_catalog,
 		binds: all_binds,
 		listener_routes: all_listener_routes,
 		listener_tcp_routes: all_listener_tcp_routes,
@@ -4178,7 +4197,8 @@ async fn convert_llm_config(
 				p.try_into(resources).await?,
 			));
 		}
-		if let Some(p) = model_config.auth.clone() {
+		if let Some(mut p) = model_config.auth.clone() {
+			p.resolve(resources).await?;
 			pols.push(BackendTrafficPolicy::BackendAuth(p));
 		}
 		if let Some(p) = model_config.backend_tunnel.clone() {
@@ -5011,7 +5031,8 @@ pub(crate) async fn split_policies_for_target(
 	if let Some(p) = backend_tunnel {
 		backend_policies.push(BackendTrafficPolicy::Tunnel(p))
 	}
-	if let Some(p) = backend_auth {
+	if let Some(mut p) = backend_auth {
+		p.resolve(resources).await?;
 		backend_policies.push(BackendTrafficPolicy::BackendAuth(p))
 	}
 

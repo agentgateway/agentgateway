@@ -62,5 +62,8 @@ data: {"type":"message_stop"          }
   "cache_creation_input_tokens": 0,
   "cached_input_tokens": 0,
   "service_tier": "standard",
-  "provider_model": "claude-opus-4-6"
+  "provider_model": "claude-opus-4-6",
+  "completion": [
+    "I don't have access to real\" in your browser\n\nIs there something specific about San Francisco's climate patterns you'd like to know more about?"
+  ]
 }

@@ -1,0 +1,2 @@
+data: {"responseId":"gemini-tool","modelVersion":"gemini-2.5-pro","candidates":[{"content":{"role":"model","parts":[{"functionCall":{"id":"fc_native","name":"get_weather","args":{"location":"Tokyo"}}}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":15,"candidatesTokenCount":12,"totalTokenCount":27}}
+

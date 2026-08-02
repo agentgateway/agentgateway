@@ -48,6 +48,10 @@ binds:
         # --- Steps 2-4: exchange identity for a backend token and attach it ----
         backendAuth:
           crossAppAccess:
+            # jwtAuth removes the validated credential, so read its raw token explicitly.
+            subjectToken:
+              source:
+                expression: jwt.rawToken.unredacted()
             # Leg 1: the user's Okta IdP (org authorization server).
             # Performs the RFC 8693 token exchange that mints the ID-JAG.
             identityProvider:

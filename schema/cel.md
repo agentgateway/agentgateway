@@ -139,6 +139,9 @@
 |`mcp.resource`|object||
 |`mcp.resource.target`|string|The target of the resource|
 |`mcp.resource.name`|string|The name of the resource|
+|`mcp.task`|object||
+|`mcp.task.target`|string|The target handling the task.|
+|`mcp.task.name`|string|The task ID.|
 |`backend`|object|`backend` contains information about the backend being used.|
 |`backend.name`|string|The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.|
 |`backend.type`|enum|The type of backend.<br>Possible values: `ai`, `mcp`, `static`, `dynamic`, `service`, `unknown`.|
