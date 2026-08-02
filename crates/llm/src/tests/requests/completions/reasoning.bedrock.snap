@@ -9,24 +9,40 @@ info:
   reasoning_effort: medium
 ---
 {
-  "modelId": "gpt-3.5-turbo",
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "text": "How is the current weather in Columbus?"
-        }
-      ]
+  "request": {
+    "modelId": "gpt-3.5-turbo",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "How is the current weather in Columbus?"
+          }
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 4096
+    },
+    "additionalModelRequestFields": {
+      "thinking": {
+        "type": "enabled",
+        "budget_tokens": 2048
+      }
     }
-  ],
-  "inferenceConfig": {
-    "maxTokens": 4096
   },
-  "additionalModelRequestFields": {
-    "thinking": {
-      "type": "enabled",
-      "budget_tokens": 2048
-    }
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-3.5-turbo",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "How is the current weather in Columbus?"
+      }
+    ]
   }
 }

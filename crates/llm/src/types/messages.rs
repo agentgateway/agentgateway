@@ -256,6 +256,42 @@ impl RequestType for Request {
 		};
 		self.messages = message_prompts.into_iter().map(Into::into).collect();
 	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		match &mut self.system {
+			Some(TextBlock::Text(text)) => f(text),
+			Some(TextBlock::Array(parts)) => {
+				crate::types::scan_text_runs(
+					parts,
+					"\n",
+					|p| match p {
+						TextPart::Text { text, .. } => Some(text),
+						TextPart::Unknown(_) => None,
+					},
+					f,
+				);
+			},
+			None => {},
+		}
+		for msg in &mut self.messages {
+			match &mut msg.content {
+				Some(ContentBlock::Text(text)) => f(text),
+				Some(ContentBlock::Array(parts)) => {
+					crate::types::scan_text_runs(
+						parts,
+						" ",
+						|p| match p {
+							ContentPart::Text { text, .. } => Some(text),
+							// TODO opt-in setting to apply guards to tool results
+							ContentPart::Unknown(_) => None,
+						},
+						f,
+					);
+				},
+				None => {},
+			}
+		}
+	}
 }
 
 pub fn prepend_prompts_helper(
@@ -439,6 +475,14 @@ impl ResponseType for Response {
 
 	fn serialize(&self) -> serde_json::Result<Vec<u8>> {
 		serde_json::to_vec(&self)
+	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		for c in &mut self.content {
+			if let Some(text) = &mut c.text {
+				f(text);
+			}
+		}
 	}
 }
 
@@ -1155,6 +1199,14 @@ pub mod typed {
 
 		fn serialize(&self) -> serde_json::Result<Vec<u8>> {
 			serde_json::to_vec(&self)
+		}
+
+		fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+			for block in &mut self.content {
+				if let ContentBlock::Text(t) = block {
+					f(&mut t.text);
+				}
+			}
 		}
 	}
 }

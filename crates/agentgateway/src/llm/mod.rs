@@ -548,7 +548,12 @@ impl ChatTranslation {
 					)
 				}),
 				InputFormat::Responses => resp.map(|b| {
-					conversion::openai_compat::to_responses::translate_stream(b, ctx.buffer_limit, ctx.logger)
+					conversion::openai_compat::to_responses::translate_stream(
+						b,
+						ctx.buffer_limit,
+						ctx.logger,
+						ctx.log_content,
+					)
 				}),
 				_ => resp,
 			},
@@ -570,7 +575,12 @@ impl ChatTranslation {
 					conversion::messages::passthrough_stream(b, ctx.buffer_limit, ctx.logger, ctx.log_content)
 				}),
 				InputFormat::Completions => resp.map(|b| {
-					conversion::messages::from_completions::translate_stream(b, ctx.buffer_limit, ctx.logger)
+					conversion::messages::from_completions::translate_stream(
+						b,
+						ctx.buffer_limit,
+						ctx.logger,
+						ctx.log_content,
+					)
 				}),
 				_ => resp,
 			},
@@ -586,6 +596,7 @@ impl ChatTranslation {
 							ctx.logger,
 							&ctx.model,
 							&msg,
+							ctx.log_content,
 							tool_name_map,
 						)
 					})
@@ -615,6 +626,7 @@ impl ChatTranslation {
 							ctx.logger,
 							&ctx.model,
 							&msg,
+							ctx.log_content,
 							tool_name_map,
 						)
 					})
@@ -629,6 +641,7 @@ impl ChatTranslation {
 						ctx.buffer_limit,
 						strng::new(&ctx.model),
 						ctx.logger,
+						ctx.log_content,
 					)
 				}),
 				_ => resp,

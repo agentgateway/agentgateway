@@ -1,6 +1,5 @@
 ---
 source: crates/llm/src/golden_tests.rs
-assertion_line: 62
 description: src/tests/response/responses/basic.json
 info:
   id: resp_0fd43e1b46691ead0069a89a2144808199a06ce29faf5798da

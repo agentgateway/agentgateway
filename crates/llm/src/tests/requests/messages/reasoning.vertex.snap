@@ -19,26 +19,44 @@ info:
             scope: turn
 ---
 {
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "type": "text",
-          "text": "Give one concise insight about distributed consensus.",
-          "cache_control": {
-            "type": "ephemeral"
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Give one concise insight about distributed consensus.",
+            "cache_control": {
+              "type": "ephemeral"
+            }
           }
-        }
-      ]
+        ]
+      }
+    ],
+    "anthropic_version": "vertex-2023-10-16",
+    "max_tokens": 1024,
+    "thinking": {
+      "type": "adaptive"
+    },
+    "output_config": {
+      "effort": "high"
     }
-  ],
-  "anthropic_version": "vertex-2023-10-16",
-  "max_tokens": 1024,
-  "thinking": {
-    "type": "adaptive"
   },
-  "output_config": {
-    "effort": "high"
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-opus-4-6",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Give one concise insight about distributed consensus."
+      }
+    ]
   }
 }

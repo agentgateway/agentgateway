@@ -8,14 +8,24 @@ info:
     - world
 ---
 {
-  "instances": [
-    {
-      "content": "hello",
-      "task_type": "RETRIEVAL_QUERY"
-    },
-    {
-      "content": "world",
-      "task_type": "RETRIEVAL_QUERY"
-    }
-  ]
+  "request": {
+    "instances": [
+      {
+        "content": "hello",
+        "task_type": "RETRIEVAL_QUERY"
+      },
+      {
+        "content": "world",
+        "task_type": "RETRIEVAL_QUERY"
+      }
+    ]
+  },
+  "parsed": {
+    "input_format": "Embeddings",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "text-embedding-3-small",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {}
+  }
 }

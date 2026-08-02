@@ -82,6 +82,18 @@ pub async fn run(
 		Some(metrics_handle.clone()),
 	);
 
+	let model_catalog_sources = if let Some(store) = &config_resource_store {
+		config_store::merge_model_catalog_sources(
+			&store
+				.list(Some(config_store::ConfigResourceKind::ModelCatalog))
+				.await?,
+			config.model_catalog.sources.clone(),
+		)?
+	} else {
+		config.model_catalog.sources.clone()
+	};
+	let model_catalog = crate::llm::cost::ModelCatalog::new(model_catalog_sources).await?;
+
 	let (xds_tx, xds_rx) = tokio::sync::watch::channel(());
 	let state_mgr = state_manager::StateManager::new(
 		config.clone(),
@@ -89,24 +101,13 @@ pub async fn run(
 		Arc::new(xds_metrics),
 		xds_tx,
 		config_resource_store.clone(),
+		model_catalog.clone(),
 	)
 	.await?;
 	let stores = state_mgr.stores();
 	let resource_manager = state_mgr.resource_manager();
 
 	state_manager::start_self_workload_resolution(&config, stores.clone(), &ready);
-
-	let mut model_catalog_sources = if let Some(store) = &config_resource_store {
-		config_store::model_catalog_sources(
-			&store
-				.list(Some(config_store::ConfigResourceKind::ModelCatalog))
-				.await?,
-		)?
-	} else {
-		Vec::new()
-	};
-	model_catalog_sources.extend(config.model_catalog.sources.clone());
-	let model_catalog = crate::llm::cost::ModelCatalog::new(model_catalog_sources)?;
 
 	let mut xds_rx_for_task = xds_rx.clone();
 	tokio::spawn(async move {

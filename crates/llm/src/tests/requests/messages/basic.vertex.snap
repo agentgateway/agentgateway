@@ -9,12 +9,30 @@ info:
       content: "Hello, world"
 ---
 {
-  "messages": [
-    {
-      "role": "user",
-      "content": "Hello, world"
-    }
-  ],
-  "anthropic_version": "vertex-2023-10-16",
-  "max_tokens": 1024
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello, world"
+      }
+    ],
+    "anthropic_version": "vertex-2023-10-16",
+    "max_tokens": 1024
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-sonnet-4-20250514",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Hello, world"
+      }
+    ]
+  }
 }

@@ -1016,15 +1016,17 @@ fn reasoning_effort_maps_to_thinking_level_on_gemini_3() {
 
 #[test]
 fn reasoning_effort_maps_to_thinking_budget_on_gemini_25() {
-	let g = to_gemini(json!({
-		"model": "gemini-2.5-flash",
-		"messages": [{ "role": "user", "content": "x" }],
-		"reasoning_effort": "high"
-	}));
-	assert_eq!(
-		g["generationConfig"]["thinkingConfig"]["thinkingBudget"],
-		4096
-	);
+	for (effort, budget) in [("high", 4096), ("xhigh", 8192), ("max", 16384)] {
+		let g = to_gemini(json!({
+			"model": "gemini-2.5-flash",
+			"messages": [{ "role": "user", "content": "x" }],
+			"reasoning_effort": effort
+		}));
+		assert_eq!(
+			g["generationConfig"]["thinkingConfig"]["thinkingBudget"],
+			budget
+		);
+	}
 }
 
 #[test]

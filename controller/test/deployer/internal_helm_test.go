@@ -574,10 +574,10 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 			InputFile: "agentgateway-model-catalog-configmap",
 			Validate: func(t *testing.T, outputYaml string) {
 				t.Helper()
-				assert.Contains(t, outputYaml, "MODEL_CATALOG_PATHS",
-					"deployment should set MODEL_CATALOG_PATHS to the mounted ConfigMap file path")
+				assert.Contains(t, outputYaml, "modelCatalog:",
+					"generated config should include the model catalog")
 				assert.Contains(t, outputYaml, "/etc/agentgateway/model-catalog/my-model-costs/my-model-costs.json",
-					"MODEL_CATALOG_PATHS should point to the ConfigMap mount path")
+					"config.modelCatalog should point to the ConfigMap mount path")
 				assert.Contains(t, outputYaml, "mountPath: /etc/agentgateway/model-catalog/my-model-costs",
 					"deployment should have a directory volume mount for the model catalog ConfigMap so kubelet's atomic symlink swap on update is visible")
 				assert.NotContains(t, outputYaml, "subPath: my-model-costs.json",

@@ -353,16 +353,7 @@ pub fn parse_config(
 	let dynamic_ca_cert_cache =
 		parse_dynamic_ca_cert_cache_config().ctx("invalid dynamic CA cert cache config")?;
 
-	let model_catalog_sources = parse::<String>("MODEL_CATALOG_PATHS")?
-		.map(|s| {
-			s.split(',')
-				.map(|p| PathBuf::from(p.trim()))
-				.filter(|p| !p.as_os_str().is_empty())
-				.map(|file| crate::ModelCatalogSource::File { file })
-				.collect::<Vec<_>>()
-		})
-		.or(raw.model_catalog)
-		.unwrap_or_default();
+	let model_catalog_sources = raw.model_catalog.unwrap_or_default();
 	let database = raw.database.clone();
 	let explicit_logging_database = raw.logging.as_ref().and_then(|l| l.database.clone());
 	if database

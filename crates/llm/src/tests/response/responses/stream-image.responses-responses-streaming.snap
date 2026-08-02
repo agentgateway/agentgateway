@@ -59,5 +59,8 @@ data: {"type":"response.completed","response":{"id":"","object":"response","crea
   "reasoning_tokens": 1152,
   "cached_input_tokens": 0,
   "service_tier": "default",
-  "provider_model": "gpt-5-2025-08-07"
+  "provider_model": "gpt-5-2025-08-07",
+  "completion": [
+    ""
+  ]
 }

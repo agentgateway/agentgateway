@@ -20,41 +20,59 @@ info:
       content: What is the weather like in San Francisco?
 ---
 {
-  "modelId": "claude-opus-4-6",
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "text": "What is the weather like in San Francisco?"
-        }
-      ]
-    }
-  ],
-  "inferenceConfig": {
-    "maxTokens": 1024
-  },
-  "toolConfig": {
-    "tools": [
+  "request": {
+    "modelId": "claude-opus-4-6",
+    "messages": [
       {
-        "toolSpec": {
-          "name": "get_weather",
-          "description": "Get the current weather in a given location",
-          "inputSchema": {
-            "json": {
-              "type": "object",
-              "properties": {
-                "location": {
-                  "type": "string",
-                  "description": "The city and state, e.g. San Francisco, CA"
-                }
-              },
-              "required": [
-                "location"
-              ]
+        "role": "user",
+        "content": [
+          {
+            "text": "What is the weather like in San Francisco?"
+          }
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 1024
+    },
+    "toolConfig": {
+      "tools": [
+        {
+          "toolSpec": {
+            "name": "get_weather",
+            "description": "Get the current weather in a given location",
+            "inputSchema": {
+              "json": {
+                "type": "object",
+                "properties": {
+                  "location": {
+                    "type": "string",
+                    "description": "The city and state, e.g. San Francisco, CA"
+                  }
+                },
+                "required": [
+                  "location"
+                ]
+              }
             }
           }
         }
+      ]
+    }
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-opus-4-6",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "What is the weather like in San Francisco?"
       }
     ]
   }

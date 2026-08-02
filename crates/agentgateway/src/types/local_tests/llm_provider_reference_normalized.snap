@@ -78,6 +78,40 @@ backends:
             minTokens: 2048
             cacheMessageOffset: 0
   - backend:
+      ai:
+        name: "llm:model:example/*:1"
+        namespace: ""
+        target:
+          providers:
+            - active:
+                example/*:
+                  endpoint:
+                    name: example/*
+                    provider:
+                      custom:
+                        providerOverride: completions-shared
+                        formats:
+                          - type: completions
+                            path: ~
+                    hostOverride: "llm.example.com:443"
+                    pathOverride: ~
+                    pathPrefix: /v1
+                    tokenize: false
+                  info:
+                    health: 1
+                    requestLatency: 0
+                    pendingRequests: 0
+                    totalRequests: 0
+                    consecutiveFailures: 0
+                    timesEjected: 0
+                    evictedUntil: ~
+                  capacity: 1
+              rejected: {}
+    inlinePolicies:
+      - backendTLS:
+          systemRoots: true
+      - ai: {}
+  - backend:
       llmRouter:
         name: "llm:router"
         namespace: ""
@@ -89,6 +123,31 @@ backends:
               headerMatches: []
               backend:
                 backend: "/llm:model:anthropic/*:0"
+                weight: 1
+              policies:
+                llm:
+                  routes:
+                    "*": passthrough
+                    /v1/chat/completions: completions
+                    /v1/embeddings: embeddings
+                    /v1/images/edits: detect
+                    /v1/images/generations: detect
+                    /v1/images/variations: detect
+                    /v1/messages: messages
+                    /v1/rerank: rerank
+                    /v1/responses: responses
+                    /v1/responses/compact: detect
+                    /v2/rerank: rerank
+                    ":rawPredict": messages
+                    ":streamRawPredict": messages
+                authorization: ~
+              backendPolicies: []
+            - name: example/*
+              created: 0
+              visibility: public
+              headerMatches: []
+              backend:
+                backend: "/llm:model:example/*:1"
                 weight: 1
               policies:
                 llm:

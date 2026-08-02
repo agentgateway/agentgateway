@@ -14,7 +14,9 @@ metadata:
 apiVersion: v1
 data:
   config.yaml: |
-    config: {}
+    config:
+      modelCatalog:
+      - file: /etc/agentgateway/model-catalog/my-model-costs/my-model-costs.json
 kind: ConfigMap
 metadata:
   labels:
@@ -72,7 +74,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 864542ed2e0b0de7cfd066cda1995c0816d7b62bfd2ec96fd7eaa6f50f2624aa
+        checksum/config: 724fc4b8c62bb05cf4a8dc68843732c420d60a343e880ec355605150ad5cde27
         checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737
         prometheus.io/path: /metrics
         prometheus.io/port: "15020"
@@ -134,8 +136,6 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.serviceAccountName
-        - name: MODEL_CATALOG_PATHS
-          value: /etc/agentgateway/model-catalog/my-model-costs/my-model-costs.json
         image: cr.agentgateway.dev/agentgateway:99.99.99
         name: agentgateway
         ports:

@@ -26,6 +26,8 @@ pub struct Request {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub seed: Option<i64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
+	pub reasoning_effort: Option<typed::ReasoningEffort>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub stream_options: Option<StreamOptions>,
 
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -245,6 +247,14 @@ impl ResponseType for Response {
 	fn serialize(&self) -> serde_json::Result<Vec<u8>> {
 		serde_json::to_vec(&self)
 	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		for c in &mut self.choices {
+			if let Some(text) = &mut c.message.content {
+				f(text);
+			}
+		}
+	}
 }
 
 fn extract_output_messages(choices: &[Choice]) -> Option<Vec<OutputMessage>> {
@@ -270,7 +280,11 @@ fn extract_output_messages(choices: &[Choice]) -> Option<Vec<OutputMessage>> {
 						let arguments = function
 							.get("arguments")
 							.and_then(|v| v.as_str())
-							.and_then(|s| serde_json::from_str(s).ok())
+							.map(|s| match serde_json::from_str(s) {
+								Ok(arguments) => arguments,
+								Err(_) if s.trim().is_empty() => serde_json::Value::Object(Default::default()),
+								Err(_) => serde_json::Value::String(s.to_owned()),
+							})
 							.unwrap_or(serde_json::Value::Object(Default::default()));
 
 						content.push(OutputMessagePart::ToolCall {
@@ -389,6 +403,22 @@ impl super::RequestType for Request {
 
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
 		self.messages = messages.into_iter().map(convert_message).collect();
+	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		for msg in &mut self.messages {
+			// TODO opt-in setting to apply guards to tool results
+			if msg.role == "tool" {
+				continue;
+			}
+			match &mut msg.content {
+				Some(Content::Text(text)) => f(text),
+				Some(Content::Array(parts)) => {
+					super::scan_text_runs(parts, " ", |p| p.text.as_mut(), f);
+				},
+				None => {},
+			}
+		}
 	}
 }
 

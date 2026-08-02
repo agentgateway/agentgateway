@@ -14,42 +14,66 @@ info:
       content: And 3+3?
 ---
 {
-  "modelId": "anthropic.claude-3-7-sonnet-20250219-v1:0",
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "text": "What is 2+2?"
-        }
-      ]
-    },
-    {
-      "role": "assistant",
-      "content": [
-        {
-          "reasoningContent": {
-            "reasoningText": {
-              "text": "Two plus two.",
-              "signature": "SIG-replay=="
-            }
+  "request": {
+    "modelId": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "What is 2+2?"
           }
-        },
-        {
-          "text": "4"
-        }
-      ]
-    },
-    {
-      "role": "user",
-      "content": [
-        {
-          "text": "And 3+3?"
-        }
-      ]
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "reasoningContent": {
+              "reasoningText": {
+                "text": "Two plus two.",
+                "signature": "SIG-replay=="
+              }
+            }
+          },
+          {
+            "text": "4"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "And 3+3?"
+          }
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 4096
     }
-  ],
-  "inferenceConfig": {
-    "maxTokens": 4096
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "What is 2+2?"
+      },
+      {
+        "role": "assistant",
+        "content": "4"
+      },
+      {
+        "role": "user",
+        "content": "And 3+3?"
+      }
+    ]
   }
 }

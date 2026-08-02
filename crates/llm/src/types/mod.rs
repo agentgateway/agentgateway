@@ -21,6 +21,21 @@ pub enum ChatRequest<'a> {
 	Responses(&'a responses::Request),
 }
 
+pub(crate) fn thinking_budget_for_reasoning_effort(
+	effort: &completions::typed::ReasoningEffort,
+) -> Option<u64> {
+	use completions::typed::ReasoningEffort;
+
+	match effort {
+		ReasoningEffort::None => None,
+		ReasoningEffort::Minimal | ReasoningEffort::Low => Some(1024),
+		ReasoningEffort::Medium => Some(2048),
+		ReasoningEffort::High => Some(4096),
+		ReasoningEffort::Xhigh => Some(8192),
+		ReasoningEffort::Max => Some(16384),
+	}
+}
+
 /// ResponseType is an abstraction over provider/endpoint specific response formats that enables
 /// uniform policy enforcement and observability
 pub trait ResponseType: Send + Sync {
@@ -31,6 +46,7 @@ pub trait ResponseType: Send + Sync {
 		resp: Vec<crate::webhook::ResponseChoice>,
 	) -> anyhow::Result<()>;
 	fn serialize(&self) -> serde_json::Result<Vec<u8>>;
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String));
 }
 
 /// RequestType is an abstraction over provider/endpoint specific request formats that enables
@@ -46,6 +62,58 @@ pub trait RequestType: Send + Sync {
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage>;
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>);
 	fn to_value(&self) -> serde_json::Result<serde_json::Value>;
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String));
+}
+
+/// Scan runs of consecutive text parts as one `sep`-joined string: `[t1, t2, img, t3]` scans
+/// `"t1{sep}t2"` then `"t3"`. An edited run collapses into its last part (keeping its other
+/// fields, e.g. `cache_control`); untouched runs pass through unchanged.
+pub(crate) fn scan_text_runs<T>(
+	parts: &mut Vec<T>,
+	sep: &str,
+	mut text_of: impl FnMut(&mut T) -> Option<&mut String>,
+	f: &mut dyn FnMut(&mut String),
+) {
+	if let [part] = parts.as_mut_slice() {
+		if let Some(text) = text_of(part) {
+			f(text);
+		}
+		return;
+	}
+
+	let mut i = 0;
+	while i < parts.len() {
+		let mut joined = String::new();
+		let mut end = i;
+
+		// join until we hit non-text or the end of the list
+		while let Some(text) = parts.get_mut(end).and_then(&mut text_of) {
+			if end > i {
+				joined.push_str(sep);
+			}
+			joined.push_str(text);
+			end += 1;
+		}
+		if end == i {
+			i += 1;
+			continue;
+		}
+
+		// don't collapse the run into a single part if `f` wouldn't mutate it
+		let original = joined.clone();
+		f(&mut joined);
+		if joined == original {
+			i = end;
+			continue;
+		}
+
+		// collapse the run's text into the last part, and remove the others
+		if let Some(text) = text_of(&mut parts[end - 1]) {
+			*text = joined;
+		}
+		parts.drain(i..end - 1);
+		i += 1;
+	}
 }
 
 /// SimpleChatCompletionMessage is a simplified chat message

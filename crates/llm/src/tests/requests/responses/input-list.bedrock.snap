@@ -9,18 +9,34 @@ info:
   stream: true
 ---
 {
-  "modelId": "gpt-4o",
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "text": "Hello"
-        }
-      ]
+  "request": {
+    "modelId": "gpt-4o",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "Hello"
+          }
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 4096
     }
-  ],
-  "inferenceConfig": {
-    "maxTokens": 4096
+  },
+  "parsed": {
+    "input_format": "Responses",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-4o",
+    "provider": "bedrock",
+    "streaming": true,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Hello"
+      }
+    ]
   }
 }

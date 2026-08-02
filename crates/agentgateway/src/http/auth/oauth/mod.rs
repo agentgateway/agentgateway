@@ -24,7 +24,7 @@ use crate::types::proto::{ProtoError, agent as proto};
 use crate::{apply, cel, schema_enum};
 
 mod cache;
-mod client_auth;
+pub(crate) mod client_auth;
 mod cross_app_access;
 mod transport;
 
@@ -349,7 +349,7 @@ impl OAuthTokenExchangeAuth {
 		// Extract everything up front so a bad request fails before we touch it.
 		let subject_token =
 			extract_subject_token(&self.subject_token.source, req).ok_or_else(|| {
-				debug!("oauth token exchange subject token missing");
+				debug!(source=?self.subject_token.source, "oauth token exchange subject token missing");
 				ProxyError::InvalidRequest
 			})?;
 		let actor = self
@@ -759,25 +759,14 @@ pub(super) async fn apply_identity_assertion(
 	Ok(explicit)
 }
 
-/// Read a subject token for exchange. A JWT auth policy may have already stripped
-/// the configured credential after validation, so fall back to populated Claims.
 pub(super) fn extract_subject_token(
 	source: &AuthorizationLocation,
 	req: &Request,
 ) -> Option<String> {
 	source
 		.extract(req)
-		.map(|token| token.into_owned())
-		.filter(|token| !token.trim().is_empty())
-		.or_else(|| extract_validated_claims_token(req))
-		.filter(|token| !token.trim().is_empty())
-}
-
-fn extract_validated_claims_token(req: &Request) -> Option<String> {
-	req
-		.extensions()
-		.get::<Claims>()
-		.map(|claims| claims.jwt.expose_secret().to_string())
+		.filter(|t| !t.trim().is_empty())
+		.map(Cow::into_owned)
 }
 
 fn actor_token_from_request(

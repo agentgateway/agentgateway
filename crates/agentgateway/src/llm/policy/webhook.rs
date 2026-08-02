@@ -212,6 +212,13 @@ fn apply_header_expressions(
 	}
 	let exec = context.executor();
 	for (k, expr) in &webhook.headers {
+		if matches!(
+			k,
+			crate::http::HeaderOrPseudo::Scheme | crate::http::HeaderOrPseudo::Status
+		) {
+			debug!("unsupported webhook pseudo-header {k}; skipping");
+			continue;
+		}
 		let v = match exec.eval(expr) {
 			Ok(v) => Some(v),
 			Err(e) => {

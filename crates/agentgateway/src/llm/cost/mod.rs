@@ -1,7 +1,7 @@
 use std::fmt;
 use std::io::ErrorKind;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, bail};
 use arc_swap::ArcSwap;
@@ -23,6 +23,7 @@ const TRACE_POLICY_KIND: &str = "llm_cost";
 
 pub struct ModelCatalog {
 	state: ArcSwap<ModelCatalogState>,
+	file_watch: Mutex<Option<tokio::task::AbortHandle>>,
 }
 
 struct ModelCatalogState {
@@ -46,39 +47,25 @@ impl Default for ModelCatalog {
 				snapshot: Arc::new(CatalogSnapshot::empty()),
 				sources: Vec::new(),
 			}),
+			file_watch: Mutex::new(None),
 		}
 	}
 }
 
 impl ModelCatalog {
-	pub fn new(sources: Vec<ModelCatalogSource>) -> anyhow::Result<Arc<Self>> {
+	pub async fn new(sources: Vec<ModelCatalogSource>) -> anyhow::Result<Arc<Self>> {
 		let catalog = Arc::new(Self::default());
 		if sources.is_empty() {
 			return Ok(catalog);
 		}
-		let file_paths: Vec<PathBuf> = sources
-			.iter()
-			.filter_map(|s| match s {
-				ModelCatalogSource::File { file } => Some(file.clone()),
-				ModelCatalogSource::Inline { .. } => None,
-				ModelCatalogSource::InlineCatalog { .. } => None,
-			})
-			.collect();
 		catalog.state.store(Arc::new(ModelCatalogState {
 			snapshot: Arc::new(CatalogSnapshot::empty()),
 			sources,
 		}));
-		tokio::spawn({
-			let catalog = catalog.clone();
-			async move {
-				if let Err(e) = catalog.reload().await {
-					warn!("model catalog load failed; will load when the files become valid: {e:#}")
-				}
-			}
-		});
-		if !file_paths.is_empty() {
-			watch_catalog_files(file_paths, catalog.clone())?;
+		if let Err(e) = catalog.reload().await {
+			warn!("model catalog load failed; will load when the files become valid: {e:#}")
 		}
+		catalog.update_file_watch()?;
 		Ok(catalog)
 	}
 
@@ -94,12 +81,19 @@ impl ModelCatalog {
 		self.state.load().snapshot.list_models()
 	}
 
-	pub async fn replace_sources(&self, sources: Vec<ModelCatalogSource>) -> anyhow::Result<()> {
+	pub async fn replace_sources(
+		self: &Arc<Self>,
+		sources: Vec<ModelCatalogSource>,
+	) -> anyhow::Result<()> {
+		if self.state.load().sources == sources {
+			return Ok(());
+		}
 		if sources.is_empty() {
 			self.state.store(Arc::new(ModelCatalogState {
 				snapshot: Arc::new(CatalogSnapshot::empty()),
 				sources,
 			}));
+			self.update_file_watch()?;
 			return Ok(());
 		}
 		let loaded = load_sources(&sources).await?;
@@ -108,6 +102,36 @@ impl ModelCatalog {
 			snapshot: Arc::new(loaded.snapshot),
 			sources,
 		}));
+		self.update_file_watch()?;
+		Ok(())
+	}
+
+	fn update_file_watch(self: &Arc<Self>) -> anyhow::Result<()> {
+		let file_paths = self
+			.state
+			.load()
+			.sources
+			.iter()
+			.filter_map(|source| match source {
+				ModelCatalogSource::File { file } => Some(file.clone()),
+				ModelCatalogSource::Inline { .. } | ModelCatalogSource::InlineCatalog { .. } => None,
+			})
+			.collect::<Vec<_>>();
+		let next = if file_paths.is_empty() {
+			None
+		} else {
+			Some(watch_catalog_files(file_paths, self.clone())?)
+		};
+		let previous = std::mem::replace(
+			&mut *self
+				.file_watch
+				.lock()
+				.expect("model catalog file watch mutex poisoned"),
+			next,
+		);
+		if let Some(previous) = previous {
+			previous.abort();
+		}
 		Ok(())
 	}
 
@@ -556,7 +580,10 @@ fn log_loaded_catalog(message: &'static str, snapshot: &CatalogSnapshot, missing
 	}
 }
 
-fn watch_catalog_files(file_paths: Vec<PathBuf>, catalog: Arc<ModelCatalog>) -> anyhow::Result<()> {
+fn watch_catalog_files(
+	file_paths: Vec<PathBuf>,
+	catalog: Arc<ModelCatalog>,
+) -> anyhow::Result<tokio::task::AbortHandle> {
 	let watch_options = crate::util::WatchFilesOptions::default()
 		.reload_on_disappearance(true)
 		.close_on_removal(true);
@@ -565,7 +592,7 @@ fn watch_catalog_files(file_paths: Vec<PathBuf>, catalog: Arc<ModelCatalog>) -> 
 		count = watched.paths().len(),
 		"watching model catalog files"
 	);
-	tokio::task::spawn(async move {
+	let task = tokio::task::spawn(async move {
 		while let Some(invalidated) = watched.changed_invalidated().await {
 			if let Err(e) = catalog.reload().await {
 				error!("failed to reload model catalog; keeping last valid catalog: {e:#}")
@@ -581,7 +608,7 @@ fn watch_catalog_files(file_paths: Vec<PathBuf>, catalog: Arc<ModelCatalog>) -> 
 			}
 		}
 	});
-	Ok(())
+	Ok(task.abort_handle())
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, EncodeLabelValue)]
@@ -741,6 +768,7 @@ mod tests {
 				snapshot: Arc::new(CatalogSnapshot::parse(json).unwrap()),
 				sources: Vec::new(),
 			}),
+			file_watch: Mutex::new(None),
 		}
 	}
 
@@ -1316,7 +1344,9 @@ mod tests {
 		let path = dir.path().join("catalog.json");
 		write_catalog(&path, "1").await;
 
-		let catalog = ModelCatalog::new(vec![ModelCatalogSource::File { file: path.clone() }]).unwrap();
+		let catalog = ModelCatalog::new(vec![ModelCatalogSource::File { file: path.clone() }])
+			.await
+			.unwrap();
 		wait_for_catalog_rate(&catalog, 1.0).await;
 
 		write_catalog(&path, "2").await;
@@ -1334,6 +1364,19 @@ mod tests {
 
 		replace_catalog(&path, "6").await;
 		wait_for_catalog_rate(&catalog, 6.0).await;
+
+		let replacement_path = dir.path().join("replacement.json");
+		write_catalog(&replacement_path, "7").await;
+		catalog
+			.replace_sources(vec![ModelCatalogSource::File {
+				file: replacement_path.clone(),
+			}])
+			.await
+			.unwrap();
+		wait_for_catalog_rate(&catalog, 7.0).await;
+
+		write_catalog(&replacement_path, "8").await;
+		wait_for_catalog_rate(&catalog, 8.0).await;
 	}
 
 	#[tokio::test]

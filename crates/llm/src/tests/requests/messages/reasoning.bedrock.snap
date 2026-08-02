@@ -19,31 +19,49 @@ info:
             scope: turn
 ---
 {
-  "modelId": "claude-opus-4-6",
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "text": "Give one concise insight about distributed consensus."
-        },
-        {
-          "cachePoint": {
-            "type": "default"
+  "request": {
+    "modelId": "claude-opus-4-6",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "Give one concise insight about distributed consensus."
+          },
+          {
+            "cachePoint": {
+              "type": "default"
+            }
           }
-        }
-      ]
-    }
-  ],
-  "inferenceConfig": {
-    "maxTokens": 1024
-  },
-  "additionalModelRequestFields": {
-    "thinking": {
-      "type": "adaptive"
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 1024
     },
-    "output_config": {
-      "effort": "high"
+    "additionalModelRequestFields": {
+      "thinking": {
+        "type": "adaptive"
+      },
+      "output_config": {
+        "effort": "high"
+      }
     }
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-opus-4-6",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Give one concise insight about distributed consensus."
+      }
+    ]
   }
 }

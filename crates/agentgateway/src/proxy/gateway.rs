@@ -136,6 +136,22 @@ pub struct Gateway {
 	drain: drain::DrainWatcher,
 }
 
+enum ActiveBind {
+	Task(AbortHandle),
+	PerCore(watch::Sender<()>),
+}
+
+impl ActiveBind {
+	fn stop(self) {
+		match self {
+			Self::Task(handle) => handle.abort(),
+			Self::PerCore(stop) => {
+				let _ = stop.send(());
+			},
+		}
+	}
+}
+
 impl Gateway {
 	pub fn new(pi: Arc<ProxyInputs>, drain: DrainWatcher) -> Gateway {
 		Gateway { drain, pi }
@@ -149,19 +165,19 @@ impl Gateway {
 			let mut binds = self.pi.stores.binds.write();
 			binds.subscribe()
 		};
-		let mut active: HashMap<BindKey, AbortHandle> = HashMap::new();
+		let mut active: HashMap<BindKey, ActiveBind> = HashMap::new();
 		let mut handle_bind = |js: &mut JoinSet<anyhow::Result<()>>, b: BindEvent| {
 			let (bind_key, bind, listeners) = match b {
 				BindEvent::Add(bind, listeners) => (bind.key.clone(), bind, listeners),
 				BindEvent::Remove(bind_key) => {
 					if let Some(h) = active.remove(&bind_key) {
-						h.abort();
+						h.stop();
 					}
 					return;
 				},
 			};
 			if let Some(h) = active.remove(&bind_key) {
-				h.abort();
+				h.stop();
 			}
 
 			debug!("add bind {}", bind.address);
@@ -171,13 +187,15 @@ impl Gateway {
 						Self::run_bind(self.pi.clone(), subdrain.clone(), Arc::new(bind), listener)
 							.in_current_span(),
 					);
-					active.insert(bind_key, task);
+					active.insert(bind_key, ActiveBind::Task(task));
 				},
 				BindListeners::PerCore(listeners) => {
+					let (stop, stop_rx) = watch::channel(());
 					for (core_id, listener) in listeners {
 						let subdrain = subdrain.clone();
 						let pi = self.pi.clone();
 						let bind = bind.clone();
+						let mut stop_rx = stop_rx.clone();
 						std::thread::spawn(move || {
 							let res = core_affinity::set_for_current(core_id);
 							if !res {
@@ -188,12 +206,15 @@ impl Gateway {
 								.build()
 								.unwrap()
 								.block_on(async {
-									let _ = Self::run_bind(pi, subdrain, Arc::new(bind), listener)
-										.in_current_span()
-										.await;
+									tokio::select! {
+										_ = stop_rx.changed() => {},
+										_ = Self::run_bind(pi, subdrain, Arc::new(bind), listener)
+											.in_current_span() => {},
+									}
 								})
 						});
 					}
+					active.insert(bind_key, ActiveBind::PerCore(stop));
 				},
 			}
 		};

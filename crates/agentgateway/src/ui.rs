@@ -413,9 +413,6 @@ async fn upsert_config_resources(
 				.map_err(resource_api_error)?;
 		}
 		persist_file_config(app, &config).await?;
-		if kind == ConfigResourceKind::ModelCatalog {
-			reload_file_model_catalog(app, &config).await?;
-		}
 		return Ok(UiConfigResourcesResponse {
 			resources: prepared.into_iter().map(UiConfigResource::from).collect(),
 		});
@@ -430,9 +427,6 @@ async fn upsert_config_resources(
 		.upsert_prepared(prepared)
 		.await
 		.map_err(resource_api_error)?;
-	if kind == ConfigResourceKind::ModelCatalog {
-		reload_model_catalog(app, &candidate).await?;
-	}
 	Ok(response.into())
 }
 
@@ -495,9 +489,6 @@ async fn update_config_resource(
 				.map_err(resource_api_error)?;
 		}
 		persist_file_config(&app, &config).await?;
-		if kind == ConfigResourceKind::ModelCatalog {
-			reload_file_model_catalog(&app, &config).await?;
-		}
 		return Ok(Json(UiConfigResourcesResponse {
 			resources: prepared.into_iter().map(UiConfigResource::from).collect(),
 		}));
@@ -588,9 +579,6 @@ async fn delete_config_resource(
 			))));
 		}
 		persist_file_config(&app, &config).await?;
-		if kind == ConfigResourceKind::ModelCatalog {
-			reload_file_model_catalog(&app, &config).await?;
-		}
 		return Ok(Json(
 			serde_json::json!({"status": "success", "message": "Configuration resource deleted successfully"}),
 		));
@@ -609,41 +597,9 @@ async fn delete_config_resource(
 	let candidate = crate::config_store::apply_delete(resources, kind, &id);
 	validate_materialized_config(&app, &candidate).await?;
 	store.delete(kind, &id).await.map_err(resource_api_error)?;
-	if kind == ConfigResourceKind::ModelCatalog {
-		reload_model_catalog(&app, &candidate).await?;
-	}
 	Ok(Json(
 		serde_json::json!({"status": "success", "message": "Configuration resource deleted successfully"}),
 	))
-}
-
-async fn reload_model_catalog(
-	app: &App,
-	resources: &[crate::config_store::ConfigResource],
-) -> Result<(), ErrorResponse> {
-	let mut sources =
-		crate::config_store::model_catalog_sources(resources).map_err(resource_api_error)?;
-	sources.extend(app.state.model_catalog.sources.clone());
-	app
-		.model_catalog
-		.replace_sources(sources)
-		.await
-		.map_err(resource_api_error)
-}
-
-async fn reload_file_model_catalog(app: &App, config: &Value) -> Result<(), ErrorResponse> {
-	let sources = config
-		.pointer("/config/modelCatalog")
-		.cloned()
-		.map(serde_json::from_value)
-		.transpose()
-		.map_err(|err| resource_api_error(anyhow::Error::from(err)))?
-		.unwrap_or_default();
-	app
-		.model_catalog
-		.replace_sources(sources)
-		.await
-		.map_err(resource_api_error)
 }
 
 async fn validate_materialized_config(

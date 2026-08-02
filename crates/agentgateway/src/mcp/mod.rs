@@ -262,6 +262,7 @@ pub enum MCPOperation {
 	Prompt,
 	Resource,
 	ResourceTemplates,
+	Task,
 }
 
 impl EncodeLabelValue for MCPOperation {
@@ -277,6 +278,7 @@ impl Display for MCPOperation {
 			MCPOperation::Prompt => write!(f, "prompt"),
 			MCPOperation::Resource => write!(f, "resource"),
 			MCPOperation::ResourceTemplates => write!(f, "templates"),
+			MCPOperation::Task => write!(f, "task"),
 		}
 	}
 }
@@ -301,6 +303,37 @@ pub struct MCPTool {
 }
 
 #[apply(schema!)]
+#[derive(Default, PartialEq)]
+pub struct MCPError {
+	pub code: i32,
+	pub message: String,
+}
+
+#[apply(schema!)]
+#[derive(Default, PartialEq, ::cel::DynamicType)]
+#[dynamic(rename_all = "camelCase")]
+pub struct MCPTask {
+	/// The target handling the task.
+	pub target: String,
+	/// The task ID.
+	pub name: String,
+}
+
+impl MCPTask {
+	pub fn new(target: String, name: String) -> Self {
+		Self { target, name }
+	}
+
+	pub fn target(&self) -> &str {
+		&self.target
+	}
+
+	pub fn name(&self) -> &str {
+		&self.name
+	}
+}
+
+#[apply(schema!)]
 #[derive(Default, PartialEq, ::cel::DynamicType)]
 #[dynamic(rename_all = "camelCase")]
 pub struct MCPInfo {
@@ -314,6 +347,14 @@ pub struct MCPInfo {
 	pub prompt: Option<ResourceId>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub resource: Option<ResourceId>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub task: Option<MCPTask>,
+	// Terminal errors arrive while the response body is drained. Keep them out of CEL so policy
+	// evaluation cannot depend on asynchronous stream timing; they are emitted as access-log fields.
+	#[dynamic(skip)]
+	#[cfg_attr(feature = "schema", schemars(skip))]
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub error: Option<MCPError>,
 }
 
 impl MCPInfo {
@@ -323,6 +364,8 @@ impl MCPInfo {
 			&& self.tool.is_none()
 			&& self.prompt.is_none()
 			&& self.resource.is_none()
+			&& self.task.is_none()
+			&& self.error.is_none()
 	}
 
 	pub fn resource_type(&self) -> Option<MCPOperation> {
@@ -332,6 +375,8 @@ impl MCPInfo {
 			Some(MCPOperation::Prompt)
 		} else if self.resource.is_some() {
 			Some(MCPOperation::Resource)
+		} else if self.task.is_some() {
+			Some(MCPOperation::Task)
 		} else {
 			None
 		}
@@ -344,9 +389,22 @@ impl MCPInfo {
 			.map(|tool| tool.target.as_str())
 			.or_else(|| self.prompt.as_ref().map(ResourceId::target))
 			.or_else(|| self.resource.as_ref().map(ResourceId::target))
+			.or_else(|| self.task.as_ref().map(MCPTask::target))
 	}
 
 	pub fn resource_name(&self) -> Option<&str> {
+		self
+			.tool
+			.as_ref()
+			.map(|tool| tool.name.as_str())
+			.or_else(|| self.prompt.as_ref().map(ResourceId::name))
+			.or_else(|| self.resource.as_ref().map(ResourceId::name))
+			.or_else(|| self.task.as_ref().map(MCPTask::name))
+	}
+
+	/// Like [`Self::resource_name`], but omits task IDs, which are unique per request and would
+	/// grow the metric label set without bound.
+	pub fn metric_resource_name(&self) -> Option<&str> {
 		self
 			.tool
 			.as_ref()
@@ -358,6 +416,7 @@ impl MCPInfo {
 	pub fn set_tool(&mut self, target: String, name: String) {
 		self.prompt = None;
 		self.resource = None;
+		self.task = None;
 		match self.tool.as_mut() {
 			Some(tool) => {
 				tool.target = target;
@@ -376,13 +435,22 @@ impl MCPInfo {
 	pub fn set_prompt(&mut self, target: String, name: String) {
 		self.tool = None;
 		self.resource = None;
+		self.task = None;
 		self.prompt = Some(ResourceId::new(target, name));
 	}
 
 	pub fn set_resource(&mut self, target: String, name: String) {
 		self.tool = None;
 		self.prompt = None;
+		self.task = None;
 		self.resource = Some(ResourceId::new(target, name));
+	}
+
+	pub fn set_task(&mut self, target: String, task_id: String) {
+		self.tool = None;
+		self.prompt = None;
+		self.resource = None;
+		self.task = Some(MCPTask::new(target, task_id));
 	}
 
 	pub fn capture_call_arguments(
@@ -402,7 +470,11 @@ impl MCPInfo {
 		}
 	}
 
-	pub fn capture_call_error<T: serde::Serialize>(&mut self, error: &T) {
+	pub fn capture_error(&mut self, error: &rmcp::ErrorData) {
+		self.error = Some(MCPError {
+			code: error.code.0,
+			message: error.message.to_string(),
+		});
 		if let Some(tool) = self.tool.as_mut() {
 			tool.error = serde_json::to_value(error).ok();
 		}
@@ -426,6 +498,13 @@ impl From<&ResourceType> for MCPInfo {
 			},
 			ResourceType::Resource(resource) => Self {
 				resource: Some(resource.clone()),
+				..Default::default()
+			},
+			ResourceType::Task(task) => Self {
+				task: Some(MCPTask::new(
+					task.target().to_string(),
+					task.name().to_string(),
+				)),
 				..Default::default()
 			},
 		}

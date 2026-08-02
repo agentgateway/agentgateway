@@ -13,34 +13,58 @@ info:
       content: Continue
 ---
 {
-  "modelId": "anthropic.claude-3-7-sonnet-20250219-v1:0",
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "text": "Hi"
-        }
-      ]
-    },
-    {
-      "role": "assistant",
-      "content": [
-        {
-          "text": "Hello"
-        }
-      ]
-    },
-    {
-      "role": "user",
-      "content": [
-        {
-          "text": "Continue"
-        }
-      ]
+  "request": {
+    "modelId": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "Hi"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "text": "Hello"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "Continue"
+          }
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 4096
     }
-  ],
-  "inferenceConfig": {
-    "maxTokens": 4096
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Hi"
+      },
+      {
+        "role": "assistant",
+        "content": "Hello"
+      },
+      {
+        "role": "user",
+        "content": "Continue"
+      }
+    ]
   }
 }

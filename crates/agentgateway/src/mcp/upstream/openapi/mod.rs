@@ -701,10 +701,23 @@ impl Handler {
 					BuildInfo::new().version.to_string(),
 				)),
 			),
-			ClientRequest::GetTaskRequest(_)
-			| ClientRequest::UpdateTaskRequest(_)
-			| ClientRequest::CancelTaskRequest(_) => {
-				return Err(UpstreamError::InvalidMethod(method.to_string()));
+			ClientRequest::GetTaskRequest(r) => {
+				return Err(UpstreamError::InvalidRequest(format!(
+					"unknown task {}",
+					r.params.task_id
+				)));
+			},
+			ClientRequest::UpdateTaskRequest(r) => {
+				return Err(UpstreamError::InvalidRequest(format!(
+					"unknown task {}",
+					r.params.task_id
+				)));
+			},
+			ClientRequest::CancelTaskRequest(r) => {
+				return Err(UpstreamError::InvalidRequest(format!(
+					"unknown task {}",
+					r.params.task_id
+				)));
 			},
 			ClientRequest::ReadResourceRequest(_) => {
 				Messages::from_result(id, ReadResourceResult::new(vec![]))

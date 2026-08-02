@@ -752,20 +752,21 @@ pub(crate) fn prepare_policy_upsert(
 	Ok(PreparedResource { kind, id, value })
 }
 
-pub fn model_catalog_sources(
+pub fn merge_model_catalog_sources(
 	resources: &[ConfigResource],
+	mut configured: Vec<crate::ModelCatalogSource>,
 ) -> anyhow::Result<Vec<crate::ModelCatalogSource>> {
 	let Some(resource) = resources
 		.iter()
 		.find(|resource| resource.kind == ConfigResourceKind::ModelCatalog)
 	else {
-		return Ok(Vec::new());
+		return Ok(configured);
 	};
 	let value = resource
 		.value
 		.as_object()
 		.ok_or_else(|| anyhow::anyhow!("modelCatalog resource must be an object"))?;
-	["base", "custom"]
+	let mut sources = ["base", "custom"]
 		.into_iter()
 		.filter_map(|field| value.get(field))
 		.map(|inline| {
@@ -773,7 +774,9 @@ pub fn model_catalog_sources(
 				inline: serde_json::from_value(inline.clone())?,
 			})
 		})
-		.collect()
+		.collect::<anyhow::Result<Vec<_>>>()?;
+	sources.append(&mut configured);
+	Ok(sources)
 }
 
 pub(crate) fn apply_prepared_upsert(
@@ -847,6 +850,9 @@ fn overlay_config_resources(
 	let has_ui_resources = resources
 		.iter()
 		.any(|resource| resource.kind == ConfigResourceKind::UiPolicy);
+	let has_model_catalog = resources
+		.iter()
+		.any(|resource| resource.kind == ConfigResourceKind::ModelCatalog);
 	let has_mcp_resources = resources.iter().any(|resource| {
 		matches!(
 			resource.kind,
@@ -866,8 +872,27 @@ fn overlay_config_resources(
 	let has_llm_policies = resources
 		.iter()
 		.any(|resource| resource.kind == ConfigResourceKind::LlmPolicy);
-	if !has_llm_resources && !has_mcp_resources && !has_traffic_resources && !has_ui_resources {
+	if !has_llm_resources
+		&& !has_mcp_resources
+		&& !has_traffic_resources
+		&& !has_ui_resources
+		&& !has_model_catalog
+	{
 		return Ok(());
+	}
+
+	if has_model_catalog {
+		let configured = config
+			.pointer("/config/modelCatalog")
+			.cloned()
+			.map(serde_json::from_value)
+			.transpose()?
+			.unwrap_or_default();
+		let sources = merge_model_catalog_sources(resources, configured)?;
+		*ensure_file_array(config, &["config", "modelCatalog"])? = serde_json::to_value(sources)?
+			.as_array()
+			.expect("model catalog sources serialize as an array")
+			.clone();
 	}
 
 	let Some(root) = config.as_object_mut() else {
@@ -1920,6 +1945,13 @@ mod tests {
 	#[test]
 	fn materializes_config_resources_into_base_config() {
 		let base = r#"
+config:
+  modelCatalog:
+  - inline:
+      providers:
+        file:
+          models:
+            file-model: {}
 llm:
   models:
   - name: file-model
@@ -1935,6 +1967,21 @@ mcp:
       host: http://localhost:3001/mcp
 "#;
 		let resources = vec![
+			test_resource(
+				ConfigResourceKind::ModelCatalog,
+				"default",
+				json!({
+					"custom": {
+						"providers": {
+							"database": {
+								"models": {
+									"database-model": {}
+								}
+							}
+						}
+					}
+				}),
+			),
 			test_resource(
 				ConfigResourceKind::LlmProvider,
 				"openai",
@@ -2022,6 +2069,14 @@ mcp:
 		let materialized = materialize_config(base, &resources).expect("materialize");
 		let value: Value = crate::yamlviajson::from_str(&materialized).expect("parse materialized");
 
+		assert_eq!(
+			value.pointer("/config/modelCatalog/0/inline/providers/database/models/database-model"),
+			Some(&json!({}))
+		);
+		assert_eq!(
+			value.pointer("/config/modelCatalog/1/inline/providers/file/models/file-model"),
+			Some(&json!({}))
+		);
 		assert_eq!(
 			value.pointer("/llm/providers/0/name"),
 			Some(&json!("openai"))

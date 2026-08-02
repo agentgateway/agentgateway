@@ -9,21 +9,37 @@ info:
   reasoning_effort: xhigh
 ---
 {
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "type": "text",
-          "text": "Deeply analyze quantum gravity"
-        }
-      ]
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Deeply analyze quantum gravity"
+          }
+        ]
+      }
+    ],
+    "model": "claude-opus-4-6",
+    "max_tokens": 4096,
+    "thinking": {
+      "type": "enabled",
+      "budget_tokens": 8192
     }
-  ],
-  "model": "claude-opus-4-6",
-  "max_tokens": 4096,
-  "thinking": {
-    "type": "enabled",
-    "budget_tokens": 8192
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-opus-4-6",
+    "provider": "anthropic",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Deeply analyze quantum gravity"
+      }
+    ]
   }
 }
