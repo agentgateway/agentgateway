@@ -828,10 +828,25 @@ fn broker_safe_redirect(uri: &str) -> bool {
 			Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
 			None => false,
 		},
-		// Custom schemes (cursor://, vscode://, ...). A successfully parsed URL always has a scheme.
-		scheme => !scheme.is_empty(),
+		// Custom app schemes MCP clients register (cursor://, vscode://, ...). Reject the
+		// pseudo-schemes a browser could execute or use to reach the local machine when it follows
+		// the relay's 302 (XSS / local-file / SSRF vectors); none of these are real MCP redirects.
+		// `url` lower-cases the scheme, so these comparisons are case-insensitive.
+		scheme => !DANGEROUS_REDIRECT_SCHEMES.contains(&scheme),
 	}
 }
+
+/// Schemes that must never be used as a broker relay target: a browser following the callback's
+/// 302 `Location` could execute them or reach the local machine.
+const DANGEROUS_REDIRECT_SCHEMES: [&str; 7] = [
+	"javascript",
+	"data",
+	"vbscript",
+	"file",
+	"blob",
+	"about",
+	"filesystem",
+];
 
 /// Rewrite the client's `/authorize` query for Entra in broker mode: drop `resource` (rejected by
 /// Entra) plus the client's `redirect_uri`/`state`, and substitute the broker callback URL and the
@@ -869,8 +884,17 @@ fn broker_callback_location(
 		ser.append_pair("state", client_state);
 	}
 	let query = ser.finish();
-	let separator = if redirect_uri.contains('?') { '&' } else { '?' };
-	format!("{redirect_uri}{separator}{query}")
+	// The query must go before any fragment: `base#frag` becomes `base?query#frag`, never
+	// `base#frag?query` (which would fold the query into the fragment and drop the code).
+	let (base, fragment) = match redirect_uri.split_once('#') {
+		Some((base, fragment)) => (base, Some(fragment)),
+		None => (redirect_uri, None),
+	};
+	let separator = if base.contains('?') { '&' } else { '?' };
+	match fragment {
+		Some(fragment) => format!("{base}{separator}{query}#{fragment}"),
+		None => format!("{base}{separator}{query}"),
+	}
 }
 
 /// Rewrite the `/token` form in broker mode: pin the authorization-code `redirect_uri` to the
@@ -1513,6 +1537,24 @@ mod tests {
 	}
 
 	#[test]
+	fn broker_safe_redirect_blocks_dangerous_schemes() {
+		// A browser following the relay's 302 could execute or resolve these; none are real MCP
+		// client redirects. Includes mixed case, which `url` normalizes to lower case.
+		for uri in [
+			"javascript:alert(document.cookie)",
+			"JavaScript:alert(1)",
+			"data:text/html,<script>alert(1)</script>",
+			"vbscript:msgbox(1)",
+			"file:///etc/passwd",
+			"blob:https://evil.example.com/uuid",
+			"about:blank",
+			"filesystem:https://evil.example.com/temporary/x",
+		] {
+			assert!(!broker_safe_redirect(uri), "{uri} should be blocked");
+		}
+	}
+
+	#[test]
 	fn broker_authorize_query_swaps_redirect_and_state_keeps_rest() {
 		let query = "response_type=code&client_id=cid&redirect_uri=cursor%3A%2F%2Fcb&state=client-xyz&scope=api%3A%2F%2Fcid%2Fmcp_access+offline_access&code_challenge=abc&code_challenge_method=S256&resource=https%3A%2F%2Fgw%2Fmcp";
 		let out = broker_authorize_query(query, "https://gw/callback", "broker-state-1");
@@ -1561,6 +1603,26 @@ mod tests {
 		let parsed = form_map(loc.split_once('?').unwrap().1);
 		assert_eq!(parsed["code"], "X");
 		assert!(!parsed.contains_key("state"));
+	}
+
+	#[test]
+	fn broker_callback_location_places_query_before_fragment() {
+		// A redirect URI with a fragment must become `base?query#frag`, not `base#frag?query`
+		// (which would fold the code into the fragment).
+		let loc = broker_callback_location(
+			"cursor://cb#/oauth",
+			"code=AUTH123&state=broker-1",
+			Some("client-xyz"),
+		);
+		let (before_fragment, fragment) = loc.split_once('#').expect("fragment preserved");
+		assert_eq!(fragment, "/oauth");
+		assert!(
+			before_fragment.starts_with("cursor://cb?"),
+			"unexpected location: {loc}"
+		);
+		let parsed = form_map(before_fragment.split_once('?').unwrap().1);
+		assert_eq!(parsed["code"], "AUTH123");
+		assert_eq!(parsed["state"], "client-xyz");
 	}
 
 	#[test]
