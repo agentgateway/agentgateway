@@ -687,6 +687,39 @@ async fn copilot_claude_responses_request_uses_messages_route() {
 	assert_eq!(body["messages"][0]["content"][0]["text"], "say hi");
 }
 
+#[test]
+fn copilot_claude_captured_codex_request_applies_provider_policy() {
+	let request: types::responses::Request = serde_json::from_str(include_str!(
+		"../../../llm/src/conversion/messages/fixtures/codex_cli_0_146_0.json"
+	))
+	.expect("captured Codex Responses request");
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+
+	let rendered = ChatTranslation {
+		input: InputFormat::Responses,
+		output: ChatFormat::AnthropicMessages,
+	}
+	.render_request(
+		types::ChatRequest::Responses(request),
+		&ChatRequestContext {
+			provider: &provider,
+			headers: &HeaderMap::new(),
+			prompt_caching: None,
+		},
+	)
+	.expect("captured Codex request should render for Copilot Claude");
+
+	assert!(matches!(
+		rendered.provider_state,
+		Some(ProviderState::ResponsesToMessages { .. })
+	));
+	let body: Value = serde_json::from_slice(&rendered.body).expect("Messages request");
+	let tools = body["tools"].as_array().expect("Messages tools");
+	assert_eq!(tools.len(), 10);
+	assert!(tools.iter().any(|tool| tool["name"] == "exec_command"));
+	assert!(!tools.iter().any(|tool| tool["name"] == "web_search"));
+}
+
 #[tokio::test]
 async fn copilot_claude_responses_route_preserves_path_with_host_override() {
 	use crate::http::auth::BackendInfo;
