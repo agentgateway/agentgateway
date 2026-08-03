@@ -12,7 +12,7 @@ Copilot models whose IDs start with `claude-` use Anthropic Messages as their na
 | --- | --- | --- |
 | `/v1/messages` | `/v1/messages` | Anthropic Messages passthrough, with Copilot-specific compatibility handling (see below) |
 | `/v1/responses` | `/v1/messages` | Direct Responses-to-Messages conversion |
-| `/v1/chat/completions` | `/v1/messages` | Existing Chat-to-Messages conversion |
+| `/v1/chat/completions` | `/v1/messages` | Chat-to-Messages conversion |
 
 Copilot exposes a narrower Anthropic Messages dialect than native Anthropic: it rejects the
 top-level `context_management` field and some `anthropic-beta` header entries (confirmed:

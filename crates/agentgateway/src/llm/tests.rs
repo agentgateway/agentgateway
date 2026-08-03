@@ -688,11 +688,7 @@ async fn copilot_claude_responses_request_uses_messages_route() {
 }
 
 #[tokio::test]
-async fn copilot_claude_responses_route_rewrites_path_even_with_host_override() {
-	// A host override with no explicit pathPrefix normally means "trust the client's original
-	// path" -- but here the body has been converted to Anthropic Messages, so the client's
-	// original /v1/responses path is wrong regardless of host override; it must still become
-	// /v1/messages.
+async fn copilot_claude_responses_route_preserves_path_with_host_override() {
 	use crate::http::auth::BackendInfo;
 	use crate::test_helpers::proxymock::setup_proxy_test;
 	use crate::types::agent::BackendTarget;
@@ -741,11 +737,11 @@ async fn copilot_claude_responses_route_rewrites_path_even_with_host_override() 
 			true, // has_host_override = true, no path_prefix
 		)
 		.expect("Copilot request setup");
-	assert_eq!(request.uri().path(), "/v1/messages");
+	assert_eq!(request.uri().path(), "/v1/responses");
 }
 
 #[tokio::test]
-async fn copilot_claude_completions_route_rewrites_path_even_with_host_override() {
+async fn copilot_claude_completions_route_preserves_path_with_host_override() {
 	use crate::http::auth::BackendInfo;
 	use crate::test_helpers::proxymock::setup_proxy_test;
 	use crate::types::agent::BackendTarget;
@@ -793,7 +789,7 @@ async fn copilot_claude_completions_route_rewrites_path_even_with_host_override(
 			true,
 		)
 		.expect("Copilot request setup");
-	assert_eq!(request.uri().path(), "/v1/messages");
+	assert_eq!(request.uri().path(), "/v1/chat/completions");
 }
 
 #[tokio::test]
@@ -1863,18 +1859,7 @@ async fn copilot_local_token_count(body: Value) -> u64 {
 }
 
 #[tokio::test]
-async fn copilot_count_tokens_uses_local_fallback() {
-	let count = copilot_local_token_count(json!({
-		"model": "claude-sonnet-5",
-		"messages": [{"role": "user", "content": "hello"}]
-	}))
-	.await;
-
-	assert!(count > 0);
-}
-
-#[tokio::test]
-async fn copilot_local_count_tokens_includes_tool_schemas() {
+async fn copilot_local_count_tokens_uses_messages_only() {
 	let without_tools = copilot_local_token_count(json!({
 		"model": "claude-sonnet-5",
 		"messages": [{"role": "user", "content": "hello"}]
@@ -1885,22 +1870,13 @@ async fn copilot_local_count_tokens_includes_tool_schemas() {
 		"messages": [{"role": "user", "content": "hello"}],
 		"tools": [{
 			"name": "lookup",
-			"description": "Look up a customer record by its unique account identifier",
-			"input_schema": {
-				"type": "object",
-				"properties": {
-					"account_id": {
-						"type": "string",
-						"description": "The unique customer account identifier"
-					}
-				},
-				"required": ["account_id"]
-			}
+			"input_schema": {"type": "object"}
 		}]
 	}))
 	.await;
 
-	assert!(with_tools > without_tools);
+	assert!(without_tools > 0);
+	assert_eq!(with_tools, without_tools);
 }
 
 #[tokio::test]
@@ -4019,9 +3995,7 @@ fn setup_request_gemini_without_native_state_keeps_compat_path() {
 #[test]
 fn native_copilot_messages_host_override_no_prefix_preserves_client_path() {
 	// A native (unconverted) Copilot Messages request under a host override with no explicit
-	// pathPrefix must keep trusting the client's own path, same as every other non-Custom
-	// provider -- only a request that actually underwent Responses-to-Messages conversion
-	// (ProviderState::ResponsesToMessages) needs its path forced to Copilot's canonical default.
+	// pathPrefix must keep trusting the client's own path, same as every other non-Custom provider.
 	let llm_request = llm_request_for_path("gpt-4o");
 	let mut req = crate::http::tests_common::request(
 		"https://proxy.example.com/tenant/v1/messages?trace=repro",

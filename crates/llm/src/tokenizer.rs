@@ -3,18 +3,6 @@ use tiktoken_rs::tokenizer::{Tokenizer, get_tokenizer};
 
 use crate::{AIError, SimpleChatCompletionMessage};
 
-pub fn num_tokens_from_text(model: &str, text: &str) -> Result<u64, AIError> {
-	let tokenizer = get_tokenizer(model).unwrap_or(Tokenizer::Cl100kBase);
-	if tokenizer != Tokenizer::Cl100kBase && tokenizer != Tokenizer::O200kBase {
-		return Err(AIError::UnsupportedModel);
-	}
-	Ok(
-		get_bpe_from_tokenizer(tokenizer)
-			.encode_with_special_tokens(text)
-			.len() as u64,
-	)
-}
-
 pub fn num_tokens_from_messages(
 	model: &str,
 	messages: &[SimpleChatCompletionMessage],

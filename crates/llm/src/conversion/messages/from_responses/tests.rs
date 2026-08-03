@@ -2097,6 +2097,21 @@ fn stream_completed_output_byte_count_matches_serialized_vector() {
 	);
 }
 
+#[tokio::test]
+async fn stream_terminal_phase_counts_toward_retained_limit() {
+	let mut frames = text_stream_prefix();
+	frames.push(block_stop(0));
+	frames.extend(stream_terminal("end_turn", 1));
+	let events = translated_body(axum_core::body::Body::from(frames.concat()), 258).await;
+
+	assert!(
+		events
+			.iter()
+			.any(|event| event["type"] == "response.output_text.done")
+	);
+	assert_one_safe_stream_error(&events, "terminal phase exceeds retained limit");
+}
+
 #[test]
 fn stream_adjacent_text_output_byte_count_matches_serialized_vector() {
 	let mut state = super::ResponsesStreamState::default();
@@ -2474,7 +2489,7 @@ fn buffered_response_preserves_order_wrappers_usage_and_stable_ids() {
 	assert_eq!(output.len(), 9);
 	assert_eq!(output[0]["type"], "message");
 	assert_eq!(output[0]["id"], "msg_msg_upstream_123_0");
-	assert_eq!(output[0]["phase"], "final_answer");
+	assert_eq!(output[0]["phase"], "commentary");
 	assert_eq!(output[0]["content"][0]["text"], "one");
 	assert_eq!(output[0]["content"][1]["text"], "two");
 	assert_eq!(output[1]["type"], "function_call");
@@ -2513,6 +2528,96 @@ fn buffered_response_preserves_order_wrappers_usage_and_stable_ids() {
 	assert_eq!(output[8]["type"], "message");
 	assert_eq!(output[8]["id"], "msg_msg_upstream_123_9");
 	assert_eq!(output[8]["content"][0]["text"], "after");
+	// Trailing text is still not the final answer while the turn waits on a tool result.
+	assert_eq!(output[8]["phase"], "commentary");
+}
+
+/// `phase` labels an assistant message as intermediate commentary or the final answer. A
+/// `tool_use` stop reason means the model is asking the client to run a tool and continue, so
+/// nothing in that turn is the final answer.
+#[rstest::rstest]
+#[case::tool_use("tool_use", true, "commentary")]
+#[case::end_turn("end_turn", false, "final_answer")]
+#[case::stop_sequence("stop_sequence", false, "final_answer")]
+#[case::max_tokens("max_tokens", false, "final_answer")]
+fn buffered_message_phase_marks_unfinished_turns_as_commentary(
+	#[case] stop_reason: &str,
+	#[case] with_tool: bool,
+	#[case] expected_phase: &str,
+) {
+	let mut content = vec![json!({"type":"text","text":"checking"})];
+	if with_tool {
+		content.push(json!({
+			"type":"tool_use","id":"call_0","name":"weather","input":{"city":"Paris"}
+		}));
+	}
+	let stop_sequence = if stop_reason == "stop_sequence" {
+		json!("STOP")
+	} else {
+		serde_json::Value::Null
+	};
+	let body = buffered_body(json!(content), stop_reason, stop_sequence, buffered_usage());
+
+	let value = buffered_value(body, &buffered_state());
+
+	assert_eq!(value["output"][0]["type"], "message");
+	assert_eq!(value["output"][0]["phase"], expected_phase);
+}
+
+/// Streaming cannot know the phase when the text item is announced, so the authoritative value
+/// lands on the terminal `output_item.done` and `response.completed` items.
+#[rstest::rstest]
+#[case::tool_use("tool_use", true, "commentary")]
+#[case::end_turn("end_turn", false, "final_answer")]
+#[tokio::test]
+async fn stream_message_phase_marks_unfinished_turns_as_commentary(
+	#[case] stop_reason: &str,
+	#[case] with_tool: bool,
+	#[case] expected_phase: &str,
+) {
+	let mut frames = vec![
+		stream_message_start(),
+		block_start(0, json!({"type":"text","text":""})),
+		block_delta(0, json!({"type":"text_delta","text":"checking"})),
+		block_stop(0),
+	];
+	if with_tool {
+		frames.extend([
+			block_start(
+				1,
+				json!({"type":"tool_use","id":"call_0","name":"weather","input":{}}),
+			),
+			block_delta(
+				1,
+				json!({"type":"input_json_delta","partial_json":"{\"city\":\"Paris\"}"}),
+			),
+			block_stop(1),
+		]);
+	}
+	frames.extend(stream_terminal(stop_reason, 3));
+
+	let events = translated_stream(frames, buffered_state()).await;
+
+	// The in-flight item cannot claim a phase it does not yet know.
+	let added = events
+		.iter()
+		.find(|event| {
+			event["type"] == "response.output_item.added" && event["item"]["type"] == "message"
+		})
+		.expect("message output_item.added");
+	assert_eq!(added["item"].get("phase"), None);
+	let done = events
+		.iter()
+		.find(|event| {
+			event["type"] == "response.output_item.done" && event["item"]["type"] == "message"
+		})
+		.expect("message output_item.done");
+	assert_eq!(done["item"]["phase"], expected_phase);
+	let completed = events
+		.iter()
+		.find(|event| event["type"] == "response.completed")
+		.expect("response.completed");
+	assert_eq!(completed["response"]["output"][0]["phase"], expected_phase);
 }
 
 #[test]
