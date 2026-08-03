@@ -1,0 +1,11 @@
+gatewayClassName: agentgateway-secondary
+controllerName: test.agentgateway.dev/secondary
+
+discoveryNamespaceSelectors:
+  - matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: In
+        values:
+          - agentgateway-secondary
+  - matchLabels:
+      e2e.agentgateway.dev/controller: secondary
