@@ -605,6 +605,9 @@ impl<'a> Value<'a> {
 				}
 				let left: Value<'a> = resolve(left_op)?;
 				if select.test {
+					if let Value::Dynamic(d) = &left {
+						return Ok(Value::Bool(d.field(&select.field).is_some()));
+					}
 					match left.always_materialize().as_ref() {
 						Value::Map(map) => {
 							let b = map.contains_key(&KeyRef::String(select.field.as_str().into()));
@@ -1740,6 +1743,55 @@ mod tests {
 					_ => None,
 				}
 			}
+		}
+
+		/// Reports whether `materialize()` was called, so a test can assert that
+		/// an operation stayed on the lazy `field()` path.
+		#[derive(Debug, Default)]
+		struct CountingDynamic {
+			materialized: std::sync::atomic::AtomicUsize,
+		}
+
+		impl DynamicType for CountingDynamic {
+			fn materialize(&self) -> Value<'_> {
+				self
+					.materialized
+					.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+				let mut map = vector_map::VecMap::with_capacity(1);
+				map.insert(crate::objects::KeyRef::from("field"), Value::from("value"));
+				Value::Map(crate::objects::MapValue::Borrow(map))
+			}
+
+			fn field(&self, field: &str) -> Option<Value<'_>> {
+				match field {
+					"field" => Some(Value::from("value")),
+					_ => None,
+				}
+			}
+		}
+
+		#[test]
+		fn test_has_over_dynamic_does_not_materialize() {
+			let value = CountingDynamic::default();
+
+			let mut vars = MapResolver::new();
+			vars.add_variable_from_value("mine", Value::Dynamic(DynamicValue::new(&value)));
+			let ctx = Context::default();
+			for (src, want) in [("has(mine.field)", true), ("has(mine.missing)", false)] {
+				let prog = Program::compile(src).unwrap();
+				assert_eq!(
+					Ok(Value::Bool(want)),
+					prog.execute_with(&ctx, &vars),
+					"{src}"
+				);
+			}
+			assert_eq!(
+				0,
+				value
+					.materialized
+					.load(std::sync::atomic::Ordering::Relaxed),
+				"has() should answer from field(), not by materializing the value"
+			);
 		}
 
 		#[test]
