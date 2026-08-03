@@ -547,7 +547,13 @@ impl ChatTranslation {
 				return Ok(rendered);
 			},
 			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Copilot(_)) => {
-				let mut rendered = render_anthropic_messages(req)?;
+				let mut rendered = match req {
+					types::ChatRequest::Responses(req) => {
+						let req = copilot::prepare_responses_request(&req);
+						render_anthropic_messages(types::ChatRequest::Responses(req))?
+					},
+					req => render_anthropic_messages(req)?,
+				};
 				rendered.body = strip_copilot_unsupported_messages_fields(rendered.body)?;
 				return Ok(rendered);
 			},

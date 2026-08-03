@@ -25,8 +25,9 @@ subagent, and the parent continuation after that subagent returned. All five con
 aliases also passed short Responses, Chat Completions, and Messages probes. Background and parallel
 subagents, context compaction near the limit, and long-running sessions have not been tested.
 
-The Responses converter is stateless and requires `store: false`. Streaming requests must also set
-`stream_options.include_obfuscation: false`. Caller metadata and cache hints (`client_metadata`,
+The Responses converter is stateless and requires `store: false`. Streaming requests may omit
+`stream_options`. When present, `include_obfuscation` must be `false`. The converter does not add
+OpenAI stream-obfuscation padding. Caller metadata and cache hints (`client_metadata`,
 `metadata`, `prompt_cache_key`, and `prompt_cache_retention`) are discarded because Messages has no
 equivalent and they do not change the converted request. It adds no provider configuration and covers
 the supported overlap between Responses and Messages, including streaming, tools, media, refusals, and usage.
@@ -38,9 +39,35 @@ Copilot may emit adaptive-thinking blocks by default for some Claude models. Bec
 history are not representable through this bridge, the converter validates those blocks and omits them from
 buffered and streaming Responses output. Malformed thinking blocks still return a conversion error.
 
-Reasoning requests, reasoning history, encrypted content, and hosted execution are rejected. Shell and patch tools
-run through fixed local schemas. Other unsupported Responses features return a conversion error instead of losing
-data during translation.
+Codex and Copilot's automatic reasoning-summary and encrypted-reasoning hints are discarded because this bridge
+does not return reasoning content. Reasoning efforts from `low` through `max` request Anthropic adaptive thinking
+with the matching effort, while `none` requests no thinking. Unsupported effort and summary values still fail
+instead of losing requested behavior. The provider-neutral converter rejects hosted `web_search` because Messages
+cannot preserve either live or cache-only search. For Copilot Claude Responses only, the Copilot request policy
+removes Codex's default `{"type":"web_search","external_web_access":false}` declaration when tool choice is absent
+or automatic. Live search, ambiguous declarations, malformed values, and explicitly selected hosted search still
+fail instead of losing requested behavior. Shell and patch tools run through fixed local schemas. Other unsupported
+Responses features return a conversion error instead of losing data during translation.
+
+Every Responses field the converter still rejects was classified against one test: whether dropping it could
+change execution, data handling, or security. None can be dropped safely. Each known field below returns its
+own error rather than sharing one message; an unrecognised field reports only that an unsupported field was
+present, because its name comes from the caller.
+
+| Rejected field | Why it cannot be ignored |
+| --- | --- |
+| `store` other than `false` | The converter holds no server-side state, so accepting it would promise a retrievable response that does not exist. |
+| `previous_response_id`, `conversation`, `prompt` | Name server-side state this bridge does not hold. |
+| `background` | Requests deferred execution the bridge does not provide. |
+| `logprobs`, `top_logprobs` | Request output Messages does not return. |
+| `max_tool_calls` | Bounds tool calling that the model would otherwise exceed. |
+| `service_tier` | Selects an upstream tier the converted request cannot carry. |
+| `truncation` other than `disabled` | Server-side history trimming changes what reaches the model. |
+| `text.verbosity` | Changes the generated output. |
+| `include` beyond `reasoning.encrypted_content` | Requests output items the bridge cannot produce. |
+| `stream_options` beyond `include_obfuscation: false` | The converter emits no obfuscation padding. |
+| hosted `web_search` | Generic conversion rejects it because removing a requested tool could change execution. Copilot policy has one documented cache-only automatic exception. |
+| `vendor_extensions` and unknown effectful fields | Unknown semantics could change execution. |
 
 In order to facilitate maximum compatibility (across providers or across versions, as new fields are added),
 we use a "passthrough" approach to parsing. Each message includes a final `rest` field that stores all unknown fields:
