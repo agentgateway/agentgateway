@@ -550,7 +550,6 @@ type MCPBackend struct {
 	// +listMapKey=name
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=32
-	// +kubebuilder:validation:XValidation:message="target names must be unique",rule="self.all(t1, self.exists_one(t2, t1.name == t2.name))"
 	// +required
 	Targets []McpTargetSelector `json:"targets"`
 
