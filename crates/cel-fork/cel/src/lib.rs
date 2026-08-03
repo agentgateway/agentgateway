@@ -131,6 +131,37 @@ pub enum ExecutionError {
 }
 
 impl ExecutionError {
+	pub fn kind(&self) -> &'static str {
+		match self {
+			ExecutionError::InvalidArgumentCount { .. } => "invalid-argument-count",
+			ExecutionError::UnsupportedTargetType { .. } => "unsupported-target-type",
+			ExecutionError::NotSupportedAsMethod { .. } => "not-supported-as-method",
+			ExecutionError::UnsupportedKeyType(_) => "unsupported-key-type",
+			ExecutionError::UnexpectedType { .. } => "unexpected-type",
+			ExecutionError::NoSuchKey(_) => "no-such-key",
+			ExecutionError::NoSuchOverload => "no-such-overload",
+			ExecutionError::UndeclaredReference(_) => "undeclared-reference",
+			ExecutionError::MissingArgumentOrTarget => "missing-argument-or-target",
+			ExecutionError::UnsupportedStruct => "unsupported-struct",
+			ExecutionError::ValuesNotComparable(_, _) => "values-not-comparable",
+			ExecutionError::UnsupportedUnaryOperator(_, _) => "unsupported-unary-operator",
+			ExecutionError::UnsupportedBinaryOperator(_, _, _) => "unsupported-binary-operator",
+			ExecutionError::UnsupportedMapIndex(_) => "unsupported-map-index",
+			ExecutionError::UnsupportedListIndex(_) => "unsupported-list-index",
+			ExecutionError::UnsupportedIndex(_, _) => "unsupported-index",
+			ExecutionError::UnsupportedFunctionCallIdentifierType(_) => {
+				"unsupported-function-call-identifier-type"
+			},
+			ExecutionError::UnsupportedFieldsConstruction(_) => "unsupported-fields-construction",
+			ExecutionError::FunctionError { .. } => "function-error",
+			ExecutionError::DivisionByZero(_) => "division-by-zero",
+			ExecutionError::RemainderByZero(_) => "remainder-by-zero",
+			ExecutionError::Overflow(_, _, _) => "overflow",
+			ExecutionError::Conversion(_, _) => "conversion",
+			ExecutionError::IndexOutOfBounds(_) => "index-out-of-bounds",
+		}
+	}
+
 	pub fn no_such_key(name: &str) -> Self {
 		ExecutionError::NoSuchKey(Arc::from(name))
 	}
