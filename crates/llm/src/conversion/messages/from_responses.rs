@@ -69,7 +69,8 @@ struct WrappedTool {
 pub fn translate(req: &types::responses::Request) -> Result<(Vec<u8>, State), AIError> {
 	let raw = serde_json::to_value(req).map_err(AIError::RequestMarshal)?;
 	let output_format = responses_output_format(&raw)?;
-	let mut state = validate_top_level(&raw)?;
+	let reasoning_effort = validate_top_level(&raw)?;
+	let mut state = State::default();
 	if req
 		.temperature
 		.is_some_and(|temperature| !temperature.is_finite() || !(0.0..=1.0).contains(&temperature))
@@ -93,10 +94,11 @@ pub fn translate(req: &types::responses::Request) -> Result<(Vec<u8>, State), AI
 			AIError::UnsupportedConversion(strng::literal!("Responses max_output_tokens is too large"))
 		})?
 		.unwrap_or(4096);
-	let output_config = output_format.map(|format| messages::OutputConfig {
-		effort: None,
-		format: Some(format),
-	});
+	let output_config =
+		(reasoning_effort.is_some() || output_format.is_some()).then_some(messages::OutputConfig {
+			effort: reasoning_effort,
+			format: output_format,
+		});
 	let user_id = raw
 		.get("safety_identifier")
 		.and_then(serde_json::Value::as_str)
@@ -123,7 +125,7 @@ pub fn translate(req: &types::responses::Request) -> Result<(Vec<u8>, State), AI
 		tools: (!tools.is_empty()).then_some(tools),
 		tool_choice,
 		metadata,
-		thinking: None,
+		thinking: reasoning_effort.map(|_| messages::ThinkingInput::Adaptive {}),
 		output_config,
 	};
 	let body = serde_json::to_vec(&translated).map_err(AIError::RequestMarshal)?;
@@ -512,10 +514,7 @@ fn response_usage(
 		.and_then(|tokens| u32::try_from(tokens).ok())
 		.ok_or(())?;
 	let output_tokens = u32::try_from(output).map_err(|_| ())?;
-	let cache_write_tokens = (cache_creation > 0)
-		.then(|| u32::try_from(cache_creation))
-		.transpose()
-		.map_err(|_| ())?;
+	let cache_write_tokens = Some(u32::try_from(cache_creation).map_err(|_| ())?);
 	let reasoning_tokens = thinking
 		.map(u32::try_from)
 		.transpose()
@@ -1878,7 +1877,9 @@ fn invalid_response() -> AIError {
 	AIError::InvalidResponse(strng::literal!("invalid Anthropic Messages response"))
 }
 
-fn validate_top_level(raw: &serde_json::Value) -> Result<State, AIError> {
+fn validate_top_level(
+	raw: &serde_json::Value,
+) -> Result<Option<messages::ThinkingEffort>, AIError> {
 	let object = raw.as_object().ok_or_else(|| {
 		AIError::UnsupportedConversion(strng::literal!("unsupported Responses request"))
 	})?;
@@ -1915,7 +1916,7 @@ fn validate_top_level(raw: &serde_json::Value) -> Result<State, AIError> {
 		"user",
 		"vendor_extensions",
 	];
-	if has_unknown_field(object, &known) {
+	if has_effectful_unknown_field(object, &known) {
 		return Err(AIError::UnsupportedConversion(strng::literal!(
 			"unsupported Responses request field"
 		)));
@@ -1935,25 +1936,25 @@ fn validate_top_level(raw: &serde_json::Value) -> Result<State, AIError> {
 			"Responses requests must set store to false"
 		)));
 	}
-	if ["previous_response_id", "conversation", "prompt"]
-		.into_iter()
-		.any(|field| object.get(field).is_some_and(has_effect))
-	{
-		return Err(AIError::UnsupportedConversion(strng::literal!(
-			"Responses server-side conversation state is unsupported"
-		)));
+	for (field, message) in [
+		(
+			"previous_response_id",
+			"Responses previous_response_id is unsupported",
+		),
+		("conversation", "Responses conversation is unsupported"),
+		("prompt", "Responses prompt is unsupported"),
+	] {
+		if object.get(field).is_some_and(has_effect) {
+			return Err(AIError::UnsupportedConversion(strng::new(message)));
+		}
 	}
 	if !absent_or_false(object.get("background")) {
 		return Err(AIError::UnsupportedConversion(strng::literal!(
 			"Responses background mode is unsupported"
 		)));
 	}
-	let stream = object
-		.get("stream")
-		.and_then(serde_json::Value::as_bool)
-		.unwrap_or(false);
 	let valid_stream_options = match object.get("stream_options") {
-		None => !stream,
+		None => true,
 		Some(serde_json::Value::Object(options)) => {
 			options.len() == 1
 				&& options.get("include_obfuscation") == Some(&serde_json::Value::Bool(false))
@@ -1962,14 +1963,14 @@ fn validate_top_level(raw: &serde_json::Value) -> Result<State, AIError> {
 	};
 	if !valid_stream_options {
 		return Err(AIError::UnsupportedConversion(strng::literal!(
-			"Responses stream options must explicitly disable obfuscation"
+			"Responses stream options must be omitted or disable obfuscation"
 		)));
 	}
 	match object.get("logprobs") {
 		None | Some(serde_json::Value::Null | serde_json::Value::Bool(false)) => {},
 		Some(serde_json::Value::Bool(true)) => {
 			return Err(AIError::UnsupportedConversion(strng::literal!(
-				"unsupported Responses request option"
+				"Responses logprobs are unsupported"
 			)));
 		},
 		Some(_) => {
@@ -1978,13 +1979,14 @@ fn validate_top_level(raw: &serde_json::Value) -> Result<State, AIError> {
 			)));
 		},
 	}
-	if ["max_tool_calls", "service_tier", "top_logprobs"]
-		.into_iter()
-		.any(|field| object.get(field).is_some_and(has_effect))
-	{
-		return Err(AIError::UnsupportedConversion(strng::literal!(
-			"unsupported Responses request option"
-		)));
+	for (field, message) in [
+		("max_tool_calls", "Responses max_tool_calls is unsupported"),
+		("service_tier", "Responses service_tier is unsupported"),
+		("top_logprobs", "Responses top_logprobs is unsupported"),
+	] {
+		if object.get(field).is_some_and(has_effect) {
+			return Err(AIError::UnsupportedConversion(strng::new(message)));
+		}
 	}
 	let valid_truncation = match object.get("truncation") {
 		None => true,
@@ -2018,20 +2020,19 @@ fn validate_top_level(raw: &serde_json::Value) -> Result<State, AIError> {
 			"Responses vendor extensions are unsupported"
 		)));
 	}
-	let valid_reasoning = match object.get("reasoning") {
-		None => true,
-		Some(serde_json::Value::Object(reasoning)) => {
-			reasoning.len() == 1
-				&& reasoning.get("effort").and_then(serde_json::Value::as_str) == Some("none")
+	let reasoning_effort = responses_reasoning_effort(object)?;
+	let valid_include = match object.get("include") {
+		None | Some(serde_json::Value::Null) => true,
+		Some(serde_json::Value::Array(values)) => {
+			values.is_empty()
+				|| matches!(
+					values.as_slice(),
+					[serde_json::Value::String(value)] if value == "reasoning.encrypted_content"
+				)
 		},
 		Some(_) => false,
 	};
-	if !valid_reasoning {
-		return Err(AIError::UnsupportedConversion(strng::literal!(
-			"Responses reasoning is unsupported"
-		)));
-	}
-	if object.contains_key("include") {
+	if !valid_include {
 		return Err(AIError::UnsupportedConversion(strng::literal!(
 			"Responses include is unsupported"
 		)));
@@ -2047,6 +2048,7 @@ fn validate_top_level(raw: &serde_json::Value) -> Result<State, AIError> {
 		"metadata",
 		"prompt_cache_key",
 		"prompt_cache_retention",
+		"reasoning",
 	] {
 		typed_object.remove(field);
 	}
@@ -2056,9 +2058,31 @@ fn validate_top_level(raw: &serde_json::Value) -> Result<State, AIError> {
 	serde_json::from_value::<types::responses::typed::CreateResponse>(typed).map_err(|_| {
 		AIError::UnsupportedConversion(strng::literal!("unsupported Responses request field"))
 	})?;
-	Ok(State {
-		tools: HashMap::new(),
-	})
+	Ok(reasoning_effort)
+}
+
+fn responses_reasoning_effort(
+	object: &serde_json::Map<String, serde_json::Value>,
+) -> Result<Option<messages::ThinkingEffort>, AIError> {
+	let invalid =
+		|| AIError::UnsupportedConversion(strng::literal!("Responses reasoning is unsupported"));
+	let Some(reasoning) = object.get("reasoning") else {
+		return Ok(None);
+	};
+	let reasoning = reasoning.as_object().ok_or_else(invalid)?;
+	let valid_summary = reasoning
+		.get("summary")
+		.is_none_or(|summary| matches!(summary.as_str(), Some("auto" | "concise" | "detailed")));
+	if has_effectful_unknown_field(reasoning, &["effort", "summary"]) || !valid_summary {
+		return Err(invalid());
+	}
+	match reasoning.get("effort") {
+		None => Ok(None),
+		Some(serde_json::Value::String(effort)) if effort == "none" => Ok(None),
+		Some(effort) => serde_json::from_value(effort.clone())
+			.map(Some)
+			.map_err(|_| invalid()),
+	}
 }
 
 fn has_effect(value: &serde_json::Value) -> bool {
@@ -2073,6 +2097,15 @@ fn has_effect(value: &serde_json::Value) -> bool {
 
 fn has_unknown_field(object: &serde_json::Map<String, serde_json::Value>, known: &[&str]) -> bool {
 	object.keys().any(|key| !known.contains(&key.as_str()))
+}
+
+fn has_effectful_unknown_field(
+	object: &serde_json::Map<String, serde_json::Value>,
+	known: &[&str],
+) -> bool {
+	object
+		.iter()
+		.any(|(key, value)| !known.contains(&key.as_str()) && has_effect(value))
 }
 
 fn absent_or_false(value: Option<&serde_json::Value>) -> bool {
@@ -2159,6 +2192,16 @@ fn translate_tools(
 				state,
 				&mut declarations,
 			)?,
+			Some("web_search")
+				if !has_unknown_field(object, &["type", "external_web_access"])
+					&& object
+						.get("external_web_access")
+						.is_some_and(serde_json::Value::is_boolean) =>
+			{
+				return Err(AIError::UnsupportedConversion(strng::literal!(
+					"Responses hosted web search is unsupported"
+				)));
+			},
 			_ => return Err(invalid_tool_declaration()),
 		}
 	}

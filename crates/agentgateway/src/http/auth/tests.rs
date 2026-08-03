@@ -536,6 +536,12 @@ async fn test_aws_sign_request_explicit_region() {
 		.headers()
 		.get(http::header::AUTHORIZATION)
 		.expect("authorization header must be set");
+	assert!(
+		auth
+			.to_str()
+			.expect("authorization header must be valid ASCII")
+			.contains("/us-west-2/bedrock/aws4_request")
+	);
 
 	// Part 2
 	// now, repeat with adefault region to make sure explicit region takes precedence
@@ -560,8 +566,12 @@ async fn test_aws_sign_request_explicit_region() {
 		.headers()
 		.get(http::header::AUTHORIZATION)
 		.expect("authorization header must be set");
-
-	assert_eq!(auth, auth2, "Signatures should match with explicit region");
+	assert!(
+		auth2
+			.to_str()
+			.expect("authorization header must be valid ASCII")
+			.contains("/us-west-2/bedrock/aws4_request")
+	);
 }
 
 #[tokio::test]
