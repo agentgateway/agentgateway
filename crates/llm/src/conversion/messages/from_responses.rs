@@ -239,6 +239,7 @@ pub fn translate_response(
 		&response.id,
 		response.content,
 		status,
+		message_phase(stop_reason),
 		refusal,
 		state,
 		buffer_limit,
@@ -474,6 +475,16 @@ fn terminal_status(
 	}
 }
 
+/// `phase` labels an assistant message as intermediate commentary or the final answer. A
+/// `tool_use` stop reason means the model is asking the client to run a tool and continue, so no
+/// message in that turn is the final answer. Every other terminal stop reason ends the turn.
+fn message_phase(stop_reason: messages::StopReason) -> responses::MessagePhase {
+	match stop_reason {
+		messages::StopReason::ToolUse => responses::MessagePhase::Commentary,
+		_ => responses::MessagePhase::FinalAnswer,
+	}
+}
+
 fn responses_usage(usage: &messages::Usage) -> Result<responses::ResponseUsage, AIError> {
 	response_usage(
 		usage.input_tokens,
@@ -537,6 +548,7 @@ fn response_output(
 	message_id: &str,
 	content: Vec<messages::ContentBlock>,
 	status: &str,
+	phase: responses::MessagePhase,
 	refusal: bool,
 	state: &State,
 	buffer_limit: usize,
@@ -571,6 +583,7 @@ fn response_output(
 			&mut pending_text,
 			message_id,
 			status,
+			phase,
 			buffer_limit,
 			&mut retained_bytes,
 		)?;
@@ -589,6 +602,7 @@ fn response_output(
 		&mut pending_text,
 		message_id,
 		status,
+		phase,
 		buffer_limit,
 		&mut retained_bytes,
 	)?;
@@ -597,7 +611,7 @@ fn response_output(
 			"type": "message",
 			"id": format!("msg_{message_id}_0"),
 			"role": "assistant",
-			"phase": "final_answer",
+			"phase": phase,
 			"status": status,
 			"content": [{"type": "refusal", "refusal": ""}],
 		});
@@ -635,6 +649,7 @@ fn flush_response_text(
 	pending: &mut Option<(usize, Vec<serde_json::Value>)>,
 	message_id: &str,
 	status: &str,
+	phase: responses::MessagePhase,
 	buffer_limit: usize,
 	retained_bytes: &mut usize,
 ) -> Result<(), AIError> {
@@ -643,7 +658,7 @@ fn flush_response_text(
 			"type": "message",
 			"id": format!("msg_{message_id}_{index}"),
 			"role": "assistant",
-			"phase": "final_answer",
+			"phase": phase,
 			"status": status,
 			"content": content,
 		});
@@ -986,7 +1001,9 @@ fn stream_message_item(
 		},
 		id: item_id,
 		role: responses::AssistantRole::Assistant,
-		phase: Some(responses::MessagePhase::FinalAnswer),
+		// Commentary and final answer cannot be told apart until the terminal stop reason
+		// arrives, so the in-flight item omits phase and the terminal loop fills it in.
+		phase: None,
 		status,
 	})
 }
@@ -1003,7 +1020,7 @@ fn stream_empty_refusal_item(
 		)],
 		id: item_id,
 		role: responses::AssistantRole::Assistant,
-		phase: Some(responses::MessagePhase::FinalAnswer),
+		phase: None,
 		status,
 	})
 }
@@ -1744,10 +1761,19 @@ pub fn translate_stream(
 					} else {
 						responses::OutputStatus::Incomplete
 					};
-					let mut output = std::mem::take(&mut stream.output);
-					for item in &mut output {
+					for item in &mut stream.output {
 						set_output_item_status(item, output_status)?;
+						if let responses::OutputItem::Message(message) = item {
+							message.phase = Some(message_phase(stop_reason));
+						}
 					}
+					stream.retained_output_bytes = serde_json::to_vec(&stream.output)
+						.map_err(|_| ())?
+						.len()
+						.checked_sub(2)
+						.ok_or(())?;
+					stream.ensure_retained_limit(buffer_limit, &model)?;
+					let output = std::mem::take(&mut stream.output);
 					if log_content.tool_calls {
 						let content = output
 							.iter()

@@ -42,7 +42,7 @@ info:
         ],
         "id": "[id]",
         "role": "assistant",
-        "phase": "final_answer",
+        "phase": "commentary",
         "status": "completed"
       },
       {

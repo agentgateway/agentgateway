@@ -6,9 +6,7 @@ use ::http::uri::{Authority, PathAndQuery};
 use ::http::{HeaderMap, HeaderName, HeaderValue, header};
 use agent_core::prelude::Strng;
 use agent_core::strng;
-pub use agent_llm::tokenizer::{
-	num_tokens_from_messages, num_tokens_from_text, preload_tokenizers,
-};
+pub use agent_llm::tokenizer::{num_tokens_from_messages, preload_tokenizers};
 pub use agent_llm::{
 	AIError, CacheTokenConvention, ChatFormat, InputFormat, LLMInfo, LLMRequest, LLMRequestParams,
 	LLMResponse, LogContentFields, PromptCachingConfig, Provider, ProviderState, RequestType,
@@ -1239,30 +1237,7 @@ impl AIProvider {
 			return Ok(());
 		}
 
-		// A host override with no explicit pathPrefix normally means "trust the client's original
-		// path" -- correct for a native (unconverted) request, since the client's path is already
-		// right for whatever host serves it. But `route_type` here is the upstream wire route
-		// after any server-side format conversion (e.g. a Responses-format client request
-		// converted to an Anthropic Messages body for a Claude model via Copilot), and in that
-		// case the client's original path is guaranteed wrong for the now-translated body
-		// regardless of host override -- copilot::path_suffix(route_type) below is the one fixed,
-		// correct upstream path for that wire format. Only force the rewrite when a conversion
-		// actually produced this route, so a native request under a host override still keeps its
-		// operator-configured path untouched.
-		let converted_wire_route = llm_request.is_some_and(|request| {
-			matches!(
-				(request.input_format, route_type),
-				(
-					InputFormat::Completions | InputFormat::Responses,
-					RouteType::Messages
-				)
-			)
-		});
-		if has_host_override
-			&& path_prefix.is_none()
-			&& !matches!(self, AIProvider::Custom(_))
-			&& !converted_wire_route
-		{
+		if has_host_override && path_prefix.is_none() && !matches!(self, AIProvider::Custom(_)) {
 			return Ok(());
 		}
 
@@ -1685,15 +1660,15 @@ impl AIProvider {
 		// Some Anthropic-compatible clients (e.g. Claude Code) always call
 		// `/v1/messages/count_tokens`. For providers/models without a native
 		// count-tokens endpoint, we must still answer this route, so we fall
-		// back to local token estimation using the complete normalized request.
+		// back to local token estimation using the normalized messages payload.
 		let use_local = !self.supports_format(
 			custom::ProviderFormat::AnthropicTokenCount,
 			req.model.as_deref(),
 		);
 		if use_local {
+			let messages = req.get_messages();
 			let model = req.model.as_deref().unwrap_or_default();
-			let request = serde_json::to_string(&req).map_err(AIError::RequestMarshal)?;
-			let count = num_tokens_from_text(model, &request)?;
+			let count = num_tokens_from_messages(model, &messages)?;
 			let body = serde_json::to_vec(&types::count_tokens::Response {
 				input_tokens: count,
 			})
