@@ -22,7 +22,7 @@ info:
     ],
     "generationConfig": {
       "thinkingConfig": {
-        "thinkingBudget": 2048,
+        "thinkingBudget": 8192,
         "includeThoughts": true
       }
     }

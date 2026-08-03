@@ -21,6 +21,21 @@ pub enum ChatRequest<'a> {
 	Responses(&'a responses::Request),
 }
 
+pub(crate) fn thinking_budget_for_reasoning_effort(
+	effort: &completions::typed::ReasoningEffort,
+) -> Option<u64> {
+	use completions::typed::ReasoningEffort;
+
+	match effort {
+		ReasoningEffort::None => None,
+		ReasoningEffort::Minimal | ReasoningEffort::Low => Some(1024),
+		ReasoningEffort::Medium => Some(2048),
+		ReasoningEffort::High => Some(4096),
+		ReasoningEffort::Xhigh => Some(8192),
+		ReasoningEffort::Max => Some(16384),
+	}
+}
+
 /// ResponseType is an abstraction over provider/endpoint specific response formats that enables
 /// uniform policy enforcement and observability
 pub trait ResponseType: Send + Sync {

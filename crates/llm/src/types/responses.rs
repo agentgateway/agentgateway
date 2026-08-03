@@ -128,6 +128,9 @@ pub struct Request {
 	pub stream: Option<bool>,
 
 	#[serde(skip_serializing_if = "Option::is_none")]
+	pub instructions: Option<String>,
+
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub vendor_extensions: Option<RequestVendorExtensions>,
 
 	// Everything else (tools, reasoning, etc.) - passthrough
@@ -398,7 +401,16 @@ impl RequestType for Request {
 	}
 
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage> {
-		match &self.input {
+		let mut messages = self
+			.instructions
+			.as_ref()
+			.map(|instructions| SimpleChatCompletionMessage {
+				role: strng::literal!("system"),
+				content: strng::new(instructions),
+			})
+			.into_iter()
+			.collect::<Vec<_>>();
+		messages.extend(match &self.input {
 			RequestInput::Text(text) => {
 				vec![SimpleChatCompletionMessage {
 					role: strng::literal!("user"),
@@ -409,10 +421,20 @@ impl RequestType for Request {
 				.iter()
 				.filter_map(RawInputItem::as_simple_message)
 				.collect(),
-		}
+		});
+		messages
 	}
 
-	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
+	fn set_messages(&mut self, mut messages: Vec<SimpleChatCompletionMessage>) {
+		if self.instructions.is_some() {
+			self.instructions = messages
+				.first()
+				.filter(|message| matches!(message.role.as_str(), "developer" | "system"))
+				.map(|message| message.content.to_string());
+			if self.instructions.is_some() {
+				messages.remove(0);
+			}
+		}
 		self.input = RequestInput::Items(
 			messages
 				.into_iter()
@@ -422,6 +444,9 @@ impl RequestType for Request {
 	}
 
 	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		if let Some(instructions) = &mut self.instructions {
+			f(instructions);
+		}
 		match &mut self.input {
 			RequestInput::Text(text) => f(text),
 			RequestInput::Items(items) => {
@@ -457,8 +482,11 @@ pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMess
 	let OutputItem::FunctionCall(call) = item else {
 		return None;
 	};
-	let arguments =
-		serde_json::from_str(&call.arguments).unwrap_or(serde_json::Value::Object(Default::default()));
+	let arguments = match serde_json::from_str(&call.arguments) {
+		Ok(arguments) => arguments,
+		Err(_) if call.arguments.trim().is_empty() => serde_json::Value::Object(Default::default()),
+		Err(_) => serde_json::Value::String(call.arguments.clone()),
+	};
 	Some(OutputMessagePart::ToolCall {
 		id: strng::new(&call.call_id),
 		name: strng::new(&call.name),
@@ -685,6 +713,40 @@ mod tests {
 			usage: None,
 			rest: serde_json::Value::Null,
 		}
+	}
+
+	#[test]
+	fn instructions_round_trip_through_messages() {
+		let mut request: Request = serde_json::from_value(serde_json::json!({
+			"model": "gpt-4.1",
+			"instructions": "original instruction",
+			"input": [
+				{"role": "system", "content": "input system message"},
+				{"role": "user", "content": "hello"},
+			],
+		}))
+		.unwrap();
+		let mut messages = request.get_messages();
+		assert_eq!(messages[0].role.as_str(), "system");
+		assert_eq!(messages[1].role.as_str(), "system");
+		messages[0].content = strng::literal!("masked instruction");
+		messages[1].content = strng::literal!("masked input system message");
+
+		request.set_messages(messages);
+
+		assert_eq!(request.instructions.as_deref(), Some("masked instruction"));
+		let input = match &request.input {
+			RequestInput::Items(items) => items,
+			RequestInput::Text(_) => panic!("rewritten messages should use structured input"),
+		};
+		assert_eq!(input.len(), 2);
+		assert_eq!(input[0].0["role"], "system");
+		assert_eq!(input[0].0["content"][0]["type"], "input_text");
+		assert_eq!(
+			input[0].0["content"][0]["text"],
+			"masked input system message"
+		);
+		assert_eq!(input[1].0["role"], "user");
 	}
 
 	#[test]

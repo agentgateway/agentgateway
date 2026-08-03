@@ -21,5 +21,8 @@ data: [DONE]
 {
   "input_tokens": 15,
   "output_tokens": 142,
-  "total_tokens": 157
+  "total_tokens": 157,
+  "completion": [
+    "\nOnce upon a time, there was a little boy named Jack who loved to play with his friends in the park. His favorite activity was to climb the tallest tree and swing on the strongest branch. One day, Jack and his friends were playing when they heard a loud noise coming from the tree. They ran over to investigate and found a large bird trapped inside.\n\nJack knew that he had to help the bird, so he climbed up the tree and gently removed the bird from the branches. The bird was grateful and thanked Jack for his help. From that day on, Jack became known as the bird whisperer in the park and everyone loved to hear his stories about the birds he had helped."
+  ]
 }

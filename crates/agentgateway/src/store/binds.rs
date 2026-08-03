@@ -858,14 +858,33 @@ impl Store {
 			bind.listeners.insert(listener);
 		}
 
-		let listeners = if self.binds.contains_key(&key) {
-			None
-		} else if bind.mode == agent::BindMode::Internal {
+		let was_internal = old_bind
+			.as_deref()
+			.is_some_and(|old| old.mode == agent::BindMode::Internal);
+		let transitioning_to_internal = old_bind
+			.as_deref()
+			.is_some_and(|old| old.mode != agent::BindMode::Internal)
+			&& bind.mode == agent::BindMode::Internal;
+		let address_changed = old_bind
+			.as_deref()
+			.is_some_and(|old| old.address != bind.address);
+
+		// A bind's key is stable across mode changes. Explicitly stop the accept loop when
+		// an existing bind becomes internal; merely replacing the stored Bind leaves the
+		// Gateway's listener task running. Address changes with a stable key likewise need
+		// to replace the old socket.
+		if transitioning_to_internal || (address_changed && !was_internal) {
+			let _ = self.tx.send(BindEvent::Remove(key.clone()));
+		}
+
+		let listeners = if bind.mode == agent::BindMode::Internal {
 			// Internal binds are routing-only; they never open an OS socket and thus never
 			// emit a BindEvent::Add (which is what spawns the accept loop). They are still
 			// inserted into `self.binds` below so find_bind/find_bind_by_port and in-process
 			// re-entry via proxy_bind can reach them.
 			debug!(bind=%key, "internal bind; not opening a listener socket");
+			None
+		} else if old_bind.is_some() && !was_internal && !address_changed {
 			None
 		} else {
 			match self.bind_listeners(bind.address) {
@@ -2183,6 +2202,7 @@ mod tests {
 	use std::time::Duration;
 
 	use frozen_collections::FzHashSet;
+	use tokio_stream::StreamExt;
 
 	use super::*;
 	use crate::telemetry::log::OrderedStringMap;
@@ -2199,6 +2219,57 @@ mod tests {
 			listener_name: strng::literal!("listener"),
 			listener_set: None,
 		}
+	}
+
+	#[tokio::test]
+	async fn bind_mode_changes_reconcile_listener_events() {
+		let probe = StdTcpListener::bind("127.0.0.1:0").expect("reserve an available port");
+		let address = probe.local_addr().expect("probe has an address");
+		drop(probe);
+
+		let mut store = Store::with_ipv6_enabled(true);
+		let mut events = store.subscribe();
+		let mut bind = Bind {
+			key: strng::literal!("bind/test"),
+			address,
+			protocol: BindProtocol::http,
+			tunnel_protocol: TunnelProtocol::Direct,
+			mode: agent::BindMode::Standard,
+			listeners: ListenerSet::default(),
+		};
+
+		store.insert_bind(bind.clone());
+		assert!(
+			matches!(events.next().await, Some(BindEvent::Add(_, _))),
+			"a new standard bind should open a listener"
+		);
+
+		bind.mode = agent::BindMode::Internal;
+		store.insert_bind(bind.clone());
+		assert!(
+			matches!(events.next().await, Some(BindEvent::Remove(key)) if key == bind.key),
+			"changing a standard bind to internal should stop its listener"
+		);
+
+		bind.mode = agent::BindMode::Standard;
+		store.insert_bind(bind.clone());
+		assert!(
+			matches!(events.next().await, Some(BindEvent::Add(_, _))),
+			"changing an internal bind to standard should open a listener"
+		);
+
+		let probe = StdTcpListener::bind("127.0.0.1:0").expect("reserve another available port");
+		bind.address = probe.local_addr().expect("probe has an address");
+		drop(probe);
+		store.insert_bind(bind.clone());
+		assert!(
+			matches!(events.next().await, Some(BindEvent::Remove(key)) if key == bind.key),
+			"changing a standard bind's address should stop its old listener"
+		);
+		assert!(
+			matches!(events.next().await, Some(BindEvent::Add(updated, _)) if updated.address == bind.address),
+			"changing a standard bind's address should open its new listener"
+		);
 	}
 
 	fn route(name: &'static str, namespace: &'static str, kind: Option<&'static str>) -> RouteName {

@@ -66,6 +66,21 @@ func TestAgentgatewayModelSupportedKindsFeatureGate(t *testing.T) {
 	}
 }
 
+func TestGetAgentgatewayModelStatus(t *testing.T) {
+	model := &agentgateway.AgentgatewayModel{
+		Status: agentgateway.AgentgatewayModelStatus{
+			Parents: []gwv1.RouteParentStatus{{
+				ParentRef: gwv1.ParentReference{Name: "gateway"},
+			}},
+		},
+	}
+
+	got := GetStatus[*agentgateway.AgentgatewayModel, agentgateway.AgentgatewayModelStatus](model)
+	if len(got.Parents) != 1 || got.Parents[0].ParentRef.Name != "gateway" {
+		t.Fatalf("status = %#v, want live AgentgatewayModel status", got)
+	}
+}
+
 func TestModelLLMProvider(t *testing.T) {
 	t.Run("default provider", func(t *testing.T) {
 		providerType := agentgateway.ModelProviderOpenAI

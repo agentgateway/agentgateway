@@ -26,6 +26,8 @@ pub struct Request {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub seed: Option<i64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
+	pub reasoning_effort: Option<typed::ReasoningEffort>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub stream_options: Option<StreamOptions>,
 
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -278,7 +280,11 @@ fn extract_output_messages(choices: &[Choice]) -> Option<Vec<OutputMessage>> {
 						let arguments = function
 							.get("arguments")
 							.and_then(|v| v.as_str())
-							.and_then(|s| serde_json::from_str(s).ok())
+							.map(|s| match serde_json::from_str(s) {
+								Ok(arguments) => arguments,
+								Err(_) if s.trim().is_empty() => serde_json::Value::Object(Default::default()),
+								Err(_) => serde_json::Value::String(s.to_owned()),
+							})
 							.unwrap_or(serde_json::Value::Object(Default::default()));
 
 						content.push(OutputMessagePart::ToolCall {

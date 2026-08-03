@@ -25,5 +25,32 @@ data: [DONE]
 {
   "input_tokens": 150,
   "output_tokens": 45,
-  "total_tokens": 195
+  "total_tokens": 195,
+  "completion": [
+    ""
+  ],
+  "output_messages": [
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_call",
+          "id": "tooluse_kZJMlvQmRJ6eAyJE5GIl7Q",
+          "name": "top_song",
+          "arguments": {
+            "sign": "WZPZ"
+          }
+        },
+        {
+          "type": "tool_call",
+          "id": "tooluse_kZJMlvQmRJ6eAyxxx",
+          "name": "hello",
+          "arguments": {
+            "sign": "world"
+          }
+        }
+      ],
+      "finish_reason": "tool_calls"
+    }
+  ]
 }

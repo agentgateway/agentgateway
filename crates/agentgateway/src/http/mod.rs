@@ -519,12 +519,10 @@ pub fn modify_req_uri(
 	req: &mut Request,
 	f: impl FnOnce(&mut uri::Parts) -> anyhow::Result<()>,
 ) -> anyhow::Result<()> {
-	let nreq = std::mem::take(req);
-	let (mut head, body) = nreq.into_parts();
-	let mut parts = head.uri.into_parts();
+	let mut parts = req.uri().clone().into_parts();
 	f(&mut parts)?;
-	head.uri = Uri::from_parts(parts)?;
-	*req = Request::from_parts(head, body);
+	let uri = Uri::from_parts(parts)?;
+	*req.uri_mut() = uri;
 	Ok(())
 }
 
@@ -984,6 +982,28 @@ mod tests {
 		modify_query_parameters(&mut uri, std::iter::empty::<(&str, &str)>(), ["remove"]).unwrap();
 
 		assert_eq!(uri.to_string(), "https://example.com/resource");
+	}
+
+	#[tokio::test]
+	async fn modify_req_uri_preserves_request_on_invalid_uri() {
+		let mut req = ::http::Request::builder()
+			.method(::http::Method::POST)
+			.uri("/request")
+			.header("x-test", "value")
+			.body(Body::from("body"))
+			.unwrap();
+
+		let result = modify_req_uri(&mut req, |parts| {
+			parts.scheme = Some(Scheme::HTTPS);
+			Ok(())
+		});
+
+		assert!(result.is_err());
+		assert_eq!(req.method(), ::http::Method::POST);
+		assert_eq!(req.uri(), "/request");
+		assert_eq!(req.headers().get("x-test").unwrap(), "value");
+		let body = read_body_with_limit(req.into_body(), 100).await.unwrap();
+		assert_eq!(body, "body");
 	}
 
 	#[test]

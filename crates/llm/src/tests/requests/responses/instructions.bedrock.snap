@@ -4,7 +4,8 @@ description: src/tests/requests/responses/instructions.json
 info:
   model: gpt-4o
   max_output_tokens: 1024
-  input: What is the weather like in San Francisco? Use the get_weather tool.
+  instructions: Always use the get_weather tool for weather questions.
+  input: What is the weather like in San Francisco?
 ---
 {
   "request": {
@@ -14,9 +15,14 @@ info:
         "role": "user",
         "content": [
           {
-            "text": "What is the weather like in San Francisco? Use the get_weather tool."
+            "text": "What is the weather like in San Francisco?"
           }
         ]
+      }
+    ],
+    "system": [
+      {
+        "text": "Always use the get_weather tool for weather questions."
       }
     ],
     "inferenceConfig": {
@@ -34,8 +40,12 @@ info:
     },
     "prompt": [
       {
+        "role": "system",
+        "content": "Always use the get_weather tool for weather questions."
+      },
+      {
         "role": "user",
-        "content": "What is the weather like in San Francisco? Use the get_weather tool."
+        "content": "What is the weather like in San Francisco?"
       }
     ]
   }

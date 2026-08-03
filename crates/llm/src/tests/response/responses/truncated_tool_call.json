@@ -1,0 +1,15 @@
+{
+  "id": "resp_truncated_tool_call",
+  "status": "incomplete",
+  "model": "gpt-x",
+  "output": [
+    {
+      "type": "function_call",
+      "id": "fc_1",
+      "call_id": "call_1",
+      "name": "get_weather",
+      "arguments": "{\"location\": \"Par",
+      "status": "completed"
+    }
+  ]
+}

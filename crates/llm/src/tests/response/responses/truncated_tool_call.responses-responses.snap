@@ -1,0 +1,49 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/responses/truncated_tool_call.json
+info:
+  id: resp_truncated_tool_call
+  status: incomplete
+  model: gpt-x
+  output:
+    - type: function_call
+      id: fc_1
+      call_id: call_1
+      name: get_weather
+      arguments: "{\"location\": \"Par"
+      status: completed
+---
+{
+  "response": {
+    "id": "[id]",
+    "status": "incomplete",
+    "output": [
+      {
+        "type": "function_call",
+        "arguments": "{\"location\": \"Par",
+        "call_id": "call_1",
+        "name": "get_weather",
+        "id": "[id]",
+        "status": "completed"
+      }
+    ],
+    "model": "gpt-x"
+  },
+  "parsed": {
+    "provider_model": "gpt-x",
+    "output_messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_call",
+            "id": "call_1",
+            "name": "get_weather",
+            "arguments": "{\"location\": \"Par"
+          }
+        ],
+        "finish_reason": "incomplete"
+      }
+    ]
+  }
+}
