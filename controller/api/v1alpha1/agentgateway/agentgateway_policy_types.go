@@ -2325,6 +2325,7 @@ type MCPGuardrailsRemote struct {
 	DisallowedRequestHeaders []HeaderName `json:"disallowedRequestHeaders,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!has(self.brokerCallback) || !self.brokerCallback || (has(self.signingKeyRef) && has(self.clientId))",message="brokerCallback requires signingKeyRef and clientId"
 type MCPAuthentication struct {
 	// Metadata to use for MCP resources.
 	// +optional
@@ -2370,6 +2371,23 @@ type MCPAuthentication struct {
 	// override via `clientSecretRef.key`.
 	// +optional
 	ClientSecretRef *LocalSecretKeyRef `json:"clientSecretRef,omitempty"`
+
+	// Enable broker-callback mode for the Entra provider. When set, the gateway presents Entra
+	// a single, pre-registered Web-platform redirect (`<served-metadata-path>/callback`) for
+	// every MCP client and relays the authorization code back to each client's own redirect URI.
+	// This removes per-client redirect-URI registration (Entra has no Dynamic Client
+	// Registration) and keeps every sign-in browser-classified. Requires `clientId` and
+	// `signingKeyRef` (and, for Web-platform confidential apps, `clientSecretRef`).
+	// +optional
+	BrokerCallback *bool `json:"brokerCallback,omitempty"`
+
+	// Reference to a Kubernetes Secret holding the HMAC key that signs the stateless
+	// broker-callback state token. Required when `brokerCallback` is enabled. It is dedicated to
+	// callback integrity and independent of `clientSecretRef`, so it also works for public
+	// clients and can be rotated on its own. Defaults to the `signingKey` key; override via
+	// `signingKeyRef.key`.
+	// +optional
+	SigningKeyRef *LocalSecretKeyRef `json:"signingKeyRef,omitempty"`
 }
 
 // +k8s:enum

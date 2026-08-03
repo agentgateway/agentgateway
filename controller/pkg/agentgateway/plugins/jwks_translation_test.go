@@ -111,3 +111,36 @@ func TestTranslateMCPAuthenticationSpecWhenLookupReturnsErrorLeavesInlineEmptyAn
 		t.Fatalf("expected permissive mode, got %v", spec.Mode)
 	}
 }
+
+func TestTranslateMCPAuthenticationSpecPropagatesBrokerCallback(t *testing.T) {
+	brokerCallback := true
+	authn := &agentgateway.MCPAuthentication{
+		Issuer:    "issuer.example",
+		Audiences: []string{"aud-a"},
+		JWKS: agentgateway.RemoteJWKS{
+			JwksPath: "/keys",
+			BackendRef: gwv1.BackendObjectReference{
+				Name: "jwks-backend",
+			},
+		},
+		BrokerCallback: &brokerCallback,
+	}
+
+	spec, err := translateMCPAuthenticationSpec(
+		PolicyCtx{
+			Krt:        krt.TestingDummyContext{},
+			JWKSLookup: stubJWKSLookup{inline: "{}"},
+		},
+		types.NamespacedName{Namespace: "default", Name: "test"},
+		authn,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if spec == nil {
+		t.Fatal("expected spec to be emitted")
+	}
+	if !spec.BrokerCallback {
+		t.Fatal("expected BrokerCallback to be propagated as true")
+	}
+}

@@ -587,6 +587,8 @@ fn mcp_authentication_from_proto(
 		mode,
 		m.client_id.clone(),
 		m.client_secret.clone().map(Into::into),
+		m.broker_callback,
+		m.signing_key.clone().map(Into::into),
 	))
 }
 
@@ -661,6 +663,8 @@ fn build_mcp_authentication(
 	mode: McpAuthenticationMode,
 	client_id: Option<String>,
 	client_secret: Option<secrecy::SecretString>,
+	broker_callback: bool,
+	signing_key: Option<secrecy::SecretString>,
 ) -> McpAuthentication {
 	McpAuthentication {
 		issuer,
@@ -671,11 +675,8 @@ fn build_mcp_authentication(
 		mode,
 		client_id,
 		client_secret,
-		// Broker-callback mode is not yet plumbed through the xDS/control-plane API; it is
-		// currently configurable only via local (standalone) config. The proto fields and
-		// controller wiring are a follow-up.
-		broker_callback: false,
-		signing_key: None,
+		broker_callback,
+		signing_key,
 	}
 }
 
@@ -2493,6 +2494,11 @@ fn traffic_policy_from_proto(
 						},
 						mcp.client_id.clone(),
 						mcp.client_secret.clone().map(Into::into),
+						// Broker-callback mode is exposed only on the backend-level MCPAuthentication
+						// policy (which carries the client secret it requires), not this route-level
+						// jwtAuthentication.mcp surface.
+						false,
+						None,
 					))
 				},
 				None => None,
