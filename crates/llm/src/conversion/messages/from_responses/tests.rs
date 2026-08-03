@@ -22,11 +22,6 @@ fn raw_request(value: serde_json::Value) -> types::responses::Request {
 fn request(mut value: serde_json::Value) -> types::responses::Request {
 	let object = value.as_object_mut().expect("request object");
 	object.entry("store").or_insert_with(|| json!(false));
-	if object.get("stream").and_then(serde_json::Value::as_bool) == Some(true) {
-		object
-			.entry("stream_options")
-			.or_insert_with(|| json!({"include_obfuscation": false}));
-	}
 	raw_request(value)
 }
 
@@ -1031,6 +1026,10 @@ async fn stream_ping_after_message_delta_before_stop_is_accepted() {
 	assert_eq!(
 		events.last().and_then(|event| event["type"].as_str()),
 		Some("response.completed")
+	);
+	assert_eq!(
+		events.last().expect("terminal")["response"]["usage"]["input_tokens_details"]["cache_write_tokens"],
+		0
 	);
 	assert!(events.iter().all(|event| event["type"] != "error"));
 }
@@ -3438,6 +3437,119 @@ fn tool_history_preserves_calls_outputs_and_error_status() {
 	assert_eq!(messages[13]["content"][0]["is_error"], true);
 }
 
+fn captured_generic_cli_request(fixture: &str) -> serde_json::Value {
+	let mut request: serde_json::Value = serde_json::from_str(fixture).expect("valid fixture");
+	request["tools"]
+		.as_array_mut()
+		.expect("fixture tools")
+		.retain(|tool| tool["type"] != "web_search");
+	request
+}
+
+#[rstest::rstest]
+#[case::codex(
+	include_str!("../fixtures/codex_cli_0_146_0.json"),
+	"xhigh",
+	10,
+	false
+)]
+#[case::copilot(
+	include_str!("../fixtures/copilot_cli_1_0_75.json"),
+	"medium",
+	24,
+	true
+)]
+fn captured_cli_generic_request_fields_translate_completely(
+	#[case] fixture: &str,
+	#[case] effort: &str,
+	#[case] expected_tool_count: usize,
+	#[case] preserves_web_search: bool,
+) {
+	let request = captured_generic_cli_request(fixture);
+	let actual = translated(request);
+
+	assert_eq!(actual["model"], "claude-sonnet-5");
+	assert_eq!(
+		actual["tools"].as_array().expect("Messages tools").len(),
+		expected_tool_count
+	);
+	assert_eq!(
+		actual["tools"]
+			.as_array()
+			.expect("Messages tools")
+			.iter()
+			.any(|tool| tool["name"] == "web_search"),
+		preserves_web_search
+	);
+	assert_eq!(actual["thinking"], json!({"type": "adaptive"}));
+	assert_eq!(actual["output_config"]["effort"], effort);
+	assert!(actual.get("include").is_none());
+	assert!(actual.get("reasoning").is_none());
+	assert!(actual.get("client_metadata").is_none());
+	assert!(actual.get("prompt_cache_key").is_none());
+	assert!(
+		!actual["messages"]
+			.as_array()
+			.expect("Messages history")
+			.is_empty()
+	);
+}
+
+#[rstest::rstest]
+#[case::codex(
+	include_str!("../fixtures/codex_cli_0_146_0.json"),
+	r#"[
+		{"type":"function_call","id":"fc_fixture_4","call_id":"call_fixture_codex","name":"exec_command","arguments":"{\"cmd\":\"printf CAPTURE_TOOL_OK\"}"},
+		{"type":"function_call_output","id":"fco_fixture_5","call_id":"call_fixture_codex","output":"CAPTURE_TOOL_OK"}
+	]"#
+)]
+#[case::copilot(
+	include_str!("../fixtures/copilot_cli_1_0_75.json"),
+	r#"[
+		{"type":"function_call","id":"fc_fixture_2","call_id":"call_fixture_copilot","name":"bash","arguments":"{\"command\":\"printf CAPTURE_TOOL_OK\"}","status":"completed"},
+		{"type":"function_call_output","call_id":"call_fixture_copilot","output":"CAPTURE_TOOL_OK"}
+	]"#
+)]
+fn captured_cli_followup_preserves_shell_call_and_result(
+	#[case] fixture: &str,
+	#[case] captured_followup: &str,
+) {
+	let mut request = captured_generic_cli_request(fixture);
+	let followup: Vec<serde_json::Value> =
+		serde_json::from_str(captured_followup).expect("valid captured follow-up items");
+	request["input"]
+		.as_array_mut()
+		.expect("fixture input")
+		.extend(followup);
+	let actual = translated(request);
+	let messages = actual["messages"].as_array().expect("Messages history");
+	let content = messages
+		.iter()
+		.flat_map(|message| message["content"].as_array().expect("message content"));
+	let types: Vec<_> = content
+		.map(|block| block["type"].as_str().expect("content block type"))
+		.collect();
+
+	assert!(types.contains(&"tool_use"));
+	assert!(types.contains(&"tool_result"));
+}
+#[rstest::rstest]
+#[case::cache_only(false)]
+#[case::enabled(true)]
+fn hosted_search_is_rejected(#[case] external_web_access: bool) {
+	let error = translate(&request(json!({
+		"input": "work",
+		"model": "claude-sonnet-5",
+		"tools": [{"type": "web_search", "external_web_access": external_web_access}]
+	})))
+	.expect_err("hosted search should be rejected");
+
+	assert_eq!(
+		error.to_string(),
+		"unsupported conversion: Responses hosted web search is unsupported"
+	);
+}
+
 #[test]
 fn tool_call_with_incomplete_status_replays_as_history() {
 	let actual = translated(json!({
@@ -4202,9 +4314,9 @@ fn assistant_content_free_refusal_history_is_rejected_instead_of_replayed_as_emp
 
 #[rstest::rstest]
 #[case::include_absent("{}", true)]
-#[case::include_null(r#"{"include":null}"#, false)]
-#[case::include_empty(r#"{"include":[]}"#, false)]
-#[case::include_encrypted_only(r#"{"include":["reasoning.encrypted_content"]}"#, false)]
+#[case::include_null(r#"{"include":null}"#, true)]
+#[case::include_empty(r#"{"include":[]}"#, true)]
+#[case::include_encrypted_only(r#"{"include":["reasoning.encrypted_content"]}"#, true)]
 #[case::include_other(r#"{"include":["message.output_text.logprobs"]}"#, false)]
 #[case::include_mixed(
 	r#"{"include":["reasoning.encrypted_content","message.output_text.logprobs"]}"#,
@@ -4230,7 +4342,7 @@ fn assistant_content_free_refusal_history_is_rejected_instead_of_replayed_as_emp
 #[case::stream_obfuscation_true(r#"{"stream_options":{"include_obfuscation":true}}"#, false)]
 #[case::stream_obfuscation_wrong_type(r#"{"stream_options":{"include_obfuscation":0}}"#, false)]
 #[case::stream_options_unknown_nonempty(r#"{"stream_options":{"future":"enabled"}}"#, false)]
-#[case::stream_missing_options(r#"{"stream":true}"#, false)]
+#[case::stream_missing_options(r#"{"stream":true}"#, true)]
 #[case::stream_empty_options(r#"{"stream":true,"stream_options":{}}"#, false)]
 #[case::stream_explicit_obfuscation_false(
 	r#"{"stream":true,"stream_options":{"include_obfuscation":false}}"#,
@@ -4248,12 +4360,19 @@ fn assistant_content_free_refusal_history_is_rejected_instead_of_replayed_as_emp
 #[case::user_array(r#"{"user":[]}"#, false)]
 #[case::user_object(r#"{"user":{}}"#, false)]
 #[case::safety_identifier(r#"{"safety_identifier":"safe_1"}"#, true)]
-#[case::reasoning_summary_auto(r#"{"reasoning":{"summary":"auto"}}"#, false)]
-#[case::reasoning_summary_concise(r#"{"reasoning":{"summary":"concise"}}"#, false)]
-#[case::reasoning_summary_detailed(r#"{"reasoning":{"summary":"detailed"}}"#, false)]
+#[case::reasoning_empty(r#"{"reasoning":{}}"#, true)]
+#[case::reasoning_summary_auto(r#"{"reasoning":{"summary":"auto"}}"#, true)]
+#[case::reasoning_none_with_summary_auto(
+	r#"{"reasoning":{"effort":"none","summary":"auto"}}"#,
+	true
+)]
+#[case::reasoning_summary_concise(r#"{"reasoning":{"summary":"concise"}}"#, true)]
+#[case::reasoning_summary_detailed(r#"{"reasoning":{"summary":"detailed"}}"#, true)]
 #[case::reasoning_summary_invalid(r#"{"reasoning":{"summary":"verbose"}}"#, false)]
+#[case::reasoning_effort_null(r#"{"reasoning":{"effort":null}}"#, false)]
+#[case::reasoning_effort_unknown(r#"{"reasoning":{"effort":"minimal"}}"#, false)]
 #[case::reasoning_false(r#"{"reasoning":false}"#, false)]
-#[case::reasoning_unknown_empty(r#"{"reasoning":{"future":null}}"#, false)]
+#[case::reasoning_unknown_empty(r#"{"reasoning":{"future":null}}"#, true)]
 #[case::reasoning_unknown_nonempty(r#"{"reasoning":{"future":"enabled"}}"#, false)]
 #[case::truncation_absent("{}", true)]
 #[case::truncation_disabled(r#"{"truncation":"disabled"}"#, true)]
@@ -4300,11 +4419,11 @@ fn assistant_content_free_refusal_history_is_rejected_instead_of_replayed_as_emp
 #[case::parallel_tool_calls_false(r#"{"parallel_tool_calls":false}"#, true)]
 #[case::parallel_tool_calls_true(r#"{"parallel_tool_calls":true}"#, true)]
 #[case::client_metadata(r#"{"client_metadata":{"session_id":"local-session"}}"#, true)]
-#[case::unknown_null(r#"{"future_field":null}"#, false)]
-#[case::unknown_false(r#"{"future_field":false}"#, false)]
-#[case::unknown_empty_string(r#"{"future_field":""}"#, false)]
-#[case::unknown_empty_array(r#"{"future_field":[]}"#, false)]
-#[case::unknown_empty_object(r#"{"future_field":{}}"#, false)]
+#[case::unknown_null(r#"{"future_field":null}"#, true)]
+#[case::unknown_false(r#"{"future_field":false}"#, true)]
+#[case::unknown_empty_string(r#"{"future_field":""}"#, true)]
+#[case::unknown_empty_array(r#"{"future_field":[]}"#, true)]
+#[case::unknown_empty_object(r#"{"future_field":{}}"#, true)]
 #[case::unknown_nonempty(r#"{"future_field":"enabled"}"#, false)]
 fn top_level_policy(#[case] extra: &str, #[case] accepted: bool) {
 	let mut value = json!({
@@ -4359,7 +4478,7 @@ fn explicit_store_policy(#[case] store: Option<serde_json::Value>, #[case] accep
 #[rstest::rstest]
 #[case::true_is_unsupported(
 	r#"{"logprobs":true}"#,
-	"unsupported conversion: unsupported Responses request option"
+	"unsupported conversion: Responses logprobs are unsupported"
 )]
 #[case::empty_string_is_invalid(
 	r#"{"logprobs":""}"#,
@@ -4369,22 +4488,30 @@ fn explicit_store_policy(#[case] store: Option<serde_json::Value>, #[case] accep
 	r#"{"logprobs":1}"#,
 	"unsupported conversion: unsupported Responses logprobs"
 )]
-fn logprobs_errors_are_fixed(#[case] extra: &str, #[case] expected: &str) {
-	let mut value = json!({
-		"input": "hello",
-		"model": "claude-sonnet-4-5"
-	});
-	let extra: serde_json::Value = serde_json::from_str(extra).expect("valid test JSON");
-	value
-		.as_object_mut()
-		.expect("request object")
-		.extend(extra.as_object().expect("extra object").clone());
-
-	let error = translate(&request(value)).expect_err("request should be rejected");
-	assert_eq!(error.to_string(), expected);
-}
-
-#[rstest::rstest]
+#[case::max_tool_calls(
+	r#"{"max_tool_calls":4}"#,
+	"unsupported conversion: Responses max_tool_calls is unsupported"
+)]
+#[case::service_tier(
+	r#"{"service_tier":"priority"}"#,
+	"unsupported conversion: Responses service_tier is unsupported"
+)]
+#[case::top_logprobs(
+	r#"{"top_logprobs":3}"#,
+	"unsupported conversion: Responses top_logprobs is unsupported"
+)]
+#[case::previous_response_id(
+	r#"{"previous_response_id":"resp_1"}"#,
+	"unsupported conversion: Responses previous_response_id is unsupported"
+)]
+#[case::conversation(
+	r#"{"conversation":"conv_1"}"#,
+	"unsupported conversion: Responses conversation is unsupported"
+)]
+#[case::prompt(
+	r#"{"prompt":{"id":"pmpt_1"}}"#,
+	"unsupported conversion: Responses prompt is unsupported"
+)]
 #[case::reasoning_unknown(
 	r#"{"reasoning":{"future":"enabled"}}"#,
 	"unsupported conversion: Responses reasoning is unsupported"
@@ -4397,7 +4524,7 @@ fn logprobs_errors_are_fixed(#[case] extra: &str, #[case] expected: &str) {
 	r#"{"text":{"format":{"type":"text","strict":true}}}"#,
 	"unsupported conversion: unsupported Responses text format option"
 )]
-fn nested_allowlist_errors_are_fixed(#[case] extra: &str, #[case] expected: &str) {
+fn rejected_request_errors_are_fixed(#[case] extra: &str, #[case] expected: &str) {
 	let mut value = json!({
 		"input": "hello",
 		"model": "claude-sonnet-4-5"
@@ -4490,12 +4617,13 @@ fn copies_parameters_uses_neutral_defaults() {
 #[case::effort_absent(None, Some(0.25), Some(0.75), true)]
 #[case::effort_none(Some("none"), Some(0.25), Some(0.75), true)]
 #[case::minimal_with_temperature(Some("minimal"), Some(0.25), None, false)]
-#[case::low_with_temperature(Some("low"), Some(0.25), None, false)]
-#[case::medium_with_temperature(Some("medium"), Some(0.25), None, false)]
-#[case::high_with_temperature(Some("high"), Some(0.25), None, false)]
-#[case::xhigh_with_temperature(Some("xhigh"), Some(0.25), None, false)]
-#[case::active_with_top_p(Some("medium"), None, Some(0.75), false)]
-#[case::active_without_sampling(Some("medium"), None, None, false)]
+#[case::low_with_temperature(Some("low"), Some(0.25), None, true)]
+#[case::medium_with_temperature(Some("medium"), Some(0.25), None, true)]
+#[case::high_with_temperature(Some("high"), Some(0.25), None, true)]
+#[case::xhigh_with_temperature(Some("xhigh"), Some(0.25), None, true)]
+#[case::max_with_temperature(Some("max"), Some(0.25), None, true)]
+#[case::active_with_top_p(Some("medium"), None, Some(0.75), true)]
+#[case::active_without_sampling(Some("medium"), None, None, true)]
 fn reasoning_sampling_policy(
 	#[case] effort: Option<&str>,
 	#[case] temperature: Option<f32>,
@@ -5098,6 +5226,68 @@ fn absent_or_none_reasoning_emits_no_thinking_or_effort(#[case] effort: Option<&
 	let actual = translated(value);
 	assert!(actual.get("thinking").is_none());
 	assert!(actual.get("output_config").is_none());
+}
+
+#[rstest::rstest]
+#[case::low("low")]
+#[case::medium("medium")]
+#[case::high("high")]
+#[case::xhigh("xhigh")]
+#[case::max("max")]
+fn reasoning_effort_becomes_adaptive_thinking(#[case] effort: &str) {
+	let actual = translated(json!({
+		"input": "question",
+		"model": "claude-sonnet-4-5",
+		"reasoning": {"effort": effort}
+	}));
+
+	assert_eq!(actual["thinking"], json!({"type": "adaptive"}));
+	assert_eq!(actual["output_config"], json!({"effort": effort}));
+}
+
+#[test]
+fn captured_default_codex_reasoning_translates_effort_and_discards_hints() {
+	let actual = translated(json!({
+		"input": "question",
+		"model": "claude-sonnet-5",
+		"reasoning": {"effort": "high", "summary": "concise"},
+		"include": ["reasoning.encrypted_content"]
+	}));
+
+	assert_eq!(actual["thinking"], json!({"type": "adaptive"}));
+	assert_eq!(actual["output_config"], json!({"effort": "high"}));
+	assert!(actual.get("reasoning").is_none());
+	assert!(actual.get("include").is_none());
+}
+
+#[test]
+fn reasoning_effort_merges_with_structured_output() {
+	let schema = json!({
+		"type": "object",
+		"properties": {"answer": {"type": "string"}},
+		"required": ["answer"],
+		"additionalProperties": false
+	});
+	let actual = translated(json!({
+		"input": "question",
+		"model": "claude-sonnet-4-5",
+		"reasoning": {"effort": "high"},
+		"text": {"format": {
+			"type": "json_schema",
+			"name": "answer",
+			"schema": schema,
+			"strict": true
+		}}
+	}));
+
+	assert_eq!(actual["thinking"], json!({"type": "adaptive"}));
+	assert_eq!(
+		actual["output_config"],
+		json!({
+			"effort": "high",
+			"format": {"type": "json_schema", "schema": schema}
+		})
+	);
 }
 
 #[rstest::rstest]
