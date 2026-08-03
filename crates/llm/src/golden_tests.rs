@@ -89,6 +89,8 @@ mod requests {
 			insta::assert_json_snapshot!(snapshot_name, report, {
 				".request.id" => "[id]",
 				".request.created" => "[date]",
+				".request.metadata" => insta::sorted_redaction(),
+				".request.additionalModelRequestFields.metadata" => insta::sorted_redaction(),
 			});
 		});
 	}
@@ -147,6 +149,11 @@ mod requests {
 		("system_message", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
 		("tools", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
 		("reasoning", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
+		("metadata", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
+		(
+			"structured-output",
+			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX],
+		),
 		("cache_control", &[COMPLETIONS]),
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
 		("reasoning_replay", &[BEDROCK]),
@@ -157,6 +164,8 @@ mod requests {
 		("instructions", &[BEDROCK, GEMINI]),
 		("input-list", &[BEDROCK, GEMINI]),
 		("parallel-tool-call", &[BEDROCK, GEMINI]),
+		("structured-output", &[BEDROCK]),
+		("input-media", &[BEDROCK]),
 		("cache_control", &[GEMINI]),
 	];
 	const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
@@ -165,7 +174,9 @@ mod requests {
 	];
 	const EMBEDDINGS_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[OPENAI, BEDROCK_TITAN, BEDROCK_COHERE, VERTEX]),
+		("cohere-v4", &[BEDROCK_COHERE]),
 		("array", &[OPENAI, BEDROCK_COHERE, VERTEX]),
+		("full", &[VERTEX]),
 	];
 	const RERANK_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[COHERE, BEDROCK, VERTEX]),
@@ -279,6 +290,12 @@ mod requests {
 			guardrail_version: None,
 			provider_preference: Default::default(),
 		};
+		let cohere_v4 = bedrock::Provider {
+			model: Some(strng::new("cohere.embed-v4:0")),
+			region: strng::new("us-west-2"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+		};
 		for (name, providers) in EMBEDDINGS_REQUESTS {
 			let path = format!("requests/embeddings/{name}.json");
 			for provider in *providers {
@@ -290,7 +307,12 @@ mod requests {
 						conversion::bedrock::from_embeddings::translate(i, &titan)
 					}),
 					BEDROCK_COHERE => test_request(BEDROCK_COHERE, &path, |i| {
-						conversion::bedrock::from_embeddings::translate(i, &cohere)
+						let provider = if *name == "cohere-v4" {
+							&cohere_v4
+						} else {
+							&cohere
+						};
+						conversion::bedrock::from_embeddings::translate(i, provider)
 					}),
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::embeddings::Request| {
 						conversion::vertex::from_embeddings::translate(i)

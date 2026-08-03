@@ -1,0 +1,67 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/responses/structured-output.json
+info:
+  model: gpt-4o
+  max_output_tokens: 64
+  input: Extract the city name.
+  text:
+    format:
+      type: json_schema
+      name: city_schema
+      description: Structured city extraction
+      schema:
+        type: object
+        properties:
+          city:
+            type: string
+        required:
+          - city
+        additionalProperties: false
+---
+{
+  "request": {
+    "modelId": "gpt-4o",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "Extract the city name."
+          }
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 64
+    },
+    "outputConfig": {
+      "textFormat": {
+        "type": "json_schema",
+        "structure": {
+          "jsonSchema": {
+            "schema": "{\"type\":\"object\",\"properties\":{\"city\":{\"type\":\"string\"}},\"required\":[\"city\"],\"additionalProperties\":false}",
+            "name": "city_schema",
+            "description": "Structured city extraction"
+          }
+        }
+      }
+    }
+  },
+  "parsed": {
+    "input_format": "Responses",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-4o",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {
+      "max_tokens": 64
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Extract the city name."
+      }
+    ]
+  }
+}

@@ -14044,6 +14044,8 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`binds[].listeners[].routes[].backends[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`binds[].listeners[].routes[].backends[].policies.sessionAffinity`|object|Keep requests whose CEL expression produces the same value on one service endpoint.|
+|`binds[].listeners[].routes[].backends[].policies.sessionAffinity.source`|string|CEL expression evaluated against request state. It must return a string or bytes value.<br>Examples: `request.headers["x-session-id"]` or `string(source.address)`.|
 |`binds[].listeners[].tcpRoutes`|[]object|TCP routes attached directly to this listener.|
 |`binds[].listeners[].tcpRoutes[].name`|string|Name identifying this route.|
 |`binds[].listeners[].tcpRoutes[].namespace`|string|Namespace scoping this route.|
@@ -44090,6 +44092,8 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`routeGroups[].routes[].backends[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`routeGroups[].routes[].backends[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`routeGroups[].routes[].backends[].policies.sessionAffinity`|object|Keep requests whose CEL expression produces the same value on one service endpoint.|
+|`routeGroups[].routes[].backends[].policies.sessionAffinity.source`|string|CEL expression evaluated against request state. It must return a string or bytes value.<br>Examples: `request.headers["x-session-id"]` or `string(source.address)`.|
 |`gateways`|object|gateways defines the entrypoint to the proxy, setting up ports and listeners that features (LLM, MCP, and UI) and routes can attach to.<br>Each gateway defines a port that proxy will listen on, and optionally TLS settings for that port.|
 |`gateways.*.port`|integer|port is the port to listen on for this gateway.|
 |`gateways.*.protocol`|enum|protocol controls whether this gateway accepts HTTP/HTTPS routes or TCP/TLS routes. When omitted, gateways<br>default to HTTP, or HTTPS when tls is set.<br>Possible values: `HTTP`, `HTTPS`, `TCP`, `TLS`, `null`.|
@@ -60577,6 +60581,8 @@
 |`routes[].backends[].policies.ai.promptCaching.minTokens`|integer|Minimum prompt size required before cache markers are added.|
 |`routes[].backends[].policies.ai.promptCaching.cacheMessageOffset`|integer|Message offset used when choosing where to place cache markers.|
 |`routes[].backends[].policies.ai.routes`|object|Route type overrides selected by request path suffix.|
+|`routes[].backends[].policies.sessionAffinity`|object|Keep requests whose CEL expression produces the same value on one service endpoint.|
+|`routes[].backends[].policies.sessionAffinity.source`|string|CEL expression evaluated against request state. It must return a string or bytes value.<br>Examples: `request.headers["x-session-id"]` or `string(source.address)`.|
 |`tcpRoutes`|[]object|tcpRoutes defines TCP routes attached to one or more named TCP/TLS gateways.|
 |`tcpRoutes[].gateways`|string|gateways attaches this route to named TCP/TLS gateways or gateway listeners.<br>This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.<br>If unset, the 'default' gateway will be used.|
 |`tcpRoutes[].name`|string|Name identifying this route.|

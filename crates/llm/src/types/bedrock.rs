@@ -665,6 +665,8 @@ pub struct CohereEmbeddingRequest {
 	pub input_type: String,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub truncate: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub output_dimension: Option<u32>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

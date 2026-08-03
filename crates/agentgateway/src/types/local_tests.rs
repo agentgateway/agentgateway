@@ -281,6 +281,15 @@ fn test_local_backend_policies_reject_unknown_fields() {
 	assert!(err.to_string().contains("unknown field"), "{err}");
 }
 
+#[test]
+fn test_local_route_backend_policies_reject_unknown_fields() {
+	let err = crate::serdes::yamlviajson::from_str::<super::LocalRouteBackendPolicies>(
+		"mcpAuthorizatoin: {}",
+	)
+	.unwrap_err();
+	assert!(err.to_string().contains("unknown field"), "{err}");
+}
+
 #[tokio::test]
 async fn test_multiple_wildcard_binds_rejected() {
 	let err = normalize_test_yaml(
@@ -1357,6 +1366,57 @@ binds:
 	normalize_test_config(input)
 		.await
 		.expect("service backends should allow inference routing");
+}
+
+#[tokio::test]
+async fn test_session_affinity_requires_service_backend() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - host: 127.0.0.1:8000
+        policies:
+          sessionAffinity:
+            source: request.headers["x-session-id"]
+"#;
+
+	let err = normalize_test_config(input).await.unwrap_err();
+	assert!(
+		err
+			.to_string()
+			.contains("sessionAffinity is only supported on service route backends"),
+		"unexpected error: {err}"
+	);
+}
+
+#[tokio::test]
+async fn test_session_affinity_service_backend_config() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - service:
+          name: default/my-model
+          port: 8000
+        policies:
+          sessionAffinity:
+            source: request.headers["x-session-id"]
+"#;
+
+	let normalized = normalize_test_config(input)
+		.await
+		.expect("service backends should allow session affinity");
+	let policies = &normalized.listener_routes[0].1[0].backends[0].inline_policies;
+	assert!(
+		policies
+			.iter()
+			.any(|policy| matches!(policy, BackendTrafficPolicy::SessionAffinity(_))),
+		"expected a normalized session affinity policy"
+	);
 }
 
 #[tokio::test]

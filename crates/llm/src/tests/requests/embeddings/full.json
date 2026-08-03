@@ -1,0 +1,8 @@
+{
+  "model": "text-embedding-004",
+  "input": ["hello", "world"],
+  "dimensions": 512,
+  "task_type": "RETRIEVAL_DOCUMENT",
+  "title": "My Document",
+  "auto_truncate": true
+}

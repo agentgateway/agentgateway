@@ -244,20 +244,25 @@ pub mod from_responses {
 						},
 					},
 					Item::FunctionCall(call) => {
-						messages.push(completions::RequestMessage::Assistant(
-							completions::RequestAssistantMessage {
-								tool_calls: Some(vec![completions::MessageToolCalls::Function(
-									completions::MessageToolCall {
-										id: call.call_id.clone(),
-										function: completions::FunctionCall {
-											name: call.name.clone(),
-											arguments: call.arguments.clone(),
-										},
-									},
-								)]),
-								..Default::default()
+						let tool_call = completions::MessageToolCalls::Function(completions::MessageToolCall {
+							id: call.call_id.clone(),
+							function: completions::FunctionCall {
+								name: call.name.clone(),
+								arguments: call.arguments.clone(),
 							},
-						));
+						});
+						if let Some(completions::RequestMessage::Assistant(message)) = messages.last_mut()
+							&& let Some(tool_calls) = &mut message.tool_calls
+						{
+							tool_calls.push(tool_call);
+						} else {
+							messages.push(completions::RequestMessage::Assistant(
+								completions::RequestAssistantMessage {
+									tool_calls: Some(vec![tool_call]),
+									..Default::default()
+								},
+							));
+						}
 					},
 					Item::FunctionCallOutput(output) => {
 						let output_text = match output.output {
@@ -280,20 +285,25 @@ pub mod from_responses {
 					},
 					Item::CustomToolCall(call) => {
 						let arguments = serde_json::to_string(&call.input).unwrap_or_else(|_| "{}".to_string());
-						messages.push(completions::RequestMessage::Assistant(
-							completions::RequestAssistantMessage {
-								tool_calls: Some(vec![completions::MessageToolCalls::Function(
-									completions::MessageToolCall {
-										id: call.id.clone(),
-										function: completions::FunctionCall {
-											name: call.name.clone(),
-											arguments,
-										},
-									},
-								)]),
-								..Default::default()
+						let tool_call = completions::MessageToolCalls::Function(completions::MessageToolCall {
+							id: call.id.clone(),
+							function: completions::FunctionCall {
+								name: call.name.clone(),
+								arguments,
 							},
-						));
+						});
+						if let Some(completions::RequestMessage::Assistant(message)) = messages.last_mut()
+							&& let Some(tool_calls) = &mut message.tool_calls
+						{
+							tool_calls.push(tool_call);
+						} else {
+							messages.push(completions::RequestMessage::Assistant(
+								completions::RequestAssistantMessage {
+									tool_calls: Some(vec![tool_call]),
+									..Default::default()
+								},
+							));
+						}
 					},
 					Item::CustomToolCallOutput(output) => {
 						let text = match &output.output {

@@ -346,6 +346,13 @@ pub mod from_embeddings {
 					.get("truncate")
 					.and_then(|v| v.as_str())
 					.map(|s| s.to_string()),
+				// Cohere Embed v4 calls OpenAI's `dimensions` parameter `output_dimension`.
+				// https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed-v4.html
+				output_dimension: if model.contains("embed-v4") {
+					typed.dimensions
+				} else {
+					None
+				},
 			};
 			serde_json::to_vec(&bedrock_req).map_err(AIError::RequestMarshal)
 		} else {

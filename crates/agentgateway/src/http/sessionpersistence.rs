@@ -1,8 +1,5 @@
 use crate::*;
 
-#[apply(schema_ser!)]
-pub struct Policy {}
-
 #[apply(schema!)]
 #[serde(tag = "t")]
 pub enum SessionState {
