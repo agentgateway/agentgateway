@@ -276,7 +276,7 @@ dependencies = [
  "ipnet",
  "itertools 0.15.0",
  "jemalloc_pprof",
- "jsonwebtoken",
+ "jsonwebtoken 11.0.0",
  "lazy_static",
  "libc",
  "mimalloc",
@@ -1337,11 +1337,11 @@ checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
 name = "bcrypt"
-version = "0.19.2"
+version = "0.19.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f3c067aa24dd4ed5c79cf222a38f260c8f23d3b82a062fba3f28c6fe563b753"
+checksum = "a0cd0bd35a28836d528d2b58ad499bc3c5641d59379421b1be9eeb0c2f2b912a"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.0",
  "blowfish 0.10.0",
  "getrandom 0.4.3",
  "subtle",
@@ -1573,7 +1573,7 @@ dependencies = [
  "macrotest",
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.3",
 ]
 
 [[package]]
@@ -2984,7 +2984,7 @@ dependencies = [
  "hex",
  "hmac 0.13.0",
  "http 1.4.2",
- "jsonwebtoken",
+ "jsonwebtoken 10.4.0",
  "p256",
  "reqwest 0.13.4",
  "rustc_version",
@@ -3890,6 +3890,21 @@ name = "jsonwebtoken"
 version = "10.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eba32bfb4ffdeaca3e34431072faf01745c9b26d25504aa7a6cf5684334fc4fc"
+dependencies = [
+ "base64 0.22.1",
+ "getrandom 0.2.17",
+ "js-sys",
+ "serde",
+ "serde_json",
+ "signature",
+ "zeroize",
+]
+
+[[package]]
+name = "jsonwebtoken"
+version = "11.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "881733cbc631fc9e472e24447ce32a64bedf2da498d6d8570b08edc87de71f65"
 dependencies = [
  "aws-lc-rs",
  "base64 0.22.1",
