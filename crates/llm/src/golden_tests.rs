@@ -485,6 +485,11 @@ mod responses {
 			"parsed": llm_response,
 		});
 		let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
+		let created_selector = if provider == COMPLETIONS_TO_RESPONSES {
+			".response.created_at"
+		} else {
+			".response.created"
+		};
 
 		insta::with_settings!({
 			info => &provider_value,
@@ -496,7 +501,7 @@ mod responses {
 			insta::assert_json_snapshot!(snapshot_name, report, {
 				".response.id" => "[id]",
 				".response.output.*.id" => "[id]",
-				".response.created" => "[date]",
+				created_selector => "[date]",
 			});
 		});
 	}
@@ -631,8 +636,14 @@ mod responses {
 		COMPLETIONS_TO_MESSAGES,
 		COMPLETIONS_TO_DETECT,
 	];
+	const ALL_COMPLETIONS_WITH_RESPONSES: &[&str] = &[
+		COMPLETIONS_TO_COMPLETIONS,
+		COMPLETIONS_TO_MESSAGES,
+		COMPLETIONS_TO_RESPONSES,
+		COMPLETIONS_TO_DETECT,
+	];
 	const COMPLETIONS_RESPONSES: &[(&str, &[&str])] = &[
-		("basic", ALL_COMPLETIONS),
+		("basic", ALL_COMPLETIONS_WITH_RESPONSES),
 		("audio", ALL_COMPLETIONS),
 		(
 			"cache_write",
@@ -641,8 +652,11 @@ mod responses {
 		("openrouter_reasoning", ALL_COMPLETIONS),
 		("gemini_zero_completion_tokens", ALL_COMPLETIONS),
 		("gemini_with_completion_tokens", ALL_COMPLETIONS),
-		("tool_call", ALL_COMPLETIONS),
-		("truncated_tool_call", &[COMPLETIONS_TO_COMPLETIONS]),
+		("tool_call", ALL_COMPLETIONS_WITH_RESPONSES),
+		(
+			"truncated_tool_call",
+			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_RESPONSES],
+		),
 	];
 	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", &[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT]),
@@ -756,6 +770,9 @@ mod responses {
 					}),
 					COMPLETIONS_TO_MESSAGES => test_response(provider, &path, |i| {
 						conversion::completions::from_messages::translate_response(&i)
+					}),
+					COMPLETIONS_TO_RESPONSES => test_response(provider, &path, |i| {
+						conversion::openai_compat::to_responses::translate_response(&i, "input-model")
 					}),
 					COMPLETIONS_TO_DETECT => test_response(provider, &path, |bytes| {
 						Ok(Box::new(

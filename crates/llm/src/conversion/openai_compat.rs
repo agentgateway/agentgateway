@@ -1,3 +1,7 @@
+#[cfg(test)]
+#[path = "openai_compat_tests.rs"]
+mod tests;
+
 pub mod from_responses {
 	use types::completions::typed as completions;
 	use types::responses::typed as responses;
@@ -472,12 +476,8 @@ pub mod to_responses {
 		let resp = serde_json::from_slice::<completions::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
 		let typed = translate_response_internal(resp, model);
-		let mut passthrough =
+		let passthrough =
 			json::convert::<_, types::responses::Response>(&typed).map_err(AIError::ResponseParsing)?;
-		passthrough.rest = serde_json::Value::Object(serde_json::Map::new());
-		if let Some(usage) = passthrough.usage.as_mut() {
-			usage.rest = serde_json::Value::Object(serde_json::Map::new());
-		}
 		Ok(Box::new(passthrough))
 	}
 
