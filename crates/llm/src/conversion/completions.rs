@@ -511,7 +511,7 @@ pub mod from_messages {
 					return events;
 				},
 				SseJsonEvent::Data(Err(e)) => {
-					tracing::warn!(
+					tracing::debug!(
 						"Failed to parse OpenAI stream response during translation: {}",
 						e
 					);

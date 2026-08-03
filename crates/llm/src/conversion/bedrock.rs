@@ -1324,7 +1324,7 @@ pub mod from_messages {
 					// Bedrock's Converse API has no native equivalent of an Anthropic server tool
 					// (e.g. web_search_20250305) executing upstream of the model. Drop it rather
 					// than fail the whole request; the model just won't see this tool offered.
-					tracing::warn!("Unsupported server tool in Bedrock conversion: {:?}", tool);
+					tracing::debug!("Unsupported server tool in Bedrock conversion: {:?}", tool);
 					continue;
 				};
 				bedrock_tools.push((

@@ -146,6 +146,7 @@ mod requests {
 		("basic", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
 		("system_message", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
 		("tools", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
+		("server_tools", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
 		("reasoning", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
 		("cache_control", &[COMPLETIONS]),
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),

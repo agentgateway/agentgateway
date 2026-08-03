@@ -1,0 +1,67 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/server_tools.json
+info:
+  model: claude-opus-4-6
+  max_tokens: 64
+  messages:
+    - role: user
+      content: "Search the web for today's date"
+  tools:
+    - type: web_search_20250305
+      name: web_search
+      max_uses: 5
+    - name: get_weather
+      description: Get the weather
+      input_schema:
+        type: object
+---
+{
+  "request": {
+    "modelId": "claude-opus-4-6",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "Search the web for today's date"
+          }
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 64
+    },
+    "toolConfig": {
+      "tools": [
+        {
+          "toolSpec": {
+            "name": "get_weather",
+            "description": "Get the weather",
+            "inputSchema": {
+              "json": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-opus-4-6",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {
+      "max_tokens": 64
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Search the web for today's date"
+      }
+    ]
+  }
+}

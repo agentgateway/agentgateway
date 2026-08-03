@@ -1,0 +1,60 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/server_tools.json
+info:
+  model: claude-opus-4-6
+  max_tokens: 64
+  messages:
+    - role: user
+      content: "Search the web for today's date"
+  tools:
+    - type: web_search_20250305
+      name: web_search
+      max_uses: 5
+    - name: get_weather
+      description: Get the weather
+      input_schema:
+        type: object
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Search the web for today's date"
+      }
+    ],
+    "anthropic_version": "vertex-2023-10-16",
+    "max_tokens": 64,
+    "tools": [
+      {
+        "type": "web_search_20250305",
+        "name": "web_search",
+        "max_uses": 5
+      },
+      {
+        "name": "get_weather",
+        "description": "Get the weather",
+        "input_schema": {
+          "type": "object"
+        }
+      }
+    ]
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-opus-4-6",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {
+      "max_tokens": 64
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Search the web for today's date"
+      }
+    ]
+  }
+}
