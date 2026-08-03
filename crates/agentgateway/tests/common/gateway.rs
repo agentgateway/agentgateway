@@ -110,7 +110,7 @@ impl AgentGateway {
 		let port = port_rx.await?;
 		anyhow::ensure!(port != 0, "bind port was not assigned");
 		info!("waiting for agent...");
-		wait_for_port(port).await?;
+		wait_for_port(port, Duration::from_secs(10)).await?;
 		info!("agent ready!...");
 		let client = ::hyper_util::client::legacy::Client::builder(TokioExecutor::new())
 			.timer(TokioTimer::new())
@@ -174,11 +174,10 @@ impl AgentGateway {
 	}
 }
 
-async fn wait_for_port(port: u16) -> anyhow::Result<()> {
-	let timeout_duration = Duration::from_secs(10);
+pub async fn wait_for_port(port: u16, timeout: Duration) -> anyhow::Result<()> {
 	let start = std::time::Instant::now();
 
-	while start.elapsed() < timeout_duration {
+	while start.elapsed() < timeout {
 		if tokio::net::TcpStream::connect(format!("127.0.0.1:{port}"))
 			.await
 			.is_ok()

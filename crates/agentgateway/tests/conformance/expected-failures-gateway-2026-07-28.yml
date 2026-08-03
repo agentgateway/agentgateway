@@ -1,0 +1,4 @@
+# Gateway-only gaps against the pinned TypeScript SDK conformance server.
+server:
+  # Status-visible rationale: expected-failure-rationales.json.
+  - server-stateless:sep-2575-server-unsupported-version-error

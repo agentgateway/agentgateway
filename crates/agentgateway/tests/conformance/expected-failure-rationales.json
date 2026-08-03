@@ -1,0 +1,11 @@
+{
+  "gateway": {
+    "2026-07-28": {
+      "server-stateless:sep-2575-server-unsupported-version-error": {
+        "kind": "intentional-proxy-behavior",
+        "reference": "#2417",
+        "summary": "The gateway rejects unsupported versions before opening upstream connections, so it returns gateway-supported versions rather than probing every target in the 400 path."
+      }
+    }
+  }
+}

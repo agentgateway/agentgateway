@@ -1,0 +1,7 @@
+# Gateway-only gaps against the pinned TypeScript SDK conformance server.
+server:
+  - dns-rebinding-protection:localhost-host-rebinding-rejected
+  - elicitation-sep1034-defaults:elicitation-sep1034-general
+  - elicitation-sep1330-enums:elicitation-sep1330-general
+  - tools-call-elicitation:tools-call-elicitation
+  - tools-call-sampling:tools-call-sampling

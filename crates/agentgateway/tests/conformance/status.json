@@ -1,0 +1,1169 @@
+{
+  "framework": "3531a6480341f3cc520f4d7a3a517bc825191e31",
+  "typescriptSdk": "cc4b41617ce3601b1290d67216ea0b194a3cd9ac",
+  "gateway": {
+    "sha": "57a48af6007350f72478335199620282ace198ff",
+    "ref": "filintod/mpc-2026-conformance"
+  },
+  "generated": "2026-08-01T23:52:42.760700+00:00",
+  "suites": {
+    "2025-11-25": {
+      "scenarios": [
+        {
+          "scenario": "completion-complete",
+          "direct": {
+            "scenario": "completion-complete",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "completion-complete",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "dns-rebinding-protection",
+          "direct": {
+            "scenario": "dns-rebinding-protection",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "dns-rebinding-protection",
+            "category": "gap",
+            "checkCounts": {
+              "total": 2,
+              "failed": 1
+            },
+            "details": [
+              {
+                "entry": "dns-rebinding-protection:localhost-host-rebinding-rejected",
+                "checkId": "localhost-host-rebinding-rejected",
+                "category": "gap",
+                "gateway": "FAILURE",
+                "direct": "SUCCESS",
+                "attribution": "gateway-attributed"
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "elicitation-sep1034-defaults",
+          "direct": {
+            "scenario": "elicitation-sep1034-defaults",
+            "category": "pass",
+            "checkCounts": {
+              "total": 6,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "elicitation-sep1034-defaults",
+            "category": "gap",
+            "checkCounts": {
+              "total": 2,
+              "failed": 1
+            },
+            "details": [
+              {
+                "entry": "elicitation-sep1034-defaults:elicitation-sep1034-general",
+                "checkId": "elicitation-sep1034-general",
+                "category": "gap",
+                "gateway": "FAILURE",
+                "direct": null,
+                "attribution": "investigate"
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "elicitation-sep1330-enums",
+          "direct": {
+            "scenario": "elicitation-sep1330-enums",
+            "category": "pass",
+            "checkCounts": {
+              "total": 6,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "elicitation-sep1330-enums",
+            "category": "gap",
+            "checkCounts": {
+              "total": 2,
+              "failed": 1
+            },
+            "details": [
+              {
+                "entry": "elicitation-sep1330-enums:elicitation-sep1330-general",
+                "checkId": "elicitation-sep1330-general",
+                "category": "gap",
+                "gateway": "FAILURE",
+                "direct": null,
+                "attribution": "investigate"
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "json-schema-2020-12",
+          "direct": {
+            "scenario": "json-schema-2020-12",
+            "category": "pass",
+            "checkCounts": {
+              "total": 8,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "json-schema-2020-12",
+            "category": "pass",
+            "checkCounts": {
+              "total": 8,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "logging-set-level",
+          "direct": {
+            "scenario": "logging-set-level",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "logging-set-level",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "ping",
+          "direct": {
+            "scenario": "ping",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "ping",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "prompts-get-embedded-resource",
+          "direct": {
+            "scenario": "prompts-get-embedded-resource",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "prompts-get-embedded-resource",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "prompts-get-simple",
+          "direct": {
+            "scenario": "prompts-get-simple",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "prompts-get-simple",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "prompts-get-with-args",
+          "direct": {
+            "scenario": "prompts-get-with-args",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "prompts-get-with-args",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "prompts-get-with-image",
+          "direct": {
+            "scenario": "prompts-get-with-image",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "prompts-get-with-image",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "prompts-list",
+          "direct": {
+            "scenario": "prompts-list",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "prompts-list",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "resources-list",
+          "direct": {
+            "scenario": "resources-list",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "resources-list",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "resources-read-binary",
+          "direct": {
+            "scenario": "resources-read-binary",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "resources-read-binary",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "resources-read-text",
+          "direct": {
+            "scenario": "resources-read-text",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "resources-read-text",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "resources-subscribe",
+          "direct": {
+            "scenario": "resources-subscribe",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "resources-subscribe",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "resources-templates-read",
+          "direct": {
+            "scenario": "resources-templates-read",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "resources-templates-read",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "resources-unsubscribe",
+          "direct": {
+            "scenario": "resources-unsubscribe",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "resources-unsubscribe",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "server-initialize",
+          "direct": {
+            "scenario": "server-initialize",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "server-initialize",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "server-session-lifecycle",
+          "direct": {
+            "scenario": "server-session-lifecycle",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "server-session-lifecycle",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "server-sse-multiple-streams",
+          "direct": {
+            "scenario": "server-sse-multiple-streams",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "server-sse-multiple-streams",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "tools-call-audio",
+          "direct": {
+            "scenario": "tools-call-audio",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "tools-call-audio",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "tools-call-elicitation",
+          "direct": {
+            "scenario": "tools-call-elicitation",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "tools-call-elicitation",
+            "category": "gap",
+            "checkCounts": {
+              "total": 2,
+              "failed": 1
+            },
+            "details": [
+              {
+                "entry": "tools-call-elicitation:tools-call-elicitation",
+                "checkId": "tools-call-elicitation",
+                "category": "gap",
+                "gateway": "FAILURE",
+                "direct": "SUCCESS",
+                "attribution": "gateway-attributed"
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "tools-call-embedded-resource",
+          "direct": {
+            "scenario": "tools-call-embedded-resource",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "tools-call-embedded-resource",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "tools-call-error",
+          "direct": {
+            "scenario": "tools-call-error",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "tools-call-error",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "tools-call-image",
+          "direct": {
+            "scenario": "tools-call-image",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "tools-call-image",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "tools-call-mixed-content",
+          "direct": {
+            "scenario": "tools-call-mixed-content",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "tools-call-mixed-content",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "tools-call-sampling",
+          "direct": {
+            "scenario": "tools-call-sampling",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "tools-call-sampling",
+            "category": "gap",
+            "checkCounts": {
+              "total": 2,
+              "failed": 1
+            },
+            "details": [
+              {
+                "entry": "tools-call-sampling:tools-call-sampling",
+                "checkId": "tools-call-sampling",
+                "category": "gap",
+                "gateway": "FAILURE",
+                "direct": "SUCCESS",
+                "attribution": "gateway-attributed"
+              }
+            ]
+          }
+        },
+        {
+          "scenario": "tools-call-simple-text",
+          "direct": {
+            "scenario": "tools-call-simple-text",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "tools-call-simple-text",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "tools-call-with-logging",
+          "direct": {
+            "scenario": "tools-call-with-logging",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "tools-call-with-logging",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "tools-call-with-progress",
+          "direct": {
+            "scenario": "tools-call-with-progress",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "tools-call-with-progress",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "tools-list",
+          "direct": {
+            "scenario": "tools-list",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "tools-list",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          }
+        }
+      ],
+      "summary": {
+        "total": 32,
+        "direct": {
+          "pass": 32
+        },
+        "gateway": {
+          "pass": 27,
+          "gap": 5
+        }
+      }
+    },
+    "2026-07-28": {
+      "scenarios": [
+        {
+          "scenario": "caching",
+          "direct": {
+            "scenario": "caching",
+            "category": "pass",
+            "checkCounts": {
+              "total": 8,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "caching",
+            "category": "pass",
+            "checkCounts": {
+              "total": 8,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "http-custom-header-server-validation",
+          "direct": {
+            "scenario": "http-custom-header-server-validation",
+            "category": "pass",
+            "checkCounts": {
+              "total": 5,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "http-custom-header-server-validation",
+            "category": "pass",
+            "checkCounts": {
+              "total": 5,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "http-header-validation",
+          "direct": {
+            "scenario": "http-header-validation",
+            "category": "pass",
+            "checkCounts": {
+              "total": 5,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "http-header-validation",
+            "category": "pass",
+            "checkCounts": {
+              "total": 5,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "input-required-result-basic-elicitation",
+          "direct": {
+            "scenario": "input-required-result-basic-elicitation",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "input-required-result-basic-elicitation",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "input-required-result-basic-list-roots",
+          "direct": {
+            "scenario": "input-required-result-basic-list-roots",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "input-required-result-basic-list-roots",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "input-required-result-basic-sampling",
+          "direct": {
+            "scenario": "input-required-result-basic-sampling",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "input-required-result-basic-sampling",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "input-required-result-capability-check",
+          "direct": {
+            "scenario": "input-required-result-capability-check",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "input-required-result-capability-check",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "input-required-result-ignore-extra-params",
+          "direct": {
+            "scenario": "input-required-result-ignore-extra-params",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "input-required-result-ignore-extra-params",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "input-required-result-missing-input-response",
+          "direct": {
+            "scenario": "input-required-result-missing-input-response",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "input-required-result-missing-input-response",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "input-required-result-multi-round",
+          "direct": {
+            "scenario": "input-required-result-multi-round",
+            "category": "pass",
+            "checkCounts": {
+              "total": 4,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "input-required-result-multi-round",
+            "category": "pass",
+            "checkCounts": {
+              "total": 4,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "input-required-result-multiple-input-requests",
+          "direct": {
+            "scenario": "input-required-result-multiple-input-requests",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "input-required-result-multiple-input-requests",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "input-required-result-non-tool-request",
+          "direct": {
+            "scenario": "input-required-result-non-tool-request",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "input-required-result-non-tool-request",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "input-required-result-request-state",
+          "direct": {
+            "scenario": "input-required-result-request-state",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "input-required-result-request-state",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "input-required-result-result-type",
+          "direct": {
+            "scenario": "input-required-result-result-type",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "input-required-result-result-type",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "input-required-result-tampered-state",
+          "direct": {
+            "scenario": "input-required-result-tampered-state",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "input-required-result-tampered-state",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "input-required-result-unsupported-methods",
+          "direct": {
+            "scenario": "input-required-result-unsupported-methods",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "input-required-result-unsupported-methods",
+            "category": "pass",
+            "checkCounts": {
+              "total": 2,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "input-required-result-validate-input",
+          "direct": {
+            "scenario": "input-required-result-validate-input",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "input-required-result-validate-input",
+            "category": "pass",
+            "checkCounts": {
+              "total": 3,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "sep-2164-resource-not-found",
+          "direct": {
+            "scenario": "sep-2164-resource-not-found",
+            "category": "pass",
+            "checkCounts": {
+              "total": 4,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "sep-2164-resource-not-found",
+            "category": "pass",
+            "checkCounts": {
+              "total": 4,
+              "failed": 0
+            },
+            "details": []
+          }
+        },
+        {
+          "scenario": "server-stateless",
+          "direct": {
+            "scenario": "server-stateless",
+            "category": "pass",
+            "checkCounts": {
+              "total": 28,
+              "failed": 0
+            },
+            "details": []
+          },
+          "gateway": {
+            "scenario": "server-stateless",
+            "category": "gap",
+            "checkCounts": {
+              "total": 28,
+              "failed": 1
+            },
+            "details": [
+              {
+                "entry": "server-stateless:sep-2575-server-unsupported-version-error",
+                "checkId": "sep-2575-server-unsupported-version-error",
+                "category": "gap",
+                "gateway": "FAILURE",
+                "direct": "SUCCESS",
+                "attribution": "gateway-attributed",
+                "rationale": {
+                  "kind": "intentional-proxy-behavior",
+                  "reference": "#2417",
+                  "summary": "The gateway rejects unsupported versions before opening upstream connections, so it returns gateway-supported versions rather than probing every target in the 400 path."
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "summary": {
+        "total": 19,
+        "direct": {
+          "pass": 19
+        },
+        "gateway": {
+          "pass": 18,
+          "gap": 1
+        }
+      }
+    }
+  }
+}

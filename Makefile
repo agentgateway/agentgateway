@@ -144,3 +144,23 @@ stop-validation-deps:
 .PHONY: validate
 validate:
 	@tools/validate-configs.sh
+
+.PHONY: mcp-conformance
+mcp-conformance:
+	@tools/mcp-conformance.sh run "$(OUT)"
+
+.PHONY: mcp-conformance-capture
+mcp-conformance-capture:
+	@tools/mcp-conformance.sh capture "$(SUITE)" "$(SCENARIO)" "$(OUT)"
+
+.PHONY: mcp-conformance-pending-availability
+mcp-conformance-pending-availability:
+	@tools/mcp-conformance.sh availability "$(SCENARIO)"
+
+.PHONY: mcp-conformance-inventory
+mcp-conformance-inventory:
+	@tools/mcp-conformance.sh inventory
+
+.PHONY: mcp-conformance-report
+mcp-conformance-report:
+	@tools/mcp-conformance.sh report

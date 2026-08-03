@@ -7,6 +7,7 @@
 .run
 .DS_Store
 .venv
+__pycache__/
 .env
 .env.*
 *.local
