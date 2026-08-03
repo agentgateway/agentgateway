@@ -18,6 +18,7 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	e2e "github.com/agentgateway/agentgateway/controller/test/e2e"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
+	"github.com/agentgateway/agentgateway/controller/test/testutils"
 )
 
 const (
@@ -36,7 +37,8 @@ func TestMultipleControllers(tt *testing.T) {
 		secondaryControllerNamespace,
 		e2e.ManifestPath("agent-gateway-secondary.yaml"),
 	)
-	t.Cleanup(func() {
+	secondary.ExtraHelmArgs = primaryImageHelmArgs(t)
+	testutils.Cleanup(t, func() {
 		secondary.UninstallAgentgatewayCore(t.Ctx, tt)
 		secondary.Finalize()
 	})
@@ -82,10 +84,35 @@ func applyWithoutResourceWait(t base.Test, manifest string) {
 	t.Helper()
 	err := t.TestInstallation.ClusterContext.Client.ApplyYAMLFiles("", manifest)
 	assert.NoError(t, err)
-	t.Cleanup(func() {
+	testutils.Cleanup(t, func() {
 		err := t.TestInstallation.ClusterContext.Client.DeleteYAMLFiles("", manifest)
 		assert.NoError(t, err)
 	})
+}
+
+func primaryImageHelmArgs(t base.Test) []string {
+	t.Helper()
+	deployment, err := t.TestInstallation.ClusterContext.Client.Kube().AppsV1().Deployments(
+		t.TestInstallation.InstallNamespace,
+	).Get(t.Ctx, "agentgateway", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("get primary controller deployment: %v", err)
+	}
+	if len(deployment.Spec.Template.Spec.Containers) == 0 {
+		t.Fatal("primary controller deployment has no containers")
+	}
+
+	image := deployment.Spec.Template.Spec.Containers[0].Image
+	lastSlash := strings.LastIndex(image, "/")
+	lastColon := strings.LastIndex(image, ":")
+	if lastSlash < 0 || lastColon <= lastSlash || lastColon == len(image)-1 {
+		t.Fatalf("primary controller image %q does not contain a registry, repository, and tag", image)
+	}
+
+	return []string{
+		"--set-string", "image.registry=" + image[:lastSlash],
+		"--set-string", "image.tag=" + image[lastColon+1:],
+	}
 }
 
 func assertGatewayClassController(t base.Test, name, controllerName string) {
