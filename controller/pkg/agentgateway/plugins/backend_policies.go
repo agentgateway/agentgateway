@@ -1049,9 +1049,17 @@ func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, n
 		Audience:                    auth.Audience,
 		Resources:                   auth.Resources,
 		Scopes:                      auth.Scopes,
+		AccessTokenScopes:           translateCrossAppAccessScopes(auth.AccessTokenScopes),
 		SubjectToken:                translateCrossAppAccessSubjectToken(auth.SubjectToken),
 		Cache:                       translateOAuthTokenCache(auth.Cache),
 	}, errors.Join(errs...)
+}
+
+func translateCrossAppAccessScopes(scopes *[]string) *api.CrossAppAccessAuth_ScopeList {
+	if scopes == nil {
+		return nil
+	}
+	return &api.CrossAppAccessAuth_ScopeList{Values: *scopes}
 }
 
 func translateCrossAppAccessSubjectToken(spec *agentgateway.CrossAppAccessSubjectToken) *api.CrossAppAccessAuth_SubjectToken {
