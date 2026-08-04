@@ -29,74 +29,45 @@ directory locally (gitignored), or check the PR description for the latest numbe
 
 ## Running it yourself
 
-You need `llm-d-benchmark` cloned somewhere and its CLI installed, check their
+```bash
+make -C controller benchmark BENCHMARK_LLM_D_BENCHMARK_DIR=/path/to/llm-d-benchmark
+```
+
+That's it - it reuses the existing `kind-create` target for the cluster, so pass
+`CLUSTER_NAME=<name>` too if you don't want the default. You need `llm-d-benchmark`
+cloned somewhere with its CLI installed first, check their
 [quickstart](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/quickstart.md)
 if you haven't set it up before.
 
-```bash
-# point this at wherever you cloned llm-d-benchmark
-export LLM_D_BENCHMARK_DIR=/path/to/llm-d-benchmark
-export AGTW_BENCHMARKING_DIR=$(pwd)/benchmarking   # run from the agentgateway repo root
+You can also run `benchmarking/run-benchmark.sh` directly (same env vars, just
+`LLM_D_BENCHMARK_DIR` instead of the `BENCHMARK_` prefix) if you already have a
+cluster up and don't want to go through `make`.
 
-cd "$LLM_D_BENCHMARK_DIR"
-source .venv/bin/activate
-```
-
-llm-d-benchmark needs a spec file pointing at its own templates plus our scenario
-file, so write one for each arm:
-
-```bash
-for arm in baseline agentgateway; do
-cat > /tmp/spec-${arm}.yaml <<EOF
-base_dir: ${LLM_D_BENCHMARK_DIR}
-values_file:
-  path: ${LLM_D_BENCHMARK_DIR}/config/templates/values/defaults.yaml
-template_dir:
-  path: ${LLM_D_BENCHMARK_DIR}/config/templates/jinja
-scenario_file:
-  path: ${AGTW_BENCHMARKING_DIR}/scenarios/${arm}.yaml
-EOF
-done
-```
-
-Spin up a Kind cluster and run both arms:
-
-```bash
-kind create cluster --name agtw-benchmark
-
-llmdbenchmark --spec /tmp/spec-baseline.yaml     standup -p plain-service-decode-only --skip-smoketest
-llmdbenchmark --spec /tmp/spec-agentgateway.yaml standup -p agentgateway-decode-only  --skip-smoketest
-
-llmdbenchmark --spec /tmp/spec-baseline.yaml     smoketest -p plain-service-decode-only
-llmdbenchmark --spec /tmp/spec-agentgateway.yaml smoketest -p agentgateway-decode-only
-
-llmdbenchmark --spec /tmp/spec-baseline.yaml     run -p plain-service-decode-only -l inference-perf -w sanity_random.yaml
-llmdbenchmark --spec /tmp/spec-agentgateway.yaml run -p agentgateway-decode-only  -l inference-perf -w sanity_random.yaml
-```
-
-Then compare. `cross_treatment.py` is just a library function, not a CLI command,
-so this is a quick python snippet instead of one line:
-
-```bash
-mkdir -p /tmp/comparison-input
-ln -sf <path-to-baseline-results>     /tmp/comparison-input/baseline
-ln -sf <path-to-agentgateway-results> /tmp/comparison-input/agentgateway
-
-python3 -c "
-from pathlib import Path
-from llmdbenchmark.analysis.cross_treatment import generate_cross_treatment_summary
-generate_cross_treatment_summary(Path('/tmp/comparison-input'), output_dir=Path('/tmp/comparison-output'))
-"
-```
+What it does, in order:
+1. Loads the agentgateway image into the cluster (see the gotcha below for why
+   this isn't just `kind load docker-image`)
+2. Writes a spec file per arm pointing llm-d-benchmark at its own templates plus
+   our `scenarios/*.yaml`
+3. `standup` -> `smoketest` -> `run` for both arms, retrying `standup` once if it
+   times out on the first image pull (see the gotcha below)
+4. Compares both arms with llm-d-benchmark's own `cross_treatment.py` and writes
+   the CSV + plots to `results/` (gitignored, not checked in)
 
 ## Stuff that'll probably trip you up
 
 - The router chart's built-in agentgateway image preset points at a tag
   (`cr.agentgateway.dev/agentgateway:v0.9.0`) that doesn't actually exist in the
-  registry. `scenarios/agentgateway.yaml` already overrides it to `latest-dev`,
-  just make sure that image is loaded into your cluster
-  (`kind load docker-image cr.agentgateway.dev/agentgateway:latest-dev --name <cluster>`).
+  registry. `scenarios/agentgateway.yaml` already overrides it to `latest-dev`.
+- Loading that image with a plain `kind load docker-image` fails with
+  `ctr: content digest ... not found`. `cr.agentgateway.dev` publishes a
+  multi-arch index with buildx attestation manifests, and on Docker Desktop's
+  containerd image store, `docker save` keeps the whole index without the
+  content for platforms/attestations you never actually pulled - `kind`'s
+  `ctr images import --all-platforms` then chokes on the missing digest. The
+  script works around this with `skopeo` (`brew install skopeo`), which
+  flattens the image to a single-platform tar before `kind load image-archive`.
 - First standup on a fresh cluster times out waiting on the harness pod - it's
   pulling `ghcr.io/llm-d/llm-d-benchmark` (~5.7GB) for the first time and that
-  takes longer than the wait timeout. Just let the pull finish and re-run
-  `standup`, it'll use the cached image the second time.
+  takes longer than the wait timeout. The script retries once after waiting for
+  the namespace's pods to go Ready; if that's still not enough, let the pull
+  finish and re-run.
