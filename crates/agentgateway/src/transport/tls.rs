@@ -15,13 +15,12 @@ use tracing::warn;
 use x509_parser::certificate::X509Certificate;
 
 use crate::apply;
-use crate::serdes::schema;
-use crate::transport::stream::Socket;
-use crate::types::discovery::Identity;
-
 // Provider construction lives in the central `crypto` module; re-export here so
 // existing `transport::tls::provider*` call sites keep working unchanged.
 pub use crate::crypto::tls::{provider, provider_with_cipher_suites, provider_with_options};
+use crate::serdes::schema;
+use crate::transport::stream::Socket;
+use crate::types::discovery::Identity;
 
 pub static ALL_TLS_VERSIONS: &[&rustls::SupportedProtocolVersion] =
 	&[&rustls::version::TLS12, &rustls::version::TLS13];

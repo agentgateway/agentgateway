@@ -90,7 +90,10 @@ mod tests {
 	#[test]
 	fn short_input_fails_cleanly() {
 		let key = Aes256Gcm::new(&[0u8; 32]).expect("key");
-		assert!(matches!(key.open(&[0u8; 11]), Err(AeadError::InvalidFormat)));
+		assert!(matches!(
+			key.open(&[0u8; 11]),
+			Err(AeadError::InvalidFormat)
+		));
 	}
 
 	#[test]
@@ -107,8 +110,14 @@ mod tests {
 
 	#[test]
 	fn wrong_key_fails() {
-		let sealed = Aes256Gcm::new(&[1u8; 32]).expect("key").seal(b"x").expect("seal");
+		let sealed = Aes256Gcm::new(&[1u8; 32])
+			.expect("key")
+			.seal(b"x")
+			.expect("seal");
 		let other = Aes256Gcm::new(&[2u8; 32]).expect("key");
-		assert!(matches!(other.open(&sealed), Err(AeadError::DecryptionFailed)));
+		assert!(matches!(
+			other.open(&sealed),
+			Err(AeadError::DecryptionFailed)
+		));
 	}
 }
