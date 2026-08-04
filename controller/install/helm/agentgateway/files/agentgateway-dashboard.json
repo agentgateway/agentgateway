@@ -61,7 +61,7 @@
       "repeatDirection": "h",
       "targets": [
         {
-          "expr": "sum by (pod,namespace) (container_memory_working_set_bytes{image=\"\",namespace=~\"$namespace\"}) * on(pod, namespace) group_left(gateway_networking_k8s_io_gateway_name) agentgateway_build_info{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\"}",
+          "expr": "sum by (pod,namespace) (container_memory_working_set_bytes{image=\"\",namespace=~\"$namespace\"})",
           "legendFormat": "{{namespace}}/{{pod}}",
           "refId": ""
         }
@@ -114,7 +114,7 @@
       "repeatDirection": "h",
       "targets": [
         {
-          "expr": "sum by (pod,namespace) (irate(container_cpu_usage_seconds_total{image=\"\",namespace=~\"$namespace\"}[$__rate_interval]) * on(pod, namespace) group_left(gateway_networking_k8s_io_gateway_name) agentgateway_build_info{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\"})",
+          "expr": "sum by (pod,namespace) (irate(container_cpu_usage_seconds_total{image=\"\",namespace=~\"$namespace\"}[$__rate_interval]))",
           "legendFormat": "{{namespace}}/{{pod}}",
           "refId": ""
         }
@@ -1011,37 +1011,37 @@
           "repeatDirection": "h",
           "targets": [
             {
-              "expr": "agentgateway_cgroup_usage{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "expr": "agentgateway_cgroup_usage{namespace=~\"$namespace\",gateway=~\"$gateway\",pod=~\"$pod\"}",
               "legendFormat": "{{namespace}}/{{pod}} usage",
               "refId": ""
             },
             {
-              "expr": "agentgateway_cgroup_working_set{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "expr": "agentgateway_cgroup_working_set{namespace=~\"$namespace\",gateway=~\"$gateway\",pod=~\"$pod\"}",
               "legendFormat": "{{namespace}}/{{pod}} working set",
               "refId": ""
             },
             {
-              "expr": "agentgateway_cgroup_anon{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "expr": "agentgateway_cgroup_anon{namespace=~\"$namespace\",gateway=~\"$gateway\",pod=~\"$pod\"}",
               "legendFormat": "{{namespace}}/{{pod}} anonymous",
               "refId": ""
             },
             {
-              "expr": "agentgateway_cgroup_file{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "expr": "agentgateway_cgroup_file{namespace=~\"$namespace\",gateway=~\"$gateway\",pod=~\"$pod\"}",
               "legendFormat": "{{namespace}}/{{pod}} file",
               "refId": ""
             },
             {
-              "expr": "agentgateway_cgroup_kernel{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "expr": "agentgateway_cgroup_kernel{namespace=~\"$namespace\",gateway=~\"$gateway\",pod=~\"$pod\"}",
               "legendFormat": "{{namespace}}/{{pod}} kernel",
               "refId": ""
             },
             {
-              "expr": "agentgateway_cgroup_sock{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "expr": "agentgateway_cgroup_sock{namespace=~\"$namespace\",gateway=~\"$gateway\",pod=~\"$pod\"}",
               "legendFormat": "{{namespace}}/{{pod}} socket",
               "refId": ""
             },
             {
-              "expr": "agentgateway_cgroup_slab{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "expr": "agentgateway_cgroup_slab{namespace=~\"$namespace\",gateway=~\"$gateway\",pod=~\"$pod\"}",
               "legendFormat": "{{namespace}}/{{pod}} slab",
               "refId": ""
             }
@@ -1095,32 +1095,32 @@
           "repeatDirection": "h",
           "targets": [
             {
-              "expr": "agentgateway_process_rss{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "expr": "agentgateway_process_rss{namespace=~\"$namespace\",gateway=~\"$gateway\",pod=~\"$pod\"}",
               "legendFormat": "{{namespace}}/{{pod}} rss",
               "refId": ""
             },
             {
-              "expr": "agentgateway_process_pss{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "expr": "agentgateway_process_pss{namespace=~\"$namespace\",gateway=~\"$gateway\",pod=~\"$pod\"}",
               "legendFormat": "{{namespace}}/{{pod}} pss",
               "refId": ""
             },
             {
-              "expr": "agentgateway_process_private_dirty{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "expr": "agentgateway_process_private_dirty{namespace=~\"$namespace\",gateway=~\"$gateway\",pod=~\"$pod\"}",
               "legendFormat": "{{namespace}}/{{pod}} private dirty",
               "refId": ""
             },
             {
-              "expr": "agentgateway_process_private_clean{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "expr": "agentgateway_process_private_clean{namespace=~\"$namespace\",gateway=~\"$gateway\",pod=~\"$pod\"}",
               "legendFormat": "{{namespace}}/{{pod}} private clean",
               "refId": ""
             },
             {
-              "expr": "agentgateway_process_shared_clean{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "expr": "agentgateway_process_shared_clean{namespace=~\"$namespace\",gateway=~\"$gateway\",pod=~\"$pod\"}",
               "legendFormat": "{{namespace}}/{{pod}} shared clean",
               "refId": ""
             },
             {
-              "expr": "agentgateway_process_swap{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "expr": "agentgateway_process_swap{namespace=~\"$namespace\",gateway=~\"$gateway\",pod=~\"$pod\"}",
               "legendFormat": "{{namespace}}/{{pod}} swap",
               "refId": ""
             }
@@ -1173,17 +1173,17 @@
           "repeatDirection": "h",
           "targets": [
             {
-              "expr": "agentgateway_tokio_num_workers{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "expr": "agentgateway_tokio_num_workers{namespace=~\"$namespace\",gateway=~\"$gateway\",pod=~\"$pod\"}",
               "legendFormat": "{{namespace}}/{{pod}} workers",
               "refId": ""
             },
             {
-              "expr": "agentgateway_tokio_num_alive_tasks{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "expr": "agentgateway_tokio_num_alive_tasks{namespace=~\"$namespace\",gateway=~\"$gateway\",pod=~\"$pod\"}",
               "legendFormat": "{{namespace}}/{{pod}} alive tasks",
               "refId": ""
             },
             {
-              "expr": "agentgateway_tokio_global_queue_depth{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"}",
+              "expr": "agentgateway_tokio_global_queue_depth{namespace=~\"$namespace\",gateway=~\"$gateway\",pod=~\"$pod\"}",
               "legendFormat": "{{namespace}}/{{pod}} global queue depth",
               "refId": ""
             }
@@ -1236,7 +1236,7 @@
           "repeatDirection": "h",
           "targets": [
             {
-              "expr": "sum by (tag) (agentgateway_build_info{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\",pod=~\"$pod\"})",
+              "expr": "sum by (tag) (agentgateway_build_info{namespace=~\"$namespace\",gateway=~\"$gateway\",pod=~\"$pod\"})",
               "legendFormat": "{{tag}}",
               "refId": ""
             }
@@ -1323,7 +1323,7 @@
         "label": "Gateway Full Name",
         "multi": true,
         "name": "gateway",
-        "query": "query_result(label_join(agentgateway_build_info{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\"}, \"gateway\", \"/\", \"namespace\", \"gateway_networking_k8s_io_gateway_name\"))",
+        "query": "query_result(label_join(agentgateway_build_info{namespace=~\"$namespace\",gateway=~\"$gateway\"}, \"gateway\", \"/\", \"namespace\", \"gateway_networking_k8s_io_gateway_name\"))",
         "refresh": 2,
         "regex": "/.*gateway=\"([^\"]+).*/",
         "skipUrlSync": false,
@@ -1344,7 +1344,7 @@
         "label": "Pod",
         "multi": true,
         "name": "pod",
-        "query": "query_result(agentgateway_build_info{namespace=~\"$namespace\",gateway_networking_k8s_io_gateway_name=~\"$gateway_name\"})",
+        "query": "query_result(agentgateway_build_info{namespace=~\"$namespace\",gateway=~\"$gateway\"})",
         "refresh": 2,
         "regex": ".*pod=\"([^\"]+)\".*",
         "skipUrlSync": false,
