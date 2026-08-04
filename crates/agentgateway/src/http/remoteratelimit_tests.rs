@@ -728,39 +728,6 @@ fn apply_over_limit_response_sets_x_ratelimit_headers_from_most_constrained_stat
 	assert_eq!(direct.headers().get("x-ratelimit-limit").unwrap(), "1");
 	assert_eq!(direct.headers().get("x-ratelimit-remaining").unwrap(), "0");
 	assert_eq!(direct.headers().get("x-ratelimit-reset").unwrap(), "38");
-	assert_eq!(direct.headers().get("x-envoy-ratelimited").unwrap(), "true");
-}
-
-#[test]
-fn apply_over_limit_preserves_service_provided_x_envoy_ratelimited() {
-	use ::http::StatusCode;
-
-	use crate::http::tests_common::request_for_uri;
-
-	let mut req = request_for_uri("http://example.com/test");
-	let response = proto::RateLimitResponse {
-		overall_code: proto::rate_limit_response::Code::OverLimit as i32,
-		statuses: vec![],
-		// The rate limit service explicitly set x-envoy-ratelimited; we must pass it through as-is
-		// rather than overwriting it with our synthesized default.
-		response_headers_to_add: vec![proto::HeaderValue {
-			key: "x-envoy-ratelimited".to_string(),
-			value: "custom".to_string(),
-			raw_value: vec![],
-		}],
-		request_headers_to_add: vec![],
-		raw_body: b"rate limit exceeded".to_vec(),
-		dynamic_metadata: None,
-		quota: None,
-	};
-
-	let result = RemoteRateLimit::apply(&mut req, response).unwrap();
-	let direct = result.direct_response.unwrap();
-	assert_eq!(direct.status(), StatusCode::TOO_MANY_REQUESTS);
-	assert_eq!(
-		direct.headers().get("x-envoy-ratelimited").unwrap(),
-		"custom"
-	);
 }
 
 #[test]
@@ -821,8 +788,8 @@ fn apply_ok_response_preserves_explicit_ratelimit_header() {
 			duration_until_reset: None,
 			quota: None,
 		}],
-		// The rate limit service explicitly set its own remaining value; it must win over the
-		// value we would otherwise derive from the descriptor status.
+		// The rate limit service set an x-ratelimit-* header; we defer the whole set to it rather
+		// than mixing in our derived values.
 		response_headers_to_add: vec![proto::HeaderValue {
 			key: "x-ratelimit-remaining".to_string(),
 			value: "7".to_string(),
@@ -839,7 +806,8 @@ fn apply_ok_response_preserves_explicit_ratelimit_header() {
 		.response_headers
 		.expect("x-ratelimit headers on allowed response");
 	assert_eq!(headers.get("x-ratelimit-remaining").unwrap(), "7");
-	assert_eq!(headers.get("x-ratelimit-limit").unwrap(), "100");
+	// Atomic: because the service supplied an x-ratelimit-* header, we do not add our derived ones.
+	assert!(headers.get("x-ratelimit-limit").is_none());
 }
 
 // --- ProxyError mapping tests ---

@@ -1,4 +1,4 @@
-use ::http::{HeaderMap, HeaderValue, StatusCode};
+use ::http::{HeaderMap, StatusCode};
 use itertools::Itertools;
 
 use crate::cel::{Executor, Expression};
@@ -450,12 +450,6 @@ impl RemoteRateLimit {
 			if let Some(hm) = rb.headers_mut() {
 				process_headers(hm, response_headers_to_add);
 				process_ratelimit_status_headers(hm, &statuses);
-				if !hm.contains_key(http::x_headers::X_ENVOY_RATELIMITED) {
-					hm.insert(
-						http::x_headers::X_ENVOY_RATELIMITED,
-						HeaderValue::from_static("true"),
-					);
-				}
 			}
 			let resp = rb
 				.body(http::Body::from(raw_body))

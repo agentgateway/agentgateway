@@ -344,14 +344,8 @@ impl ProxyError {
 			reset_seconds,
 		} = self
 		{
-			// Mirror Envoy's rate limit filters, which set x-envoy-ratelimited on the enforced 429 for
-			// both local and global rate limiting.
 			if let Some(hm) = rb.headers_mut() {
 				http::x_headers::set_ratelimit_headers(hm, limit, remaining, reset_seconds);
-				hm.insert(
-					http::x_headers::X_ENVOY_RATELIMITED,
-					HeaderValue::from_static("true"),
-				);
 			}
 		}
 

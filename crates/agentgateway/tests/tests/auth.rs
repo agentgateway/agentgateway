@@ -351,11 +351,9 @@ async fn local_ratelimit() {
 
 	let res = send_request(io.clone(), Method::GET, "http://lo").await;
 	assert_eq!(res.status(), 429);
-	// The 429 carries the limit info plus x-envoy-ratelimited, matching Envoy's local rate limit
-	// filter (which sets it on the enforced 429, the same as the global filter).
+	// The 429 still carries the limit info.
 	assert_eq!(res.hdr("x-ratelimit-limit"), "1");
 	assert_eq!(res.hdr("x-ratelimit-remaining"), "0");
-	assert_eq!(res.hdr("x-envoy-ratelimited"), "true");
 }
 
 #[tokio::test]
