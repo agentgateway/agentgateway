@@ -1,6 +1,5 @@
 use agent_core::strng;
 use agent_core::strng::Strng;
-use async_openai::types::chat::ModerationParam;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
@@ -15,7 +14,7 @@ pub struct Request {
 	pub model: Option<String>,
 
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub moderation: Option<ModerationParam>,
+	pub moderation: Option<serde_json::Value>,
 
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub top_p: Option<f32>,
@@ -521,8 +520,8 @@ pub mod typed {
 		ChatCompletionStreamOptions as StreamOptions, ChatCompletionTool as FunctionTool,
 		ChatCompletionToolChoiceOption as ToolChoiceOption, ChatCompletionToolChoiceOption,
 		ChatCompletionTools as Tool, FinishReason, FunctionCall, FunctionCallStream, FunctionName,
-		FunctionObject, FunctionType, ImageUrl, ModerationParam, PredictionContent,
-		PromptCacheBreakpointParam, ReasoningEffort, ResponseFormat, ResponseFormatJsonSchema,
+		FunctionObject, FunctionType, ImageUrl, PredictionContent, PromptCacheBreakpointParam,
+		ReasoningEffort, ResponseFormat, ResponseFormatJsonSchema,
 		ResponseModalities as ChatCompletionModalities, Role, StopConfiguration as Stop,
 		ToolChoiceOptions, WebSearchOptions,
 	};
@@ -824,7 +823,7 @@ pub mod typed {
 
 		/// Configuration for running moderation on the request input and generated output.
 		#[serde(skip_serializing_if = "Option::is_none")]
-		pub moderation: Option<ModerationParam>,
+		pub moderation: Option<serde_json::Value>,
 
 		/// Whether or not to store the output of this chat completion request
 		///

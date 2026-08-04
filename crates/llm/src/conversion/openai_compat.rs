@@ -431,7 +431,7 @@ pub mod from_responses {
 			response_format,
 			stream: Some(stream),
 			model: req.model.clone(),
-			moderation: req.moderation.clone(),
+			moderation: None,
 			temperature: req.temperature,
 			top_p: req.top_p,
 			max_completion_tokens: req.max_output_tokens,

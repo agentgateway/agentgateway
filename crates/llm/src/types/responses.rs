@@ -1,4 +1,3 @@
-use async_openai::types::responses::ModerationParam;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -117,7 +116,7 @@ pub struct Request {
 	pub model: Option<String>,
 
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub moderation: Option<ModerationParam>,
+	pub moderation: Option<Value>,
 
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub max_output_tokens: Option<u32>,

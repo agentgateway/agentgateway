@@ -328,75 +328,60 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 };
 
 fn render_openai_completions(
-	req: types::ChatRequest<'_>,
+	req: types::ChatRequest,
 	ctx: &ChatRequestContext<'_>,
 ) -> Result<Vec<u8>, AIError> {
 	match req {
-		types::ChatRequest::Completions(req) => serialize_openai_request(req, ctx),
+		types::ChatRequest::Completions(mut req) => {
+			apply_openai_moderation(&mut req.moderation, ctx)?;
+			serde_json::to_vec(&req).map_err(AIError::RequestMarshal)
+		},
 		types::ChatRequest::Messages(req) => {
-			let translated = conversion::completions::from_messages::translate_request(req)?;
-			serialize_openai_request(&translated, ctx)
+			let mut translated = conversion::completions::from_messages::translate_request(&req)?;
+			apply_openai_moderation(&mut translated.moderation, ctx)?;
+			serde_json::to_vec(&translated).map_err(AIError::RequestMarshal)
 		},
 		types::ChatRequest::Responses(req) => {
-			let translated = conversion::openai_compat::from_responses::translate_request(req)?;
-			serialize_openai_request(&translated, ctx)
+			let mut translated = conversion::openai_compat::from_responses::translate_request(&req)?;
+			apply_openai_moderation(&mut translated.moderation, ctx)?;
+			serde_json::to_vec(&translated).map_err(AIError::RequestMarshal)
 		},
 	}
 }
 
 fn render_openai_responses(
-	req: types::ChatRequest<'_>,
+	req: types::ChatRequest,
 	ctx: &ChatRequestContext<'_>,
 ) -> Result<Vec<u8>, AIError> {
 	match req {
-		types::ChatRequest::Responses(req) => serialize_openai_request(req, ctx),
+		types::ChatRequest::Responses(mut req) => {
+			apply_openai_moderation(&mut req.moderation, ctx)?;
+			serde_json::to_vec(&req).map_err(AIError::RequestMarshal)
+		},
 		_ => Err(AIError::UnsupportedConversion(strng::literal!(
 			"expected responses request"
 		))),
 	}
 }
 
-trait OpenAIRequestWithModeration: Clone + serde::Serialize {
-	fn set_moderation(&mut self, moderation: async_openai::types::chat::ModerationParam);
-}
-
-impl OpenAIRequestWithModeration for types::completions::Request {
-	fn set_moderation(&mut self, moderation: async_openai::types::chat::ModerationParam) {
-		self.moderation = Some(moderation);
-	}
-}
-
-impl OpenAIRequestWithModeration for types::completions::typed::Request {
-	fn set_moderation(&mut self, moderation: async_openai::types::chat::ModerationParam) {
-		self.moderation = Some(moderation);
-	}
-}
-
-impl OpenAIRequestWithModeration for types::responses::Request {
-	fn set_moderation(&mut self, moderation: async_openai::types::chat::ModerationParam) {
-		self.moderation = Some(moderation);
-	}
-}
-
-fn serialize_openai_request<T: OpenAIRequestWithModeration>(
-	req: &T,
+fn apply_openai_moderation(
+	request_moderation: &mut Option<serde_json::Value>,
 	ctx: &ChatRequestContext<'_>,
-) -> Result<Vec<u8>, AIError> {
+) -> Result<(), AIError> {
 	let Some(moderation) = (match ctx.provider {
 		AIProvider::OpenAI(provider) => provider.moderation.as_ref(),
 		_ => None,
 	}) else {
-		return serde_json::to_vec(req).map_err(AIError::RequestMarshal);
+		return Ok(());
 	};
-	let mut req = req.clone();
-	req.set_moderation(moderation.to_openai_param());
-	serde_json::to_vec(&req).map_err(AIError::RequestMarshal)
+	*request_moderation = Some(serde_json::to_value(moderation).map_err(AIError::RequestMarshal)?);
+	Ok(())
 }
 
-fn render_anthropic_messages(req: types::ChatRequest<'_>) -> Result<Vec<u8>, AIError> {
+fn render_anthropic_messages(req: types::ChatRequest) -> Result<Vec<u8>, AIError> {
 	match req {
-		types::ChatRequest::Completions(req) => conversion::messages::from_completions::translate(req),
-		types::ChatRequest::Messages(req) => serde_json::to_vec(req).map_err(AIError::RequestMarshal),
+		types::ChatRequest::Completions(req) => conversion::messages::from_completions::translate(&req),
+		types::ChatRequest::Messages(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
 		types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"responses to messages"
 		))),
@@ -404,7 +389,7 @@ fn render_anthropic_messages(req: types::ChatRequest<'_>) -> Result<Vec<u8>, AIE
 }
 
 fn render_vertex_gemini(
-	req: types::ChatRequest<'_>,
+	req: types::ChatRequest,
 	ctx: &ChatRequestContext<'_>,
 ) -> Result<Vec<u8>, AIError> {
 	let AIProvider::Vertex(provider) = ctx.provider else {
@@ -414,7 +399,7 @@ fn render_vertex_gemini(
 	};
 	match req {
 		types::ChatRequest::Completions(req) => {
-			conversion::vertex_gemini::from_completions::translate(req, provider.model.as_deref())
+			conversion::vertex_gemini::from_completions::translate(&req, provider.model.as_deref())
 		},
 		_ => Err(AIError::UnsupportedConversion(strng::literal!(
 			"vertex gemini only supports completions input"
@@ -423,7 +408,7 @@ fn render_vertex_gemini(
 }
 
 fn render_bedrock_converse(
-	req: types::ChatRequest<'_>,
+	req: types::ChatRequest,
 	ctx: &ChatRequestContext<'_>,
 ) -> Result<RenderedChatRequest, AIError> {
 	let AIProvider::Bedrock(provider) = ctx.provider else {
@@ -433,16 +418,16 @@ fn render_bedrock_converse(
 	};
 	let bedrock = match req {
 		types::ChatRequest::Completions(req) => conversion::bedrock::from_completions::translate(
-			req,
+			&req,
 			provider,
 			Some(ctx.headers),
 			ctx.prompt_caching,
 		),
 		types::ChatRequest::Messages(req) => {
-			conversion::bedrock::from_messages::translate(req, provider, Some(ctx.headers))
+			conversion::bedrock::from_messages::translate(&req, provider, Some(ctx.headers))
 		},
 		types::ChatRequest::Responses(req) => conversion::bedrock::from_responses::translate(
-			req,
+			&req,
 			provider,
 			Some(ctx.headers),
 			ctx.prompt_caching,
@@ -482,7 +467,7 @@ impl ChatTranslation {
 
 	fn render_request(
 		&self,
-		req: types::ChatRequest<'_>,
+		req: types::ChatRequest,
 		ctx: &ChatRequestContext<'_>,
 	) -> Result<RenderedChatRequest, AIError> {
 		let body = match self.output {
@@ -1423,7 +1408,7 @@ impl AIProvider {
 				parts,
 				tokenize,
 				log,
-				|req| types::ChatRequest::Completions(req),
+				types::ChatRequest::Completions,
 			)
 			.await
 	}
@@ -1450,7 +1435,7 @@ impl AIProvider {
 				parts,
 				tokenize,
 				log,
-				|req| types::ChatRequest::Messages(req),
+				types::ChatRequest::Messages,
 			)
 			.await
 	}
@@ -1537,7 +1522,7 @@ impl AIProvider {
 				parts,
 				tokenize,
 				log,
-				|req| types::ChatRequest::Responses(req),
+				types::ChatRequest::Responses,
 			)
 			.await
 	}
@@ -1781,7 +1766,7 @@ impl AIProvider {
 	) -> Result<RequestResult, AIError>
 	where
 		T: RequestType,
-		F: for<'a> FnOnce(&'a T) -> types::ChatRequest<'a>,
+		F: FnOnce(T) -> types::ChatRequest,
 	{
 		let request_model = if req.supports_model() {
 			req.model().as_deref().map(str::to_string)
@@ -1816,7 +1801,7 @@ impl AIProvider {
 		};
 
 		let rendered = chat_translation.render_request(
-			chat_request(&req),
+			chat_request(req),
 			&ChatRequestContext {
 				provider: self,
 				headers: &parts.headers,

@@ -296,7 +296,10 @@ async fn openai_client_moderation_passthrough_without_config() {
 					"moderation": {
 						"model": "client-selected-model",
 						"policy": {
-							"input": { "mode": "score" },
+							"input": {
+								"mode": "future-mode",
+								"future_option": { "enabled": true }
+							},
 							"output": { "mode": "block" }
 						}
 					},
@@ -325,7 +328,10 @@ async fn openai_client_moderation_passthrough_without_config() {
 		json!({
 			"model": "client-selected-model",
 			"policy": {
-				"input": { "mode": "score" },
+				"input": {
+					"mode": "future-mode",
+					"future_option": { "enabled": true }
+				},
 				"output": { "mode": "block" }
 			}
 		})

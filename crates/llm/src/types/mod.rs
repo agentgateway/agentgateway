@@ -15,10 +15,10 @@ use serde::Serialize;
 
 use crate::{AIError, LLMRequest, LLMResponse, apply};
 
-pub enum ChatRequest<'a> {
-	Completions(&'a completions::Request),
-	Messages(&'a messages::Request),
-	Responses(&'a responses::Request),
+pub enum ChatRequest {
+	Completions(completions::Request),
+	Messages(messages::Request),
+	Responses(responses::Request),
 }
 
 pub(crate) fn thinking_budget_for_reasoning_effort(

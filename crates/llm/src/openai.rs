@@ -1,6 +1,5 @@
 use agent_core::strng;
 use agent_core::strng::Strng;
-use async_openai::types::chat as openai_chat;
 
 use crate::{RouteType, apply};
 
@@ -52,44 +51,6 @@ pub struct ModerationConfigParam {
 pub enum ModerationMode {
 	Score,
 	Block,
-}
-
-impl ModerationParam {
-	pub fn to_openai_param(&self) -> openai_chat::ModerationParam {
-		openai_chat::ModerationParam {
-			model: self.model.to_string(),
-			policy: self
-				.policy
-				.as_ref()
-				.map(ModerationPolicyParam::to_openai_param),
-		}
-	}
-}
-
-impl ModerationPolicyParam {
-	fn to_openai_param(&self) -> openai_chat::ModerationPolicyParam {
-		openai_chat::ModerationPolicyParam {
-			input: self
-				.input
-				.as_ref()
-				.map(ModerationConfigParam::to_openai_param),
-			output: self
-				.output
-				.as_ref()
-				.map(ModerationConfigParam::to_openai_param),
-		}
-	}
-}
-
-impl ModerationConfigParam {
-	fn to_openai_param(&self) -> openai_chat::ModerationConfigParam {
-		openai_chat::ModerationConfigParam {
-			mode: match self.mode {
-				ModerationMode::Score => openai_chat::ModerationMode::Score,
-				ModerationMode::Block => openai_chat::ModerationMode::Block,
-			},
-		}
-	}
 }
 
 pub const DEFAULT_MODERATION_MODEL: Strng = strng::literal!("omni-moderation-latest");
