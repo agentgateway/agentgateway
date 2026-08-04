@@ -6,7 +6,7 @@
 # Decode-only to match the baseline arm (see baseline.yaml for why).
 
 scenario:
-- name: gap2-agentgateway
+- name: agentgateway-decode-only
   model:
     name: facebook/opt-125m
     shortName: facebook-opt-125m

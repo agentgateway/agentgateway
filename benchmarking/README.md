@@ -23,7 +23,9 @@ hardware is a separate follow-up, still TBD.
   no EPP, no proxy (`gateway.className: none`)
 - `scenarios/agentgateway.yaml` - EPP with agentgateway as the sidecar proxy, no
   Kubernetes Gateway (`gateway.className: epponly`, `router.proxy.proxyType: agentgateway`)
-- `results/` - the comparison CSV and plots from the last run
+
+Results aren't checked in here - running the steps below produces a `results/`
+directory locally (gitignored), or check the PR description for the latest numbers.
 
 ## Running it yourself
 
@@ -62,14 +64,14 @@ Spin up a Kind cluster and run both arms:
 ```bash
 kind create cluster --name agtw-benchmark
 
-llmdbenchmark --spec /tmp/spec-baseline.yaml     standup -p gap2-baseline     --skip-smoketest
-llmdbenchmark --spec /tmp/spec-agentgateway.yaml standup -p gap2-agentgateway --skip-smoketest
+llmdbenchmark --spec /tmp/spec-baseline.yaml     standup -p plain-service-decode-only --skip-smoketest
+llmdbenchmark --spec /tmp/spec-agentgateway.yaml standup -p agentgateway-decode-only  --skip-smoketest
 
-llmdbenchmark --spec /tmp/spec-baseline.yaml     smoketest -p gap2-baseline
-llmdbenchmark --spec /tmp/spec-agentgateway.yaml smoketest -p gap2-agentgateway
+llmdbenchmark --spec /tmp/spec-baseline.yaml     smoketest -p plain-service-decode-only
+llmdbenchmark --spec /tmp/spec-agentgateway.yaml smoketest -p agentgateway-decode-only
 
-llmdbenchmark --spec /tmp/spec-baseline.yaml     run -p gap2-baseline     -l inference-perf -w sanity_random.yaml
-llmdbenchmark --spec /tmp/spec-agentgateway.yaml run -p gap2-agentgateway -l inference-perf -w sanity_random.yaml
+llmdbenchmark --spec /tmp/spec-baseline.yaml     run -p plain-service-decode-only -l inference-perf -w sanity_random.yaml
+llmdbenchmark --spec /tmp/spec-agentgateway.yaml run -p agentgateway-decode-only  -l inference-perf -w sanity_random.yaml
 ```
 
 Then compare. `cross_treatment.py` is just a library function, not a CLI command,
