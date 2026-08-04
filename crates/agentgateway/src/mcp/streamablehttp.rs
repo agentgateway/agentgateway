@@ -7,10 +7,10 @@ use rmcp::model::{
 	RequestId, ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{
-	EVENT_STREAM_MIME_TYPE, HEADER_MCP_METHOD, HEADER_MCP_NAME, HEADER_MCP_PARAM_PREFIX,
-	HEADER_MCP_PROTOCOL_VERSION, HEADER_SESSION_ID, JSON_MIME_TYPE,
+	BASE64_HEADER_PREFIX, BASE64_HEADER_SUFFIX, EVENT_STREAM_MIME_TYPE, HEADER_MCP_METHOD,
+	HEADER_MCP_NAME, HEADER_MCP_PARAM_PREFIX, HEADER_MCP_PROTOCOL_VERSION, HEADER_SESSION_ID,
+	JSON_MIME_TYPE,
 };
-use rmcp::transport::common::mcp_headers::{decode_header_value, encode_header_value};
 
 use crate::http::{DropBody, Request, Response};
 use crate::mcp::handler::RelayInputs;
@@ -404,8 +404,8 @@ fn message_method(message: &ClientJsonRpcMessage) -> Option<&str> {
 			ClientNotification::ProgressNotification(n) => n.method.as_str(),
 			ClientNotification::InitializedNotification(n) => n.method.as_str(),
 			ClientNotification::RootsListChangedNotification(n) => n.method.as_str(),
-			ClientNotification::TaskStatusNotification(n) => n.method.as_str(),
 			ClientNotification::CustomNotification(n) => n.method.as_str(),
+			_ => return None,
 		}),
 		_ => None,
 	}
@@ -421,6 +421,9 @@ fn message_name(message: &ClientJsonRpcMessage) -> Option<&str> {
 		ClientRequest::ReadResourceRequest(r) => Some(&r.params.uri),
 		ClientRequest::SubscribeRequest(r) => Some(&r.params.uri),
 		ClientRequest::UnsubscribeRequest(r) => Some(&r.params.uri),
+		ClientRequest::GetTaskRequest(r) => Some(&r.params.task_id),
+		ClientRequest::UpdateTaskRequest(r) => Some(&r.params.task_id),
+		ClientRequest::CancelTaskRequest(r) => Some(&r.params.task_id),
 		_ => None,
 	}
 }
@@ -501,13 +504,14 @@ fn validate_request_protocol(
 		return Err(mcp::Error::VersionMismatch(request_id).into());
 	}
 
-	// Completeness checks header or body. A body-only modern version is still a
-	// modern request, but it is missing the required protocol header.
+	// A body-only modern version is still a modern request, but it is missing the required
+	// protocol header. Notifications do not carry request metadata, so the header is their only
+	// version signal.
 	let declares_modern_version = header_version
 		.as_ref()
 		.or(body_version.as_ref())
 		.is_some_and(is_modern_version);
-	if declares_modern_version && (header_version.is_none() || body_version.is_none()) {
+	if declares_modern_version && header_version.is_none() {
 		return Err(mcp::Error::InvalidProtocolVersion.into());
 	}
 
@@ -546,10 +550,41 @@ fn message_protocol_version(message: &ClientJsonRpcMessage) -> Option<ProtocolVe
 			ClientRequest::InitializeRequest(init) => Some(init.params.protocol_version.clone()),
 			_ => req.request.get_meta().protocol_version(),
 		},
-		ClientJsonRpcMessage::Notification(notification) => {
-			notification.notification.get_meta().protocol_version()
-		},
+		ClientJsonRpcMessage::Notification(_) => None,
 		_ => None,
+	}
+}
+
+fn encode_header_value(value: &str) -> String {
+	use base64::Engine;
+	use base64::prelude::BASE64_STANDARD;
+	let bytes = value.as_bytes();
+	let requires_base64 = !value.is_empty()
+		&& (matches!(bytes.first(), Some(b' ' | b'\t'))
+			|| matches!(bytes.last(), Some(b' ' | b'\t'))
+			|| value
+				.chars()
+				.any(|c| (c as u32) < 0x20 || (c as u32) > 0x7e)
+			|| (value.starts_with(BASE64_HEADER_PREFIX) && value.ends_with(BASE64_HEADER_SUFFIX)));
+	if requires_base64 {
+		format!(
+			"{BASE64_HEADER_PREFIX}{}{BASE64_HEADER_SUFFIX}",
+			BASE64_STANDARD.encode(value)
+		)
+	} else {
+		value.to_owned()
+	}
+}
+
+fn decode_header_value(value: &str) -> Option<String> {
+	use base64::Engine;
+	use base64::prelude::BASE64_STANDARD;
+	match value
+		.strip_prefix(BASE64_HEADER_PREFIX)
+		.and_then(|inner| inner.strip_suffix(BASE64_HEADER_SUFFIX))
+	{
+		Some(inner) => String::from_utf8(BASE64_STANDARD.decode(inner).ok()?).ok(),
+		None => Some(value.to_owned()),
 	}
 }
 

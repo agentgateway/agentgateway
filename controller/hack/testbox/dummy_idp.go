@@ -273,6 +273,20 @@ func handleTokenExchangeGrant(w http.ResponseWriter, r *http.Request, form url.V
 		handleCrossAppAccessIdentityAssertionGrant(w, r, form)
 		return
 	}
+	if form.Get("client_id") == "oauth-e2e-jwt-subject-client" {
+		required := map[string][]string{
+			"subject_token":        {testjwt.OrgOneJWT},
+			"subject_token_type":   {oauthTokenTypeAccessToken},
+			"requested_token_type": {oauthTokenTypeAccessToken},
+			"client_id":            {"oauth-e2e-jwt-subject-client"},
+		}
+		if !formContainsValues(form, required) {
+			writeOAuthTokenExchangeError(w, r, http.StatusBadRequest, "invalid_request")
+			return
+		}
+		writeOAuthTokenExchangeResponse(w, r, "jwt-subject-token-exchange-access")
+		return
+	}
 
 	required := map[string][]string{
 		"subject_token":        {"subject-token"},

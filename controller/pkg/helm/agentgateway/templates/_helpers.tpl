@@ -259,18 +259,6 @@ spec:
         - name: NETWORK
           value: {{ $gateway.istio.network | quote }}
         {{- end }}
-      {{- $catalogPaths := list }}
-      {{- range ($gateway.modelCatalog).sources }}
-      {{- if .configMap }}
-      {{- $catalogPaths = append $catalogPaths (printf "/etc/agentgateway/model-catalog/%s/%s.json" .configMap.name .configMap.name) }}
-      {{- end }}
-      {{- end }}
-      {{- if $catalogPaths }}
-        {{- if not (hasKey $userEnvNames "MODEL_CATALOG_PATHS") }}
-        - name: MODEL_CATALOG_PATHS
-          value: {{ $catalogPaths | join "," | quote }}
-        {{- end }}
-      {{- end }}
       {{- /* User-specified env vars */}}
       {{- with $gateway.env }}
         {{- toYaml . | nindent 8 }}

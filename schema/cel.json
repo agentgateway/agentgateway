@@ -398,7 +398,7 @@
           "minimum": 0
         },
         "cacheCreationInputTokens": {
-          "description": "Tokens written to cache (costs)\nNot present with OpenAI",
+          "description": "Tokens written to cache (costs)",
           "type": [
             "integer",
             "null"
@@ -993,6 +993,27 @@
             }
           },
           "additionalProperties": false
+        },
+        "task": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "target": {
+              "description": "The target handling the task.",
+              "type": "string"
+            },
+            "name": {
+              "description": "The task ID.",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "target",
+            "name"
+          ]
         }
       },
       "additionalProperties": false

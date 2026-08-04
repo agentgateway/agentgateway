@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use ::http::header::{HeaderName, HeaderValue};
+use agent_core::version::BuildInfo;
 use headers::HeaderMapExt;
 use http::Method;
 use http::header::{ACCEPT, CONTENT_LENGTH, CONTENT_TYPE, HOST, TRANSFER_ENCODING};
@@ -694,16 +695,30 @@ impl Handler {
 				DiscoverResult::new(
 					ProtocolVersion::KNOWN_VERSIONS.to_vec(),
 					ServerCapabilities::builder().enable_tools().build(),
-				),
+				)
+				.with_server_info(Implementation::new(
+					"agentgateway",
+					BuildInfo::new().version.to_string(),
+				)),
 			),
-			ClientRequest::ListTasksRequest(_) => Messages::from_result(id, ListTasksResult::new(vec![])),
-			ClientRequest::GetTaskRequest(_) => {
-				Messages::from_result(id, GetTaskResult::new(Task::default()))
+			ClientRequest::GetTaskRequest(r) => {
+				return Err(UpstreamError::InvalidRequest(format!(
+					"unknown task {}",
+					r.params.task_id
+				)));
 			},
-			ClientRequest::GetTaskPayloadRequest(_) => {
-				return Err(UpstreamError::InvalidMethod(method.to_string()));
+			ClientRequest::UpdateTaskRequest(r) => {
+				return Err(UpstreamError::InvalidRequest(format!(
+					"unknown task {}",
+					r.params.task_id
+				)));
 			},
-			ClientRequest::CancelTaskRequest(_) => Messages::empty(),
+			ClientRequest::CancelTaskRequest(r) => {
+				return Err(UpstreamError::InvalidRequest(format!(
+					"unknown task {}",
+					r.params.task_id
+				)));
+			},
 			ClientRequest::ReadResourceRequest(_) => {
 				Messages::from_result(id, ReadResourceResult::new(vec![]))
 			},
@@ -748,6 +763,7 @@ impl Handler {
 					..Default::default()
 				},
 			),
+			_ => return Err(UpstreamError::InvalidMethod(method.to_string())),
 		};
 		Ok(res)
 	}

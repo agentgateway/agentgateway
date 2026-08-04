@@ -65,29 +65,37 @@ fn duplicate_names<'a>(enabled: bool, names: impl Iterator<Item = &'a str>) -> H
 fn per_target_deduped<T>(
 	streams: Vec<(Strng, ServerResult)>,
 	reject_duplicates: bool,
-	extract: impl Fn(ServerResult) -> Vec<T>,
+	extract: impl Fn(ServerResult) -> Result<Vec<T>, ClientError>,
 	name: impl for<'a> Fn(&'a T) -> &'a str,
-) -> Vec<(Strng, Vec<T>)> {
+) -> Result<Vec<(Strng, Vec<T>)>, ClientError> {
 	let per_target = streams
 		.into_iter()
-		.map(|(server_name, s)| (server_name, extract(s)))
-		.collect_vec();
+		.map(|(server_name, s)| Ok((server_name, extract(s)?)))
+		.collect::<Result<Vec<_>, ClientError>>()?;
 	let duplicates = duplicate_names(
 		reject_duplicates,
 		per_target
 			.iter()
 			.flat_map(|(_, items)| items.iter().map(&name)),
 	);
-	per_target
-		.into_iter()
-		.map(|(server_name, items)| {
-			let items = items
-				.into_iter()
-				.filter(|item| !duplicates.contains(name(item)))
-				.collect_vec();
-			(server_name, items)
-		})
-		.collect_vec()
+	Ok(
+		per_target
+			.into_iter()
+			.map(|(server_name, items)| {
+				let items = items
+					.into_iter()
+					.filter(|item| !duplicates.contains(name(item)))
+					.collect_vec();
+				(server_name, items)
+			})
+			.collect_vec(),
+	)
+}
+
+fn incompatible_upstream_result(method: &str) -> ClientError {
+	ClientError::new(anyhow::anyhow!(
+		"upstream returned a result incompatible with `{method}`"
+	))
 }
 
 /// Returns the byte length of an RFC 3986 scheme prefix ending at `:`, if present.
@@ -160,6 +168,61 @@ pub(super) fn rewrite_resource_messages(
 		}
 	}
 	message
+}
+
+// Namespaces a task id as `<target>+<task id>`, mirroring `resource_uri`.
+fn task_id(default_target_name: Option<&String>, target: &str, task_id: &str) -> String {
+	if default_target_name.is_none() {
+		format!("{target}+{task_id}")
+	} else {
+		task_id.to_string()
+	}
+}
+
+// Rewrites task ids in outbound results/notifications so they round-trip through `parse_task_id`.
+pub(super) fn rewrite_task_messages(
+	default_target_name: Option<&String>,
+	target: &str,
+	mut message: ServerJsonRpcMessage,
+) -> ServerJsonRpcMessage {
+	if let ServerJsonRpcMessage::Response(resp) = &mut message {
+		match &mut resp.result {
+			ServerResult::CreateTaskResult(r) => {
+				r.task.task_id = task_id(default_target_name, target, &r.task.task_id);
+			},
+			ServerResult::GetTaskResult(r) => {
+				r.task.task.task_id = task_id(default_target_name, target, &r.task.task.task_id);
+			},
+			_ => {},
+		}
+	}
+	if let ServerJsonRpcMessage::Notification(notification) = &mut message
+		&& let ServerNotification::TaskStatusNotification(tsn) = &mut notification.notification
+	{
+		tsn.params.task.task.task_id =
+			task_id(default_target_name, target, &tsn.params.task.task.task_id);
+	}
+	message
+}
+
+// Reverse of `task_id`: splits `<target>+<task id>` into (target, task id).
+pub(super) fn parse_task_id<'a>(
+	upstreams: &'a upstream::UpstreamGroup,
+	task_id: &str,
+) -> Result<(&'a str, String), UpstreamError> {
+	if let Some(default) = upstreams.default_target_name.as_ref() {
+		Ok((default.as_str(), task_id.to_string()))
+	} else {
+		let plus_pos = task_id
+			.find('+')
+			.ok_or_else(|| UpstreamError::InvalidRequest("invalid task id".to_string()))?;
+		let service_name = &task_id[..plus_pos];
+		let original_id = &task_id[plus_pos + 1..];
+		let validated_name = upstreams
+			.get_name(service_name)
+			.ok_or_else(|| UpstreamError::InvalidRequest(format!("unknown service {service_name}")))?;
+		Ok((validated_name, original_id.to_string()))
+	}
 }
 
 /// What kind of name is being resolved to a target (`prefixMode: never`).
@@ -271,6 +334,7 @@ impl Relay {
 		let policies = self.policies.clone();
 		stream.map_server_messages(move |message| {
 			let message = rewrite_resource_messages(default_target_name.as_ref(), &target, message);
+			let message = rewrite_task_messages(default_target_name.as_ref(), &target, message);
 
 			let mut resource_allowed = |uri: &str| {
 				// rewrite_tool_list_ui_meta extracts app URIs from tool metadata, apply RBAC against
@@ -401,6 +465,19 @@ impl Relay {
 			let Some(result) = Self::first_response(con.generic_stream(req, ctx).await?).await? else {
 				return Ok(false);
 			};
+			if !matches!(
+				(kind, &result),
+				(ResolveKind::Tool, ServerResult::ListToolsResult(_))
+					| (ResolveKind::Prompt, ServerResult::ListPromptsResult(_))
+			) {
+				return Err(UpstreamError::InvalidRequest(format!(
+					"upstream returned a result incompatible with `{}`",
+					match kind {
+						ResolveKind::Tool => "tools/list",
+						ResolveKind::Prompt => "prompts/list",
+					}
+				)));
+			}
 			if kind.contains_name(&result, name) {
 				return Ok(true);
 			}
@@ -628,11 +705,11 @@ impl Relay {
 				streams,
 				reject_duplicates,
 				|s| match s {
-					ServerResult::ListToolsResult(ltr) => ltr.tools,
-					_ => vec![],
+					ServerResult::ListToolsResult(ltr) => Ok(ltr.tools),
+					_ => Err(incompatible_upstream_result("tools/list")),
 				},
 				|tool| tool.name.as_ref(),
-			);
+			)?;
 			let tools = per_target
 				.into_iter()
 				.flat_map(|(server_name, tools)| {
@@ -674,25 +751,14 @@ impl Relay {
 		Box::new(move |s, _cel| {
 			if !multiplexing {
 				// Happy case: we can forward everything
-				let res = s.into_iter().next().and_then(|(name, r)| match r {
-					ServerResult::InitializeResult(ir) => Some((name, ir)),
-					_ => None,
-				});
-				if let Some((name, ir)) = res {
-					upstreams.record_extensions(name.as_str(), ir.capabilities.extensions.as_ref());
-					return Ok(ir.into());
-				}
-				// If we got here in FailOpen mode, it means the only target failed.
-				// Return a default info response to keep the client session alive.
-				return Ok(
-					Self::get_info(
-						pv,
-						resource_subscribe,
-						Vec::new(),
-						upstreams.merged_extensions(&HashMap::new()),
-					)
-					.into(),
-				);
+				let Some((name, result)) = s.into_iter().next() else {
+					return Err(incompatible_upstream_result("initialize"));
+				};
+				let ServerResult::InitializeResult(ir) = result else {
+					return Err(incompatible_upstream_result("initialize"));
+				};
+				upstreams.record_extensions(name.as_str(), ir.capabilities.extensions.as_ref());
+				return Ok(ir.into());
 			}
 
 			// Multiplexing is more complex. We need to find the lowest protocol version
@@ -701,16 +767,17 @@ impl Relay {
 			let mut upstream_instructions: Vec<(String, String)> = Vec::new();
 
 			for (server_name, v) in s {
-				if let ServerResult::InitializeResult(r) = v {
-					upstreams.record_extensions(server_name.as_str(), r.capabilities.extensions.as_ref());
-					if r.protocol_version.to_string() < lowest_version.to_string() {
-						lowest_version = r.protocol_version;
-					}
-					if let Some(instructions) = r.instructions
-						&& !instructions.is_empty()
-					{
-						upstream_instructions.push((server_name.to_string(), instructions));
-					}
+				let ServerResult::InitializeResult(r) = v else {
+					return Err(incompatible_upstream_result("initialize"));
+				};
+				upstreams.record_extensions(server_name.as_str(), r.capabilities.extensions.as_ref());
+				if r.protocol_version.to_string() < lowest_version.to_string() {
+					lowest_version = r.protocol_version;
+				}
+				if let Some(instructions) = r.instructions
+					&& !instructions.is_empty()
+				{
+					upstream_instructions.push((server_name.to_string(), instructions));
 				}
 			}
 
@@ -734,25 +801,18 @@ impl Relay {
 			// does no version translation, so an old-only upstream must surface as-is and let
 			// the client fall back to `initialize`. Multiplexed: advertise the intersection.
 			if !multiplexing {
-				let res = s.into_iter().next().and_then(|(_, r)| match r {
-					ServerResult::DiscoverResult(dr) => Some(dr),
-					_ => None,
-				});
-				if let Some(dr) = res {
-					// Cache hints describe the gateway's presented server, not the upstream.
-					// Gateway routing/backend config can change without client invalidation.
-					return Ok(dr.with_cache(0, CacheScope::Private).into());
-				}
-				// In FailOpen, a default discovery response lets the client continue negotiation
-				// when no upstream discovery response is available.
-				// Include the recorded extensions from initialize responses.
+				let Some((_, result)) = s.into_iter().next() else {
+					return Err(incompatible_upstream_result("server/discover"));
+				};
+				let ServerResult::DiscoverResult(dr) = result else {
+					return Err(incompatible_upstream_result("server/discover"));
+				};
+				// Cache hints describe the gateway's presented server, not the upstream.
+				// Gateway routing/backend config can change without client invalidation.
 				return Ok(
-					Self::get_discovery(
-						resource_subscribe,
-						Vec::new(),
-						upstreams.merged_extensions(&HashMap::new()),
-					)
-					.into(),
+					dr.with_ttl_ms(0)
+						.with_cache_scope(CacheScope::Private)
+						.into(),
 				);
 			}
 
@@ -760,18 +820,19 @@ impl Relay {
 			let mut supported_versions = ProtocolVersion::KNOWN_VERSIONS.to_vec();
 			let mut upstream_extensions: HashMap<Strng, ExtensionCapabilities> = HashMap::new();
 			for (server_name, v) in s {
-				if let ServerResult::DiscoverResult(mut r) = v {
-					if let Some(ext) = r.capabilities.extensions.take()
-						&& !ext.is_empty()
-					{
-						upstream_extensions.insert(server_name.clone(), ext);
-					}
-					supported_versions.retain(|version| r.supported_versions.contains(version));
-					if let Some(instructions) = r.instructions
-						&& !instructions.is_empty()
-					{
-						upstream_instructions.push((server_name.to_string(), instructions));
-					}
+				let ServerResult::DiscoverResult(mut r) = v else {
+					return Err(incompatible_upstream_result("server/discover"));
+				};
+				if let Some(ext) = r.capabilities.extensions.take()
+					&& !ext.is_empty()
+				{
+					upstream_extensions.insert(server_name.clone(), ext);
+				}
+				supported_versions.retain(|version| r.supported_versions.contains(version));
+				if let Some(instructions) = r.instructions
+					&& !instructions.is_empty()
+				{
+					upstream_instructions.push((server_name.to_string(), instructions));
 				}
 			}
 
@@ -794,11 +855,11 @@ impl Relay {
 				streams,
 				reject_duplicates,
 				|s| match s {
-					ServerResult::ListPromptsResult(lpr) => lpr.prompts,
-					_ => vec![],
+					ServerResult::ListPromptsResult(lpr) => Ok(lpr.prompts),
+					_ => Err(incompatible_upstream_result("prompts/list")),
 				},
 				|prompt| prompt.name.as_str(),
-			);
+			)?;
 			let prompts = per_target
 				.into_iter()
 				.flat_map(|(server_name, prompts)| {
@@ -837,29 +898,34 @@ impl Relay {
 		Box::new(move |streams, cel| {
 			let resources = streams
 				.into_iter()
-				.flat_map(|(server_name, s)| {
+				.map(|(server_name, s)| {
 					let resources = match s {
 						ServerResult::ListResourcesResult(lrr) => lrr.resources,
-						_ => vec![],
+						_ => return Err(incompatible_upstream_result("resources/list")),
 					};
-					resources
-						.into_iter()
-						.filter(|r| {
-							policies.validate(
-								&rbac::ResourceType::Resource(rbac::ResourceId::new(
-									server_name.to_string(),
-									r.uri.to_string(),
-								)),
-								cel,
-							)
-						})
-						// Prefix URI with service name when multiplexing to avoid conflicts
-						.map(|mut r| {
-							r.uri = resource_uri(default_target_name.as_ref(), server_name.as_str(), &r.uri);
-							r
-						})
-						.collect_vec()
+					Ok(
+						resources
+							.into_iter()
+							.filter(|r| {
+								policies.validate(
+									&rbac::ResourceType::Resource(rbac::ResourceId::new(
+										server_name.to_string(),
+										r.uri.to_string(),
+									)),
+									cel,
+								)
+							})
+							// Prefix URI with service name when multiplexing to avoid conflicts
+							.map(|mut r| {
+								r.uri = resource_uri(default_target_name.as_ref(), server_name.as_str(), &r.uri);
+								r
+							})
+							.collect_vec(),
+					)
 				})
+				.collect::<Result<Vec<Vec<_>>, ClientError>>()?
+				.into_iter()
+				.flatten()
 				.collect_vec();
 			Ok(
 				ListResourcesResult {
@@ -878,33 +944,38 @@ impl Relay {
 		Box::new(move |streams, cel| {
 			let resource_templates = streams
 				.into_iter()
-				.flat_map(|(server_name, s)| {
+				.map(|(server_name, s)| {
 					let resource_templates = match s {
 						ServerResult::ListResourceTemplatesResult(lrr) => lrr.resource_templates,
-						_ => vec![],
+						_ => return Err(incompatible_upstream_result("resources/templates/list")),
 					};
-					resource_templates
-						.into_iter()
-						.filter(|rt| {
-							policies.validate(
-								&rbac::ResourceType::Resource(rbac::ResourceId::new(
-									server_name.to_string(),
-									rt.uri_template.to_string(),
-								)),
-								cel,
-							)
-						})
-						// Prefix uri_template with service name when multiplexing
-						.map(|mut rt| {
-							rt.uri_template = resource_uri(
-								default_target_name.as_ref(),
-								server_name.as_str(),
-								&rt.uri_template,
-							);
-							rt
-						})
-						.collect_vec()
+					Ok(
+						resource_templates
+							.into_iter()
+							.filter(|rt| {
+								policies.validate(
+									&rbac::ResourceType::Resource(rbac::ResourceId::new(
+										server_name.to_string(),
+										rt.uri_template.to_string(),
+									)),
+									cel,
+								)
+							})
+							// Prefix uri_template with service name when multiplexing
+							.map(|mut rt| {
+								rt.uri_template = resource_uri(
+									default_target_name.as_ref(),
+									server_name.as_str(),
+									&rt.uri_template,
+								);
+								rt
+							})
+							.collect_vec(),
+					)
 				})
+				.collect::<Result<Vec<Vec<_>>, ClientError>>()?
+				.into_iter()
+				.flatten()
 				.collect_vec();
 			Ok(
 				ListResourceTemplatesResult {
@@ -918,7 +989,15 @@ impl Relay {
 		})
 	}
 	pub fn merge_empty(&self) -> Box<MergeFn> {
-		Box::new(move |_, _cel| Ok(rmcp::model::ServerResult::empty(())))
+		Box::new(move |results, _cel| {
+			if results
+				.iter()
+				.any(|(_, result)| !matches!(result, ServerResult::EmptyResult(_)))
+			{
+				return Err(incompatible_upstream_result("empty-result method"));
+			}
+			Ok(rmcp::model::ServerResult::empty(()))
+		})
 	}
 
 	/// Opens the upstream streams shared by `subscriptions/listen` and request fanout.
@@ -1069,7 +1148,7 @@ impl Relay {
 						id,
 						futures::stream::once(async move { error.into_downstream_message(error_id) }),
 						service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)),
-						None,
+						ctx.extensions().get::<AsyncLog<MCPInfo>>().cloned(),
 						&ctx,
 					);
 				},
@@ -1110,7 +1189,7 @@ impl Relay {
 			id,
 			body,
 			service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)),
-			None,
+			ctx.extensions().get::<AsyncLog<MCPInfo>>().cloned(),
 			&ctx,
 		)
 	}
@@ -1128,6 +1207,7 @@ impl Relay {
 			)));
 		};
 		let guardrails = self.build_guardrails_ctx(&r, &ctx, vec![service_name.to_string()]);
+		let mcp_log = mcp_log.or_else(|| ctx.extensions().get::<AsyncLog<MCPInfo>>().cloned());
 		let cel = CelExecWrapper::new(ctx.as_request().map(|_| ()));
 		let stream = self.rewrite_outbound_server_messages(
 			service_name,
@@ -1278,7 +1358,7 @@ impl Relay {
 			id,
 			ms,
 			service_names.and_then(|sn| self.build_guardrails_ctx(&r, &ctx, sn)),
-			None,
+			ctx.extensions().get::<AsyncLog<MCPInfo>>().cloned(),
 			&ctx,
 		)
 	}
@@ -1386,12 +1466,15 @@ impl Relay {
 			upstream_instructions,
 			extensions,
 		);
-		DiscoverResult::new(ProtocolVersion::KNOWN_VERSIONS.to_vec(), info.capabilities)
-			.with_server_info(info.server_info)
-			.with_instructions(info.instructions.unwrap_or_default())
+		let mut result =
+			DiscoverResult::new(ProtocolVersion::KNOWN_VERSIONS.to_vec(), info.capabilities)
+				.with_server_info(info.server_info);
+		result.instructions = info.instructions;
+		result
 			// Discovery is immediately stale because the gateway has no way to
 			// invalidate clients when backend membership or routing config changes.
-			.with_cache(0, CacheScope::Private)
+			.with_ttl_ms(0)
+			.with_cache_scope(CacheScope::Private)
 	}
 }
 
@@ -1578,6 +1661,7 @@ fn server_request_method(request: &ServerRequest) -> &str {
 		ServerRequest::ListRootsRequest(r) => r.method.as_str(),
 		ServerRequest::ElicitRequest(r) => r.method.as_str(),
 		ServerRequest::CustomRequest(r) => r.method.as_str(),
+		_ => "unknown",
 	}
 }
 
@@ -1590,10 +1674,6 @@ fn normalize_outbound_for_protocol(
 	};
 
 	match &mut resp.result {
-		ServerResult::DiscoverResult(r) => {
-			normalize_result_type(&mut r.result_type, downstream_modern);
-			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
-		},
 		ServerResult::ListToolsResult(r) => {
 			normalize_result_type(&mut r.result_type, downstream_modern);
 			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
@@ -1614,40 +1694,13 @@ fn normalize_outbound_for_protocol(
 			normalize_result_type(&mut r.result_type, downstream_modern);
 			normalize_cache_fields(&mut r.ttl_ms, &mut r.cache_scope, downstream_modern);
 		},
-		ServerResult::InitializeResult(r) => {
-			normalize_result_type(&mut r.result_type, downstream_modern)
-		},
 		ServerResult::CompleteResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
 		ServerResult::GetPromptResult(r) => {
 			normalize_result_type(&mut r.result_type, downstream_modern)
 		},
-		ServerResult::ElicitResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
-		ServerResult::CreateTaskResult(r) => {
-			normalize_result_type(&mut r.result_type, downstream_modern)
-		},
-		ServerResult::ListTasksResult(r) => {
-			normalize_result_type(&mut r.result_type, downstream_modern)
-		},
-		ServerResult::GetTaskResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
-		ServerResult::CancelTaskResult(r) => {
-			normalize_result_type(&mut r.result_type, downstream_modern)
-		},
-		ServerResult::SubscriptionsListenResult(r) => {
-			normalize_result_type(&mut r.result_type, downstream_modern)
-		},
 		ServerResult::CallToolResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
-		ServerResult::EmptyResult(r) => normalize_result_type(&mut r.result_type, downstream_modern),
-		ServerResult::GetTaskPayloadResult(r) => {
-			if !downstream_modern {
-				strip_protocol_result_fields(&mut r.0)
-			}
-		},
-		ServerResult::CustomResult(r) => {
-			if !downstream_modern {
-				strip_protocol_result_fields(&mut r.0)
-			}
-		},
-		ServerResult::InputRequiredResult(_) => {},
+		ServerResult::CustomResult(r) if !downstream_modern => strip_protocol_result_fields(&mut r.0),
+		_ => {},
 	}
 
 	msg
@@ -1693,8 +1746,8 @@ fn with_gateway_cache_policy(mut msg: ServerJsonRpcMessage) -> ServerJsonRpcMess
 	// per-user/authz-dependent filtering applies.
 	match &mut resp.result {
 		ServerResult::DiscoverResult(r) => {
-			r.ttl_ms = Some(0);
-			r.cache_scope = Some(CacheScope::Private);
+			r.ttl_ms = 0;
+			r.cache_scope = CacheScope::Private;
 		},
 		ServerResult::ListToolsResult(r) => {
 			r.ttl_ms = Some(0);
@@ -1777,7 +1830,7 @@ fn capture_terminal_mcp_payload(
 		},
 		ServerJsonRpcMessage::Error(error) if error.id.as_ref() == Some(request_id) => {
 			if let Some(log) = log {
-				log.non_atomic_mutate(|mcp| mcp.capture_call_error(&error.error));
+				log.non_atomic_mutate(|mcp| mcp.capture_error(&error.error));
 			}
 			true
 		},
@@ -1956,9 +2009,7 @@ mod tests {
 	#[tokio::test]
 	async fn messages_to_response_captures_json_rpc_error() {
 		let log = AsyncLog::default();
-		let mut info = MCPInfo::default();
-		info.set_tool("mcp".to_string(), "echo".to_string());
-		log.store(Some(info));
+		log.store(Some(MCPInfo::default()));
 
 		let stream = stream::iter(vec![Ok(ServerJsonRpcMessage::error(
 			ErrorData::internal_error("boom", None),
@@ -1969,16 +2020,7 @@ mod tests {
 		let _ = crate::http::read_resp_body(response).await.unwrap();
 
 		let info = log.take().unwrap();
-		assert!(info.tool.as_ref().unwrap().result.is_none());
-		assert_eq!(
-			info.tool.as_ref().unwrap().error.as_ref().unwrap()["code"],
-			-32603
-		);
-		assert!(
-			info.tool.as_ref().unwrap().error.as_ref().unwrap()["message"]
-				.as_str()
-				.unwrap()
-				.contains("boom")
-		);
+		assert_eq!(info.error.as_ref().unwrap().code, -32603);
+		assert_eq!(info.error.as_ref().unwrap().message, "boom");
 	}
 }

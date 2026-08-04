@@ -7,18 +7,36 @@ info:
   input: "Hello, world"
 ---
 {
-  "modelId": "gpt-4o",
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "text": "Hello, world"
-        }
-      ]
+  "request": {
+    "modelId": "gpt-4o",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "Hello, world"
+          }
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 1024
     }
-  ],
-  "inferenceConfig": {
-    "maxTokens": 1024
+  },
+  "parsed": {
+    "input_format": "Responses",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-4o",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Hello, world"
+      }
+    ]
   }
 }

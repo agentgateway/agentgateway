@@ -1,0 +1,39 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/anthropic/stream_tool.json
+---
+data: {"id":"msg_tool","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":0,"id":"toolu_01A","type":"function","function":{"name":"get_weather"}}]}}],"created":123,"model":"claude-haiku-4-5-20251001","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"msg_tool","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":0,"id":null,"type":null,"function":{"arguments":"{\"location\":"}}]}}],"created":123,"model":"claude-haiku-4-5-20251001","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"msg_tool","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":0,"id":null,"type":null,"function":{"arguments":"\"San Francisco\"}"}}]}}],"created":123,"model":"claude-haiku-4-5-20251001","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"msg_tool","choices":[{"index":0,"delta":{"content":null},"finish_reason":"tool_calls"}],"created":123,"model":"claude-haiku-4-5-20251001","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":15,"completion_tokens":12,"total_tokens":27}}
+
+
+
+{
+  "input_tokens": 15,
+  "output_tokens": 12,
+  "total_tokens": 27,
+  "provider_model": "claude-haiku-4-5-20251001",
+  "completion": [
+    ""
+  ],
+  "output_messages": [
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_call",
+          "id": "toolu_01A",
+          "name": "get_weather",
+          "arguments": {
+            "location": "San Francisco"
+          }
+        }
+      ],
+      "finish_reason": "tool_use"
+    }
+  ]
+}

@@ -32,10 +32,10 @@ func TestReferences(t *testing.T) {
 	})
 }
 
-func TestPolicyReferenceGrants(t *testing.T) {
+func TestReferenceGrants(t *testing.T) {
 	testutils.RunForDirectory(t, "testdata/references-policy-refgrants", func(t *testing.T, ctx plugins.PolicyCtx) (any, []ir.AgwResource) {
 		ctx.Collections.Settings.BackendRefGrantMode = apisettings.BackendRefGrantModeRouteAndPolicy
-		sq, ri := testutils.Syncer(t, ctx, "AgentgatewayPolicy")
+		sq, ri := testutils.Syncer(t, ctx, "AgentgatewayPolicy", "AgentgatewayBackend")
 		r := ri.Outputs.Resources.List()
 		r = slices.FilterInPlace(r, func(resource ir.AgwResource) bool {
 			x := ir.GetAgwResourceName(resource.Resource)

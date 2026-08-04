@@ -257,7 +257,7 @@ pub struct BackendPolicies {
 	pub request_mirror: Vec<filters::RequestMirror>,
 	pub transformation: BackendPolicy<http::transformation_cel::Transformation>,
 
-	pub session_persistence: Option<http::sessionpersistence::Policy>,
+	pub session_affinity: Option<http::sessionaffinity::Policy>,
 
 	pub health: Option<health::Policy>,
 
@@ -275,7 +275,10 @@ impl BackendPolicies {
 			backend_auth: other.backend_auth.or(self.backend_auth),
 			a2a: other.a2a.or(self.a2a),
 			llm_provider: other.llm_provider.or(self.llm_provider),
-			llm: other.llm.or(self.llm),
+			llm: match (self.llm, other.llm) {
+				(Some(base), Some(more)) => Some(LLMRequestPolicies::merge_llm_policies(&more, &base)),
+				(base, more) => more.or(base),
+			},
 			// Authorization composes to avoid erasing a broader deny
 			authorization: match (
 				self.authorization.into_arc(),
@@ -312,7 +315,7 @@ impl BackendPolicies {
 				other.request_mirror
 			},
 			transformation: other.transformation.or(self.transformation),
-			session_persistence: other.session_persistence.or(self.session_persistence),
+			session_affinity: other.session_affinity.or(self.session_affinity),
 			health: other.health.or(self.health),
 			override_dest: other.override_dest.or(self.override_dest),
 		}
@@ -347,6 +350,9 @@ impl BackendPolicies {
 		}
 		if let Some(health) = self.health.as_ref() {
 			health.register_expressions(ctx);
+		}
+		if let Some(session_affinity) = self.session_affinity.as_ref() {
+			session_affinity.register_expressions(ctx);
 		}
 	}
 }
@@ -858,14 +864,33 @@ impl Store {
 			bind.listeners.insert(listener);
 		}
 
-		let listeners = if self.binds.contains_key(&key) {
-			None
-		} else if bind.mode == agent::BindMode::Internal {
+		let was_internal = old_bind
+			.as_deref()
+			.is_some_and(|old| old.mode == agent::BindMode::Internal);
+		let transitioning_to_internal = old_bind
+			.as_deref()
+			.is_some_and(|old| old.mode != agent::BindMode::Internal)
+			&& bind.mode == agent::BindMode::Internal;
+		let address_changed = old_bind
+			.as_deref()
+			.is_some_and(|old| old.address != bind.address);
+
+		// A bind's key is stable across mode changes. Explicitly stop the accept loop when
+		// an existing bind becomes internal; merely replacing the stored Bind leaves the
+		// Gateway's listener task running. Address changes with a stable key likewise need
+		// to replace the old socket.
+		if transitioning_to_internal || (address_changed && !was_internal) {
+			let _ = self.tx.send(BindEvent::Remove(key.clone()));
+		}
+
+		let listeners = if bind.mode == agent::BindMode::Internal {
 			// Internal binds are routing-only; they never open an OS socket and thus never
 			// emit a BindEvent::Add (which is what spawns the accept loop). They are still
 			// inserted into `self.binds` below so find_bind/find_bind_by_port and in-process
 			// re-entry via proxy_bind can reach them.
 			debug!(bind=%key, "internal bind; not opening a listener socket");
+			None
+		} else if old_bind.is_some() && !was_internal && !address_changed {
 			None
 		} else {
 			match self.bind_listeners(bind.address) {
@@ -901,13 +926,19 @@ impl Store {
 	}
 
 	pub fn route_policies(&self, path: &RoutePath<'_>) -> RoutePolicies {
-		let listener = &path.listener;
+		let listener_name = &path.listener;
 		let gateway = self
 			.policies_by_target
-			.get(&listener.as_gateway_target_ref());
+			.get(&listener_name.as_gateway_target_ref());
+		let listener_set = listener_name
+			.as_listenerset_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
+		let listener_set_section = listener_name
+			.as_listenerset_listener_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
 		let listener = self
 			.policies_by_target
-			.get(&listener.as_listener_target_ref());
+			.get(&listener_name.as_listener_target_ref());
 		let service = path
 			.service
 			.and_then(|s| self.policies_by_target.get(&s.as_policy_target_ref()));
@@ -949,6 +980,8 @@ impl Store {
 			.iter()
 			.copied()
 			.flatten()
+			.chain(listener_set.iter().copied().flatten())
+			.chain(listener_set_section.iter().copied().flatten())
 			.chain(listener.iter().copied().flatten())
 			.chain(service.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_key.get(n))
@@ -1316,8 +1349,8 @@ impl Store {
 				BackendTrafficPolicy::Transformation(p) => {
 					pol.transformation.set_if_unset(p);
 				},
-				BackendTrafficPolicy::SessionPersistence(p) => {
-					pol.session_persistence.get_or_insert_with(|| p.clone());
+				BackendTrafficPolicy::SessionAffinity(p) => {
+					pol.session_affinity.get_or_insert_with(|| p.clone());
 				},
 				BackendTrafficPolicy::Health(p) => {
 					pol.health.get_or_insert_with(|| p.clone());
@@ -1498,11 +1531,16 @@ impl Store {
 			.cloned()
 	}
 
+	/// Finds a wildcard-address bind by port.
+	///
+	/// This is used when a CONNECT authority contains a hostname rather than an IP address. Since
+	/// the hostname is not resolved here, it must not be allowed to select a bind scoped to a
+	/// concrete address (for example, a loopback-only listener) merely because the ports match.
 	pub fn find_bind_by_port(&self, port: u16) -> Option<Arc<Bind>> {
 		self
 			.binds
 			.values()
-			.find(|b| b.address.port() == port)
+			.find(|b| b.address.ip().is_unspecified() && b.address.port() == port)
 			.cloned()
 	}
 
@@ -2178,6 +2216,7 @@ mod tests {
 	use std::time::Duration;
 
 	use frozen_collections::FzHashSet;
+	use tokio_stream::StreamExt;
 
 	use super::*;
 	use crate::telemetry::log::OrderedStringMap;
@@ -2194,6 +2233,57 @@ mod tests {
 			listener_name: strng::literal!("listener"),
 			listener_set: None,
 		}
+	}
+
+	#[tokio::test]
+	async fn bind_mode_changes_reconcile_listener_events() {
+		let probe = StdTcpListener::bind("127.0.0.1:0").expect("reserve an available port");
+		let address = probe.local_addr().expect("probe has an address");
+		drop(probe);
+
+		let mut store = Store::with_ipv6_enabled(true);
+		let mut events = store.subscribe();
+		let mut bind = Bind {
+			key: strng::literal!("bind/test"),
+			address,
+			protocol: BindProtocol::http,
+			tunnel_protocol: TunnelProtocol::Direct,
+			mode: agent::BindMode::Standard,
+			listeners: ListenerSet::default(),
+		};
+
+		store.insert_bind(bind.clone());
+		assert!(
+			matches!(events.next().await, Some(BindEvent::Add(_, _))),
+			"a new standard bind should open a listener"
+		);
+
+		bind.mode = agent::BindMode::Internal;
+		store.insert_bind(bind.clone());
+		assert!(
+			matches!(events.next().await, Some(BindEvent::Remove(key)) if key == bind.key),
+			"changing a standard bind to internal should stop its listener"
+		);
+
+		bind.mode = agent::BindMode::Standard;
+		store.insert_bind(bind.clone());
+		assert!(
+			matches!(events.next().await, Some(BindEvent::Add(_, _))),
+			"changing an internal bind to standard should open a listener"
+		);
+
+		let probe = StdTcpListener::bind("127.0.0.1:0").expect("reserve another available port");
+		bind.address = probe.local_addr().expect("probe has an address");
+		drop(probe);
+		store.insert_bind(bind.clone());
+		assert!(
+			matches!(events.next().await, Some(BindEvent::Remove(key)) if key == bind.key),
+			"changing a standard bind's address should stop its old listener"
+		);
+		assert!(
+			matches!(events.next().await, Some(BindEvent::Add(updated, _)) if updated.address == bind.address),
+			"changing a standard bind's address should open its new listener"
+		);
 	}
 
 	fn route(name: &'static str, namespace: &'static str, kind: Option<&'static str>) -> RouteName {
@@ -2900,6 +2990,69 @@ mod tests {
 	}
 
 	#[test]
+	fn route_policies_include_listenerset_targets() {
+		let mut store = Store::default();
+		let listener_set = ResourceName::new(strng::new("my-ls"), strng::new("default"));
+		let listener_a = ListenerName {
+			listener_name: strng::new("listener-a"),
+			listener_set: Some(listener_set.clone()),
+			..listener()
+		};
+		let listener_b = ListenerName {
+			listener_name: strng::new("listener-b"),
+			listener_set: Some(listener_set),
+			..listener()
+		};
+		let set_timeout = timeout::Policy {
+			request_timeout: Some(Duration::from_secs(1)),
+			backend_request_timeout: None,
+		};
+		let section_timeout = timeout::Policy {
+			request_timeout: Some(Duration::from_secs(2)),
+			backend_request_timeout: None,
+		};
+		insert_traffic_policy(
+			&mut store,
+			"listenerset-timeout",
+			PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: None,
+			}),
+			PolicyInheritance::Default,
+			TrafficPolicy::Timeout(set_timeout.clone()),
+		);
+		insert_traffic_policy(
+			&mut store,
+			"listenerset-section-timeout",
+			PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: Some(strng::new("listener-a")),
+			}),
+			PolicyInheritance::Default,
+			TrafficPolicy::Timeout(section_timeout.clone()),
+		);
+
+		let selected_timeout = |listener| {
+			store
+				.route_policies(&RoutePath {
+					listener,
+					service: None,
+					routes: vec![],
+					route_inlines: vec![],
+				})
+				.timeout
+				.select("timeout", &request_for_policy_selection())
+				.as_deref()
+				.cloned()
+		};
+
+		assert_eq!(selected_timeout(&listener_a), Some(section_timeout));
+		assert_eq!(selected_timeout(&listener_b), Some(set_timeout));
+	}
+
+	#[test]
 	fn route_policies_give_precedence_to_later_routes_in_path() {
 		let mut store = Store::default();
 		let listener = listener();
@@ -3446,6 +3599,73 @@ mod tests {
 		);
 		assert_eq!(policy.resolve_route("/v1/messages"), RouteType::Messages);
 		assert_eq!(policy.resolve_route("/v1/models"), RouteType::Passthrough);
+	}
+
+	#[test]
+	fn llm_config_merges() {
+		use crate::llm::policy::{
+			PromptEnrichment, PromptGuard, RegexRule, RegexRules, RequestGuard, RequestGuardKind,
+			SortedRoutes,
+		};
+		use crate::llm::{self, RouteType, SimpleChatCompletionMessage};
+
+		// attached policy (e.g. AgentgatewayPolicy.ai) with prompt guard and enrichment
+		let attached = BackendPolicies {
+			llm: Some(Arc::new(llm::Policy {
+				prompt_guard: Some(PromptGuard {
+					streaming: Default::default(),
+					request: vec![RequestGuard {
+						rejection: Default::default(),
+						kind: RequestGuardKind::Regex(RegexRules {
+							action: Default::default(),
+							rules: vec![RegexRule::Regex {
+								pattern: regex::Regex::new("blocked-word").unwrap(),
+							}],
+						}),
+					}],
+					response: vec![],
+				}),
+				prompts: Some(PromptEnrichment {
+					prepend: vec![SimpleChatCompletionMessage {
+						role: strng::new("system"),
+						content: strng::new("You are a helpful assistant."),
+					}],
+					append: vec![],
+				}),
+				..Default::default()
+			})),
+			..Default::default()
+		};
+
+		// provider level policy (e.g. AgentgatewayBackend.ai.groups.providers.policies)
+		let mut routes = SortedRoutes::default();
+		routes.insert(strng::new("/v1/messages"), RouteType::Messages);
+		let provider = BackendPolicies {
+			llm: Some(Arc::new(llm::Policy {
+				model_aliases: std::collections::HashMap::from([(
+					strng::new("fast"),
+					strng::new("gpt-4.1-nano"),
+				)]),
+				routes,
+				..Default::default()
+			})),
+			..Default::default()
+		};
+
+		let effective = attached.merge(provider).llm.expect("expected AI policy");
+		assert!(
+			effective.prompt_guard.is_some(),
+			"provider-level AI config must not disable the attached prompt guard"
+		);
+		assert!(
+			effective.prompts.is_some(),
+			"provider-level AI config must not disable the attached prompt enrichment"
+		);
+		assert_eq!(
+			effective.model_aliases.get(&strng::new("fast")),
+			Some(&strng::new("gpt-4.1-nano"))
+		);
+		assert_eq!(effective.resolve_route("/v1/messages"), RouteType::Messages);
 	}
 
 	#[test]

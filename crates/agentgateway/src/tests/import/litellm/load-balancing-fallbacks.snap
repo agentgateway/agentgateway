@@ -1,0 +1,91 @@
+---
+source: crates/agentgateway/src/import.rs
+description: src/tests/import/litellm/load-balancing-fallbacks.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: imported/litellm/fast/1
+        visibility: internal
+        provider: azure
+        params:
+          model: gpt-4o-east
+          baseUrl: "https://east.openai.azure.com"
+          azureApiVersion: 2025-01-01
+          apiKey: $AZURE_EAST_KEY
+        defaults:
+          temperature: 0.2
+      - name: imported/litellm/fast/2
+        visibility: internal
+        provider: openAI
+        params:
+          model: gpt-4o
+          apiKey: $OPENAI_API_KEY
+      - name: imported/litellm/backup/1
+        visibility: internal
+        provider: anthropic
+        params:
+          model: claude-sonnet-4
+          apiKey: $ANTHROPIC_API_KEY
+      - name: imported/litellm/backup/2
+        visibility: internal
+        provider: anthropic
+        params:
+          model: claude-haiku-4
+          apiKey: $ANTHROPIC_API_KEY
+    virtualModels:
+      - name: fast
+        routing:
+          failover:
+            targets:
+              - model: imported/litellm/fast/1
+                priority: 0
+              - model: imported/litellm/fast/2
+                priority: 0
+              - model: imported/litellm/backup/1
+                priority: 1
+              - model: imported/litellm/backup/2
+                priority: 1
+      - name: backup
+        routing:
+          weighted:
+            targets:
+              - model: imported/litellm/backup/1
+                weight: 1
+              - model: imported/litellm/backup/2
+                weight: 1
+findings:
+  - sourcePath: "model_list[0].litellm_params.rpm"
+    status: approximate
+    message: Used RPM as the relative weight for generated weighted routes
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for fast
+  - sourcePath: "model_list[1].litellm_params.rpm"
+    status: approximate
+    message: Used RPM as the relative weight for generated weighted routes
+  - sourcePath: "model_list[1]"
+    status: exact
+    message: Imported model deployment for fast
+  - sourcePath: "model_list[2]"
+    status: exact
+    message: Imported model deployment for backup
+  - sourcePath: "model_list[3]"
+    status: exact
+    message: Imported model deployment for backup
+  - sourcePath: router_settings.fallbacks
+    status: approximate
+    message: Mapped ordinary LiteLLM fallbacks to agentgateway priority-based failover
+  - sourcePath: router_settings.routing_strategy
+    status: approximate
+    message: Approximated LiteLLM simple-shuffle with generated agentgateway routing; RPM is used only by weighted routes

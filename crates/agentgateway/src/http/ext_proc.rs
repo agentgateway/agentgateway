@@ -407,7 +407,10 @@ impl ExtProcInstance {
 			failure_mode,
 			protocol_config_sent: false,
 			mode_state: processing_options.into(),
-			client: Some(proto::external_processor_client::ExternalProcessorClient::new(chan)),
+			client: Some(
+				proto::external_processor_client::ExternalProcessorClient::new(chan)
+					.max_decoding_message_size(defaults::GRPC_MAX_DECODING_MESSAGE_SIZE),
+			),
 			tx_req: None,
 			rx_resp_for_request: None,
 			rx_resp_for_response: None,
@@ -444,9 +447,20 @@ impl ExtProcInstance {
 			};
 			trace!("initial stream established");
 			let mut responses = responses.into_inner();
-			while let Ok(Some(item)) = responses.message().await {
-				trace!("received response item {item:?}");
-				let _ = tx_resp.send(item).await;
+			loop {
+				match responses.message().await {
+					Ok(Some(item)) => {
+						trace!("received response item {item:?}");
+						if tx_resp.send(item).await.is_err() {
+							return;
+						}
+					},
+					Ok(None) => return,
+					Err(error) => {
+						warn!(%error, "ext_proc response stream failed");
+						return;
+					},
+				}
 			}
 		});
 

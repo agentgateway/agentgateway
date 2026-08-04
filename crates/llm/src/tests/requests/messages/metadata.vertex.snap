@@ -1,0 +1,45 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/metadata.json
+info:
+  model: anthropic.claude-3-sonnet
+  max_tokens: 100
+  metadata:
+    user_id: "{\"device_id\":\"704cb53c2074e9\",\"account_uuid\":\"\",\"session_id\":\"180423cd-fe24-4f48-bbde-b4ab5bfd36e7\"}"
+    department: engineering
+  messages:
+    - role: user
+      content: Hello
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello"
+      }
+    ],
+    "anthropic_version": "vertex-2023-10-16",
+    "max_tokens": 100,
+    "metadata": {
+      "department": "engineering",
+      "user_id": "{\"device_id\":\"704cb53c2074e9\",\"account_uuid\":\"\",\"session_id\":\"180423cd-fe24-4f48-bbde-b4ab5bfd36e7\"}"
+    }
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "anthropic.claude-3-sonnet",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {
+      "max_tokens": 100
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Hello"
+      }
+    ]
+  }
+}

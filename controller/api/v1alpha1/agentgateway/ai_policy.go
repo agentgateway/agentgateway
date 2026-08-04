@@ -134,6 +134,11 @@ type Webhook struct {
 	// +required
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
 
+	// CEL-computed headers to include in webhook requests.
+	// +kubebuilder:validation:MaxProperties=64
+	// +optional
+	Headers map[string]CELExpression `json:"headers,omitempty"`
+
 	// HTTP header matches used to select the headers to forward to the webhook.
 	// Request headers are used when forwarding requests and response headers
 	// are used when forwarding responses.

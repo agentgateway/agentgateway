@@ -30,6 +30,7 @@ info:
   },
   "parsed": {
     "input_tokens": 3,
-    "total_tokens": 3
+    "total_tokens": 3,
+    "provider_model": "amazon.titan-embed-text-v2:0"
   }
 }

@@ -60,6 +60,13 @@ impl RequestType for Request {
 		false
 	}
 
+	fn to_value(&self) -> serde_json::Result<serde_json::Value> {
+		match self {
+			Self::Raw(body) => serde_json::from_slice(body),
+			Self::Json(body) => Ok(body.clone()),
+		}
+	}
+
 	fn model(&mut self) -> &mut Option<String> {
 		unimplemented!("model is not available");
 	}
@@ -109,6 +116,10 @@ impl RequestType for Request {
 
 	fn set_messages(&mut self, _messages: Vec<SimpleChatCompletionMessage>) {
 		unimplemented!("set_messages is used for prompt guard; prompt guard is disabled for detect.")
+	}
+
+	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(&mut String)) {
+		unimplemented!("visit_text_mut is used for prompt guard; prompt guard is disabled for detect.")
 	}
 }
 
@@ -486,6 +497,10 @@ impl ResponseType for Response {
 			Self::Raw(bytes) => Ok(bytes.to_vec()),
 			Self::Json(v) => Ok(serde_json::to_vec(v)?),
 		}
+	}
+
+	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(&mut String)) {
+		unimplemented!("visit_text_mut is used for prompt guard; prompt guard is disabled for detect.")
 	}
 }
 

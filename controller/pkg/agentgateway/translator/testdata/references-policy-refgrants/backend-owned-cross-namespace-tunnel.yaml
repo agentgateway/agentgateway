@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: egress-proxy
+  namespace: shared
+spec:
+  ports:
+    - port: 8080
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: application
+  namespace: default
+spec:
+  static:
+    host: application.example.com
+    port: 443
+  policies:
+    tunnel:
+      backendRef:
+        group: ""
+        kind: Service
+        name: egress-proxy
+        namespace: shared
+        port: 8080
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-egress-proxy
+  namespace: shared
+spec:
+  from:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      namespace: default
+  to:
+    - group: ""
+      kind: Service
+      name: egress-proxy
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: backend-repro
+  namespace: default
+spec:
+  parentRefs:
+    - name: test
+  rules:
+    - backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: application
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    backend:
+      inlinePolicies:
+      - backendTunnel:
+          proxy:
+            port: 8080
+            service:
+              hostname: egress-proxy.shared.svc.cluster.local
+              namespace: shared
+      key: default/application
+      name:
+        name: application
+        namespace: default
+      static:
+        host: application.example.com
+        port: 443
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: application
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted

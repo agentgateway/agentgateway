@@ -3,9 +3,8 @@ use agent_core::strng::Strng;
 use futures_util::StreamExt;
 use futures_util::stream::FuturesUnordered;
 use rmcp::model::{
-	CustomNotification, GetMeta, Meta, RequestId, ServerJsonRpcMessage, ServerNotification,
-	SubscriptionFilter, SubscriptionsAcknowledgedNotification,
-	SubscriptionsAcknowledgedNotificationParams,
+	GetMeta, RequestId, ServerJsonRpcMessage, ServerNotification, SubscriptionFilter,
+	SubscriptionsAcknowledgedNotification, SubscriptionsAcknowledgedNotificationParams,
 };
 use tracing::warn;
 
@@ -14,52 +13,22 @@ use crate::mcp::mergestream::Messages;
 use crate::mcp::{ClientError, FailureMode};
 
 /// Stamps the subscription id on every forwarded listen notification.
-///
-/// `ToolListChanged`/`PromptListChanged`/`ResourceListChanged` are rmcp `NotificationNoParam`.
-/// Their serializer emits `{"method": ...}` only and drops extension `_meta`.
-/// `CustomNotification` serializes extension `Meta` into `params._meta`, which is what
-/// `ServerTagsSubscriptionId` checks for on every frame.
-/// `ResourceUpdated` round-trips `_meta` through extensions, so it is tagged in place.
-///
-/// TODO(rmcp fork): `NotificationNoParam::{serialize,deserialize}` (serde_impl.rs) drop
-/// `params._meta`. The fork should emit `params: {"_meta": ...}` when extensions carry
-/// `Meta` and capture `_meta` into extensions on deserialize, matching `Notification<M,P>`.
-/// After the `rmcp` rev is bumped, delete the `CustomNotification` conversion and tag every
-/// variant via `GetMeta`.
 fn tag_listen_notification(
 	message: ServerJsonRpcMessage,
 	subscription_id: &RequestId,
 ) -> Option<ServerJsonRpcMessage> {
-	use rmcp::model::{
-		ConstString, PromptListChangedNotificationMethod, ResourceListChangedNotificationMethod,
-		ToolListChangedNotificationMethod,
-	};
 	let ServerJsonRpcMessage::Notification(mut jn) = message else {
 		return Some(message);
 	};
-	let replacement = match &mut jn.notification {
+	match &jn.notification {
 		ServerNotification::ResourceUpdatedNotification(_)
-		| ServerNotification::CustomNotification(_) => {
+		| ServerNotification::ToolListChangedNotification(_)
+		| ServerNotification::PromptListChangedNotification(_)
+		| ServerNotification::ResourceListChangedNotification(_) => {
 			jn.notification
 				.get_meta_mut()
 				.set_subscription_id(subscription_id.clone());
-			None
 		},
-		ServerNotification::ToolListChangedNotification(_) => Some(custom_tagged_notification(
-			ToolListChangedNotificationMethod::VALUE,
-			None,
-			subscription_id,
-		)),
-		ServerNotification::PromptListChangedNotification(_) => Some(custom_tagged_notification(
-			PromptListChangedNotificationMethod::VALUE,
-			None,
-			subscription_id,
-		)),
-		ServerNotification::ResourceListChangedNotification(_) => Some(custom_tagged_notification(
-			ResourceListChangedNotificationMethod::VALUE,
-			None,
-			subscription_id,
-		)),
 		_ => {
 			debug_assert!(
 				false,
@@ -68,23 +37,8 @@ fn tag_listen_notification(
 			warn!("dropping unhandled subscriptions/listen notification");
 			return None;
 		},
-	};
-	if let Some(notification) = replacement {
-		jn.notification = notification;
 	}
 	Some(ServerJsonRpcMessage::Notification(jn))
-}
-
-fn custom_tagged_notification(
-	method: impl Into<String>,
-	params: Option<serde_json::Value>,
-	subscription_id: &RequestId,
-) -> ServerNotification {
-	let mut custom = CustomNotification::new(method, params);
-	custom
-		.get_meta_mut()
-		.set_subscription_id(subscription_id.clone());
-	ServerNotification::CustomNotification(custom)
 }
 
 /// Filters one upstream listen stream and tags the notifications forwarded to the client.
@@ -329,7 +283,7 @@ pub(super) fn synthesize_listen_ack(
 	client_filter: SubscriptionFilter,
 ) -> ServerJsonRpcMessage {
 	let mut params = SubscriptionsAcknowledgedNotificationParams::new(client_filter);
-	let mut meta = Meta::new();
+	let mut meta = rmcp::model::NotificationMetaObject::new();
 	meta.set_subscription_id(id);
 	params.meta = Some(meta);
 	ServerJsonRpcMessage::notification(ServerNotification::SubscriptionsAcknowledgedNotification(
@@ -469,7 +423,7 @@ mod tests {
 	}
 
 	fn tools_filter() -> SubscriptionFilter {
-		SubscriptionFilter::new().with_tools_list_changed(true)
+		SubscriptionFilter::builder().tools_list_changed().build()
 	}
 
 	fn listen_ack(filter: SubscriptionFilter) -> ServerJsonRpcMessage {
@@ -478,9 +432,10 @@ mod tests {
 
 	#[tokio::test]
 	async fn prepare_listen_streams_unions_accepted_filters() {
-		let requested = SubscriptionFilter::new()
-			.with_tools_list_changed(true)
-			.with_prompts_list_changed(true);
+		let requested = SubscriptionFilter::builder()
+			.tools_list_changed()
+			.prompts_list_changed()
+			.build();
 		let (prepared, accepted) = prepare_listen_streams(
 			vec![
 				(
@@ -495,7 +450,7 @@ mod tests {
 					"prompts".into(),
 					Messages::from_results(vec![
 						Ok(listen_ack(
-							SubscriptionFilter::new().with_prompts_list_changed(true),
+							SubscriptionFilter::builder().prompts_list_changed().build(),
 						)),
 						Ok(prompts_list_changed()),
 					]),
@@ -509,9 +464,10 @@ mod tests {
 
 		assert_eq!(
 			accepted,
-			SubscriptionFilter::new()
-				.with_tools_list_changed(true)
-				.with_prompts_list_changed(true)
+			SubscriptionFilter::builder()
+				.tools_list_changed()
+				.prompts_list_changed()
+				.build()
 		);
 		assert_eq!(prepared.len(), 2);
 		assert_eq!(
@@ -528,7 +484,7 @@ mod tests {
 				.find(|stream| stream.target == "prompts")
 				.unwrap()
 				.accepted_filter,
-			SubscriptionFilter::new().with_prompts_list_changed(true)
+			SubscriptionFilter::builder().prompts_list_changed().build()
 		);
 	}
 
@@ -558,13 +514,15 @@ mod tests {
 			resource_sub("svc", "https://example.com/b"),
 			resource_sub("svc", "https://example.com/a"),
 		];
-		let accepted = SubscriptionFilter::new()
-			.with_resource_subscriptions(vec!["https://example.com/a".to_string()]);
+		let accepted = SubscriptionFilter::builder()
+			.resource_subscriptions(["https://example.com/a"])
+			.build();
 		let prepared = [prepared_with_accepted("svc", accepted.clone())];
 		assert_eq!(
 			client_filter_from_accepted(&SubscriptionFilter::new(), &subs, &accepted, &prepared),
-			SubscriptionFilter::new()
-				.with_resource_subscriptions(vec!["svc+https://example.com/a".to_string()])
+			SubscriptionFilter::builder()
+				.resource_subscriptions(["svc+https://example.com/a"])
+				.build()
 		);
 	}
 
@@ -576,16 +534,18 @@ mod tests {
 			resource_sub("a", "https://example.com/r"),
 			resource_sub("b", "https://example.com/r"),
 		];
-		let accepted_a = SubscriptionFilter::new()
-			.with_resource_subscriptions(vec!["https://example.com/r".to_string()]);
+		let accepted_a = SubscriptionFilter::builder()
+			.resource_subscriptions(["https://example.com/r"])
+			.build();
 		let prepared = [
 			prepared_with_accepted("a", accepted_a.clone()),
 			prepared_with_accepted("b", SubscriptionFilter::new()),
 		];
 		assert_eq!(
 			client_filter_from_accepted(&SubscriptionFilter::new(), &subs, &accepted_a, &prepared),
-			SubscriptionFilter::new()
-				.with_resource_subscriptions(vec!["a+https://example.com/r".to_string()])
+			SubscriptionFilter::builder()
+				.resource_subscriptions(["a+https://example.com/r"])
+				.build()
 		);
 	}
 
@@ -702,9 +662,9 @@ mod tests {
 		let frames = run_listen(
 			RequestId::Number(1),
 			(
-				SubscriptionFilter::new().with_prompts_list_changed(true),
-				SubscriptionFilter::new().with_prompts_list_changed(true),
-				SubscriptionFilter::new().with_prompts_list_changed(true),
+				SubscriptionFilter::builder().prompts_list_changed().build(),
+				SubscriptionFilter::builder().prompts_list_changed().build(),
+				SubscriptionFilter::builder().prompts_list_changed().build(),
 			),
 			vec![Ok(tools_list_changed())],
 			None,
@@ -721,13 +681,14 @@ mod tests {
 
 	#[tokio::test]
 	async fn listen_swallows_upstream_ack_and_response() {
-		let requested_filter = SubscriptionFilter::new()
-			.with_tools_list_changed(true)
-			.with_prompts_list_changed(true);
+		let requested_filter = SubscriptionFilter::builder()
+			.tools_list_changed()
+			.prompts_list_changed()
+			.build();
 		// The upstream narrows the requested filter. The downstream ACK and notification pipeline
 		// must use the accepted subset, not the original request.
 		let upstream_response = ServerJsonRpcMessage::response(
-			SubscriptionsListenResult::new(RequestId::Number(99)).into(),
+			SubscriptionsListenResult::complete(RequestId::Number(99)).into(),
 			RequestId::Number(99),
 		);
 		let frames = run_listen(
@@ -771,8 +732,9 @@ mod tests {
 	async fn listen_multiplex_uri_filter_and_rewrite() {
 		// resource_subscriptions holds upstream-form URIs; a matching ResourceUpdated is forwarded,
 		// rewritten to service+ form, and tagged. A non-matching URI is dropped.
-		let filter = SubscriptionFilter::new()
-			.with_resource_subscriptions(vec!["http://example.com/a".to_string()]);
+		let filter = SubscriptionFilter::builder()
+			.resource_subscriptions(["http://example.com/a"])
+			.build();
 		let frames = run_listen(
 			RequestId::Number(5),
 			(filter.clone(), filter.clone(), filter),

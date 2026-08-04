@@ -35,7 +35,6 @@ use crate::types::agent::{
 	BindKey, BindProtocol, Listener, ListenerProtocol, TransportProtocol, TunnelProtocol,
 };
 use crate::types::discovery::Service;
-use crate::types::discovery::gatewayaddress::Destination;
 use crate::types::frontend;
 use crate::{ProxyInputs, Stores, client};
 
@@ -137,6 +136,22 @@ pub struct Gateway {
 	drain: drain::DrainWatcher,
 }
 
+enum ActiveBind {
+	Task(AbortHandle),
+	PerCore(watch::Sender<()>),
+}
+
+impl ActiveBind {
+	fn stop(self) {
+		match self {
+			Self::Task(handle) => handle.abort(),
+			Self::PerCore(stop) => {
+				let _ = stop.send(());
+			},
+		}
+	}
+}
+
 impl Gateway {
 	pub fn new(pi: Arc<ProxyInputs>, drain: DrainWatcher) -> Gateway {
 		Gateway { drain, pi }
@@ -150,19 +165,19 @@ impl Gateway {
 			let mut binds = self.pi.stores.binds.write();
 			binds.subscribe()
 		};
-		let mut active: HashMap<BindKey, AbortHandle> = HashMap::new();
+		let mut active: HashMap<BindKey, ActiveBind> = HashMap::new();
 		let mut handle_bind = |js: &mut JoinSet<anyhow::Result<()>>, b: BindEvent| {
 			let (bind_key, bind, listeners) = match b {
 				BindEvent::Add(bind, listeners) => (bind.key.clone(), bind, listeners),
 				BindEvent::Remove(bind_key) => {
 					if let Some(h) = active.remove(&bind_key) {
-						h.abort();
+						h.stop();
 					}
 					return;
 				},
 			};
 			if let Some(h) = active.remove(&bind_key) {
-				h.abort();
+				h.stop();
 			}
 
 			debug!("add bind {}", bind.address);
@@ -172,13 +187,15 @@ impl Gateway {
 						Self::run_bind(self.pi.clone(), subdrain.clone(), Arc::new(bind), listener)
 							.in_current_span(),
 					);
-					active.insert(bind_key, task);
+					active.insert(bind_key, ActiveBind::Task(task));
 				},
 				BindListeners::PerCore(listeners) => {
+					let (stop, stop_rx) = watch::channel(());
 					for (core_id, listener) in listeners {
 						let subdrain = subdrain.clone();
 						let pi = self.pi.clone();
 						let bind = bind.clone();
+						let mut stop_rx = stop_rx.clone();
 						std::thread::spawn(move || {
 							let res = core_affinity::set_for_current(core_id);
 							if !res {
@@ -189,12 +206,15 @@ impl Gateway {
 								.build()
 								.unwrap()
 								.block_on(async {
-									let _ = Self::run_bind(pi, subdrain, Arc::new(bind), listener)
-										.in_current_span()
-										.await;
+									tokio::select! {
+										_ = stop_rx.changed() => {},
+										_ = Self::run_bind(pi, subdrain, Arc::new(bind), listener)
+											.in_current_span() => {},
+									}
 								})
 						});
 					}
+					active.insert(bind_key, ActiveBind::PerCore(stop));
 				},
 			}
 		};
@@ -734,9 +754,15 @@ impl Gateway {
 					};
 					let binds = inputs.stores.read_binds();
 					let (target_address, bind) = if let Ok(addr) = authority.parse::<SocketAddr>() {
-						// Match an exact bind for this address; otherwise fall back to the internal
-						// wildcard bind, preserving the requested address as the tunnel target.
-						let Some(bind) = binds.find_bind(addr).or_else(|| binds.find_wildcard_bind()) else {
+						// CONNECT re-entry must not expose a bind scoped to a concrete address
+						// (for example, a loopback-only listener). Match only an unspecified-address
+						// bind for this port; otherwise fall back to the explicit internal wildcard
+						// bind, preserving the requested address as the tunnel target.
+						let Some(bind) = binds
+							.find_bind(addr)
+							.filter(|b| b.address.ip().is_unspecified())
+							.or_else(|| binds.find_wildcard_bind())
+						else {
 							return Ok(ProxyError::BindNotFound.into_response_with_grpc(false));
 						};
 						(addr, bind)
@@ -1451,32 +1477,29 @@ impl Gateway {
 		};
 
 		// Make sure the service is actually bound to us
-		let Some(wp) = svc.waypoint.as_ref() else {
+		if !svc.has_fronting_waypoint() {
 			anyhow::bail!(
 				"service {}.{} is not bound to a waypoint",
 				svc.hostname,
 				svc.namespace
 			);
-		};
+		}
 		let Some(self_id) = pi.cfg.self_addr.as_ref() else {
 			anyhow::bail!("self_id required for waypoint");
 		};
-		let is_ours = match &wp.destination {
-			Destination::Address(addr) => self_id.matches_address(addr, |a| {
-				discovery
-					.services
-					.get_by_vip(a)
-					.map(|s| (s.name.clone(), s.namespace.clone()))
-			}),
-			Destination::Hostname(n) => self_id.matches_hostname(n),
-		};
+		let is_ours = self_id.fronts_service(&svc, |a| {
+			discovery
+				.services
+				.get_by_vip(a)
+				.map(|s| (s.name.clone(), s.namespace.clone()))
+		});
 		if !is_ours {
 			anyhow::bail!(
-				"service {} is meant for waypoint {:?}, but we are {}.{}",
+				"service {} is not fronted by waypoint {}.{}; its waypoints are {:?}",
 				svc.hostname,
-				wp.destination,
 				self_id.gateway,
-				self_id.namespace
+				self_id.namespace,
+				svc.fronting_waypoint_destinations(),
 			);
 		}
 

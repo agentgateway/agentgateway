@@ -323,8 +323,8 @@ async fn apply_backend_policies(
 		response_header_modifier,
 		request_redirect,
 		transformation,
-		// TODO: implement session persistence
-		session_persistence: _,
+		// Applied during service endpoint selection
+		session_affinity: _,
 		// Applied elsewhere
 		request_mirror: _,
 		// Applied elsewhere
@@ -1887,16 +1887,26 @@ async fn apply_inference_routing(
 		.apply(response_policies.headers())?;
 	log.add(|l| l.inference_pool = inference_result.destination);
 
-	// Use inference override if present, otherwise check for stateful MCP pinning.
-	// In practice, these don't conflict: inference is for AI backends, MCP pinning is for MCP backends.
+	// Explicit inference and stateful MCP destinations take precedence over stateless affinity.
+	// In practice inference and MCP pinning do not conflict because they target different backends.
+	let destination = inference_result.destination.or(policies.override_dest);
+	let affinity_key = if destination.is_none() {
+		policies
+			.session_affinity
+			.as_ref()
+			.and_then(|policy| policy.affinity_key(req))
+	} else {
+		None
+	};
 	let service_override = ServiceCallOverride {
-		destination: inference_result.destination.or(policies.override_dest),
+		destination,
 		destination_passthrough: inference_result.destination.is_some()
 			&& matches!(
 				inference_result.destination_mode,
 				InferenceRoutingDestinationMode::Passthrough
 			),
 		inference_failed_open: inference_result.failed_open,
+		affinity_key,
 	};
 
 	Ok((maybe_inference, service_override))
@@ -2707,11 +2717,18 @@ fn build_connect_backend_call(
 	match backend {
 		Backend::Service(svc, port) => {
 			let mut maybe_log = Some(log);
+			let service_override = ServiceCallOverride {
+				affinity_key: policies
+					.session_affinity
+					.as_ref()
+					.and_then(|policy| policy.affinity_key(req)),
+				..Default::default()
+			};
 			build_service_call(
 				inputs,
 				policies,
 				&mut maybe_log,
-				ServiceCallOverride::default(),
+				service_override,
 				svc,
 				port,
 				req.uri().host(),
@@ -2768,7 +2785,13 @@ pub fn build_service_call(
 	let workloads = &discovery.workloads;
 	let (ep, handle, wl) = svc
 		.endpoints
-		.select_endpoint(workloads, svc.as_ref(), port, service_override.destination)
+		.select_endpoint_with_affinity(
+			workloads,
+			svc.as_ref(),
+			port,
+			service_override.destination,
+			service_override.affinity_key.as_ref(),
+		)
 		.ok_or(ProxyError::NoHealthyEndpoints)?;
 
 	let target_port = select_service_target_port(
@@ -3431,6 +3454,7 @@ mod tests {
 			endpoints: Default::default(),
 			subject_alt_names: Vec::new(),
 			waypoint: None,
+			weighted_waypoints: Vec::new(),
 			load_balancer: None,
 			ip_families: None,
 			ingress_use_waypoint: false,
@@ -3940,6 +3964,7 @@ pub struct ServiceCallOverride {
 	pub destination: Option<SocketAddr>,
 	pub destination_passthrough: bool,
 	pub inference_failed_open: bool,
+	pub affinity_key: Option<u64>,
 }
 
 #[derive(Debug, Default)]

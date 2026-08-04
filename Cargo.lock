@@ -312,7 +312,7 @@ dependencies = [
  "reqwest 0.12.28",
  "reqwest 0.13.4",
  "rmcp 0.10.0",
- "rmcp 2.0.0",
+ "rmcp 3.1.0",
  "rstest",
  "rust_decimal",
  "rustls",
@@ -351,6 +351,7 @@ dependencies = [
  "tower-serve-static",
  "tracing",
  "tracing-subscriber",
+ "twox-hash",
  "typespec_client_core",
  "url",
  "uuid",
@@ -1217,12 +1218,13 @@ dependencies = [
 
 [[package]]
 name = "axum-server"
-version = "0.7.3"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1ab4a3ec9ea8a657c72d99a03a824af695bd0fb5ec639ccbd9cd3543b41a5f9"
+checksum = "b1df331683d982a0b9492b38127151e6453639cd34926eb9c07d4cd8c6d22bfc"
 dependencies = [
  "arc-swap",
  "bytes",
+ "either",
  "fs-err",
  "http 1.4.2",
  "http-body 1.1.0",
@@ -1230,7 +1232,6 @@ dependencies = [
  "hyper-util",
  "pin-project-lite",
  "rustls",
- "rustls-pemfile",
  "rustls-pki-types",
  "tokio",
  "tokio-rustls",
@@ -5980,11 +5981,12 @@ dependencies = [
 
 [[package]]
 name = "rmcp"
-version = "2.0.0"
-source = "git+https://github.com/howardjohn/rust-sdk?rev=7366ffc42beb89f27410ae348a67001beb4c6ba5#7366ffc42beb89f27410ae348a67001beb4c6ba5"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad26b216c966e987e80e86daf784a455c039c43d98575ceed57b8faa259e5695"
 dependencies = [
  "async-trait",
- "base64 0.22.1",
+ "base64 0.23.0",
  "bytes",
  "chrono",
  "futures",
@@ -5997,7 +5999,7 @@ dependencies = [
  "process-wrap",
  "rand 0.10.2",
  "reqwest 0.13.4",
- "rmcp-macros 2.0.0",
+ "rmcp-macros 3.1.0",
  "schemars 1.2.1",
  "serde",
  "serde_json",
@@ -6027,8 +6029,9 @@ dependencies = [
 
 [[package]]
 name = "rmcp-macros"
-version = "2.0.0"
-source = "git+https://github.com/howardjohn/rust-sdk?rev=7366ffc42beb89f27410ae348a67001beb4c6ba5#7366ffc42beb89f27410ae348a67001beb4c6ba5"
+version = "3.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41bc748630c2be2a71b614c2f40d27bc0df0060696d224e1692c72345b7e0b79"
 dependencies = [
  "darling 0.23.0",
  "proc-macro2",
@@ -6178,15 +6181,6 @@ dependencies = [
  "openssl-sys",
  "rustls",
  "zeroize",
-]
-
-[[package]]
-name = "rustls-pemfile"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dce314e5fee3f39953d46bb63bb8a46d40c2f8fb7cc5a3b6cab2bde9721d6e50"
-dependencies = [
- "rustls-pki-types",
 ]
 
 [[package]]
@@ -7825,6 +7819,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
+name = "twox-hash"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7b17f197b3050ba473acf9181f7b1d3b66d1cf7356c6cc57886662276e65908"
+
+[[package]]
 name = "typed-arena"
 version = "2.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8629,7 +8629,7 @@ dependencies = [
 [[package]]
 name = "wiremock"
 version = "0.6.5"
-source = "git+https://github.com/howardjohn/wiremock-rs?rev=e55f5b96083125fdabc3e62f92790ee15ae3a10d#e55f5b96083125fdabc3e62f92790ee15ae3a10d"
+source = "git+https://github.com/howardjohn/wiremock-rs?rev=79e5f488d8bc3bce2f7b397b5791b5caef5129e6#79e5f488d8bc3bce2f7b397b5791b5caef5129e6"
 dependencies = [
  "assert-json-diff",
  "axum-server",
@@ -8644,6 +8644,7 @@ dependencies = [
  "once_cell",
  "rcgen 0.13.2",
  "regex",
+ "rustls",
  "rustls-pki-types",
  "serde",
  "serde_json",

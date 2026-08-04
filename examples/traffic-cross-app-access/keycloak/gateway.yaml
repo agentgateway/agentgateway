@@ -28,6 +28,10 @@ binds:
 
         backendAuth:
           crossAppAccess:
+            # jwtAuth removes the validated credential, so read its raw token explicitly.
+            subjectToken:
+              source:
+                expression: jwt.rawToken.unredacted()
             # Leg 1 — the user's IdP token endpoint, authenticated as the requesting client.
             identityProvider:
               host: localhost:8480

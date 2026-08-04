@@ -105,12 +105,12 @@ impl IncomingRequestContext {
 	}
 	// SEP-414: copy W3C trace context into the message's `_meta` (un-prefixed keys, per spec).
 	// The only trace carrier for stdio upstreams, which have no request headers.
-	fn stamp_trace_context<T: GetMeta>(&self, msg: &mut T) {
+	fn stamp_trace_context(&self, meta: &mut rmcp::model::MetaObject) {
 		for key in ["traceparent", "tracestate", "baggage"] {
 			let Some(value) = self.headers.get(key).and_then(|v| v.to_str().ok()) else {
 				continue;
 			};
-			msg.get_meta_mut().0.insert(
+			meta.0.insert(
 				key.to_string(),
 				serde_json::Value::String(value.to_string()),
 			);
@@ -241,7 +241,7 @@ impl Upstream {
 				"subscriptions/listen is not supported for stdio/SSE upstreams".to_string(),
 			));
 		}
-		ctx.stamp_trace_context(&mut request.request);
+		ctx.stamp_trace_context(&mut request.request.get_meta_mut().0);
 		match &self {
 			Upstream::McpStdio(c) => Ok(mergestream::Messages::from(
 				Box::pin(c.send_message(request, ctx).assert_size::<{ 6 * 1024 }>()).await?,
@@ -273,7 +273,7 @@ impl Upstream {
 		mut request: ClientNotification,
 		ctx: &IncomingRequestContext,
 	) -> Result<(), UpstreamError> {
-		ctx.stamp_trace_context(&mut request);
+		ctx.stamp_trace_context(&mut request.get_meta_mut().0);
 		match &self {
 			Upstream::McpStdio(c) => {
 				c.send_notification(request, ctx).await?;
@@ -695,7 +695,7 @@ mod tests {
 			("authorization", "Bearer token"),
 		]);
 		let mut req = ping_request();
-		ctx.stamp_trace_context(&mut req);
+		ctx.stamp_trace_context(&mut req.get_meta_mut().0);
 
 		let meta = &req.get_meta().0;
 		// SEP-414: un-prefixed keys, verbatim W3C values, matching the forwarded headers.
@@ -710,7 +710,7 @@ mod tests {
 	fn stamp_trace_context_noop_without_trace_headers() {
 		let ctx = ctx_with_headers(&[("authorization", "Bearer token")]);
 		let mut req = ping_request();
-		ctx.stamp_trace_context(&mut req);
+		ctx.stamp_trace_context(&mut req.get_meta_mut().0);
 		assert!(req.get_meta().0.get("traceparent").is_none());
 	}
 }

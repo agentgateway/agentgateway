@@ -45,5 +45,24 @@ data: [DONE]
   "total_tokens": 20,
   "reasoning_tokens": 0,
   "cached_input_tokens": 0,
-  "provider_model": "gpt-4.1-mini"
+  "provider_model": "gpt-4.1-mini",
+  "completion": [
+    "Hello"
+  ],
+  "output_messages": [
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_call",
+          "id": "call_xxx",
+          "name": "get_weather",
+          "arguments": {
+            "location": "San Francisco"
+          }
+        }
+      ],
+      "finish_reason": "completed"
+    }
+  ]
 }

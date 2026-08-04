@@ -17,31 +17,53 @@ info:
       content: The following skills are available for use.
 ---
 {
-  "modelId": "claude-opus-4-8",
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "text": "<system-reminder>\nAs you answer, be concise."
-        },
-        {
-          "text": "hola"
-        },
-        {
-          "cachePoint": {
-            "type": "default"
+  "request": {
+    "modelId": "claude-opus-4-8",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "<system-reminder>\nAs you answer, be concise."
+          },
+          {
+            "text": "hola"
+          },
+          {
+            "cachePoint": {
+              "type": "default"
+            }
           }
-        }
-      ]
+        ]
+      }
+    ],
+    "system": [
+      {
+        "text": "The following skills are available for use."
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 1024
     }
-  ],
-  "system": [
-    {
-      "text": "The following skills are available for use."
-    }
-  ],
-  "inferenceConfig": {
-    "maxTokens": 1024
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-opus-4-8",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "<system-reminder>\nAs you answer, be concise. hola"
+      },
+      {
+        "role": "system",
+        "content": "The following skills are available for use."
+      }
+    ]
   }
 }

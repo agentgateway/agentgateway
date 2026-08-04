@@ -51,6 +51,7 @@ info:
   },
   "parsed": {
     "input_tokens": 9,
-    "total_tokens": 9
+    "total_tokens": 9,
+    "provider_model": "text-embedding-004"
   }
 }

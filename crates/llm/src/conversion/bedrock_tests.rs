@@ -185,56 +185,6 @@ fn test_metadata_from_header() {
 }
 
 #[test]
-fn test_messages_metadata_is_preserved_in_additional_model_request_fields() {
-	let provider = Provider {
-		model: None,
-		region: strng::new("us-east-1"),
-		guardrail_identifier: None,
-		guardrail_version: None,
-	};
-
-	let json_encoded_user_id = r#"{"device_id":"704cb53c2074e9","account_uuid":"","session_id":"180423cd-fe24-4f48-bbde-b4ab5bfd36e7"}"#;
-	let req = messages::typed::Request {
-		model: "anthropic.claude-3-sonnet".to_string(),
-		messages: vec![messages::typed::Message {
-			role: messages::typed::Role::User,
-			content: vec![messages::typed::ContentBlock::Text(
-				messages::typed::ContentTextBlock {
-					text: "Hello".to_string(),
-					citations: None,
-					cache_control: None,
-				},
-			)],
-		}],
-		max_tokens: 100,
-		metadata: Some(messages::typed::Metadata {
-			fields: std::collections::HashMap::from([
-				("user_id".to_string(), json_encoded_user_id.to_string()),
-				("department".to_string(), "engineering".to_string()),
-			]),
-		}),
-		system: None,
-		stop_sequences: vec![],
-		stream: false,
-		temperature: None,
-		top_k: None,
-		top_p: None,
-		tools: None,
-		tool_choice: None,
-		thinking: None,
-		output_config: None,
-	};
-
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
-	let additional_fields = out.additional_model_request_fields.unwrap();
-	let metadata = additional_fields.get("metadata").unwrap();
-
-	assert!(out.request_metadata.is_none());
-	assert_eq!(metadata["user_id"], json_encoded_user_id);
-	assert_eq!(metadata["department"], "engineering");
-}
-
-#[test]
 fn test_output_config_effort_without_thinking_is_passed_through() {
 	let provider = Provider {
 		model: None,
@@ -285,80 +235,6 @@ fn test_output_config_effort_without_thinking_is_passed_through() {
 	assert_eq!(inference.temperature, Some(0.7));
 	assert_eq!(inference.top_p, Some(0.8));
 	assert_eq!(inference.top_k, Some(50));
-}
-
-#[test]
-fn test_output_config_format_maps_to_converse_output_config() {
-	let provider = Provider {
-		model: None,
-		region: strng::new("us-east-1"),
-		guardrail_identifier: None,
-		guardrail_version: None,
-	};
-
-	let schema = json!({
-		"type": "object",
-		"properties": {
-			"answer": { "type": "number" }
-		},
-		"required": ["answer"],
-		"additionalProperties": false
-	});
-	let req = messages::typed::Request {
-		model: "anthropic.claude-3-sonnet".to_string(),
-		messages: vec![messages::typed::Message {
-			role: messages::typed::Role::User,
-			content: vec![messages::typed::ContentBlock::Text(
-				messages::typed::ContentTextBlock {
-					text: "What is 2+2?".to_string(),
-					citations: None,
-					cache_control: None,
-				},
-			)],
-		}],
-		max_tokens: 100,
-		metadata: None,
-		system: None,
-		stop_sequences: vec![],
-		stream: false,
-		temperature: Some(0.7),
-		top_k: Some(50),
-		top_p: Some(0.8),
-		tools: None,
-		tool_choice: None,
-		thinking: None,
-		output_config: Some(messages::typed::OutputConfig {
-			effort: Some(messages::typed::ThinkingEffort::High),
-			format: Some(messages::typed::OutputFormat::JsonSchema {
-				schema: schema.clone(),
-			}),
-		}),
-	};
-
-	let (out, _) = super::from_messages::translate_internal(req, &provider, None).unwrap();
-	assert_eq!(
-		out.additional_model_request_fields,
-		Some(json!({
-			"output_config": {
-				"effort": "high"
-			}
-		}))
-	);
-	assert_eq!(
-		out.output_config,
-		Some(types::bedrock::OutputConfig {
-			text_format: Some(types::bedrock::OutputFormat {
-				r#type: types::bedrock::OutputFormatType::JsonSchema,
-				structure: types::bedrock::OutputFormatStructure {
-					json_schema: types::bedrock::JsonSchemaDefinition {
-						schema: serde_json::to_string(&schema).unwrap(),
-						name: None,
-						description: None,
-					},
-				},
-			}),
-		})
-	);
 }
 
 #[test]
@@ -500,18 +376,20 @@ fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
 		temperature: Some(0.7),
 		top_k: Some(50),
 		top_p: Some(0.8),
-		tools: Some(vec![messages::typed::Tool {
-			name: "lookup".to_string(),
-			description: Some("Lookup tool".to_string()),
-			input_schema: json!({
-				"type": "object",
-				"properties": {
-					"q": { "type": "string" }
-				},
-				"required": ["q"]
-			}),
-			cache_control: None,
-		}]),
+		tools: Some(vec![messages::typed::Tool::Custom(
+			messages::typed::CustomTool {
+				name: "lookup".to_string(),
+				description: Some("Lookup tool".to_string()),
+				input_schema: json!({
+					"type": "object",
+					"properties": {
+						"q": { "type": "string" }
+					},
+					"required": ["q"]
+				}),
+				cache_control: None,
+			},
+		)]),
 		tool_choice: Some(messages::typed::ToolChoice::Tool {
 			name: "lookup".to_string(),
 			disable_parallel_tool_use: None,
@@ -574,18 +452,20 @@ fn test_enabled_thinking_applies_sampling_and_tool_choice_constraints() {
 		temperature: Some(0.7),
 		top_k: Some(50),
 		top_p: Some(0.8),
-		tools: Some(vec![messages::typed::Tool {
-			name: "lookup".to_string(),
-			description: Some("Lookup tool".to_string()),
-			input_schema: json!({
-				"type": "object",
-				"properties": {
-					"q": { "type": "string" }
-				},
-				"required": ["q"]
-			}),
-			cache_control: None,
-		}]),
+		tools: Some(vec![messages::typed::Tool::Custom(
+			messages::typed::CustomTool {
+				name: "lookup".to_string(),
+				description: Some("Lookup tool".to_string()),
+				input_schema: json!({
+					"type": "object",
+					"properties": {
+						"q": { "type": "string" }
+					},
+					"required": ["q"]
+				}),
+				cache_control: None,
+			},
+		)]),
 		tool_choice: Some(messages::typed::ToolChoice::Auto {
 			disable_parallel_tool_use: None,
 		}),
@@ -695,6 +575,30 @@ fn test_completions_image_data_url_maps_to_converse_image_block() {
 		content[1]["image"]["source"]["bytes"],
 		json!("/9j/4AAQSkZJRg==")
 	);
+}
+
+#[test]
+fn test_completions_image_url_to_bedrock_returns_error() {
+	let provider = Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+	let req: types::completions::Request = serde_json::from_value(json!({
+		"model": "gpt-4o",
+		"messages": [{
+			"role": "user",
+			"content": [{
+				"type": "image_url",
+				"image_url": { "url": "https://example.com/sample.jpg" }
+			}]
+		}]
+	}))
+	.expect("valid completions request");
+
+	let err = super::from_completions::translate(&req, &provider, None, None).unwrap_err();
+	assert!(matches!(err, crate::AIError::UnsupportedConversion(_)));
 }
 
 #[test]
@@ -1028,61 +932,6 @@ fn test_completions_explicit_thinking_budget_forces_enabled_thinking() {
 }
 
 #[test]
-fn test_responses_json_schema_text_format_maps_to_converse_output_config() {
-	let provider = Provider {
-		model: None,
-		region: strng::new("us-east-1"),
-		guardrail_identifier: None,
-		guardrail_version: None,
-	};
-
-	let schema = json!({
-		"type": "object",
-		"properties": {
-			"city": { "type": "string" }
-		},
-		"required": ["city"],
-		"additionalProperties": false
-	});
-	let req: types::responses::Request = serde_json::from_value(json!({
-		"model": "gpt-4o",
-		"max_output_tokens": 64,
-		"input": "Extract the city name.",
-		"text": {
-			"format": {
-				"type": "json_schema",
-				"name": "city_schema",
-				"description": "Structured city extraction",
-				"schema": schema
-			}
-		}
-	}))
-	.expect("valid responses request");
-
-	let translated = super::from_responses::translate(&req, &provider, None, None)
-		.unwrap()
-		.body;
-	let translated: serde_json::Value = serde_json::from_slice(&translated).unwrap();
-
-	assert_eq!(
-		translated["outputConfig"]["textFormat"]["type"],
-		json!("json_schema")
-	);
-	assert_eq!(
-		translated["outputConfig"]["textFormat"]["structure"]["jsonSchema"]["name"],
-		json!("city_schema")
-	);
-	assert_eq!(
-		translated["outputConfig"]["textFormat"]["structure"]["jsonSchema"]["description"],
-		json!("Structured city extraction")
-	);
-	assert_eq!(
-		translated["outputConfig"]["textFormat"]["structure"]["jsonSchema"]["schema"],
-		serde_json::to_string(&schema).unwrap()
-	);
-}
-
-#[test]
 fn test_responses_request_metadata_only_uses_bedrock_header() {
 	let provider = Provider {
 		model: None,
@@ -1337,6 +1186,7 @@ fn test_embeddings_cohere_with_passthrough_fields() {
 	assert_eq!(bedrock_req.texts, vec!["hello", "world"]);
 	assert_eq!(bedrock_req.input_type, "search_document");
 	assert_eq!(bedrock_req.truncate, Some("END".to_string()));
+	assert_eq!(bedrock_req.output_dimension, None);
 }
 
 #[test]
@@ -1584,12 +1434,12 @@ fn test_messages_long_tool_names_fit_bedrock_tool_config() {
 				cache_control: None,
 			})],
 		}],
-		tools: Some(vec![messages::Tool {
+		tools: Some(vec![messages::Tool::Custom(messages::CustomTool {
 			name: long_name.to_string(),
 			description: Some("test".to_string()),
 			input_schema: serde_json::json!({"type": "object"}),
 			cache_control: None,
-		}]),
+		})]),
 		tool_choice: None,
 		system: None,
 		metadata: None,
@@ -1640,12 +1490,12 @@ fn test_messages_long_tool_name_round_trip_response() {
 				cache_control: None,
 			})],
 		}],
-		tools: Some(vec![messages::Tool {
+		tools: Some(vec![messages::Tool::Custom(messages::CustomTool {
 			name: long_name.to_string(),
 			description: Some("test".to_string()),
 			input_schema: serde_json::json!({"type": "object"}),
 			cache_control: None,
-		}]),
+		})]),
 		tool_choice: None,
 		system: None,
 		metadata: None,
@@ -1709,48 +1559,6 @@ fn test_messages_long_tool_name_round_trip_response() {
 		.expect("tool use block in response");
 
 	assert_eq!(tool_use_name, long_name);
-}
-
-#[test]
-fn test_responses_input_image_data_url_maps_to_converse_image_block() {
-	let provider = Provider {
-		model: None,
-		region: strng::new("us-east-1"),
-		guardrail_identifier: None,
-		guardrail_version: None,
-	};
-
-	let req: types::responses::Request = serde_json::from_value(json!({
-		"model": "gpt-4o",
-		"max_output_tokens": 64,
-		"input": [{
-			"role": "user",
-			"content": [
-				{ "type": "input_text", "text": "What is in this image?" },
-				{
-					"type": "input_image",
-					"image_url": "data:image/png;base64,iVBORw0KGgo=",
-					"detail": "auto"
-				}
-			]
-		}]
-	}))
-	.expect("valid responses request");
-
-	let translated = super::from_responses::translate(&req, &provider, None, None)
-		.unwrap()
-		.body;
-	let translated: serde_json::Value = serde_json::from_slice(&translated).unwrap();
-
-	let content = translated["messages"][0]["content"]
-		.as_array()
-		.expect("user message content");
-	assert_eq!(content[0]["text"], json!("What is in this image?"));
-	assert_eq!(content[1]["image"]["format"], json!("png"));
-	assert_eq!(
-		content[1]["image"]["source"]["bytes"],
-		json!("iVBORw0KGgo=")
-	);
 }
 
 #[test]
@@ -2035,111 +1843,6 @@ fn test_responses_input_file_remote_url_is_rejected() {
 }
 
 #[test]
-fn test_responses_input_file_data_url_maps_to_document_block() {
-	let provider = Provider {
-		model: None,
-		region: strng::new("us-east-1"),
-		guardrail_identifier: None,
-		guardrail_version: None,
-	};
-
-	// PDF via file_data data URL — format derived from MIME type
-	let req: types::responses::Request = serde_json::from_value(json!({
-		"model": "gpt-4o",
-		"max_output_tokens": 64,
-		"input": [{
-			"role": "user",
-			"content": [
-				{ "type": "input_text", "text": "Summarize this document." },
-				{
-					"type": "input_file",
-					"file_data": "data:application/pdf;base64,JVBERi0=",
-					"filename": "report.pdf"
-				}
-			]
-		}]
-	}))
-	.expect("valid responses request");
-
-	let bedrock_req = super::from_responses::translate(&req, &provider, None, None)
-		.expect("translation should succeed")
-		.body;
-	let body: serde_json::Value = serde_json::from_slice(&bedrock_req).expect("valid JSON");
-	let content = &body["messages"][0]["content"];
-	assert_eq!(content[0]["text"], json!("Summarize this document."));
-	assert_eq!(content[1]["document"]["format"], json!("pdf"));
-	// Bedrock doc names cannot contain periods, so the extension is stripped
-	assert_eq!(content[1]["document"]["name"], json!("report"));
-	assert_eq!(content[1]["document"]["source"]["bytes"], json!("JVBERi0="));
-}
-
-#[test]
-fn test_responses_input_file_data_url_in_file_url_field_maps_to_document_block() {
-	let provider = Provider {
-		model: None,
-		region: strng::new("us-east-1"),
-		guardrail_identifier: None,
-		guardrail_version: None,
-	};
-
-	// CSV via file_url data URL — format derived from filename extension
-	let req: types::responses::Request = serde_json::from_value(json!({
-		"model": "gpt-4o",
-		"max_output_tokens": 64,
-		"input": [{
-			"role": "user",
-			"content": [{
-				"type": "input_file",
-				"file_url": "data:text/csv;base64,YSxiLGM=",
-				"filename": "data.csv"
-			}]
-		}]
-	}))
-	.expect("valid responses request");
-
-	let bedrock_req = super::from_responses::translate(&req, &provider, None, None)
-		.expect("translation should succeed")
-		.body;
-	let body: serde_json::Value = serde_json::from_slice(&bedrock_req).expect("valid JSON");
-	let content = &body["messages"][0]["content"];
-	assert_eq!(content[0]["document"]["format"], json!("csv"));
-	assert_eq!(content[0]["document"]["name"], json!("data"));
-	assert_eq!(content[0]["document"]["source"]["bytes"], json!("YSxiLGM="));
-}
-
-#[test]
-fn test_responses_input_file_format_from_extension_fallback() {
-	let provider = Provider {
-		model: None,
-		region: strng::new("us-east-1"),
-		guardrail_identifier: None,
-		guardrail_version: None,
-	};
-
-	// Unknown MIME type but known extension — format derived from filename
-	let req: types::responses::Request = serde_json::from_value(json!({
-		"model": "gpt-4o",
-		"max_output_tokens": 64,
-		"input": [{
-			"role": "user",
-			"content": [{
-				"type": "input_file",
-				"file_data": "data:application/octet-stream;base64,dGVzdA==",
-				"filename": "notes.md"
-			}]
-		}]
-	}))
-	.expect("valid responses request");
-
-	let bedrock_req = super::from_responses::translate(&req, &provider, None, None)
-		.expect("translation should succeed")
-		.body;
-	let body: serde_json::Value = serde_json::from_slice(&bedrock_req).expect("valid JSON");
-	let content = &body["messages"][0]["content"];
-	assert_eq!(content[0]["document"]["format"], json!("md"));
-}
-
-#[test]
 fn test_responses_input_file_unknown_format_is_rejected() {
 	let provider = Provider {
 		model: None,
@@ -2170,50 +1873,4 @@ fn test_responses_input_file_unknown_format_is_rejected() {
 			.contains("document format could not be determined"),
 		"unexpected error: {err}"
 	);
-}
-
-#[test]
-fn test_responses_input_file_duplicate_names_are_deduplicated() {
-	let provider = Provider {
-		model: None,
-		region: strng::new("us-east-1"),
-		guardrail_identifier: None,
-		guardrail_version: None,
-	};
-
-	// Bedrock requires unique document names within a request
-	let req: types::responses::Request = serde_json::from_value(json!({
-		"model": "gpt-4o",
-		"max_output_tokens": 64,
-		"input": [{
-			"role": "user",
-			"content": [
-				{ "type": "input_text", "text": "Compare these documents." },
-				{
-					"type": "input_file",
-					"file_data": "data:application/pdf;base64,JVBERi0=",
-					"filename": "report.pdf"
-				},
-				{
-					"type": "input_file",
-					"file_data": "data:application/pdf;base64,JVBERi1=",
-					"filename": "report.pdf"
-				},
-				{
-					"type": "input_file",
-					"file_data": "data:text/plain;base64,dGVzdA=="
-				}
-			]
-		}]
-	}))
-	.expect("valid responses request");
-
-	let bedrock_req = super::from_responses::translate(&req, &provider, None, None)
-		.expect("translation should succeed")
-		.body;
-	let body: serde_json::Value = serde_json::from_slice(&bedrock_req).expect("valid JSON");
-	let content = &body["messages"][0]["content"];
-	assert_eq!(content[1]["document"]["name"], json!("report"));
-	assert_eq!(content[2]["document"]["name"], json!("report [2]"));
-	assert_eq!(content[3]["document"]["name"], json!("document"));
 }

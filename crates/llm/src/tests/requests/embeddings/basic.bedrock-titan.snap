@@ -7,6 +7,18 @@ info:
   dimensions: 1024
 ---
 {
-  "inputText": "hello world",
-  "dimensions": 1024
+  "request": {
+    "inputText": "hello world",
+    "dimensions": 1024
+  },
+  "parsed": {
+    "input_format": "Embeddings",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "text-embedding-3-small",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {
+      "dimensions": 1024
+    }
+  }
 }

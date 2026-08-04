@@ -49,6 +49,25 @@ type LocalMcpGuardrails = crate::mcp::guardrails::McpGuardrails;
 const DEFAULT_LLM_PORT: u16 = 4000;
 const DEFAULT_MCP_PORT: u16 = 3000;
 
+/// Build the base configuration used by a standalone agentgateway instance.
+pub fn default_standalone_config(database_url: &str) -> serde_json::Value {
+	serde_json::json!({
+		"config": {
+			"database": {
+				"url": database_url,
+			},
+		},
+		"gateways": {
+			"default": {
+				"port": DEFAULT_LLM_PORT,
+			},
+		},
+		"ui": {
+			"gateways": "default",
+		},
+	})
+}
+
 // Windows has different output, for now easier to just not deal with it
 #[cfg(all(test, target_family = "unix"))]
 #[path = "local_tests.rs"]
@@ -281,6 +300,8 @@ fn parse_deprecated_tracing_endpoint(endpoint: &str) -> anyhow::Result<(Target, 
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct NormalizedLocalConfig {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub model_catalog: Option<Vec<crate::ModelCatalogSource>>,
 	pub binds: Vec<Bind>,
 	pub listener_routes: Vec<(ListenerKey, Vec<Route>)>,
 	pub listener_tcp_routes: Vec<(ListenerKey, Vec<TCPRoute>)>,
@@ -296,7 +317,8 @@ pub struct NormalizedLocalConfig {
 #[apply(schema_de!)]
 pub struct LocalConfig {
 	/// config defines top-level settings for DNS, admin, networking, observability, and session
-	/// management. Unlike other sections, these are applied only at startup and are not dynamically reloaded.
+	/// management. Unlike other sections, these are applied only at startup, except modelCatalog,
+	/// which is dynamically reloaded.
 	#[serde(default)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<RawConfig>"))]
 	#[allow(unused)]
@@ -947,6 +969,13 @@ impl LocalLLMModels {
 			self.params.model = Some(model_override);
 		}
 		self.provider = provider.provider.clone();
+		if let LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Custom(custom)) =
+			&mut self.provider
+		{
+			custom
+				.provider_override
+				.get_or_insert_with(|| provider.name.clone());
+		}
 		if let Some(defaults) = provider.defaults.clone() {
 			self.defaults = merge_optional_maps(defaults.defaults, self.defaults.take());
 			self.overrides = merge_optional_maps(defaults.overrides, self.overrides.take());
@@ -1300,7 +1329,7 @@ pub struct LocalRouteBackend {
 	pub backend: LocalBackend,
 	/// Backend-level policies such as TLS, authentication, and transformations.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub policies: Option<LocalBackendPolicies>,
+	pub policies: Option<LocalRouteBackendPolicies>,
 }
 
 fn default_weight() -> usize {
@@ -2418,6 +2447,51 @@ pub struct LocalBackendPolicies {
 	pub ai: Option<llm::Policy>,
 }
 
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+	feature = "schema",
+	schemars(rename_all = "camelCase", deny_unknown_fields)
+)]
+pub struct LocalRouteBackendPolicies {
+	#[cfg_attr(feature = "schema", serde(flatten))]
+	backend: LocalBackendPolicies,
+
+	/// Keep requests whose CEL expression produces the same value on one service endpoint.
+	#[cfg_attr(feature = "schema", schemars(default))]
+	pub session_affinity: Option<http::sessionaffinity::Policy>,
+}
+
+impl<'de> Deserialize<'de> for LocalRouteBackendPolicies {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let value = serde_json::Value::deserialize(deserializer)?;
+		let serde_json::Value::Object(mut fields) = value else {
+			return Err(serde::de::Error::custom(
+				"route backend policies must be an object",
+			));
+		};
+
+		// Deserialize the route-only policy separately, then pass every existing field through the
+		// original LocalBackendPolicies deserializer. This avoids nested serde(flatten), which causes
+		// the inner policy fields to be treated as unknown, while preserving its strict unknown-field
+		// validation and all existing wire formats.
+		let session_affinity = match fields.remove("sessionAffinity") {
+			None | Some(serde_json::Value::Null) => None,
+			Some(value) => Some(serde_json::from_value(value).map_err(serde::de::Error::custom)?),
+		};
+		let backend = serde_json::from_value(serde_json::Value::Object(fields))
+			.map_err(serde::de::Error::custom)?;
+
+		Ok(Self {
+			backend,
+			session_affinity,
+		})
+	}
+}
+
 enum InferenceRoutingScope {
 	ServiceRouteBackend,
 	NonServiceRouteBackend,
@@ -2445,6 +2519,42 @@ fn validate_inference_routing_scope(
 				"inferenceRouting is only supported on service route backends, not AI provider policies"
 			)
 		},
+	}
+}
+
+fn validate_route_backend_policy_scope(
+	backend: &LocalBackend,
+	policies: Option<&LocalRouteBackendPolicies>,
+) -> anyhow::Result<()> {
+	let is_service = matches!(backend, LocalBackend::Service { .. });
+	validate_inference_routing_scope(
+		policies.map(|p| &p.backend),
+		if is_service {
+			InferenceRoutingScope::ServiceRouteBackend
+		} else {
+			InferenceRoutingScope::NonServiceRouteBackend
+		},
+	)?;
+	if !is_service && policies.is_some_and(|p| p.session_affinity.is_some()) {
+		bail!("sessionAffinity is only supported on service route backends")
+	}
+	Ok(())
+}
+
+impl LocalRouteBackendPolicies {
+	pub async fn translate(
+		self,
+		resources: &crate::resource_manager::ResourceFetcher,
+	) -> anyhow::Result<Vec<BackendTrafficPolicy>> {
+		let LocalRouteBackendPolicies {
+			backend,
+			session_affinity,
+		} = self;
+		let mut policies = backend.translate(resources).await?;
+		if let Some(policy) = session_affinity {
+			policies.push(BackendTrafficPolicy::SessionAffinity(policy));
+		}
+		Ok(policies)
 	}
 }
 
@@ -2517,7 +2627,8 @@ impl LocalBackendPolicies {
 				p.try_into(resources).await?,
 			))
 		}
-		if let Some(p) = backend_auth {
+		if let Some(mut p) = backend_auth {
+			p.resolve(resources).await?;
 			pols.push(BackendTrafficPolicy::BackendAuth(p))
 		}
 		if let Some(p) = ext_authz {
@@ -2733,7 +2844,7 @@ async fn convert(
 	apply_implicit_default_gateway(&mut i);
 	validate_local_listener_ports(&i)?;
 	let LocalConfig {
-		config: _,
+		config: local_runtime_config,
 		mut frontend_policies,
 		binds,
 		policies,
@@ -2748,6 +2859,13 @@ async fn convert(
 		mcp,
 		ui,
 	} = i;
+	let model_catalog = local_runtime_config
+		.as_ref()
+		.as_ref()
+		.and_then(|config| config.get("modelCatalog"))
+		.cloned()
+		.map(serde_json::from_value)
+		.transpose()?;
 	merge_deprecated_frontend_policies(config, &mut frontend_policies)?;
 	let mut all_policies = vec![];
 	let mut all_backends = vec![];
@@ -3024,6 +3142,7 @@ async fn convert(
 	all_policies.extend_from_slice(&split_frontend_policies(gateway, frontend_policies).await?);
 
 	let normalized = NormalizedLocalConfig {
+		model_catalog,
 		binds: all_binds,
 		listener_routes: all_listener_routes,
 		listener_tcp_routes: all_listener_tcp_routes,
@@ -4227,7 +4346,8 @@ async fn convert_llm_config(
 				p.try_into(resources).await?,
 			));
 		}
-		if let Some(p) = model_config.auth.clone() {
+		if let Some(mut p) = model_config.auth.clone() {
+			p.resolve(resources).await?;
 			pols.push(BackendTrafficPolicy::BackendAuth(p));
 		}
 		if let Some(p) = model_config.backend_tunnel.clone() {
@@ -4770,14 +4890,7 @@ pub async fn convert_route(
 	let mut backend_refs = Vec::new();
 	let mut external_backends = Vec::new();
 	for (idx, b) in backends.iter().enumerate() {
-		validate_inference_routing_scope(
-			b.policies.as_ref(),
-			if matches!(b.backend, LocalBackend::Service { .. }) {
-				InferenceRoutingScope::ServiceRouteBackend
-			} else {
-				InferenceRoutingScope::NonServiceRouteBackend
-			},
-		)?;
+		validate_route_backend_policy_scope(&b.backend, b.policies.as_ref())?;
 		let backend_key = strng::format!("{key}/backend{idx}");
 		let policies = b
 			.policies
@@ -5060,7 +5173,8 @@ pub(crate) async fn split_policies_for_target(
 	if let Some(p) = backend_tunnel {
 		backend_policies.push(BackendTrafficPolicy::Tunnel(p))
 	}
-	if let Some(p) = backend_auth {
+	if let Some(mut p) = backend_auth {
+		p.resolve(resources).await?;
 		backend_policies.push(BackendTrafficPolicy::BackendAuth(p))
 	}
 

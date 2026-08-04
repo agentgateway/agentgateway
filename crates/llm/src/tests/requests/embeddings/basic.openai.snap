@@ -7,7 +7,19 @@ info:
   dimensions: 1024
 ---
 {
-  "model": "text-embedding-3-small",
-  "input": "hello world",
-  "dimensions": 1024
+  "request": {
+    "model": "text-embedding-3-small",
+    "input": "hello world",
+    "dimensions": 1024
+  },
+  "parsed": {
+    "input_format": "Embeddings",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "text-embedding-3-small",
+    "provider": "openai",
+    "streaming": false,
+    "params": {
+      "dimensions": 1024
+    }
+  }
 }

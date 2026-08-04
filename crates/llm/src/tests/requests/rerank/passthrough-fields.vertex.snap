@@ -11,13 +11,23 @@ info:
   truncation: END
 ---
 {
-  "model": "rerank-v3.5",
-  "query": "q",
-  "records": [
-    {
-      "id": "0",
-      "content": "a"
-    }
-  ],
-  "ignoreRecordDetailsInResponse": true
+  "request": {
+    "model": "rerank-v3.5",
+    "query": "q",
+    "records": [
+      {
+        "id": "0",
+        "content": "a"
+      }
+    ],
+    "ignoreRecordDetailsInResponse": true
+  },
+  "parsed": {
+    "input_format": "Rerank",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "rerank-v3.5",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {}
+  }
 }

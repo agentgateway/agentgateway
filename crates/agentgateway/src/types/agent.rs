@@ -2756,7 +2756,7 @@ pub enum BackendTrafficPolicy {
 	#[serde(rename = "ai")]
 	AI(Arc<llm::Policy>),
 	ExtAuthz(Arc<ext_authz::ExtAuthz>),
-	SessionPersistence(http::sessionpersistence::Policy),
+	SessionAffinity(http::sessionaffinity::Policy),
 	Transformation(Arc<crate::http::transformation_cel::Transformation>),
 	Health(health::Policy),
 

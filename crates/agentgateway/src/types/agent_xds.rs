@@ -1331,8 +1331,46 @@ fn backend_auth_kind_from_proto(
 				diagnostics,
 			)?))
 		},
+		Some(proto::agent::backend_auth_policy::Kind::JwtSign(j)) => {
+			let location = optional_authorization_location(j.authorization_location.as_ref())?;
+			let claims = j
+				.claims
+				.into_iter()
+				.map(|(key, value)| {
+					let value = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
+					(key, value)
+				})
+				.collect();
+			BackendAuthKind::JwtSign(Box::new(
+				auth::jwt_sign::JwtSignAuth::try_new(
+					j.signing_key.trim(),
+					jwt_sign_alg_from_proto(j.alg)?,
+					j.kid,
+					claims,
+					j.ttl.map(convert_duration),
+					location,
+				)
+				.map_err(ProtoError::Generic)?,
+			))
+		},
 		None => return Ok(None),
 	}))
+}
+
+fn jwt_sign_alg_from_proto(alg: i32) -> Result<auth::oauth::SigningAlg, ProtoError> {
+	use auth::oauth::SigningAlg;
+	use proto::agent::jwt_sign::SigningAlg as ProtoSigningAlg;
+
+	match ProtoSigningAlg::try_from(alg) {
+		Ok(ProtoSigningAlg::Unspecified) => Ok(SigningAlg::Rs256),
+		Ok(ProtoSigningAlg::Rs256) => Ok(SigningAlg::Rs256),
+		Ok(ProtoSigningAlg::Rs384) => Ok(SigningAlg::Rs384),
+		Ok(ProtoSigningAlg::Rs512) => Ok(SigningAlg::Rs512),
+		Ok(ProtoSigningAlg::Es256) => Ok(SigningAlg::Es256),
+		Ok(ProtoSigningAlg::Es384) => Ok(SigningAlg::Es384),
+		Ok(ProtoSigningAlg::Ps256) => Ok(SigningAlg::Ps256),
+		Err(_) => Err(ProtoError::EnumParse("unknown jwt_sign signing alg".into())),
+	}
 }
 
 fn listener_protocol_from_proto(
@@ -3781,10 +3819,28 @@ fn convert_webhook(
 			_ => llm::policy::FailureMode::FailClosed,
 		};
 
+	let headers: Vec<(HeaderOrPseudo, Arc<cel::Expression>)> = w
+		.headers
+		.iter()
+		.filter_map(|(k, v)| {
+			let header = match HeaderOrPseudo::try_from(k.as_str()) {
+				Ok(h) => h,
+				Err(_) => {
+					diagnostics.add_warning(format!(
+						"skipping webhook header {k:?}: invalid header or pseudo-header name"
+					));
+					return None;
+				},
+			};
+			let expr =
+				permissive_cel_expression_arc(diagnostics, format!("backend.ai.webhook.headers.{k}"), v);
+			Some((header, expr))
+		})
+		.collect();
+
 	Ok(llm::policy::Webhook {
 		target,
-		// CEL header expressions are not yet exposed via the XDS API.
-		headers: Default::default(),
+		headers,
 		forward_header_matches,
 		failure_mode,
 	})
@@ -5204,6 +5260,113 @@ mod tests {
 
 		assert_eq!(metrics.add.len(), 0);
 		Ok(())
+	}
+
+	#[test]
+	fn test_convert_webhook_empty_headers() -> Result<(), ProtoError> {
+		let wh = proto::agent::backend_policy_spec::ai::Webhook {
+			backend: None,
+			headers: Default::default(),
+			forward_header_matches: vec![],
+			failure_mode: 0,
+		};
+		let mut diag = Diagnostics::default();
+		let result = convert_webhook(&wh, &mut diag)?;
+		assert!(
+			result.headers.is_empty(),
+			"empty headers map should produce empty vec"
+		);
+		assert!(diag.is_empty(), "no warnings expected for empty headers");
+		Ok(())
+	}
+
+	#[test]
+	fn test_convert_webhook_with_headers() -> Result<(), ProtoError> {
+		let mut headers = std::collections::HashMap::new();
+		headers.insert(
+			"x-tenant".to_string(),
+			r#"request.headers["x-tenant"]"#.to_string(),
+		);
+		headers.insert("x-user".to_string(), "jwt.sub".to_string());
+		let wh = proto::agent::backend_policy_spec::ai::Webhook {
+			backend: None,
+			headers,
+			forward_header_matches: vec![],
+			failure_mode: 0,
+		};
+		let mut diag = Diagnostics::default();
+		let result = convert_webhook(&wh, &mut diag)?;
+		assert_eq!(result.headers.len(), 2, "both headers should be parsed");
+		// Verify header names are valid
+		let names: std::collections::HashSet<_> =
+			result.headers.iter().map(|(h, _)| h.to_string()).collect();
+		assert!(
+			names.contains("x-tenant"),
+			"x-tenant header name should be present"
+		);
+		assert!(
+			names.contains("x-user"),
+			"x-user header name should be present"
+		);
+		assert!(diag.is_empty(), "no warnings expected for valid headers");
+		Ok(())
+	}
+
+	#[test]
+	fn test_convert_webhook_path_pseudo_header() -> Result<(), ProtoError> {
+		let mut headers = std::collections::HashMap::new();
+		headers.insert(":path".to_string(), r#""/custom/guardrail""#.to_string());
+		let wh = proto::agent::backend_policy_spec::ai::Webhook {
+			backend: None,
+			headers,
+			forward_header_matches: vec![],
+			failure_mode: 0,
+		};
+		let mut diag = Diagnostics::default();
+		let result = convert_webhook(&wh, &mut diag)?;
+		assert_eq!(result.headers.len(), 1);
+		// :path is a valid pseudo-header
+		let p = &result.headers[0];
+		assert_eq!(p.0.to_string(), ":path");
+		assert!(
+			diag.is_empty(),
+			"no warnings expected for valid :path pseudo-header"
+		);
+		Ok(())
+	}
+
+	#[test]
+	fn test_convert_webhook_invalid_header_names_skipped() {
+		let mut headers = std::collections::HashMap::new();
+		headers.insert("x-valid".to_string(), "request.path".to_string());
+		headers.insert("\0invalid".to_string(), "request.path".to_string());
+		headers.insert("".to_string(), "request.path".to_string());
+		let wh = proto::agent::backend_policy_spec::ai::Webhook {
+			backend: None,
+			headers,
+			forward_header_matches: vec![],
+			failure_mode: 0,
+		};
+		let mut diag = Diagnostics::default();
+		// convert_webhook returns Result, but invalid header names produce warnings not errors
+		let result = convert_webhook(&wh, &mut diag)
+			.expect("invalid header names should produce warnings, not errors");
+		assert_eq!(
+			result.headers.len(),
+			1,
+			"only the valid header should be kept"
+		);
+		assert_eq!(result.headers[0].0.to_string(), "x-valid");
+		assert!(
+			!diag.is_empty(),
+			"warnings expected for invalid header names"
+		);
+		assert!(
+			diag
+				.into_warnings()
+				.iter()
+				.any(|w| w.contains("skipping webhook header"))
+		);
 	}
 
 	#[tokio::test]

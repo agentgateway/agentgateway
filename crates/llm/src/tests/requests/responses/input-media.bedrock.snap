@@ -1,0 +1,116 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/responses/input-media.json
+info:
+  model: gpt-4o
+  max_output_tokens: 64
+  input:
+    - role: user
+      content:
+        - type: input_text
+          text: Compare these documents and image.
+        - type: input_image
+          image_url: "data:image/png;base64,iVBORw0KGgo="
+          detail: auto
+        - type: input_file
+          file_data: "data:application/pdf;base64,JVBERi0="
+          filename: report.pdf
+        - type: input_file
+          file_url: "data:text/csv;base64,YSxiLGM="
+          filename: data.csv
+        - type: input_file
+          file_data: "data:application/octet-stream;base64,dGVzdA=="
+          filename: notes.md
+        - type: input_file
+          file_data: "data:application/pdf;base64,JVBERi1="
+          filename: report.pdf
+        - type: input_file
+          file_data: "data:text/plain;base64,dGVzdA=="
+---
+{
+  "request": {
+    "modelId": "gpt-4o",
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "Compare these documents and image."
+          },
+          {
+            "image": {
+              "format": "png",
+              "source": {
+                "bytes": "iVBORw0KGgo="
+              }
+            }
+          },
+          {
+            "document": {
+              "format": "pdf",
+              "name": "report",
+              "source": {
+                "bytes": "JVBERi0="
+              }
+            }
+          },
+          {
+            "document": {
+              "format": "csv",
+              "name": "data",
+              "source": {
+                "bytes": "YSxiLGM="
+              }
+            }
+          },
+          {
+            "document": {
+              "format": "md",
+              "name": "notes",
+              "source": {
+                "bytes": "dGVzdA=="
+              }
+            }
+          },
+          {
+            "document": {
+              "format": "pdf",
+              "name": "report [2]",
+              "source": {
+                "bytes": "JVBERi1="
+              }
+            }
+          },
+          {
+            "document": {
+              "format": "txt",
+              "name": "document",
+              "source": {
+                "bytes": "dGVzdA=="
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 64
+    }
+  },
+  "parsed": {
+    "input_format": "Responses",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-4o",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {
+      "max_tokens": 64
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Compare these documents and image."
+      }
+    ]
+  }
+}

@@ -296,16 +296,18 @@ pub mod from_completions {
 			let mapped_tools: Vec<_> = tools
 				.iter()
 				.filter_map(|tool| match tool {
-					completions::Tool::Function(function_tool) => Some(messages::Tool {
-						name: function_tool.function.name.clone(),
-						description: function_tool.function.description.clone(),
-						input_schema: function_tool
-							.function
-							.parameters
-							.clone()
-							.unwrap_or_default(),
-						cache_control: None,
-					}),
+					completions::Tool::Function(function_tool) => {
+						Some(messages::Tool::Custom(messages::CustomTool {
+							name: function_tool.function.name.clone(),
+							description: function_tool.function.description.clone(),
+							input_schema: function_tool
+								.function
+								.parameters
+								.clone()
+								.unwrap_or_default(),
+							cache_control: None,
+						}))
+					},
 					_ => None,
 				})
 				.collect();
@@ -353,7 +355,7 @@ pub mod from_completions {
 			req
 				.reasoning_effort
 				.as_ref()
-				.and_then(reasoning_effort_to_enabled_budget)
+				.and_then(crate::types::thinking_budget_for_reasoning_effort)
 				.map(|budget_tokens| messages::ThinkingInput::Enabled { budget_tokens })
 		};
 
@@ -398,17 +400,6 @@ pub mod from_completions {
 			metadata,
 			thinking,
 			output_config,
-		}
-	}
-
-	fn reasoning_effort_to_enabled_budget(effort: &completions::ReasoningEffort) -> Option<u64> {
-		match effort {
-			completions::ReasoningEffort::None => None,
-			completions::ReasoningEffort::Minimal | completions::ReasoningEffort::Low => Some(1024),
-			completions::ReasoningEffort::Medium => Some(2048),
-			completions::ReasoningEffort::High => Some(4096),
-			completions::ReasoningEffort::Xhigh => Some(8192),
-			completions::ReasoningEffort::Max => Some(16384),
 		}
 	}
 
@@ -551,7 +542,12 @@ pub mod from_completions {
 		))
 	}
 
-	pub fn translate_stream(b: Body, buffer_limit: usize, log: StreamingUsageGuard) -> Body {
+	pub fn translate_stream(
+		b: Body,
+		buffer_limit: usize,
+		log: StreamingUsageGuard,
+		log_content: crate::LogContentFields,
+	) -> Body {
 		let mut message_id = None;
 		let mut model = String::new();
 		let mut service_tier = None;
@@ -560,6 +556,8 @@ pub mod from_completions {
 		let mut saw_token = false;
 		let mut next_tool_index = 0u32;
 		let mut tool_index_map: HashMap<usize, u32> = HashMap::new();
+		let mut completion = log_content.completion.then(String::new);
+		let mut tool_calls = super::StreamingToolCalls::new(log_content.tool_calls);
 
 		// https://docs.anthropic.com/en/docs/build-with-claude/streaming
 		parse::sse::json_transform::<messages::MessagesStreamEvent, completions::StreamResponse>(
@@ -606,11 +604,16 @@ pub mod from_completions {
 						index,
 						content_block,
 					} => match content_block {
-						messages::ContentBlock::ToolUse { id, name, .. }
-						| messages::ContentBlock::ServerToolUse { id, name, .. } => {
+						messages::ContentBlock::ToolUse {
+							id, name, input, ..
+						}
+						| messages::ContentBlock::ServerToolUse {
+							id, name, input, ..
+						} => {
 							let tool_index = next_tool_index;
 							next_tool_index += 1;
 							tool_index_map.insert(index, tool_index);
+							tool_calls.start(index, id.as_str(), name.as_str(), &input);
 
 							let choice = completions::ChatChoiceStream {
 								index: 0,
@@ -644,12 +647,16 @@ pub mod from_completions {
 						let mut emit_chunk = true;
 						match delta {
 							messages::ContentBlockDelta::TextDelta { text } => {
+								if let Some(completion) = completion.as_mut() {
+									completion.push_str(&text);
+								}
 								dr.content = Some(text);
 							},
 							messages::ContentBlockDelta::ThinkingDelta { thinking } => {
 								dr.reasoning_content = Some(thinking)
 							},
 							messages::ContentBlockDelta::InputJsonDelta { partial_json } => {
+								tool_calls.append_arguments(index, &partial_json);
 								if let Some(&tool_index) = tool_index_map.get(&index) {
 									dr.tool_calls = Some(vec![completions::ChatCompletionMessageToolCallChunk {
 										index: tool_index,
@@ -683,6 +690,10 @@ pub mod from_completions {
 					},
 					messages::MessagesStreamEvent::MessageDelta { usage, delta } => {
 						let finish_reason = delta.stop_reason.as_ref().map(super::translate_stop_reason);
+						let log_finish_reason = delta
+							.stop_reason
+							.as_ref()
+							.and_then(crate::types::serialize_str);
 						log.update(|r| {
 							if let Some(crt) = usage.cache_read_input_tokens {
 								r.response.cached_input_tokens = Some(crt as u64);
@@ -698,6 +709,11 @@ pub mod from_completions {
 							{
 								r.response.total_tokens = Some(inp + o)
 							}
+							if let Some(completion) = completion.take() {
+								r.response.completion = Some(vec![completion]);
+							}
+							r.response.output_messages =
+								tool_calls.take_output_messages(log_finish_reason.clone());
 						});
 						let choices = finish_reason.map_or_else(Vec::new, |finish_reason| {
 							vec![completions::ChatChoiceStream {
@@ -739,7 +755,17 @@ pub mod from_completions {
 						tool_index_map.remove(&index);
 						None
 					},
-					messages::MessagesStreamEvent::MessageStop => None,
+					messages::MessagesStreamEvent::MessageStop => {
+						log.update(|r| {
+							if let Some(completion) = completion.take() {
+								r.response.completion = Some(vec![completion]);
+							}
+							if r.response.output_messages.is_none() {
+								r.response.output_messages = tool_calls.take_output_messages(None);
+							}
+						});
+						None
+					},
 					messages::MessagesStreamEvent::Ping => None,
 				}
 			},
@@ -813,11 +839,19 @@ impl StreamingToolCalls {
 	) -> Option<Vec<crate::OutputMessage>> {
 		let content: Vec<_> = std::mem::take(self.calls.as_mut()?)
 			.into_values()
-			.map(|call| crate::OutputMessagePart::ToolCall {
-				id: call.id,
-				name: call.name,
-				arguments: serde_json::from_str(&call.arguments)
-					.unwrap_or(serde_json::Value::Object(Default::default())),
+			.map(|call| {
+				let arguments = match serde_json::from_str(&call.arguments) {
+					Ok(arguments) => arguments,
+					Err(_) if call.arguments.trim().is_empty() => {
+						serde_json::Value::Object(Default::default())
+					},
+					Err(_) => serde_json::Value::String(call.arguments),
+				};
+				crate::OutputMessagePart::ToolCall {
+					id: call.id,
+					name: call.name,
+					arguments,
+				}
 			})
 			.collect();
 		(!content.is_empty()).then(|| {

@@ -233,6 +233,15 @@ discoveryNamespaceSelectors: []
 #        namespace: kgateway-system
 gatewayClassParametersRefs: {}
 
+# -- Name of the primary GatewayClass the controller creates and manages.
+#    Leave empty to use the built-in default ("agentgateway"). Sets AGW_AGENTGATEWAY_CLASS_NAME.
+gatewayClassName: ""
+
+# -- Value written to GatewayClass.spec.controllerName that this controller reconciles.
+#    Leave empty to use the built-in default ("agentgateway.dev/agentgateway"). Sets AGW_CONTROLLER_NAME.
+#    Change this together with gatewayClassName when running multiple agentgateway controllers.
+controllerName: ""
+
 # -- Control-plane-wide Istio mesh defaults.
 istio:
   # -- Enable Istio integration by default on all built-in-class gateways.

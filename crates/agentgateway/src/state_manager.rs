@@ -37,6 +37,7 @@ impl StateManager {
 		config_metrics: Arc<agent_xds::Metrics>,
 		awaiting_ready: tokio::sync::watch::Sender<()>,
 		config_resource_store: Option<config_store::ConfigResourceStore>,
+		model_catalog: Arc<crate::llm::cost::ModelCatalog>,
 	) -> anyhow::Result<Self> {
 		let xds = &config.xds;
 		let stores = Stores::new_with_dynamic_ca_cert_cache(
@@ -74,6 +75,7 @@ impl StateManager {
 				stores: stores.clone(),
 				cfg: cfg.clone(),
 				config_resource_store: config_resource_store.clone(),
+				model_catalog,
 				client,
 				resource_manager: resource_manager.clone(),
 				gateway: ListenerTarget {
@@ -115,6 +117,7 @@ pub struct LocalClient {
 	config: Arc<crate::Config>,
 	pub cfg: ConfigSource,
 	pub config_resource_store: Option<config_store::ConfigResourceStore>,
+	pub model_catalog: Arc<crate::llm::cost::ModelCatalog>,
 	pub stores: Stores,
 	pub client: Client,
 	pub resource_manager: crate::resource_manager::ResourceManager,
@@ -242,6 +245,10 @@ impl LocalClient {
 			config_content.as_str(),
 		)
 		.await?;
+		let model_catalog = config
+			.model_catalog
+			.unwrap_or_else(|| self.config.model_catalog.sources.clone());
+		self.model_catalog.replace_sources(model_catalog).await?;
 		info!("loaded config from {:?}", self.cfg);
 
 		// Sync the state
@@ -441,6 +448,15 @@ mod tests {
 	fn local_config(remove_field: &str) -> String {
 		format!(
 			r#"
+config:
+  modelCatalog:
+  - inline:
+      providers:
+        custom:
+          models:
+            {remove_field}:
+              rates:
+                input: "1"
 frontendPolicies:
   accessLog:
     remove:
@@ -487,6 +503,24 @@ frontendPolicies:
 		})
 		.await
 		.unwrap_or_else(|_| panic!("timed out waiting for access log remove {remove_field}"));
+	}
+
+	async fn wait_for_catalog_model(catalog: &crate::llm::cost::ModelCatalog, model: &str) {
+		tokio::time::timeout(Duration::from_secs(5), async {
+			loop {
+				if catalog
+					.list_models()
+					.providers
+					.iter()
+					.any(|provider| provider.models.iter().any(|candidate| candidate == model))
+				{
+					return;
+				}
+				tokio::time::sleep(Duration::from_millis(10)).await;
+			}
+		})
+		.await
+		.unwrap_or_else(|_| panic!("timed out waiting for catalog model {model}"));
 	}
 
 	#[tokio::test]
@@ -560,10 +594,12 @@ frontendPolicies:
 		let metrics = Arc::new(agent_xds::Metrics::new(&mut registry));
 		let client = test_client();
 		let resource_manager = crate::resource_manager::ResourceManager::new(client.clone()).unwrap();
+		let model_catalog = crate::llm::cost::ModelCatalog::empty();
 		let local_client = LocalClient {
 			config: config.clone(),
 			cfg: ConfigSource::File(path.clone()),
 			config_resource_store: None,
+			model_catalog: model_catalog.clone(),
 			stores: stores.clone(),
 			client,
 			resource_manager,
@@ -573,21 +609,26 @@ frontendPolicies:
 
 		local_client.run().await.unwrap();
 		wait_for_access_log_remove(&config, &stores, "first").await;
+		wait_for_catalog_model(&model_catalog, "first").await;
 
 		fs_err::tokio::write(&path, local_config("ready"))
 			.await
 			.unwrap();
 		wait_for_access_log_remove(&config, &stores, "ready").await;
+		wait_for_catalog_model(&model_catalog, "ready").await;
 
 		replace_config(&path, "second").await;
 		wait_for_access_log_remove(&config, &stores, "second").await;
+		wait_for_catalog_model(&model_catalog, "second").await;
 
 		fs_err::tokio::write(&path, local_config("ready-again"))
 			.await
 			.unwrap();
 		wait_for_access_log_remove(&config, &stores, "ready-again").await;
+		wait_for_catalog_model(&model_catalog, "ready-again").await;
 
 		replace_config(&path, "third").await;
 		wait_for_access_log_remove(&config, &stores, "third").await;
+		wait_for_catalog_model(&model_catalog, "third").await;
 	}
 }

@@ -109,7 +109,7 @@ libc.workspace = true
 rcgen.workspace = true
 regex.workspace = true
 
-rmcp = { version = "2.0", features = [
+rmcp = { version = "3.1.0", features = [
     "client",
     "server",
     "base64",
@@ -150,6 +150,7 @@ tower-serve-static.workspace = true
 tower.workspace = true
 tracing-subscriber.workspace = true
 tracing.workspace = true
+twox-hash.workspace = true
 typespec_client_core.workspace = true
 url.workspace = true
 uuid.workspace = true
@@ -200,7 +201,7 @@ rstest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }
 which.workspace = true
-rmcp = { version = "2.0", features = [
+rmcp = { version = "3.1.0", features = [
     "client",
     "server",
     "base64",

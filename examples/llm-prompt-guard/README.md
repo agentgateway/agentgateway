@@ -159,8 +159,9 @@ policies:
   ai:
     promptGuard:
       request:
-        webhook:
-          target: 127.0.0.1:8000
+      - webhook:
+          target:
+            host: 127.0.0.1:8000
           # By default, request headers are not forwarded.
           # forwardHeaderMatches specifies a list of header matchers to use
           # to determine the request headers to forward to the webhook
@@ -172,8 +173,9 @@ policies:
             value:
               regex: v2.*
       response:
-        webhook:
-          target: 127.0.0.1:8000
+      - webhook:
+          target:
+            host: 127.0.0.1:8000
           # set forwardHeaderMatches for to forward response headers
 ```
 
@@ -189,8 +191,9 @@ policies:
   ai:
     promptGuard:
       request:
-        webhook:
-          target: 127.0.0.1:8000
+      - webhook:
+          target:
+            host: 127.0.0.1:8000
           headers:
             # Replace the default /request path
             ":path": '"/v3/guardrails/request"'

@@ -405,7 +405,7 @@ fn certificate_key_matches(
 	Ok(signing_key_spki.as_ref() == certificate.public_key().raw)
 }
 
-struct ParsedEncodingKey(EncodingKey);
+pub(crate) struct ParsedEncodingKey(pub(crate) EncodingKey);
 
 impl Clone for ParsedEncodingKey {
 	fn clone(&self) -> Self {
@@ -562,7 +562,7 @@ pub enum SigningAlg {
 }
 
 impl SigningAlg {
-	fn algorithm(self) -> Algorithm {
+	pub(crate) fn algorithm(self) -> Algorithm {
 		match self {
 			Self::Rs256 => Algorithm::RS256,
 			Self::Rs384 => Algorithm::RS384,
@@ -573,7 +573,7 @@ impl SigningAlg {
 		}
 	}
 
-	fn encoding_key(self, pem: &[u8]) -> anyhow::Result<EncodingKey> {
+	pub(crate) fn encoding_key(self, pem: &[u8]) -> anyhow::Result<EncodingKey> {
 		match self {
 			Self::Rs256 | Self::Rs384 | Self::Rs512 | Self::Ps256 => {
 				EncodingKey::from_rsa_pem(pem).context("failed to load RSA signing key")

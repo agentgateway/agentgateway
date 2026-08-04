@@ -161,6 +161,20 @@ Gotchas:
 - Use `clientSecretPost` to put the client credentials in the body (matching the
   curl above). The default `clientSecretBasic` would send them as an
   `Authorization: Basic` header instead.
+- If the route also uses `jwtAuth`, it removes the validated credential from
+  its original location. Read the validated raw token explicitly for the
+  backend exchange:
+
+  ```yaml
+  jwtAuth:
+    # issuer, audiences, and jwks...
+  backendAuth:
+    oauthTokenExchange:
+      # host, path, and client auth...
+      subjectToken:
+        source:
+          expression: jwt.rawToken.unredacted()
+  ```
 
 ---
 

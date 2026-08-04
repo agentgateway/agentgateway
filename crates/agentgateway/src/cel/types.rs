@@ -1426,7 +1426,6 @@ pub struct LLMContext {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cached_input_tokens: Option<u64>,
 	/// Tokens written to cache (costs)
-	/// Not present with OpenAI
 	#[dynamic(rename = "cacheCreationInputTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub cache_creation_input_tokens: Option<u64>,
@@ -2346,6 +2345,8 @@ pub fn full_example_executor() -> ExecutorSerde {
 			}),
 			prompt: None,
 			resource: None,
+			task: None,
+			error: None,
 		}),
 		backend: Some(BackendContext {
 			name: "my-backend".into(),

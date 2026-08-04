@@ -36,6 +36,7 @@ import codexIcon from "../assets/codex-color.svg";
 import curlIcon from "../assets/curl.svg";
 import cursorIcon from "../assets/cursor.svg";
 import githubCopilotIcon from "../assets/providers/copilot.svg";
+import gooseIcon from "../assets/goose.svg";
 import opencodeIcon from "../assets/opencode.svg";
 import windsurfIcon from "../assets/windsurf.svg";
 
@@ -49,6 +50,7 @@ type ClientRecipe = {
     | "curl"
     | "cursor"
     | "copilot"
+    | "goose"
     | "opencode"
     | "windsurf";
   provider?: ProviderName;
@@ -532,6 +534,38 @@ ${openCodeApiKeyExport}
 opencode`,
     },
     {
+      id: "goose",
+      title: "Goose",
+      description:
+        "Point Goose's OpenAI provider at the gateway host and chat completions path.",
+      icon: "goose",
+      steps: [
+        <>
+          Run <code>goose configure</code> &gt;{" "}
+          <strong>Configure Providers</strong> &gt; <strong>OpenAI</strong>, or
+          export the variables below before starting a session.
+        </>,
+        <>
+          To persist the settings, add them to{" "}
+          <code>~/.config/goose/config.yaml</code>.
+        </>,
+        <>
+          <code>goose configure</code> cannot enter custom model names; set{" "}
+          <code>GOOSE_MODEL</code> in <code>config.yaml</code> for models
+          missing from the provider list.
+        </>,
+      ],
+      language: "bash",
+      code: `export GOOSE_PROVIDER=openai
+export GOOSE_MODEL=${JSON.stringify(args.model)}
+export OPENAI_HOST=${JSON.stringify(base)}
+export OPENAI_BASE_PATH=v1/chat/completions
+# Goose requires a non-empty key; the gateway holds the real provider credentials.
+export OPENAI_API_KEY=${JSON.stringify(requiredApiKey)}
+
+goose session`,
+    },
+    {
       id: "cursor",
       title: "Cursor",
       description:
@@ -690,6 +724,13 @@ function ClientSetupIcon(props: { recipe: ClientRecipe; compact?: boolean }) {
       </span>
     );
   }
+  if (props.recipe.icon === "goose") {
+    return (
+      <span className={className}>
+        <img src={gooseIcon} alt="" aria-hidden="true" />
+      </span>
+    );
+  }
   if (props.recipe.icon === "opencode") {
     return (
       <span className={className}>
@@ -786,7 +827,10 @@ const pythonRules: CodeRule[] = [
 const bashRules: CodeRule[] = [
   { className: "code-comment", pattern: /#.*/y },
   { className: "code-string", pattern: /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/y },
-  { className: "code-keyword", pattern: /\b(?:curl|export|claude|codex)\b/y },
+  {
+    className: "code-keyword",
+    pattern: /\b(?:curl|export|claude|codex|goose)\b/y,
+  },
   { className: "code-flag", pattern: /--?[A-Za-z][\w-]*/y },
   { className: "code-number", pattern: /\b\d+(?:\.\d+)?\b/y },
 ];
