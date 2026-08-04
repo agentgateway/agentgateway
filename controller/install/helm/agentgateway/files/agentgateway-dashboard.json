@@ -1273,21 +1273,24 @@
         "auto": false,
         "auto_count": 30,
         "auto_min": "10s",
-        "datasource": {
-          "type": "prometheus",
-          "uid": "$datasource"
-        },
         "hide": 0,
         "id": "00000000-0000-0000-0000-000000000000",
-        "includeAll": true,
+        "includeAll": false,
         "label": "Namespace",
-        "multi": true,
+        "multi": false,
         "name": "namespace",
-        "query": "label_values(agentgateway_build_info,namespace)",
-        "refresh": 2,
+        "query": "llmpe-vacpp",
+        "refresh": 0,
         "skipUrlSync": false,
         "sort": 1,
-        "type": "query"
+        "type": "custom",
+        "options": [
+          {
+            "text": "llmpe-vacpp",
+            "value": "llmpe-vacpp",
+            "selected": true
+          }
+        ]
       },
       {
         "auto": false,
@@ -1303,7 +1306,7 @@
         "label": "Gateway",
         "multi": true,
         "name": "gateway_name",
-        "query": "label_values(agentgateway_build_info{namespace=~\"$namespace\"},gateway_networking_k8s_io_gateway_name)",
+        "query": "label_values(agentgateway_requests_total{namespace=\"llmpe-vacpp\"}, gateway)",
         "refresh": 2,
         "skipUrlSync": false,
         "sort": 1,
@@ -1323,9 +1326,9 @@
         "label": "Gateway Full Name",
         "multi": true,
         "name": "gateway",
-        "query": "query_result(label_join(agentgateway_build_info{namespace=~\"$namespace\",gateway=~\"$gateway\"}, \"gateway\", \"/\", \"namespace\", \"gateway_networking_k8s_io_gateway_name\"))",
+        "query": "label_values(agentgateway_requests_total{gateway=~\"$gateway_name\"}, gateway)",
         "refresh": 2,
-        "regex": "/.*gateway=\"([^\"]+).*/",
+        "regex": "/(.*)/",
         "skipUrlSync": false,
         "sort": 1,
         "type": "query"
@@ -1344,7 +1347,7 @@
         "label": "Pod",
         "multi": true,
         "name": "pod",
-        "query": "query_result(agentgateway_build_info{namespace=~\"$namespace\",gateway=~\"$gateway\"})",
+        "query": "query_result(agentgateway_requests_total{namespace=~\"$namespace\",gateway=~\"$gateway\"})",
         "refresh": 2,
         "regex": ".*pod=\"([^\"]+)\".*",
         "skipUrlSync": false,
