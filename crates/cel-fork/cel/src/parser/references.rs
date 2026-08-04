@@ -65,6 +65,47 @@ impl ExpressionReferences<'_> {
 }
 
 impl IdedExpr {
+	/// Visits every sub-expression, parents before children.
+	///
+	/// # Example
+	/// ```rust
+	/// # use cel::parser::Parser;
+	/// let expression = Parser::new().parse("1 + 2").unwrap();
+	/// let mut count = 0;
+	/// expression.walk(&mut |_| count += 1);
+	/// assert_eq!(count, 3);
+	/// ```
+	pub fn walk<'expr>(&'expr self, visit: &mut impl FnMut(&'expr IdedExpr)) {
+		visit(self);
+		match &self.expr {
+			Expr::Optimized { original, .. } => original.walk(visit),
+			Expr::Unspecified | Expr::Ident(_) | Expr::Literal(_) | Expr::Inline(_) => {},
+			Expr::Call(call) => {
+				if let Some(target) = &call.target {
+					target.walk(visit);
+				}
+				for arg in &call.args {
+					arg.walk(visit);
+				}
+			},
+			Expr::Comprehension(comp) => {
+				comp.iter_range.walk(visit);
+				comp.accu_init.walk(visit);
+				comp.loop_cond.walk(visit);
+				comp.loop_step.walk(visit);
+				comp.result.walk(visit);
+			},
+			Expr::List(list) => {
+				for elem in &list.elements {
+					elem.walk(visit);
+				}
+			},
+			Expr::Map(map) => walk_entries(&map.entries, visit),
+			Expr::Struct(struct_expr) => walk_entries(&struct_expr.entries, visit),
+			Expr::Select(select) => select.operand.walk(visit),
+		}
+	}
+
 	/// Returns a set of all variables and functions referenced in the expression.
 	///
 	/// # Example
@@ -79,81 +120,43 @@ impl IdedExpr {
 	pub fn references(&self) -> ExpressionReferences<'_> {
 		let mut variables = HashSet::new();
 		let mut functions = HashSet::new();
-		self._references(&mut variables, &mut functions);
+		self.walk(&mut |e| match &e.expr {
+			Expr::Call(call) => {
+				functions.insert(call.func_name.as_str());
+			},
+			Expr::Ident(name) => {
+				// todo! Might want to make this "smarter" (are we in a comprehension?) and better encode these in const
+				if !name.starts_with('@') && standard_type(name).is_none() {
+					variables.insert(name.as_str());
+				}
+			},
+			Expr::Optimized { .. }
+			| Expr::Unspecified
+			| Expr::Literal(_)
+			| Expr::Inline(_)
+			| Expr::Comprehension(_)
+			| Expr::List(_)
+			| Expr::Map(_)
+			| Expr::Struct(_)
+			| Expr::Select(_) => {},
+		});
 		ExpressionReferences {
 			variables,
 			functions,
 		}
 	}
+}
 
-	/// Internal recursive function to collect all variable and function references in the expression.
-	fn _references<'expr>(
-		&'expr self,
-		variables: &mut HashSet<&'expr str>,
-		functions: &mut HashSet<&'expr str>,
-	) {
-		match &self.expr {
-			Expr::Optimized { original, .. } => {
-				original._references(variables, functions);
-			},
-			Expr::Unspecified => {},
-			Expr::Call(call) => {
-				functions.insert(&call.func_name);
-				if let Some(target) = &call.target {
-					target._references(variables, functions);
-				}
-				for arg in &call.args {
-					arg._references(variables, functions);
-				}
-			},
-			Expr::Comprehension(comp) => {
-				comp.iter_range._references(variables, functions);
-				comp.accu_init._references(variables, functions);
-				comp.loop_cond._references(variables, functions);
-				comp.loop_step._references(variables, functions);
-				comp.result._references(variables, functions);
-			},
-			Expr::Ident(name) => {
-				// todo! Might want to make this "smarter" (are we in a comprehension?) and better encode these in const
-				if !name.starts_with('@') && standard_type(name).is_none() {
-					variables.insert(name);
-				}
-			},
-			Expr::List(list) => {
-				for elem in &list.elements {
-					elem._references(variables, functions);
-				}
-			},
-			Expr::Literal(_) => {},
-			Expr::Inline(_) => {},
-			Expr::Map(map) => {
-				for entry in &map.entries {
-					match &entry.expr {
-						crate::common::ast::EntryExpr::StructField(field) => {
-							field.value._references(variables, functions);
-						},
-						crate::common::ast::EntryExpr::MapEntry(map_entry) => {
-							map_entry.key._references(variables, functions);
-							map_entry.value._references(variables, functions);
-						},
-					}
-				}
-			},
-			Expr::Select(select) => {
-				select.operand._references(variables, functions);
-			},
-			Expr::Struct(struct_expr) => {
-				for entry in &struct_expr.entries {
-					match &entry.expr {
-						crate::common::ast::EntryExpr::StructField(field) => {
-							field.value._references(variables, functions);
-						},
-						crate::common::ast::EntryExpr::MapEntry(map_entry) => {
-							map_entry.key._references(variables, functions);
-							map_entry.value._references(variables, functions);
-						},
-					}
-				}
+fn walk_entries<'expr>(
+	entries: &'expr [crate::common::ast::IdedEntryExpr],
+	visit: &mut impl FnMut(&'expr IdedExpr),
+) {
+	for entry in entries {
+		match &entry.expr {
+			crate::common::ast::EntryExpr::StructField(field) => field.value.walk(visit),
+			crate::common::ast::EntryExpr::MapEntry(map_entry) => {
+				map_entry.key.walk(visit);
+				map_entry.value.walk(visit);
 			},
 		}
 	}
