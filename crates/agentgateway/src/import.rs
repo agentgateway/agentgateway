@@ -696,7 +696,7 @@ impl LiteLlmCredentials {
 				provider_name.clone()
 			} else {
 				let provider_name =
-					unique_imported_provider_name(source, &credential.name, &provider, &plan.providers);
+					unique_imported_provider_name(source, &credential.name, &plan.providers);
 				plan.providers.push(ImportedProvider {
 					name: provider_name.clone(),
 					provider,
@@ -1088,14 +1088,12 @@ fn imported_model_name(source: &str, public_name: &str, deployment: usize) -> St
 fn unique_imported_provider_name(
 	source: &str,
 	credential: &str,
-	provider: &str,
 	providers: &[ImportedProvider],
 ) -> String {
 	let base = format!(
-		"imported/{}/{}/{}",
+		"imported/{}/{}",
 		sanitize_name(source),
-		sanitize_name(credential),
-		sanitize_name(provider)
+		sanitize_name(credential)
 	);
 	if !providers.iter().any(|candidate| candidate.name == base) {
 		return base;
