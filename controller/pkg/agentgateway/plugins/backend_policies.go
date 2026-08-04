@@ -670,6 +670,21 @@ func translateMCPAuthenticationSpec(
 		}
 	}
 
+	if authnPolicy.BrokerCallback != nil {
+		mcpAuthn.BrokerCallback = *authnPolicy.BrokerCallback
+	}
+
+	if authnPolicy.SigningKeyRef != nil {
+		data, key, err := ctx.ResolveCredentialKeyRef(*authnPolicy.SigningKeyRef, policy.Namespace, wellknown.SigningKey)
+		if err != nil {
+			errs = append(errs, err)
+		} else if value, exists := kubeutils.GetSecretDataValue(data, key); !exists || value == "" {
+			errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", policy.Namespace, authnPolicy.SigningKeyRef.Name, key))
+		} else {
+			mcpAuthn.SigningKey = &value
+		}
+	}
+
 	return mcpAuthn, errors.Join(errs...)
 }
 

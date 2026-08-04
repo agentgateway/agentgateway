@@ -1578,6 +1578,13 @@ message BackendPolicySpec {
     // OAuth client secret injected into proxied token requests for confidential clients
     // (used by the ENTRA provider).
     optional string client_secret = 10;
+    // Enable broker-callback mode (ENTRA provider): the gateway presents Entra one
+    // registered callback URL for every MCP client and relays the authorization code back
+    // to each client's own redirect URI. Requires client_id and signing_key.
+    bool broker_callback = 11;
+    // HMAC signing key for the stateless broker-callback state token. Required when
+    // broker_callback is set; resolved by the control plane from a Kubernetes Secret.
+    optional string signing_key = 12;
   }
 
   // McpGuardrails is a backend-phase policy for MCP traffic: an ordered chain of

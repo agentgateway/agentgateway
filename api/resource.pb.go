@@ -13560,7 +13560,14 @@ type BackendPolicySpec_McpAuthentication struct {
 	ClientId              *string                `protobuf:"bytes,9,opt,name=client_id,json=clientId,proto3,oneof" json:"client_id,omitempty"`
 	// OAuth client secret injected into proxied token requests for confidential clients
 	// (used by the ENTRA provider).
-	ClientSecret  *string `protobuf:"bytes,10,opt,name=client_secret,json=clientSecret,proto3,oneof" json:"client_secret,omitempty"`
+	ClientSecret *string `protobuf:"bytes,10,opt,name=client_secret,json=clientSecret,proto3,oneof" json:"client_secret,omitempty"`
+	// Enable broker-callback mode (ENTRA provider): the gateway presents Entra one
+	// registered callback URL for every MCP client and relays the authorization code back
+	// to each client's own redirect URI. Requires client_id and signing_key.
+	BrokerCallback bool `protobuf:"varint,11,opt,name=broker_callback,json=brokerCallback,proto3" json:"broker_callback,omitempty"`
+	// HMAC signing key for the stateless broker-callback state token. Required when
+	// broker_callback is set; resolved by the control plane from a Kubernetes Secret.
+	SigningKey    *string `protobuf:"bytes,12,opt,name=signing_key,json=signingKey,proto3,oneof" json:"signing_key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -13661,6 +13668,20 @@ func (x *BackendPolicySpec_McpAuthentication) GetClientId() string {
 func (x *BackendPolicySpec_McpAuthentication) GetClientSecret() string {
 	if x != nil && x.ClientSecret != nil {
 		return *x.ClientSecret
+	}
+	return ""
+}
+
+func (x *BackendPolicySpec_McpAuthentication) GetBrokerCallback() bool {
+	if x != nil {
+		return x.BrokerCallback
+	}
+	return false
+}
+
+func (x *BackendPolicySpec_McpAuthentication) GetSigningKey() string {
+	if x != nil && x.SigningKey != nil {
+		return *x.SigningKey
 	}
 	return ""
 }
@@ -17699,7 +17720,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\xd5Z\n" +
+	"\x04kind\"\xb4[\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -17932,7 +17953,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x10McpAuthorization\x12\x14\n" +
 	"\x05allow\x18\x01 \x03(\tR\x05allow\x12\x12\n" +
 	"\x04deny\x18\x02 \x03(\tR\x04deny\x12\x18\n" +
-	"\arequire\x18\x03 \x03(\tR\arequire\x1a\xd0\b\n" +
+	"\arequire\x18\x03 \x03(\tR\arequire\x1a\xaf\t\n" +
 	"\x11McpAuthentication\x12\x16\n" +
 	"\x06issuer\x18\x01 \x01(\tR\x06issuer\x12\x1c\n" +
 	"\taudiences\x18\x02 \x03(\tR\taudiences\x12\x1f\n" +
@@ -17945,7 +17966,10 @@ const file_resource_proto_rawDesc = "" +
 	"\x16authorization_location\x18\b \x01(\v20.agentgateway.dev.resource.AuthorizationLocationR\x15authorizationLocation\x12 \n" +
 	"\tclient_id\x18\t \x01(\tH\x00R\bclientId\x88\x01\x01\x12(\n" +
 	"\rclient_secret\x18\n" +
-	" \x01(\tH\x01R\fclientSecret\x88\x01\x01\x1a\xd6\x01\n" +
+	" \x01(\tH\x01R\fclientSecret\x88\x01\x01\x12'\n" +
+	"\x0fbroker_callback\x18\v \x01(\bR\x0ebrokerCallback\x12$\n" +
+	"\vsigning_key\x18\f \x01(\tH\x02R\n" +
+	"signingKey\x88\x01\x01\x1a\xd6\x01\n" +
 	"\x10ResourceMetadata\x12p\n" +
 	"\x05extra\x18\x01 \x03(\v2Z.agentgateway.dev.resource.BackendPolicySpec.McpAuthentication.ResourceMetadata.ExtraEntryR\x05extra\x1aP\n" +
 	"\n" +
@@ -17968,7 +17992,8 @@ const file_resource_proto_rawDesc = "" +
 	"PERMISSIVE\x10\x02B\f\n" +
 	"\n" +
 	"_client_idB\x10\n" +
-	"\x0e_client_secret\x1a\xa6\b\n" +
+	"\x0e_client_secretB\x0e\n" +
+	"\f_signing_key\x1a\xa6\b\n" +
 	"\rMcpGuardrails\x12d\n" +
 	"\n" +
 	"processors\x18\x03 \x03(\v2D.agentgateway.dev.resource.BackendPolicySpec.McpGuardrails.ProcessorR\n" +

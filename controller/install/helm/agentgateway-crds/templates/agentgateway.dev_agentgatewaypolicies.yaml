@@ -5132,6 +5132,15 @@ spec:
                             maxItems: 64
                             minItems: 1
                             type: array
+                          brokerCallback:
+                            description: |-
+                              Enable broker-callback mode for the Entra provider. When set, the gateway presents Entra
+                              a single, pre-registered Web-platform redirect (`<served-metadata-path>/callback`) for
+                              every MCP client and relays the authorization code back to each client's own redirect URI.
+                              This removes per-client redirect-URI registration (Entra has no Dynamic Client
+                              Registration) and keeps every sign-in browser-classified. Requires `clientId` and
+                              `signingKeyRef` (and, for Web-platform confidential apps, `clientSecretRef`).
+                            type: boolean
                           clientId:
                             description: |-
                               Client ID to use for short-circuiting Dynamic Client Registration.
@@ -5281,9 +5290,51 @@ spec:
                               x-kubernetes-preserve-unknown-fields: true
                             description: Metadata to use for MCP resources.
                             type: object
+                          signingKeyRef:
+                            description: |-
+                              Reference to a Kubernetes Secret holding the HMAC key that signs the stateless
+                              broker-callback state token. Required when `brokerCallback` is enabled. It is dedicated to
+                              callback integrity and independent of `clientSecretRef`, so it also works for public
+                              clients and can be rotated on its own. Defaults to the `signingKey` key; override via
+                              `signingKeyRef.key`.
+                            properties:
+                              group:
+                                description: API group of the referenced credential;
+                                  empty selects the core API group
+                                type: string
+                              key:
+                                description: Key in the referenced Secret. If omitted,
+                                  a location-specific default is used
+                                maxLength: 253
+                                minLength: 1
+                                type: string
+                              kind:
+                                description: Kind of the referenced credential; empty
+                                  defaults to `Secret`
+                                type: string
+                              name:
+                                description: Name of the referenced credential
+                                maxLength: 253
+                                minLength: 1
+                                type: string
+                            required:
+                            - name
+                            type: object
+                            x-kubernetes-map-type: atomic
+                            x-kubernetes-validations:
+                            - message: custom credential refs must set both group
+                                and kind
+                              rule: '(!has(self.group) || size(self.group) == 0) ?
+                                (!has(self.kind) || size(self.kind) == 0 || self.kind
+                                == ''Secret'') : (has(self.kind) && size(self.kind)
+                                > 0)'
                         required:
                         - jwks
                         type: object
+                        x-kubernetes-validations:
+                        - message: brokerCallback requires signingKeyRef and clientId
+                          rule: '!has(self.brokerCallback) || !self.brokerCallback
+                            || (has(self.signingKeyRef) && has(self.clientId))'
                       authorization:
                         description: |-
                           MCP backend authorization. Unlike authorization at the HTTP level, which rejects

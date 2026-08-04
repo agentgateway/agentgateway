@@ -66,6 +66,7 @@ hashbrown.workspace = true
 headers.workspace = true
 heck.workspace = true
 hex.workspace = true
+hmac.workspace = true
 hickory-resolver.workspace = true
 htpasswd-verify-fork.workspace = true
 http-body-util.workspace = true
