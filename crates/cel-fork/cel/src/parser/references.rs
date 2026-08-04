@@ -9,6 +9,17 @@ pub struct ExpressionReferences<'expr> {
 	functions: HashSet<&'expr str>,
 }
 
+/// One function call site: the name invoked and the arity it was invoked at.
+///
+/// `arity` counts a method-style receiver, so `x.contains(y)` and
+/// `contains(x, y)` both report 2.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CallSignature<'expr> {
+	pub name: &'expr str,
+	pub arity: usize,
+	pub method_style: bool,
+}
+
 impl ExpressionReferences<'_> {
 	/// Returns true if the expression references the provided variable name.
 	///
@@ -144,6 +155,33 @@ impl IdedExpr {
 			variables,
 			functions,
 		}
+	}
+
+	/// Returns every function call in the expression, with the arity it was
+	/// called at.
+	///
+	/// # Example
+	/// ```rust
+	/// # use cel::parser::Parser;
+	/// let expression = Parser::new().parse("'ab'.contains('a')").unwrap();
+	/// let calls = expression.call_signatures();
+	///
+	/// let contains = calls.iter().find(|c| c.name == "contains").unwrap();
+	/// assert_eq!(contains.arity, 2);
+	/// assert!(contains.method_style);
+	/// ```
+	pub fn call_signatures(&self) -> Vec<CallSignature<'_>> {
+		let mut calls = Vec::new();
+		self.walk(&mut |e| {
+			if let Expr::Call(call) = &e.expr {
+				calls.push(CallSignature {
+					name: &call.func_name,
+					arity: call.args.len() + usize::from(call.target.is_some()),
+					method_style: call.target.is_some(),
+				});
+			}
+		});
+		calls
 	}
 }
 
