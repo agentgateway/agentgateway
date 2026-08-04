@@ -1,7 +1,7 @@
 use agent_core::telemetry::testing;
 use agentgateway::http::Response;
 use http::StatusCode;
-use serde_json::{Value, json};
+use serde_json::json;
 use tracing::warn;
 
 use crate::common::gateway::AgentGateway;
@@ -570,7 +570,8 @@ mod gemini {
 		"gemini",
 		"GEMINI_API_KEY",
 		"gemini-2.5-flash",
-		send_buffered_responses_with_metadata
+		send_responses,
+		false
 	);
 	provider_model_test!(
 		responses_streaming,
@@ -1330,38 +1331,6 @@ async fn send_responses(gw: &AgentGateway, stream: bool) {
 		String::from_utf8_lossy(&bytes)
 	);
 	assert_log("/v1/responses", stream, &test_id).await;
-}
-
-async fn send_buffered_responses_with_metadata(gw: &AgentGateway) {
-	let resp = gw
-		.send_request_json(
-			"http://localhost/v1/responses",
-			json!({
-				"max_output_tokens": 16,
-				"input": "give me a 1 word answer",
-				"stream": false,
-			}),
-		)
-		.await;
-
-	let test_id = test_id_from_response(&resp);
-	let status = resp.status();
-	let bytes = http_body_util::BodyExt::collect(resp.into_body())
-		.await
-		.unwrap()
-		.to_bytes();
-	assert_eq!(
-		status,
-		StatusCode::OK,
-		"body: {:?}",
-		String::from_utf8_lossy(&bytes)
-	);
-
-	let body: Value = serde_json::from_slice(&bytes).expect("buffered response should be JSON");
-	assert_eq!(body["object"], json!("response"));
-	assert!(body["created_at"].is_number());
-	assert!(body["usage"]["total_tokens"].is_number());
-	assert_log("/v1/responses", false, &test_id).await;
 }
 
 pub async fn send_messages(gw: &AgentGateway, stream: bool) {

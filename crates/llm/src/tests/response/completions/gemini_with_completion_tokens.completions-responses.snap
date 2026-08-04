@@ -1,0 +1,66 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/gemini_with_completion_tokens.json
+info:
+  model: gemini-2.5-flash
+  usage:
+    prompt_tokens: 7
+    completion_tokens: 12
+    total_tokens: 402
+  choices:
+    - message:
+        content: "Hello! I'm functioning perfectly and ready to assist.\n\n"
+        role: assistant
+      finish_reason: length
+      index: 0
+  created: 1775595257
+  id: 9W7VaabzK7KPjMcPnYGiuAU
+  object: chat.completion
+---
+{
+  "response": {
+    "id": "[id]",
+    "status": "incomplete",
+    "output": [
+      {
+        "type": "message",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "logprobs": null,
+            "text": "Hello! I'm functioning perfectly and ready to assist.\n\n"
+          }
+        ],
+        "id": "[id]",
+        "role": "assistant",
+        "status": "completed"
+      }
+    ],
+    "model": "input-model",
+    "usage": {
+      "input_tokens": 7,
+      "output_tokens": 12,
+      "input_tokens_details": {
+        "cached_tokens": 0
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 402
+    },
+    "created_at": "[date]",
+    "incomplete_details": {
+      "reason": "max_tokens"
+    },
+    "object": "response"
+  },
+  "parsed": {
+    "input_tokens": 7,
+    "output_tokens": 12,
+    "total_tokens": 19,
+    "reasoning_tokens": 0,
+    "cached_input_tokens": 0,
+    "provider_model": "input-model"
+  }
+}
