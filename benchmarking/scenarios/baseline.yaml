@@ -8,7 +8,7 @@
 # agentgateway arm decode-only too, otherwise the comparison isn't fair.
 
 scenario:
-- name: gap2-baseline
+- name: plain-service-decode-only
   model:
     name: facebook/opt-125m
     shortName: facebook-opt-125m
