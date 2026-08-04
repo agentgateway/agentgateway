@@ -296,6 +296,7 @@ mod requests {
 			region: strng::new("us-west-2"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			provider_preference: Default::default(),
 		};
 		for (name, providers) in EMBEDDINGS_REQUESTS {
 			let path = format!("requests/embeddings/{name}.json");
