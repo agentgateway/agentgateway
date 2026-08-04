@@ -310,7 +310,6 @@ struct ChatStreamContext {
 	logger: agent_llm::StreamingUsageGuard,
 	model: String,
 	log_content: LogContentFields,
-	strip_messages_done: bool,
 	tool_name_map: Option<conversion::bedrock::BedrockToolNameMap>,
 	responses_to_messages_state: Option<conversion::messages::from_responses::State>,
 }
@@ -734,13 +733,7 @@ impl ChatTranslation {
 
 			ChatFormat::AnthropicMessages => match self.input {
 				InputFormat::Messages => resp.map(|b| {
-					conversion::messages::passthrough_stream(
-						b,
-						ctx.buffer_limit,
-						ctx.logger,
-						ctx.log_content,
-						ctx.strip_messages_done,
-					)
+					conversion::messages::passthrough_stream(b, ctx.buffer_limit, ctx.logger, ctx.log_content)
 				}),
 				InputFormat::Completions => resp.map(|b| {
 					conversion::messages::from_completions::translate_stream(
@@ -2902,7 +2895,6 @@ impl AIProvider {
 					logger,
 					model: model.to_string(),
 					log_content,
-					strip_messages_done: matches!(self, AIProvider::Copilot(_)),
 					tool_name_map: bedrock_tool_name_map,
 					responses_to_messages_state,
 				},

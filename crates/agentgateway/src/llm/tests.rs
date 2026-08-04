@@ -4372,15 +4372,10 @@ async fn messages_passthrough_stream_captures_completion() {
 			completion: true,
 			tool_calls: true,
 		},
-		true,
 	);
 	// Consume the body to drive the stream to completion
 	let output = body.collect().await.unwrap().to_bytes();
-	assert!(
-		!output
-			.windows(b"[DONE]".len())
-			.any(|value| value == b"[DONE]")
-	);
+	assert!(output.ends_with(b"data: [DONE]\n\n"));
 	let info = log2
 		.take()
 		.expect("log should have LLMInfo after stream completes");
@@ -4421,7 +4416,6 @@ async fn messages_passthrough_stream_preserves_native_sse_bytes() {
 		1024 * 1024,
 		logger,
 		llm::LogContentFields::default(),
-		false,
 	)
 	.collect()
 	.await
@@ -4432,19 +4426,7 @@ async fn messages_passthrough_stream_preserves_native_sse_bytes() {
 }
 
 #[tokio::test]
-async fn copilot_messages_done_stripping_forwards_other_sse_frames() {
-	fn decode_sse(bytes: &[u8]) -> Vec<tokio_sse_codec::Frame<bytes::Bytes>> {
-		let mut decoder = tokio_sse_codec::SseDecoder::<bytes::Bytes>::new();
-		let mut buffer = bytes::BytesMut::from(bytes);
-		let mut frames = Vec::new();
-		while let Some(frame) =
-			tokio_util::codec::Decoder::decode_eof(&mut decoder, &mut buffer).expect("valid SSE")
-		{
-			frames.push(frame);
-		}
-		frames
-	}
-
+async fn copilot_messages_passthrough_preserves_native_sse_bytes() {
 	let expected = concat!(
 		": keep-this-comment\r\n",
 		"id: upstream-7\r\n",
@@ -4454,21 +4436,38 @@ async fn copilot_messages_done_stripping_forwards_other_sse_frames() {
 		"event: message_stop\r\n",
 		"data: {\"type\":\"message_stop\"}\r\n",
 		"\r\n",
+		"data: [DONE]\r\n",
+		"\r\n",
 	);
-	let input = format!("{expected}data: [DONE]\r\n\r\n");
+	let split = expected.find("DONE").expect("done marker") + 2;
+	let mut trailers = http::HeaderMap::new();
+	trailers.insert(
+		"x-upstream-trailer",
+		http::HeaderValue::from_static("preserved"),
+	);
+	let body = Body::new(http_body_util::StreamBody::new(futures_util::stream::iter(
+		vec![
+			Ok::<_, std::convert::Infallible>(http_body::Frame::data(bytes::Bytes::copy_from_slice(
+				&expected.as_bytes()[..split],
+			))),
+			Ok(http_body::Frame::data(bytes::Bytes::copy_from_slice(
+				&expected.as_bytes()[split..],
+			))),
+			Ok(http_body::Frame::trailers(trailers.clone())),
+		],
+	)));
 	let output = conversion::messages::passthrough_stream(
-		Body::from(input),
+		body,
 		1024 * 1024,
 		agent_llm::StreamingUsageGuard::default(),
 		llm::LogContentFields::default(),
-		true,
 	)
 	.collect()
 	.await
-	.expect("Copilot Messages stream")
-	.to_bytes();
+	.expect("Copilot Messages stream");
 
-	assert_eq!(decode_sse(&output), decode_sse(expected.as_bytes()));
+	assert_eq!(output.trailers(), Some(&trailers));
+	assert_eq!(output.to_bytes().as_ref(), expected.as_bytes());
 }
 
 #[tokio::test]
@@ -4501,7 +4500,6 @@ async fn native_messages_stream_thinking_tokens_use_terminal_value() {
 		1024 * 1024,
 		logger,
 		llm::LogContentFields::default(),
-		false,
 	)
 	.collect()
 	.await
@@ -4543,7 +4541,6 @@ async fn native_messages_stream_thinking_tokens_fall_back_to_initial_value() {
 		1024 * 1024,
 		logger,
 		llm::LogContentFields::default(),
-		false,
 	)
 	.collect()
 	.await
@@ -4553,41 +4550,6 @@ async fn native_messages_stream_thinking_tokens_fall_back_to_initial_value() {
 	let info = log2.take().expect("stream telemetry");
 	assert_eq!(info.response.output_tokens, Some(5));
 	assert_eq!(info.response.reasoning_tokens, Some(2));
-}
-
-#[tokio::test]
-async fn messages_passthrough_stream_preserves_done_for_native_providers() {
-	let input = Bytes::from_static(b"data: [DONE]\n\n");
-	let body = Body::from(input.clone());
-	let log = AsyncLog::default();
-	log.store(Some(LLMInfo {
-		request: LLMRequest {
-			input_tokens: None,
-			input_format: InputFormat::Messages,
-			cache_convention: CacheTokenConvention::pending(),
-			request_model: "claude-test".into(),
-			provider: "custom".into(),
-			streaming: true,
-			params: Default::default(),
-			prompt: None,
-			provider_state: None,
-		},
-		response: LLMResponse::default(),
-	}));
-	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
-	let output = conversion::messages::passthrough_stream(
-		body,
-		1024,
-		logger,
-		llm::LogContentFields::default(),
-		false,
-	)
-	.collect()
-	.await
-	.expect("native Messages done marker")
-	.to_bytes();
-
-	assert_eq!(output, input);
 }
 
 #[tokio::test]
@@ -4619,7 +4581,6 @@ async fn messages_passthrough_stream_skips_completion_when_disabled() {
 		buffer_limit,
 		logger,
 		llm::LogContentFields::default(),
-		false,
 	);
 	let _ = body.collect().await.unwrap();
 	let info = log2
@@ -4666,7 +4627,6 @@ async fn messages_passthrough_stream_captures_tool_calls() {
 			completion: false,
 			tool_calls: true,
 		},
-		false,
 	);
 	let _ = body.collect().await.unwrap();
 	let info = log2

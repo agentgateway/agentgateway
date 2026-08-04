@@ -4,7 +4,7 @@ use futures_util::StreamExt;
 use futures_util::stream::{self, BoxStream};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use tokio_sse_codec::{Event, Frame, SseDecoder, SseEncoder};
+use tokio_sse_codec::{Event, Frame, SseDecoder};
 use tokio_util::codec::{BytesCodec, Decoder};
 
 use super::passthrough::parser as passthrough_parser;
@@ -48,18 +48,6 @@ pub fn json_passthrough<F: DeserializeOwned>(
 		}
 		let obj = serde_json::from_slice::<F>(&data);
 		f(Some(obj.map_err(anyhow::Error::from)))
-	})
-}
-
-pub(crate) fn remove_done(b: Body, buffer_limit: usize) -> Body {
-	let decoder = SseDecoder::<Bytes>::with_max_size(buffer_limit);
-	let encoder = SseEncoder::new();
-
-	transform_parser(b, decoder, encoder, |event| match event {
-		TransformEvent::Item(frame) if !matches!(&frame, Frame::Event(event) if event.data.as_ref() == b"[DONE]") => {
-			Some(frame)
-		},
-		TransformEvent::Item(_) | TransformEvent::Eof | TransformEvent::Error => None,
 	})
 }
 

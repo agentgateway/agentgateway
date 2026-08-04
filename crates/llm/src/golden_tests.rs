@@ -1253,13 +1253,7 @@ mod responses {
 			for provider in *providers {
 				test_streaming(provider, &path, |response, reporter| match *provider {
 					MESSAGES_TO_MESSAGES => response.map(|body| {
-						conversion::messages::passthrough_stream(
-							body,
-							BUFFER_LIMIT,
-							reporter,
-							LOG_CONTENT,
-							false,
-						)
+						conversion::messages::passthrough_stream(body, BUFFER_LIMIT, reporter, LOG_CONTENT)
 					}),
 					MESSAGES_TO_COMPLETIONS => response.map(|body| {
 						conversion::messages::from_completions::translate_stream(

@@ -1076,129 +1076,121 @@ pub fn passthrough_stream(
 	buffer_limit: usize,
 	log: StreamingUsageGuard,
 	log_content: crate::LogContentFields,
-	strip_done: bool,
 ) -> Body {
 	let mut saw_token = false;
 	let mut completion = log_content.completion.then(String::new);
 	let mut tool_calls = StreamingToolCalls::new(log_content.tool_calls);
 	// https://platform.claude.com/docs/en/build-with-claude/streaming
-	let body =
-		parse::sse::json_passthrough::<messages::MessagesStreamEvent>(b, buffer_limit, move |f| {
-			// ignore errors... what else can we do?
-			let Some(Ok(f)) = f else {
-				// Stream ended ([DONE]): flush completion if not already set via MessageDelta
-				if f.is_none() {
+	parse::sse::json_passthrough::<messages::MessagesStreamEvent>(b, buffer_limit, move |f| {
+		// ignore errors... what else can we do?
+		let Some(Ok(f)) = f else {
+			// Stream ended ([DONE]): flush completion if not already set via MessageDelta
+			if f.is_none() {
+				log.update(|r| {
+					if let Some(c) = completion.take() {
+						r.response.completion = Some(vec![c]);
+					}
+					if r.response.output_messages.is_none() {
+						r.response.output_messages = tool_calls.take_output_messages(None);
+					}
+				});
+			}
+			return;
+		};
+
+		// Extract info we need
+		match f {
+			messages::MessagesStreamEvent::MessageStart { message } => {
+				log.update(|r| {
+					r.response.output_tokens = Some(message.usage.output_tokens as u64);
+					r.response.reasoning_tokens = message
+						.usage
+						.output_tokens_details
+						.as_ref()
+						.and_then(|details| details.thinking_tokens)
+						.map(|tokens| tokens as u64);
+					r.response.input_tokens = Some(message.usage.input_tokens as u64);
+					r.response.cached_input_tokens = message.usage.cache_read_input_tokens.map(|i| i as u64);
+					r.response.cache_creation_input_tokens =
+						message.usage.cache_creation_input_tokens.map(|i| i as u64);
+					r.response.service_tier = message.usage.service_tier.as_deref().map(Into::into);
+					r.response.provider_model = Some(strng::new(&message.model))
+				});
+			},
+			messages::MessagesStreamEvent::ContentBlockStart {
+				index,
+				content_block,
+			} => match &content_block {
+				messages::ContentBlock::ToolUse {
+					id, name, input, ..
+				}
+				| messages::ContentBlock::ServerToolUse {
+					id, name, input, ..
+				} => tool_calls.start(index, id.as_str(), name.as_str(), input),
+				_ => {},
+			},
+			messages::MessagesStreamEvent::ContentBlockDelta { index, delta } => {
+				if !saw_token {
+					saw_token = true;
 					log.update(|r| {
-						if let Some(c) = completion.take() {
-							r.response.completion = Some(vec![c]);
-						}
-						if r.response.output_messages.is_none() {
-							r.response.output_messages = tool_calls.take_output_messages(None);
-						}
+						r.response.first_token = Some(Instant::now());
 					});
 				}
-				return;
-			};
-
-			// Extract info we need
-			match f {
-				messages::MessagesStreamEvent::MessageStart { message } => {
-					log.update(|r| {
-						r.response.output_tokens = Some(message.usage.output_tokens as u64);
-						r.response.reasoning_tokens = message
-							.usage
-							.output_tokens_details
-							.as_ref()
-							.and_then(|details| details.thinking_tokens)
-							.map(|tokens| tokens as u64);
-						r.response.input_tokens = Some(message.usage.input_tokens as u64);
-						r.response.cached_input_tokens =
-							message.usage.cache_read_input_tokens.map(|i| i as u64);
-						r.response.cache_creation_input_tokens =
-							message.usage.cache_creation_input_tokens.map(|i| i as u64);
-						r.response.service_tier = message.usage.service_tier.as_deref().map(Into::into);
-						r.response.provider_model = Some(strng::new(&message.model))
-					});
-				},
-				messages::MessagesStreamEvent::ContentBlockStart {
-					index,
-					content_block,
-				} => match &content_block {
-					messages::ContentBlock::ToolUse {
-						id, name, input, ..
+				if let Some(c) = completion.as_mut()
+					&& let messages::ContentBlockDelta::TextDelta { text } = &delta
+				{
+					c.push_str(text);
+				}
+				if let messages::ContentBlockDelta::InputJsonDelta { partial_json } = &delta {
+					tool_calls.append_arguments(index, partial_json);
+				}
+			},
+			messages::MessagesStreamEvent::MessageDelta { usage, delta } => {
+				let finish_reason = delta
+					.stop_reason
+					.as_ref()
+					.and_then(crate::types::serialize_str);
+				log.update(|r| {
+					if let Some(inp) = usage.input_tokens {
+						r.response.input_tokens = Some(inp as u64);
 					}
-					| messages::ContentBlock::ServerToolUse {
-						id, name, input, ..
-					} => tool_calls.start(index, id.as_str(), name.as_str(), input),
-					_ => {},
-				},
-				messages::MessagesStreamEvent::ContentBlockDelta { index, delta } => {
-					if !saw_token {
-						saw_token = true;
-						log.update(|r| {
-							r.response.first_token = Some(Instant::now());
-						});
+					if let Some(o) = usage.output_tokens {
+						r.response.output_tokens = Some(o as u64);
 					}
-					if let Some(c) = completion.as_mut()
-						&& let messages::ContentBlockDelta::TextDelta { text } = &delta
-					{
-						c.push_str(text);
-					}
-					if let messages::ContentBlockDelta::InputJsonDelta { partial_json } = &delta {
-						tool_calls.append_arguments(index, partial_json);
-					}
-				},
-				messages::MessagesStreamEvent::MessageDelta { usage, delta } => {
-					let finish_reason = delta
-						.stop_reason
+					if let Some(thinking_tokens) = usage
+						.output_tokens_details
 						.as_ref()
-						.and_then(crate::types::serialize_str);
-					log.update(|r| {
-						if let Some(inp) = usage.input_tokens {
-							r.response.input_tokens = Some(inp as u64);
-						}
-						if let Some(o) = usage.output_tokens {
-							r.response.output_tokens = Some(o as u64);
-						}
-						if let Some(thinking_tokens) = usage
-							.output_tokens_details
-							.as_ref()
-							.and_then(|details| details.thinking_tokens)
-						{
-							r.response.reasoning_tokens = Some(thinking_tokens as u64);
-						}
-						if let Some(crt) = usage.cache_read_input_tokens {
-							r.response.cached_input_tokens = Some(crt as u64);
-						}
-						if let Some(cwt) = usage.cache_creation_input_tokens {
-							r.response.cache_creation_input_tokens = Some(cwt as u64);
-						}
-						if let Some(inp) = r.response.input_tokens
-							&& let Some(o) = r.response.output_tokens
-						{
-							r.response.total_tokens = Some(inp + o)
-						}
-						if let Some(c) = completion.take() {
-							r.response.completion = Some(vec![c]);
-						}
-						r.response.output_messages = tool_calls.take_output_messages(finish_reason.clone());
-					});
-				},
-				messages::MessagesStreamEvent::MessageStop => {
-					log.update(|r| {
-						if r.response.output_messages.is_none() {
-							r.response.output_messages = tool_calls.take_output_messages(None);
-						}
-					});
-				},
-				messages::MessagesStreamEvent::ContentBlockStop { .. }
-				| messages::MessagesStreamEvent::Ping => {},
-				messages::MessagesStreamEvent::Error { .. } => {},
-			}
-		});
-	if strip_done {
-		parse::sse::remove_done(body, buffer_limit)
-	} else {
-		body
-	}
+						.and_then(|details| details.thinking_tokens)
+					{
+						r.response.reasoning_tokens = Some(thinking_tokens as u64);
+					}
+					if let Some(crt) = usage.cache_read_input_tokens {
+						r.response.cached_input_tokens = Some(crt as u64);
+					}
+					if let Some(cwt) = usage.cache_creation_input_tokens {
+						r.response.cache_creation_input_tokens = Some(cwt as u64);
+					}
+					if let Some(inp) = r.response.input_tokens
+						&& let Some(o) = r.response.output_tokens
+					{
+						r.response.total_tokens = Some(inp + o)
+					}
+					if let Some(c) = completion.take() {
+						r.response.completion = Some(vec![c]);
+					}
+					r.response.output_messages = tool_calls.take_output_messages(finish_reason.clone());
+				});
+			},
+			messages::MessagesStreamEvent::MessageStop => {
+				log.update(|r| {
+					if r.response.output_messages.is_none() {
+						r.response.output_messages = tool_calls.take_output_messages(None);
+					}
+				});
+			},
+			messages::MessagesStreamEvent::ContentBlockStop { .. }
+			| messages::MessagesStreamEvent::Ping => {},
+			messages::MessagesStreamEvent::Error { .. } => {},
+		}
+	})
 }
