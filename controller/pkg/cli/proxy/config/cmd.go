@@ -94,35 +94,20 @@ func loadConfigDumpSource(ctx context.Context, common *commonFlags, args []strin
 		}, nil
 	}
 
-	namespace, err := kubeutil.LoadNamespace(common.namespace)
+	target, err := kubeutil.ResolveResourceTarget(ctx, common.namespace, args)
 	if err != nil {
 		return nil, err
 	}
 
-	kubeClient, err := kubeutil.NewCLIClient()
-	if err != nil {
-		return nil, err
-	}
-
-	resourceName, err := kubeutil.ResolveResourceName(ctx, kubeClient, namespace, args)
-	if err != nil {
-		return nil, err
-	}
-
-	podName, podNamespace, err := kubeutil.ResolvePodForResource(ctx, kubeClient, resourceName, namespace)
-	if err != nil {
-		return nil, err
-	}
-
-	configDump, err := extractConfigDump(kubeClient, podName, podNamespace, common.proxyAdminPort)
+	configDump, err := extractConfigDump(target.KubeClient, target.Pod.Name, target.Pod.Namespace, common.proxyAdminPort)
 	if err != nil {
 		return nil, err
 	}
 
 	return &configDumpSource{
-		ResourceName: resourceName,
-		Namespace:    podNamespace,
-		PodName:      podName,
+		ResourceName: target.ResourceName,
+		Namespace:    target.Pod.Namespace,
+		PodName:      target.Pod.Name,
 		ConfigDump:   configDump,
 	}, nil
 }

@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"istio.io/istio/pkg/kube"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/cli/kubeutil"
 )
@@ -32,7 +31,7 @@ const (
 )
 
 type profileTarget struct {
-	KubeClient   kube.CLIClient
+	KubeClient   kubeutil.CLIClient
 	ResourceName string
 	PodName      string
 	PodNamespace string
@@ -76,31 +75,16 @@ func resolveProfileTarget(ctx context.Context, namespaceOverride string, local b
 		}, nil
 	}
 
-	namespace, err := kubeutil.LoadNamespace(namespaceOverride)
-	if err != nil {
-		return nil, err
-	}
-
-	kubeClient, err := kubeutil.NewCLIClient()
-	if err != nil {
-		return nil, err
-	}
-
-	resourceName, err := kubeutil.ResolveResourceName(ctx, kubeClient, namespace, args)
-	if err != nil {
-		return nil, err
-	}
-
-	podName, podNamespace, err := kubeutil.ResolvePodForResource(kubeClient, resourceName, namespace)
+	target, err := kubeutil.ResolveResourceTarget(ctx, namespaceOverride, args)
 	if err != nil {
 		return nil, err
 	}
 
 	return &profileTarget{
-		KubeClient:   kubeClient,
-		ResourceName: resourceName,
-		PodName:      podName,
-		PodNamespace: podNamespace,
+		KubeClient:   target.KubeClient,
+		ResourceName: target.ResourceName,
+		PodName:      target.Pod.Name,
+		PodNamespace: target.Pod.Namespace,
 	}, nil
 }
 
