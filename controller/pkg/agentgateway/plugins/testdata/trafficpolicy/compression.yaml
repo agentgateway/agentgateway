@@ -1,0 +1,72 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: compression
+  namespace: default
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: test
+  traffic:
+    compression:
+      responseCompression: {}
+      requestDecompression:
+        acceptedAlgorithms:
+        - Brotli
+        - Deflate
+        - Zstd
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/compression:compression:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: compression
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+      traffic:
+        compression:
+          requestDecompression:
+            acceptedAlgorithms:
+            - BROTLI
+            - DEFLATE
+            - ZSTD
+          responseCompression:
+            preferredAlgorithms:
+            - GZIP
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: compression
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

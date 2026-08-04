@@ -154,7 +154,13 @@ async fn apply_request_policies(
 	l: &mut RequestLog,
 	req: &mut Request,
 	rp: &mut ResponsePolicies,
-) -> Result<(), ProxyResponse> {
+) -> Result<Option<Arc<retry::Policy>>, ProxyResponse> {
+	// Register and buffer only expressions needed by policies that run before authorization.
+	// Post-authorization body expressions are deferred so denied requests avoid unnecessary body
+	// buffering and decompression.
+	pol.register_pre_auth_cel_expressions(l.cel.ctx());
+	l.cel.ctx().maybe_buffer_request_body(req).await;
+
 	// TODO we only need allow policies to be timeout-aware because we odn't have
 	// a unified timeout guard that applies during policy evalutation
 	if let Some(timeout) = rp.timeout.as_ref().and_then(|t| t.request_timeout) {
@@ -201,6 +207,9 @@ async fn apply_request_policies(
 		.apply_without_response("authorization", c, l, req, rp.headers())
 		.await?;
 
+	pol.register_post_auth_cel_expressions(l.cel.ctx());
+	l.cel.ctx().maybe_buffer_request_body(req).await;
+
 	rp.llm_request_policies.local_rate_limit = pol
 		.local_rate_limit
 		.apply_selected("local rate limit", c, l, req, rp.headers())
@@ -210,6 +219,19 @@ async fn apply_request_policies(
 		.remote_rate_limit
 		.apply_selected("remote rate limit", c, l, req, rp.headers())
 		.await?;
+
+	let mut route_retry = pol.retry.select("retry", req);
+	l.retry_backoff = route_retry.as_ref().and_then(|retry| retry.backoff);
+	// Evaluate the retry precondition after authorization but before the request can be consumed.
+	if let Some(retry) = route_retry.as_ref()
+		&& let Some(precondition) = retry.precondition.as_ref()
+	{
+		let exec = cel::Executor::new_request(req);
+		if !exec.eval_bool(precondition.as_ref()) {
+			debug!("retry precondition not met, disabling retries");
+			route_retry = None;
+		}
+	}
 
 	rp.buffer = pol.buffer.apply("buffer", c, l, req, rp.headers()).await?;
 
@@ -283,7 +305,7 @@ async fn apply_request_policies(
 		.await?;
 	// Mirror, timeout, and retry are handled separately.
 
-	Ok(())
+	Ok(route_retry)
 }
 
 async fn apply_backend_policies(
@@ -866,21 +888,23 @@ impl HTTPProxy {
 			route_inlines,
 		};
 		let route_policies = inputs.stores.read_binds().route_policies(&route_path);
-		// Register all expressions
-		route_policies.register_cel_expressions(log.cel.ctx());
-		let mut route_retry = route_policies.retry.select("retry", &req);
-		log.retry_backoff = route_retry.as_ref().and_then(|r| r.backoff);
-		// Evaluate the retry precondition (if any) against the request before it is consumed.
-		if let Some(retry) = route_retry.as_ref()
-			&& let Some(pre) = retry.precondition.as_ref()
-		{
-			let exec = cel::Executor::new_request(&req);
-			if !exec.eval_bool(pre.as_ref()) {
-				debug!("retry precondition not met, disabling retries");
-				route_retry = None;
-			}
-		}
-		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
+		// Install the streaming decoder before CEL can inspect or buffer the body, so body-aware
+		// policies observe decoded bytes. Installing it reads nothing, so header-only authorization
+		// can still reject a request without paying for decompression. Conditions on this policy are
+		// evaluated against the original request, before authentication has run.
+		let compression = route_policies
+			.compression
+			.apply_selected(
+				"compression",
+				&self.policy_client(),
+				log,
+				&mut req,
+				response_policies.headers(),
+			)
+			.await
+			.snapshot_on_err(log, &mut req)?;
+		response_policies.response_compressor = compression
+			.and_then(|compression| compression.response_compression.as_ref()?.for_request(&req));
 
 		// Others are set only when they have gotten to the appropriate phase of the request, so we simulate
 		// a middleware-style approach where if the request side never runs, neither does the response side.
@@ -890,7 +914,7 @@ impl HTTPProxy {
 			.as_deref()
 			.cloned();
 
-		apply_request_policies(
+		let route_retry = apply_request_policies(
 			&route_policies,
 			&self.policy_client(),
 			log,
@@ -3884,6 +3908,7 @@ struct ResponsePolicies {
 	response_headers: HeaderMap,
 	ext_proc: Option<ExtProcRequest>,
 	gateway_ext_proc: Option<ExtProcRequest>,
+	response_compressor: Option<http::compression::ResponseCompressor>,
 	// Populated by the standard request-policy flow after conditional rate-limit policies are
 	// evaluated. The later LLM path uses these selected policies and does not re-evaluate conditions.
 	llm_request_policies: LLMRequestPolicies,
@@ -3960,6 +3985,14 @@ impl ResponsePolicies {
 		if !self.response_headers.is_empty() {
 			merge_in_headers(Some(self.response_headers.clone()), resp.headers_mut());
 			dtrace::snapshot!(Response, "response headers", l, &resp);
+		}
+
+		if let Some(compressor) = self.response_compressor.take() {
+			compressor
+				.apply(resp)
+				.await
+				.map_err(|error| ProxyError::Processing(error.into()))?;
+			dtrace::snapshot!(Response, "response compression", l, &resp);
 		}
 
 		Ok(())
