@@ -343,10 +343,9 @@ impl ProxyError {
 			remaining,
 			reset_seconds,
 		} = self
+			&& let Some(hm) = rb.headers_mut()
 		{
-			if let Some(hm) = rb.headers_mut() {
-				http::x_headers::set_ratelimit_headers(hm, limit, remaining, reset_seconds);
-			}
+			http::x_headers::set_ratelimit_headers(hm, limit, remaining, reset_seconds);
 		}
 
 		// Add WWW-Authenticate header for basic auth failures
