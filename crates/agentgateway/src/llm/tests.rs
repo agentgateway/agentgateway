@@ -510,8 +510,13 @@ fn copilot_claude_surface_routes_stay_native() {
 }
 
 #[test]
-fn responses_to_messages_routing_is_copilot_only() {
+fn responses_to_messages_routing_follows_messages_capability() {
 	let providers = [
+		(
+			"Copilot",
+			AIProvider::Copilot(copilot::Provider { model: None }),
+			"claude-sonnet-4-5",
+		),
 		(
 			"Anthropic",
 			AIProvider::Anthropic(anthropic::Provider { model: None }),
@@ -541,11 +546,62 @@ fn responses_to_messages_routing_is_copilot_only() {
 	];
 
 	for (name, provider, model) in providers {
-		assert!(
+		assert_eq!(
 			provider
 				.chat_translation(InputFormat::Responses, Some(model))
-				.is_err(),
-			"{name} unexpectedly enabled Responses-to-Messages routing"
+				.expect("Responses-to-Messages routing should be available")
+				.output,
+			ChatFormat::AnthropicMessages,
+			"{name} did not select Responses-to-Messages routing"
+		);
+	}
+}
+
+#[test]
+fn responses_routing_preserves_non_messages_formats() {
+	let providers = [
+		(
+			"OpenAI",
+			AIProvider::OpenAI(openai::Provider {
+				model: None,
+				moderation: None,
+			}),
+			"gpt-5",
+			ChatFormat::OpenAIResponses,
+		),
+		(
+			"custom Responses",
+			custom_provider(custom::ProviderFormat::Responses),
+			"custom-model",
+			ChatFormat::OpenAIResponses,
+		),
+		(
+			"Bedrock",
+			AIProvider::bedrock(bedrock::Provider {
+				model: None,
+				region: strng::new("us-west-2"),
+				guardrail_identifier: None,
+				guardrail_version: None,
+			}),
+			"anthropic.claude-sonnet-4-5-v1:0",
+			ChatFormat::BedrockConverse,
+		),
+		(
+			"Vertex Gemini",
+			vertex_provider("gemini-2.0-flash"),
+			"gemini-2.0-flash",
+			ChatFormat::OpenAICompletions,
+		),
+	];
+
+	for (name, provider, model, expected) in providers {
+		assert_eq!(
+			provider
+				.chat_translation(InputFormat::Responses, Some(model))
+				.expect("Responses routing should remain available")
+				.output,
+			expected,
+			"{name} changed Responses routing"
 		);
 	}
 }
@@ -573,9 +629,10 @@ fn copilot_claude_responses_buffered_renderer() {
 		},
 	)
 	.expect("Responses request should render as Messages");
-	let Some(ProviderState::ResponsesToMessages { state }) = rendered.provider_state else {
-		panic!("expected Responses-to-Messages state");
-	};
+	assert!(matches!(
+		rendered.provider_state.as_ref(),
+		Some(ProviderState::ResponsesToMessages { .. })
+	));
 	let upstream = Bytes::from(
 		serde_json::to_vec(&json!({
 			"id":"msg_gateway",
@@ -603,8 +660,7 @@ fn copilot_claude_responses_buffered_renderer() {
 		&ChatResponseContext {
 			model: "claude-sonnet-4-5",
 			buffer_limit: 1024 * 1024,
-			tool_name_map: None,
-			responses_to_messages_state: Some(state.as_ref()),
+			provider_state: rendered.provider_state.as_ref(),
 		},
 	)
 	.expect("buffered response should translate");
@@ -619,6 +675,35 @@ fn copilot_claude_responses_buffered_renderer() {
 	assert_eq!(value["output"][0]["type"], "shell_call");
 	assert_eq!(value["output"][0]["call_id"], "call_shell");
 	assert_eq!(value["output"][0]["action"]["commands"], json!(["pwd"]));
+}
+
+#[test]
+fn responses_to_messages_buffered_requires_matching_provider_state() {
+	let translation = ChatTranslation {
+		input: InputFormat::Responses,
+		output: ChatFormat::AnthropicMessages,
+	};
+	let upstream = Bytes::from_static(b"{}");
+	let wrong_state = ProviderState::VertexGemini;
+
+	for provider_state in [None, Some(&wrong_state)] {
+		let result = translation.render_response(
+			&upstream,
+			&ChatResponseContext {
+				model: "claude-sonnet-4-5",
+				buffer_limit: 1024 * 1024,
+				provider_state,
+			},
+		);
+		let Err(error) = result else {
+			panic!("missing or wrong conversion state must fail")
+		};
+
+		assert_eq!(
+			error.to_string(),
+			"unsupported conversion: missing Responses-to-Messages state"
+		);
+	}
 }
 
 #[tokio::test]
@@ -1045,41 +1130,43 @@ async fn copilot_claude_responses_stream_captures_function_call_telemetry() {
 }
 
 #[tokio::test]
-async fn copilot_claude_responses_stream_missing_state_returns_sanitized_error() {
+async fn copilot_claude_responses_stream_missing_or_wrong_state_returns_sanitized_error() {
 	use crate::proxy::httpproxy::PolicyClient;
 	use crate::test_helpers::proxymock::setup_proxy_test;
 
 	let provider = AIProvider::Copilot(copilot::Provider { model: None });
-	let mut req = llm_request_with_tokens(None);
-	req.input_format = InputFormat::Responses;
-	req.request_model = "claude-sonnet-4-5".into();
-	req.provider_state = None;
-	let marker = "SENSITIVE_UPSTREAM_STREAM_BODY";
-	let mut response = Response::new(Body::from(marker));
-	response.headers_mut().insert(
-		::http::header::CONTENT_TYPE,
-		"text/event-stream".parse().expect("content type"),
-	);
+	for provider_state in [None, Some(ProviderState::VertexGemini)] {
+		let mut req = llm_request_with_tokens(None);
+		req.input_format = InputFormat::Responses;
+		req.request_model = "claude-sonnet-4-5".into();
+		req.provider_state = provider_state;
+		let marker = "SENSITIVE_UPSTREAM_STREAM_BODY";
+		let mut response = Response::new(Body::from(marker));
+		response.headers_mut().insert(
+			::http::header::CONTENT_TYPE,
+			"text/event-stream".parse().expect("content type"),
+		);
 
-	let result = provider.process_streaming(
-		PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
-		req,
-		LLMResponsePolicies::default(),
-		None,
-		AsyncLog::default(),
-		llm::LogContentFields::default(),
-		None,
-		response,
-	);
-	let Err(error) = result else {
-		panic!("missing conversion state must fail")
-	};
-	let message = error.to_string();
-	assert_eq!(
-		message,
-		"unsupported conversion: missing Responses-to-Messages state"
-	);
-	assert!(!message.contains(marker));
+		let result = provider.process_streaming(
+			PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+			req,
+			LLMResponsePolicies::default(),
+			None,
+			AsyncLog::default(),
+			llm::LogContentFields::default(),
+			None,
+			response,
+		);
+		let Err(error) = result else {
+			panic!("missing or wrong conversion state must fail")
+		};
+		let message = error.to_string();
+		assert_eq!(
+			message,
+			"unsupported conversion: missing Responses-to-Messages state"
+		);
+		assert!(!message.contains(marker));
+	}
 }
 
 #[test]
@@ -3024,41 +3111,6 @@ fn copilot_messages_strips_context_management_and_unsupported_beta_header() {
 	);
 }
 
-#[test]
-fn copilot_messages_beta_header_filter_handles_repeated_headers() {
-	let mut headers = HeaderMap::new();
-	headers.append(
-		"anthropic-beta",
-		HeaderValue::from_static("advisor-tool-2026-03-01"),
-	);
-	headers.append(
-		"anthropic-beta",
-		HeaderValue::from_static("claude-code-20250219, effort-2025-11-24"),
-	);
-
-	filter_copilot_unsupported_beta_headers(&mut headers);
-
-	let values: Vec<_> = headers
-		.get_all("anthropic-beta")
-		.iter()
-		.map(|v| v.to_str().unwrap())
-		.collect();
-	assert_eq!(values, vec!["claude-code-20250219,effort-2025-11-24"]);
-}
-
-#[test]
-fn copilot_messages_beta_header_filter_removes_header_entirely_when_nothing_survives() {
-	let mut headers = HeaderMap::new();
-	headers.insert(
-		"anthropic-beta",
-		HeaderValue::from_static("advisor-tool-2026-03-01"),
-	);
-
-	filter_copilot_unsupported_beta_headers(&mut headers);
-
-	assert!(!headers.contains_key("anthropic-beta"));
-}
-
 #[tokio::test]
 async fn copilot_messages_request_body_omits_context_management_field() {
 	use crate::http::auth::BackendInfo;
@@ -3135,6 +3187,101 @@ async fn copilot_messages_request_body_omits_context_management_field() {
 		forwarded_json["some_future_anthropic_field"],
 		json!("should-remain")
 	);
+}
+
+#[test]
+fn non_copilot_providers_preserve_copilot_unsupported_beta_header() {
+	let providers = [
+		AIProvider::Anthropic(anthropic::Provider { model: None }),
+		vertex_provider("anthropic/claude-sonnet-4-5"),
+		AIProvider::azure(azure::Provider {
+			model: None,
+			resource_name: strng::new("example"),
+			resource_type: azure::AzureResourceType::Foundry,
+			api_version: None,
+			project_name: Some(strng::new("project")),
+		}),
+		AIProvider::bedrock(bedrock::Provider {
+			model: None,
+			region: strng::new("us-west-2"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+		}),
+		custom_provider(custom::ProviderFormat::Messages),
+	];
+	let mut llm_request = llm_request_with_tokens(None);
+	llm_request.request_model = "claude-sonnet-4-5".into();
+
+	for provider in providers {
+		let mut request = crate::http::tests_common::request(
+			"https://example.com/v1/messages",
+			http::Method::POST,
+			&[],
+		);
+		request.headers_mut().insert(
+			"anthropic-beta",
+			HeaderValue::from_static(CLAUDE_CODE_2_1_217_BETA_HEADER),
+		);
+
+		provider
+			.set_required_fields(&mut request, RouteType::Messages, Some(&llm_request))
+			.expect("non-Copilot Messages headers");
+
+		assert_eq!(
+			request.headers()["anthropic-beta"],
+			CLAUDE_CODE_2_1_217_BETA_HEADER,
+			"{} applied Copilot beta policy",
+			provider.provider()
+		);
+	}
+}
+
+#[test]
+fn non_copilot_messages_providers_preserve_context_management() {
+	let request: types::messages::Request = serde_json::from_value(json!({
+		"model": "claude-sonnet-4-5",
+		"max_tokens": 64,
+		"messages": [{"role": "user", "content": "say hi"}],
+		"context_management": {"edits": [{"type": "clear_tool_uses_20250919"}]},
+		"some_future_anthropic_field": "preserved"
+	}))
+	.expect("Messages request");
+	let providers = [
+		AIProvider::Anthropic(anthropic::Provider { model: None }),
+		vertex_provider("anthropic/claude-sonnet-4-5"),
+		AIProvider::azure(azure::Provider {
+			model: None,
+			resource_name: strng::new("example"),
+			resource_type: azure::AzureResourceType::Foundry,
+			api_version: None,
+			project_name: Some(strng::new("project")),
+		}),
+		custom_provider(custom::ProviderFormat::Messages),
+	];
+
+	for provider in providers {
+		let translation = provider
+			.chat_translation(InputFormat::Messages, Some("claude-sonnet-4-5"))
+			.expect("Messages routing");
+		let rendered = translation
+			.render_request(
+				types::ChatRequest::Messages(request.clone()),
+				&ChatRequestContext {
+					provider: &provider,
+					headers: &HeaderMap::new(),
+					prompt_caching: None,
+				},
+			)
+			.expect("non-Copilot Messages body");
+		let body: Value = serde_json::from_slice(&rendered.body).expect("Messages JSON");
+
+		assert!(
+			body.get("context_management").is_some(),
+			"{} applied Copilot body policy",
+			provider.provider()
+		);
+		assert_eq!(body["some_future_anthropic_field"], "preserved");
+	}
 }
 
 #[tokio::test]
@@ -4908,6 +5055,25 @@ fn vertex_non_anthropic_model_uses_inclusive_convention() {
 	assert_eq!(
 		cache_convention_for(&provider, None, "gemini-2.0-flash"),
 		CacheTokenConvention::InputIncludesCache,
+	);
+}
+
+#[test]
+fn azure_foundry_messages_backend_uses_exclusive_convention() {
+	let provider = AIProvider::azure(azure::Provider {
+		model: None,
+		resource_name: strng::new("example"),
+		resource_type: azure::AzureResourceType::Foundry,
+		api_version: None,
+		project_name: Some(strng::new("project")),
+	});
+	assert_eq!(
+		cache_convention_for(
+			&provider,
+			Some(custom::ProviderFormat::Messages),
+			"claude-sonnet-4-5"
+		),
+		CacheTokenConvention::InputExcludesCache,
 	);
 }
 

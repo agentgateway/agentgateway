@@ -1,7 +1,8 @@
 use agent_core::strng;
 use agent_core::strng::Strng;
+use http::{HeaderMap, HeaderValue};
 
-use crate::{ChatFormat, RouteType, apply};
+use crate::{AIError, ChatFormat, RouteType, apply};
 
 #[apply(schema!)]
 #[cfg_attr(feature = "schema", schemars(rename = "CopilotProvider"))]
@@ -71,6 +72,39 @@ impl Provider {
 pub const DEFAULT_HOST_STR: &str = "api.githubcopilot.com";
 pub const DEFAULT_HOST: Strng = strng::literal!(DEFAULT_HOST_STR);
 
+const UNSUPPORTED_BETA_HEADER: &str = "advisor-tool-2026-03-01";
+
+/// Applies Copilot's Messages header policy without changing supported Anthropic beta entries.
+pub fn prepare_messages_headers(headers: &mut HeaderMap) {
+	headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+	let mut kept = Vec::new();
+	for value in headers.get_all("anthropic-beta") {
+		let Ok(header_str) = value.to_str() else {
+			continue;
+		};
+		for feature in header_str.split(',') {
+			let trimmed = feature.trim();
+			if !trimmed.is_empty() && trimmed != UNSUPPORTED_BETA_HEADER {
+				kept.push(trimmed.to_string());
+			}
+		}
+	}
+	headers.remove("anthropic-beta");
+	if !kept.is_empty()
+		&& let Ok(value) = HeaderValue::from_str(&kept.join(","))
+	{
+		headers.insert("anthropic-beta", value);
+	}
+}
+
+/// Removes Messages fields that Copilot's Anthropic-compatible endpoint rejects.
+pub fn prepare_messages_body(body: Vec<u8>) -> Result<Vec<u8>, AIError> {
+	let mut body: serde_json::Map<String, serde_json::Value> =
+		serde_json::from_slice(&body).map_err(AIError::RequestParsing)?;
+	body.remove("context_management");
+	serde_json::to_vec(&body).map_err(AIError::RequestMarshal)
+}
+
 /// Applies confirmed Copilot compatibility rules to a Responses request before conversion.
 pub fn prepare_responses_request(
 	request: &crate::types::responses::Request,
@@ -108,6 +142,7 @@ pub fn path_suffix(route: RouteType) -> &'static str {
 
 #[cfg(test)]
 mod tests {
+	use http::{HeaderMap, HeaderValue};
 	use serde_json::{Value, json};
 
 	use super::*;
@@ -144,6 +179,9 @@ mod tests {
 			vec![ChatFormat::OpenAIResponses]
 		);
 	}
+
+	const CLAUDE_CODE_BETA_HEADER: &str =
+		"claude-code-20250219,advisor-tool-2026-03-01,effort-2025-11-24";
 
 	fn request(tools: Value, tool_choice: Option<Value>) -> responses::Request {
 		let mut request = json!({
@@ -229,5 +267,57 @@ mod tests {
 			let prepared = prepare_responses_request(&request);
 			assert_eq!(tools(&prepared), tools(&request));
 		}
+	}
+
+	#[test]
+	fn messages_header_policy_sets_version_and_filters_only_unsupported_entries() {
+		let mut headers = HeaderMap::new();
+		headers.append(
+			"anthropic-beta",
+			HeaderValue::from_static("advisor-tool-2026-03-01"),
+		);
+		headers.append(
+			"anthropic-beta",
+			HeaderValue::from_static(CLAUDE_CODE_BETA_HEADER),
+		);
+
+		prepare_messages_headers(&mut headers);
+
+		assert_eq!(headers["anthropic-version"], "2023-06-01");
+		assert_eq!(
+			headers["anthropic-beta"],
+			"claude-code-20250219,effort-2025-11-24"
+		);
+	}
+
+	#[test]
+	fn messages_header_policy_removes_beta_header_when_nothing_survives() {
+		let mut headers = HeaderMap::new();
+		headers.insert(
+			"anthropic-beta",
+			HeaderValue::from_static("advisor-tool-2026-03-01"),
+		);
+
+		prepare_messages_headers(&mut headers);
+
+		assert!(!headers.contains_key("anthropic-beta"));
+	}
+
+	#[test]
+	fn messages_body_policy_removes_only_context_management() {
+		let body = serde_json::to_vec(&json!({
+			"model": "claude-sonnet-5",
+			"messages": [{"role": "user", "content": "hi"}],
+			"context_management": {"edits": [{"type": "clear_tool_uses_20250919"}]},
+			"some_future_anthropic_field": "preserved"
+		}))
+		.expect("Messages body");
+
+		let prepared: Value =
+			serde_json::from_slice(&prepare_messages_body(body).expect("Copilot Messages body policy"))
+				.expect("prepared Messages body");
+
+		assert!(prepared.get("context_management").is_none());
+		assert_eq!(prepared["some_future_anthropic_field"], "preserved");
 	}
 }
