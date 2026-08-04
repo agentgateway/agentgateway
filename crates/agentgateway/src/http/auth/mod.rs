@@ -2,17 +2,21 @@ pub mod aws;
 pub mod azure;
 mod copilot;
 pub mod gcp;
+pub(crate) mod jws;
 pub mod jwt_sign;
 pub mod oauth;
 
 use std::borrow::Cow;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use ::http::HeaderValue;
+use anyhow::Context;
 pub use aws::{AwsAssumeRole, AwsAuth};
 pub use azure::AzureAuth;
 use cookie::Cookie;
 pub use gcp::GcpAuth;
+pub use jws::JwtSigningAlg;
+pub(crate) use jws::signing_alg_from_proto;
 pub use jwt_sign::JwtSignAuth;
 pub use oauth::{
 	CrossAppAccessAuth, OAuthClientAuth, OAuthClientAuthMethod, OAuthGrantType,
@@ -30,6 +34,41 @@ use crate::types::agent::{BackendTarget, Target};
 use crate::*;
 
 const CLOUD_AUTH_TIMEOUT: Duration = Duration::from_secs(5);
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct JwtClaimTimes {
+	issued_at: u64,
+	expires_at: u64,
+}
+
+fn unix_timestamp_now() -> anyhow::Result<u64> {
+	SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.context("system clock is before the unix epoch")
+		.map(|duration| duration.as_secs())
+}
+
+fn jwt_claim_times(
+	now: u64,
+	lifetime: Duration,
+	issued_at_backdate: Duration,
+) -> anyhow::Result<JwtClaimTimes> {
+	let issued_at = now.saturating_sub(issued_at_backdate.as_secs());
+	let expires_at = now
+		.checked_add(numeric_date_seconds(lifetime))
+		.context("JWT lifetime overflows the exp timestamp")?;
+
+	Ok(JwtClaimTimes {
+		issued_at,
+		expires_at,
+	})
+}
+
+fn numeric_date_seconds(duration: Duration) -> u64 {
+	duration
+		.as_secs()
+		.saturating_add(u64::from(duration.subsec_nanos() > 0))
+}
 
 #[apply(schema!)]
 #[cfg_attr(feature = "schema", schemars(rename = "BackendAuth"))]

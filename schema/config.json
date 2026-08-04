@@ -3553,7 +3553,7 @@
         },
         "alg": {
           "description": "JWS signing algorithm. Defaults to RS256.",
-          "$ref": "#/$defs/SigningAlg",
+          "$ref": "#/$defs/JwtSigningAlg",
           "default": "RS256"
         },
         "kid": {
@@ -3594,7 +3594,7 @@
         "claims"
       ]
     },
-    "SigningAlg": {
+    "JwtSigningAlg": {
       "type": "string",
       "enum": [
         "RS256",
@@ -3937,7 +3937,7 @@
               ]
             },
             "alg": {
-              "$ref": "#/$defs/SigningAlg",
+              "$ref": "#/$defs/JwtSigningAlg",
               "default": "RS256"
             },
             "kid": {

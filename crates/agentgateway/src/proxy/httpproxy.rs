@@ -154,9 +154,10 @@ async fn apply_request_policies(
 	l: &mut RequestLog,
 	req: &mut Request,
 	rp: &mut ResponsePolicies,
-) -> Result<(), ProxyResponse> {
+) -> Result<Option<Arc<retry::Policy>>, ProxyResponse> {
 	// TODO we only need allow policies to be timeout-aware because we odn't have
 	// a unified timeout guard that applies during policy evalutation
+	rp.timeout = pol.timeout.select("timeout", req).as_deref().cloned();
 	if let Some(timeout) = rp.timeout.as_ref().and_then(|t| t.request_timeout) {
 		req.extensions_mut().insert(http::filters::RequestDeadline(
 			l.start.as_instant() + timeout,
@@ -200,6 +201,19 @@ async fn apply_request_policies(
 		.authorization
 		.apply_without_response("authorization", c, l, req, rp.headers())
 		.await?;
+
+	let mut route_retry = pol.retry.select("retry", req);
+	// Evaluate the retry precondition (if any) against the request before it is consumed.
+	if let Some(retry) = route_retry.as_ref()
+		&& let Some(pre) = retry.precondition.as_ref()
+	{
+		let exec = cel::Executor::new_request(req);
+		if !exec.eval_bool(pre.as_ref()) {
+			debug!("retry precondition not met, disabling retries");
+			route_retry = None;
+		}
+	}
+	l.retry_backoff = route_retry.as_ref().and_then(|r| r.backoff);
 
 	rp.llm_request_policies.local_rate_limit = pol
 		.local_rate_limit
@@ -281,9 +295,9 @@ async fn apply_request_policies(
 		.direct_response
 		.apply_without_response("direct response", c, l, req, rp.headers())
 		.await?;
-	// Mirror, timeout, and retry are handled separately.
 
-	Ok(())
+	// Mirror is handled separately
+	Ok(route_retry)
 }
 
 async fn apply_backend_policies(
@@ -868,29 +882,9 @@ impl HTTPProxy {
 		let route_policies = inputs.stores.read_binds().route_policies(&route_path);
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
-		let mut route_retry = route_policies.retry.select("retry", &req);
-		log.retry_backoff = route_retry.as_ref().and_then(|r| r.backoff);
-		// Evaluate the retry precondition (if any) against the request before it is consumed.
-		if let Some(retry) = route_retry.as_ref()
-			&& let Some(pre) = retry.precondition.as_ref()
-		{
-			let exec = cel::Executor::new_request(&req);
-			if !exec.eval_bool(pre.as_ref()) {
-				debug!("retry precondition not met, disabling retries");
-				route_retry = None;
-			}
-		}
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
-		// Others are set only when they have gotten to the appropriate phase of the request, so we simulate
-		// a middleware-style approach where if the request side never runs, neither does the response side.
-		response_policies.timeout = route_policies
-			.timeout
-			.select("timeout", &req)
-			.as_deref()
-			.cloned();
-
-		apply_request_policies(
+		let route_retry = apply_request_policies(
 			&route_policies,
 			&self.policy_client(),
 			log,

@@ -1,16 +1,17 @@
 use std::fmt;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use anyhow::Context;
 use base64::Engine;
 use base64::engine::general_purpose::{STANDARD, URL_SAFE_NO_PAD};
-use jsonwebtoken::{Algorithm, EncodingKey, Header};
 use rustls::pki_types::PrivateKeyDer;
 use rustls::pki_types::pem::PemObject;
 use secrecy::{ExposeSecret, SecretString};
 use sha2::{Digest, Sha256};
 use tracing::warn;
 
+use super::super::jws::{JwtSigningAlg, SigningKey, signing_alg_from_proto};
+use super::super::{jwt_claim_times, unix_timestamp_now};
 use crate::serdes::FileOrInline;
 use crate::types::proto::{ProtoError, agent as proto};
 use crate::{apply, schema_enum, ser_redact};
@@ -130,7 +131,7 @@ enum RawOAuthClientAuth {
 		/// JWS certificate header emitted from `certificate`. Required when `certificate` is set.
 		certificate_header: Option<CertificateHeader>,
 		#[serde(default)]
-		alg: SigningAlg,
+		alg: JwtSigningAlg,
 		#[serde(default, skip_serializing_if = "Option::is_none")]
 		kid: Option<String>,
 		assertion_audience: String,
@@ -230,9 +231,9 @@ pub enum OAuthClientAuthMethod {
 pub struct PrivateKeyJwt {
 	#[serde(skip)]
 	#[cfg_attr(feature = "schema", schemars(skip))]
-	signing_key: ParsedEncodingKey,
+	signing_key: SigningKey,
 	#[serde(default)]
-	alg: SigningAlg,
+	alg: JwtSigningAlg,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	kid: Option<String>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -274,7 +275,7 @@ pub(super) struct RawPrivateKeyJwt {
 	/// JWS certificate header emitted from `certificate`. Required when `certificate` is set.
 	pub(super) certificate_header: Option<CertificateHeader>,
 	#[serde(default)]
-	pub(super) alg: SigningAlg,
+	pub(super) alg: JwtSigningAlg,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub(super) kid: Option<String>,
 	pub(super) assertion_audience: String,
@@ -289,9 +290,7 @@ impl TryFrom<RawPrivateKeyJwt> for PrivateKeyJwt {
 		}
 		// TODO: file-based keys are loaded once at config load; consider reload/rotation (K8s secret remounts need a restart)
 		let signing_key_pem = raw.signing_key.expose_secret();
-		let signing_key = raw
-			.alg
-			.encoding_key(signing_key_pem.trim().as_bytes())
+		let signing_key = SigningKey::from_pem(raw.alg, signing_key_pem.trim().as_bytes())
 			.map_err(|e| format!("failed to parse oauth private_key_jwt signing_key: {e}"))?;
 		let certificate_headers = match (raw.certificate, raw.certificate_header) {
 			(Some(certificate), Some(certificate_header)) => {
@@ -310,7 +309,7 @@ impl TryFrom<RawPrivateKeyJwt> for PrivateKeyJwt {
 			(None, None) => CertificateHeaders::default(),
 		};
 		Ok(Self {
-			signing_key: ParsedEncodingKey(signing_key),
+			signing_key,
 			alg: raw.alg,
 			kid: raw.kid,
 			x5c: certificate_headers.x5c,
@@ -403,20 +402,6 @@ fn certificate_key_matches(
 	let (_, certificate) = x509_parser::parse_x509_certificate(leaf_certificate_der)
 		.map_err(|e| format!("failed to parse oauth private_key_jwt certificate: {e}"))?;
 	Ok(signing_key_spki.as_ref() == certificate.public_key().raw)
-}
-
-pub(crate) struct ParsedEncodingKey(pub(crate) EncodingKey);
-
-impl Clone for ParsedEncodingKey {
-	fn clone(&self) -> Self {
-		Self(self.0.clone())
-	}
-}
-
-impl fmt::Debug for ParsedEncodingKey {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str("[REDACTED]")
-	}
 }
 
 impl OAuthClientAuth {
@@ -525,7 +510,8 @@ impl TryFrom<proto::o_auth_client_auth::PrivateKeyJwt> for PrivateKeyJwt {
 			certificate: (!private_key_jwt.certificate.is_empty())
 				.then_some(FileOrInline::Inline(private_key_jwt.certificate).into()),
 			certificate_header: certificate_header_from_proto(private_key_jwt.certificate_header)?,
-			alg: signing_alg_from_proto(private_key_jwt.alg)?,
+			alg: signing_alg_from_proto(private_key_jwt.alg)
+				.ok_or_else(|| ProtoError::EnumParse("unknown oauth private_key_jwt signing alg".into()))?,
 			kid: private_key_jwt.kid,
 			assertion_audience: private_key_jwt.assertion_audience,
 		})
@@ -541,65 +527,6 @@ pub enum CertificateHeader {
 	/// Send the leaf certificate's SHA-256 thumbprint in `x5t#S256`.
 	#[serde(rename = "x5t#S256")]
 	X5tS256,
-}
-
-#[apply(schema_enum!)]
-#[derive(Default)]
-pub enum SigningAlg {
-	#[default]
-	#[serde(rename = "RS256")]
-	Rs256,
-	#[serde(rename = "RS384")]
-	Rs384,
-	#[serde(rename = "RS512")]
-	Rs512,
-	#[serde(rename = "PS256")]
-	Ps256,
-	#[serde(rename = "ES256")]
-	Es256,
-	#[serde(rename = "ES384")]
-	Es384,
-}
-
-impl SigningAlg {
-	pub(crate) fn algorithm(self) -> Algorithm {
-		match self {
-			Self::Rs256 => Algorithm::RS256,
-			Self::Rs384 => Algorithm::RS384,
-			Self::Rs512 => Algorithm::RS512,
-			Self::Ps256 => Algorithm::PS256,
-			Self::Es256 => Algorithm::ES256,
-			Self::Es384 => Algorithm::ES384,
-		}
-	}
-
-	pub(crate) fn encoding_key(self, pem: &[u8]) -> anyhow::Result<EncodingKey> {
-		match self {
-			Self::Rs256 | Self::Rs384 | Self::Rs512 | Self::Ps256 => {
-				EncodingKey::from_rsa_pem(pem).context("failed to load RSA signing key")
-			},
-			Self::Es256 | Self::Es384 => {
-				EncodingKey::from_ec_pem(pem).context("failed to load EC signing key")
-			},
-		}
-	}
-}
-
-fn signing_alg_from_proto(alg: i32) -> Result<SigningAlg, ProtoError> {
-	use proto::o_auth_client_auth::private_key_jwt::SigningAlg as ProtoSigningAlg;
-
-	match ProtoSigningAlg::try_from(alg) {
-		Ok(ProtoSigningAlg::Unspecified) => Ok(SigningAlg::Rs256),
-		Ok(ProtoSigningAlg::Rs256) => Ok(SigningAlg::Rs256),
-		Ok(ProtoSigningAlg::Rs384) => Ok(SigningAlg::Rs384),
-		Ok(ProtoSigningAlg::Rs512) => Ok(SigningAlg::Rs512),
-		Ok(ProtoSigningAlg::Ps256) => Ok(SigningAlg::Ps256),
-		Ok(ProtoSigningAlg::Es256) => Ok(SigningAlg::Es256),
-		Ok(ProtoSigningAlg::Es384) => Ok(SigningAlg::Es384),
-		Err(_) => Err(ProtoError::EnumParse(
-			"unknown oauth private_key_jwt signing alg".into(),
-		)),
-	}
 }
 
 fn certificate_header_from_proto(header: i32) -> Result<Option<CertificateHeader>, ProtoError> {
@@ -630,25 +557,23 @@ pub(super) fn sign_client_assertion(
 		exp: u64,
 	}
 
-	let now = SystemTime::now()
-		.duration_since(UNIX_EPOCH)
-		.context("system clock is before the unix epoch")?
-		.as_secs();
-	let issued_at = now.saturating_sub(CLIENT_ASSERTION_CLOCK_SKEW.as_secs());
+	let now = unix_timestamp_now()?;
+	let times = jwt_claim_times(now, CLIENT_ASSERTION_LIFETIME, CLIENT_ASSERTION_CLOCK_SKEW)?;
 	let claims = ClientAssertionClaims {
 		iss: client_id,
 		sub: client_id,
 		aud: &private_key.assertion_audience,
 		jti: uuid::Uuid::new_v4().to_string(),
-		nbf: issued_at,
-		iat: issued_at,
-		exp: now + CLIENT_ASSERTION_LIFETIME.as_secs(),
+		nbf: times.issued_at,
+		iat: times.issued_at,
+		exp: times.expires_at,
 	};
 
-	let mut header = Header::new(private_key.alg.algorithm());
-	header.kid = private_key.kid.clone();
+	let mut header = private_key.alg.header(private_key.kid.clone());
 	header.x5c = private_key.x5c.clone();
 	header.x5t_s256 = private_key.x5t_s256.clone();
-	jsonwebtoken::encode(&header, &claims, &private_key.signing_key.0)
+	private_key
+		.signing_key
+		.encode(&header, &claims)
 		.context("failed to sign client assertion")
 }

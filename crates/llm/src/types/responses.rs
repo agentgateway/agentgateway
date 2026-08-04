@@ -171,6 +171,8 @@ pub struct Usage {
 	/// Breakdown of tokens used in the prompt.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub output_tokens_details: Option<UsageOutputDetails>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub total_tokens: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -518,7 +520,7 @@ impl ResponseType for Response {
 			total_tokens: self
 				.usage
 				.as_ref()
-				.map(|u| u.input_tokens + u.output_tokens),
+				.map(|u| u.total_tokens.unwrap_or(u.input_tokens + u.output_tokens)),
 			reasoning_tokens: self.usage.as_ref().and_then(|u| {
 				u.output_tokens_details
 					.as_ref()

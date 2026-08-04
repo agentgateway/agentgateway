@@ -1869,7 +1869,7 @@ type OAuthPrivateKeyJWT struct {
 
 	// JWS signing algorithm. Defaults to RS256.
 	// +optional
-	Alg *OAuthPrivateKeyJWTSigningAlgorithm `json:"alg,omitempty"`
+	Alg *JwtSigningAlg `json:"alg,omitempty"`
 
 	// Optional JWS key ID header.
 	// +optional
@@ -1890,15 +1890,15 @@ const (
 )
 
 // +k8s:enum
-type OAuthPrivateKeyJWTSigningAlgorithm string
+type JwtSigningAlg string
 
 const (
-	OAuthPrivateKeyJWTSigningAlgorithmRS256 OAuthPrivateKeyJWTSigningAlgorithm = "RS256"
-	OAuthPrivateKeyJWTSigningAlgorithmRS384 OAuthPrivateKeyJWTSigningAlgorithm = "RS384"
-	OAuthPrivateKeyJWTSigningAlgorithmRS512 OAuthPrivateKeyJWTSigningAlgorithm = "RS512"
-	OAuthPrivateKeyJWTSigningAlgorithmPS256 OAuthPrivateKeyJWTSigningAlgorithm = "PS256"
-	OAuthPrivateKeyJWTSigningAlgorithmES256 OAuthPrivateKeyJWTSigningAlgorithm = "ES256"
-	OAuthPrivateKeyJWTSigningAlgorithmES384 OAuthPrivateKeyJWTSigningAlgorithm = "ES384"
+	JwtSigningAlgRS256 JwtSigningAlg = "RS256"
+	JwtSigningAlgRS384 JwtSigningAlg = "RS384"
+	JwtSigningAlgRS512 JwtSigningAlg = "RS512"
+	JwtSigningAlgPS256 JwtSigningAlg = "PS256"
+	JwtSigningAlgES256 JwtSigningAlg = "ES256"
+	JwtSigningAlgES384 JwtSigningAlg = "ES384"
 )
 
 // JwtSignAuth signs a short-lived JWT with a private key on each request and
@@ -1911,7 +1911,7 @@ type JwtSignAuth struct {
 
 	// JWS signing algorithm. Defaults to RS256.
 	// +optional
-	Alg *OAuthPrivateKeyJWTSigningAlgorithm `json:"alg,omitempty"`
+	Alg *JwtSigningAlg `json:"alg,omitempty"`
 
 	// Optional JWS key ID header.
 	// +optional
@@ -2576,10 +2576,12 @@ const (
 	// BodySendModeNone does not send the body to the external processor.
 	BodySendModeNone BodySendMode = "None"
 	// BodySendModeBuffered buffers the full body before sending it to the
-	// external processor. It returns an error if the body exceeds 8KB.
+	// external processor. Returns an error if the body exceeds the
+	// configured body buffer limit.
 	BodySendModeBuffered BodySendMode = "Buffered"
-	// BodySendModeBufferedPartial buffers up to 8KB. If the body exceeds that
-	// limit, it sends the buffered prefix instead of returning an error.
+	// BodySendModeBufferedPartial buffers up to the configured body buffer limit.
+	// If the body exceeds that limit, it sends the buffered prefix instead of
+	// returning an error.
 	BodySendModeBufferedPartial BodySendMode = "BufferedPartial"
 	// BodySendModeFullDuplexStreamed streams the body to the external processor.
 	BodySendModeFullDuplexStreamed BodySendMode = "FullDuplexStreamed"
@@ -2610,17 +2612,13 @@ const (
 // External processor request and response phase settings.
 type ProcessingOptions struct {
 	// How request bodies are sent to the external processor.
-	// `Buffered` buffers the full body and returns an error if it exceeds 8KB.
-	// `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
-	// body exceeds that limit. Defaults to `FullDuplexStreamed`.
+	// Defaults to `FullDuplexStreamed`.
 	// +optional
 	// +kubebuilder:default=FullDuplexStreamed
 	RequestBodyMode *BodySendMode `json:"requestBodyMode,omitempty"`
 
 	// How response bodies are sent to the external processor.
-	// `Buffered` buffers the full body and returns an error if it exceeds 8KB.
-	// `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
-	// body exceeds that limit. Defaults to `FullDuplexStreamed`.
+	// Defaults to `FullDuplexStreamed`.
 	// +optional
 	// +kubebuilder:default=FullDuplexStreamed
 	ResponseBodyMode *BodySendMode `json:"responseBodyMode,omitempty"`

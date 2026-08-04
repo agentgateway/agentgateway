@@ -1117,6 +1117,41 @@ fn backend_auth_credentials_from_proto(
 		.collect()
 }
 
+fn jwt_sign_from_proto(
+	mut jwt_sign: proto::agent::JwtSign,
+) -> Result<auth::jwt_sign::JwtSignAuth, String> {
+	if let Some(error) = jwt_sign.translation_error.take() {
+		return Err(if error.trim().is_empty() {
+			"jwtSign configuration is invalid".to_string()
+		} else {
+			error
+		});
+	}
+
+	let ttl = convert_jwt_sign_ttl(jwt_sign.ttl.take())?;
+	let location = optional_authorization_location(jwt_sign.authorization_location.as_ref())
+		.map_err(|error| error.to_string())?;
+	let alg = auth::signing_alg_from_proto(jwt_sign.alg)
+		.ok_or_else(|| "unknown jwt_sign signing alg".to_string())?;
+	let claims = jwt_sign
+		.claims
+		.into_iter()
+		.map(|(key, value)| {
+			let value = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
+			(key, value)
+		})
+		.collect();
+
+	auth::jwt_sign::JwtSignAuth::try_new(
+		jwt_sign.signing_key.trim(),
+		alg,
+		jwt_sign.kid,
+		claims,
+		ttl,
+		location,
+	)
+}
+
 fn backend_auth_kind_from_proto(
 	s: proto::agent::BackendAuthPolicy,
 	diagnostics: &mut Diagnostics,
@@ -1320,46 +1355,22 @@ fn backend_auth_kind_from_proto(
 				diagnostics,
 			)?))
 		},
-		Some(proto::agent::backend_auth_policy::Kind::JwtSign(j)) => {
-			let location = optional_authorization_location(j.authorization_location.as_ref())?;
-			let claims = j
-				.claims
-				.into_iter()
-				.map(|(key, value)| {
-					let value = serde_json::to_value(value).unwrap_or(serde_json::Value::Null);
-					(key, value)
-				})
-				.collect();
-			BackendAuthKind::JwtSign(Box::new(
-				auth::jwt_sign::JwtSignAuth::try_new(
-					j.signing_key.trim(),
-					jwt_sign_alg_from_proto(j.alg)?,
-					j.kid,
-					claims,
-					j.ttl.map(convert_duration),
-					location,
-				)
-				.map_err(ProtoError::Generic)?,
-			))
+		Some(proto::agent::backend_auth_policy::Kind::JwtSign(jwt_sign)) => {
+			let jwt_sign = match jwt_sign_from_proto(jwt_sign) {
+				Ok(jwt_sign) => jwt_sign,
+				Err(error) => {
+					// Match invalid TLS handling: accept the xDS resource with a warning,
+					// but retain a runtime configuration that rejects when used.
+					diagnostics.add_warning(format!(
+						"jwtSign configuration is invalid; requests using this policy will be rejected: {error}"
+					));
+					auth::jwt_sign::JwtSignAuth::new_invalid(error)
+				},
+			};
+			BackendAuthKind::JwtSign(Box::new(jwt_sign))
 		},
 		None => return Ok(None),
 	}))
-}
-
-fn jwt_sign_alg_from_proto(alg: i32) -> Result<auth::oauth::SigningAlg, ProtoError> {
-	use auth::oauth::SigningAlg;
-	use proto::agent::jwt_sign::SigningAlg as ProtoSigningAlg;
-
-	match ProtoSigningAlg::try_from(alg) {
-		Ok(ProtoSigningAlg::Unspecified) => Ok(SigningAlg::Rs256),
-		Ok(ProtoSigningAlg::Rs256) => Ok(SigningAlg::Rs256),
-		Ok(ProtoSigningAlg::Rs384) => Ok(SigningAlg::Rs384),
-		Ok(ProtoSigningAlg::Rs512) => Ok(SigningAlg::Rs512),
-		Ok(ProtoSigningAlg::Es256) => Ok(SigningAlg::Es256),
-		Ok(ProtoSigningAlg::Es384) => Ok(SigningAlg::Es384),
-		Ok(ProtoSigningAlg::Ps256) => Ok(SigningAlg::Ps256),
-		Err(_) => Err(ProtoError::EnumParse("unknown jwt_sign signing alg".into())),
-	}
 }
 
 fn listener_protocol_from_proto(
@@ -3042,6 +3053,22 @@ fn convert_duration(d: prost_types::Duration) -> Duration {
 	Duration::from_secs(d.seconds as u64) + Duration::from_nanos(d.nanos as u64)
 }
 
+fn convert_jwt_sign_ttl(ttl: Option<prost_types::Duration>) -> Result<Option<Duration>, String> {
+	const PROTOBUF_DURATION_MAX_SECONDS: i64 = 315_576_000_000;
+
+	ttl
+		.map(|ttl| {
+			if ttl.seconds < 0 || ttl.nanos < 0 {
+				return Err("jwtSign ttl must not be negative".to_string());
+			}
+			if ttl.seconds > PROTOBUF_DURATION_MAX_SECONDS || ttl.nanos >= 1_000_000_000 {
+				return Err("jwtSign ttl is not a valid protobuf duration".to_string());
+			}
+			Ok(Duration::new(ttl.seconds as u64, ttl.nanos as u32))
+		})
+		.transpose()
+}
+
 pub(crate) fn authorization_location(
 	diagnostics: &mut Diagnostics,
 	context: impl AsRef<str>,
@@ -3959,6 +3986,41 @@ mod tests {
 	use crate::store::RequestPolicyTrait;
 	use crate::types::proto::agent::backend_policy_spec::Ai;
 
+	fn jwt_sign_from_proto_for_test(
+		jwt_sign: proto::agent::JwtSign,
+		diagnostics: &mut Diagnostics,
+	) -> Box<auth::jwt_sign::JwtSignAuth> {
+		let auth = backend_auth_kind_from_proto(
+			proto::agent::BackendAuthPolicy {
+				kind: Some(proto::agent::backend_auth_policy::Kind::JwtSign(jwt_sign)),
+				credentials: vec![],
+			},
+			diagnostics,
+		)
+		.expect("jwtSign policy conversion should succeed")
+		.expect("jwtSign kind should be present");
+		let BackendAuthKind::JwtSign(jwt_sign) = auth else {
+			panic!("expected jwtSign auth kind");
+		};
+		jwt_sign
+	}
+
+	fn jwt_sign_proto_for_test() -> proto::agent::JwtSign {
+		proto::agent::JwtSign {
+			signing_key: "not a PEM key".to_string(),
+			alg: proto::agent::JwtSigningAlg::Es256 as i32,
+			claims: HashMap::from([(
+				"iss".to_string(),
+				prost_wkt_types::Value {
+					kind: Some(prost_wkt_types::value::Kind::StringValue(
+						"acct.user".to_string(),
+					)),
+				},
+			)]),
+			..Default::default()
+		}
+	}
+
 	fn test_policy_target() -> proto::agent::PolicyTarget {
 		proto::agent::PolicyTarget {
 			kind: Some(proto::agent::policy_target::Kind::Route(
@@ -4585,6 +4647,119 @@ mod tests {
 		};
 		assert_eq!(transformation.expressions().count(), 2);
 		Ok(())
+	}
+
+	#[rstest::rstest]
+	#[case::diagnostic(
+		"secret default/recognizable-marker not found",
+		"secret default/recognizable-marker not found"
+	)]
+	#[case::empty(" \t", "jwtSign configuration is invalid")]
+	fn jwt_sign_translation_error_becomes_runtime_invalid(
+		#[case] translation_error: &str,
+		#[case] expected: &str,
+	) {
+		let mut diagnostics = Diagnostics::default();
+		let jwt_sign = jwt_sign_from_proto_for_test(
+			proto::agent::JwtSign {
+				signing_key: "not a PEM key".to_string(),
+				alg: i32::MAX,
+				// translation_error takes precedence over normal field validation.
+				ttl: Some(prost_types::Duration {
+					seconds: -1,
+					nanos: 0,
+				}),
+				translation_error: Some(translation_error.to_string()),
+				..Default::default()
+			},
+			&mut diagnostics,
+		);
+		assert_eq!(
+			serde_json::to_value(jwt_sign).expect("invalid jwtSign should serialize"),
+			json!({"translationError": expected})
+		);
+		let warnings = diagnostics.into_warnings();
+		assert_eq!(warnings.len(), 1);
+		assert!(warnings[0].contains(expected));
+	}
+
+	#[test]
+	fn jwt_sign_conversion_errors_become_runtime_invalid() {
+		let invalid_key = jwt_sign_proto_for_test();
+		let mut unknown_alg = jwt_sign_proto_for_test();
+		unknown_alg.alg = i32::MAX;
+		let mut expression_location = jwt_sign_proto_for_test();
+		expression_location.authorization_location = Some(proto::agent::AuthorizationLocation {
+			kind: Some(proto::agent::authorization_location::Kind::Expression(
+				"request.headers['authorization']".to_string(),
+			)),
+		});
+
+		let cases = [
+			(
+				"invalid signing key",
+				invalid_key,
+				"failed to parse jwtSign signingKey",
+			),
+			(
+				"unknown algorithm",
+				unknown_alg,
+				"unknown jwt_sign signing alg",
+			),
+			(
+				"expression location",
+				expression_location,
+				"expression auth location is only supported for credential extraction",
+			),
+		];
+
+		for (name, jwt_sign, expected) in cases {
+			let mut diagnostics = Diagnostics::default();
+			let jwt_sign = jwt_sign_from_proto_for_test(jwt_sign, &mut diagnostics);
+			let serialized = serde_json::to_value(jwt_sign).expect("invalid jwtSign should serialize");
+			assert!(
+				serialized["translationError"]
+					.as_str()
+					.is_some_and(|error| error.contains(expected)),
+				"{name} did not produce the expected runtime-invalid diagnostic: {serialized}"
+			);
+			let warnings = diagnostics.into_warnings();
+			assert_eq!(warnings.len(), 1, "{name} should produce one warning");
+			assert!(warnings[0].contains(expected));
+		}
+	}
+
+	#[test]
+	fn jwt_sign_ttl_preserves_fractional_duration() {
+		assert_eq!(
+			convert_jwt_sign_ttl(Some(prost_types::Duration {
+				seconds: 1,
+				nanos: 500_000_000,
+			}))
+			.unwrap(),
+			Some(Duration::from_millis(1500))
+		);
+	}
+
+	#[rstest::rstest]
+	#[case::negative(-1, 0)]
+	#[case::invalid_nanos(1, 1_000_000_000)]
+	fn invalid_jwt_sign_ttl_becomes_runtime_invalid(#[case] seconds: i64, #[case] nanos: i32) {
+		let mut diagnostics = Diagnostics::default();
+		let jwt_sign = jwt_sign_from_proto_for_test(
+			proto::agent::JwtSign {
+				ttl: Some(prost_types::Duration { seconds, nanos }),
+				..Default::default()
+			},
+			&mut diagnostics,
+		);
+		let serialized = serde_json::to_value(jwt_sign).expect("invalid jwtSign should serialize");
+		assert!(
+			serialized["translationError"]
+				.as_str()
+				.is_some_and(|error| error.contains("ttl"))
+		);
+		assert_eq!(diagnostics.into_warnings().len(), 1);
 	}
 
 	#[test]

@@ -1,3 +1,4 @@
+use http_body_util::BodyExt;
 use secrecy::SecretString;
 use serde_json::Map;
 
@@ -5,6 +6,33 @@ use super::*;
 use crate::http::jwt::Claims;
 use crate::llm::bedrock::AwsRegion;
 use crate::test_helpers::proxymock::setup_proxy_test;
+
+#[rstest::rstest]
+#[case::normal(100, Duration::from_secs(300), Duration::from_secs(10), 90, 400)]
+#[case::fractional_lifetime(100, Duration::from_millis(1500), Duration::from_secs(10), 90, 102)]
+#[case::issued_at_underflow(5, Duration::from_secs(30), Duration::from_secs(10), 0, 35)]
+fn test_jwt_claim_times(
+	#[case] now: u64,
+	#[case] lifetime: Duration,
+	#[case] issued_at_backdate: Duration,
+	#[case] expected_issued_at: u64,
+	#[case] expected_expires_at: u64,
+) {
+	assert_eq!(
+		jwt_claim_times(now, lifetime, issued_at_backdate).unwrap(),
+		JwtClaimTimes {
+			issued_at: expected_issued_at,
+			expires_at: expected_expires_at,
+		}
+	);
+}
+
+#[rstest::rstest]
+#[case::timestamp(u64::MAX, Duration::from_secs(1))]
+#[case::rounded_lifetime(1, Duration::new(u64::MAX, 1))]
+fn test_jwt_claim_times_rejects_expiration_overflow(#[case] now: u64, #[case] lifetime: Duration) {
+	assert!(jwt_claim_times(now, lifetime, Duration::from_secs(10)).is_err());
+}
 
 #[test]
 fn test_aws_auth_deserializes_assume_role() {
@@ -1179,7 +1207,7 @@ fn jwt_sign_auth(
 	BackendAuth::new(BackendAuthKind::JwtSign(Box::new(
 		JwtSignAuth::try_new(
 			TEST_JWT_SIGN_EC_KEY,
-			oauth::SigningAlg::Es256,
+			JwtSigningAlg::Es256,
 			kid,
 			claims,
 			ttl,
@@ -1245,8 +1273,8 @@ async fn test_backend_auth_jwt_sign() {
 	assert_eq!(payload["sub"], "ACCT.USER");
 	let iat = payload["iat"].as_u64().expect("iat must be set");
 	let exp = payload["exp"].as_u64().expect("exp must be set");
-	// iat is backdated and exp extended by the 10s clock-skew fudge.
-	assert_eq!(exp - iat, 600 + 20);
+	// The lifetime starts at signing time while iat is backdated by 10s.
+	assert_eq!(exp - iat, 600 + 10);
 	assert!(
 		payload.get("nbf").is_none(),
 		"nbf must not be emitted; iat already conveys the issue time"
@@ -1302,11 +1330,10 @@ async fn test_backend_auth_jwt_sign_explicit_location() {
 	let (header, payload) = decode_jwt_parts(header_value.to_str().unwrap());
 	assert_eq!(header["alg"], "ES256");
 	assert!(header.get("kid").is_none_or(|kid| kid.is_null()));
-	// Default 300s lifetime applies when ttl is unset, plus the 10s
-	// clock-skew fudge on both iat and exp.
+	// Default 300s lifetime starts at signing time; iat is backdated 10s.
 	let iat = payload["iat"].as_u64().unwrap();
 	let exp = payload["exp"].as_u64().unwrap();
-	assert_eq!(exp - iat, 300 + 20);
+	assert_eq!(exp - iat, 300 + 10);
 	assert!(payload.get("nbf").is_none());
 
 	assert!(
@@ -1325,7 +1352,7 @@ async fn test_backend_auth_jwt_sign_explicit_location() {
 fn test_jwt_sign_rejects_reserved_and_empty_claims() {
 	let reserved = JwtSignAuth::try_new(
 		TEST_JWT_SIGN_EC_KEY,
-		oauth::SigningAlg::Es256,
+		JwtSigningAlg::Es256,
 		None,
 		[("exp".to_string(), "123".into())].into_iter().collect(),
 		None,
@@ -1338,7 +1365,7 @@ fn test_jwt_sign_rejects_reserved_and_empty_claims() {
 
 	let reserved_nbf = JwtSignAuth::try_new(
 		TEST_JWT_SIGN_EC_KEY,
-		oauth::SigningAlg::Es256,
+		JwtSigningAlg::Es256,
 		None,
 		[("nbf".to_string(), "123".into())].into_iter().collect(),
 		None,
@@ -1351,7 +1378,7 @@ fn test_jwt_sign_rejects_reserved_and_empty_claims() {
 
 	let reserved_iat = JwtSignAuth::try_new(
 		TEST_JWT_SIGN_EC_KEY,
-		oauth::SigningAlg::Es256,
+		JwtSigningAlg::Es256,
 		None,
 		[("iat".to_string(), "123".into())].into_iter().collect(),
 		None,
@@ -1364,7 +1391,7 @@ fn test_jwt_sign_rejects_reserved_and_empty_claims() {
 
 	let empty = JwtSignAuth::try_new(
 		TEST_JWT_SIGN_EC_KEY,
-		oauth::SigningAlg::Es256,
+		JwtSigningAlg::Es256,
 		None,
 		Default::default(),
 		None,
@@ -1380,7 +1407,7 @@ fn test_jwt_sign_rejects_zero_ttl_and_bad_key() {
 
 	let zero_ttl = JwtSignAuth::try_new(
 		TEST_JWT_SIGN_EC_KEY,
-		oauth::SigningAlg::Es256,
+		JwtSigningAlg::Es256,
 		None,
 		claims.clone(),
 		Some(std::time::Duration::ZERO),
@@ -1392,7 +1419,7 @@ fn test_jwt_sign_rejects_zero_ttl_and_bad_key() {
 	// exp == iat, so they must be rejected too.
 	let sub_second_ttl = JwtSignAuth::try_new(
 		TEST_JWT_SIGN_EC_KEY,
-		oauth::SigningAlg::Es256,
+		JwtSigningAlg::Es256,
 		None,
 		claims.clone(),
 		Some(std::time::Duration::from_millis(500)),
@@ -1400,14 +1427,7 @@ fn test_jwt_sign_rejects_zero_ttl_and_bad_key() {
 	);
 	assert!(sub_second_ttl.is_err(), "sub-second ttl must be rejected");
 
-	let bad_key = JwtSignAuth::try_new(
-		"not a pem",
-		oauth::SigningAlg::Es256,
-		None,
-		claims,
-		None,
-		None,
-	);
+	let bad_key = JwtSignAuth::try_new("not a pem", JwtSigningAlg::Es256, None, claims, None, None);
 	assert!(bad_key.is_err(), "invalid PEM must be rejected");
 }
 
@@ -1445,8 +1465,8 @@ async fn test_backend_auth_jwt_sign_rounds_up_sub_second_ttl() {
 	let exp = payload["exp"].as_u64().expect("exp must be set");
 	assert_eq!(
 		exp - iat,
-		2 + 20,
-		"a 1500ms ttl must round up to 2s (plus the clock-skew fudge on both ends), not truncate to 1s"
+		2 + 10,
+		"a 1500ms ttl must round up to 2s and iat must be backdated by 10s"
 	);
 }
 
@@ -1470,10 +1490,79 @@ fn test_jwt_sign_deserializes() {
 }
 
 #[test]
-fn test_jwt_sign_serialize_rounds_up_sub_second_ttl() {
+fn test_jwt_sign_serialization_preserves_fractional_ttl() {
 	let auth = jwt_sign_auth(None, Some(std::time::Duration::from_millis(1500)), None);
 	let value = serde_json::to_value(&auth).expect("jwtSign auth should serialize");
-	assert_eq!(value["jwtSign"]["ttl"], "2s");
+	assert_eq!(value["jwtSign"]["ttl"], "1.5s");
+}
+
+#[tokio::test]
+async fn test_invalid_jwt_sign_rejects_before_request_mutation() {
+	const DIAGNOSTIC_MARKER: &str = "secret default/private-signing-key not found";
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	req.headers_mut().insert(
+		http::header::AUTHORIZATION,
+		http::HeaderValue::from_static("Bearer client-supplied-token"),
+	);
+	let t = setup_proxy_test("{}").expect("setup proxy inputs");
+	let backend_info = BackendInfo {
+		call_target: Target::Address("0.0.0.0:80".parse().unwrap()),
+		target: BackendTarget::Backend {
+			name: Default::default(),
+			namespace: Default::default(),
+			section: None,
+		},
+		inputs: t.inputs(),
+	};
+	let auth = BackendAuth {
+		kind: Some(BackendAuthKind::JwtSign(Box::new(
+			JwtSignAuth::new_invalid(DIAGNOSTIC_MARKER.to_string()),
+		))),
+		credentials: vec![credential("x-api-key", "secondary-credential", None)],
+	};
+
+	let err = apply_backend_auth(&backend_info, &auth, &mut req)
+		.await
+		.expect_err("invalid jwtSign must reject the request");
+	assert!(matches!(err, ProxyError::BackendAuthenticationFailed(_)));
+	assert_eq!(
+		req.headers().get(http::header::AUTHORIZATION),
+		Some(&http::HeaderValue::from_static(
+			"Bearer client-supplied-token"
+		))
+	);
+	assert!(
+		req.headers().get("x-api-key").is_none(),
+		"additional credentials must not be applied after jwtSign rejects"
+	);
+
+	let rendered = err.to_string();
+	assert!(rendered.contains("jwtSign configuration is invalid"));
+	assert!(
+		!rendered.contains(DIAGNOSTIC_MARKER),
+		"client-facing error leaked the translation diagnostic: {rendered}"
+	);
+	let response = err.into_response_with_grpc(false);
+	let body = response
+		.into_body()
+		.collect()
+		.await
+		.expect("error response body should collect")
+		.to_bytes();
+	let body = String::from_utf8(body.to_vec()).expect("error response should be UTF-8");
+	assert!(
+		!body.contains(DIAGNOSTIC_MARKER),
+		"client-facing response leaked the translation diagnostic: {body}"
+	);
+}
+
+#[test]
+fn test_invalid_jwt_sign_serializes_only_translation_error() {
+	let auth = JwtSignAuth::new_invalid("recognizable diagnostic".to_string());
+	assert_eq!(
+		serde_json::to_value(auth).expect("invalid jwtSign should serialize"),
+		serde_json::json!({"translationError": "recognizable diagnostic"})
+	);
 }
 
 #[tokio::test]
@@ -1495,7 +1584,7 @@ async fn test_backend_auth_jwt_sign_rsa() {
 	let auth = BackendAuth::new(BackendAuthKind::JwtSign(Box::new(
 		JwtSignAuth::try_new(
 			TEST_JWT_SIGN_RSA_KEY,
-			oauth::SigningAlg::Rs256,
+			JwtSigningAlg::Rs256,
 			None,
 			[
 				("iss".to_string(), "acct.user".into()),

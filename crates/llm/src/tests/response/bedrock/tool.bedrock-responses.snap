@@ -21,7 +21,7 @@ info:
 {
   "response": {
     "id": "[id]",
-    "status": "requires_action",
+    "status": "completed",
     "output": [
       {
         "type": "function_call",
@@ -40,7 +40,9 @@ info:
         "status": "completed"
       }
     ],
-    "model": "input-model"
+    "model": "input-model",
+    "created_at": "[date]",
+    "object": "response"
   },
   "parsed": {
     "provider_model": "input-model",
@@ -65,7 +67,7 @@ info:
             }
           }
         ],
-        "finish_reason": "requires_action"
+        "finish_reason": "completed"
       }
     ]
   }

@@ -15,6 +15,7 @@ use super::cross_app_access::{
 };
 use super::*;
 use crate::http::Body;
+use crate::http::auth::JwtSigningAlg;
 use crate::http::oauth::{
 	CLIENT_ASSERTION_TYPE_JWT_BEARER, GRANT_TYPE_JWT_BEARER, GRANT_TYPE_TOKEN_EXCHANGE,
 	TOKEN_TYPE_ID, TOKEN_TYPE_ID_JAG, TOKEN_TYPE_JWT,
@@ -674,7 +675,7 @@ async fn private_key_jwt_sends_client_assertion_form_fields() {
 		signing_key: SecretString::from(TEST_EC_PRIVATE_KEY_PEM),
 		certificate: Some(FileOrInline::Inline(TEST_EC_CERT_PEM.to_string()).into()),
 		certificate_header: Some(CertificateHeader::X5c),
-		alg: SigningAlg::Es256,
+		alg: JwtSigningAlg::Es256,
 		kid: Some("kid-1".into()),
 		assertion_audience: "https://issuer.example/token".into(),
 	})
@@ -722,7 +723,7 @@ async fn private_key_jwt_sends_client_assertion_form_fields() {
 	assert_eq!(claims.aud, "https://issuer.example/token");
 	assert!(!claims.jti.is_empty());
 	assert_eq!(claims.nbf, claims.iat);
-	assert!(claims.exp > claims.nbf);
+	assert_eq!(claims.exp - claims.iat, 310);
 }
 
 #[test]
@@ -731,7 +732,7 @@ fn private_key_jwt_debug_redacts_key_and_certificate() {
 		signing_key: SecretString::from(TEST_EC_PRIVATE_KEY_PEM),
 		certificate: Some(FileOrInline::Inline(TEST_EC_CERT_PEM.to_string()).into()),
 		certificate_header: Some(CertificateHeader::X5c),
-		alg: SigningAlg::Es256,
+		alg: JwtSigningAlg::Es256,
 		kid: Some("kid-1".into()),
 		assertion_audience: "https://issuer.example/token".into(),
 	};
@@ -776,7 +777,7 @@ fn private_key_jwt_signs_with_ps256() {
 		signing_key: SecretString::from(signing_key.serialize_pem()),
 		certificate: None,
 		certificate_header: None,
-		alg: SigningAlg::Ps256,
+		alg: JwtSigningAlg::Ps256,
 		kid: None,
 		assertion_audience: "https://issuer.example/token".into(),
 	})
@@ -812,7 +813,7 @@ fn private_key_jwt_requires_certificate_and_header_together(
 			.then(|| FileOrInline::Inline(TEST_EC_CERT_PEM.to_string()))
 			.map(Into::into),
 		certificate_header: with_certificate_header.then_some(CertificateHeader::X5c),
-		alg: SigningAlg::Es256,
+		alg: JwtSigningAlg::Es256,
 		kid: None,
 		assertion_audience: "https://issuer.example/token".into(),
 	})
@@ -872,7 +873,7 @@ fn private_key_jwt_rejects_invalid_certificate_in_chain() {
 			FileOrInline::Inline(format!("{TEST_EC_CERT_PEM}{TEST_INVALID_CERT_PEM}")).into(),
 		),
 		certificate_header: Some(CertificateHeader::X5c),
-		alg: SigningAlg::Es256,
+		alg: JwtSigningAlg::Es256,
 		kid: None,
 		assertion_audience: "https://issuer.example/token".into(),
 	})
@@ -889,7 +890,7 @@ fn private_key_jwt_warns_but_accepts_mismatched_certificate() {
 		signing_key: SecretString::from(TEST_EC_PRIVATE_KEY_PEM),
 		certificate: Some(FileOrInline::Inline(TEST_MISMATCHED_CERT_PEM.to_string()).into()),
 		certificate_header: Some(CertificateHeader::X5c),
-		alg: SigningAlg::Es256,
+		alg: JwtSigningAlg::Es256,
 		kid: None,
 		assertion_audience: "https://issuer.example/token".into(),
 	})
@@ -1599,7 +1600,7 @@ fn private_key_jwt_client_auth_from_proto() {
 			signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
 			certificate: TEST_EC_CERT_PEM.to_string(),
 			certificate_header: proto::o_auth_client_auth::private_key_jwt::CertificateHeader::X5c as i32,
-			alg: proto::o_auth_client_auth::private_key_jwt::SigningAlg::Es256 as i32,
+			alg: proto::JwtSigningAlg::Es256 as i32,
 			kid: Some("kid-1".to_string()),
 			assertion_audience: "https://issuer.example/token".to_string(),
 		}),
@@ -1629,7 +1630,7 @@ fn private_key_jwt_serialization_omits_unset_optional_headers() {
 		signing_key: SecretString::from(TEST_EC_PRIVATE_KEY_PEM),
 		certificate: None,
 		certificate_header: None,
-		alg: SigningAlg::Es256,
+		alg: JwtSigningAlg::Es256,
 		kid: None,
 		assertion_audience: "https://issuer.example/token".into(),
 	})
@@ -1716,7 +1717,7 @@ fn private_key_jwt_serialization_omits_unset_optional_headers() {
 			method: proto::o_auth_client_auth::Method::PrivateKeyJwt as i32,
 			private_key_jwt: Some(proto::o_auth_client_auth::PrivateKeyJwt {
 				signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
-				alg: proto::o_auth_client_auth::private_key_jwt::SigningAlg::Es256 as i32,
+				alg: proto::JwtSigningAlg::Es256 as i32,
 				assertion_audience: "https://issuer.example/token".to_string(),
 				..Default::default()
 			}),
@@ -1733,7 +1734,7 @@ fn private_key_jwt_serialization_omits_unset_optional_headers() {
 			method: proto::o_auth_client_auth::Method::ClientSecretPost as i32,
 			private_key_jwt: Some(proto::o_auth_client_auth::PrivateKeyJwt {
 				signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
-				alg: proto::o_auth_client_auth::private_key_jwt::SigningAlg::Es256 as i32,
+				alg: proto::JwtSigningAlg::Es256 as i32,
 				assertion_audience: "https://issuer.example/token".to_string(),
 				..Default::default()
 			}),
@@ -1750,7 +1751,7 @@ fn private_key_jwt_serialization_omits_unset_optional_headers() {
 			private_key_jwt: Some(proto::o_auth_client_auth::PrivateKeyJwt {
 				signing_key: TEST_EC_PRIVATE_KEY_PEM.to_string(),
 				certificate: TEST_EC_CERT_PEM.to_string(),
-				alg: proto::o_auth_client_auth::private_key_jwt::SigningAlg::Es256 as i32,
+				alg: proto::JwtSigningAlg::Es256 as i32,
 				assertion_audience: "https://issuer.example/token".to_string(),
 				..Default::default()
 			}),

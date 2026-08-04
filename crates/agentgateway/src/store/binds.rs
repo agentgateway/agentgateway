@@ -444,11 +444,13 @@ impl RoutePolicies {
 			&self.direct_response as &dyn PolicyExpressions,
 			&self.llm as &dyn PolicyExpressions,
 			&self.request_header_modifier as &dyn PolicyExpressions,
+			&self.response_header_modifier as &dyn PolicyExpressions,
 			&self.retry as &dyn PolicyExpressions,
 			&self.delay as &dyn PolicyExpressions,
 			&self.request_redirect as &dyn PolicyExpressions,
 			&self.url_rewrite as &dyn PolicyExpressions,
 			&self.cors as &dyn PolicyExpressions,
+			&self.buffer as &dyn PolicyExpressions,
 		]
 		.into_iter()
 	}

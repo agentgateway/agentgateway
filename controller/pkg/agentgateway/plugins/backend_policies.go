@@ -3,7 +3,9 @@ package plugins
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"net/url"
+	slices0 "slices"
 	"strings"
 
 	jsonpb "google.golang.org/protobuf/encoding/protojson"
@@ -640,7 +642,7 @@ func translateMCPAuthenticationSpec(
 		errs = append(errs, err)
 	}
 
-	extraResourceMetadata, metadataErr := translateJSONValueMap(authnPolicy.ResourceMetadata)
+	extraResourceMetadata, metadataErr := translateJSONValueMap("resourceMetadata field", authnPolicy.ResourceMetadata)
 	if metadataErr != nil {
 		errs = append(errs, metadataErr)
 	}
@@ -672,7 +674,7 @@ func translateMCPAuthenticationSpec(
 }
 
 func translateJWTMCPConfig(mcp *agentgateway.JWTMCPConfig) (*api.TrafficPolicySpec_JWT_MCP, error) {
-	extraResourceMetadata, err := translateJSONValueMap(mcp.ResourceMetadata)
+	extraResourceMetadata, err := translateJSONValueMap("resourceMetadata field", mcp.ResourceMetadata)
 	if err != nil {
 		return nil, err
 	}
@@ -711,23 +713,22 @@ func translateMcpIDP(provider *agentgateway.McpIDP) api.BackendPolicySpec_McpAut
 	return api.BackendPolicySpec_McpAuthentication_UNSPECIFIED
 }
 
-func translateJSONValueMap(values map[string]apiextensionsv1.JSON) (map[string]*structpb.Value, error) {
+func translateJSONValueMap(valueContext string, values map[string]apiextensionsv1.JSON) (map[string]*structpb.Value, error) {
 	var errs []error
 	var translated map[string]*structpb.Value
-	for k, v := range values {
+	for _, key := range slices0.Sorted(maps.Keys(values)) {
 		if translated == nil {
 			translated = make(map[string]*structpb.Value)
 		}
 
 		proto := &structpb.Value{}
-		err := jsonpb.Unmarshal(v.Raw, proto)
-		if err != nil {
-			logger.Error("error converting json value", "key", k, "error", err)
-			errs = append(errs, err)
+		if err := jsonpb.Unmarshal(values[key].Raw, proto); err != nil {
+			logger.Error("error converting JSON value", "context", valueContext, "key", key)
+			errs = append(errs, fmt.Errorf("%s %q contains invalid JSON", valueContext, key))
 			continue
 		}
 
-		translated[k] = proto
+		translated[key] = proto
 	}
 	return translated, errors.Join(errs...)
 }
@@ -938,10 +939,17 @@ func translateBackendAuth(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy
 		}
 	} else if auth.JwtSign != nil {
 		jwtSignAuth, err := buildJwtSignAuthPolicy(ctx, auth.JwtSign, policy.Namespace)
-		translatedAuth = jwtSignAuth
 		if err != nil {
 			errs = append(errs, err)
+			jwtSignAuth = &api.BackendAuthPolicy{
+				Kind: &api.BackendAuthPolicy_JwtSign{
+					JwtSign: &api.JwtSign{
+						TranslationError: new(err.Error()),
+					},
+				},
+			}
 		}
+		translatedAuth = jwtSignAuth
 	} else if auth.Passthrough != nil {
 		translatedAuth = &api.BackendAuthPolicy{
 			Kind: &api.BackendAuthPolicy_Passthrough{
@@ -1268,7 +1276,7 @@ func buildOAuthPrivateKeyJWT(ctx PolicyCtx, auth *agentgateway.OAuthPrivateKeyJW
 
 	var errs []error
 	res := &api.OAuthClientAuth_PrivateKeyJwt{
-		Alg:               translateOAuthPrivateKeyJWTSigningAlg(auth.Alg),
+		Alg:               translateJWTSigningAlg(auth.Alg),
 		Kid:               auth.KeyID,
 		AssertionAudience: auth.AssertionAudience,
 		CertificateHeader: translateOAuthPrivateKeyJWTCertificateHeader(auth.CertificateHeader),
@@ -1356,26 +1364,18 @@ func translateOAuthClientAuthMethod(method *agentgateway.OAuthClientAuthMethod) 
 	}
 }
 
-func translateOAuthPrivateKeyJWTSigningAlg(alg *agentgateway.OAuthPrivateKeyJWTSigningAlgorithm) api.OAuthClientAuth_PrivateKeyJwt_SigningAlg {
+func translateJWTSigningAlg(alg *agentgateway.JwtSigningAlg) api.JwtSigningAlg {
 	if alg == nil {
-		return api.OAuthClientAuth_PrivateKeyJwt_SIGNING_ALG_UNSPECIFIED
+		return api.JwtSigningAlg_JWT_SIGNING_ALG_UNSPECIFIED
 	}
-	switch *alg {
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS256:
-		return api.OAuthClientAuth_PrivateKeyJwt_RS256
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS384:
-		return api.OAuthClientAuth_PrivateKeyJwt_RS384
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS512:
-		return api.OAuthClientAuth_PrivateKeyJwt_RS512
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmPS256:
-		return api.OAuthClientAuth_PrivateKeyJwt_PS256
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256:
-		return api.OAuthClientAuth_PrivateKeyJwt_ES256
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES384:
-		return api.OAuthClientAuth_PrivateKeyJwt_ES384
-	default:
-		return api.OAuthClientAuth_PrivateKeyJwt_SIGNING_ALG_UNSPECIFIED
-	}
+	translated, _ := translateJWTSigningAlgValue(*alg)
+	return translated
+}
+
+func translateJWTSigningAlgValue(alg agentgateway.JwtSigningAlg) (api.JwtSigningAlg, bool) {
+	value, ok := api.JwtSigningAlg_value[string(alg)]
+	translated := api.JwtSigningAlg(value)
+	return translated, ok && translated != api.JwtSigningAlg_JWT_SIGNING_ALG_UNSPECIFIED
 }
 
 func translateOAuthPrivateKeyJWTCertificateHeader(header *agentgateway.OAuthPrivateKeyJWTCertificateHeader) api.OAuthClientAuth_PrivateKeyJwt_CertificateHeader {
@@ -1739,7 +1739,7 @@ func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, names
 			return nil, fmt.Errorf("jwtSign claim %q is reserved for the signer and cannot be configured", reserved)
 		}
 	}
-	claims, err := translateJSONValueMap(auth.Claims)
+	claims, err := translateJSONValueMap("jwtSign claim", auth.Claims)
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -1747,14 +1747,16 @@ func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, names
 	var signingKey string
 	data, err := ctx.ResolveCredentialRef(auth.SigningKeyRef, namespace)
 	if err != nil {
-		errs = append(errs, err)
+		errs = append(errs, fmt.Errorf(
+			"failed to resolve jwtSign signing secret %s/%s",
+			namespace,
+			auth.SigningKeyRef.Name,
+		))
 	} else if value, exists := kubeutils.GetSecretDataValue(data, wellknown.SigningKey); !exists || value == "" {
 		errs = append(errs, fmt.Errorf("secret %s/%s missing %s value", namespace, auth.SigningKeyRef.Name, wellknown.SigningKey))
 	} else {
 		signingKey = value
 	}
-	// A jwtSign policy without its signing key cannot mint tokens; drop the
-	// policy entirely instead of shipping it with an empty key.
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
@@ -1782,24 +1784,13 @@ func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, names
 // applies its RS256 default, but rejects unrecognized values instead of
 // silently signing with the wrong algorithm. Unrecognized values are normally
 // unreachable behind the CRD enum validation; this guards against version skew.
-func translateJwtSignSigningAlg(alg *agentgateway.OAuthPrivateKeyJWTSigningAlgorithm) (api.JwtSign_SigningAlg, error) {
+func translateJwtSignSigningAlg(alg *agentgateway.JwtSigningAlg) (api.JwtSigningAlg, error) {
 	if alg == nil {
-		return api.JwtSign_SIGNING_ALG_UNSPECIFIED, nil
+		return api.JwtSigningAlg_JWT_SIGNING_ALG_UNSPECIFIED, nil
 	}
-	switch *alg {
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS256:
-		return api.JwtSign_RS256, nil
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS384:
-		return api.JwtSign_RS384, nil
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS512:
-		return api.JwtSign_RS512, nil
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256:
-		return api.JwtSign_ES256, nil
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES384:
-		return api.JwtSign_ES384, nil
-	case agentgateway.OAuthPrivateKeyJWTSigningAlgorithmPS256:
-		return api.JwtSign_PS256, nil
-	default:
-		return api.JwtSign_SIGNING_ALG_UNSPECIFIED, fmt.Errorf("unsupported jwtSign signing algorithm %q", *alg)
+	translated, ok := translateJWTSigningAlgValue(*alg)
+	if !ok {
+		return api.JwtSigningAlg_JWT_SIGNING_ALG_UNSPECIFIED, fmt.Errorf("unsupported jwtSign signing algorithm %q", *alg)
 	}
+	return translated, nil
 }

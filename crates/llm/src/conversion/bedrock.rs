@@ -131,6 +131,16 @@ fn restore_tool_name(map: Option<&BedrockToolNameMap>, name: &str) -> String {
 		.unwrap_or_else(|| name.to_string())
 }
 
+fn responses_output_status(stop_reason: &bedrock::StopReason) -> responses::typed::OutputStatus {
+	match stop_reason {
+		bedrock::StopReason::MaxTokens
+		| bedrock::StopReason::ModelContextWindowExceeded
+		| bedrock::StopReason::ContentFiltered
+		| bedrock::StopReason::GuardrailIntervened => responses::typed::OutputStatus::Incomplete,
+		_ => responses::typed::OutputStatus::Completed,
+	}
+}
+
 struct CanonicalImage {
 	media_type: String,
 	bytes_base64: String,
@@ -2038,7 +2048,7 @@ pub mod from_responses {
 	use types::bedrock;
 	use types::responses::typed as responses;
 
-	use super::helpers;
+	use super::{helpers, responses_output_status};
 	use crate::bedrock::Provider;
 	use crate::conversion::completions::parse_data_url;
 	use crate::types::ResponseType;
@@ -2739,15 +2749,8 @@ pub mod from_responses {
 			.map_err(logged_response_parsing(bytes))?;
 		let adapter = super::ConverseResponseAdapter::from_response(resp, model)?;
 		let typed = adapter.to_responses_typed(tool_name_map);
-		let mut passthrough =
+		let passthrough =
 			json::convert::<_, types::responses::Response>(&typed).map_err(AIError::ResponseParsing)?;
-		passthrough.rest = serde_json::Value::Object(serde_json::Map::new());
-		if let Some(usage) = passthrough.usage.as_mut() {
-			usage.rest = serde_json::Value::Object(serde_json::Map::new());
-		}
-		if matches!(adapter.stop_reason, bedrock::StopReason::ToolUse) {
-			passthrough.status = "requires_action".to_string();
-		}
 		Ok(Box::new(passthrough))
 	}
 
@@ -3065,6 +3068,12 @@ pub mod from_responses {
 					}
 
 					let mut out: Vec<(&'static str, ResponseStreamEvent)> = Vec::new();
+					let stop = pending_stop_reason.take();
+					let usage_data = pending_usage.take();
+					let output_status = stop
+						.as_ref()
+						.map(responses_output_status)
+						.unwrap_or(OutputStatus::Completed);
 
 					sequence_number += 1;
 					let message_done_event =
@@ -3076,13 +3085,11 @@ pub mod from_responses {
 								id: message_item_id.clone(),
 								role: AssistantRole::Assistant,
 								phase: None,
-								status: OutputStatus::Completed,
+								status: output_status,
 							}),
 						});
 					out.push(("event", message_done_event));
 
-					let stop = pending_stop_reason.take();
-					let usage_data = pending_usage.take();
 					let response_status = match stop.as_ref() {
 						Some(bedrock::StopReason::EndTurn)
 						| Some(bedrock::StopReason::StopSequence)
@@ -3105,7 +3112,7 @@ pub mod from_responses {
 					let usage_obj = usage_data.map(|u| ResponseUsage {
 						input_tokens: u.input_tokens as u32,
 						output_tokens: u.output_tokens as u32,
-						total_tokens: (u.input_tokens + u.output_tokens) as u32,
+						total_tokens: u.total_tokens as u32,
 						input_tokens_details: InputTokenDetails {
 							cached_tokens: u.cache_read_input_tokens.unwrap_or(0) as u32,
 							cache_write_tokens: u.cache_write_input_tokens.map(|tokens| tokens as u32),
@@ -3604,6 +3611,7 @@ impl ConverseResponseAdapter {
 		let response_id = format!("resp_{:016x}", rand::rng().random::<u64>());
 		let response_builder =
 			crate::types::responses::ResponseBuilder::new(response_id, self.model.clone());
+		let output_status = responses_output_status(&self.stop_reason);
 
 		// Convert Bedrock content blocks to Responses OutputItem
 		let mut outputs: Vec<responsest::OutputItem> = Vec::new();
@@ -3648,7 +3656,7 @@ impl ConverseResponseAdapter {
 							name: restore_tool_name(tool_name_map, &tool_use.name),
 							caller: None,
 							id: Some(tool_use.tool_use_id.clone()),
-							status: Some(responsest::OutputStatus::Completed),
+							status: Some(output_status),
 						},
 					));
 				},
@@ -3667,7 +3675,7 @@ impl ConverseResponseAdapter {
 				role: responsest::AssistantRole::Assistant,
 				phase: None,
 				content: text_parts,
-				status: responsest::OutputStatus::Completed,
+				status: output_status,
 			}));
 		}
 
@@ -3712,7 +3720,7 @@ impl ConverseResponseAdapter {
 		let usage = self.usage.map(|u| responsest::ResponseUsage {
 			input_tokens: u.input_tokens as u32,
 			output_tokens: u.output_tokens as u32,
-			total_tokens: (u.input_tokens + u.output_tokens) as u32,
+			total_tokens: u.total_tokens as u32,
 			input_tokens_details: responsest::InputTokenDetails {
 				cached_tokens: u.cache_read_input_tokens.unwrap_or(0) as u32,
 				cache_write_tokens: u.cache_write_input_tokens.map(|tokens| tokens as u32),

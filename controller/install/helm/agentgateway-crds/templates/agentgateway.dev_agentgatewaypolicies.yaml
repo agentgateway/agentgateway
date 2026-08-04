@@ -8401,9 +8401,7 @@ spec:
                                       default: FullDuplexStreamed
                                       description: |-
                                         How request bodies are sent to the external processor.
-                                        `Buffered` buffers the full body and returns an error if it exceeds 8KB.
-                                        `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
-                                        body exceeds that limit. Defaults to `FullDuplexStreamed`.
+                                        Defaults to `FullDuplexStreamed`.
                                       enum:
                                       - Buffered
                                       - BufferedPartial
@@ -8432,9 +8430,7 @@ spec:
                                       default: FullDuplexStreamed
                                       description: |-
                                         How response bodies are sent to the external processor.
-                                        `Buffered` buffers the full body and returns an error if it exceeds 8KB.
-                                        `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
-                                        body exceeds that limit. Defaults to `FullDuplexStreamed`.
+                                        Defaults to `FullDuplexStreamed`.
                                       enum:
                                       - Buffered
                                       - BufferedPartial
@@ -8542,9 +8538,7 @@ spec:
                             default: FullDuplexStreamed
                             description: |-
                               How request bodies are sent to the external processor.
-                              `Buffered` buffers the full body and returns an error if it exceeds 8KB.
-                              `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
-                              body exceeds that limit. Defaults to `FullDuplexStreamed`.
+                              Defaults to `FullDuplexStreamed`.
                             enum:
                             - Buffered
                             - BufferedPartial
@@ -8573,9 +8567,7 @@ spec:
                             default: FullDuplexStreamed
                             description: |-
                               How response bodies are sent to the external processor.
-                              `Buffered` buffers the full body and returns an error if it exceeds 8KB.
-                              `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
-                              body exceeds that limit. Defaults to `FullDuplexStreamed`.
+                              Defaults to `FullDuplexStreamed`.
                             enum:
                             - Buffered
                             - BufferedPartial

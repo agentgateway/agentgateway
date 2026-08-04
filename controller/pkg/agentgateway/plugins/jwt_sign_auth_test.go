@@ -1,9 +1,12 @@
 package plugins
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
+	"istio.io/istio/pkg/kube/krt"
+	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -11,25 +14,55 @@ import (
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 )
 
-// Every algorithm the CRD enum admits must translate to a proto value, or a
-// config that passes admission fails at translation time.
-func TestJwtSignTranslatesEveryCRDSigningAlg(t *testing.T) {
-	want := map[agentgateway.OAuthPrivateKeyJWTSigningAlgorithm]api.JwtSign_SigningAlg{
-		agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS256: api.JwtSign_RS256,
-		agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS384: api.JwtSign_RS384,
-		agentgateway.OAuthPrivateKeyJWTSigningAlgorithmRS512: api.JwtSign_RS512,
-		agentgateway.OAuthPrivateKeyJWTSigningAlgorithmPS256: api.JwtSign_PS256,
-		agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES256: api.JwtSign_ES256,
-		agentgateway.OAuthPrivateKeyJWTSigningAlgorithmES384: api.JwtSign_ES384,
+type jwtSignErrorCredentialResolver struct{}
+
+func (jwtSignErrorCredentialResolver) ResolveCredentialRef(
+	krt.HandlerContext,
+	agentgateway.LocalSecretObjectRef,
+	string,
+) (map[string][]byte, error) {
+	return nil, errors.New("resolver-secret-data-marker")
+}
+
+func jwtSignTestPolicy(auth *agentgateway.JwtSignAuth) *agentgateway.AgentgatewayPolicy {
+	return &agentgateway.AgentgatewayPolicy{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "default"},
+		Spec: agentgateway.AgentgatewayPolicySpec{
+			Backend: &agentgateway.BackendFull{
+				BackendSimple: agentgateway.BackendSimple{
+					Auth: &agentgateway.BackendAuth{JwtSign: auth},
+				},
+			},
+		},
 	}
-	for alg, expected := range want {
-		got, err := translateJwtSignSigningAlg(&alg)
-		if err != nil {
-			t.Fatalf("translateJwtSignSigningAlg(%q) error = %v, want nil", alg, err)
-		}
-		if got != expected {
-			t.Fatalf("translateJwtSignSigningAlg(%q) = %v, want %v", alg, got, expected)
-		}
+}
+
+func translatedJwtSign(t *testing.T, policy *api.Policy) *api.JwtSign {
+	t.Helper()
+	if policy == nil {
+		t.Fatal("translated policy is nil")
+	}
+	jwtSign := policy.GetBackend().GetAuth().GetJwtSign()
+	if jwtSign == nil {
+		t.Fatal("translated policy kind is not jwtSign")
+	}
+	return jwtSign
+}
+
+func jwtSignSecret(data map[string][]byte) *corev1.Secret {
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Namespace: "default", Name: "jwt-sign-secret"},
+		Data:       data,
+	}
+}
+
+func TestJwtSignNilSigningAlgDefaultsToUnspecified(t *testing.T) {
+	got, err := translateJwtSignSigningAlg(nil)
+	if err != nil {
+		t.Fatalf("translateJwtSignSigningAlg(nil) error = %v, want nil", err)
+	}
+	if got != api.JwtSigningAlg_JWT_SIGNING_ALG_UNSPECIFIED {
+		t.Fatalf("translateJwtSignSigningAlg(nil) = %v, want JWT_SIGNING_ALG_UNSPECIFIED", got)
 	}
 }
 
@@ -39,30 +72,23 @@ func TestJwtSignTranslatesEveryCRDSigningAlg(t *testing.T) {
 // that rejection instead of still emitting a policy with the wrong alg.
 func TestJwtSignRejectsUnsupportedSigningAlg(t *testing.T) {
 	ctx := oauthTestPolicyCtx(t)
-	badAlg := agentgateway.OAuthPrivateKeyJWTSigningAlgorithm("HS256")
-	policy := &agentgateway.AgentgatewayPolicy{
-		ObjectMeta: metav1.ObjectMeta{Namespace: "default"},
-		Spec: agentgateway.AgentgatewayPolicySpec{
-			Backend: &agentgateway.BackendFull{
-				BackendSimple: agentgateway.BackendSimple{
-					Auth: &agentgateway.BackendAuth{
-						JwtSign: &agentgateway.JwtSignAuth{
-							SigningKeyRef: agentgateway.LocalSecretObjectRef{Name: "jwt-sign-secret"},
-							Alg:           &badAlg,
-							Claims:        map[string]apiextensionsv1.JSON{"iss": {Raw: []byte(`"acct.user"`)}},
-						},
-					},
-				},
-			},
-		},
-	}
+	badAlg := agentgateway.JwtSigningAlg("HS256")
+	policy := jwtSignTestPolicy(&agentgateway.JwtSignAuth{
+		SigningKeyRef: agentgateway.LocalSecretObjectRef{Name: "jwt-sign-secret"},
+		Alg:           &badAlg,
+		Claims:        map[string]apiextensionsv1.JSON{"iss": {Raw: []byte(`"acct.user"`)}},
+	})
 
 	p, err := translateBackendAuth(ctx, policy, "default/jwt-sign")
 	if err == nil || !strings.Contains(err.Error(), "unsupported jwtSign signing algorithm") {
 		t.Fatalf("translateBackendAuth() error = %v, want unsupported signing algorithm error", err)
 	}
-	if p != nil {
-		t.Fatalf("translateBackendAuth() policy = %v, want nil policy on unsupported alg", p)
+	jwtSign := translatedJwtSign(t, p)
+	if jwtSign.TranslationError == nil || !strings.Contains(jwtSign.GetTranslationError(), "HS256") {
+		t.Fatalf("translationError = %q, want unsupported HS256 diagnostic", jwtSign.GetTranslationError())
+	}
+	if jwtSign.GetSigningKey() != "" || jwtSign.GetAlg() != api.JwtSigningAlg_JWT_SIGNING_ALG_UNSPECIFIED {
+		t.Fatalf("error-bearing jwtSign contains signing configuration: %+v", jwtSign)
 	}
 }
 
@@ -71,31 +97,85 @@ func TestJwtSignRejectsUnsupportedSigningAlg(t *testing.T) {
 func TestJwtSignRejectsReservedClaims(t *testing.T) {
 	ctx := oauthTestPolicyCtx(t)
 	for _, reserved := range []string{"iat", "exp", "nbf"} {
-		policy := &agentgateway.AgentgatewayPolicy{
-			ObjectMeta: metav1.ObjectMeta{Namespace: "default"},
-			Spec: agentgateway.AgentgatewayPolicySpec{
-				Backend: &agentgateway.BackendFull{
-					BackendSimple: agentgateway.BackendSimple{
-						Auth: &agentgateway.BackendAuth{
-							JwtSign: &agentgateway.JwtSignAuth{
-								SigningKeyRef: agentgateway.LocalSecretObjectRef{Name: "jwt-sign-secret"},
-								Claims: map[string]apiextensionsv1.JSON{
-									"iss":    {Raw: []byte(`"acct.user"`)},
-									reserved: {Raw: []byte(`123`)},
-								},
-							},
-						},
-					},
-				},
+		policy := jwtSignTestPolicy(&agentgateway.JwtSignAuth{
+			SigningKeyRef: agentgateway.LocalSecretObjectRef{Name: "jwt-sign-secret"},
+			Claims: map[string]apiextensionsv1.JSON{
+				"iss":    {Raw: []byte(`"acct.user"`)},
+				reserved: {Raw: []byte(`123`)},
 			},
-		}
+		})
 
 		p, err := translateBackendAuth(ctx, policy, "default/jwt-sign")
 		if err == nil || !strings.Contains(err.Error(), "reserved for the signer") {
 			t.Fatalf("translateBackendAuth() error = %v, want reserved claim error for %q", err, reserved)
 		}
-		if p != nil {
-			t.Fatalf("translateBackendAuth() policy = %v, want nil policy on reserved claim %q", p, reserved)
+		jwtSign := translatedJwtSign(t, p)
+		if jwtSign.TranslationError == nil || !strings.Contains(jwtSign.GetTranslationError(), reserved) {
+			t.Fatalf("translationError = %q, want reserved claim %q", jwtSign.GetTranslationError(), reserved)
+		}
+	}
+}
+
+func TestJwtSignTranslationErrorSanitizesResolverError(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t)
+	ctx.CredentialResolver = jwtSignErrorCredentialResolver{}
+	policy := jwtSignTestPolicy(&agentgateway.JwtSignAuth{
+		SigningKeyRef: agentgateway.LocalSecretObjectRef{Name: "jwt-sign-secret"},
+		Claims:        map[string]apiextensionsv1.JSON{"iss": {Raw: []byte(`"acct.user"`)}},
+	})
+
+	p, err := translateBackendAuth(ctx, policy, "default/jwt-sign")
+	want := "failed to resolve jwtSign signing secret default/jwt-sign-secret"
+	if err == nil || !strings.Contains(err.Error(), want) {
+		t.Fatalf("translateBackendAuth() error = %v, want %q", err, want)
+	}
+	jwtSign := translatedJwtSign(t, p)
+	if jwtSign.TranslationError == nil || !strings.Contains(jwtSign.GetTranslationError(), want) {
+		t.Fatalf("translationError = %q, want %q", jwtSign.GetTranslationError(), want)
+	}
+	if jwtSign.GetSigningKey() != "" {
+		t.Fatal("error-bearing jwtSign must not contain a signing key")
+	}
+	if strings.Contains(err.Error(), "resolver-secret-data-marker") ||
+		strings.Contains(jwtSign.GetTranslationError(), "resolver-secret-data-marker") {
+		t.Fatal("translation diagnostic leaked resolver error details")
+	}
+}
+
+func TestJwtSignInvalidClaimDoesNotLeakValue(t *testing.T) {
+	const claimValueMarker = "claim-value-secret-marker"
+	ctx := oauthTestPolicyCtx(t, jwtSignSecret(map[string][]byte{
+		"signingKey": []byte("pem-value"),
+	}))
+	policy := jwtSignTestPolicy(&agentgateway.JwtSignAuth{
+		SigningKeyRef: agentgateway.LocalSecretObjectRef{Name: "jwt-sign-secret"},
+		Claims: map[string]apiextensionsv1.JSON{
+			"password": {Raw: []byte(claimValueMarker)},
+		},
+	})
+
+	p, err := translateBackendAuth(ctx, policy, "default/jwt-sign")
+	if err == nil || !strings.Contains(err.Error(), `jwtSign claim "password" contains invalid JSON`) {
+		t.Fatalf("translateBackendAuth() error = %v, want sanitized invalid claim error", err)
+	}
+	jwtSign := translatedJwtSign(t, p)
+	if strings.Contains(err.Error(), claimValueMarker) ||
+		strings.Contains(jwtSign.GetTranslationError(), claimValueMarker) {
+		t.Fatalf("diagnostic leaked claim value marker %q", claimValueMarker)
+	}
+}
+
+func TestJwtSignInvalidClaimErrorsAreDeterministic(t *testing.T) {
+	values := map[string]apiextensionsv1.JSON{
+		"z-last":  {Raw: []byte("invalid-z")},
+		"a-first": {Raw: []byte("invalid-a")},
+	}
+	const want = "jwtSign claim \"a-first\" contains invalid JSON\njwtSign claim \"z-last\" contains invalid JSON"
+
+	for range 10 {
+		_, err := translateJSONValueMap("jwtSign claim", values)
+		if err == nil || err.Error() != want {
+			t.Fatalf("translateJSONValueMap() error = %q, want %q", err, want)
 		}
 	}
 }
