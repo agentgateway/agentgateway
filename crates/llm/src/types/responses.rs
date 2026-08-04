@@ -582,6 +582,14 @@ impl ResponseType for Response {
 						message: crate::webhook::Message {
 							role: "assistant".into(),
 							content: content.into(),
+							// TODO: the Responses API returns function calls as
+							// sibling `OutputItem::FunctionCall` entries rather than
+							// parts of a message, so surfacing them here would change
+							// the choice count that `set_webhook_choices` zips against.
+							// Left for a follow-up; Messages and Completions carry
+							// tool calls today.
+							tool_calls: Vec::new(),
+							tool_results: Vec::new(),
 						},
 					})
 				},
