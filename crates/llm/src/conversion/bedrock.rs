@@ -1275,7 +1275,7 @@ pub mod from_messages {
 	) -> Result<(bedrock::ConverseRequest, super::BedrockToolNameMap), AIError> {
 		let mut tool_name_map = super::BedrockToolNameMap::default();
 		for tool in req.tools.iter().flatten() {
-			tool_name_map.register(&tool.name);
+			tool_name_map.register(tool.name());
 		}
 		if let Some(messages::ToolChoice::Tool { name, .. }) = &req.tool_choice {
 			tool_name_map.register(name);
@@ -1327,6 +1327,13 @@ pub mod from_messages {
 		let pending_tool_config = if let Some(tools) = req.tools {
 			let mut bedrock_tools = Vec::with_capacity(tools.len());
 			for tool in tools {
+				let messages::Tool::Custom(tool) = tool else {
+					// Bedrock's Converse API has no native equivalent of an Anthropic server tool
+					// (e.g. web_search_20250305) executing upstream of the model. Drop it rather
+					// than fail the whole request; the model just won't see this tool offered.
+					tracing::debug!("Unsupported server tool in Bedrock conversion: {:?}", tool);
+					continue;
+				};
 				bedrock_tools.push((
 					bedrock::Tool::ToolSpec(bedrock::ToolSpecification {
 						name: tool_name_map.register(&tool.name),

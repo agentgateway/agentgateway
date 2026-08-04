@@ -23,6 +23,9 @@ metadata:
   namespace: agentgateway-base
 spec:
   gatewayClassName: agentgateway
+  allowedListeners:
+    namespaces:
+      from: Same
   infrastructure:
     parametersRef:
       group: agentgateway.dev

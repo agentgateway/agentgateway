@@ -19,7 +19,7 @@ pub struct RefreshBaseCatalogResponse {
 
 pub async fn refresh_models_dev_base_catalog(
 	file: &Path,
-	model_catalog: &ModelCatalog,
+	model_catalog: Option<&ModelCatalog>,
 ) -> anyhow::Result<RefreshBaseCatalogResponse> {
 	let refreshed = fetch_models_dev_base_catalog().await?;
 	let catalog = refreshed.catalog.clone();
@@ -28,7 +28,9 @@ pub async fn refresh_models_dev_base_catalog(
 		fs_err::tokio::create_dir_all(parent).await?;
 	}
 	fs_err::tokio::write(file, &json).await?;
-	model_catalog.reload().await?;
+	if let Some(model_catalog) = model_catalog {
+		model_catalog.reload().await?;
+	}
 	Ok(refreshed)
 }
 

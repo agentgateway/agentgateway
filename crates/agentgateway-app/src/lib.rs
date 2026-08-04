@@ -217,10 +217,12 @@ fn default_config_dir() -> anyhow::Result<PathBuf> {
 			config_dir.display()
 		);
 	}
-	let home = std::env::var_os("HOME")
+	let config_home = std::env::var_os("XDG_CONFIG_HOME")
+		.filter(|path| !path.is_empty())
 		.map(PathBuf::from)
+		.or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
 		.ok_or_else(|| anyhow::anyhow!("HOME is not set; pass --config or --file"))?;
-	Ok(home.join(".config").join("agentgateway"))
+	Ok(config_home.join("agentgateway"))
 }
 
 fn running_in_official_container() -> bool {

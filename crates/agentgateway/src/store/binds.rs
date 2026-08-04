@@ -926,13 +926,19 @@ impl Store {
 	}
 
 	pub fn route_policies(&self, path: &RoutePath<'_>) -> RoutePolicies {
-		let listener = &path.listener;
+		let listener_name = &path.listener;
 		let gateway = self
 			.policies_by_target
-			.get(&listener.as_gateway_target_ref());
+			.get(&listener_name.as_gateway_target_ref());
+		let listener_set = listener_name
+			.as_listenerset_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
+		let listener_set_section = listener_name
+			.as_listenerset_listener_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
 		let listener = self
 			.policies_by_target
-			.get(&listener.as_listener_target_ref());
+			.get(&listener_name.as_listener_target_ref());
 		let service = path
 			.service
 			.and_then(|s| self.policies_by_target.get(&s.as_policy_target_ref()));
@@ -974,6 +980,8 @@ impl Store {
 			.iter()
 			.copied()
 			.flatten()
+			.chain(listener_set.iter().copied().flatten())
+			.chain(listener_set_section.iter().copied().flatten())
 			.chain(listener.iter().copied().flatten())
 			.chain(service.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_key.get(n))
@@ -2979,6 +2987,69 @@ mod tests {
 				.cloned(),
 			Some(grpc_timeout)
 		);
+	}
+
+	#[test]
+	fn route_policies_include_listenerset_targets() {
+		let mut store = Store::default();
+		let listener_set = ResourceName::new(strng::new("my-ls"), strng::new("default"));
+		let listener_a = ListenerName {
+			listener_name: strng::new("listener-a"),
+			listener_set: Some(listener_set.clone()),
+			..listener()
+		};
+		let listener_b = ListenerName {
+			listener_name: strng::new("listener-b"),
+			listener_set: Some(listener_set),
+			..listener()
+		};
+		let set_timeout = timeout::Policy {
+			request_timeout: Some(Duration::from_secs(1)),
+			backend_request_timeout: None,
+		};
+		let section_timeout = timeout::Policy {
+			request_timeout: Some(Duration::from_secs(2)),
+			backend_request_timeout: None,
+		};
+		insert_traffic_policy(
+			&mut store,
+			"listenerset-timeout",
+			PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: None,
+			}),
+			PolicyInheritance::Default,
+			TrafficPolicy::Timeout(set_timeout.clone()),
+		);
+		insert_traffic_policy(
+			&mut store,
+			"listenerset-section-timeout",
+			PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: Some(strng::new("listener-a")),
+			}),
+			PolicyInheritance::Default,
+			TrafficPolicy::Timeout(section_timeout.clone()),
+		);
+
+		let selected_timeout = |listener| {
+			store
+				.route_policies(&RoutePath {
+					listener,
+					service: None,
+					routes: vec![],
+					route_inlines: vec![],
+				})
+				.timeout
+				.select("timeout", &request_for_policy_selection())
+				.as_deref()
+				.cloned()
+		};
+
+		assert_eq!(selected_timeout(&listener_a), Some(section_timeout));
+		assert_eq!(selected_timeout(&listener_b), Some(set_timeout));
 	}
 
 	#[test]
