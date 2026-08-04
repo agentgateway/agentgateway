@@ -231,7 +231,7 @@ async fn llm_local_router_handles_models_virtual_model_and_missing_model() {
 	let config = format!(
 		r#"
 llm:
-  port: 4000
+  port: 0
   models:
   - name: real-model
     visibility: internal
@@ -279,7 +279,7 @@ llm:
 		mock.address()
 	);
 	let t = setup_local_llm_config(&config).await;
-	let io = t.serve_http(strng::literal!("bind/4000"));
+	let io = t.serve_http(strng::literal!("bind/0"));
 
 	// check model list respects authorization
 	{
@@ -388,7 +388,7 @@ async fn llm_conditional_virtual_model_no_match_returns_json_error() {
 	let config = format!(
 		r#"
 llm:
-  port: 4000
+  port: 0
   models:
   - name: real-model
     visibility: internal
@@ -406,7 +406,7 @@ llm:
 		mock.address()
 	);
 	let t = setup_local_llm_config(&config).await;
-	let io = t.serve_http(strng::literal!("bind/4000"));
+	let io = t.serve_http(strng::literal!("bind/0"));
 	let res = send_completions_with_model(io, "public-model", &[]).await;
 
 	assert_eq!(res.status(), StatusCode::BAD_REQUEST);
@@ -433,7 +433,7 @@ async fn llm_model_router_handles_multipart_audio_detect_request() {
 	let config = format!(
 		r#"
 llm:
-  port: 4000
+  port: 0
   models:
   - name: real-model
     provider: openAI
@@ -444,7 +444,7 @@ llm:
 		mock.address()
 	);
 	let t = setup_local_llm_config(&config).await;
-	let io = t.serve_http(strng::literal!("bind/4000"));
+	let io = t.serve_http(strng::literal!("bind/0"));
 	let body = concat!(
 		"--audio-boundary\r\n",
 		"Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n",
