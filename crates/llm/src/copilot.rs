@@ -19,14 +19,17 @@ impl Provider {
 	pub fn is_anthropic_model(request_model: Option<&str>) -> bool {
 		request_model.is_some_and(|model| model.to_ascii_lowercase().starts_with("claude-"))
 	}
-	pub fn supported_formats_for_model(request_model: Option<&str>) -> Vec<ChatFormat> {
+	pub fn supported_formats_for_model(
+		request_model: Option<&str>,
+		catalog: crate::model_catalog::Catalog<'_>,
+	) -> Vec<ChatFormat> {
 		let Some(m) = request_model else {
 			// If we have no model not much we can do...
 			return vec![ChatFormat::OpenAICompletions];
 		};
 		let normalized_model = m.to_ascii_lowercase();
 		// TODO: also support endpoint parsing from copilot models and add a tool to grab specific setups in agctl
-		if let Some(tags) = crate::model_catalog::get_model_tags(m) {
+		if let Some(tags) = catalog.and_then(|c| c.get_model_tags(m)) {
 			let formats: Vec<ChatFormat> = [
 				ChatFormat::OpenAICompletions,
 				ChatFormat::OpenAIResponses,

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 )
@@ -16,8 +17,17 @@ const bedrockMantleSourceName = "aws-bedrock-mantle"
 // bedrockProviderID is the cost-catalog provider key for AWS Bedrock models (matches modelsDevProviderIDs).
 const bedrockProviderID = "aws.bedrock"
 
-// mantleTag marks a model served only via the Bedrock Mantle endpoint (must match the proxy's MANTLE_TAG).
-const mantleTag = "mantle"
+// Endpoint tags marking where a Bedrock model is served (must match the proxy's model_catalog::tags).
+const (
+	runtimeTag = "runtime"
+	mantleTag  = "mantle"
+)
+
+// endpointTags maps a model card's programmatic-access endpoint to its catalog tag.
+var endpointTags = map[string]string{
+	"bedrock-runtime": runtimeTag,
+	"bedrock-mantle":  mantleTag,
+}
 
 const awsMDBaseURL = "https://docs.aws.amazon.com/bedrock/latest/userguide/"
 const awsMDAvailURL = awsMDBaseURL + "models-endpoint-availability.md"
@@ -31,8 +41,8 @@ func init() {
 	}
 }
 
-// awsBedrockMantleFetch scrapes the AWS availability page for Mantle-only models
-// (bedrock-mantle=yes, bedrock-runtime=no) and returns them flagged in the catalog.
+// awsBedrockMantleFetch tags every served Bedrock model with the endpoints its model card lists it under.
+// TODO: also emit per-model chat-format tags once the docs expose supported inference APIs.
 func awsBedrockMantleFetch(ctx context.Context) (*ModelCatalog, []string, error) {
 	client := &http.Client{Timeout: 30 * time.Second}
 
@@ -53,17 +63,35 @@ func awsBedrockMantleFetch(ctx context.Context) (*ModelCatalog, []string, error)
 		}
 	}
 
-	models := make(map[string]Model)
+	// Accumulate endpoint tags per model ID across all cards before flattening.
+	tagSets := make(map[string]map[string]bool)
 	for _, href := range unique {
 		cardBody, err := awsMDGetBody(ctx, client, awsMDBaseURL+href)
 		if err != nil {
 			warns = append(warns, fmt.Sprintf("fetch %s: %v", href, err))
 			continue
 		}
-		for _, id := range awsMDParseModelCard(cardBody) {
-			models[id] = Model{Tags: []string{mantleTag}}
+		for id, tags := range awsMDParseModelCard(cardBody) {
+			set := tagSets[id]
+			if set == nil {
+				set = make(map[string]bool)
+				tagSets[id] = set
+			}
+			for _, t := range tags {
+				set[t] = true
+			}
 		}
 		cardBody.Close()
+	}
+
+	models := make(map[string]Model, len(tagSets))
+	for id, set := range tagSets {
+		tags := make([]string, 0, len(set))
+		for t := range set {
+			tags = append(tags, t)
+		}
+		slices.Sort(tags)
+		models[id] = Model{Tags: tags}
 	}
 
 	return &ModelCatalog{
@@ -94,8 +122,7 @@ func docScanner(r io.Reader) *bufio.Scanner {
 	return s
 }
 
-// awsMDParseAvailability returns model-card hrefs for Mantle-only models
-// (bedrock-mantle=yes, bedrock-runtime=no). Columns: name(1), runtime(2), mantle(3).
+// awsMDParseAvailability returns model-card hrefs for every served model. Columns: name(1), runtime(2), mantle(3).
 func awsMDParseAvailability(r io.Reader) ([]string, []string) {
 	var hrefs []string
 	var warns []string
@@ -117,11 +144,8 @@ func awsMDParseAvailability(r io.Reader) ([]string, []string) {
 		if strings.Contains(nameCell, "---") || strings.Contains(nameCell, "**") {
 			continue
 		}
-		// Mantle-only: present on Mantle, absent from Runtime.
-		if !strings.Contains(mantleCell, "icon-yes.png") {
-			continue
-		}
-		if strings.Contains(runtimeCell, "icon-yes.png") {
+		// Skip models not served on any endpoint; the card supplies the actual endpoint tags.
+		if !strings.Contains(runtimeCell, "icon-yes.png") && !strings.Contains(mantleCell, "icon-yes.png") {
 			continue
 		}
 		m := mdLinkRe.FindStringSubmatch(nameCell)
@@ -137,11 +161,9 @@ func awsMDParseAvailability(r io.Reader) ([]string, []string) {
 	return hrefs, warns
 }
 
-// awsMDParseModelCard returns bedrock-mantle model IDs from a model card's
-// Programmatic Access table (rows: | bedrock-mantle | <model-id> | ... |).
-func awsMDParseModelCard(r io.Reader) []string {
-	var ids []string
-	seen := make(map[string]bool)
+// awsMDParseModelCard maps each model ID to its (unique, unsorted) endpoint tags from a card's access table.
+func awsMDParseModelCard(r io.Reader) map[string][]string {
+	sets := make(map[string]map[string]bool)
 	scanner := docScanner(r)
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -152,8 +174,8 @@ func awsMDParseModelCard(r io.Reader) []string {
 		if len(fields) < 3 {
 			continue
 		}
-		endpoint := strings.TrimSpace(fields[1])
-		if endpoint != "bedrock-mantle" {
+		tag, ok := endpointTags[strings.TrimSpace(fields[1])]
+		if !ok {
 			continue
 		}
 		id := strings.TrimSpace(fields[2])
@@ -163,10 +185,20 @@ func awsMDParseModelCard(r io.Reader) []string {
 		if !modelIDRe.MatchString(id) {
 			continue
 		}
-		if !seen[id] {
-			seen[id] = true
-			ids = append(ids, id)
+		set := sets[id]
+		if set == nil {
+			set = make(map[string]bool)
+			sets[id] = set
 		}
+		set[tag] = true
 	}
-	return ids
+	out := make(map[string][]string, len(sets))
+	for id, set := range sets {
+		tags := make([]string, 0, len(set))
+		for t := range set {
+			tags = append(tags, t)
+		}
+		out[id] = tags
+	}
+	return out
 }

@@ -33,14 +33,17 @@ fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
 
 	assert_eq!(
 		provider
-			.chat_translation(InputFormat::Completions, model)
+			.chat_translation(InputFormat::Completions, model, None)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
 	);
 	for input in [InputFormat::Messages, InputFormat::Responses] {
 		assert_eq!(
-			provider.chat_translation(input, model).unwrap().output,
+			provider
+				.chat_translation(input, model, None)
+				.unwrap()
+				.output,
 			ChatFormat::OpenAICompletions
 		);
 	}
@@ -187,7 +190,7 @@ async fn openai_provider_normalizes_max_tokens_before_forwarding() {
 		llm_request,
 		..
 	} = provider
-		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.process_completions_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -242,7 +245,7 @@ async fn openai_provider_normalizes_max_tokens_after_model_alias() {
 		llm_request,
 		..
 	} = provider
-		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None)
+		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -291,7 +294,7 @@ async fn openai_provider_preserves_max_tokens_for_non_gpt_models() {
 		llm_request,
 		..
 	} = provider
-		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.process_completions_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("OpenAI-compatible completions request should process")
 	else {
@@ -454,7 +457,7 @@ async fn vertex_anthropic_messages_prepares_vertex_body() {
 		upstream_route_type,
 		..
 	} = provider
-		.process_messages_request(&backend_info, None, req, false, &mut None)
+		.process_messages_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("Vertex Anthropic messages request should process")
 	else {
@@ -519,7 +522,7 @@ async fn provider_model_is_set_before_llm_transformations() {
 		llm_request,
 		..
 	} = provider
-		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None)
+		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -575,7 +578,7 @@ async fn llm_transformations_can_set_missing_model() {
 		llm_request,
 		..
 	} = provider
-		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None)
+		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -621,7 +624,7 @@ async fn copilot_anthropic_model_uses_messages_route() {
 		llm_request,
 		upstream_route_type,
 	} = provider
-		.process_messages_request(&backend_info, None, req, false, &mut None)
+		.process_messages_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("Copilot Anthropic messages request should process")
 	else {
@@ -644,6 +647,7 @@ async fn copilot_anthropic_model_uses_messages_route() {
 			None,
 			None,
 			false,
+			None,
 			None,
 		)
 		.expect("setup_request should succeed");
@@ -1019,7 +1023,7 @@ fn openai_completions_error_translates_to_messages_client() {
 		br#"{"error":{"message":"bad request","type":"invalid_request_error","param":null,"code":400}}"#,
 	);
 	let translated = provider
-		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error)
+		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error, None)
 		.expect("OpenAI error should translate to messages error");
 	let body: Value = serde_json::from_slice(&translated).expect("translated error should be JSON");
 
@@ -1039,7 +1043,7 @@ fn custom_messages_error_translates_to_completions_client() {
 		br#"{"type":"error","error":{"type":"invalid_request_error","message":"bad request"}}"#,
 	);
 	let translated = provider
-		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error)
+		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error, None)
 		.expect("Anthropic error should translate to completions error");
 	let body: Value = serde_json::from_slice(&translated).expect("translated error should be JSON");
 
@@ -1064,7 +1068,7 @@ fn foundry_claude_messages_error_uses_anthropic_shape() {
 		br#"{"type":"error","error":{"type":"invalid_request_error","message":"bad request"}}"#,
 	);
 	let translated = provider
-		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error)
+		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error, None)
 		.expect("Foundry Claude messages error should stay Anthropic-shaped");
 	let body: Value = serde_json::from_slice(&translated).expect("translated error should be JSON");
 
@@ -1159,6 +1163,7 @@ fn setup_request_openai_applies_prefixed_path_without_host_override() {
 			Some("/v1/custom"),
 			false,
 			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -1187,6 +1192,7 @@ fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
 			None,
 			Some("/v1/custom/"),
 			false,
+			None,
 			None,
 		)
 		.expect("setup_request should succeed");
@@ -1231,6 +1237,7 @@ fn setup_request_custom_path_override_wins_over_format_path() {
 			None,
 			true,
 			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -1273,6 +1280,7 @@ fn assert_prefixed_host_override_path(
 			None,
 			Some("/proxy/"),
 			true,
+			None,
 			None,
 		)
 		.expect("setup_request should succeed");
@@ -1350,6 +1358,7 @@ fn setup_bedrock_request(
 			None,
 			None,
 			false,
+			None,
 			None,
 		)
 		.expect("setup_request should succeed");
@@ -1448,6 +1457,7 @@ fn setup_request_bedrock_aligns_connection_target_with_model_host() {
 			None,
 			false,
 			Some(&mut target),
+			None,
 		)
 		.expect("setup_request should succeed");
 	assert_eq!(

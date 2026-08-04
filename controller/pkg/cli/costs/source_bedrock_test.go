@@ -8,10 +8,9 @@ import (
 	"testing"
 )
 
-func TestParseMDAvailabilityReturnsMantleOnlyCardHrefs(t *testing.T) {
+func TestParseMDAvailabilityReturnsServedCardHrefs(t *testing.T) {
 	// Column layout: name | bedrock-runtime | bedrock-mantle
-	// Jamba Large: runtime=no, mantle=yes  -> Mantle-only  -> selected
-	// Jamba Mini:  runtime=yes, mantle=yes -> on both      -> skipped
+	// Both are served (Large=mantle-only, Mini=both) so both are selected; endpoint tags come from the card.
 	page := `| Model name | ` + "`bedrock-runtime`" + ` | ` + "`bedrock-mantle`" + ` |
 | --- | --- | --- |
 | [Jamba 1.5 Large](model-card-ai21-labs-jamba-1-5-large.md) | ![](http://docs.aws.amazon.com/bedrock/latest/userguide/images/icons/icon-no.png) | ![](http://docs.aws.amazon.com/bedrock/latest/userguide/images/icons/icon-yes.png) |
@@ -21,8 +20,9 @@ func TestParseMDAvailabilityReturnsMantleOnlyCardHrefs(t *testing.T) {
 	if len(warns) != 0 {
 		t.Fatalf("unexpected warnings: %v", warns)
 	}
-	if len(hrefs) != 1 || hrefs[0] != "model-card-ai21-labs-jamba-1-5-large.md" {
-		t.Fatalf("hrefs = %v, want [model-card-ai21-labs-jamba-1-5-large.md]", hrefs)
+	want := []string{"model-card-ai21-labs-jamba-1-5-large.md", "model-card-ai21-labs-jamba-1-5-mini.md"}
+	if !slices.Equal(hrefs, want) {
+		t.Fatalf("hrefs = %v, want %v", hrefs, want)
 	}
 }
 
@@ -38,29 +38,34 @@ func TestParseMDAvailabilitySkipsHeaderAndSeparator(t *testing.T) {
 	}
 }
 
-func TestParseMDAvailabilitySkipsRuntimeCapableModels(t *testing.T) {
-	// A model available on Runtime (regardless of Mantle) must not appear in the
-	// Mantle-only allow-list.
+func TestParseMDAvailabilitySkipsUnservedModels(t *testing.T) {
+	// A model served on either endpoint is included; one served on neither is skipped.
 	page := `| Model name | ` + "`bedrock-runtime`" + ` | ` + "`bedrock-mantle`" + ` |
 | --- | --- | --- |
 | [Sonnet](model-card-anthropic-claude-3-5-sonnet.md) | ![](icon-yes.png) | ![](icon-yes.png) |
-| [Titan](model-card-amazon-titan-text.md) | ![](icon-yes.png) | ![](icon-no.png) | `
+| [Titan](model-card-amazon-titan-text.md) | ![](icon-yes.png) | ![](icon-no.png) |
+| [Retired](model-card-retired.md) | ![](icon-no.png) | ![](icon-no.png) | `
 
 	hrefs, _ := awsMDParseAvailability(strings.NewReader(page))
-	if len(hrefs) != 0 {
-		t.Fatalf("hrefs = %v, want [] (no Mantle-only models)", hrefs)
+	want := []string{"model-card-anthropic-claude-3-5-sonnet.md", "model-card-amazon-titan-text.md"}
+	if !slices.Equal(hrefs, want) {
+		t.Fatalf("hrefs = %v, want %v", hrefs, want)
 	}
 }
 
-func TestParseMDModelCardExtractsMantleID(t *testing.T) {
+func TestParseMDModelCardTagsPerEndpoint(t *testing.T) {
+	// A model listed under both endpoints is tagged with both.
 	page := `| **Endpoint** | **Model ID** | **In-Region endpoint URL** |
 | --- | --- | --- |
 | bedrock-runtime | anthropic.claude-opus-4-8 | N/A |
 | bedrock-mantle | anthropic.claude-opus-4-8 | https://bedrock-mantle.{region}.api.aws | `
 
-	ids := awsMDParseModelCard(strings.NewReader(page))
-	if len(ids) != 1 || ids[0] != "anthropic.claude-opus-4-8" {
-		t.Fatalf("ids = %v, want [anthropic.claude-opus-4-8]", ids)
+	got := awsMDParseModelCard(strings.NewReader(page))
+	tags := got["anthropic.claude-opus-4-8"]
+	slices.Sort(tags)
+	want := []string{mantleTag, runtimeTag}
+	if len(got) != 1 || !slices.Equal(tags, want) {
+		t.Fatalf("got = %v, want {anthropic.claude-opus-4-8: %v}", got, want)
 	}
 }
 
@@ -69,9 +74,9 @@ func TestParseMDModelCardDeduplicates(t *testing.T) {
 	page := `| bedrock-mantle | amazon.nova-pro-v1:0 | N/A |
 | bedrock-mantle | amazon.nova-pro-v1:0 | https://example.com | `
 
-	ids := awsMDParseModelCard(strings.NewReader(page))
-	if len(ids) != 1 || ids[0] != "amazon.nova-pro-v1:0" {
-		t.Fatalf("ids = %v, want [amazon.nova-pro-v1:0]", ids)
+	got := awsMDParseModelCard(strings.NewReader(page))
+	if len(got) != 1 || !slices.Equal(got["amazon.nova-pro-v1:0"], []string{mantleTag}) {
+		t.Fatalf("got = %v, want {amazon.nova-pro-v1:0: [mantle]}", got)
 	}
 }
 
@@ -80,9 +85,9 @@ func TestParseMDModelCardSkipsInvalidIDs(t *testing.T) {
 | bedrock-mantle | --- | N/A |
 | bedrock-mantle | valid.model-id | N/A | `
 
-	ids := awsMDParseModelCard(strings.NewReader(page))
-	if len(ids) != 1 || ids[0] != "valid.model-id" {
-		t.Fatalf("ids = %v, want [valid.model-id]", ids)
+	got := awsMDParseModelCard(strings.NewReader(page))
+	if len(got) != 1 || !slices.Equal(got["valid.model-id"], []string{mantleTag}) {
+		t.Fatalf("got = %v, want {valid.model-id: [mantle]}", got)
 	}
 }
 
@@ -103,13 +108,12 @@ func TestAwsBedrockMantleFetchLive(t *testing.T) {
 		t.Fatalf("invalid catalog: %v", err)
 	}
 
-	// The Mantle-only set is legitimately allowed to be small or empty, so we only
-	// validate the shape of whatever is returned.
+	// We only validate the shape of whatever is returned.
 	models := cat.Providers[bedrockProviderID].Models
-	t.Logf("fetched %d Mantle-only models", len(models))
+	t.Logf("fetched %d served Bedrock models", len(models))
 	for id, m := range models {
-		if !slices.Contains(m.Tags, mantleTag) {
-			t.Errorf("model %q missing mantle tag", id)
+		if !slices.Contains(m.Tags, mantleTag) && !slices.Contains(m.Tags, runtimeTag) {
+			t.Errorf("model %q has no endpoint tag", id)
 		}
 		if !modelIDRe.MatchString(id) || !strings.Contains(id, ".") {
 			t.Errorf("model ID %q is not a valid base model ID", id)

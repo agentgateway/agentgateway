@@ -176,6 +176,13 @@ impl ModelCatalog {
 	}
 }
 
+impl ModelCatalog {
+	/// Borrow as the cross-crate catalog handle threaded through the request path.
+	pub fn as_handle(&self) -> &dyn agent_llm::model_catalog::ModelCatalogHandle {
+		self
+	}
+}
+
 impl agent_llm::model_catalog::ModelCatalogHandle for ModelCatalog {
 	fn model_has_tag(&self, model_id: &str, tag: &str) -> bool {
 		self.state.load().snapshot.model_has_tag(model_id, tag)

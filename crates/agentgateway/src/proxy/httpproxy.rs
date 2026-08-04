@@ -2103,7 +2103,7 @@ async fn make_backend_call(
 					Some(target) => target.clone(),
 					None => provider
 						.provider
-						.default_connector_target(route_type)
+						.default_connector_target(route_type, Some(inputs.model_catalog.as_handle()))
 						.ok_or_else(|| {
 							ProxyError::ProcessingString(
 								"custom providers require an explicit host override or provider backend"
@@ -2281,6 +2281,7 @@ async fn make_backend_call(
 							req,
 							llm.tokenize,
 							&mut log,
+							Some(inputs.model_catalog.as_handle()),
 						))
 						.await
 						.map_err(|e| ProxyError::Processing(e.into()))?,
@@ -2290,6 +2291,7 @@ async fn make_backend_call(
 							req,
 							llm.tokenize,
 							&mut log,
+							Some(inputs.model_catalog.as_handle()),
 						))
 						.await
 						.map_err(|e| ProxyError::Processing(e.into()))?,
@@ -2299,6 +2301,7 @@ async fn make_backend_call(
 							req,
 							llm.tokenize,
 							&mut log,
+							Some(inputs.model_catalog.as_handle()),
 						))
 						.await
 						.map_err(|e| ProxyError::Processing(e.into()))?,
@@ -2382,6 +2385,7 @@ async fn make_backend_call(
 							llm.path_prefix.as_deref(),
 							llm.host_override.is_some(),
 							Some(&mut backend_call.target),
+							Some(inputs.model_catalog.as_handle()),
 						)
 						.map_err(ProxyError::Processing)?;
 
@@ -2430,6 +2434,7 @@ async fn make_backend_call(
 							llm.path_prefix.as_deref(),
 							llm.host_override.is_some(),
 							Some(&mut backend_call.target),
+							Some(inputs.model_catalog.as_handle()),
 						)
 						.map_err(ProxyError::Processing)?;
 					if route_type == RouteType::Realtime {

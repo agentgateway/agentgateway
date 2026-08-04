@@ -152,12 +152,13 @@ pub enum ChatFormat {
 
 impl ChatFormat {
 	pub fn tag(&self) -> &'static str {
+		use crate::model_catalog::tags;
 		match self {
-			ChatFormat::OpenAICompletions => "openai_completions",
-			ChatFormat::OpenAIResponses => "openai_responses",
-			ChatFormat::AnthropicMessages => "anthropic_messages",
-			ChatFormat::BedrockConverse => "bedrock_converse",
-			ChatFormat::VertexGemini => "vertex_gemini",
+			ChatFormat::OpenAICompletions => tags::OPENAI_COMPLETIONS,
+			ChatFormat::OpenAIResponses => tags::OPENAI_RESPONSES,
+			ChatFormat::AnthropicMessages => tags::ANTHROPIC_MESSAGES,
+			ChatFormat::BedrockConverse => tags::BEDROCK_CONVERSE,
+			ChatFormat::VertexGemini => tags::VERTEX_GEMINI,
 		}
 	}
 }
