@@ -11,14 +11,22 @@ Copilot models whose IDs start with `claude-` use Anthropic Messages as their na
 | Client route | Copilot route | Handling |
 | --- | --- | --- |
 | `/v1/messages` | `/v1/messages` | Anthropic Messages passthrough, with Copilot-specific compatibility handling (see below) |
-| `/v1/responses` | `/v1/messages` | Direct Responses-to-Messages conversion |
+| `/v1/responses` | `/v1/messages` | Provider-neutral Responses-to-Messages conversion |
 | `/v1/chat/completions` | `/v1/messages` | Chat-to-Messages conversion |
+
+Responses-to-Messages routing follows the selected provider and model's advertised Messages
+capability. Anthropic, Vertex Claude, Azure Foundry Claude, custom Messages providers, and Copilot
+Claude all use the same conversion path. Providers that advertise native Responses or another wire
+format keep that route, including OpenAI Responses, Bedrock Converse, and Vertex Gemini. The
+converter carries per-request response translation state through `ProviderState`; it does not use
+Copilot-specific context fields.
 
 Copilot exposes a narrower Anthropic Messages dialect than native Anthropic: it rejects the
 top-level `context_management` field and some `anthropic-beta` header entries (confirmed:
 `advisor-tool-2026-03-01`) that a real Claude Code client sends. For Copilot only, the gateway
 removes `context_management` before rendering the upstream body and filters confirmed-unsupported
-`anthropic-beta` entries while preserving every other entry. Every other provider (Anthropic,
+`anthropic-beta` entries while preserving every other entry. These rules live in the Copilot
+provider policy rather than the format converter. Every other provider (Anthropic,
 Vertex, Bedrock, Azure, custom) forwards these fields unchanged. Verified Claude Code compatibility
 covers streaming text, the built-in Read tool, a two-turn session, prompt caching, MCP, a custom
 subagent, and the parent continuation after that subagent returned. All five configured Claude

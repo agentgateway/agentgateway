@@ -245,10 +245,7 @@ fn cache_convention_for(
 			InputExcludesCache
 		},
 		AIProvider::Vertex(p) if p.is_anthropic_model(Some(request_model)) => InputExcludesCache,
-		AIProvider::Custom(_) => match provider_format {
-			Some(Messages | AnthropicTokenCount) => InputExcludesCache,
-			_ => InputIncludesCache,
-		},
+		_ if matches!(provider_format, Some(Messages | AnthropicTokenCount)) => InputExcludesCache,
 		_ => InputIncludesCache, // openai, azure, gemini, copilot/vertex non-anthropic
 	}
 }
@@ -289,8 +286,7 @@ struct ChatRequestContext<'a> {
 struct ChatResponseContext<'a> {
 	model: &'a str,
 	buffer_limit: usize,
-	tool_name_map: Option<&'a conversion::bedrock::BedrockToolNameMap>,
-	responses_to_messages_state: Option<&'a conversion::messages::from_responses::State>,
+	provider_state: Option<&'a ProviderState>,
 }
 
 // Context provider to each response translation (streaming)
@@ -299,8 +295,7 @@ struct ChatStreamContext {
 	logger: agent_llm::StreamingUsageGuard,
 	model: String,
 	log_content: LogContentFields,
-	tool_name_map: Option<conversion::bedrock::BedrockToolNameMap>,
-	responses_to_messages_state: Option<conversion::messages::from_responses::State>,
+	provider_state: Option<ProviderState>,
 }
 
 /// Ordered chat conversion table.
@@ -415,46 +410,6 @@ fn render_anthropic_messages(req: types::ChatRequest) -> Result<RenderedChatRequ
 	})
 }
 
-/// `anthropic-beta` entries confirmed to make Copilot reject the request outright. This is
-/// deliberately a denylist, not an allowlist: Copilot accepts most Anthropic beta features
-/// (thinking, prompt caching, context management, etc.), and only entries confirmed unsupported
-/// by a real Claude Code request should be added here.
-const COPILOT_UNSUPPORTED_BETA_HEADERS: &[&str] = &["advisor-tool-2026-03-01"];
-
-/// Removes confirmed-unsupported `anthropic-beta` entries for a Copilot-bound Messages request,
-/// preserving every other entry (including across repeated headers and comma-separated lists)
-/// and their relative order.
-fn filter_copilot_unsupported_beta_headers(headers: &mut HeaderMap) {
-	let mut kept = Vec::new();
-	for value in headers.get_all("anthropic-beta") {
-		let Ok(header_str) = value.to_str() else {
-			continue;
-		};
-		for feature in header_str.split(',') {
-			let trimmed = feature.trim();
-			if !trimmed.is_empty() && !COPILOT_UNSUPPORTED_BETA_HEADERS.contains(&trimmed) {
-				kept.push(trimmed.to_string());
-			}
-		}
-	}
-	headers.remove("anthropic-beta");
-	if !kept.is_empty()
-		&& let Ok(value) = HeaderValue::from_str(&kept.join(","))
-	{
-		headers.insert("anthropic-beta", value);
-	}
-}
-
-/// Removes top-level Messages fields confirmed to make Copilot reject the request outright.
-/// `context_management` is a real Anthropic Messages beta field (preserved for every other
-/// provider via `Request.rest`), but Copilot's narrower Anthropic Messages dialect rejects it.
-fn strip_copilot_unsupported_messages_fields(body: Vec<u8>) -> Result<Vec<u8>, AIError> {
-	let mut body: serde_json::Map<String, serde_json::Value> =
-		serde_json::from_slice(&body).map_err(AIError::RequestParsing)?;
-	body.remove("context_management");
-	serde_json::to_vec(&body).map_err(AIError::RequestMarshal)
-}
-
 fn render_vertex_gemini(
 	req: types::ChatRequest,
 	ctx: &ChatRequestContext<'_>,
@@ -553,7 +508,7 @@ impl ChatTranslation {
 					},
 					req => render_anthropic_messages(req)?,
 				};
-				rendered.body = strip_copilot_unsupported_messages_fields(rendered.body)?;
+				rendered.body = copilot::prepare_messages_body(rendered.body)?;
 				return Ok(rendered);
 			},
 			ChatFormat::AnthropicMessages => return render_anthropic_messages(req),
@@ -607,9 +562,7 @@ impl ChatTranslation {
 				InputFormat::Responses => conversion::messages::from_responses::translate_response(
 					bytes,
 					ctx.model,
-					ctx.responses_to_messages_state.ok_or_else(|| {
-						AIError::UnsupportedConversion(strng::literal!("missing Responses-to-Messages state"))
-					})?,
+					responses_to_messages_state(ctx.provider_state)?,
 					ctx.buffer_limit,
 				),
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
@@ -622,17 +575,17 @@ impl ChatTranslation {
 				InputFormat::Completions => conversion::bedrock::from_completions::translate_response(
 					bytes,
 					ctx.model,
-					ctx.tool_name_map,
+					bedrock_tool_name_map(ctx.provider_state),
 				),
 				InputFormat::Messages => conversion::bedrock::from_messages::translate_response(
 					bytes,
 					ctx.model,
-					ctx.tool_name_map,
+					bedrock_tool_name_map(ctx.provider_state),
 				),
 				InputFormat::Responses => conversion::bedrock::from_responses::translate_response(
 					bytes,
 					ctx.model,
-					ctx.tool_name_map,
+					bedrock_tool_name_map(ctx.provider_state),
 				),
 				_ => Err(AIError::UnsupportedConversion(strng::format!(
 					"from {:?} to {:?}",
@@ -703,9 +656,7 @@ impl ChatTranslation {
 					)
 				}),
 				InputFormat::Responses => {
-					let state = ctx.responses_to_messages_state.ok_or_else(|| {
-						AIError::UnsupportedConversion(strng::literal!("missing Responses-to-Messages state"))
-					})?;
+					let state = responses_to_messages_state(ctx.provider_state.as_ref())?.clone();
 					resp.map(move |body| {
 						conversion::messages::from_responses::translate_stream(
 							body,
@@ -723,7 +674,7 @@ impl ChatTranslation {
 			ChatFormat::BedrockConverse => match self.input {
 				InputFormat::Completions => {
 					let msg = conversion::bedrock::message_id(&resp);
-					let tool_name_map = ctx.tool_name_map.clone();
+					let tool_name_map = bedrock_tool_name_map(ctx.provider_state.as_ref()).cloned();
 					resp.map(move |b| {
 						conversion::bedrock::from_completions::translate_stream(
 							b,
@@ -738,7 +689,7 @@ impl ChatTranslation {
 				},
 				InputFormat::Messages => {
 					let msg = conversion::bedrock::message_id(&resp);
-					let tool_name_map = ctx.tool_name_map.clone();
+					let tool_name_map = bedrock_tool_name_map(ctx.provider_state.as_ref()).cloned();
 					resp.map(move |b| {
 						conversion::bedrock::from_messages::translate_stream(
 							b,
@@ -753,7 +704,7 @@ impl ChatTranslation {
 				},
 				InputFormat::Responses => {
 					let msg = conversion::bedrock::message_id(&resp);
-					let tool_name_map = ctx.tool_name_map.clone();
+					let tool_name_map = bedrock_tool_name_map(ctx.provider_state.as_ref()).cloned();
 					resp.map(move |b| {
 						conversion::bedrock::from_responses::translate_stream(
 							b,
@@ -1048,11 +999,7 @@ impl AIProvider {
 		CHAT_TRANSLATIONS
 			.iter()
 			.find(|translation| {
-				translation.input == input_format
-					&& supported.contains(&translation.output)
-					&& (translation.input != InputFormat::Responses
-						|| translation.output != ChatFormat::AnthropicMessages
-						|| matches!(self, AIProvider::Copilot(_)))
+				translation.input == input_format && supported.contains(&translation.output)
 			})
 			.ok_or_else(|| {
 				AIError::UnsupportedConversion(strng::format!(
@@ -1433,10 +1380,7 @@ impl AIProvider {
 				})
 			},
 			AIProvider::Copilot(_) if route_type == RouteType::Messages => http::modify_req(req, |req| {
-				req
-					.headers
-					.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
-				filter_copilot_unsupported_beta_headers(&mut req.headers);
+				copilot::prepare_messages_headers(&mut req.headers);
 				Ok(())
 			}),
 			AIProvider::Azure(p) => {
@@ -2399,11 +2343,7 @@ impl AIProvider {
 			&ChatResponseContext {
 				model: &req.request_model,
 				buffer_limit,
-				tool_name_map: bedrock_tool_name_map(req),
-				responses_to_messages_state: match &req.provider_state {
-					Some(ProviderState::ResponsesToMessages { state }) => Some(state.as_ref()),
-					_ => None,
-				},
+				provider_state: req.provider_state.as_ref(),
 			},
 		)
 	}
@@ -2422,11 +2362,7 @@ impl AIProvider {
 	) -> Result<Response, AIError> {
 		let model = req.request_model.clone();
 		let input_format = req.input_format;
-		let bedrock_tool_name_map = bedrock_tool_name_map(&req).cloned();
-		let responses_to_messages_state = match &req.provider_state {
-			Some(ProviderState::ResponsesToMessages { state }) => Some(state.as_ref().clone()),
-			_ => None,
-		};
+		let provider_state = req.provider_state.clone();
 		let chat_translation = if input_format.is_chat() {
 			Some(self.chat_translation(input_format, Some(&model))?)
 		} else {
@@ -2513,8 +2449,7 @@ impl AIProvider {
 					logger,
 					model: model.to_string(),
 					log_content,
-					tool_name_map: bedrock_tool_name_map,
-					responses_to_messages_state,
+					provider_state,
 				},
 			)?
 		} else {
@@ -2694,10 +2629,23 @@ impl AIProvider {
 	}
 }
 
-fn bedrock_tool_name_map(req: &LLMRequest) -> Option<&conversion::bedrock::BedrockToolNameMap> {
-	match &req.provider_state {
+fn bedrock_tool_name_map(
+	provider_state: Option<&ProviderState>,
+) -> Option<&conversion::bedrock::BedrockToolNameMap> {
+	match provider_state {
 		Some(ProviderState::Bedrock { tool_names }) => Some(tool_names.as_ref()),
 		_ => None,
+	}
+}
+
+fn responses_to_messages_state(
+	provider_state: Option<&ProviderState>,
+) -> Result<&conversion::messages::from_responses::State, AIError> {
+	match provider_state {
+		Some(ProviderState::ResponsesToMessages { state }) => Ok(state.as_ref()),
+		_ => Err(AIError::UnsupportedConversion(strng::literal!(
+			"missing Responses-to-Messages state"
+		))),
 	}
 }
 
