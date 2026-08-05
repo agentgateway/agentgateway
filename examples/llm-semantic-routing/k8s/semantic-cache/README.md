@@ -47,7 +47,7 @@ agentgateway
              `---- response passes through vSR and is stored in Redis
 ```
 
-Agentgateway invokes vSR as an ExtProc before forwarding a cache miss to the
+agentgateway invokes vSR as an ExtProc before forwarding a cache miss to the
 backend. It also sends the completed backend response through vSR so the
 response can be added to Redis. The cache plugin is attached only to the
 factory-reset decision; other support intents select an uncached decision.
@@ -86,7 +86,7 @@ The kind context is `kind-semantic-cache`:
 kubectl config use-context kind-semantic-cache
 ```
 
-## Install Agentgateway
+## Install agentgateway
 
 Install the Gateway API and agentgateway 1.4.1:
 

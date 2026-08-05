@@ -1,4 +1,4 @@
-# Redis-backed semantic-cache Agentgateway resources.
+# Redis-backed semantic-cache agentgateway resources.
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
 metadata:
