@@ -156,13 +156,13 @@ kubectl rollout status deployment/agentgateway-proxy \
 ## Deploy Redis Open Source
 
 The manifest deploys the official Redis 8 image as a single-replica
-StatefulSet. A 2 GiB persistent volume stores its append-only file and periodic
-snapshots. Redis 8 includes Redis Search and vector-search support.
+StatefulSet. A 256 MiB persistent volume stores its append-only file and
+periodic snapshots. This is ample for the example's small cache dataset and
+AOF rewrite overhead. Redis 8 includes Redis Search and vector-search support.
 
-The example uses only a small fraction of the allocated storage. For a
-production deployment, size Redis storage for the expected number of cache
-entries, embedding and response sizes, cache TTL, dataset growth, and temporary
-disk space required during AOF rewrites.
+For a production deployment, size Redis storage for the expected number of
+cache entries, embedding and response sizes, cache TTL, dataset growth, and
+temporary disk space required during AOF rewrites.
 
 ```bash
 kubectl apply \
