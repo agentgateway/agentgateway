@@ -91,8 +91,9 @@ impl Provider {
 		model_id: Option<&str>,
 		catalog: crate::model_catalog::Catalog<'_>,
 	) -> BedrockEndpoint {
-		use crate::model_catalog::tags;
 		use BedrockProviderPreference::*;
+
+		use crate::model_catalog::tags;
 		match self.provider_preference {
 			RuntimeOnly => BedrockEndpoint::Runtime,
 			MantleOnly => BedrockEndpoint::Mantle,

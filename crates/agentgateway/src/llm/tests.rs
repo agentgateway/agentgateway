@@ -218,7 +218,7 @@ async fn openai_inline_moderation_injected_for_completions() {
 		upstream_route_type,
 		..
 	} = provider
-		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.process_completions_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -265,7 +265,7 @@ async fn openai_inline_moderation_overrides_client_value_for_completions() {
 	let RequestResult::Success {
 		request: forwarded, ..
 	} = provider
-		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.process_completions_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -315,7 +315,7 @@ async fn openai_client_moderation_passthrough_without_config() {
 	let RequestResult::Success {
 		request: forwarded, ..
 	} = provider
-		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.process_completions_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -369,7 +369,7 @@ async fn openai_inline_moderation_injected_for_responses() {
 		upstream_route_type,
 		..
 	} = provider
-		.process_responses_request(&backend_info, None, req, false, &mut None)
+		.process_responses_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("OpenAI responses request should process")
 	else {
@@ -412,7 +412,7 @@ async fn openai_inline_moderation_injected_after_messages_translation() {
 		upstream_route_type,
 		..
 	} = provider
-		.process_messages_request(&backend_info, None, req, false, &mut None)
+		.process_messages_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("Anthropic messages request should translate to OpenAI completions")
 	else {
