@@ -4164,6 +4164,10 @@
               "prefix": "Bearer "
             }
           }
+        },
+        "tokenType": {
+          "description": "RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.",
+          "type": "string"
         }
       },
       "additionalProperties": false
