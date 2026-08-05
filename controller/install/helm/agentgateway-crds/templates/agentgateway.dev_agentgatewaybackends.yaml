@@ -5163,9 +5163,15 @@ spec:
                                                     == 1'
                                               tokenType:
                                                 description: OAuth RFC 8693 subject
-                                                  token type. Defaults to id_token
+                                                  token type. Defaults to IdToken
                                                 type: string
                                             type: object
+                                            x-kubernetes-validations:
+                                            - message: tokenType IdJag is not supported
+                                                by crossAppAccess
+                                              rule: '!has(self.tokenType) || (self.tokenType
+                                                != ''IdJag'' && self.tokenType !=
+                                                ''urn:ietf:params:oauth:token-type:id-jag'')'
                                         required:
                                         - audience
                                         - identityProvider
@@ -8401,9 +8407,14 @@ spec:
                                                   == 1'
                                             tokenType:
                                               description: OAuth RFC 8693 subject
-                                                token type. Defaults to id_token
+                                                token type. Defaults to IdToken
                                               type: string
                                           type: object
+                                          x-kubernetes-validations:
+                                          - message: tokenType IdJag is not supported
+                                              by crossAppAccess
+                                            rule: '!has(self.tokenType) || (self.tokenType
+                                              != ''IdJag'' && self.tokenType != ''urn:ietf:params:oauth:token-type:id-jag'')'
                                       required:
                                       - audience
                                       - identityProvider
@@ -13727,9 +13738,13 @@ spec:
                                     == 1'
                               tokenType:
                                 description: OAuth RFC 8693 subject token type. Defaults
-                                  to id_token
+                                  to IdToken
                                 type: string
                             type: object
+                            x-kubernetes-validations:
+                            - message: tokenType IdJag is not supported by crossAppAccess
+                              rule: '!has(self.tokenType) || (self.tokenType != ''IdJag''
+                                && self.tokenType != ''urn:ietf:params:oauth:token-type:id-jag'')'
                         required:
                         - audience
                         - identityProvider

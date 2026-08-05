@@ -1050,9 +1050,6 @@ func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, n
 		}
 		if auth.SubjectToken.TokenType != nil {
 			errs = append(errs, validateOAuthTokenType(*auth.SubjectToken.TokenType, "crossAppAccess subjectToken tokenType"))
-			if *auth.SubjectToken.TokenType == agentgateway.OAuthTokenTypeIDJAG {
-				errs = append(errs, errors.New("crossAppAccess subjectToken tokenType IdJag is not supported"))
-			}
 		}
 	}
 	cache := translateOAuthTokenCache(auth.Cache)
@@ -1361,19 +1358,10 @@ func validateOAuthTokenType(tokenType agentgateway.OAuthTokenType, field string)
 		return nil
 	}
 	parsed, err := url.Parse(string(tokenType))
-	if err != nil || !parsed.IsAbs() || parsed.Fragment != "" || oauthTokenTypeURLRequiresHost(parsed) {
+	if err != nil || !parsed.IsAbs() || parsed.Fragment != "" {
 		return fmt.Errorf("%s %q must be a built-in token type or an absolute URI without a fragment", field, tokenType)
 	}
 	return nil
-}
-
-func oauthTokenTypeURLRequiresHost(parsed *url.URL) bool {
-	switch strings.ToLower(parsed.Scheme) {
-	case "ftp", "http", "https", "ws", "wss":
-		return parsed.Host == ""
-	default:
-		return false
-	}
 }
 
 func translateOAuthTokenType(tokenType agentgateway.OAuthTokenType) string {
