@@ -14,7 +14,7 @@ pub mod parser;
 
 pub use common::ast::IdedExpr;
 use common::ast::SelectExpr;
-pub use context::Context;
+pub use context::{Context, FunctionMeta, ReceiverStyle};
 pub use functions::FunctionContext;
 pub use objects::{ResolveResult, Value};
 use parser::{CallSignature, Expression, ExpressionReferences, Parser};
