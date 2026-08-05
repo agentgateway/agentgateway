@@ -11,7 +11,7 @@ spec:
     provider:
       openai:
         model: homehub-support
-      host: support-backend.agentgateway-system.svc.cluster.local
+      host: support-backend.homehub.svc.cluster.local
       port: 8080
   policies:
     auth:

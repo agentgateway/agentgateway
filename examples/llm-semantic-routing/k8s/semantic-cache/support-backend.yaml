@@ -1,8 +1,15 @@
 apiVersion: v1
+kind: Namespace
+metadata:
+  name: homehub
+  labels:
+    app.kubernetes.io/part-of: semantic-cache
+---
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: support-backend
-  namespace: agentgateway-system
+  namespace: homehub
   labels:
     app.kubernetes.io/name: support-backend
     app.kubernetes.io/part-of: semantic-cache
@@ -133,7 +140,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: support-backend
-  namespace: agentgateway-system
+  namespace: homehub
   labels:
     app.kubernetes.io/name: support-backend
     app.kubernetes.io/part-of: semantic-cache
@@ -195,7 +202,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: support-backend
-  namespace: agentgateway-system
+  namespace: homehub
   labels:
     app.kubernetes.io/name: support-backend
     app.kubernetes.io/part-of: semantic-cache

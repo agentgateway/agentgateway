@@ -34,7 +34,7 @@ config:
       api_format: openai
       backend_refs:
       - name: agentgateway-support-backend
-        base_url: http://support-backend.agentgateway-system.svc.cluster.local:8080/v1
+        base_url: http://support-backend.homehub.svc.cluster.local:8080/v1
         provider: openai
         weight: 100
 

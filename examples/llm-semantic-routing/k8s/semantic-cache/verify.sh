@@ -2,6 +2,7 @@
 set -euo pipefail
 
 NAMESPACE=agentgateway-system
+BACKEND_NAMESPACE=homehub
 RUN_SHARED_VSR=false
 RUN_REDIS_RESTART=false
 
@@ -55,7 +56,7 @@ echo "Checking workload readiness"
 kubectl wait --for=condition=Available deployment/semantic-router \
   -n "${NAMESPACE}" --timeout=600s
 kubectl wait --for=condition=Available deployment/support-backend \
-  -n "${NAMESPACE}" --timeout=120s
+  -n "${BACKEND_NAMESPACE}" --timeout=120s
 kubectl rollout status statefulset/redis-semantic-cache \
   -n "${NAMESPACE}" --timeout=120s
 kubectl wait --for=condition=Programmed gateway/agentgateway-proxy \
@@ -64,7 +65,7 @@ kubectl wait --for=condition=Programmed gateway/agentgateway-proxy \
 kubectl port-forward -n "${NAMESPACE}" service/agentgateway-proxy \
   18080:80 >"${WORK_DIR}/gateway-port-forward.log" 2>&1 &
 GATEWAY_PID=$!
-kubectl port-forward -n "${NAMESPACE}" service/support-backend \
+kubectl port-forward -n "${BACKEND_NAMESPACE}" service/support-backend \
   18081:8080 >"${WORK_DIR}/backend-port-forward.log" 2>&1 &
 BACKEND_PID=$!
 

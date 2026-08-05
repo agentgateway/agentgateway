@@ -154,13 +154,15 @@ The commands should report `PONG` and information about `FT.SEARCH`.
 
 The backend implements the OpenAI Chat Completions response API with the
 Python standard library. It returns fixed answers and records every invocation.
+The manifest creates a dedicated `homehub` namespace so the mock application
+is isolated from the agentgateway control plane and supporting services.
 
 ```bash
 kubectl apply \
   -f examples/llm-semantic-routing/k8s/semantic-cache/support-backend.yaml
 
 kubectl wait --for=condition=Available deployment/support-backend \
-  -n agentgateway-system \
+  -n homehub \
   --timeout=120s
 ```
 
@@ -355,7 +357,7 @@ only difference.
 Inspect the backend history:
 
 ```bash
-kubectl port-forward -n agentgateway-system service/support-backend 18081:8080
+kubectl port-forward -n homehub service/support-backend 18081:8080
 curl -sS http://127.0.0.1:18081/stats | jq
 ```
 
