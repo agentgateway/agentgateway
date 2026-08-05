@@ -45,6 +45,8 @@ use crate::store;
 
 pub const LOCAL_LISTENER_NAME: &str = "llm";
 
+const ANTHROPIC_VERSION: &str = "2023-06-01";
+
 #[cfg(test)]
 mod anthropic_tests;
 
@@ -1330,9 +1332,10 @@ impl AIProvider {
 						}
 					}
 					// https://docs.anthropic.com/en/api/versioning
-					req
-						.headers
-						.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+					req.headers.insert(
+						"anthropic-version",
+						HeaderValue::from_static(ANTHROPIC_VERSION),
+					);
 					Ok(())
 				})
 			},
@@ -1347,9 +1350,10 @@ impl AIProvider {
 						RouteType::Messages | RouteType::AnthropicTokenCount
 					) {
 					http::modify_req(req, |req| {
-						req
-							.headers
-							.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+						req.headers.insert(
+							"anthropic-version",
+							HeaderValue::from_static(ANTHROPIC_VERSION),
+						);
 						Ok(())
 					})
 				} else {
@@ -1369,9 +1373,10 @@ impl AIProvider {
 					) =>
 			{
 				http::modify_req(req, |req| {
-					req
-						.headers
-						.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+					req.headers.insert(
+						"anthropic-version",
+						HeaderValue::from_static(ANTHROPIC_VERSION),
+					);
 					Ok(())
 				})
 			},
