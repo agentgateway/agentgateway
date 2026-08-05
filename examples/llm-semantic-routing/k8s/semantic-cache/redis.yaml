@@ -40,7 +40,7 @@ spec:
       containers:
       - name: redis
         # Redis 8 includes Redis Search and its vector-search commands.
-        image: redis:8.8.1-alpine
+        image: redis:8.10.0-alpine
         imagePullPolicy: IfNotPresent
         args:
         - redis-server

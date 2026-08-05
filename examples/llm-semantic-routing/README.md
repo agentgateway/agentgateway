@@ -18,7 +18,7 @@ LLM provider(s)
 Each example focuses on a different production use case.
 
 | Example | Demonstrates | Best for |
-|---------|--------------|----------|
+| --- | --- | --- |
 | [Cost-based routing](k8s/cost-based/) | Route requests to lower-cost or higher-capability models based on semantic classification. | Cost optimization while maintaining response quality. |
 | [Tier-aware routing](k8s/tier-aware/) | Select different model pools according to authenticated user entitlements. | SaaS plans, internal vs external users, premium AI features. |
 | [Semantic caching](k8s/semantic-cache/) | Cache semantically equivalent requests in Redis Open Source and optionally share entries across vSR replicas. | Product support, documentation assistants, FAQ chatbots, and other workloads with many repeated questions. |
@@ -73,7 +73,11 @@ The example demonstrates:
 - optional cache sharing across vSR replicas
 - cache persistence across Redis pod restarts
 
-Unlike the default in-memory cache, Redis allows vSR replicas to share the same
-cache. The example also enables Redis persistence on a local persistent volume.
+vSR supports multiple cache backends, including a default in-memory store.
+Redis is used here as a production-oriented backend because it allows vSR
+replicas to share cache entries and persist them across process restarts. Redis
+also backs other agentgateway-related services, such as [global rate
+limiting](https://agentgateway.dev/docs/kubernetes/main/security/rate-limit-global/).
+The example enables Redis persistence on a local persistent volume.
 
 See: `k8s/semantic-cache`

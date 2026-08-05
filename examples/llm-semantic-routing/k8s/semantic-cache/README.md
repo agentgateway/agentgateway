@@ -14,7 +14,21 @@ The deterministic HomeHub support backend makes cache behavior observable:
   replica started.
 - Optionally, the Redis pod can restart and recover the cache from its volume.
 
-This is a local functional example, not a highly available Redis deployment.
+vSR supports multiple semantic-cache backends, including its default in-memory
+store. The in-memory backend is useful for development because it requires no
+external service, but its entries are local to one vSR process and disappear
+when that process restarts. This example chooses Redis as a production-oriented
+backend because it provides shared, persistent cache state and can fit an
+existing Redis operational model. Redis is also used by other agentgateway
+features; for example, the [agentgateway global rate-limiting
+guide](https://agentgateway.dev/docs/kubernetes/main/security/rate-limit-global/)
+deploys a Redis-backed rate-limit service.
+
+See the [vSR semantic-cache documentation](https://vllm-semantic-router.com/docs/tutorials/plugin/semantic-cache/),
+[Redis vector-search documentation](https://redis.io/docs/latest/develop/interact/search-and-query/query/vector-search/),
+and [Redis persistence documentation](https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/)
+for details. This remains a local functional example, not a highly available
+production Redis deployment.
 
 ## Request Flow
 
@@ -49,10 +63,12 @@ Install these tools:
 - curl
 - jq
 
-The example uses Kubernetes 1.36, agentgateway 1.4.0, the current vSR chart and
-image, and Redis Open Source 8.8.1. vSR downloads an embedding model on its
-first startup. Allocate at least 6 CPUs, 10 GiB of memory, and 15 GiB of free
-disk space to Docker.
+The example uses Kubernetes 1.36, agentgateway 1.4.1, the current vSR chart and
+image, and Redis Open Source 8.10.0. See the [agentgateway version-support
+reference](https://agentgateway.dev/docs/kubernetes/main/reference/versions/)
+for the supported Kubernetes and Gateway API versions. vSR downloads an
+embedding model on its first startup. Allocate at least 6 CPUs, 10 GiB of
+memory, and 15 GiB of free disk space to Docker.
 
 Redis and vSR use cleartext, unauthenticated connections inside the kind
 cluster. Do not copy those settings into a shared or production cluster.
@@ -72,10 +88,10 @@ kubectl config use-context kind-semantic-cache
 
 ## Install Agentgateway
 
-Install the Gateway API and agentgateway 1.4.0:
+Install the Gateway API and agentgateway 1.4.1:
 
 ```bash
-export AGENTGATEWAY_VERSION=v1.4.0
+export AGENTGATEWAY_VERSION=v1.4.1
 
 kubectl apply --server-side --force-conflicts \
   -f https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.6.0/standard-install.yaml
