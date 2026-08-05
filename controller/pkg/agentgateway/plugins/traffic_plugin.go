@@ -1700,11 +1700,19 @@ func processRateLimitDescriptor(descriptor agentgateway.RateLimitDescriptor) (*a
 		}
 		cost = new(string(*descriptor.Cost))
 	}
+	var limitOverride *string
+	if descriptor.LimitOverride != nil {
+		if !isCEL(*descriptor.LimitOverride) {
+			errs = append(errs, fmt.Errorf("rate limit descriptor limit override is not a valid CEL expression: %s", *descriptor.LimitOverride))
+		}
+		limitOverride = new(string(*descriptor.LimitOverride))
+	}
 
 	return &api.TrafficPolicySpec_RemoteRateLimit_Descriptor{
-		Entries: entries,
-		Type:    rlType,
-		Cost:    cost,
+		Entries:       entries,
+		Type:          rlType,
+		Cost:          cost,
+		LimitOverride: limitOverride,
 	}, errors.Join(errs...)
 }
 

@@ -2350,6 +2350,14 @@ type RateLimitDescriptor struct {
 	// See https://agentgateway.dev/docs/standalone/latest/reference/cel/ for more info.
 	// +optional
 	Cost *CELExpression `json:"cost,omitempty"`
+	// Common Expression Language (`CEL`) expression that returns a dynamic
+	// limit override for this descriptor. The expression must evaluate to an
+	// object containing `unit` and `requestsPerUnit`, for example
+	// `{"unit":"minute","requestsPerUnit":5}`.
+	//
+	// See https://agentgateway.dev/docs/standalone/latest/reference/cel/ for more info.
+	// +optional
+	LimitOverride *CELExpression `json:"limitOverride,omitempty"`
 }
 
 // Entry in a rate limit descriptor.

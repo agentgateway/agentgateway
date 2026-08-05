@@ -9167,6 +9167,17 @@ spec:
                                             maxItems: 16
                                             minItems: 1
                                             type: array
+                                          limitOverride:
+                                            description: |-
+                                              Common Expression Language (`CEL`) expression that returns a dynamic
+                                              limit override for this descriptor. The expression must evaluate to an
+                                              object containing `unit` and `requestsPerUnit`, for example
+                                              `{"unit":"minute","requestsPerUnit":5}`.
+
+                                              See https://agentgateway.dev/docs/standalone/latest/reference/cel/ for more info.
+                                            maxLength: 16384
+                                            minLength: 1
+                                            type: string
                                           unit:
                                             description: |-
                                               Cost unit. If unspecified,
@@ -9394,6 +9405,17 @@ spec:
                                   maxItems: 16
                                   minItems: 1
                                   type: array
+                                limitOverride:
+                                  description: |-
+                                    Common Expression Language (`CEL`) expression that returns a dynamic
+                                    limit override for this descriptor. The expression must evaluate to an
+                                    object containing `unit` and `requestsPerUnit`, for example
+                                    `{"unit":"minute","requestsPerUnit":5}`.
+
+                                    See https://agentgateway.dev/docs/standalone/latest/reference/cel/ for more info.
+                                  maxLength: 16384
+                                  minLength: 1
+                                  type: string
                                 unit:
                                   description: |-
                                     Cost unit. If unspecified,
