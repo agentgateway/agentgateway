@@ -33,14 +33,17 @@ fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
 
 	assert_eq!(
 		provider
-			.chat_translation(InputFormat::Completions, model)
+			.chat_translation(InputFormat::Completions, model, None)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
 	);
 	for input in [InputFormat::Messages, InputFormat::Responses] {
 		assert_eq!(
-			provider.chat_translation(input, model).unwrap().output,
+			provider
+				.chat_translation(input, model, None)
+				.unwrap()
+				.output,
 			ChatFormat::OpenAICompletions
 		);
 	}
@@ -215,7 +218,7 @@ async fn openai_inline_moderation_injected_for_completions() {
 		upstream_route_type,
 		..
 	} = provider
-		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.process_completions_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -262,7 +265,7 @@ async fn openai_inline_moderation_overrides_client_value_for_completions() {
 	let RequestResult::Success {
 		request: forwarded, ..
 	} = provider
-		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.process_completions_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -312,7 +315,7 @@ async fn openai_client_moderation_passthrough_without_config() {
 	let RequestResult::Success {
 		request: forwarded, ..
 	} = provider
-		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.process_completions_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -366,7 +369,7 @@ async fn openai_inline_moderation_injected_for_responses() {
 		upstream_route_type,
 		..
 	} = provider
-		.process_responses_request(&backend_info, None, req, false, &mut None)
+		.process_responses_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("OpenAI responses request should process")
 	else {
@@ -409,7 +412,7 @@ async fn openai_inline_moderation_injected_after_messages_translation() {
 		upstream_route_type,
 		..
 	} = provider
-		.process_messages_request(&backend_info, None, req, false, &mut None)
+		.process_messages_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("Anthropic messages request should translate to OpenAI completions")
 	else {
@@ -505,7 +508,7 @@ async fn openai_provider_normalizes_max_tokens_before_forwarding() {
 		llm_request,
 		..
 	} = provider
-		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.process_completions_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -563,7 +566,7 @@ async fn openai_provider_normalizes_max_tokens_after_model_alias() {
 		llm_request,
 		..
 	} = provider
-		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None)
+		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -615,7 +618,7 @@ async fn openai_provider_preserves_max_tokens_for_non_gpt_models() {
 		llm_request,
 		..
 	} = provider
-		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.process_completions_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("OpenAI-compatible completions request should process")
 	else {
@@ -778,7 +781,7 @@ async fn vertex_anthropic_messages_prepares_vertex_body() {
 		upstream_route_type,
 		..
 	} = provider
-		.process_messages_request(&backend_info, None, req, false, &mut None)
+		.process_messages_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("Vertex Anthropic messages request should process")
 	else {
@@ -844,7 +847,7 @@ async fn provider_model_is_set_before_llm_transformations() {
 		llm_request,
 		..
 	} = provider
-		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None)
+		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -903,7 +906,7 @@ async fn llm_transformations_can_set_missing_model() {
 		llm_request,
 		..
 	} = provider
-		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None)
+		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -949,7 +952,7 @@ async fn copilot_anthropic_model_uses_messages_route() {
 		llm_request,
 		upstream_route_type,
 	} = provider
-		.process_messages_request(&backend_info, None, req, false, &mut None)
+		.process_messages_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("Copilot Anthropic messages request should process")
 	else {
@@ -972,6 +975,8 @@ async fn copilot_anthropic_model_uses_messages_route() {
 			None,
 			None,
 			false,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 	assert_eq!(setup_req.uri().path(), "/v1/messages");
@@ -1276,6 +1281,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 	});
 
 	let error_json = r#"{"message":"Expected toolResult blocks at messages.2.content for the following Ids: tooluse_abc123"}"#;
@@ -1351,7 +1357,7 @@ fn openai_completions_error_translates_to_messages_client() {
 		br#"{"error":{"message":"bad request","type":"invalid_request_error","param":null,"code":400}}"#,
 	);
 	let translated = provider
-		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error)
+		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error, None)
 		.expect("OpenAI error should translate to messages error");
 	let body: Value = serde_json::from_slice(&translated).expect("translated error should be JSON");
 
@@ -1371,7 +1377,7 @@ fn custom_messages_error_translates_to_completions_client() {
 		br#"{"type":"error","error":{"type":"invalid_request_error","message":"bad request"}}"#,
 	);
 	let translated = provider
-		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error)
+		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error, None)
 		.expect("Anthropic error should translate to completions error");
 	let body: Value = serde_json::from_slice(&translated).expect("translated error should be JSON");
 
@@ -1396,7 +1402,7 @@ fn foundry_claude_messages_error_uses_anthropic_shape() {
 		br#"{"type":"error","error":{"type":"invalid_request_error","message":"bad request"}}"#,
 	);
 	let translated = provider
-		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error)
+		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error, None)
 		.expect("Foundry Claude messages error should stay Anthropic-shaped");
 	let body: Value = serde_json::from_slice(&translated).expect("translated error should be JSON");
 
@@ -1414,6 +1420,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 	});
 
 	let body = Body::from(
@@ -1492,6 +1499,8 @@ fn setup_request_openai_applies_prefixed_path_without_host_override() {
 			None,
 			Some("/v1/custom"),
 			false,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -1523,6 +1532,8 @@ fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
 			None,
 			Some("/v1/custom/"),
 			false,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -1565,6 +1576,8 @@ fn setup_request_custom_path_override_wins_over_format_path() {
 			Some("/override/messages"),
 			None,
 			true,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -1607,6 +1620,8 @@ fn assert_prefixed_host_override_path(
 			None,
 			Some("/proxy/"),
 			true,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -1646,11 +1661,178 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 			region: strng::new("us-east-1"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			provider_preference: Default::default(),
 		}),
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
 		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
 		Some("trace=repro"),
 	);
+}
+
+/// Runs `setup_request` (no host override) and returns the built upstream request,
+/// so tests can inspect the resolved Bedrock host, path, and signing-service extension.
+fn setup_bedrock_request(
+	provider: &AIProvider,
+	route_type: RouteType,
+	input_format: InputFormat,
+	model: &str,
+) -> crate::http::Request {
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: model.into(),
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: None,
+	};
+	let mut req =
+		crate::http::tests_common::request("https://proxy.example.com/in", http::Method::POST, &[]);
+	provider
+		.setup_request(
+			&mut req,
+			route_type,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+			None,
+			None,
+		)
+		.expect("setup_request should succeed");
+	req
+}
+
+fn bedrock_signing_service(req: &crate::http::Request) -> Option<String> {
+	req
+		.extensions()
+		.get::<crate::http::auth::aws::DefaultAwsServiceName>()
+		.map(|d| d.0.clone())
+}
+
+#[test]
+fn setup_request_bedrock_mantle_only_targets_native_host_path_and_signing() {
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		provider_preference: bedrock::BedrockProviderPreference::MantleOnly,
+	});
+
+	// Completions -> native OpenAI chat path on the Mantle host, signed as bedrock-mantle.
+	let req = setup_bedrock_request(
+		&provider,
+		RouteType::Completions,
+		InputFormat::Completions,
+		"some.model",
+	);
+	assert_eq!(
+		req.uri().authority().map(|a| a.host()),
+		Some("bedrock-mantle.us-east-1.api.aws")
+	);
+	assert_eq!(req.uri().path(), "/v1/chat/completions");
+	assert_eq!(
+		bedrock_signing_service(&req).as_deref(),
+		Some("bedrock-mantle")
+	);
+
+	// Messages -> Anthropic native path, still on the Mantle host.
+	let req = setup_bedrock_request(
+		&provider,
+		RouteType::Messages,
+		InputFormat::Messages,
+		"some.model",
+	);
+	assert_eq!(
+		req.uri().authority().map(|a| a.host()),
+		Some("bedrock-mantle.us-east-1.api.aws")
+	);
+	assert_eq!(req.uri().path(), "/anthropic/v1/messages");
+
+	// Responses -> native responses path.
+	let req = setup_bedrock_request(
+		&provider,
+		RouteType::Responses,
+		InputFormat::Responses,
+		"some.model",
+	);
+	assert_eq!(req.uri().path(), "/v1/responses");
+}
+
+#[test]
+fn setup_request_bedrock_aligns_connection_target_with_model_host() {
+	// Bedrock's host is model-dependent, so setup_request updates the connection target
+	// (not just the request :authority) — the proxy no longer re-resolves it.
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		provider_preference: bedrock::BedrockProviderPreference::MantleOnly,
+	});
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Completions,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "some.model".into(),
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: None,
+	};
+	let mut req =
+		crate::http::tests_common::request("https://proxy.example.com/in", http::Method::POST, &[]);
+	// Placeholder target the proxy picks before the model is parsed.
+	let mut target = Target::Hostname(strng::new("placeholder.example.com"), 443);
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Completions,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+			Some(&mut target),
+			None,
+		)
+		.expect("setup_request should succeed");
+	assert_eq!(
+		target,
+		Target::Hostname(strng::new("bedrock-mantle.us-east-1.api.aws"), 443)
+	);
+}
+
+#[test]
+fn setup_request_bedrock_runtime_default_targets_converse_without_signing_override() {
+	// Default preference + the empty Mantle allow-list keeps chat on the Runtime
+	// Converse endpoint with the default (bedrock) signing service.
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model: None,
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+		provider_preference: bedrock::BedrockProviderPreference::default(),
+	});
+
+	let req = setup_bedrock_request(
+		&provider,
+		RouteType::Completions,
+		InputFormat::Completions,
+		"anthropic.claude-sonnet-4-20250514-v1:0",
+	);
+	assert_eq!(
+		req.uri().authority().map(|a| a.host()),
+		Some("bedrock-runtime.us-east-1.amazonaws.com")
+	);
+	assert_eq!(
+		req.uri().path(),
+		"/model/anthropic.claude-sonnet-4-20250514-v1:0/converse"
+	);
+	assert_eq!(bedrock_signing_service(&req), None);
 }
 
 #[test]

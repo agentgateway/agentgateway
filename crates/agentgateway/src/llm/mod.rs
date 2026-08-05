@@ -45,6 +45,8 @@ use crate::store;
 
 pub const LOCAL_LISTENER_NAME: &str = "llm";
 
+const ANTHROPIC_VERSION: &str = "2023-06-01";
+
 #[cfg(test)]
 mod anthropic_tests;
 
@@ -879,13 +881,19 @@ impl AIProvider {
 		}
 	}
 
-	fn supported_chat_formats(&self, request_model: Option<&str>) -> Vec<ChatFormat> {
+	fn supported_chat_formats(
+		&self,
+		request_model: Option<&str>,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
+	) -> Vec<ChatFormat> {
 		match self {
 			AIProvider::OpenAI(_) => {
 				vec![ChatFormat::OpenAIResponses, ChatFormat::OpenAICompletions]
 			},
 
-			AIProvider::Copilot(_) => copilot::Provider::supported_formats_for_model(request_model),
+			AIProvider::Copilot(_) => {
+				copilot::Provider::supported_formats_for_model(request_model, catalog)
+			},
 
 			AIProvider::Azure(p)
 				if matches!(p.resource_type, azure::AzureResourceType::Foundry)
@@ -899,7 +907,8 @@ impl AIProvider {
 
 			AIProvider::Gemini(_) => vec![ChatFormat::OpenAICompletions],
 			AIProvider::Anthropic(_) => vec![ChatFormat::AnthropicMessages],
-			AIProvider::Bedrock(_) => vec![ChatFormat::BedrockConverse],
+			// Native formats for Mantle models (CHAT_TRANSLATIONS then picks passthrough), else Converse.
+			AIProvider::Bedrock(p) => p.supported_chat_formats(request_model, catalog),
 
 			AIProvider::Vertex(p) if p.is_anthropic_model(request_model) => {
 				vec![ChatFormat::AnthropicMessages]
@@ -945,8 +954,9 @@ impl AIProvider {
 		&self,
 		input_format: InputFormat,
 		request_model: Option<&str>,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<&'static ChatTranslation, AIError> {
-		let supported = self.supported_chat_formats(request_model);
+		let supported = self.supported_chat_formats(request_model, catalog);
 		CHAT_TRANSLATIONS
 			.iter()
 			.find(|translation| {
@@ -1035,19 +1045,25 @@ impl AIProvider {
 	/// providers serve routes from different hosts (Bedrock rerank uses `bedrock-agent-runtime` and
 	/// Vertex rerank uses `discoveryengine`, distinct from the chat/embeddings host). Returns `None`
 	/// for custom providers, which require an explicit host override or provider backend.
-	pub fn default_connector_target(&self, route_type: RouteType) -> Option<Target> {
+	pub fn default_connector_target(
+		&self,
+		route_type: RouteType,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
+	) -> Option<Target> {
 		Some(match self {
 			AIProvider::OpenAI(_) => Target::Hostname(openai::DEFAULT_HOST, 443),
 			AIProvider::Copilot(_) => Target::Hostname(copilot::DEFAULT_HOST, 443),
 			AIProvider::Gemini(_) => Target::Hostname(gemini::DEFAULT_HOST, 443),
 			AIProvider::Anthropic(_) => Target::Hostname(anthropic::DEFAULT_HOST, 443),
 			AIProvider::Vertex(p) => Target::Hostname(p.get_host(route_type), 443),
-			AIProvider::Bedrock(p) => Target::Hostname(p.get_host(route_type), 443),
+			// No model parsed yet; the model-aware host is re-resolved later in the request path.
+			AIProvider::Bedrock(p) => Target::Hostname(p.get_host(route_type, None, catalog), 443),
 			AIProvider::Azure(p) => Target::Hostname(p.get_host(), 443),
 			AIProvider::Custom(_) => return None,
 		})
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	pub fn setup_request(
 		&self,
 		req: &mut Request,
@@ -1056,6 +1072,8 @@ impl AIProvider {
 		path_override: Option<&str>,
 		path_prefix: Option<&str>,
 		has_host_override: bool,
+		connection_target: Option<&mut Target>,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> anyhow::Result<()> {
 		if let Some(path_override) = path_override {
 			http::modify_req_uri(req, |uri| {
@@ -1063,12 +1081,20 @@ impl AIProvider {
 				Ok(())
 			})?;
 		} else {
-			self.set_default_path(req, route_type, llm_request, path_prefix, has_host_override)?;
+			self.set_default_path(
+				req,
+				route_type,
+				llm_request,
+				path_prefix,
+				has_host_override,
+				catalog,
+			)?;
 		}
 		if !has_host_override {
-			self.set_default_authority(req, route_type)?;
+			let model_id = llm_request.map(|l| l.request_model.as_str());
+			self.set_default_authority(req, route_type, model_id, connection_target, catalog)?;
 		}
-		self.set_required_fields(req, route_type, llm_request)?;
+		self.set_required_fields(req, route_type, llm_request, catalog)?;
 		Ok(())
 	}
 
@@ -1100,6 +1126,7 @@ impl AIProvider {
 		llm_request: Option<&LLMRequest>,
 		path_prefix: Option<&str>,
 		has_host_override: bool,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> anyhow::Result<()> {
 		if matches!(route_type, RouteType::Passthrough | RouteType::Detect) {
 			if let Some(prefix) = path_prefix {
@@ -1207,8 +1234,12 @@ impl AIProvider {
 			AIProvider::Bedrock(provider) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
 					if let Some(l) = llm_request {
-						let path =
-							provider.get_path_for_route(route_type, l.streaming, l.request_model.as_str());
+						let path = provider.get_path_for_route(
+							route_type,
+							l.streaming,
+							l.request_model.as_str(),
+							catalog,
+						);
 						let path = Self::with_path_prefix(&path, path_prefix);
 						Self::set_path_and_query(uri, &path)?;
 					}
@@ -1261,6 +1292,9 @@ impl AIProvider {
 		&self,
 		req: &mut Request,
 		route_type: RouteType,
+		model_id: Option<&str>,
+		connection_target: Option<&mut Target>,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> anyhow::Result<()> {
 		let authority = match self {
 			AIProvider::OpenAI(_) => Authority::from_static(openai::DEFAULT_HOST_STR),
@@ -1271,15 +1305,28 @@ impl AIProvider {
 			AIProvider::Azure(provider) => Authority::from_str(&provider.get_host())?,
 			AIProvider::Custom(_) => return Ok(()),
 			AIProvider::Bedrock(provider) => {
-				// Store the region in request extensions so AWS signing can use it.
+				// Resolve host + signing name for the model; stash region/signing in extensions for late signing.
+				let host = provider.get_host(route_type, model_id, catalog);
+				let signing_service = provider.signing_service_name(route_type, model_id, catalog);
+				// Bedrock's Mantle-vs-Runtime host is model-dependent, so align the connection target with it.
+				if let Some(Target::Hostname(target_host, _)) = connection_target {
+					*target_host = host.clone();
+				}
 				return http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
-						uri.authority = Some(Authority::from_str(&provider.get_host(route_type))?);
+						uri.authority = Some(Authority::from_str(&host)?);
 						Ok(())
 					})?;
 					req.extensions.insert(bedrock::AwsRegion {
 						region: provider.region.as_str().to_string(),
 					});
+					if let Some(service) = signing_service {
+						req
+							.extensions
+							.insert(crate::http::auth::aws::DefaultAwsServiceName(
+								service.to_string(),
+							));
+					}
 					Ok(())
 				});
 			},
@@ -1298,6 +1345,7 @@ impl AIProvider {
 		req: &mut Request,
 		route_type: RouteType,
 		llm_request: Option<&LLMRequest>,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> anyhow::Result<()> {
 		match self {
 			AIProvider::Anthropic(_) => {
@@ -1324,9 +1372,10 @@ impl AIProvider {
 						}
 					}
 					// https://docs.anthropic.com/en/api/versioning
-					req
-						.headers
-						.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+					req.headers.insert(
+						"anthropic-version",
+						HeaderValue::from_static(ANTHROPIC_VERSION),
+					);
 					Ok(())
 				})
 			},
@@ -1341,14 +1390,35 @@ impl AIProvider {
 						RouteType::Messages | RouteType::AnthropicTokenCount
 					) {
 					http::modify_req(req, |req| {
-						req
-							.headers
-							.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+						req.headers.insert(
+							"anthropic-version",
+							HeaderValue::from_static(ANTHROPIC_VERSION),
+						);
 						Ok(())
 					})
 				} else {
 					Ok(())
 				}
+			},
+			// Mantle's Anthropic path (`/anthropic/v1/messages`) requires anthropic-version; Runtime's Converse does not.
+			AIProvider::Bedrock(p)
+				if matches!(route_type, RouteType::Messages)
+					&& matches!(
+						p.resolve_endpoint(
+							route_type,
+							llm_request.map(|r| r.request_model.as_str()),
+							catalog
+						),
+						bedrock::BedrockEndpoint::Mantle
+					) =>
+			{
+				http::modify_req(req, |req| {
+					req.headers.insert(
+						"anthropic-version",
+						HeaderValue::from_static(ANTHROPIC_VERSION),
+					);
+					Ok(())
+				})
 			},
 			_ => Ok(()),
 		}
@@ -1383,6 +1453,7 @@ impl AIProvider {
 		req: Request,
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<RequestResult, AIError> {
 		let (parts, mut req) = self
 			.read_body_and_default_model::<types::completions::Request>(policies, req, log)
@@ -1416,6 +1487,7 @@ impl AIProvider {
 				parts,
 				tokenize,
 				log,
+				catalog,
 				types::ChatRequest::Completions,
 			)
 			.await
@@ -1428,6 +1500,7 @@ impl AIProvider {
 		req: Request,
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<RequestResult, AIError> {
 		let (parts, mut req) = self
 			.read_body_and_default_model::<types::messages::Request>(policies, req, log)
@@ -1443,6 +1516,7 @@ impl AIProvider {
 				parts,
 				tokenize,
 				log,
+				catalog,
 				types::ChatRequest::Messages,
 			)
 			.await
@@ -1509,6 +1583,7 @@ impl AIProvider {
 		req: Request,
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<RequestResult, AIError> {
 		let (mut parts, mut req) = self
 			.read_body_and_default_model::<types::responses::Request>(policies, req, log)
@@ -1530,6 +1605,7 @@ impl AIProvider {
 				parts,
 				tokenize,
 				log,
+				catalog,
 				types::ChatRequest::Responses,
 			)
 			.await
@@ -1770,6 +1846,7 @@ impl AIProvider {
 		mut parts: Parts,
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 		chat_request: F,
 	) -> Result<RequestResult, AIError>
 	where
@@ -1781,7 +1858,8 @@ impl AIProvider {
 		} else {
 			None
 		};
-		let chat_translation = self.chat_translation(original_format, request_model.as_deref())?;
+		let chat_translation =
+			self.chat_translation(original_format, request_model.as_deref(), catalog)?;
 		let provider_format = chat_translation.provider_format();
 		let prepared = self
 			.prepare_request(
@@ -1974,10 +2052,19 @@ impl AIProvider {
 		} = buffered;
 
 		let (llm_resp, body) = if !parts.status.is_success() {
-			let body = self.process_error(&req, parts.status, &bytes)?;
+			let body = self.process_error(
+				&req,
+				parts.status,
+				&bytes,
+				model_catalog.map(|c| c.as_handle()),
+			)?;
 			(LLMResponse::default(), body)
 		} else {
-			let mut resp = self.translate_chat_or_detect_response(&req, &bytes)?;
+			let mut resp = self.translate_chat_or_detect_response(
+				&req,
+				&bytes,
+				model_catalog.map(|c| c.as_handle()),
+			)?;
 			let prompt_guard_headers =
 				response_prompt_guard_headers(&parts.headers, rate_limit.request_traceparent.as_ref());
 
@@ -2137,7 +2224,12 @@ impl AIProvider {
 		} = buffered;
 		parts.headers.remove(header::CONTENT_LENGTH);
 		if !parts.status.is_success() {
-			let body = self.process_error(&req, parts.status, &bytes)?;
+			let body = self.process_error(
+				&req,
+				parts.status,
+				&bytes,
+				model_catalog.map(|c| c.as_handle()),
+			)?;
 			return Ok(Self::finalize_response(
 				parts,
 				body.into(),
@@ -2170,7 +2262,12 @@ impl AIProvider {
 		} = buffered;
 		parts.headers.remove(header::CONTENT_LENGTH);
 		if !parts.status.is_success() {
-			let body = self.process_error(&req, parts.status, &bytes)?;
+			let body = self.process_error(
+				&req,
+				parts.status,
+				&bytes,
+				model_catalog.map(|c| c.as_handle()),
+			)?;
 			return Ok(Self::finalize_response(
 				parts,
 				body.into(),
@@ -2273,6 +2370,7 @@ impl AIProvider {
 		&self,
 		req: &LLMRequest,
 		bytes: &Bytes,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<Box<dyn ResponseType>, AIError> {
 		if req.input_format == InputFormat::Detect {
 			return Ok(Box::new(
@@ -2281,7 +2379,7 @@ impl AIProvider {
 			));
 		}
 
-		let translation = self.chat_translation(req.input_format, Some(&req.request_model))?;
+		let translation = self.chat_translation(req.input_format, Some(&req.request_model), catalog)?;
 		translation.render_response(
 			bytes,
 			&ChatResponseContext {
@@ -2307,7 +2405,11 @@ impl AIProvider {
 		let input_format = req.input_format;
 		let bedrock_tool_name_map = bedrock_tool_name_map(&req).cloned();
 		let chat_translation = if input_format.is_chat() {
-			Some(self.chat_translation(input_format, Some(&model))?)
+			Some(self.chat_translation(
+				input_format,
+				Some(&model),
+				model_catalog.as_deref().map(|c| c.as_handle()),
+			)?)
 		} else {
 			None
 		};
@@ -2518,9 +2620,11 @@ impl AIProvider {
 		req: &LLMRequest,
 		status: ::http::StatusCode,
 		bytes: &Bytes,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<Bytes, AIError> {
 		if req.input_format.is_chat() {
-			let translation = self.chat_translation(req.input_format, Some(&req.request_model))?;
+			let translation =
+				self.chat_translation(req.input_format, Some(&req.request_model), catalog)?;
 			return translation.error(
 				bytes,
 				status,

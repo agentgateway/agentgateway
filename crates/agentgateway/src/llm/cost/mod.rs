@@ -176,8 +176,26 @@ impl ModelCatalog {
 	}
 }
 
+impl ModelCatalog {
+	/// Borrow as the cross-crate catalog handle threaded through the request path.
+	pub fn as_handle(&self) -> &dyn agent_llm::model_catalog::ModelCatalogHandle {
+		self
+	}
+}
+
+impl agent_llm::model_catalog::ModelCatalogHandle for ModelCatalog {
+	fn model_has_tag(&self, model_id: &str, tag: &str) -> bool {
+		self.state.load().snapshot.model_has_tag(model_id, tag)
+	}
+	fn get_model_tags(&self, model_id: &str) -> Option<Arc<std::collections::BTreeSet<String>>> {
+		self.state.load().snapshot.get_model_tags(model_id)
+	}
+}
+
 pub struct CatalogSnapshot {
 	catalog: Option<CatalogData>,
+	/// Precomputed `model_id -> tags` (merged across providers) for O(1) attribute lookups.
+	model_tags: std::collections::HashMap<String, Arc<std::collections::BTreeSet<String>>>,
 }
 
 impl fmt::Debug for CatalogSnapshot {
@@ -194,17 +212,41 @@ impl CatalogSnapshot {
 		Ok(Self::from_catalogs([catalog::from_json(json)?]))
 	}
 
+	/// Whether `model_id` carries `tag` (used by the `ModelCatalogHandle` impl).
+	fn model_has_tag(&self, model_id: &str, tag: &str) -> bool {
+		self
+			.model_tags
+			.get(model_id)
+			.is_some_and(|t| t.contains(tag))
+	}
+
+	/// Return the tags for `model_id` if known.
+	fn get_model_tags(&self, model_id: &str) -> Option<Arc<std::collections::BTreeSet<String>>> {
+		self.model_tags.get(model_id).cloned()
+	}
+
 	fn from_catalogs(catalogs: impl IntoIterator<Item = CatalogData>) -> Self {
 		let merged = catalogs
 			.into_iter()
 			.fold(CatalogData::default(), CatalogData::override_with);
+		let model_tags = merged
+			.providers
+			.values()
+			.flat_map(|p| p.models.iter())
+			.filter(|(_, m)| !m.tags.is_empty())
+			.map(|(id, m)| (id.clone(), Arc::new(m.tags.clone())))
+			.collect();
 		CatalogSnapshot {
 			catalog: Some(merged),
+			model_tags,
 		}
 	}
 
 	fn empty() -> Self {
-		CatalogSnapshot { catalog: None }
+		CatalogSnapshot {
+			catalog: None,
+			model_tags: std::collections::HashMap::new(),
+		}
 	}
 
 	fn list_models(&self) -> ModelCatalogModels {
@@ -783,6 +825,19 @@ mod tests {
 			let p = self.project(provider, model, resp, convention);
 			(p.cost.and_then(|c| c.total().to_f64()), p.status)
 		}
+	}
+
+	#[test]
+	fn model_has_tag_reads_tags_from_the_catalog() {
+		let json = r#"{"providers":{"bedrock":{"models":{
+			"openai.gpt-oss-120b":{"tags":["mantle"]},
+			"anthropic.claude-3-5-sonnet-20241022-v2:0":{"rates":{"input":"3.00"}}
+		}}}}"#;
+		let snapshot = CatalogSnapshot::parse(json).unwrap();
+		assert!(snapshot.model_has_tag("openai.gpt-oss-120b", "mantle"));
+		assert!(!snapshot.model_has_tag("anthropic.claude-3-5-sonnet-20241022-v2:0", "mantle"));
+		assert!(!snapshot.model_has_tag("openai.gpt-oss-120b", "other"));
+		assert!(!snapshot.model_has_tag("unknown.model", "mantle"));
 	}
 
 	#[test]

@@ -159,6 +159,7 @@ pub struct RawConfig {
 
 	/// Model cost catalog sources; entries are merged in order, with later entries taking precedence.
 	model_catalog: Option<Vec<ModelCatalogSource>>,
+
 	/// Primary database used by local runtime features.
 	database: Option<telemetry::log_store::Config>,
 	/// Controls whether UI-managed configuration is written to the config file or a DB overlay.
