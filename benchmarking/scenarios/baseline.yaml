@@ -75,7 +75,7 @@ scenario:
     enabled: false
 
   decode:
-    replicas: 1
+    replicas: 3
     parallelism:
       tensor: 0
       data: 1

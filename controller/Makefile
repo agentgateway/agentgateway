@@ -714,8 +714,12 @@ kind-load: kind-load-testbox
 BENCHMARK_LLM_D_BENCHMARK_DIR ?=
 
 .PHONY: benchmark
-benchmark: kind-create ## Run the agentgateway vs plain-Service benchmark (requires BENCHMARK_LLM_D_BENCHMARK_DIR)
+benchmark: kind-create ## Run the agentgateway vs plain-Service benchmark (optional: BENCHMARK_LLM_D_BENCHMARK_DIR to use an existing clone)
 	CLUSTER_NAME=$(CLUSTER_NAME) LLM_D_BENCHMARK_DIR=$(BENCHMARK_LLM_D_BENCHMARK_DIR) ../benchmarking/run-benchmark.sh
+
+.PHONY: benchmark-clean
+benchmark-clean: ## Remove the llm-d-benchmark clone/CLI managed by `make benchmark` (leaves the kind cluster alone)
+	LLM_D_BENCHMARK_DIR=$(BENCHMARK_LLM_D_BENCHMARK_DIR) ../benchmarking/run-benchmark.sh --clean
 
 #----------------------------------------------------------------------------------
 # Targets for running Agent Gateway conformance tests
