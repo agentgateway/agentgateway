@@ -120,6 +120,7 @@ impl From<CrossAppAccessAuthConfig> for CrossAppAccessAuth {
 			chained_exchange: Some(chained_exchange),
 			authorization_location: AuthorizationLocation::default(),
 			cache,
+			state: Default::default(),
 		};
 		Self { oauth }
 	}

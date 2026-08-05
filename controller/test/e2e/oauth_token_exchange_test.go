@@ -3,12 +3,17 @@
 package e2e_test
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/onsi/gomega"
+	"istio.io/istio/pkg/test/util/retry"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
@@ -22,6 +27,7 @@ func TestOAuthTokenExchange(tt *testing.T) {
 	t.Apply(manifest("oauth", "routes.yaml"))
 
 	t.HTTPRouteAccepted("cross-app-access", base.Namespace)
+	t.HTTPRouteAccepted("invalid-oauth-token-exchange", base.Namespace)
 	t.HTTPRouteAccepted("oauth-token-exchange", base.Namespace)
 	t.HTTPRouteAccepted("oauth-jwt-subject", base.Namespace)
 	t.HTTPRouteAccepted("oauth-jwt-bearer", base.Namespace)
@@ -59,6 +65,42 @@ func TestOAuthTokenExchange(tt *testing.T) {
 			base.Expect(http.StatusBadRequest),
 			curl.WithHeader("X-Actor-Token", "actor-token"),
 			curl.WithHeader("X-Tenant", "tenant-a"),
+		)
+	})
+
+	t.Run("InvalidConfiguration", func(t base.Test) {
+		const missingReferenceName = "missing-oauth-client-secret"
+		retry.UntilSuccessOrFail(t, func() error {
+			policy := &agentgateway.AgentgatewayPolicy{}
+			if err := t.E2EClusterContext().ControllerClient.Get(
+				t.E2EContext(),
+				types.NamespacedName{Name: "invalid-oauth-token-exchange", Namespace: base.Namespace},
+				policy,
+			); err != nil {
+				return err
+			}
+			for _, ancestor := range policy.Status.Ancestors {
+				for _, condition := range ancestor.Conditions {
+					if condition.Type == "Accepted" &&
+						condition.Status == metav1.ConditionTrue &&
+						condition.Reason == "PartiallyValid" &&
+						strings.Contains(condition.Message, missingReferenceName) {
+						return nil
+					}
+				}
+			}
+			return fmt.Errorf("policy status does not report Accepted=True/PartiallyValid for %s", missingReferenceName)
+		})
+
+		t.Send("invalid-oauth-token-exchange.com",
+			&testmatchers.HttpResponse{
+				StatusCode: http.StatusInternalServerError,
+				Body: gomega.And(
+					gomega.ContainSubstring("OAuth token exchange configuration is invalid"),
+					gomega.Not(gomega.ContainSubstring(missingReferenceName)),
+				),
+			},
+			curl.WithHeader("Authorization", "Bearer subject-token"),
 		)
 	})
 
