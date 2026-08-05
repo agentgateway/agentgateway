@@ -47,10 +47,22 @@ agentgateway
              `---- response passes through vSR and is stored in Redis
 ```
 
-agentgateway invokes vSR as an ExtProc before forwarding a cache miss to the
-backend. It also sends the completed backend response through vSR so the
-response can be added to Redis. The cache plugin is attached only to the
-factory-reset decision; other support intents select an uncached decision.
+agentgateway invokes vSR as an ExtProc before selecting and calling the
+configured HomeHub backend. On a cache hit, vSR returns the cached completion
+as an immediate ExtProc response. agentgateway sends that response to the
+client and stops upstream processing, so the HomeHub Service and its
+`AgentgatewayBackend` are not called.
+
+On a cache miss, vSR allows upstream processing to continue and agentgateway
+routes the request to the deterministic HomeHub backend. agentgateway sends the
+completed backend response through vSR, which stores it in Redis before the
+response is returned to the client. The verification script demonstrates this
+behavior by warming the cache once, then confirming that exact and paraphrased
+cache hits return successfully without increasing the HomeHub backend's
+invocation counter.
+
+The cache plugin is attached only to the factory-reset decision; other support
+intents select an uncached decision.
 
 ## Before You Begin
 
