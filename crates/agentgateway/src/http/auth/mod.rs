@@ -70,8 +70,7 @@ fn numeric_date_seconds(duration: Duration) -> u64 {
 		.saturating_add(u64::from(duration.subsec_nanos() > 0))
 }
 
-#[apply(schema!)]
-#[cfg_attr(feature = "schema", schemars(rename = "BackendAuth"))]
+#[apply(schema_ser!)]
 pub enum BackendAuthKind {
 	/// Forward the validated incoming JWT to the backend.
 	Passthrough {
@@ -82,11 +81,7 @@ pub enum BackendAuthKind {
 	/// Send a configured secret value to the backend.
 	Key {
 		/// Secret value to send to the backend.
-		#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
-		#[serde(
-			serialize_with = "ser_redact",
-			deserialize_with = "deser_key_from_file"
-		)]
+		#[serde(serialize_with = "ser_redact")]
 		value: SecretString,
 		/// Where to place the secret in the backend request.
 		#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -129,19 +124,6 @@ impl BackendAuth {
 		Self {
 			kind: Some(kind),
 			credentials: Vec::new(),
-		}
-	}
-
-	/// Resolves deferred file-based resources through the resource manager so
-	/// they are watched for changes. Must be called when converting local
-	/// config; XDS-delivered config carries material inline and is a no-op.
-	pub async fn resolve(
-		&mut self,
-		resources: &crate::resource_manager::ResourceFetcher,
-	) -> anyhow::Result<()> {
-		match &mut self.kind {
-			Some(BackendAuthKind::JwtSign(cfg)) => cfg.resolve(resources).await,
-			_ => Ok(()),
 		}
 	}
 }
@@ -296,22 +278,12 @@ async fn apply_backend_auth_kind(
 			let token = cfg
 				.sign()
 				.map_err(ProxyError::BackendAuthenticationFailed)?;
-			let resolved = cfg
-				.location
-				.as_ref()
-				.unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
-			// jwtSign fully replaces backend auth; strip any client-supplied
-			// Authorization header instead of letting it ride through
-			// alongside (or instead of, if `location` differs) the signed JWT.
-			DEFAULT_AUTHORIZATION_LOCATION.remove(req)?;
+			let explicit = cfg.location().is_some();
+			let resolved = cfg.location().unwrap_or(&DEFAULT_AUTHORIZATION_LOCATION);
 			resolved.insert(req, &token)?;
-			// The signed JWT must stay exactly where jwtSign put it, even when
-			// `location` was defaulted: providers rewrite non-explicit Bearer
-			// tokens (e.g. Anthropic relocates them to x-api-key), which would
-			// break a keypair JWT.
 			req
 				.extensions_mut()
-				.insert(AppliedBackendAuthLocation { explicit: true });
+				.insert(AppliedBackendAuthLocation { explicit });
 		},
 		BackendAuthKind::OAuthTokenExchange(te_auth) => {
 			let explicit = oauth::apply_token_exchange(&backend_info.inputs, te_auth, req).await?;

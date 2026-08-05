@@ -196,7 +196,15 @@ impl RequestOrResponse<'_> {
 				if let RequestOrResponse::Request(r) = self {
 					let _ = modify_req_uri(r, |uri| {
 						uri.authority = Some(v);
-						if uri.scheme.is_none() {
+						// http::Uri::from_parts requires scheme+authority+path together,
+						// or authority alone with neither scheme nor path (the CONNECT
+						// request-target shape). Only synthesize a scheme when a path is
+						// also present -- i.e. when we're promoting an origin-form URI to
+						// absolute-form. Unconditionally adding a scheme here used to make
+						// Uri::from_parts reject any CONNECT (schemeless, pathless)
+						// request's authority mutation with PathAndQueryMissing, silently
+						// discarded by the `let _ =` above, so the mutation was a no-op.
+						if uri.scheme.is_none() && uri.path_and_query.is_some() {
 							// When authority is set, scheme must also be set
 							// TODO: do the same for HeaderOrPseudo::Scheme
 							uri.scheme = Some(Scheme::HTTP);

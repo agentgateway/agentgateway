@@ -478,8 +478,6 @@ pub mod from_completions {
 
 	use axum_core::body::Body;
 	use bytes::Bytes;
-	use futures_util::StreamExt;
-	use futures_util::stream::{self, BoxStream};
 	use itertools::Itertools;
 	use types::bedrock;
 	use types::completions::typed as completions;
@@ -702,10 +700,9 @@ pub mod from_completions {
 			max_tokens: req.max_tokens(),
 			temperature: req.temperature,
 			top_p: req.top_p,
-			// Map Anthropic-style vendor extension to Bedrock topK when provided
-			top_k: req.vendor_extensions.top_k,
 			stop_sequences: req.stop_sequence(),
 		};
+		let top_k = req.vendor_extensions.top_k;
 
 		let tool_choice = match req.tool_choice {
 			Some(completions::ToolChoiceOption::Function(completions::NamedToolChoice { function })) => {
@@ -816,7 +813,7 @@ pub mod from_completions {
 				.and_then(crate::types::thinking_budget_for_reasoning_effort)
 		});
 
-		let additional_model_request_fields = enabled_thinking_budget.map(|budget| {
+		let mut additional_model_request_fields = enabled_thinking_budget.map(|budget| {
 			serde_json::json!({
 				"thinking": {
 					"type": "enabled",
@@ -824,6 +821,16 @@ pub mod from_completions {
 				}
 			})
 		});
+		// Anthropic manual thinking is incompatible with custom sampling parameters.
+		if enabled_thinking_budget.is_none()
+			&& let Some(top_k) = top_k
+		{
+			additional_model_request_fields
+				.get_or_insert_with(|| serde_json::json!({}))
+				.as_object_mut()
+				.expect("additional model request fields must be a JSON object")
+				.insert("top_k".to_string(), top_k.into());
+		}
 		let output_config = req
 			.response_format
 			.as_ref()
@@ -1201,30 +1208,7 @@ pub mod from_completions {
 			}
 		});
 
-		append_done_on_success(body.into_data_stream())
-	}
-
-	pub(super) fn append_done_on_success<S>(stream: S) -> Body
-	where
-		S: futures_core::Stream<Item = Result<Bytes, axum_core::Error>> + Send + 'static,
-	{
-		let done = crate::parse::encode_sse_event("", Bytes::from_static(b"[DONE]"));
-		let stream = stream::unfold(
-			(Some(stream.boxed()), Some(done)),
-			|(stream, done): (
-				Option<BoxStream<'static, Result<Bytes, axum_core::Error>>>,
-				Option<Bytes>,
-			)| async move {
-				let mut stream = stream?;
-				match stream.next().await {
-					Some(Ok(chunk)) => Some((Ok(chunk), (Some(stream), done))),
-					Some(Err(err)) => Some((Err(err), (None, None))),
-					None => done.map(|done| (Ok(done), (None, None))),
-				}
-			},
-		)
-		.fuse();
-		Body::from_stream(stream)
+		parse::sse::append_done_on_success(body)
 	}
 
 	pub fn translate_stop_reason(
@@ -1581,9 +1565,9 @@ pub mod from_messages {
 				req.temperature
 			},
 			top_p: if thinking_enabled { None } else { req.top_p },
-			top_k: if thinking_enabled { None } else { req.top_k },
 			stop_sequences: req.stop_sequences,
 		};
+		let top_k = if thinking_enabled { None } else { req.top_k };
 
 		let tool_config = pending_tool_config.map(|(tools, tool_choice)| {
 			let mut bedrock_tools = Vec::with_capacity(tools.len() * 2);
@@ -1624,6 +1608,10 @@ pub mod from_messages {
 				.expect("additional model request fields must be a JSON object")
 				.insert(key.to_string(), value);
 		};
+
+		if let Some(top_k) = top_k {
+			upsert_additional_field("top_k", top_k.into());
+		}
 
 		// Preserve explicit output_config in Anthropic's model-specific envelope.
 		if let Some(output_config) = requested_output_config_json {
@@ -2591,7 +2579,6 @@ pub mod from_responses {
 			max_tokens: req.max_output_tokens.unwrap_or(4096) as usize,
 			temperature: req.temperature,
 			top_p: req.top_p,
-			top_k: None,
 			stop_sequences: vec![],
 		};
 		let output_config = req

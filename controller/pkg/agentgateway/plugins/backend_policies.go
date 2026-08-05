@@ -3,9 +3,7 @@ package plugins
 import (
 	"errors"
 	"fmt"
-	"maps"
 	"net/url"
-	slices0 "slices"
 	"strings"
 
 	jsonpb "google.golang.org/protobuf/encoding/protojson"
@@ -13,6 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/structpb"
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/kube/krt"
+	"istio.io/istio/pkg/maps"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
 	corev1 "k8s.io/api/core/v1"
@@ -716,13 +715,15 @@ func translateMcpIDP(provider *agentgateway.McpIDP) api.BackendPolicySpec_McpAut
 func translateJSONValueMap(valueContext string, values map[string]apiextensionsv1.JSON) (map[string]*structpb.Value, error) {
 	var errs []error
 	var translated map[string]*structpb.Value
-	for _, key := range slices0.Sorted(maps.Keys(values)) {
+	// Stable iteration keeps joined translation errors deterministic; successful
+	// values still land in the unordered protobuf map.
+	for key, value := range maps.SeqStable(values) {
 		if translated == nil {
 			translated = make(map[string]*structpb.Value)
 		}
 
 		proto := &structpb.Value{}
-		if err := jsonpb.Unmarshal(values[key].Raw, proto); err != nil {
+		if err := jsonpb.Unmarshal(value.Raw, proto); err != nil {
 			logger.Error("error converting JSON value", "context", valueContext, "key", key)
 			errs = append(errs, fmt.Errorf("%s %q contains invalid JSON", valueContext, key))
 			continue
@@ -1724,13 +1725,7 @@ func buildGcpAuthPolicy(ctx PolicyCtx, auth *agentgateway.GcpAuth, namespace str
 }
 
 func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, namespace string) (*api.BackendAuthPolicy, error) {
-	// translateJwtSignSigningAlg rejects unrecognized alg values rather than
-	// falling back to a default, so an error here must not fall through to
-	// building a policy that silently signs with RS256 instead.
-	alg, err := translateJwtSignSigningAlg(auth.Alg)
-	if err != nil {
-		return nil, err
-	}
+	alg := translateJwtSignSigningAlg(auth.Alg)
 	var errs []error
 	// CEL admission validation cannot inspect map[string]JSON fields, so the
 	// signer-reserved claims are enforced here instead.
@@ -1780,17 +1775,16 @@ func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, names
 	}, nil
 }
 
-// translateJwtSignSigningAlg maps a nil alg to UNSPECIFIED so the data plane
-// applies its RS256 default, but rejects unrecognized values instead of
-// silently signing with the wrong algorithm. Unrecognized values are normally
-// unreachable behind the CRD enum validation; this guards against version skew.
-func translateJwtSignSigningAlg(alg *agentgateway.JwtSigningAlg) (api.JwtSigningAlg, error) {
+// translateJwtSignSigningAlg is infallible because the CRD validates the enum.
+// Preserve an unknown numeric value for programmatic callers that bypass
+// admission so the data plane rejects it instead of silently defaulting RS256.
+func translateJwtSignSigningAlg(alg *agentgateway.JwtSigningAlg) api.JwtSigningAlg {
 	if alg == nil {
-		return api.JwtSigningAlg_JWT_SIGNING_ALG_UNSPECIFIED, nil
+		return api.JwtSigningAlg_JWT_SIGNING_ALG_UNSPECIFIED
 	}
 	translated, ok := translateJWTSigningAlgValue(*alg)
 	if !ok {
-		return api.JwtSigningAlg_JWT_SIGNING_ALG_UNSPECIFIED, fmt.Errorf("unsupported jwtSign signing algorithm %q", *alg)
+		return api.JwtSigningAlg(-1)
 	}
-	return translated, nil
+	return translated
 }

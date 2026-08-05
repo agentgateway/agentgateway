@@ -623,6 +623,12 @@ impl<'a> Executor<'a> {
 		this.llm_request = Some(llm_body);
 		this
 	}
+	pub fn new_llm_request<B>(req: &'a ::http::Request<B>, llm_body: &'a serde_json::Value) -> Self {
+		let mut this = Self::new_empty();
+		this.set_request(req);
+		this.llm_request = Some(llm_body);
+		this
+	}
 	pub fn new_logger(
 		req: Option<&'a RequestSnapshot>,
 		resp: Option<&'a ResponseSnapshot>,

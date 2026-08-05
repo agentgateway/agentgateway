@@ -10,6 +10,8 @@ data: {"id":"msg_tool","choices":[{"index":0,"delta":{"content":null,"tool_calls
 
 data: {"id":"msg_tool","choices":[{"index":0,"delta":{"content":null},"finish_reason":"tool_calls"}],"created":123,"model":"claude-haiku-4-5-20251001","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":15,"completion_tokens":12,"total_tokens":27}}
 
+data: [DONE]
+
 
 
 {

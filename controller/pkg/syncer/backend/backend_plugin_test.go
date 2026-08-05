@@ -369,6 +369,34 @@ func TestBuildAIBackend(t *testing.T) {
 			},
 		},
 		{
+			name: "Valid OpenAI backend with inline moderation",
+			backend: &agentgateway.AgentgatewayBackend{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "openai-moderation-backend",
+					Namespace: "test-ns",
+				},
+				Spec: agentgateway.AgentgatewayBackendSpec{
+					AI: &agentgateway.AIBackend{
+						LLM: &agentgateway.LLMProvider{
+							OpenAI: &agentgateway.OpenAIConfig{
+								Model: new("gpt-5"),
+								Moderation: &agentgateway.OpenAIInlineModeration{
+									Policy: &agentgateway.OpenAIInlineModerationPolicy{
+										Input: &agentgateway.OpenAIInlineModerationConfig{
+											Mode: agentgateway.OpenAIInlineModerationModeBlock,
+										},
+										Output: &agentgateway.OpenAIInlineModerationConfig{
+											Mode: agentgateway.OpenAIInlineModerationModeScore,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		{
 			name: "Valid Azure OpenAI backend",
 			backend: &agentgateway.AgentgatewayBackend{
 				ObjectMeta: metav1.ObjectMeta{

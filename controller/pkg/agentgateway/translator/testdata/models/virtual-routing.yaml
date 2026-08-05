@@ -45,6 +45,10 @@ spec:
     sectionName: llm
   provider: OpenAI
   policies:
+    authorization:
+      policy:
+        matchExpressions:
+        - request.headers['x-model-access'] == 'allowed'
     transformations:
     - field: model
       expression: '"gpt-5-mini-transformed"'
@@ -154,6 +158,9 @@ output:
         providerGroups:
         - providers:
           - inlinePolicies:
+            - authorization:
+                allow:
+                - request.headers['x-model-access'] == 'allowed'
             - ai:
                 transformations:
                   model: '"gpt-5-mini-transformed"'
@@ -211,6 +218,9 @@ output:
       aiPolicy:
         transformations:
           model: '"gpt-5-mini-transformed"'
+      authorization:
+        allow:
+        - request.headers['x-model-access'] == 'allowed'
       concreteModel:
         backend:
           backend: default/gpt-5-mini/backend.llm

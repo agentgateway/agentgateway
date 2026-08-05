@@ -496,8 +496,20 @@ async fn apply_llm_request_policies(
 		.filter(|rate_limit| rate_limit.spec.limit_type == http::localratelimit::RateLimitType::Tokens)
 		.cloned()
 		.collect::<Vec<_>>();
+	let mut local_status: Option<http::localratelimit::RateLimitStatus> = None;
 	for lrl in &local_rate_limit {
-		lrl.check_llm_request(llm_req)?;
+		local_status = http::localratelimit::RateLimitStatus::most_constrained(
+			local_status,
+			lrl.check_llm_request(llm_req)?,
+		);
+	}
+	if let Some(status) = local_status {
+		http::x_headers::set_ratelimit_headers(
+			response_headers,
+			status.limit,
+			status.remaining,
+			status.reset_seconds,
+		);
 	}
 	let (rl_resp, response) = if let Some(rrl) = &policies.remote_rate_limit {
 		// For the LLM request side, request either the count of the input tokens (if tokenization was done)
@@ -2284,7 +2296,7 @@ async fn make_backend_call(
 							Some(inputs.model_catalog.as_handle()),
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ProxyError::AI)?,
 						RouteType::Messages => Box::pin(llm.provider.process_messages_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2294,7 +2306,7 @@ async fn make_backend_call(
 							Some(inputs.model_catalog.as_handle()),
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ProxyError::AI)?,
 						RouteType::Responses => Box::pin(llm.provider.process_responses_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2304,7 +2316,7 @@ async fn make_backend_call(
 							Some(inputs.model_catalog.as_handle()),
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ProxyError::AI)?,
 						RouteType::Embeddings => Box::pin(llm.provider.process_embeddings_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2313,7 +2325,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ProxyError::AI)?,
 						RouteType::Rerank => Box::pin(llm.provider.process_rerank_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2322,7 +2334,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ProxyError::AI)?,
 						RouteType::AnthropicTokenCount => Box::pin(llm.provider.process_count_tokens_request(
 							&backend_info,
 							req,
@@ -2330,7 +2342,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ProxyError::AI)?,
 						RouteType::Detect => Box::pin(llm.provider.process_detect_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2338,7 +2350,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ProxyError::AI)?,
 						_ => unreachable!(),
 					};
 					let (mut req, llm_request, upstream_route_type) = match r {
@@ -2620,7 +2632,7 @@ async fn make_backend_call(
 				.assert_size::<{ 4 * 1024 }>(),
 		)
 		.await
-		.map_err(|e| ProxyError::Processing(e.into()))?
+		.map_err(ProxyError::AI)?
 	} else {
 		resp
 	};

@@ -1,14 +1,12 @@
 use std::collections::BTreeMap;
-use std::fmt;
-use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::Context;
 
 use super::jws::{JwtSigningAlg, SigningKey};
 use super::{AuthorizationLocation, jwt_claim_times, unix_timestamp_now};
-use crate::resource_manager::{ResourceFetcher, ResourceRef};
-use crate::serdes::FileOrInline;
+use crate::resource_manager::ResourceFetcher;
+use crate::serdes::{FileOrInline, load_file_or_inline};
 use crate::*;
 
 /// Default token lifetime. Keep signed tokens short-lived to limit replay
@@ -25,85 +23,46 @@ const ISSUED_AT_BACKDATE: Duration = Duration::from_secs(10);
 /// no sense for per-request tokens) but stays reserved.
 const RESERVED_CLAIMS: &[&str] = &["iat", "exp", "nbf"];
 
-#[derive(Clone)]
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(untagged)]
 enum JwtSignState {
-	Parsed(SigningKey),
-	File(PathBuf),
-	Invalid(String),
+	Valid(JwtSignConfig),
+	Invalid {
+		#[serde(rename = "translationError")]
+		reason: String,
+	},
 }
 
 /// Signs a short-lived JWT with a private key on each request and sends it to
 /// the backend. For upstreams that require per-request keypair JWTs (e.g. the
 /// Snowflake SQL API) rather than a static credential.
-#[derive(Clone, serde::Deserialize)]
-#[serde(try_from = "RawJwtSignAuth", rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-pub struct JwtSignAuth {
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(transparent)]
+pub struct JwtSignAuth(JwtSignState);
+
+#[derive(Clone, Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JwtSignConfig {
 	#[serde(skip)]
-	#[cfg_attr(feature = "schema", schemars(skip))]
-	state: JwtSignState,
+	signing_key: SigningKey,
 	#[serde(default)]
 	alg: JwtSigningAlg,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	kid: Option<String>,
 	claims: BTreeMap<String, serde_json::Value>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[serde(with = "crate::serdes::serde_dur_option")]
 	ttl: Option<Duration>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub(super) location: Option<AuthorizationLocation>,
 }
 
-impl fmt::Debug for JwtSignAuth {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let mut debug = f.debug_struct("JwtSignAuth");
-		match &self.state {
-			JwtSignState::Invalid(error) => {
-				debug.field("translation_error", error);
-			},
-			JwtSignState::Parsed(_) | JwtSignState::File(_) => {
-				debug
-					.field("signing_key", &"<redacted>")
-					.field("alg", &self.alg)
-					.field("kid", &self.kid)
-					.field("claims", &self.claims)
-					.field("ttl", &self.ttl)
-					.field("location", &self.location);
-			},
-		}
-		debug.finish()
-	}
-}
-
-impl serde::Serialize for JwtSignAuth {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		use serde::ser::SerializeStruct;
-
-		if let JwtSignState::Invalid(error) = &self.state {
-			let mut state = serializer.serialize_struct("JwtSignAuth", 1)?;
-			state.serialize_field("translationError", error)?;
-			return state.end();
-		}
-
-		let mut state = serializer.serialize_struct("JwtSignAuth", 5)?;
-		state.serialize_field("alg", &self.alg)?;
-		state.serialize_field("kid", &self.kid)?;
-		state.serialize_field("claims", &self.claims)?;
-		state.serialize_field("ttl", &self.ttl.map(SerializableDuration))?;
-		state.serialize_field("location", &self.location)?;
-		state.end()
-	}
-}
-
-#[derive(serde::Serialize)]
-struct SerializableDuration(#[serde(with = "crate::serdes::serde_dur")] Duration);
-
-#[derive(Clone, Debug, serde::Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-struct RawJwtSignAuth {
+/// Signs a short-lived JWT with a private key on each request and sends it to
+/// the backend. For upstreams that require per-request keypair JWTs (e.g. the
+/// Snowflake SQL API) rather than a static credential.
+#[apply(schema_de!)]
+#[cfg_attr(feature = "schema", schemars(rename = "JwtSignAuth"))]
+pub(crate) struct LocalJwtSignAuth {
 	/// PEM-encoded private signing key (RSA or EC, matching `alg`).
 	#[cfg_attr(feature = "schema", schemars(with = "crate::serdes::FileOrInline"))]
 	signing_key: FileOrInline,
@@ -116,7 +75,7 @@ struct RawJwtSignAuth {
 	/// Static claims added to every token (e.g. iss, sub, aud). Values may be
 	/// any JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,
 	/// and `nbf` are reserved for the signer and cannot be configured here.
-	#[cfg_attr(feature = "schema", schemars(extend("minProperties" = 1)))]
+	#[serde(default)]
 	claims: BTreeMap<String, serde_json::Value>,
 	/// Token lifetime used for `exp`. Defaults to 300s.
 	#[serde(
@@ -132,26 +91,20 @@ struct RawJwtSignAuth {
 	location: Option<AuthorizationLocation>,
 }
 
-impl TryFrom<RawJwtSignAuth> for JwtSignAuth {
-	type Error = String;
-
-	fn try_from(raw: RawJwtSignAuth) -> Result<Self, Self::Error> {
-		validate_config(&raw.claims, raw.ttl)?;
-		// Inline keys are parsed eagerly so misconfigurations fail at parse
-		// time. File keys are deferred to `resolve`, which fetches through the
-		// resource manager so the file is watched and changes reload the config.
-		let state = match raw.signing_key {
-			FileOrInline::Inline(pem) => JwtSignState::Parsed(parse_signing_key(raw.alg, pem.trim())?),
-			FileOrInline::File { file } => JwtSignState::File(file),
-		};
-		Ok(Self {
-			state,
-			alg: raw.alg,
-			kid: raw.kid,
-			claims: raw.claims,
-			ttl: raw.ttl,
-			location: raw.location,
-		})
+impl LocalJwtSignAuth {
+	pub(crate) async fn try_into(self, resources: &ResourceFetcher) -> anyhow::Result<JwtSignAuth> {
+		let pem = load_file_or_inline(&self.signing_key, resources)
+			.await
+			.context("failed to load jwtSign signingKey")?;
+		JwtSignAuth::try_new(
+			pem.trim(),
+			self.alg,
+			self.kid,
+			self.claims,
+			self.ttl,
+			self.location,
+		)
+		.map_err(anyhow::Error::msg)
 	}
 }
 
@@ -159,9 +112,6 @@ fn validate_config(
 	claims: &BTreeMap<String, serde_json::Value>,
 	ttl: Option<Duration>,
 ) -> Result<(), String> {
-	if claims.is_empty() {
-		return Err("jwtSign requires at least one claim".into());
-	}
 	for reserved in RESERVED_CLAIMS {
 		if claims.contains_key(*reserved) {
 			return Err(format!(
@@ -185,14 +135,7 @@ fn parse_signing_key(alg: JwtSigningAlg, pem: &str) -> Result<SigningKey, String
 impl JwtSignAuth {
 	/// Returns a jwtSign configuration that always rejects requests
 	pub(crate) fn new_invalid(error: String) -> Self {
-		Self {
-			state: JwtSignState::Invalid(error),
-			alg: JwtSigningAlg::default(),
-			kid: None,
-			claims: BTreeMap::new(),
-			ttl: None,
-			location: None,
-		}
+		Self(JwtSignState::Invalid { reason: error })
 	}
 
 	pub fn try_new(
@@ -204,62 +147,50 @@ impl JwtSignAuth {
 		location: Option<AuthorizationLocation>,
 	) -> Result<Self, String> {
 		validate_config(&claims, ttl)?;
-		let state = JwtSignState::Parsed(parse_signing_key(alg, signing_key_pem)?);
-		Ok(Self {
-			state,
+		let signing_key = parse_signing_key(alg, signing_key_pem)?;
+		Ok(Self(JwtSignState::Valid(JwtSignConfig {
+			signing_key,
 			alg,
 			kid,
 			claims,
 			ttl,
 			location,
-		})
-	}
-
-	/// Resolves a file-based signing key through the resource manager, which
-	/// registers the file so changes trigger a config reload. Inline keys are
-	/// already parsed and are left untouched.
-	pub async fn resolve(&mut self, resources: &ResourceFetcher) -> anyhow::Result<()> {
-		let JwtSignState::File(path) = &self.state else {
-			return Ok(());
-		};
-		let pem = resources
-			.fetch(ResourceRef::File(path.clone()))
-			.await
-			.context("failed to load jwtSign signingKey")?;
-		let pem = std::str::from_utf8(&pem).context("jwtSign signingKey is not valid UTF-8")?;
-		self.state =
-			JwtSignState::Parsed(parse_signing_key(self.alg, pem.trim()).map_err(anyhow::Error::msg)?);
-		Ok(())
+		})))
 	}
 
 	pub(super) fn sign(&self) -> anyhow::Result<String> {
-		let signing_key = match &self.state {
-			JwtSignState::Parsed(signing_key) => signing_key,
-			JwtSignState::File(_) => {
-				anyhow::bail!("jwtSign file-based signingKey was not resolved at config load");
-			},
-			JwtSignState::Invalid(error) => {
+		let config = match &self.0 {
+			JwtSignState::Valid(config) => config,
+			JwtSignState::Invalid { reason } => {
 				tracing::debug!(
-					error = %error,
-					"rejecting request: jwtSign configuration is invalid"
+						error = %reason,
+						"rejecting request: jwtSign configuration is invalid"
 				);
 				anyhow::bail!("jwtSign configuration is invalid");
 			},
 		};
 		let now = unix_timestamp_now()?;
-		let ttl = self.ttl.unwrap_or(DEFAULT_TTL);
+		let ttl = config.ttl.unwrap_or(DEFAULT_TTL);
 		let times = jwt_claim_times(now, ttl, ISSUED_AT_BACKDATE)?;
 
-		let mut claims = serde_json::Map::with_capacity(self.claims.len() + RESERVED_CLAIMS.len());
-		for (key, value) in &self.claims {
+		let mut claims = serde_json::Map::with_capacity(config.claims.len() + RESERVED_CLAIMS.len());
+		for (key, value) in &config.claims {
 			claims.insert(key.clone(), value.clone());
 		}
 		claims.insert("iat".to_string(), times.issued_at.into());
 		claims.insert("exp".to_string(), times.expires_at.into());
 
-		let header = self.alg.header(self.kid.clone());
-		signing_key
+		let header = config.alg.header(config.kid.clone());
+		config
+			.signing_key
 			.encode(&header, &serde_json::Value::Object(claims))
 			.context("failed to sign backend JWT")
+	}
+
+	pub(super) fn location(&self) -> Option<&AuthorizationLocation> {
+		match &self.0 {
+			JwtSignState::Valid(config) => config.location.as_ref(),
+			JwtSignState::Invalid { .. } => None,
+		}
 	}
 }

@@ -315,6 +315,37 @@ mod tests {
 		assert_eq!(llm_response.output_tokens, Some(14));
 		assert_eq!(llm_response.total_tokens, Some(22));
 	}
+
+	#[test]
+	fn to_llm_response_extracts_gemini_cloud_code_usage() {
+		// Cloud Code (cloudcode-pa.googleapis.com) serves generateContent with the
+		// whole Gemini payload nested under a `response` key, so the unwrapped
+		// `usageMetadata` paths miss and usage is silently dropped.
+		let resp = Response::Json(serde_json::json!({
+			"response": {
+				"candidates": [{
+					"content": {
+						"role": "model",
+						"parts": [{"text": "Hello!"}]
+					}
+				}],
+				"usageMetadata": {
+					"promptTokenCount": 30460,
+					"candidatesTokenCount": 3,
+					"totalTokenCount": 30550,
+					"thoughtsTokenCount": 87
+				},
+				"modelVersion": "gemini-3.6-flash"
+			},
+			"traceId": "fb9dce3e019159b5"
+		}));
+
+		let llm_response = resp.to_llm_response(crate::LogContentFields::default());
+
+		assert_eq!(llm_response.input_tokens, Some(30460));
+		assert_eq!(llm_response.output_tokens, Some(3));
+		assert_eq!(llm_response.total_tokens, Some(30550));
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -349,7 +380,7 @@ mod lookups {
 	pub const MAX_TOKENS: [&[&str]; 2] = [&["max_completion_tokens"], &["max_tokens"]];
 	pub const ENCODING_FORMAT: [&[&str]; 1] = [&["encoding_format"]];
 	pub const DIMENSIONS: [&[&str]; 1] = [&["dimensions"]];
-	pub const USAGE_INPUT_TOKENS: [&[&str]; 6] = [
+	pub const USAGE_INPUT_TOKENS: [&[&str]; 7] = [
 		&["usage", "input_tokens"],
 		// Responses streaming
 		&["response", "usage", "input_tokens"],
@@ -360,8 +391,11 @@ mod lookups {
 		&["metadata", "usage", "inputTokens"],
 		// Gemini generateContent
 		&["usageMetadata", "promptTokenCount"],
+		// Gemini generateContent via Cloud Code, which wraps the payload in a
+		// `response` envelope
+		&["response", "usageMetadata", "promptTokenCount"],
 	];
-	pub const USAGE_OUTPUT_TOKENS: [&[&str]; 6] = [
+	pub const USAGE_OUTPUT_TOKENS: [&[&str]; 7] = [
 		&["usage", "output_tokens"],
 		// Responses streaming
 		&["response", "usage", "output_tokens"],
@@ -372,13 +406,17 @@ mod lookups {
 		&["metadata", "usage", "outputTokens"],
 		// Gemini generateContent
 		&["usageMetadata", "candidatesTokenCount"],
+		// Gemini generateContent via Cloud Code
+		&["response", "usageMetadata", "candidatesTokenCount"],
 	];
-	pub const USAGE_TOTAL_TOKENS: [&[&str]; 3] = [
+	pub const USAGE_TOTAL_TOKENS: [&[&str]; 4] = [
 		&["usage", "total_tokens"],
 		// Bedrock converse
 		&["usage", "totalTokens"],
 		// Gemini generateContent
 		&["usageMetadata", "totalTokenCount"],
+		// Gemini generateContent via Cloud Code
+		&["response", "usageMetadata", "totalTokenCount"],
 	];
 	pub const INPUT_IMAGE_TOKENS: [&[&str]; 1] = [&["usage", "input_tokens_details", "image_tokens"]];
 	pub const INPUT_TEXT_TOKENS: [&[&str]; 1] = [&["usage", "input_tokens_details", "text_tokens"]];

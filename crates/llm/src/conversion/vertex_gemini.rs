@@ -945,8 +945,6 @@ pub mod to_completions {
 	use std::time::Instant;
 
 	use axum_core::body::Body;
-	use futures_util::StreamExt;
-	use futures_util::stream::{self, BoxStream};
 	use serde_json::Value;
 
 	use super::*;
@@ -1418,31 +1416,7 @@ pub mod to_completions {
 				None => vec![],
 			}
 		});
-		append_done_on_close(body.into_data_stream())
-	}
-
-	/// Gemini ends the HTTP stream without a `[DONE]` sentinel; append one on successful close
-	/// (mirrors `conversion::bedrock::from_completions::append_done_on_success`).
-	fn append_done_on_close<S>(stream: S) -> Body
-	where
-		S: futures_core::Stream<Item = Result<Bytes, axum_core::Error>> + Send + 'static,
-	{
-		let done = crate::parse::encode_sse_event("", Bytes::from_static(b"[DONE]"));
-		let stream = stream::unfold(
-			(Some(stream.boxed()), Some(done)),
-			|(stream, done): (
-				Option<BoxStream<'static, Result<Bytes, axum_core::Error>>>,
-				Option<Bytes>,
-			)| async move {
-				let mut stream = stream?;
-				match stream.next().await {
-					Some(Ok(chunk)) => Some((Ok(chunk), (Some(stream), done))),
-					Some(Err(err)) => Some((Err(err), (None, None))),
-					None => done.map(|done| (Ok(done), (None, None))),
-				}
-			},
-		);
-		Body::from_stream(stream)
+		parse::sse::append_done_on_success(body)
 	}
 
 	/// Prompt, completion, and total token counts from Gemini usage metadata

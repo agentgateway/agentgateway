@@ -23,6 +23,43 @@ type Pod struct {
 	Namespace string
 }
 
+// ResourceTarget identifies the Kubernetes client, resource, and selected pod
+// used by commands that operate on one proxy instance.
+type ResourceTarget struct {
+	KubeClient   CLIClient
+	ResourceName string
+	Pod          Pod
+}
+
+// ResolveResourceTarget resolves an optional resource argument to one proxy pod.
+func ResolveResourceTarget(ctx context.Context, namespaceOverride string, args []string) (*ResourceTarget, error) {
+	namespace, err := LoadNamespace(namespaceOverride)
+	if err != nil {
+		return nil, err
+	}
+
+	kubeClient, err := NewCLIClient()
+	if err != nil {
+		return nil, err
+	}
+
+	resourceName, err := ResolveResourceName(ctx, kubeClient, namespace, args)
+	if err != nil {
+		return nil, err
+	}
+
+	podName, podNamespace, err := ResolvePodForResource(ctx, kubeClient, resourceName, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ResourceTarget{
+		KubeClient:   kubeClient,
+		ResourceName: resourceName,
+		Pod:          Pod{Name: podName, Namespace: podNamespace},
+	}, nil
+}
+
 func LoadNamespace(namespaceOverride string) (string, error) {
 	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 	if kubeconfig := flag.Kubeconfig(); kubeconfig != "" {

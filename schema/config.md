@@ -5015,6 +5015,13 @@
 |`binds[].listeners[].routes[].backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
 |`binds[].listeners[].routes[].backends[].ai.provider.openAI`|object||
 |`binds[].listeners[].routes[].backends[].ai.provider.openAI.model`|string|Model ID to send to OpenAI, overriding the model in the client request.|
+|`binds[].listeners[].routes[].backends[].ai.provider.openAI.moderation`|object|Configuration for running OpenAI inline moderation on request input and generated output.|
+|`binds[].listeners[].routes[].backends[].ai.provider.openAI.moderation.model`|string|The moderation model to use. Defaults to `omni-moderation-latest`.|
+|`binds[].listeners[].routes[].backends[].ai.provider.openAI.moderation.policy`|object|Policies to apply to request input and generated output.|
+|`binds[].listeners[].routes[].backends[].ai.provider.openAI.moderation.policy.input`|object|Policy for request input moderation.|
+|`binds[].listeners[].routes[].backends[].ai.provider.openAI.moderation.policy.input.mode`|enum|Possible values: `score`, `block`.|
+|`binds[].listeners[].routes[].backends[].ai.provider.openAI.moderation.policy.output`|object|Policy for generated output moderation.|
+|`binds[].listeners[].routes[].backends[].ai.provider.openAI.moderation.policy.output.mode`|enum|Possible values: `score`, `block`.|
 |`binds[].listeners[].routes[].backends[].ai.provider.gemini`|object||
 |`binds[].listeners[].routes[].backends[].ai.provider.gemini.model`|string|Model ID to send to Gemini, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.provider.vertex`|object||
@@ -8037,6 +8044,13 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.openAI`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.openAI.model`|string|Model ID to send to OpenAI, overriding the model in the client request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.openAI.moderation`|object|Configuration for running OpenAI inline moderation on request input and generated output.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.openAI.moderation.model`|string|The moderation model to use. Defaults to `omni-moderation-latest`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.openAI.moderation.policy`|object|Policies to apply to request input and generated output.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.openAI.moderation.policy.input`|object|Policy for request input moderation.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.openAI.moderation.policy.input.mode`|enum|Possible values: `score`, `block`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.openAI.moderation.policy.output`|object|Policy for generated output moderation.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.openAI.moderation.policy.output.mode`|enum|Possible values: `score`, `block`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.gemini`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.gemini.model`|string|Model ID to send to Gemini, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.vertex`|object||
@@ -21140,6 +21154,13 @@
 |`backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
 |`backends[].ai.provider.openAI`|object||
 |`backends[].ai.provider.openAI.model`|string|Model ID to send to OpenAI, overriding the model in the client request.|
+|`backends[].ai.provider.openAI.moderation`|object|Configuration for running OpenAI inline moderation on request input and generated output.|
+|`backends[].ai.provider.openAI.moderation.model`|string|The moderation model to use. Defaults to `omni-moderation-latest`.|
+|`backends[].ai.provider.openAI.moderation.policy`|object|Policies to apply to request input and generated output.|
+|`backends[].ai.provider.openAI.moderation.policy.input`|object|Policy for request input moderation.|
+|`backends[].ai.provider.openAI.moderation.policy.input.mode`|enum|Possible values: `score`, `block`.|
+|`backends[].ai.provider.openAI.moderation.policy.output`|object|Policy for generated output moderation.|
+|`backends[].ai.provider.openAI.moderation.policy.output.mode`|enum|Possible values: `score`, `block`.|
 |`backends[].ai.provider.gemini`|object||
 |`backends[].ai.provider.gemini.model`|string|Model ID to send to Gemini, overriding the model in the client request.|
 |`backends[].ai.provider.vertex`|object||
@@ -24162,6 +24183,13 @@
 |`backends[].ai.groups[].providers[].provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
 |`backends[].ai.groups[].providers[].provider.openAI`|object||
 |`backends[].ai.groups[].providers[].provider.openAI.model`|string|Model ID to send to OpenAI, overriding the model in the client request.|
+|`backends[].ai.groups[].providers[].provider.openAI.moderation`|object|Configuration for running OpenAI inline moderation on request input and generated output.|
+|`backends[].ai.groups[].providers[].provider.openAI.moderation.model`|string|The moderation model to use. Defaults to `omni-moderation-latest`.|
+|`backends[].ai.groups[].providers[].provider.openAI.moderation.policy`|object|Policies to apply to request input and generated output.|
+|`backends[].ai.groups[].providers[].provider.openAI.moderation.policy.input`|object|Policy for request input moderation.|
+|`backends[].ai.groups[].providers[].provider.openAI.moderation.policy.input.mode`|enum|Possible values: `score`, `block`.|
+|`backends[].ai.groups[].providers[].provider.openAI.moderation.policy.output`|object|Policy for generated output moderation.|
+|`backends[].ai.groups[].providers[].provider.openAI.moderation.policy.output.mode`|enum|Possible values: `score`, `block`.|
 |`backends[].ai.groups[].providers[].provider.gemini`|object||
 |`backends[].ai.groups[].providers[].provider.gemini.model`|string|Model ID to send to Gemini, overriding the model in the client request.|
 |`backends[].ai.groups[].providers[].provider.vertex`|object||
@@ -35063,6 +35091,13 @@
 |`routeGroups[].routes[].backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
 |`routeGroups[].routes[].backends[].ai.provider.openAI`|object||
 |`routeGroups[].routes[].backends[].ai.provider.openAI.model`|string|Model ID to send to OpenAI, overriding the model in the client request.|
+|`routeGroups[].routes[].backends[].ai.provider.openAI.moderation`|object|Configuration for running OpenAI inline moderation on request input and generated output.|
+|`routeGroups[].routes[].backends[].ai.provider.openAI.moderation.model`|string|The moderation model to use. Defaults to `omni-moderation-latest`.|
+|`routeGroups[].routes[].backends[].ai.provider.openAI.moderation.policy`|object|Policies to apply to request input and generated output.|
+|`routeGroups[].routes[].backends[].ai.provider.openAI.moderation.policy.input`|object|Policy for request input moderation.|
+|`routeGroups[].routes[].backends[].ai.provider.openAI.moderation.policy.input.mode`|enum|Possible values: `score`, `block`.|
+|`routeGroups[].routes[].backends[].ai.provider.openAI.moderation.policy.output`|object|Policy for generated output moderation.|
+|`routeGroups[].routes[].backends[].ai.provider.openAI.moderation.policy.output.mode`|enum|Possible values: `score`, `block`.|
 |`routeGroups[].routes[].backends[].ai.provider.gemini`|object||
 |`routeGroups[].routes[].backends[].ai.provider.gemini.model`|string|Model ID to send to Gemini, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.provider.vertex`|object||
@@ -38085,6 +38120,13 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.openAI`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.openAI.model`|string|Model ID to send to OpenAI, overriding the model in the client request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.openAI.moderation`|object|Configuration for running OpenAI inline moderation on request input and generated output.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.openAI.moderation.model`|string|The moderation model to use. Defaults to `omni-moderation-latest`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.openAI.moderation.policy`|object|Policies to apply to request input and generated output.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.openAI.moderation.policy.input`|object|Policy for request input moderation.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.openAI.moderation.policy.input.mode`|enum|Possible values: `score`, `block`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.openAI.moderation.policy.output`|object|Policy for generated output moderation.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.openAI.moderation.policy.output.mode`|enum|Possible values: `score`, `block`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.gemini`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.gemini.model`|string|Model ID to send to Gemini, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.vertex`|object||
@@ -51552,6 +51594,13 @@
 |`routes[].backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
 |`routes[].backends[].ai.provider.openAI`|object||
 |`routes[].backends[].ai.provider.openAI.model`|string|Model ID to send to OpenAI, overriding the model in the client request.|
+|`routes[].backends[].ai.provider.openAI.moderation`|object|Configuration for running OpenAI inline moderation on request input and generated output.|
+|`routes[].backends[].ai.provider.openAI.moderation.model`|string|The moderation model to use. Defaults to `omni-moderation-latest`.|
+|`routes[].backends[].ai.provider.openAI.moderation.policy`|object|Policies to apply to request input and generated output.|
+|`routes[].backends[].ai.provider.openAI.moderation.policy.input`|object|Policy for request input moderation.|
+|`routes[].backends[].ai.provider.openAI.moderation.policy.input.mode`|enum|Possible values: `score`, `block`.|
+|`routes[].backends[].ai.provider.openAI.moderation.policy.output`|object|Policy for generated output moderation.|
+|`routes[].backends[].ai.provider.openAI.moderation.policy.output.mode`|enum|Possible values: `score`, `block`.|
 |`routes[].backends[].ai.provider.gemini`|object||
 |`routes[].backends[].ai.provider.gemini.model`|string|Model ID to send to Gemini, overriding the model in the client request.|
 |`routes[].backends[].ai.provider.vertex`|object||
@@ -54574,6 +54623,13 @@
 |`routes[].backends[].ai.groups[].providers[].provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
 |`routes[].backends[].ai.groups[].providers[].provider.openAI`|object||
 |`routes[].backends[].ai.groups[].providers[].provider.openAI.model`|string|Model ID to send to OpenAI, overriding the model in the client request.|
+|`routes[].backends[].ai.groups[].providers[].provider.openAI.moderation`|object|Configuration for running OpenAI inline moderation on request input and generated output.|
+|`routes[].backends[].ai.groups[].providers[].provider.openAI.moderation.model`|string|The moderation model to use. Defaults to `omni-moderation-latest`.|
+|`routes[].backends[].ai.groups[].providers[].provider.openAI.moderation.policy`|object|Policies to apply to request input and generated output.|
+|`routes[].backends[].ai.groups[].providers[].provider.openAI.moderation.policy.input`|object|Policy for request input moderation.|
+|`routes[].backends[].ai.groups[].providers[].provider.openAI.moderation.policy.input.mode`|enum|Possible values: `score`, `block`.|
+|`routes[].backends[].ai.groups[].providers[].provider.openAI.moderation.policy.output`|object|Policy for generated output moderation.|
+|`routes[].backends[].ai.groups[].providers[].provider.openAI.moderation.policy.output.mode`|enum|Possible values: `score`, `block`.|
 |`routes[].backends[].ai.groups[].providers[].provider.gemini`|object||
 |`routes[].backends[].ai.groups[].providers[].provider.gemini.model`|string|Model ID to send to Gemini, overriding the model in the client request.|
 |`routes[].backends[].ai.groups[].providers[].provider.vertex`|object||

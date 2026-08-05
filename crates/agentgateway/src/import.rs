@@ -20,15 +20,29 @@ pub trait ConfigImporter: Send + Sync {
 /// Source-neutral representation consumed by the agentgateway configuration emitter.
 #[derive(Debug, Default)]
 pub struct ImportPlan {
+	pub providers: Vec<ImportedProvider>,
 	pub models: Vec<ImportedModel>,
 	pub routes: IndexMap<String, ImportedRoute>,
 	pub findings: Vec<ImportFinding>,
 }
 
 #[derive(Debug)]
-pub struct ImportedModel {
+pub struct ImportedProvider {
 	pub name: String,
 	pub provider: String,
+	pub params: Map<String, Value>,
+}
+
+#[derive(Debug)]
+pub enum ImportedModelProvider {
+	Inline(String),
+	Reference(String),
+}
+
+#[derive(Debug)]
+pub struct ImportedModel {
+	pub name: String,
+	pub provider: ImportedModelProvider,
 	pub params: Map<String, Value>,
 	pub defaults: Map<String, Value>,
 	pub weight: usize,
@@ -124,6 +138,7 @@ fn importers() -> Vec<Box<dyn ConfigImporter>> {
 
 fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Result<ImportResult> {
 	let ImportPlan {
+		providers,
 		models,
 		routes,
 		findings,
@@ -162,7 +177,13 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 			if direct_name.is_none() {
 				value.insert("visibility".to_string(), json!("internal"));
 			}
-			value.insert("provider".to_string(), json!(model.provider));
+			let provider = match &model.provider {
+				ImportedModelProvider::Inline(provider) => json!(provider),
+				ImportedModelProvider::Reference(reference) => {
+					json!({"reference": reference})
+				},
+			};
+			value.insert("provider".to_string(), provider);
 			value.insert("params".to_string(), Value::Object(model.params.clone()));
 			if !model.defaults.is_empty() {
 				value.insert(
@@ -220,6 +241,19 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 		("gateways".to_string(), json!("default")),
 		("models".to_string(), Value::Array(emitted_models)),
 	]);
+	if !providers.is_empty() {
+		let providers = providers
+			.into_iter()
+			.map(|provider| {
+				json!({
+					"name": provider.name,
+					"provider": provider.provider,
+					"params": provider.params,
+				})
+			})
+			.collect();
+		llm.insert("providers".to_string(), Value::Array(providers));
+	}
 	if !virtual_models.is_empty() {
 		llm.insert("virtualModels".to_string(), Value::Array(virtual_models));
 	}
@@ -244,6 +278,8 @@ struct LiteLlmConfig {
 	#[serde(default)]
 	model_list: Vec<LiteLlmModel>,
 	#[serde(default)]
+	credential_list: Vec<Value>,
+	#[serde(default)]
 	router_settings: Map<String, Value>,
 	#[serde(default)]
 	litellm_settings: Map<String, Value>,
@@ -266,6 +302,22 @@ struct LiteLlmModel {
 	other: Map<String, Value>,
 }
 
+#[derive(Debug)]
+struct LiteLlmCredential {
+	name: String,
+	source_path: String,
+	provider_hint: Option<String>,
+	params: Map<String, Value>,
+}
+
+#[derive(Debug)]
+struct LiteLlmCredentials {
+	entries: IndexMap<String, LiteLlmCredential>,
+	ambiguous: HashSet<String>,
+	used: HashSet<String>,
+	emitted: HashMap<(String, String), String>,
+}
+
 impl ConfigImporter for LiteLlmImporter {
 	fn source(&self) -> &'static str {
 		"litellm"
@@ -279,6 +331,7 @@ impl ConfigImporter for LiteLlmImporter {
 		}
 
 		let mut plan = ImportPlan::default();
+		let mut credentials = LiteLlmCredentials::parse(config.credential_list, &mut plan.findings);
 		let use_rpm_weights = match config.router_settings.get("routing_strategy") {
 			None => true,
 			Some(Value::String(strategy)) => strategy == "simple-shuffle",
@@ -290,7 +343,7 @@ impl ConfigImporter for LiteLlmImporter {
 			let deployment = counts.entry(model.model_name.clone()).or_default();
 			*deployment += 1;
 			let internal_name = imported_model_name(self.source(), &model.model_name, *deployment);
-			let Some(imported) = import_litellm_model(
+			let Some((public_name, mut imported, credential_name)) = import_litellm_model(
 				internal_name.clone(),
 				model,
 				&source_path,
@@ -299,14 +352,24 @@ impl ConfigImporter for LiteLlmImporter {
 			) else {
 				continue;
 			};
+			if let Some(credential_name) = credential_name {
+				credentials.apply(
+					self.source(),
+					&source_path,
+					&credential_name,
+					&mut imported,
+					&mut plan,
+				);
+			}
 			plan
 				.routes
-				.entry(imported.0)
+				.entry(public_name)
 				.or_default()
 				.targets
 				.push(internal_name);
-			plan.models.push(imported.1);
+			plan.models.push(imported);
 		}
+		credentials.report_unused(&mut plan.findings);
 
 		let fallbacks = config
 			.router_settings
@@ -408,13 +471,270 @@ fn report_litellm_database(findings: &mut Vec<ImportFinding>, source_path: &str)
 	});
 }
 
+impl LiteLlmCredentials {
+	fn parse(entries: Vec<Value>, findings: &mut Vec<ImportFinding>) -> Self {
+		let mut parsed = Vec::new();
+		let mut counts = HashMap::<String, usize>::new();
+		for (index, entry) in entries.into_iter().enumerate() {
+			let source_path = format!("credential_list[{index}]");
+			let Value::Object(mut entry) = entry else {
+				findings.push(ImportFinding {
+					source_path,
+					status: ImportStatus::Unsupported,
+					message: "LiteLLM credential entry must be an object and was not emitted".to_string(),
+				});
+				continue;
+			};
+			let name = match entry.remove("credential_name") {
+				Some(Value::String(name)) if !name.is_empty() => name,
+				_ => {
+					findings.push(ImportFinding {
+						source_path: format!("{source_path}.credential_name"),
+						status: ImportStatus::Unsupported,
+						message: "LiteLLM credential_name must be a non-empty string and was not emitted"
+							.to_string(),
+					});
+					continue;
+				},
+			};
+			let mut credential_values = match entry.remove("credential_values") {
+				Some(Value::Object(values)) => values,
+				_ => {
+					findings.push(ImportFinding {
+						source_path: format!("{source_path}.credential_values"),
+						status: ImportStatus::Unsupported,
+						message: "LiteLLM credential_values must be an object and was not emitted".to_string(),
+					});
+					continue;
+				},
+			};
+			let mut credential_info = match entry.remove("credential_info") {
+				None => Map::new(),
+				Some(Value::Object(info)) => info,
+				Some(_) => {
+					findings.push(ImportFinding {
+						source_path: format!("{source_path}.credential_info"),
+						status: ImportStatus::Manual,
+						message: "LiteLLM credential_info must be an object and was not used".to_string(),
+					});
+					Map::new()
+				},
+			};
+			let provider_hint = match credential_info.remove("provider") {
+				None => None,
+				Some(Value::String(provider)) => Some(provider),
+				Some(_) => {
+					findings.push(ImportFinding {
+						source_path: format!("{source_path}.credential_info.provider"),
+						status: ImportStatus::Manual,
+						message: "LiteLLM credential provider metadata must be a string and was not used"
+							.to_string(),
+					});
+					None
+				},
+			};
+			report_unmapped_fields(
+				findings,
+				&format!("{source_path}.credential_info"),
+				&credential_info,
+				ImportStatus::Manual,
+				"LiteLLM credential metadata requires manual review and was not emitted",
+			);
+			report_unmapped_fields(
+				findings,
+				&source_path,
+				&entry,
+				ImportStatus::Unsupported,
+				"Unrecognized LiteLLM credential field was not emitted",
+			);
+
+			let mut params = Map::new();
+			move_litellm_provider_params(&mut credential_values, &mut params);
+			report_unmapped_fields(
+				findings,
+				&format!("{source_path}.credential_values"),
+				&credential_values,
+				ImportStatus::Manual,
+				"LiteLLM credential value requires manual review and was not emitted",
+			);
+			*counts.entry(name.clone()).or_default() += 1;
+			parsed.push(LiteLlmCredential {
+				name,
+				source_path,
+				provider_hint,
+				params,
+			});
+		}
+
+		let ambiguous = counts
+			.iter()
+			.filter(|(_, count)| **count > 1)
+			.map(|(name, _)| name.clone())
+			.collect::<HashSet<_>>();
+		let mut credentials = IndexMap::new();
+		for credential in parsed {
+			if ambiguous.contains(&credential.name) {
+				findings.push(ImportFinding {
+					source_path: format!("{}.credential_name", credential.source_path),
+					status: ImportStatus::Unsupported,
+					message: format!(
+						"LiteLLM credential name {:?} is duplicated and cannot be resolved safely",
+						credential.name
+					),
+				});
+			} else {
+				credentials.insert(credential.name.clone(), credential);
+			}
+		}
+		Self {
+			entries: credentials,
+			ambiguous,
+			used: HashSet::new(),
+			emitted: HashMap::new(),
+		}
+	}
+
+	fn report_unused(&self, findings: &mut Vec<ImportFinding>) {
+		for credential in self.entries.values() {
+			if !self.used.contains(&credential.name) {
+				findings.push(ImportFinding {
+					source_path: credential.source_path.clone(),
+					status: ImportStatus::Manual,
+					message: format!(
+						"LiteLLM credential {:?} is not referenced by an imported model and was not emitted",
+						credential.name
+					),
+				});
+			}
+		}
+	}
+
+	fn apply(
+		&mut self,
+		source: &str,
+		model_source_path: &str,
+		credential_name: &str,
+		model: &mut ImportedModel,
+		plan: &mut ImportPlan,
+	) {
+		let reference_path = format!("{model_source_path}.litellm_params.litellm_credential_name");
+		if self.ambiguous.contains(credential_name) {
+			plan.findings.push(ImportFinding {
+				source_path: reference_path,
+				status: ImportStatus::Unsupported,
+				message: format!(
+					"LiteLLM credential {credential_name:?} is duplicated and was not applied"
+				),
+			});
+			return;
+		}
+		let Some(credential) = self.entries.get(credential_name) else {
+			plan.findings.push(ImportFinding {
+				source_path: reference_path,
+				status: ImportStatus::Unsupported,
+				message: format!(
+					"LiteLLM credential {credential_name:?} is not defined and was not applied"
+				),
+			});
+			return;
+		};
+		let first_use = self.used.insert(credential.name.clone());
+
+		let ImportedModelProvider::Inline(provider) = &model.provider else {
+			return;
+		};
+		let provider = provider.clone();
+		if let Some(provider_hint) = &credential.provider_hint {
+			match map_provider(provider_hint) {
+			Some(mapped) if mapped == provider => {},
+			Some(mapped) => plan.findings.push(ImportFinding {
+				source_path: format!("{}.credential_info.provider", credential.source_path),
+				status: ImportStatus::Manual,
+				message: format!(
+					"Credential provider metadata maps to {mapped:?}, but the referencing model uses {provider:?}; the model provider was retained"
+				),
+			}),
+			None => plan.findings.push(ImportFinding {
+				source_path: format!("{}.credential_info.provider", credential.source_path),
+				status: ImportStatus::Manual,
+				message: format!(
+					"Credential provider metadata {provider_hint:?} is not recognized; the referencing model provider was retained"
+				),
+			}),
+		}
+		}
+
+		if credential.params.is_empty() {
+			plan.findings.push(ImportFinding {
+			source_path: reference_path,
+			status: ImportStatus::Manual,
+			message: format!(
+				"LiteLLM credential {credential_name:?} contains no supported provider values and was not applied"
+			),
+		});
+			return;
+		}
+		if first_use {
+			plan.findings.push(ImportFinding {
+				source_path: credential.source_path.clone(),
+				status: ImportStatus::Exact,
+				message: format!("Imported supported values from LiteLLM credential {credential_name:?}"),
+			});
+		}
+
+		let can_reference = model
+			.params
+			.iter()
+			.filter(|(key, _)| key.as_str() != "model")
+			.all(|(key, value)| credential.params.get(key) == Some(value));
+		if can_reference {
+			model
+				.params
+				.retain(|key, _| key == "model" || !credential.params.contains_key(key));
+			let key = (credential.name.clone(), provider.clone());
+			let provider_name = if let Some(provider_name) = self.emitted.get(&key) {
+				provider_name.clone()
+			} else {
+				let provider_name =
+					unique_imported_provider_name(source, &credential.name, &plan.providers);
+				plan.providers.push(ImportedProvider {
+					name: provider_name.clone(),
+					provider,
+					params: credential.params.clone(),
+				});
+				self.emitted.insert(key, provider_name.clone());
+				provider_name
+			};
+			model.provider = ImportedModelProvider::Reference(provider_name.clone());
+			plan.findings.push(ImportFinding {
+			source_path: reference_path,
+			status: ImportStatus::Exact,
+			message: format!(
+				"Mapped LiteLLM credential {credential_name:?} to reusable agentgateway provider {provider_name:?}"
+			),
+		});
+		} else {
+			let model_params = std::mem::take(&mut model.params);
+			model.params = credential.params.clone();
+			model.params.extend(model_params);
+			plan.findings.push(ImportFinding {
+			source_path: reference_path,
+			status: ImportStatus::Approximate,
+			message: format!(
+				"Applied LiteLLM credential {credential_name:?} inline because model-level provider parameters override the shared credential"
+			),
+		});
+		}
+	}
+}
+
 fn import_litellm_model(
 	name: String,
 	model: LiteLlmModel,
 	source_path: &str,
 	use_rpm_weights: bool,
 	findings: &mut Vec<ImportFinding>,
-) -> Option<(String, ImportedModel)> {
+) -> Option<(String, ImportedModel, Option<String>)> {
 	let LiteLlmModel {
 		model_name: public_name,
 		litellm_params: mut params,
@@ -447,6 +767,19 @@ fn import_litellm_model(
 		},
 		None => public_name.clone(),
 	};
+	let credential_name = match params.remove("litellm_credential_name") {
+		None => None,
+		Some(Value::String(name)) if !name.is_empty() => Some(name),
+		Some(_) => {
+			findings.push(ImportFinding {
+				source_path: format!("{source_path}.litellm_params.litellm_credential_name"),
+				status: ImportStatus::Unsupported,
+				message: "LiteLLM credential reference must be a non-empty string and was not applied"
+					.to_string(),
+			});
+			None
+		},
+	};
 	if public_name.contains('*') || model_id.contains('*') {
 		let wildcard_path = if public_name.contains('*') {
 			format!("{source_path}.model_name")
@@ -472,38 +805,7 @@ fn import_litellm_model(
 
 	let mut output_params = Map::new();
 	output_params.insert("model".to_string(), json!(upstream_model));
-	move_string(&mut params, "api_base", &mut output_params, "baseUrl");
-	move_string(&mut params, "base_url", &mut output_params, "baseUrl");
-	move_string(
-		&mut params,
-		"api_version",
-		&mut output_params,
-		"azureApiVersion",
-	);
-	move_string(
-		&mut params,
-		"aws_region_name",
-		&mut output_params,
-		"awsRegion",
-	);
-	move_string(
-		&mut params,
-		"vertex_project",
-		&mut output_params,
-		"vertexProject",
-	);
-	move_string(
-		&mut params,
-		"vertex_location",
-		&mut output_params,
-		"vertexRegion",
-	);
-	if let Some(api_key) = params.remove("api_key") {
-		output_params.insert(
-			"apiKey".to_string(),
-			normalize_environment_references(api_key),
-		);
-	}
+	move_litellm_provider_params(&mut params, &mut output_params);
 
 	let rpm = params.remove("rpm");
 	let tpm = params.remove("tpm");
@@ -585,11 +887,12 @@ fn import_litellm_model(
 		public_name,
 		ImportedModel {
 			name,
-			provider: provider.to_string(),
+			provider: ImportedModelProvider::Inline(provider.to_string()),
 			params: output_params,
 			defaults,
 			weight,
 		},
+		credential_name,
 	))
 }
 
@@ -620,6 +923,21 @@ fn map_provider(provider: &str) -> Option<&'static str> {
 		"deepseek" => Some("deepseek"),
 		"fireworks_ai" | "fireworks" => Some("fireworks"),
 		_ => None,
+	}
+}
+
+fn move_litellm_provider_params(source: &mut Map<String, Value>, target: &mut Map<String, Value>) {
+	move_string(source, "api_base", target, "baseUrl");
+	move_string(source, "base_url", target, "baseUrl");
+	move_string(source, "api_version", target, "azureApiVersion");
+	move_string(source, "aws_region_name", target, "awsRegion");
+	move_string(source, "vertex_project", target, "vertexProject");
+	move_string(source, "vertex_location", target, "vertexRegion");
+	if let Some(api_key) = source.remove("api_key") {
+		target.insert(
+			"apiKey".to_string(),
+			normalize_environment_references(api_key),
+		);
 	}
 }
 
@@ -767,6 +1085,28 @@ fn imported_model_name(source: &str, public_name: &str, deployment: usize) -> St
 	)
 }
 
+fn unique_imported_provider_name(
+	source: &str,
+	credential: &str,
+	providers: &[ImportedProvider],
+) -> String {
+	let base = format!(
+		"imported/{}/{}",
+		sanitize_name(source),
+		sanitize_name(credential)
+	);
+	if !providers.iter().any(|candidate| candidate.name == base) {
+		return base;
+	}
+	for suffix in 2.. {
+		let candidate = format!("{base}/{suffix}");
+		if !providers.iter().any(|provider| provider.name == candidate) {
+			return candidate;
+		}
+	}
+	unreachable!()
+}
+
 #[cfg(test)]
 mod tests {
 	use std::fs;
@@ -828,6 +1168,16 @@ mod tests {
 	#[test]
 	fn reports_litellm_database_settings_without_reusing_them() {
 		assert_litellm_golden("database-settings");
+	}
+
+	#[test]
+	fn imports_reusable_litellm_credentials() {
+		assert_litellm_golden("centralized-credentials");
+	}
+
+	#[test]
+	fn reports_credential_conflicts_without_dropping_model_overrides() {
+		assert_litellm_golden("credential-conflicts");
 	}
 
 	#[test]

@@ -57,21 +57,16 @@ func jwtSignSecret(data map[string][]byte) *corev1.Secret {
 }
 
 func TestJwtSignNilSigningAlgDefaultsToUnspecified(t *testing.T) {
-	got, err := translateJwtSignSigningAlg(nil)
-	if err != nil {
-		t.Fatalf("translateJwtSignSigningAlg(nil) error = %v, want nil", err)
-	}
+	got := translateJwtSignSigningAlg(nil)
 	if got != api.JwtSigningAlg_JWT_SIGNING_ALG_UNSPECIFIED {
 		t.Fatalf("translateJwtSignSigningAlg(nil) = %v, want JWT_SIGNING_ALG_UNSPECIFIED", got)
 	}
 }
 
-// translateJwtSignSigningAlg is documented to reject unrecognized alg values
-// (guarding against version skew, since the CRD enum otherwise prevents this)
-// rather than falling back to a default. buildJwtSignAuthPolicy must honor
-// that rejection instead of still emitting a policy with the wrong alg.
-func TestJwtSignRejectsUnsupportedSigningAlg(t *testing.T) {
-	ctx := oauthTestPolicyCtx(t)
+func TestJwtSignPreservesUnsupportedSigningAlgForDataPlaneRejection(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t, jwtSignSecret(map[string][]byte{
+		"signingKey": []byte("pem-value"),
+	}))
 	badAlg := agentgateway.JwtSigningAlg("HS256")
 	policy := jwtSignTestPolicy(&agentgateway.JwtSignAuth{
 		SigningKeyRef: agentgateway.LocalSecretObjectRef{Name: "jwt-sign-secret"},
@@ -80,15 +75,15 @@ func TestJwtSignRejectsUnsupportedSigningAlg(t *testing.T) {
 	})
 
 	p, err := translateBackendAuth(ctx, policy, "default/jwt-sign")
-	if err == nil || !strings.Contains(err.Error(), "unsupported jwtSign signing algorithm") {
-		t.Fatalf("translateBackendAuth() error = %v, want unsupported signing algorithm error", err)
+	if err != nil {
+		t.Fatalf("translateBackendAuth() error = %v, want nil", err)
 	}
 	jwtSign := translatedJwtSign(t, p)
-	if jwtSign.TranslationError == nil || !strings.Contains(jwtSign.GetTranslationError(), "HS256") {
-		t.Fatalf("translationError = %q, want unsupported HS256 diagnostic", jwtSign.GetTranslationError())
+	if jwtSign.TranslationError != nil {
+		t.Fatalf("translationError = %q, want nil", jwtSign.GetTranslationError())
 	}
-	if jwtSign.GetSigningKey() != "" || jwtSign.GetAlg() != api.JwtSigningAlg_JWT_SIGNING_ALG_UNSPECIFIED {
-		t.Fatalf("error-bearing jwtSign contains signing configuration: %+v", jwtSign)
+	if jwtSign.GetAlg() != api.JwtSigningAlg(-1) {
+		t.Fatalf("jwtSign alg = %v, want unknown value for data-plane rejection", jwtSign.GetAlg())
 	}
 }
 
@@ -113,6 +108,23 @@ func TestJwtSignRejectsReservedClaims(t *testing.T) {
 		if jwtSign.TranslationError == nil || !strings.Contains(jwtSign.GetTranslationError(), reserved) {
 			t.Fatalf("translationError = %q, want reserved claim %q", jwtSign.GetTranslationError(), reserved)
 		}
+	}
+}
+
+func TestJwtSignAllowsNoStaticClaims(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t, jwtSignSecret(map[string][]byte{
+		"signingKey": []byte("pem-value"),
+	}))
+	policy := jwtSignTestPolicy(&agentgateway.JwtSignAuth{
+		SigningKeyRef: agentgateway.LocalSecretObjectRef{Name: "jwt-sign-secret"},
+	})
+
+	p, err := translateBackendAuth(ctx, policy, "default/jwt-sign")
+	if err != nil {
+		t.Fatalf("translateBackendAuth() error = %v, want nil", err)
+	}
+	if claims := translatedJwtSign(t, p).GetClaims(); len(claims) != 0 {
+		t.Fatalf("translated claims = %v, want empty", claims)
 	}
 }
 

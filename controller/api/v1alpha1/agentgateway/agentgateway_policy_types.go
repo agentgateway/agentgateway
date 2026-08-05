@@ -1920,12 +1920,9 @@ type JwtSignAuth struct {
 	// Static claims added to every token (e.g. iss, sub, aud). Values may be
 	// any JSON value (e.g. a string, number, bool, or array). iat, exp, and
 	// nbf are reserved for the signer and cannot be configured here; the
-	// controller rejects them at translation time. (CEL admission validation
-	// cannot inspect this map: JSON-valued fields are excluded from CEL type
-	// declarations.)
-	// +kubebuilder:validation:MinProperties=1
-	// +required
-	Claims map[string]apiextensionsv1.JSON `json:"claims"`
+	// controller rejects them at translation time.
+	// +optional
+	Claims map[string]apiextensionsv1.JSON `json:"claims,omitempty"`
 
 	// Token lifetime used for exp. Defaults to 300s.
 	// +kubebuilder:validation:Type=string

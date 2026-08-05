@@ -1285,9 +1285,8 @@ async fn test_backend_auth_jwt_sign() {
 		.get::<AppliedBackendAuthLocation>()
 		.expect("extension must be set");
 	assert!(
-		ext.explicit,
-		"jwtSign must mark the location explicit even when defaulted, so \
-		 providers never relocate the signed JWT"
+		!ext.explicit,
+		"a defaulted jwtSign location must retain normal backend-auth semantics"
 	);
 }
 
@@ -1336,9 +1335,12 @@ async fn test_backend_auth_jwt_sign_explicit_location() {
 	assert_eq!(exp - iat, 300 + 10);
 	assert!(payload.get("nbf").is_none());
 
-	assert!(
-		req.headers().get(http::header::AUTHORIZATION).is_none(),
-		"client-supplied Authorization header must not be forwarded to the backend"
+	assert_eq!(
+		req.headers().get(http::header::AUTHORIZATION),
+		Some(&http::HeaderValue::from_static(
+			"Bearer client-supplied-token"
+		)),
+		"a custom jwtSign location must not remove unrelated Authorization credentials"
 	);
 
 	let ext = req
@@ -1349,7 +1351,7 @@ async fn test_backend_auth_jwt_sign_explicit_location() {
 }
 
 #[test]
-fn test_jwt_sign_rejects_reserved_and_empty_claims() {
+fn test_jwt_sign_rejects_reserved_claims_and_allows_empty_claims() {
 	let reserved = JwtSignAuth::try_new(
 		TEST_JWT_SIGN_EC_KEY,
 		JwtSigningAlg::Es256,
@@ -1397,7 +1399,7 @@ fn test_jwt_sign_rejects_reserved_and_empty_claims() {
 		None,
 		None,
 	);
-	assert!(empty.is_err(), "empty claims must be rejected");
+	assert!(empty.is_ok(), "signer-generated claims are sufficient");
 }
 
 #[test]
@@ -1470,23 +1472,23 @@ async fn test_backend_auth_jwt_sign_rounds_up_sub_second_ttl() {
 	);
 }
 
-#[test]
-fn test_jwt_sign_deserializes() {
-	let kind: BackendAuthKind = serde_json::from_value(serde_json::json!({
-		"jwtSign": {
-			"signingKey": TEST_JWT_SIGN_EC_KEY,
-			"alg": "ES256",
-			"kid": "kid-1",
-			"claims": {"iss": "acct.user", "sub": "acct.user"},
-			"ttl": "600s",
-			"location": {"header": {"name": "x-signed-jwt"}}
-		}
+#[tokio::test]
+async fn test_jwt_sign_deserializes() {
+	let local: jwt_sign::LocalJwtSignAuth = serde_json::from_value(serde_json::json!({
+		"signingKey": TEST_JWT_SIGN_EC_KEY,
+		"alg": "ES256",
+		"kid": "kid-1",
+		"claims": {"iss": "acct.user", "sub": "acct.user"},
+		"ttl": "600s",
+		"location": {"header": {"name": "x-signed-jwt"}}
 	}))
 	.expect("jwtSign auth should deserialize");
-	let BackendAuthKind::JwtSign(cfg) = kind else {
-		panic!("expected jwtSign variant");
-	};
-	assert!(cfg.location.is_some());
+	let resources = crate::resource_manager::ResourceFetcher::files_only();
+	let auth = local
+		.try_into(&resources)
+		.await
+		.expect("jwtSign auth should resolve");
+	assert!(auth.location().is_some());
 }
 
 #[test]
@@ -1644,47 +1646,32 @@ async fn test_backend_auth_jwt_sign_rejects_ttl_that_overflows_exp() {
 }
 
 #[tokio::test]
-async fn test_jwt_sign_file_key_defers_to_resolve() {
+async fn test_local_jwt_sign_resolves_file_key_into_runtime_auth() {
 	let dir = tempfile::tempdir().unwrap();
 	let key_path = dir.path().join("signing.pem");
 	std::fs::write(&key_path, TEST_JWT_SIGN_EC_KEY).unwrap();
 
-	let auth: BackendAuthKind = serde_json::from_value(serde_json::json!({
-		"jwtSign": {
-			"signingKey": {"file": key_path},
-			"alg": "ES256",
-			"claims": {"iss": "acct.user"}
-		}
+	let local: jwt_sign::LocalJwtSignAuth = serde_json::from_value(serde_json::json!({
+		"signingKey": {"file": key_path},
+		"alg": "ES256",
+		"claims": {"iss": "acct.user"}
 	}))
 	.expect("file-based jwtSign auth should deserialize without reading the file");
-	let BackendAuthKind::JwtSign(mut cfg) = auth else {
-		panic!("expected jwtSign variant");
-	};
-
-	let err = cfg
-		.sign()
-		.expect_err("signing must fail before the file key is resolved");
-	assert!(
-		err.to_string().contains("resolved"),
-		"unexpected error: {err}"
-	);
 
 	let resources = crate::resource_manager::ResourceFetcher::files_only();
-	cfg
-		.resolve(&resources)
+	let auth = local
+		.try_into(&resources)
 		.await
-		.expect("resolve should load and parse the file key");
-	cfg.sign().expect("signing must work after resolve");
+		.expect("conversion should load and parse the file key");
+	auth.sign().expect("resolved runtime auth must sign");
 }
 
 #[test]
 fn test_jwt_sign_rejects_unknown_field() {
-	let result: Result<BackendAuthKind, _> = serde_json::from_value(serde_json::json!({
-		"jwtSign": {
-			"signingKey": TEST_JWT_SIGN_EC_KEY,
-			"claims": {"iss": "acct.user"},
-			"notAField": "oops"
-		}
+	let result: Result<jwt_sign::LocalJwtSignAuth, _> = serde_json::from_value(serde_json::json!({
+		"signingKey": TEST_JWT_SIGN_EC_KEY,
+		"claims": {"iss": "acct.user"},
+		"notAField": "oops"
 	}));
 	assert!(
 		result.is_err(),

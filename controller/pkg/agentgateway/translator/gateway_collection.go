@@ -385,14 +385,6 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 			})
 		}
 		validateListenerConflicts(result)
-		if ports := internalPortDisagreements(result); len(ports) > 0 {
-			gwReporter.SetCondition(reporter.GatewayCondition{
-				Type:    gwv1.GatewayConditionAccepted,
-				Status:  metav1.ConditionFalse,
-				Reason:  gwv1.GatewayReasonInvalid,
-				Message: fmt.Sprintf("conflicting %s annotation: port(s) %v are marked internal by some listeners but standard by others", annotations.InternalPorts, ports),
-			})
-		}
 		uniqueListenerSets := sets.New[utils.TypedNamespacedName]()
 		for _, ls := range result {
 			if !(ls.Valid && ls.Conflict == "" && ls.ParentObject.Kind == wellknown.ListenerSetGVK.Kind) {
@@ -410,6 +402,7 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 type portProtocol struct {
 	hostnames sets.String
 	protocol  gwv1.ProtocolType
+	internal  bool
 }
 
 type ListenerConflict string
@@ -417,40 +410,18 @@ type ListenerConflict string
 const (
 	ListenerConflictHostname = "hostname"
 	ListenerConflictProtocol = "protocol"
+	ListenerConflictBindMode = "bind-mode"
 )
-
-// internalPortDisagreements returns the sorted set of ports for which non-conflicting
-// listeners disagree on internal vs standard bind mode. A bind is per-port and shared,
-// so such a port cannot be resolved to a single mode and must be reported as invalid.
-func internalPortDisagreements(listeners []*GatewayListener) []int32 {
-	var sawInternal, sawStandard sets.Set[gwv1.PortNumber]
-	sawInternal = sets.New[gwv1.PortNumber]()
-	sawStandard = sets.New[gwv1.PortNumber]()
-	for _, l := range listeners {
-		if l.Conflict != "" {
-			continue
-		}
-		if l.ParentInfo.Internal {
-			sawInternal.Insert(l.ParentInfo.Port)
-		} else {
-			sawStandard.Insert(l.ParentInfo.Port)
-		}
-	}
-	var conflicting []int32
-	for port := range sawInternal {
-		if sawStandard.Contains(port) {
-			conflicting = append(conflicting, int32(port))
-		}
-	}
-	slices.Sort(conflicting)
-	return conflicting
-}
 
 func validateListenerConflicts(listeners []*GatewayListener) {
 	portMap := make(map[gwv1.PortNumber]*portProtocol)
 	for _, listener := range listeners {
 		if p, ok := portMap[listener.ParentInfo.Port]; ok {
-			if p.protocol == listener.ParentInfo.Protocol {
+			if p.internal != listener.ParentInfo.Internal {
+				// Listeners are ordered by Gateway API precedence before validation.
+				// Preserve the winning bind mode and reject only the later listener.
+				listener.Conflict = ListenerConflictBindMode
+			} else if p.protocol == listener.ParentInfo.Protocol {
 				if slices.ContainsFunc(listener.ParentInfo.Hostnames, p.hostnames.Contains) {
 					listener.Conflict = ListenerConflictHostname
 				} else {
@@ -463,6 +434,7 @@ func validateListenerConflicts(listeners []*GatewayListener) {
 			portMap[listener.ParentInfo.Port] = &portProtocol{
 				hostnames: sets.New(listener.ParentInfo.Hostnames...),
 				protocol:  listener.ParentInfo.Protocol,
+				internal:  listener.ParentInfo.Internal,
 			}
 		}
 	}

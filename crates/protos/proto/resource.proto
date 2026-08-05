@@ -1659,6 +1659,10 @@ message BackendPolicySpec {
     BackendTunnel backend_tunnel = 16;
     TrafficPolicySpec.ExternalAuth ext_authz = 17;
     McpGuardrails mcp_guardrails = 18;
+    // Authorization evaluated after a backend or AI provider is selected.
+    // AI failover providers use this to preserve the authorization policy of
+    // the concrete model from which the provider was lowered.
+    TrafficPolicySpec.RBAC authorization = 19;
   }
 }
 
@@ -1688,6 +1692,25 @@ message AIBackend {
   }
   message OpenAI {
     optional string model = 1;
+    Moderation moderation = 2;
+    message Moderation {
+      // The moderation model to use. Defaults to `omni-moderation-latest`.
+      string model = 1;
+      // Policies to apply to request input and generated output.
+      ModerationPolicy policy = 2;
+    }
+    message ModerationPolicy {
+      ModerationConfig input = 1;
+      ModerationConfig output = 2;
+    }
+    message ModerationConfig {
+      ModerationMode mode = 1;
+    }
+    enum ModerationMode {
+      MODERATION_MODE_UNSPECIFIED = 0;
+      MODERATION_MODE_SCORE = 1;
+      MODERATION_MODE_BLOCK = 2;
+    }
   }
   message Gemini {
     optional string model = 1;

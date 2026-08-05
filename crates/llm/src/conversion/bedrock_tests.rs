@@ -12,10 +12,12 @@ use crate::types;
 
 #[tokio::test]
 async fn test_append_done_on_success_omits_done_after_error() {
-	let mut body = super::from_completions::append_done_on_success(futures_util::stream::iter(vec![
-		Ok::<_, axum_core::Error>(Bytes::from_static(b"data: chunk\n\n")),
-		Err(axum_core::Error::new(io::Error::other("boom"))),
-	]));
+	let mut body = crate::parse::sse::append_done_on_success(axum_core::body::Body::from_stream(
+		futures_util::stream::iter(vec![
+			Ok::<_, axum_core::Error>(Bytes::from_static(b"data: chunk\n\n")),
+			Err(axum_core::Error::new(io::Error::other("boom"))),
+		]),
+	));
 
 	let first = body
 		.frame()
@@ -36,13 +38,11 @@ async fn test_append_done_on_success_omits_done_after_error() {
 
 #[tokio::test]
 async fn test_append_done_on_success_does_not_repoll_after_eof() {
-	let mut body =
-		super::from_completions::append_done_on_success(futures_util::stream::iter(vec![Ok::<
-			_,
-			axum_core::Error,
-		>(
-			Bytes::from_static(b"data: chunk\n\n"),
-		)]));
+	let mut body = crate::parse::sse::append_done_on_success(axum_core::body::Body::from_stream(
+		futures_util::stream::iter(vec![Ok::<_, axum_core::Error>(Bytes::from_static(
+			b"data: chunk\n\n",
+		))]),
+	));
 
 	assert!(body.frame().await.is_some(), "data frame should be present");
 	assert!(
@@ -228,6 +228,7 @@ fn test_output_config_effort_without_thinking_is_passed_through() {
 	assert_eq!(
 		out.additional_model_request_fields,
 		Some(json!({
+			"top_k": 50,
 			"output_config": {
 				"effort": "high"
 			}
@@ -236,7 +237,6 @@ fn test_output_config_effort_without_thinking_is_passed_through() {
 	let inference = out.inference_config.unwrap();
 	assert_eq!(inference.temperature, Some(0.7));
 	assert_eq!(inference.top_p, Some(0.8));
-	assert_eq!(inference.top_k, Some(50));
 }
 
 #[test]
@@ -285,6 +285,7 @@ fn test_explicit_empty_output_config_is_preserved() {
 			"thinking": {
 				"type": "adaptive"
 			},
+			"top_k": 50,
 			"output_config": {}
 		}))
 	);
@@ -292,7 +293,6 @@ fn test_explicit_empty_output_config_is_preserved() {
 	let inference = out.inference_config.unwrap();
 	assert_eq!(inference.temperature, Some(0.7));
 	assert_eq!(inference.top_p, Some(0.8));
-	assert_eq!(inference.top_k, Some(50));
 }
 
 #[test]
@@ -407,7 +407,6 @@ fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
 	let inference = out.inference_config.unwrap();
 	assert_eq!(inference.temperature, Some(0.7));
 	assert_eq!(inference.top_p, Some(0.8));
-	assert_eq!(inference.top_k, Some(50));
 
 	let tool_choice = out
 		.tool_config
@@ -423,7 +422,8 @@ fn test_adaptive_thinking_preserves_sampling_and_tool_choice() {
 		Some(json!({
 			"thinking": {
 				"type": "adaptive"
-			}
+			},
+			"top_k": 50
 		}))
 	);
 }
@@ -485,7 +485,6 @@ fn test_enabled_thinking_applies_sampling_and_tool_choice_constraints() {
 	let inference = out.inference_config.unwrap();
 	assert_eq!(inference.temperature, None);
 	assert_eq!(inference.top_p, None);
-	assert_eq!(inference.top_k, None);
 
 	let tool_choice = out
 		.tool_config
@@ -622,6 +621,7 @@ fn test_completions_request_metadata_only_uses_bedrock_header() {
 
 	let req = types::completions::typed::Request {
 		model: Some("anthropic.claude-3-sonnet".to_string()),
+		moderation: None,
 		messages: vec![types::completions::typed::RequestMessage::User(
 			types::completions::typed::RequestUserMessage {
 				content: types::completions::typed::RequestUserMessageContent::Text("Hello".to_string()),
@@ -716,6 +716,7 @@ fn test_completions_json_schema_response_format_maps_to_converse_output_config()
 
 	let req = types::completions::typed::Request {
 		model: Some("anthropic.claude-3-sonnet".to_string()),
+		moderation: None,
 		messages: vec![types::completions::typed::RequestMessage::User(
 			types::completions::typed::RequestUserMessage {
 				content: types::completions::typed::RequestUserMessageContent::Text(
@@ -803,6 +804,7 @@ fn test_completions_reasoning_effort_maps_to_enabled_thinking_budget() {
 
 	let req = types::completions::typed::Request {
 		model: Some("anthropic.claude-3-sonnet".to_string()),
+		moderation: None,
 		messages: vec![types::completions::typed::RequestMessage::User(
 			types::completions::typed::RequestUserMessage {
 				content: types::completions::typed::RequestUserMessageContent::Text(
@@ -878,6 +880,7 @@ fn test_completions_explicit_thinking_budget_forces_enabled_thinking() {
 
 	let req = types::completions::typed::Request {
 		model: Some("anthropic.claude-3-sonnet".to_string()),
+		moderation: None,
 		messages: vec![types::completions::typed::RequestMessage::User(
 			types::completions::typed::RequestUserMessage {
 				content: types::completions::typed::RequestUserMessageContent::Text(

@@ -1,0 +1,1 @@
+variables().filterKeys(k, k in ["request", "response", "source", "llm", "mcp"])

@@ -14,6 +14,9 @@ pub struct Request {
 	pub model: Option<String>,
 
 	#[serde(skip_serializing_if = "Option::is_none")]
+	pub moderation: Option<serde_json::Value>,
+
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub top_p: Option<f32>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub temperature: Option<f32>,
@@ -817,6 +820,10 @@ pub mod typed {
 		/// Agentgateway: translated this to Option<> since the users can override the model.
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub model: Option<String>,
+
+		/// Configuration for running moderation on the request input and generated output.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub moderation: Option<serde_json::Value>,
 
 		/// Whether or not to store the output of this chat completion request
 		///
