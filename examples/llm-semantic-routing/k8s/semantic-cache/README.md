@@ -129,6 +129,11 @@ The manifest deploys the official Redis 8 image as a single-replica
 StatefulSet. A 2 GiB persistent volume stores its append-only file and periodic
 snapshots. Redis 8 includes Redis Search and vector-search support.
 
+The example uses only a small fraction of the allocated storage. For a
+production deployment, size Redis storage for the expected number of cache
+entries, embedding and response sizes, cache TTL, dataset growth, and temporary
+disk space required during AOF rewrites.
+
 ```bash
 kubectl apply \
   -f examples/llm-semantic-routing/k8s/semantic-cache/redis.yaml
