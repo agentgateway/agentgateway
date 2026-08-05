@@ -3190,9 +3190,7 @@ mod tests {
 		apply_auto_hostname, apply_llm_request_policies, hop_by_hop_headers,
 		resolved_workload_target_hostname, select_service_target_port,
 	};
-	use crate::http;
 	use crate::http::filters::AutoHostname;
-	use crate::llm;
 	use crate::llm::policy::{
 		PromptGuard, PromptGuardStreamingMode, RegexRule, RegexRules, RequestRejection, ResponseGuard,
 		ResponseGuardKind,
@@ -3203,6 +3201,7 @@ mod tests {
 	use crate::types::agent::{Backend, ResourceName, Target};
 	use crate::types::discovery::{AppProtocol, Endpoint, HealthStatus, Service};
 	use crate::types::local::LocalAIBackend;
+	use crate::{http, llm};
 
 	fn retry_policy(codes: &[u16], condition: Option<&str>) -> crate::http::retry::Policy {
 		crate::http::retry::Policy {
