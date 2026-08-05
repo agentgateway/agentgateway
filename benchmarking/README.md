@@ -30,27 +30,42 @@ directory locally (gitignored), or check the PR description for the latest numbe
 ## Running it yourself
 
 ```bash
-make -C controller benchmark BENCHMARK_LLM_D_BENCHMARK_DIR=/path/to/llm-d-benchmark
+make -C controller benchmark
 ```
 
-That's it - it reuses the existing `kind-create` target for the cluster, so pass
-`CLUSTER_NAME=<name>` too if you don't want the default. You need `llm-d-benchmark`
-cloned somewhere with its CLI installed first, check their
-[quickstart](https://github.com/llm-d/llm-d-benchmark/blob/main/docs/quickstart.md)
-if you haven't set it up before.
+That's it - no pre-setup needed. It reuses the existing `kind-create` target for
+the cluster (pass `CLUSTER_NAME=<name>` if you don't want the default), and
+clones/manages its own `llm-d-benchmark` checkout automatically (see below).
 
-You can also run `benchmarking/run-benchmark.sh` directly (same env vars, just
-`LLM_D_BENCHMARK_DIR` instead of the `BENCHMARK_` prefix) if you already have a
-cluster up and don't want to go through `make`.
+To clean up that managed clone later:
+
+```bash
+make -C controller benchmark-clean
+```
+
+This doesn't touch the kind cluster or anything deployed to it, just the local
+`llm-d-benchmark` clone and its venv.
+
+If you'd rather use your own existing `llm-d-benchmark` clone instead of the
+managed one, pass `BENCHMARK_LLM_D_BENCHMARK_DIR=/path/to/llm-d-benchmark` to
+either target - `benchmark-clean` then becomes a no-op, since that clone isn't
+ours to delete.
+
+You can also run `benchmarking/run-benchmark.sh` directly (same idea, just
+`LLM_D_BENCHMARK_DIR` instead of the `BENCHMARK_` prefix, and `--clean` instead
+of a separate make target) if you already have a cluster up and don't want to
+go through `make`.
 
 What it does, in order:
-1. Loads the agentgateway image into the cluster (see the gotcha below for why
+1. Clones (or reuses/updates a cached clone of) `llm-d-benchmark` and installs
+   it via their own `install.sh`, unless `LLM_D_BENCHMARK_DIR` is set
+2. Loads the agentgateway image into the cluster (see the gotcha below for why
    this isn't just `kind load docker-image`)
-2. Writes a spec file per arm pointing llm-d-benchmark at its own templates plus
+3. Writes a spec file per arm pointing llm-d-benchmark at its own templates plus
    our `scenarios/*.yaml`
-3. `standup` -> `smoketest` -> `run` for both arms, retrying `standup` once if it
-   times out on the first image pull (see the gotcha below)
-4. Compares both arms with llm-d-benchmark's own `cross_treatment.py` and writes
+4. `standup` -> `smoketest` -> `run` for both arms, with a longer timeout for
+   the first image pull (see the gotcha below)
+5. Compares both arms with llm-d-benchmark's own `cross_treatment.py` and writes
    the CSV + plots to `results/` (gitignored, not checked in)
 
 ## Stuff that'll probably trip you up
@@ -66,8 +81,15 @@ What it does, in order:
   `ctr images import --all-platforms` then chokes on the missing digest. The
   script works around this with `skopeo` (`brew install skopeo`), which
   flattens the image to a single-platform tar before `kind load image-archive`.
-- First standup on a fresh cluster times out waiting on the harness pod - it's
-  pulling `ghcr.io/llm-d/llm-d-benchmark` (~5.7GB) for the first time and that
-  takes longer than the wait timeout. The script retries once after waiting for
-  the namespace's pods to go Ready; if that's still not enough, let the pull
-  finish and re-run.
+- First standup on a fresh cluster can be slow waiting on the harness pod -
+  it's pulling `ghcr.io/llm-d/llm-d-benchmark` (~5.7GB) for the first time,
+  which can take longer than the default 120s wait. The script passes
+  `--data-access-timeout 600` to standup for this (needs
+  llm-d-benchmark#1696 or later - `git pull` if you're on an older clone
+  and hit this).
+- If you're on Helm 4, `helmfile apply` fails with `if any flags in the group
+  [validate dry-run] are set none of the others can be`. That's the installed
+  `helm-diff` plugin passing both `--validate` and `--dry-run`, which Helm 4
+  now rejects as mutually exclusive. Downgrade to Helm 3
+  (`brew install helm@3 && brew unlink helm && brew link helm@3`) until
+  `helm-diff` catches up.

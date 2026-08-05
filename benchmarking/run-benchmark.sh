@@ -5,25 +5,34 @@
 # llm-d-benchmark's own cross_treatment.py. See README.md for the manual
 # version of these same steps.
 #
-# Set LLM_D_BENCHMARK_DIR to your llm-d-benchmark clone before running this
-# (CLI installed in .venv, see their quickstart). Needs skopeo too
-# (brew install skopeo) - see the image-loading gotcha below.
-# Optional: CLUSTER_NAME (default: kind), AGTW_BENCHMARKING_DIR (default: here)
+# Clones and manages its own llm-d-benchmark checkout - no setup needed
+# beyond skopeo (brew install skopeo, see the image-loading gotcha below).
+# Needs llm-d-benchmark#1696 or later for --data-access-timeout on standup,
+# which is why LLM_D_BENCHMARK_REF defaults to main instead of a tag.
+#
+# Optional: CLUSTER_NAME (default: kind), AGTW_BENCHMARKING_DIR (default: here),
+# LLM_D_BENCHMARK_REF (default: main - branch, tag, or commit),
+# LLM_D_BENCHMARK_DIR (skip the managed clone entirely and use this checkout
+# instead - your responsibility to keep it up to date then),
+# LLM_D_BENCHMARK_CACHE_DIR (where the managed clone lives, default: see below)
+#
+# Usage: ./run-benchmark.sh          run the comparison
+#        ./run-benchmark.sh --clean  remove the managed llm-d-benchmark clone
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-: "${LLM_D_BENCHMARK_DIR:?Set LLM_D_BENCHMARK_DIR to your llm-d-benchmark clone}"
 CLUSTER_NAME="${CLUSTER_NAME:-kind}"
 AGTW_BENCHMARKING_DIR="${AGTW_BENCHMARKING_DIR:-$SCRIPT_DIR}"
+LLM_D_BENCHMARK_REF="${LLM_D_BENCHMARK_REF:-main}"
+LLM_D_BENCHMARK_CACHE_DIR="${LLM_D_BENCHMARK_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/agentgateway-benchmark/llm-d-benchmark}"
 
 AGW_IMAGE="cr.agentgateway.dev/agentgateway:latest-dev"
 WORKLOAD="sanity_random.yaml"
 SPEC_DIR="$(mktemp -d)"
 RESULTS_DIR="${AGTW_BENCHMARKING_DIR}/results"
-STANDUP_RETRIES=2
-STANDUP_RETRY_WAIT=600
+DATA_ACCESS_TIMEOUT=600
 
 declare -A ARM_SCENARIO=(
   [baseline]=plain-service-decode-only
@@ -31,6 +40,42 @@ declare -A ARM_SCENARIO=(
 )
 
 log() { echo "[run-benchmark] $*"; }
+
+# If the caller already pointed us at a clone (LLM_D_BENCHMARK_DIR), use it
+# as-is - that's on them to keep updated. Otherwise manage our own clone in
+# a cache dir: clone once, fetch+checkout LLM_D_BENCHMARK_REF on every run
+# after that instead of re-cloning from scratch each time.
+#
+# Setup itself (venv, the llmdbenchmark CLI, the separate `planner` package
+# it needs, picking a Python 3.11+ interpreter) is delegated to
+# llm-d-benchmark's own install.sh instead of reimplementing it - it already
+# handles all of that correctly, including cases plain `pip install -e .`
+# doesn't (planner isn't pulled in by that alone, and macOS's system python3
+# is usually too old for llm-d-benchmark's >=3.11 requirement).
+ensure_llm_d_benchmark() {
+  if [[ -n "${LLM_D_BENCHMARK_DIR:-}" ]]; then
+    log "using existing llm-d-benchmark checkout at ${LLM_D_BENCHMARK_DIR}"
+    return 0
+  fi
+
+  LLM_D_BENCHMARK_DIR="${LLM_D_BENCHMARK_CACHE_DIR}"
+
+  if [[ ! -d "${LLM_D_BENCHMARK_DIR}/.git" ]]; then
+    log "cloning llm-d-benchmark into ${LLM_D_BENCHMARK_DIR}"
+    mkdir -p "$(dirname "${LLM_D_BENCHMARK_DIR}")"
+    git clone https://github.com/llm-d/llm-d-benchmark.git "${LLM_D_BENCHMARK_DIR}"
+  fi
+
+  log "checking out llm-d-benchmark @ ${LLM_D_BENCHMARK_REF}"
+  (cd "${LLM_D_BENCHMARK_DIR}" && git fetch origin "${LLM_D_BENCHMARK_REF}" && git checkout FETCH_HEAD)
+
+  # --uv, not --no-uv/-y: this machine's plain `python3` is often an old
+  # system Python (e.g. macOS's 3.9), and -y forces using it as-is with no
+  # version check. --uv lets install.sh download and use a real 3.11+
+  # itself instead of failing on whatever `python3` happens to resolve to.
+  log "running llm-d-benchmark's install.sh"
+  (cd "${LLM_D_BENCHMARK_DIR}" && ./install.sh --uv)
+}
 
 # The router chart's agentgateway image preset points at a tag that doesn't
 # exist upstream (see benchmarking/README.md), so this needs to be loaded
@@ -84,29 +129,43 @@ llmdbench() {
   (cd "${LLM_D_BENCHMARK_DIR}" && source .venv/bin/activate && llmdbenchmark "$@")
 }
 
-# First standup on a fresh cluster times out waiting on the harness pod since
-# it's pulling a ~5.7GB image for the first time. Retry a couple times,
-# waiting for the namespace's pods to go Ready in between.
+# First standup on a fresh cluster can take a while waiting on the harness
+# pod, since it's pulling a ~5.7GB image for the first time - the default
+# 120s wait isn't enough. --data-access-timeout raises that
+# (llm-d/llm-d-benchmark#1696).
 standup_arm() {
   local arm="$1" scenario="${ARM_SCENARIO[$arm]}"
-  local attempt=1
-  while true; do
-    if llmdbench --spec "${SPEC_DIR}/spec-${arm}.yaml" --workspace "$(workspace_dir "${arm}")" \
-        standup -p "${scenario}" --skip-smoketest; then
-      return 0
-    fi
-    if [[ "${attempt}" -ge "${STANDUP_RETRIES}" ]]; then
-      log "standup for ${arm} failed after ${attempt} attempts"
-      return 1
-    fi
-    log "standup for ${arm} timed out (likely still pulling images), waiting for pods then retrying"
-    kubectl wait --for=condition=Ready pod --all -n "${scenario}" --timeout="${STANDUP_RETRY_WAIT}s" || true
-    attempt=$((attempt + 1))
-  done
+  llmdbench --spec "${SPEC_DIR}/spec-${arm}.yaml" --workspace "$(workspace_dir "${arm}")" \
+    standup -p "${scenario}" --skip-smoketest --data-access-timeout "${DATA_ACCESS_TIMEOUT}"
+}
+
+# Removes the managed llm-d-benchmark clone (repo + venv + installed CLI/
+# planner) from LLM_D_BENCHMARK_CACHE_DIR. Does nothing if LLM_D_BENCHMARK_DIR
+# was set (that clone isn't ours to delete) or if there's no managed clone
+# to remove. Doesn't touch the kind cluster or anything deployed to it -
+# that's a separate concern, use kind-delete/teardown for that.
+clean() {
+  if [[ -n "${LLM_D_BENCHMARK_DIR:-}" ]]; then
+    log "LLM_D_BENCHMARK_DIR is set, nothing managed by this script to clean up"
+    return 0
+  fi
+  if [[ ! -d "${LLM_D_BENCHMARK_CACHE_DIR}" ]]; then
+    log "no managed clone at ${LLM_D_BENCHMARK_CACHE_DIR}, nothing to clean up"
+    return 0
+  fi
+  log "removing ${LLM_D_BENCHMARK_CACHE_DIR}"
+  rm -rf "${LLM_D_BENCHMARK_CACHE_DIR}"
 }
 
 main() {
+  if [[ "${1:-}" == "--clean" ]]; then
+    clean
+    exit 0
+  fi
+
+  declare -A report_paths
   mkdir -p "${RESULTS_DIR}"
+  ensure_llm_d_benchmark
   load_agentgateway_image
 
   for arm in baseline agentgateway; do
@@ -139,6 +198,7 @@ main() {
     fi
     treatment_dir="$(dirname "${report}")"
     ln -sf "${treatment_dir}" "${comparison_input}/${arm}"
+    report_paths["${arm}"]="${report}"
   done
 
   (cd "${LLM_D_BENCHMARK_DIR}" && source .venv/bin/activate && python3 -c "
@@ -146,6 +206,15 @@ from pathlib import Path
 from llmdbenchmark.analysis.cross_treatment import generate_cross_treatment_summary
 generate_cross_treatment_summary(Path('${comparison_input}'), output_dir=Path('${RESULTS_DIR}'))
 ")
+
+  # So callers (e.g. the regression check in CI) can find each arm's raw
+  # report without re-deriving these temp paths themselves.
+  {
+    echo "{"
+    echo "  \"baseline\": \"${report_paths[baseline]}\","
+    echo "  \"agentgateway\": \"${report_paths[agentgateway]}\""
+    echo "}"
+  } > "${RESULTS_DIR}/report-paths.json"
 
   log "done, results in ${RESULTS_DIR}"
 }
