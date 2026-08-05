@@ -82,8 +82,26 @@ for the supported Kubernetes and Gateway API versions. vSR downloads an
 embedding model on its first startup. Allocate at least 6 CPUs, 10 GiB of
 memory, and 15 GiB of free disk space to Docker.
 
-Redis and vSR use cleartext, unauthenticated connections inside the kind
-cluster. Do not copy those settings into a shared or production cluster.
+This local kind setup uses cleartext connections from agentgateway to vSR's
+ExtProc endpoint and from vSR to Redis. Production deployments should use TLS
+for both connections:
+
+- Serve the vSR ExtProc gRPC endpoint with TLS, either directly or through a
+  TLS-terminating sidecar, and configure agentgateway to originate TLS to the
+  `semantic-router` Service. See the agentgateway [ExtProc
+  guide](https://agentgateway.dev/docs/kubernetes/main/traffic-management/extproc/)
+  and [BackendTLS
+  guide](https://agentgateway.dev/docs/kubernetes/main/security/backendtls/).
+- Configure Redis with a server certificate, private key, and trusted CA as
+  described in the [Redis Open Source TLS
+  documentation](https://redis.io/docs/latest/operate/oss_and_stack/management/security/encryption/).
+  Mount the required CA and client certificate material into vSR, then enable
+  TLS in the semantic-cache Redis connection. See the vSR [Redis semantic-cache
+  configuration](https://vllm-semantic-router.com/docs/v0.2/tutorials/semantic-cache/redis-cache/).
+
+TLS encrypts traffic in transit. Configure Redis authentication and ACLs
+separately, and store credentials and certificate private keys in Kubernetes
+Secrets rather than inline configuration.
 
 ## Create the Cluster
 
