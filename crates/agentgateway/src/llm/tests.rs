@@ -860,6 +860,147 @@ async fn provider_model_is_set_before_llm_transformations() {
 }
 
 #[tokio::test]
+async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
+	use crate::http::auth::BackendInfo;
+	use crate::llm::policy::Policy;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model: Some(strng::new(
+			"bedrock-runtime/us/anthropic.claude-3-5-sonnet-20241022-v2:0",
+		)),
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	});
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("bedrock-runtime.us-east-1.amazonaws.com", 443)),
+		inputs,
+	};
+	let policy = Policy {
+		transformations: Some(
+			[(
+				"model".to_string(),
+				std::sync::Arc::new(
+					crate::cel::Expression::new_strict(
+						r#"llmRequest.model.stripPrefix("bedrock-runtime/us/")"#,
+					)
+					.unwrap(),
+				),
+			)]
+			.into_iter()
+			.collect(),
+		),
+		..Default::default()
+	};
+	let expected_model = "anthropic.claude-3-5-sonnet-20241022-v2:0";
+
+	let req = ::http::Request::builder()
+		.uri("https://gateway.example.com/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			json!({
+				"model": "client-model",
+				"messages": [{"role": "user", "content": "hello"}],
+				"stream": true,
+			})
+			.to_string(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: mut forwarded,
+		llm_request,
+		upstream_route_type,
+	} = provider
+		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None)
+		.await
+		.expect("Bedrock completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	assert_eq!(llm_request.request_model, expected_model);
+	provider
+		.setup_request(
+			&mut forwarded,
+			upstream_route_type,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+		)
+		.expect("Bedrock upstream request should be finalized");
+	assert_eq!(
+		forwarded.uri().path(),
+		format!("/model/{expected_model}/converse-stream")
+	);
+}
+
+#[tokio::test]
+async fn bedrock_provider_model_overrides_client_model() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let configured_model = "anthropic.claude-3-5-sonnet-20241022-v2:0";
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model: Some(strng::new(configured_model)),
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	});
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("bedrock-runtime.us-east-1.amazonaws.com", 443)),
+		inputs,
+	};
+	let req = ::http::Request::builder()
+		.uri("https://gateway.example.com/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "client-model",
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: mut forwarded,
+		llm_request,
+		upstream_route_type,
+	} = provider
+		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("Bedrock completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	assert_eq!(llm_request.request_model, configured_model);
+	provider
+		.setup_request(
+			&mut forwarded,
+			upstream_route_type,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+		)
+		.expect("Bedrock upstream request should be finalized");
+	assert_eq!(
+		forwarded.uri().path(),
+		format!("/model/{configured_model}/converse")
+	);
+}
+
+#[tokio::test]
 async fn llm_transformations_can_set_missing_model() {
 	use crate::http::auth::BackendInfo;
 	use crate::llm::policy::Policy;
