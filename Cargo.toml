@@ -286,12 +286,12 @@ codegen-units = 16
 lto = false
 incremental = true
 
-# For CI, optimize all dependencies since they are cached. Leave workspace packages, which are uncached,
+# Keep CI builds fast and the resulting binary small. CI does not need optimized
+# code or debugging symbols.
 [profile.ci]
-inherits = "quick-release"
-opt-level = 1
-[profile.ci.package."*"]
-opt-level = 3
+inherits = "dev"
+debug = 0
+strip = "symbols"
 
 [profile.release]
 codegen-units = 1
