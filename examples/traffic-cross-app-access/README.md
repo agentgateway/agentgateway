@@ -69,9 +69,17 @@ authenticates the user:
 - `cache.defaultTtl` (optional) — fallback TTL when the final token response omits `expires_in`.
   The cache is capped by the subject token's JWT `exp` when present.
 
+By default, the subject ID token is read from the `Authorization: Bearer` header. To extract it
+from another request value or a validated JWT claim, configure `subjectToken.source`:
+
+```yaml
+subjectToken:
+  source:
+    expression: jwt.the_id_token
+```
+
 Each endpoint (and the upstream backend) needs `backendTLS: {}` when it is HTTPS — see the demo
 READMEs.
 
 > The `jwtAuth` policy must validate an **OIDC ID token** (not an arbitrary access token), as
 > that is what the IdP expects as the `subject_token`.
-

@@ -213,6 +213,11 @@ inferenceExtension:
   # -- Enable Inference Extension support in the agentgateway controller.
   enabled: false
 
+# -- Configure the experimental AgentgatewayModel API.
+agentgatewayModels:
+  # -- Enable AgentgatewayModel support in the agentgateway controller.
+  enabled: false
+
 # -- List of namespace selectors (OR'ed): each entry can use 'matchLabels' or 'matchExpressions' (AND'ed within each entry if used together). Agentgateway includes the selected namespaces in config discovery. For more information, see the docs https://agentgateway.dev/docs/kubernetes/latest/install/advanced/#namespace-discovery.
 discoveryNamespaceSelectors: []
 
@@ -227,6 +232,15 @@ discoveryNamespaceSelectors: []
 #        name: shared-gwp
 #        namespace: kgateway-system
 gatewayClassParametersRefs: {}
+
+# -- Name of the primary GatewayClass the controller creates and manages.
+#    Leave empty to use the built-in default ("agentgateway"). Sets AGW_AGENTGATEWAY_CLASS_NAME.
+gatewayClassName: ""
+
+# -- Value written to GatewayClass.spec.controllerName that this controller reconciles.
+#    Leave empty to use the built-in default ("agentgateway.dev/agentgateway"). Sets AGW_CONTROLLER_NAME.
+#    Change this together with gatewayClassName when running multiple agentgateway controllers.
+controllerName: ""
 
 # -- Control-plane-wide Istio mesh defaults.
 istio:
@@ -255,16 +269,23 @@ monitoring:
   enabled: false
 
   serviceMonitor:
-    # -- Create ServiceMonitor resources.
+    # -- Create the controller ServiceMonitor.
     enabled: true
-    # -- Scrape interval for both ServiceMonitors.
+    # -- Scrape interval for the controller ServiceMonitor and the proxy PodMonitor.
     interval: 15s
-    # -- Additional labels to add to both ServiceMonitor resources (e.g. release: prometheus).
+    # -- Additional labels to add to the controller ServiceMonitor and the proxy PodMonitor (e.g. release: prometheus).
     extraLabels: {}
 
   proxy:
-    # -- Namespace selector used by the proxy ServiceMonitor.
-    # The proxy ServiceMonitor always selects Services with gateway.networking.k8s.io/gateway-class-name=agentgateway.
+    podMonitor:
+      # -- Create a PodMonitor that scrapes provisioned proxy pods on the pod's
+      #    metrics port (15020) directly, without requiring a metrics port on the
+      #    provisioned Service.
+      enabled: true
+    # -- GatewayClass names whose proxy pods are selected by the proxy PodMonitor.
+    gatewayClassNames:
+      - agentgateway
+    # -- Namespace selector used by the proxy PodMonitor. Defaults to the release namespace only.
     namespaceSelector: {}
 
   grafanaDashboard:

@@ -31,7 +31,10 @@ impl RawInputItem {
 
 	fn from_user_text(text: String) -> Self {
 		Self::from_typed(InputItem::from(InputMessage {
-			content: vec![InputContent::InputText(InputTextContent { text })],
+			content: vec![InputContent::InputText(InputTextContent {
+				text,
+				prompt_cache_breakpoint: None,
+			})],
 			role: InputRole::User,
 			status: None,
 		}))
@@ -72,6 +75,35 @@ impl RawInputItem {
 
 		Some(SimpleChatCompletionMessage { role, content })
 	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		if self.0.get("role").is_some() {
+			match self.0.get_mut("content") {
+				Some(Value::String(text)) => f(text),
+				Some(Value::Array(parts)) => {
+					crate::types::scan_text_runs(
+						parts,
+						"\n",
+						|part| {
+							if !matches!(
+								part.get("type").and_then(|t| t.as_str()),
+								Some("input_text" | "output_text")
+							) {
+								return None;
+							}
+							match part.get_mut("text") {
+								Some(Value::String(text)) => Some(text),
+								_ => None,
+							}
+						},
+						f,
+					);
+				},
+				_ => {},
+			}
+		}
+		// TODO opt-in setting to apply guards to tool results
+	}
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
@@ -84,6 +116,9 @@ pub struct Request {
 	pub model: Option<String>,
 
 	#[serde(skip_serializing_if = "Option::is_none")]
+	pub moderation: Option<Value>,
+
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub max_output_tokens: Option<u32>,
 
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -94,6 +129,9 @@ pub struct Request {
 
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub stream: Option<bool>,
+
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub instructions: Option<String>,
 
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub vendor_extensions: Option<RequestVendorExtensions>,
@@ -136,6 +174,8 @@ pub struct Usage {
 	/// Breakdown of tokens used in the prompt.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub output_tokens_details: Option<UsageOutputDetails>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub total_tokens: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -150,6 +190,8 @@ pub struct UsageOutputDetails {
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct UsageInputDetails {
 	pub cached_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_write_tokens: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -189,12 +231,14 @@ impl ResponseBuilder {
 			max_output_tokens: None,
 			metadata: None,
 			model: self.model.clone(),
+			moderation: None,
 			object: "response".to_string(),
 			output: Vec::new(),
 			parallel_tool_calls: None,
 			previous_response_id: None,
 			prompt: None,
 			prompt_cache_key: None,
+			prompt_cache_options: None,
 			prompt_cache_retention: None,
 			reasoning: None,
 			safety_identifier: None,
@@ -271,6 +315,7 @@ impl From<SimpleChatCompletionMessage> for InputItem {
 			"system" => InputItem::from(InputMessage {
 				content: vec![InputContent::InputText(InputTextContent {
 					text: msg.content.to_string(),
+					prompt_cache_breakpoint: None,
 				})],
 				role: InputRole::System,
 				status: None,
@@ -278,6 +323,7 @@ impl From<SimpleChatCompletionMessage> for InputItem {
 			"developer" => InputItem::from(InputMessage {
 				content: vec![InputContent::InputText(InputTextContent {
 					text: msg.content.to_string(),
+					prompt_cache_breakpoint: None,
 				})],
 				role: InputRole::Developer,
 				status: None,
@@ -285,6 +331,7 @@ impl From<SimpleChatCompletionMessage> for InputItem {
 			_ => InputItem::from(InputMessage {
 				content: vec![InputContent::InputText(InputTextContent {
 					text: msg.content.to_string(),
+					prompt_cache_breakpoint: None,
 				})],
 				role: InputRole::User,
 				status: None,
@@ -305,6 +352,10 @@ impl Request {
 impl RequestType for Request {
 	fn model(&mut self) -> &mut Option<String> {
 		&mut self.model
+	}
+
+	fn to_value(&self) -> serde_json::Result<serde_json::Value> {
+		serde_json::to_value(self)
 	}
 
 	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
@@ -355,7 +406,16 @@ impl RequestType for Request {
 	}
 
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage> {
-		match &self.input {
+		let mut messages = self
+			.instructions
+			.as_ref()
+			.map(|instructions| SimpleChatCompletionMessage {
+				role: strng::literal!("system"),
+				content: strng::new(instructions),
+			})
+			.into_iter()
+			.collect::<Vec<_>>();
+		messages.extend(match &self.input {
 			RequestInput::Text(text) => {
 				vec![SimpleChatCompletionMessage {
 					role: strng::literal!("user"),
@@ -366,10 +426,20 @@ impl RequestType for Request {
 				.iter()
 				.filter_map(RawInputItem::as_simple_message)
 				.collect(),
-		}
+		});
+		messages
 	}
 
-	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
+	fn set_messages(&mut self, mut messages: Vec<SimpleChatCompletionMessage>) {
+		if self.instructions.is_some() {
+			self.instructions = messages
+				.first()
+				.filter(|message| matches!(message.role.as_str(), "developer" | "system"))
+				.map(|message| message.content.to_string());
+			if self.instructions.is_some() {
+				messages.remove(0);
+			}
+		}
 		self.input = RequestInput::Items(
 			messages
 				.into_iter()
@@ -377,10 +447,66 @@ impl RequestType for Request {
 				.collect(),
 		);
 	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		if let Some(instructions) = &mut self.instructions {
+			f(instructions);
+		}
+		match &mut self.input {
+			RequestInput::Text(text) => f(text),
+			RequestInput::Items(items) => {
+				for item in items {
+					item.visit_text_mut(f);
+				}
+			},
+		}
+	}
+}
+
+fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {
+	let mut content = Vec::new();
+
+	for item in &resp.output {
+		if let OutputItem::FunctionCall(_) = item {
+			content.extend(output_item_tool_call_part(item));
+		}
+	}
+
+	if content.is_empty() {
+		return None;
+	}
+
+	Some(vec![OutputMessage {
+		role: strng::literal!("assistant"),
+		content,
+		finish_reason: Some(strng::new(&resp.status)),
+	}])
+}
+
+pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMessagePart> {
+	let OutputItem::FunctionCall(call) = item else {
+		return None;
+	};
+	let arguments = match serde_json::from_str(&call.arguments) {
+		Ok(arguments) => arguments,
+		Err(_) if call.arguments.trim().is_empty() => serde_json::Value::Object(Default::default()),
+		Err(_) => serde_json::Value::String(call.arguments.clone()),
+	};
+	Some(OutputMessagePart::ToolCall {
+		id: strng::new(&call.call_id),
+		name: strng::new(&call.name),
+		arguments,
+	})
 }
 
 impl ResponseType for Response {
-	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
+	fn to_llm_response(&self, log_content: crate::LogContentFields) -> LLMResponse {
+		let output_messages = if log_content.tool_calls {
+			extract_output_messages(self)
+		} else {
+			None
+		};
+
 		LLMResponse {
 			input_tokens: self.usage.as_ref().map(|u| u.input_tokens),
 			input_image_tokens: None,
@@ -397,7 +523,7 @@ impl ResponseType for Response {
 			total_tokens: self
 				.usage
 				.as_ref()
-				.map(|u| u.input_tokens + u.output_tokens),
+				.map(|u| u.total_tokens.unwrap_or(u.input_tokens + u.output_tokens)),
 			reasoning_tokens: self.usage.as_ref().and_then(|u| {
 				u.output_tokens_details
 					.as_ref()
@@ -408,10 +534,14 @@ impl ResponseType for Response {
 					.as_ref()
 					.and_then(|d| d.cached_tokens)
 			}),
-			cache_creation_input_tokens: None,
+			cache_creation_input_tokens: self.usage.as_ref().and_then(|u| {
+				u.input_tokens_details
+					.as_ref()
+					.and_then(|d| d.cache_write_tokens)
+			}),
 			service_tier: self.service_tier.as_deref().map(Into::into),
 			provider_model: Some(strng::new(&self.model)),
-			completion: if include_completion_in_log {
+			completion: if log_content.completion {
 				Some(
 					self
 						.output
@@ -431,6 +561,7 @@ impl ResponseType for Response {
 			} else {
 				None
 			},
+			output_messages,
 			first_token: Default::default(),
 		}
 	}
@@ -496,6 +627,18 @@ impl ResponseType for Response {
 	fn serialize(&self) -> serde_json::Result<Vec<u8>> {
 		serde_json::to_vec(&self)
 	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		for o in &mut self.output {
+			if let OutputItem::Message(msg) = o {
+				for c in &mut msg.content {
+					if let Content::OutputText(t) = c {
+						f(&mut t.text);
+					}
+				}
+			}
+		}
+	}
 }
 
 pub mod typed {
@@ -557,5 +700,104 @@ pub mod typed {
 		/// Emitted when an error occurs.
 		#[serde(rename = "error")]
 		ResponseError(openai_responses::ResponseErrorEvent),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::typed::{FunctionToolCall, OutputStatus};
+	use super::*;
+
+	fn response_with_output(output: Vec<OutputItem>) -> Response {
+		Response {
+			id: "resp_123".to_string(),
+			status: "completed".to_string(),
+			output,
+			model: "gpt-4.1".to_string(),
+			service_tier: None,
+			usage: None,
+			rest: serde_json::Value::Null,
+		}
+	}
+
+	#[test]
+	fn instructions_round_trip_through_messages() {
+		let mut request: Request = serde_json::from_value(serde_json::json!({
+			"model": "gpt-4.1",
+			"instructions": "original instruction",
+			"input": [
+				{"role": "system", "content": "input system message"},
+				{"role": "user", "content": "hello"},
+			],
+		}))
+		.unwrap();
+		let mut messages = request.get_messages();
+		assert_eq!(messages[0].role.as_str(), "system");
+		assert_eq!(messages[1].role.as_str(), "system");
+		messages[0].content = strng::literal!("masked instruction");
+		messages[1].content = strng::literal!("masked input system message");
+
+		request.set_messages(messages);
+
+		assert_eq!(request.instructions.as_deref(), Some("masked instruction"));
+		let input = match &request.input {
+			RequestInput::Items(items) => items,
+			RequestInput::Text(_) => panic!("rewritten messages should use structured input"),
+		};
+		assert_eq!(input.len(), 2);
+		assert_eq!(input[0].0["role"], "system");
+		assert_eq!(input[0].0["content"][0]["type"], "input_text");
+		assert_eq!(
+			input[0].0["content"][0]["text"],
+			"masked input system message"
+		);
+		assert_eq!(input[1].0["role"], "user");
+	}
+
+	#[test]
+	fn test_response_tool_calls_populated_when_flag_true() {
+		let response = response_with_output(vec![OutputItem::FunctionCall(FunctionToolCall {
+			arguments: r#"{"location":"San Francisco"}"#.to_string(),
+			call_id: "call_123".to_string(),
+			namespace: None,
+			name: "get_weather".to_string(),
+			caller: None,
+			id: Some("fc_123".to_string()),
+			status: Some(OutputStatus::Completed),
+		})]);
+
+		let llm_response = response.to_llm_response(crate::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		});
+		let messages = llm_response
+			.output_messages
+			.expect("output_messages should be present");
+		let tool_calls = messages[0].tool_calls();
+
+		assert_eq!(tool_calls.len(), 1);
+		assert_eq!(tool_calls[0].id.as_str(), "call_123");
+		assert_eq!(tool_calls[0].name.as_str(), "get_weather");
+		assert_eq!(
+			tool_calls[0].arguments,
+			serde_json::json!({"location":"San Francisco"})
+		);
+	}
+
+	#[test]
+	fn test_response_output_messages_omitted_when_flag_false() {
+		let response = response_with_output(vec![OutputItem::FunctionCall(FunctionToolCall {
+			arguments: "{}".to_string(),
+			call_id: "call_123".to_string(),
+			namespace: None,
+			name: "get_weather".to_string(),
+			caller: None,
+			id: Some("fc_123".to_string()),
+			status: Some(OutputStatus::Completed),
+		})]);
+
+		let llm_response = response.to_llm_response(crate::LogContentFields::default());
+
+		assert!(llm_response.output_messages.is_none());
 	}
 }

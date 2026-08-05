@@ -1,0 +1,150 @@
+# Tier-specific vLLM Semantic Router pools and routes.
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: basic-models
+  namespace: semantic-router-basic
+  labels:
+    app.kubernetes.io/part-of: tiered-semantic-routing
+    agentgateway.dev/entitlement-tier: basic
+spec:
+  defaultModel: gpt-4.1
+  models:
+  - name: gpt-4.1
+  - name: gpt-5.4
+    reasoningFamily: gpt
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: basic-routing
+  namespace: semantic-router-basic
+  labels:
+    app.kubernetes.io/part-of: tiered-semantic-routing
+    agentgateway.dev/entitlement-tier: basic
+spec:
+  signals:
+    keywords:
+    - name: stem
+      operator: OR
+      keywords:
+      - quantum physics
+      - physics
+      - chemistry
+      - biology
+      - mathematics
+      - engineering
+      caseSensitive: false
+  decisions:
+  - name: stem
+    priority: 100
+    description: Route Basic STEM prompts to GPT-5.4.
+    signals:
+      operator: AND
+      conditions:
+      - type: keyword
+        name: stem
+    modelRefs:
+    - model: gpt-5.4
+      useReasoning: false
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: standard-models
+  namespace: semantic-router-standard
+  labels:
+    app.kubernetes.io/part-of: tiered-semantic-routing
+    agentgateway.dev/entitlement-tier: standard
+spec:
+  defaultModel: gpt-4.1
+  models:
+  - name: gpt-4.1
+  - name: gpt-5.4
+    reasoningFamily: gpt
+  - name: claude-haiku-4.5
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: standard-routing
+  namespace: semantic-router-standard
+  labels:
+    app.kubernetes.io/part-of: tiered-semantic-routing
+    agentgateway.dev/entitlement-tier: standard
+spec:
+  signals:
+    keywords:
+    - name: stem
+      operator: OR
+      keywords:
+      - quantum physics
+      - physics
+      - chemistry
+      - biology
+      - mathematics
+      - engineering
+      caseSensitive: false
+  decisions:
+  - name: stem
+    priority: 100
+    description: Route Standard STEM prompts to Claude Haiku 4.5.
+    signals:
+      operator: AND
+      conditions:
+      - type: keyword
+        name: stem
+    modelRefs:
+    - model: claude-haiku-4.5
+      useReasoning: false
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentPool
+metadata:
+  name: pro-models
+  namespace: semantic-router-pro
+  labels:
+    app.kubernetes.io/part-of: tiered-semantic-routing
+    agentgateway.dev/entitlement-tier: pro
+spec:
+  defaultModel: gpt-4.1
+  models:
+  - name: gpt-4.1
+  - name: gpt-5.4
+    reasoningFamily: gpt
+  - name: claude-haiku-4.5
+  - name: claude-sonnet-4.6
+---
+apiVersion: vllm.ai/v1alpha1
+kind: IntelligentRoute
+metadata:
+  name: pro-routing
+  namespace: semantic-router-pro
+  labels:
+    app.kubernetes.io/part-of: tiered-semantic-routing
+    agentgateway.dev/entitlement-tier: pro
+spec:
+  signals:
+    keywords:
+    - name: stem
+      operator: OR
+      keywords:
+      - quantum physics
+      - physics
+      - chemistry
+      - biology
+      - mathematics
+      - engineering
+      caseSensitive: false
+  decisions:
+  - name: stem
+    priority: 100
+    description: Route Pro STEM prompts to Claude Sonnet 4.6.
+    signals:
+      operator: AND
+      conditions:
+      - type: keyword
+        name: stem
+    modelRefs:
+    - model: claude-sonnet-4.6
+      useReasoning: false

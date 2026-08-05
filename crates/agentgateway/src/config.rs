@@ -15,8 +15,9 @@ use crate::telemetry::trc;
 use crate::types::discovery::{Identity, WaypointIdentity};
 use crate::util::ErrorContext;
 use crate::{
-	Address, Config, ConfigSource, DnsLookupFamily, NestedRawConfig, RawLoggingFields,
-	RawLoggingLevel, StringOrInt, ThreadingMode, XDSConfig, cel, client, serdes, telemetry, types,
+	Address, Config, ConfigSource, ConfigStoreMode, DnsLookupFamily, NestedRawConfig,
+	RawLoggingFields, RawLoggingLevel, StorageConfig, StringOrInt, ThreadingMode, XDSConfig, cel,
+	client, serdes, telemetry, types,
 };
 
 const DEFAULT_UI_USER_ATTRIBUTE: &str = r#"coalesce(apiKey.user, apiKey.name, apiKey.owner, jwt.sub, jwt.email, basicAuth.username, source.identity.namespace + "/" + source.identity.serviceAccount, source.subjectCn, null)"#;
@@ -33,6 +34,9 @@ pub fn parse_config(
 	contents: String,
 	local_config_source: Option<ConfigSource>,
 ) -> anyhow::Result<Config> {
+	// Shellexpend before parsing it
+	let contents = contents.replace("# yaml-language-server: $schema", "#");
+	let contents = shellexpand::full(&contents)?;
 	let nested: NestedRawConfig = serdes::yamlviajson::from_str(&contents).ctx("invalid config")?;
 	let raw = nested.config.unwrap_or_default();
 	cel::register_custom_functions(&raw.custom_functions).ctx("invalid config.customFunctions")?;
@@ -349,20 +353,37 @@ pub fn parse_config(
 	let dynamic_ca_cert_cache =
 		parse_dynamic_ca_cert_cache_config().ctx("invalid dynamic CA cert cache config")?;
 
-	let model_catalog_sources = parse::<String>("MODEL_CATALOG_PATHS")?
-		.map(|s| {
-			s.split(',')
-				.map(|p| PathBuf::from(p.trim()))
-				.filter(|p| !p.as_os_str().is_empty())
-				.map(|file| crate::ModelCatalogSource::File { file })
-				.collect::<Vec<_>>()
-		})
-		.or(raw.model_catalog)
-		.unwrap_or_default();
-	let database = raw
-		.database
-		.clone()
-		.or_else(|| raw.logging.as_ref().and_then(|l| l.database.clone()));
+	let model_catalog_sources = raw.model_catalog.unwrap_or_default();
+	let database = raw.database.clone();
+	let explicit_logging_database = raw.logging.as_ref().and_then(|l| l.database.clone());
+	if database
+		.as_ref()
+		.is_some_and(|database| database.max_connections == Some(0))
+	{
+		anyhow::bail!("config.database.maxConnections must be greater than zero");
+	}
+	if explicit_logging_database
+		.as_ref()
+		.is_some_and(|database| database.max_connections == Some(0))
+	{
+		anyhow::bail!("config.logging.database.maxConnections must be greater than zero");
+	}
+	let logging_database = explicit_logging_database.or_else(|| database.clone());
+	let storage = StorageConfig {
+		mode: raw.storage.clone().unwrap_or_default().mode,
+	};
+	if storage.mode == ConfigStoreMode::Hybrid && database.is_none() {
+		anyhow::bail!("config.storage.mode=hybrid requires config.database.url");
+	}
+	if storage.mode == ConfigStoreMode::Hybrid
+		&& database.as_ref().is_some_and(|database| {
+			(database.url.starts_with("postgres://") || database.url.starts_with("postgresql://"))
+				&& database.max_connections == Some(1)
+		}) {
+		anyhow::bail!(
+			"config.database.maxConnections must be at least 2 for PostgreSQL hybrid storage"
+		);
+	}
 
 	Ok(crate::Config {
 		ipv6_enabled,
@@ -516,10 +537,10 @@ pub fn parse_config(
 				.as_ref()
 				.and_then(|l| l.format.clone())
 				.unwrap_or_default(),
-			database: database.clone(),
+			database: logging_database.clone(),
 				fields: logging_fields(raw.logging.as_ref().and_then(|f| f.fields.clone()))
 					.ctx("invalid config.logging.fields")?,
-				database_fields: if database.is_some() {
+				database_fields: if logging_database.is_some() {
 					database_logging_fields(raw.standard_attributes.as_ref())
 						.ctx("invalid config.standardAttributes")?
 				} else {
@@ -550,6 +571,7 @@ pub fn parse_config(
 			sources: model_catalog_sources,
 		},
 		database,
+		storage,
 		session_encoder,
 		oidc_cookie_encoder,
 			hbone: Arc::new(agent_hbone::Config {
@@ -918,13 +940,20 @@ fn parse_headers(prefix: &str) -> Result<Vec<(String, String)>, anyhow::Error> {
 	Ok(headers)
 }
 
+// tokio Mutex so async tests can hold the guard across an await without tripping
+// clippy::await_holding_lock (denied in CI).
 #[cfg(test)]
-static ENV_LOCK: std::sync::LazyLock<std::sync::Mutex<()>> =
-	std::sync::LazyLock::new(|| std::sync::Mutex::new(()));
+static ENV_LOCK: std::sync::LazyLock<tokio::sync::Mutex<()>> =
+	std::sync::LazyLock::new(|| tokio::sync::Mutex::new(()));
 
 #[cfg(test)]
-pub(crate) fn lock_env_for_tests() -> std::sync::MutexGuard<'static, ()> {
-	ENV_LOCK.lock().expect("env mutex poisoned")
+pub(crate) fn lock_env_for_tests() -> tokio::sync::MutexGuard<'static, ()> {
+	ENV_LOCK.blocking_lock()
+}
+
+#[cfg(test)]
+pub(crate) async fn lock_env_for_tests_async() -> tokio::sync::MutexGuard<'static, ()> {
+	ENV_LOCK.lock().await
 }
 
 #[cfg(test)]
@@ -1010,7 +1039,7 @@ mod tests {
 
 	use super::*;
 
-	fn lock_env() -> std::sync::MutexGuard<'static, ()> {
+	fn lock_env() -> tokio::sync::MutexGuard<'static, ()> {
 		lock_env_for_tests()
 	}
 
@@ -1222,6 +1251,174 @@ config:
 	}
 
 	#[test]
+	fn storage_defaults_to_file_mode() {
+		let _env_lock = lock_env();
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+
+		assert_eq!(config.storage.mode, ConfigStoreMode::File);
+		assert!(config.database.is_none());
+	}
+
+	#[test]
+	fn storage_hybrid_uses_shared_database_url() {
+		let _env_lock = lock_env();
+		let config = parse_config(
+			r#"
+config:
+  database:
+    url: "sqlite::memory:"
+  storage:
+    mode: hybrid
+"#
+			.to_string(),
+			None,
+		)
+		.expect("hybrid config should parse with primary database");
+
+		assert_eq!(config.storage.mode, ConfigStoreMode::Hybrid);
+		assert_eq!(
+			config.database.as_ref().map(|db| db.url.as_str()),
+			Some("sqlite::memory:")
+		);
+		assert_eq!(
+			config.logging.database.as_ref().map(|db| db.url.as_str()),
+			Some("sqlite::memory:")
+		);
+		assert_eq!(config.database.as_ref(), config.logging.database.as_ref());
+
+		let err = parse_config(
+			r#"
+config:
+  storage:
+    mode: hybrid
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("hybrid config without database should fail");
+
+		assert!(
+			err
+				.to_string()
+				.contains("config.storage.mode=hybrid requires config.database.url"),
+			"unexpected error: {err}"
+		);
+
+		let err = parse_config(
+			r#"
+config:
+  logging:
+    database:
+      url: "sqlite::memory:"
+  storage:
+    mode: hybrid
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("hybrid config should require top-level database");
+
+		assert!(
+			err
+				.to_string()
+				.contains("config.storage.mode=hybrid requires config.database.url"),
+			"unexpected error: {err}"
+		);
+	}
+
+	#[test]
+	fn primary_and_logging_databases_can_differ() {
+		let _env_lock = lock_env();
+		let config = parse_config(
+			r#"
+config:
+  database:
+    url: "postgres://config.example/database"
+    maxConnections: 7
+  logging:
+    database:
+      url: "postgres://logs.example/database"
+      maxConnections: 11
+  storage:
+    mode: hybrid
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config should preserve both databases");
+
+		let database = config.database.as_ref().expect("primary database");
+		let logging_database = config.logging.database.as_ref().expect("logging database");
+		assert_eq!(database.url, "postgres://config.example/database");
+		assert_eq!(database.max_connections, Some(7));
+		assert_eq!(logging_database.url, "postgres://logs.example/database");
+		assert_eq!(logging_database.max_connections, Some(11));
+		assert_ne!(database, logging_database);
+	}
+
+	#[test]
+	fn legacy_logging_database_does_not_become_primary_database() {
+		let _env_lock = lock_env();
+		let config = parse_config(
+			r#"
+config:
+  logging:
+    database:
+      url: "sqlite::memory:"
+"#
+			.to_string(),
+			None,
+		)
+		.expect("legacy logging database should parse");
+
+		assert!(config.database.is_none());
+		assert_eq!(
+			config.logging.database.as_ref().map(|db| db.url.as_str()),
+			Some("sqlite::memory:")
+		);
+	}
+
+	#[test]
+	fn database_pool_sizes_must_be_usable() {
+		let _env_lock = lock_env();
+		let err = parse_config(
+			r#"
+config:
+  database:
+    url: "sqlite::memory:"
+    maxConnections: 0
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("zero-sized pool should fail");
+		assert!(
+			err
+				.to_string()
+				.contains("config.database.maxConnections must be greater than zero")
+		);
+
+		let err = parse_config(
+			r#"
+config:
+  database:
+    url: "postgres://database.example/database"
+    maxConnections: 1
+  storage:
+    mode: hybrid
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("PostgreSQL hybrid pool needs a slot besides its listener");
+		assert!(
+			err
+				.to_string()
+				.contains("maxConnections must be at least 2 for PostgreSQL hybrid storage")
+		);
+	}
+
+	#[test]
 	fn dynamic_ca_cert_cache_uses_defaults_without_env() {
 		let _env_lock = lock_env();
 		let defaults = crate::DynamicCaCertCacheConfig::default();
@@ -1301,6 +1498,85 @@ config:
 		unsafe {
 			env::remove_var("SESSION_KEY");
 		}
+	}
+
+	#[test]
+	fn expands_environment_variables_in_config() {
+		let _env_lock = lock_env();
+		let _network = TempEnvVar::set("TEST_EXPAND_NETWORK", "expanded-network");
+
+		let config = parse_config(
+			r#"
+config:
+  network: "${TEST_EXPAND_NETWORK}"
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config should parse");
+
+		assert_eq!(config.network.as_str(), "expanded-network");
+	}
+
+	#[test]
+	fn expands_environment_variables_with_default_values() {
+		let _env_lock = lock_env();
+		unsafe {
+			env::remove_var("TEST_EXPAND_UNSET");
+		}
+
+		let config = parse_config(
+			r#"
+config:
+  network: "${TEST_EXPAND_UNSET:-fallback-network}"
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config should parse");
+
+		assert_eq!(config.network.as_str(), "fallback-network");
+	}
+
+	#[test]
+	fn does_not_expand_schema_comment() {
+		let _env_lock = lock_env();
+
+		// The schema comment contains a `$schema` token that must not be treated as a variable.
+		let config = parse_config(
+			r#"# yaml-language-server: $schema=https://example.com/schema.json
+config:
+  network: "static-network"
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config with schema comment should parse");
+
+		assert_eq!(config.network.as_str(), "static-network");
+	}
+
+	#[test]
+	fn errors_on_unset_environment_variable() {
+		let _env_lock = lock_env();
+		unsafe {
+			env::remove_var("TEST_EXPAND_MISSING");
+		}
+
+		let err = parse_config(
+			r#"
+config:
+  network: "${TEST_EXPAND_MISSING}"
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("unset variable should fail expansion");
+
+		assert!(
+			err.to_string().contains("environment variable not found"),
+			"unexpected error: {err}"
+		);
 	}
 
 	#[test]

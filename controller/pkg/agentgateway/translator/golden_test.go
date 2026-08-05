@@ -32,10 +32,10 @@ func TestReferences(t *testing.T) {
 	})
 }
 
-func TestPolicyReferenceGrants(t *testing.T) {
+func TestReferenceGrants(t *testing.T) {
 	testutils.RunForDirectory(t, "testdata/references-policy-refgrants", func(t *testing.T, ctx plugins.PolicyCtx) (any, []ir.AgwResource) {
 		ctx.Collections.Settings.BackendRefGrantMode = apisettings.BackendRefGrantModeRouteAndPolicy
-		sq, ri := testutils.Syncer(t, ctx, "AgentgatewayPolicy")
+		sq, ri := testutils.Syncer(t, ctx, "AgentgatewayPolicy", "AgentgatewayBackend")
 		r := ri.Outputs.Resources.List()
 		r = slices.FilterInPlace(r, func(resource ir.AgwResource) bool {
 			x := ir.GetAgwResourceName(resource.Resource)
@@ -55,6 +55,17 @@ func TestRouteCollection(t *testing.T) {
 			x := ir.GetAgwResourceName(resource.Resource)
 			return strings.HasPrefix(x, "route/") || strings.HasPrefix(x, "tcp_route/") || strings.HasPrefix(x, "policy/")
 		})
+		return sq.Dump(), slices.SortBy(r, func(a ir.AgwResource) string {
+			return a.ResourceName()
+		})
+	})
+}
+
+func TestModels(t *testing.T) {
+	testutils.RunForDirectory(t, "testdata/models", func(t *testing.T, ctx plugins.PolicyCtx) (any, []ir.AgwResource) {
+		ctx.Collections.Settings.EnableAgentgatewayModels = true
+		sq, ri := testutils.Syncer(t, ctx, "Gateway", "AgentgatewayModel", "HTTPRoute")
+		r := ri.Outputs.Resources.List()
 		return sq.Dump(), slices.SortBy(r, func(a ir.AgwResource) string {
 			return a.ResourceName()
 		})

@@ -43,6 +43,7 @@ type AgentGwStatusSyncer struct {
 
 	agentgatewayPolicies StatusSyncer[*agentgateway.AgentgatewayPolicy, gwv1.PolicyStatus]
 	agentgatewayBackends StatusSyncer[*agentgateway.AgentgatewayBackend, agentgateway.AgentgatewayBackendStatus]
+	agentgatewayModels   StatusSyncer[*agentgateway.AgentgatewayModel, *agentgateway.AgentgatewayModelStatus]
 
 	// Configuration
 	controllerName string
@@ -72,6 +73,7 @@ func NewAgwStatusSyncer(
 	cacheSyncs []cache.InformerSynced,
 	extraHandlers map[schema.GroupVersionKind]ResourceStatusSyncer,
 	enableInference bool,
+	enableAgentgatewayModels bool,
 ) *AgentGwStatusSyncer {
 	f := kclient.Filter{ObjectFilter: client.ObjectFilter()}
 	syncer := &AgentGwStatusSyncer{
@@ -195,6 +197,19 @@ func NewAgwStatusSyncer(
 			},
 		}
 	}
+	if enableAgentgatewayModels {
+		syncer.agentgatewayModels = StatusSyncer[*agentgateway.AgentgatewayModel, *agentgateway.AgentgatewayModelStatus]{
+			Name:           "agentgatewayModel",
+			ControllerName: controllerName,
+			Client:         kclient.NewFilteredDelayed[*agentgateway.AgentgatewayModel](client, wellknown.AgentgatewayModelGVR, f),
+			Build: func(om metav1.ObjectMeta, s *agentgateway.AgentgatewayModelStatus) *agentgateway.AgentgatewayModel {
+				return &agentgateway.AgentgatewayModel{
+					ObjectMeta: om,
+					Status:     *s,
+				}
+			},
+		}
+	}
 
 	return syncer
 }
@@ -230,6 +245,13 @@ func (s *AgentGwStatusSyncer) Start(ctx context.Context) error {
 			s.inferencePools.Client.HasSynced,
 		)
 	}
+	if s.agentgatewayModels.Client != nil {
+		s.client.WaitForCacheSync(
+			"agent gateway status clients",
+			ctx.Done(),
+			s.agentgatewayModels.Client.HasSynced,
+		)
+	}
 
 	logger.Info("caches warm!")
 
@@ -260,6 +282,10 @@ func (s *AgentGwStatusSyncer) SyncStatus(ctx context.Context, resource status.Re
 		s.agentgatewayPolicies.ApplyStatus(ctx, resource, statusObj)
 	case wellknown.AgentgatewayBackendGVK:
 		s.agentgatewayBackends.ApplyStatus(ctx, resource, statusObj)
+	case wellknown.AgentgatewayModelGVK:
+		if s.agentgatewayModels.Client != nil {
+			s.agentgatewayModels.ApplyStatus(ctx, resource, statusObj)
+		}
 	case wellknown.BackendTLSPolicyGVK:
 		s.backendTLSPolicies.ApplyStatus(ctx, resource, statusObj)
 	case wellknown.InferencePoolGVK:
@@ -364,6 +390,13 @@ func (s StatusSyncer[O, S]) ApplyStatus(ctx context.Context, obj status.Resource
 			}
 		case *gwv1.TLSRouteStatus:
 			cur, ok := any(current).(*gwv1.TLSRoute)
+			if ok {
+				merged := *desired
+				merged.Parents = mergeRouteParentStatuses(s.ControllerName, cur.Status.Parents, desired.Parents)
+				mergedAny = &merged
+			}
+		case *agentgateway.AgentgatewayModelStatus:
+			cur, ok := any(current).(*agentgateway.AgentgatewayModel)
 			if ok {
 				merged := *desired
 				merged.Parents = mergeRouteParentStatuses(s.ControllerName, cur.Status.Parents, desired.Parents)

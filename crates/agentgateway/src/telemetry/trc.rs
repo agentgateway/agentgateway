@@ -716,17 +716,28 @@ mod traceparent {
 		type Error = anyhow::Error;
 
 		fn try_from(value: &str) -> Result<Self, Self::Error> {
-			if value.len() != 55 {
-				anyhow::bail!("traceparent malformed length was {}", value.len())
+			let segs: [&str; 4] = value
+				.split('-')
+				.collect::<Vec<_>>()
+				.try_into()
+				.map_err(|_| anyhow::anyhow!("traceparent malformed: expected 4 fields"))?;
+			if [segs[0].len(), segs[1].len(), segs[2].len(), segs[3].len()] != [2, 32, 16, 2] {
+				anyhow::bail!("traceparent malformed field lengths")
 			}
 
-			let segs: Vec<&str> = value.split('-').collect();
-
+			let version = u8::from_str_radix(segs[0], 16)?;
+			let trace_id = u128::from_str_radix(segs[1], 16)?;
+			let span_id = u64::from_str_radix(segs[2], 16)?;
+			let flags = u8::from_str_radix(segs[3], 16)?;
+			// W3C: version 0xff is forbidden, and all-zero trace-id / parent-id are invalid.
+			if version == 0xff || trace_id == 0 || span_id == 0 {
+				anyhow::bail!("traceparent has invalid W3C fields")
+			}
 			Ok(Self {
-				version: u8::from_str_radix(segs[0], 16)?,
-				trace_id: u128::from_str_radix(segs[1], 16)?,
-				span_id: u64::from_str_radix(segs[2], 16)?,
-				flags: u8::from_str_radix(segs[3], 16)?,
+				version,
+				trace_id,
+				span_id,
+				flags,
 			})
 		}
 	}
@@ -752,6 +763,37 @@ mod tests {
 	};
 	use crate::telemetry::metrics::Metrics;
 	use crate::transport::stream::TCPConnectionInfo;
+
+	#[test]
+	fn traceparent_parses_valid_and_rejects_malformed() {
+		let valid = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+		assert_eq!(
+			format!("{:?}", TraceParent::try_from(valid).unwrap()),
+			valid
+		);
+
+		// 55 chars but no hyphens: must not panic on segment indexing.
+		assert!(TraceParent::try_from("0".repeat(55).as_str()).is_err());
+		// Wrong field count and wrong field lengths.
+		assert!(TraceParent::try_from("00-4bf9-00f067aa0ba902b7-01").is_err());
+		assert!(
+			TraceParent::try_from("00-4bf92f3577b34da6a3ce929d0e0e47360-0f067aa0ba902b7-01").is_err()
+		);
+		// Non-hex in a correctly-shaped value.
+		assert!(
+			TraceParent::try_from("zz-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01").is_err()
+		);
+		// W3C-invalid values: forbidden version, all-zero trace-id, all-zero parent-id.
+		assert!(
+			TraceParent::try_from("ff-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01").is_err()
+		);
+		assert!(
+			TraceParent::try_from("00-00000000000000000000000000000000-00f067aa0ba902b7-01").is_err()
+		);
+		assert!(
+			TraceParent::try_from("00-4bf92f3577b34da6a3ce929d0e0e4736-0000000000000000-01").is_err()
+		);
+	}
 
 	#[derive(Clone, Debug, Default)]
 	struct RecordingSpanExporter {

@@ -161,6 +161,16 @@ func ResolveGatewayPort(ctx context.Context, installation *e2e.TestInstallation,
 			return localPort
 		}
 	}
+
+	// The Gateway Service may have gained a port since the cache was populated.
+	addr, portMap, err := setupGatewayPortForwards(ctx, installation, name)
+	if err == nil {
+		gatewayAddresses[name] = addr
+		gatewayPorts[name] = portMap
+		if localPort, ok := portMap[remotePort]; ok {
+			return localPort
+		}
+	}
 	return remotePort
 }
 

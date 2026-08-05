@@ -1,0 +1,1 @@
+has(mcp.tool.name) && mcp.tool.name == "echo"

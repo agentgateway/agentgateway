@@ -129,7 +129,7 @@ jobs:
             echo
             echo "## agctl binaries"
             echo
-            echo "Nightly \`agctl\` binaries (Linux amd64/arm64, Darwin arm64, Windows amd64) are published as the \`release-binary-agctl\` workflow artifact on this run:"
+            echo "Nightly \`agctl\` binaries (Linux amd64/arm64, Darwin arm64, Windows amd64), each with a \`.sha256\` checksum, are published as the \`release-binary-agctl\` workflow artifact on this run:"
             echo "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           } > nightly-changelog.md
 

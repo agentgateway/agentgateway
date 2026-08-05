@@ -3,7 +3,7 @@ use agent_core::strng::Strng;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::types::{ResponseType, SimpleChatCompletionMessage};
+use crate::types::{OutputMessage, OutputMessagePart, ResponseType, SimpleChatCompletionMessage};
 use crate::webhook::{Message, ResponseChoice};
 use crate::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, json};
 
@@ -12,6 +12,9 @@ pub struct Request {
 	pub messages: Vec<RequestMessage>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub model: Option<String>,
+
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub moderation: Option<serde_json::Value>,
 
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub top_p: Option<f32>,
@@ -25,6 +28,8 @@ pub struct Request {
 	pub presence_penalty: Option<f32>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub seed: Option<i64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub reasoning_effort: Option<typed::ReasoningEffort>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub stream_options: Option<StreamOptions>,
 
@@ -121,6 +126,8 @@ pub struct UsagePromptDetails {
 	pub cached_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub audio_tokens: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub cache_write_tokens: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
 }
@@ -151,7 +158,13 @@ pub struct Usage {
 }
 
 impl ResponseType for Response {
-	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
+	fn to_llm_response(&self, log_content: crate::LogContentFields) -> LLMResponse {
+		let output_messages = if log_content.tool_calls {
+			extract_output_messages(&self.choices)
+		} else {
+			None
+		};
+
 		LLMResponse {
 			input_tokens: self.usage.as_ref().map(|u| u.prompt_tokens as u64),
 			input_image_tokens: None,
@@ -186,13 +199,15 @@ impl ResponseType for Response {
 						.and_then(|d| d.cached_tokens)
 				})
 			}),
-			cache_creation_input_tokens: self
-				.usage
-				.as_ref()
-				.and_then(|u| u.cache_creation_input_tokens),
+			cache_creation_input_tokens: self.usage.as_ref().and_then(|u| {
+				u.prompt_tokens_details
+					.as_ref()
+					.and_then(|d| d.cache_write_tokens)
+					.or(u.cache_creation_input_tokens)
+			}),
 			service_tier: self.service_tier.as_deref().map(Into::into),
 			provider_model: Some(strng::new(&self.model)),
-			completion: if include_completion_in_log {
+			completion: if log_content.completion {
 				Some(
 					self
 						.choices
@@ -203,6 +218,7 @@ impl ResponseType for Response {
 			} else {
 				None
 			},
+			output_messages,
 			first_token: Default::default(),
 		}
 	}
@@ -234,11 +250,78 @@ impl ResponseType for Response {
 	fn serialize(&self) -> serde_json::Result<Vec<u8>> {
 		serde_json::to_vec(&self)
 	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		for c in &mut self.choices {
+			if let Some(text) = &mut c.message.content {
+				f(text);
+			}
+		}
+	}
+}
+
+fn extract_output_messages(choices: &[Choice]) -> Option<Vec<OutputMessage>> {
+	let messages: Vec<OutputMessage> = choices
+		.iter()
+		.filter_map(|choice| {
+			let mut content = Vec::new();
+
+			if let Some(tc_array) = choice
+				.message
+				.rest
+				.get("tool_calls")
+				.and_then(|v| v.as_array())
+			{
+				for (idx, tc_item) in tc_array.iter().enumerate() {
+					if let Some(function) = tc_item.get("function").and_then(|v| v.as_object()) {
+						let id = tc_item
+							.get("id")
+							.and_then(|v| v.as_str())
+							.map(strng::new)
+							.unwrap_or_else(|| format!("tool_call_{idx}").into());
+						let name = function.get("name").and_then(|v| v.as_str()).unwrap_or("");
+						let arguments = function
+							.get("arguments")
+							.and_then(|v| v.as_str())
+							.map(|s| match serde_json::from_str(s) {
+								Ok(arguments) => arguments,
+								Err(_) if s.trim().is_empty() => serde_json::Value::Object(Default::default()),
+								Err(_) => serde_json::Value::String(s.to_owned()),
+							})
+							.unwrap_or(serde_json::Value::Object(Default::default()));
+
+						content.push(OutputMessagePart::ToolCall {
+							id,
+							name: strng::new(name),
+							arguments,
+						});
+					}
+				}
+			}
+
+			let finish_reason = choice
+				.rest
+				.get("finish_reason")
+				.and_then(|v| v.as_str())
+				.map(strng::new);
+
+			(!content.is_empty()).then(|| OutputMessage {
+				role: strng::new(choice.message.role.as_deref().unwrap_or("assistant")),
+				content,
+				finish_reason,
+			})
+		})
+		.collect();
+
+	(!messages.is_empty()).then_some(messages)
 }
 
 impl super::RequestType for Request {
 	fn model(&mut self) -> &mut Option<String> {
 		&mut self.model
+	}
+	fn to_value(&self) -> serde_json::Result<serde_json::Value> {
+		serde_json::to_value(self)
 	}
 	fn prepend_prompts(&mut self, prompts: Vec<crate::types::SimpleChatCompletionMessage>) {
 		self
@@ -251,7 +334,6 @@ impl super::RequestType for Request {
 			.messages
 			.extend(prompts.into_iter().map(convert_message));
 	}
-
 	fn to_llm_request(&self, provider: Strng, tokenize: bool) -> Result<LLMRequest, AIError> {
 		let model = strng::new(self.model.as_deref().unwrap_or_default());
 		let input_tokens = if tokenize {
@@ -324,6 +406,22 @@ impl super::RequestType for Request {
 
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>) {
 		self.messages = messages.into_iter().map(convert_message).collect();
+	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		for msg in &mut self.messages {
+			// TODO opt-in setting to apply guards to tool results
+			if msg.role == "tool" {
+				continue;
+			}
+			match &mut msg.content {
+				Some(Content::Text(text)) => f(text),
+				Some(Content::Array(parts)) => {
+					super::scan_text_runs(parts, " ", |p| p.text.as_mut(), f);
+				},
+				None => {},
+			}
+		}
 	}
 }
 
@@ -422,10 +520,12 @@ pub mod typed {
 		ChatCompletionStreamOptions as StreamOptions, ChatCompletionTool as FunctionTool,
 		ChatCompletionToolChoiceOption as ToolChoiceOption, ChatCompletionToolChoiceOption,
 		ChatCompletionTools as Tool, FinishReason, FunctionCall, FunctionCallStream, FunctionName,
-		FunctionObject, FunctionType, ImageUrl, PredictionContent, ReasoningEffort, ResponseFormat,
-		ResponseFormatJsonSchema, ResponseModalities as ChatCompletionModalities, Role,
-		StopConfiguration as Stop, ToolChoiceOptions, WebSearchOptions,
+		FunctionObject, FunctionType, ImageUrl, PredictionContent, PromptCacheBreakpointParam,
+		ReasoningEffort, ResponseFormat, ResponseFormatJsonSchema,
+		ResponseModalities as ChatCompletionModalities, Role, StopConfiguration as Stop,
+		ToolChoiceOptions, WebSearchOptions,
 	};
+	pub use async_openai::types::responses::PromptCacheBreakpointMode;
 	use serde::{Deserialize, Serialize};
 
 	/// Agentgateway fork of async-openai's `ChatCompletionRequestMessage`.
@@ -515,6 +615,8 @@ pub mod typed {
 		pub cached_tokens: Option<u64>,
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub audio_tokens: Option<u64>,
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_write_tokens: Option<u64>,
 		#[serde(flatten, default)]
 		pub rest: serde_json::Value,
 	}
@@ -719,6 +821,10 @@ pub mod typed {
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub model: Option<String>,
 
+		/// Configuration for running moderation on the request input and generated output.
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub moderation: Option<serde_json::Value>,
+
 		/// Whether or not to store the output of this chat completion request
 		///
 		/// for use in our [model distillation](https://platform.openai.com/docs/guides/distillation) or [evals](https://platform.openai.com/docs/guides/evals) products.
@@ -919,7 +1025,7 @@ pub mod typed {
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub param: Option<String>,
 		#[serde(skip_serializing_if = "Option::is_none")]
-		pub code: Option<String>,
+		pub code: Option<serde_json::Value>,
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub event_id: Option<String>,
 	}
@@ -1017,5 +1123,155 @@ pub mod typed {
 				_ => vec![],
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_extract_tool_calls_from_response() {
+		// Covers both single-call extraction and that multiple calls keep their order.
+		let json_str = r#"{
+			"id": "chatcmpl-test",
+			"object": "chat.completion",
+			"created": 1000000000,
+			"model": "gpt-4",
+			"choices": [
+				{
+					"index": 0,
+					"message": {
+						"role": "assistant",
+						"content": null,
+						"tool_calls": [
+							{
+								"id": "call_1",
+								"type": "function",
+								"function": {
+									"name": "get_weather",
+									"arguments": "{\"location\": \"San Francisco\"}"
+								}
+							},
+							{
+								"id": "call_2",
+								"type": "function",
+								"function": {
+									"name": "func_b",
+									"arguments": "{\"y\": 2}"
+								}
+							}
+						]
+					},
+					"finish_reason": "tool_calls"
+				}
+			],
+			"usage": {
+				"prompt_tokens": 10,
+				"completion_tokens": 20,
+				"total_tokens": 30
+			}
+		}"#;
+
+		let response: Response = serde_json::from_str(json_str).expect("Failed to parse JSON");
+		let llm_response = response.to_llm_response(crate::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		});
+
+		let messages = llm_response
+			.output_messages
+			.expect("output_messages should be present");
+		assert_eq!(messages.len(), 1);
+		assert_eq!(messages[0].role.as_str(), "assistant");
+		assert_eq!(messages[0].finish_reason.as_deref(), Some("tool_calls"));
+
+		let tool_calls: Vec<_> = messages[0].tool_calls();
+		assert_eq!(tool_calls.len(), 2);
+
+		assert_eq!(tool_calls[0].id.as_str(), "call_1");
+		assert_eq!(tool_calls[0].name.as_str(), "get_weather");
+		assert_eq!(
+			tool_calls[0].arguments,
+			serde_json::json!({"location": "San Francisco"})
+		);
+		assert_eq!(tool_calls[1].id.as_str(), "call_2");
+		assert_eq!(tool_calls[1].name.as_str(), "func_b");
+	}
+
+	#[test]
+	fn test_no_tool_calls_when_flag_false() {
+		let json_str = r#"{
+			"id": "chatcmpl-test",
+			"object": "chat.completion",
+			"created": 1000000000,
+			"model": "gpt-4",
+			"choices": [
+				{
+					"index": 0,
+					"message": {
+						"role": "assistant",
+						"content": "Hello",
+						"tool_calls": [
+							{
+								"id": "call_123",
+								"type": "function",
+								"function": {
+									"name": "get_weather",
+									"arguments": "{\"location\": \"San Francisco\"}"
+								}
+							}
+						]
+					},
+					"finish_reason": "stop"
+				}
+			],
+			"usage": {
+				"prompt_tokens": 10,
+				"completion_tokens": 20,
+				"total_tokens": 30
+			}
+		}"#;
+
+		let response: Response = serde_json::from_str(json_str).expect("Failed to parse JSON");
+		let llm_response = response.to_llm_response(crate::LogContentFields::default());
+
+		assert!(
+			llm_response.output_messages.is_none(),
+			"output_messages should be None when flag is false"
+		);
+	}
+
+	#[test]
+	fn test_no_output_messages_in_response() {
+		let json_str = r#"{
+			"id": "chatcmpl-test",
+			"object": "chat.completion",
+			"created": 1000000000,
+			"model": "gpt-4",
+			"choices": [
+				{
+					"index": 0,
+					"message": {
+						"role": "assistant",
+						"content": "Hello, how can I help?"
+					},
+					"finish_reason": "stop"
+				}
+			],
+			"usage": {
+				"prompt_tokens": 10,
+				"completion_tokens": 20,
+				"total_tokens": 30
+			}
+		}"#;
+
+		let response: Response = serde_json::from_str(json_str).expect("Failed to parse JSON");
+		let llm_response = response.to_llm_response(crate::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		});
+
+		assert!(llm_response.output_messages.is_none());
 	}
 }

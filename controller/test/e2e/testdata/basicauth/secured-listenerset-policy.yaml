@@ -1,0 +1,53 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: ListenerSet
+metadata:
+  name: secured-listeners
+  namespace: agentgateway-base
+spec:
+  parentRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: gateway
+  listeners:
+  - name: secured
+    hostname: securelistenerset.com
+    protocol: HTTP
+    port: 8080
+    allowedRoutes:
+      namespaces:
+        from: Same
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: route-secure-listenerset
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: ListenerSet
+    name: secured-listeners
+    sectionName: secured
+  hostnames:
+  - securelistenerset.com
+  rules:
+  - backendRefs:
+    - name: backend
+      port: 80
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: listenerset-policy-users
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: ListenerSet
+    name: secured-listeners
+  traffic:
+    basicAuthentication:
+      mode: Strict
+      realm: test
+      users:
+      - "alice:$apr1$SrcRE04W$bio6ASdFjG8ANvVHWgfr80"

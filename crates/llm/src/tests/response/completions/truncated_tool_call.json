@@ -1,0 +1,31 @@
+{
+  "id": "chatcmpl-truncated-tool-call",
+  "object": "chat.completion",
+  "created": 1700000000,
+  "model": "gpt-x",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "tool_calls": [
+          {
+            "id": "call_1",
+            "type": "function",
+            "function": {
+              "name": "get_weather",
+              "arguments": "{\"location\": \"Par"
+            }
+          }
+        ]
+      },
+      "finish_reason": "length"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 20,
+    "completion_tokens": 15,
+    "total_tokens": 35
+  }
+}

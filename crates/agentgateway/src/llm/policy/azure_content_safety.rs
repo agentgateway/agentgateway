@@ -3,7 +3,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
-use crate::http::auth::BackendAuth;
+use crate::http::auth::BackendAuthKind;
 use crate::http::jwt::Claims;
 use crate::llm::RequestType;
 use crate::llm::policy::{
@@ -196,7 +196,7 @@ fn resolve_host(root: &AzureContentSafety) -> agent_core::strng::Strng {
 fn build_policies(root: &AzureContentSafety) -> Vec<BackendTrafficPolicy> {
 	let mut pols = vec![
 		BackendTrafficPolicy::BackendTLS(crate::http::backendtls::SYSTEM_TRUST.clone()),
-		BackendTrafficPolicy::BackendAuth(BackendAuth::Azure(root.cached_azure_auth.clone())),
+		BackendTrafficPolicy::backend_auth(BackendAuthKind::Azure(root.cached_azure_auth.clone())),
 	];
 	pols.extend(root.policies.iter().cloned());
 	pols

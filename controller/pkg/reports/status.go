@@ -4,32 +4,34 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"reflect"
 	"strings"
 
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 // Status message constants
 const (
-	GatewayAcceptedMessage       = "Successfully accepted Gateway"
-	GatewayProgrammedMessage     = "Successfully programmed Gateway"
-	ListenerSetAcceptedMessage   = "Successfully accepted ListenerSet"
-	ListenerSetProgrammedMessage = "Successfully programmed ListenerSet"
-	ListenerAcceptedMessage      = "Successfully accepted Listener"
-	ListenerNoConflictsMessage   = "Successfully verified that Listener has no conflicts"
-	ValidRefsMessage             = "Successfully resolved all references"
-	ListenerProgrammedMessage    = "Successfully programmed Listener"
-	RouteAcceptedMessage         = "Successfully accepted Route"
-	GatewayClassAcceptedMessage  = "GatewayClass accepted by agentgateway controller"
+	GatewayAcceptedMessage           = "Successfully accepted Gateway"
+	GatewayProgrammedMessage         = "Successfully programmed Gateway"
+	ListenerSetAcceptedMessage       = "Successfully accepted ListenerSet"
+	ListenerSetProgrammedMessage     = "Successfully programmed ListenerSet"
+	ListenerAcceptedMessage          = "Successfully accepted Listener"
+	ListenerNoConflictsMessage       = "Successfully verified that Listener has no conflicts"
+	ValidRefsMessage                 = "Successfully resolved all references"
+	ListenerProgrammedMessage        = "Successfully programmed Listener"
+	RouteAcceptedMessage             = "Successfully accepted Route"
+	AgentgatewayModelAcceptedMessage = "Successfully accepted AgentgatewayModel"
+	GatewayClassAcceptedMessage      = "GatewayClass accepted by agentgateway controller"
 )
 
 // TODO: refactor this struct + methods to better reflect the usage now in proxy_syncer
@@ -283,6 +285,12 @@ func (r *ReportMap) BuildRouteStatusWithParentRefDefaulting(
 		if len(parentRefs) == 0 {
 			parentRefs = append(parentRefs, routeReport.parentRefs()...)
 		}
+	case *agentgateway.AgentgatewayModel:
+		existingStatus = gwv1.RouteStatus{Parents: route.Status.Parents}
+		parentRefs = append(parentRefs, route.Spec.ParentRefs...)
+		if len(parentRefs) == 0 {
+			parentRefs = append(parentRefs, routeReport.parentRefs()...)
+		}
 	default:
 		slog.Error("unsupported route type for status reporting", "route_type", fmt.Sprintf("%T", obj))
 		return nil
@@ -305,7 +313,7 @@ func (r *ReportMap) BuildRouteStatusWithParentRefDefaulting(
 		// Get the status of the current parentRef conditions if they exist
 		var currentParentRefConditions []metav1.Condition
 		currentParentRefIdx := slices.IndexFunc(existingStatus.Parents, func(s gwv1.RouteParentStatus) bool {
-			return reflect.DeepEqual(s.ParentRef, parentRef)
+			return apiequality.Semantic.DeepEqual(s.ParentRef, parentRef)
 		})
 		if currentParentRefIdx != -1 {
 			currentParentRefConditions = existingStatus.Parents[currentParentRefIdx].Conditions

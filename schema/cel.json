@@ -61,7 +61,14 @@
           "default": {}
         },
         "body": {
-          "description": "The body of the request. Warning: accessing the body will cause the body to be buffered.",
+          "description": "The request's body, buffered up to `maxBufferSize`. If the body exceeds the max buffer size,\nthis field is not available and will fail to evaluate.\nIncluding this attribute in an expression will trigger the body to be buffered.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bodyPrefix": {
+          "description": "The request body buffered up to `maxBufferSize`. If the complete body exceeds the limit,\nthis contains the first `maxBufferSize` bytes.",
           "type": [
             "string",
             "null"
@@ -118,7 +125,14 @@
           "default": {}
         },
         "body": {
-          "description": "The body of the response. Warning: accessing the body will cause the body to be buffered.",
+          "description": "The response's body, buffered up to `maxBufferSize`. If the body exceeds the max buffer size,\nthis field is not available and will fail to evaluate.\nIncluding this attribute in an expression will trigger the body to be buffered.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bodyPrefix": {
+          "description": "The response body buffered up to `maxBufferSize`. If the complete body exceeds the limit,\nthis contains the first `maxBufferSize` bytes.",
           "type": [
             "string",
             "null"
@@ -384,7 +398,7 @@
           "minimum": 0
         },
         "cacheCreationInputTokens": {
-          "description": "Tokens written to cache (costs)\nNot present with OpenAI",
+          "description": "Tokens written to cache (costs)",
           "type": [
             "integer",
             "null"
@@ -510,6 +524,32 @@
           ],
           "items": {
             "type": "string"
+          }
+        },
+        "toolCalls": {
+          "description": "The tool calls from the LLM. Warning: accessing this has some performance impacts for large responses.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "description": "ToolCall represents a single tool/function invocation surfaced for observability.",
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "arguments": true
+            },
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "name",
+              "arguments"
+            ]
           }
         },
         "params": {
@@ -945,6 +985,27 @@
             }
           },
           "additionalProperties": false
+        },
+        "task": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "target": {
+              "description": "The target handling the task.",
+              "type": "string"
+            },
+            "name": {
+              "description": "The task ID.",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "target",
+            "name"
+          ]
         }
       },
       "additionalProperties": false

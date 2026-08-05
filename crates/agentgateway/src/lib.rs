@@ -27,8 +27,12 @@ pub mod aws;
 pub mod cel;
 pub mod client;
 pub mod config;
+pub mod config_store;
 pub mod control;
+pub mod crypto;
+pub mod database;
 pub mod http;
+pub mod import;
 pub mod json;
 pub mod llm;
 pub mod management;
@@ -43,7 +47,6 @@ pub mod telemetry;
 pub mod test_helpers;
 pub mod transport;
 pub mod types;
-#[cfg(feature = "ui")]
 mod ui;
 pub mod util;
 
@@ -158,6 +161,8 @@ pub struct RawConfig {
 	model_catalog: Option<Vec<ModelCatalogSource>>,
 	/// Primary database used by local runtime features.
 	database: Option<telemetry::log_store::Config>,
+	/// Controls whether UI-managed configuration is written to the config file or a DB overlay.
+	storage: Option<RawStorageConfig>,
 
 	/// Address of the Certificate Authority used to issue SPIFFE certificates.
 	ca_address: Option<String>,
@@ -321,6 +326,13 @@ mod defaults {
 		2_097_152
 	}
 
+	/// Semi-trusted, controller-configured gRPC services that return body mutations do not impose
+	/// a message-size limit.
+	///
+	/// Tonic otherwise defaults to a 4 MiB receive limit, which is too small for services that may
+	/// legitimately return buffered HTTP or MCP bodies.
+	pub const GRPC_MAX_DECODING_MESSAGE_SIZE: usize = usize::MAX;
+
 	pub fn tls_handshake_timeout() -> Duration {
 		Duration::from_secs(15)
 	}
@@ -402,6 +414,23 @@ pub struct RawLogging {
 	format: Option<LoggingFormat>,
 	/// Log-store database configuration; enables request logging to a database backend.
 	database: Option<telemetry::log_store::Config>,
+}
+
+#[apply(schema_de!)]
+#[derive(Default)]
+pub struct RawStorageConfig {
+	#[serde(default)]
+	mode: ConfigStoreMode,
+}
+
+#[apply(schema!)]
+#[derive(Default, Eq, PartialEq, Copy)]
+pub enum ConfigStoreMode {
+	/// Store all UI-managed configuration in the local config file.
+	#[default]
+	File,
+	/// Read a file baseline and store UI-managed overlay resources in the configured database.
+	Hybrid,
 }
 
 #[apply(schema_de!)]
@@ -594,6 +623,7 @@ pub struct Config {
 	pub metrics: crate::telemetry::log::MetricsConfig,
 	pub logging: crate::telemetry::log::Config,
 	pub database: Option<telemetry::log_store::Config>,
+	pub storage: StorageConfig,
 
 	pub dns: client::Config,
 	pub proxy_metadata: ProxyMetadata,
@@ -617,8 +647,14 @@ pub struct ModelCatalogConfig {
 	pub sources: Vec<ModelCatalogSource>,
 }
 
+#[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct StorageConfig {
+	pub mode: ConfigStoreMode,
+}
+
 /// A source of model cost catalog data.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(untagged)]
 pub enum ModelCatalogSource {

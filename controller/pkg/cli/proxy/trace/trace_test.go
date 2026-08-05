@@ -136,6 +136,26 @@ func TestSummarizePolicyEventStringDetails(t *testing.T) {
 	}
 }
 
+func TestSummarizeTraceSampling(t *testing.T) {
+	line := `{"eventEnd":1,"severity":"info","message":{"type":"traceSampling","decision":"sample (client)"}}`
+
+	var got traceEnvelope
+	err := consumeTrace(strings.NewReader(line+"\n"), func(_ string, envelope traceEnvelope) error {
+		got = envelope
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if summary := summarizeEnvelope(got); summary != "sample (client)" {
+		t.Fatalf("got summary %q", summary)
+	}
+	if display := displayEventType(got.Message.Type); display != "Tracing" {
+		t.Fatalf("got display type %q", display)
+	}
+}
+
 func TestSummarizeFrontendPolicySelection(t *testing.T) {
 	summary := summarizePolicySelection("listenerFrontend", []byte(`{"http":{},"tls":{}}`))
 

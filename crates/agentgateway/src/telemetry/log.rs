@@ -10,6 +10,7 @@ use agent_core::metrics::CustomField;
 use agent_core::strng::{RichStrng, Strng};
 use agent_core::telemetry::{
 	OptionExt, OtelLogSink, ValueBag, current_connection_id, current_request_id, debug, display,
+	quoted,
 };
 use agent_core::{Timestamp, strng};
 use bytes::Buf;
@@ -47,7 +48,7 @@ use crate::telemetry::{log_store, trc};
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{BackendInfo, BindKey, ListenerName, RouteName, Target};
 use crate::types::loadbalancer::ActiveHandle;
-use crate::{cel, llm, mcp};
+use crate::{a2a, cel, llm, mcp};
 
 fn u64_to_i64(value: Option<u64>) -> Option<i64> {
 	value.map(|value| value.min(i64::MAX as u64) as i64)
@@ -384,26 +385,31 @@ pub struct TraceSampler {
 }
 
 impl TraceSampler {
-	pub fn trace_sampled(&self, req: &Request, tp: Option<&TraceParent>) -> bool {
+	pub fn trace_sampled(&self, req: &Request, tp: Option<&TraceParent>) -> (bool, &'static str) {
 		let TraceSampler {
 			random_sampling,
 			client_sampling,
 		} = &self;
-		let expr = if tp.is_some() {
+		let (expr, client) = if tp.is_some() {
 			let Some(cs) = client_sampling else {
 				// If client_sampling is not set, default to include it
-				return true;
+				return (true, "sample (client)");
 			};
-			cs
+			(cs, true)
 		} else {
 			let Some(rs) = random_sampling else {
 				// If random_sampling is not set, default to NOT include it
-				return false;
+				return (false, "not sampled (random)");
 			};
-			rs
+			(rs, false)
 		};
 		let exec = cel::Executor::new_request(req);
-		exec.eval_rng(expr.as_ref())
+		match (exec.eval_rng(expr.as_ref()), client) {
+			(true, true) => (true, "sample (client)"),
+			(true, false) => (true, "sample (random)"),
+			(false, true) => (false, "not sampled (client)"),
+			(false, false) => (false, "not sampled (random)"),
+		}
 	}
 }
 
@@ -929,6 +935,7 @@ impl RequestLog {
 			llm_request: None,
 			llm_response: Default::default(),
 			a2a_method: None,
+			a2a_response: None,
 			inference_pool: None,
 			request_handle: None,
 			request_snapshot: None,
@@ -1082,6 +1089,7 @@ pub struct RequestLog {
 	pub llm_response: AsyncLog<llm::LLMInfo>,
 
 	pub a2a_method: Option<Strng>,
+	pub a2a_response: Option<a2a::ResponseInfo>,
 
 	pub inference_pool: Option<SocketAddr>,
 
@@ -1265,7 +1273,7 @@ impl Drop for DropOnLog {
 						method: mcp.method_name.as_ref().map(RichStrng::from).into(),
 						resource_type: mcp.resource_type().into(),
 						server: mcp.target_name().map(RichStrng::from).into(),
-						resource: mcp.resource_name().map(RichStrng::from).into(),
+						resource: mcp.metric_resource_name().map(RichStrng::from).into(),
 
 						route: route_identifier.clone(),
 						custom: custom_metric_fields.clone(),
@@ -1391,6 +1399,34 @@ impl Drop for DropOnLog {
 				("protocol", log.backend_protocol.as_ref().map(debug)),
 				("a2a.method", log.a2a_method.display()),
 				(
+					"a2a.response.outcome",
+					log.a2a_response.as_ref().map(|r| r.outcome.as_str().into()),
+				),
+				(
+					"a2a.response.error_code",
+					log
+						.a2a_response
+						.as_ref()
+						.and_then(|r| r.error_code)
+						.map(Into::into),
+				),
+				(
+					"a2a.result.kind",
+					log
+						.a2a_response
+						.as_ref()
+						.and_then(|r| r.result_kind.as_ref())
+						.map(display),
+				),
+				(
+					"a2a.task.state",
+					log
+						.a2a_response
+						.as_ref()
+						.and_then(|r| r.task_state.as_ref())
+						.map(display),
+				),
+				(
 					"mcp.method.name",
 					mcp
 						.as_ref()
@@ -1408,6 +1444,20 @@ impl Drop for DropOnLog {
 						.as_ref()
 						.and_then(|m| m.session_id.as_ref())
 						.map(display),
+				),
+				(
+					"mcp.error.code",
+					mcp
+						.as_ref()
+						.and_then(|m| m.error.as_ref())
+						.map(|error| error.code.into()),
+				),
+				(
+					"mcp.error.message",
+					mcp
+						.as_ref()
+						.and_then(|m| m.error.as_ref())
+						.map(|error| quoted(&error.message)),
 				),
 				(
 					"inferencepool.selected_endpoint",
@@ -2309,6 +2359,7 @@ mod tests {
 		let catalog = ModelCatalog::new(vec![crate::ModelCatalogSource::File {
 			file: catalog_file.path().to_path_buf(),
 		}])
+		.await
 		.unwrap();
 		let request = llm::LLMRequest {
 			input_tokens: None,
@@ -2375,5 +2426,41 @@ mod tests {
 				.all(|attr| attr.key.as_str() != "agw.usage.cost"),
 			"cost should use the AGW AI usage namespace"
 		);
+	}
+
+	#[test]
+	fn a2a_response_span_attributes() {
+		let (tracer, exporter) = test_tracer();
+		let mut log = test_request_log();
+		log.tracer = Some(tracer.clone());
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		log.outgoing_span = Some(outgoing);
+		log.backend_protocol = Some(cel::BackendProtocol::a2a);
+		log.a2a_method = Some(strng::literal!("tasks/send"));
+		log.a2a_response = Some(a2a::ResponseInfo {
+			outcome: a2a::ResponseOutcome::Error,
+			error_code: Some(-32602),
+			result_kind: Some(strng::literal!("task")),
+			task_state: Some(strng::literal!("failed")),
+		});
+
+		drop(DropOnLog::from(log));
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		let span = spans
+			.iter()
+			.find(|span| span.name.as_ref() == "unknown")
+			.expect("request span should be exported");
+		let has = |key: &str| span.attributes.iter().any(|attr| attr.key.as_str() == key);
+		for expected in [
+			"a2a.response.outcome",
+			"a2a.response.error_code",
+			"a2a.result.kind",
+			"a2a.task.state",
+		] {
+			assert!(has(expected), "expected {expected} span attribute");
+		}
 	}
 }

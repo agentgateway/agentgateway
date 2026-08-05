@@ -18,6 +18,7 @@ pub struct RecordedBodyHandle {
 struct RecordedBodyHandleInner {
 	state: RecordedBodyState,
 	recorded: usize,
+	exceeded_limit: bool,
 }
 
 #[derive(Debug)]
@@ -33,6 +34,11 @@ impl Default for RecordedBodyState {
 }
 
 impl RecordedBodyHandle {
+	/// Returns whether recording observed more bytes than the configured limit.
+	pub fn exceeded_limit(&self) -> bool {
+		self.inner.lock().exceeded_limit
+	}
+
 	pub fn bytes(&self) -> Bytes {
 		let mut inner = self.inner.lock();
 		match &mut inner.state {
@@ -50,6 +56,9 @@ impl RecordedBodyHandle {
 	fn push(&self, bytes: Bytes) {
 		let mut inner = self.inner.lock();
 		let remaining = self.limit.saturating_sub(inner.recorded);
+		if bytes.len() > remaining {
+			inner.exceeded_limit = true;
+		}
 		if let RecordedBodyState::Recording(buffer) = &mut inner.state {
 			let to_record = bytes.len().min(remaining);
 			if to_record == 0 {
@@ -83,6 +92,7 @@ impl RecordedBodyHandle {
 pub struct RecordedBody<B = crate::http::Body> {
 	inner: B,
 	handle: RecordedBodyHandle,
+	finished: bool,
 }
 
 impl<B> RecordedBody<B> {
@@ -95,6 +105,7 @@ impl<B> RecordedBody<B> {
 			inner: Arc::new(Mutex::new(RecordedBodyHandleInner {
 				state: RecordedBodyState::default(),
 				recorded: 0,
+				exceeded_limit: false,
 			})),
 			limit,
 		};
@@ -102,6 +113,7 @@ impl<B> RecordedBody<B> {
 			Self {
 				inner,
 				handle: handle.clone(),
+				finished: false,
 			},
 			handle,
 		)
@@ -125,10 +137,17 @@ where
 		cx: &mut Context<'_>,
 	) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
 		let this = self.get_mut();
+		if this.finished {
+			return Poll::Ready(None);
+		}
 		let frame = match futures::ready!(Pin::new(&mut this.inner).poll_frame(cx)) {
 			Some(Ok(frame)) => frame,
-			Some(Err(error)) => return Poll::Ready(Some(Err(error.into()))),
+			Some(Err(error)) => {
+				this.finished = true;
+				return Poll::Ready(Some(Err(error.into())));
+			},
 			None => {
+				this.finished = true;
 				this.handle.complete();
 				return Poll::Ready(None);
 			},
@@ -144,18 +163,20 @@ where
 				Poll::Ready(Some(Ok(Frame::data(bytes))))
 			},
 			Err(Ok(trailers)) => {
+				this.finished = true;
 				this.handle.complete();
 				Poll::Ready(Some(Ok(Frame::trailers(trailers))))
 			},
 			Err(Err(_unknown)) => {
 				tracing::warn!("An unknown body frame has been recorded");
+				this.finished = true;
 				Poll::Ready(None)
 			},
 		}
 	}
 
 	fn is_end_stream(&self) -> bool {
-		self.inner.is_end_stream()
+		self.finished || self.inner.is_end_stream()
 	}
 
 	fn size_hint(&self) -> SizeHint {
@@ -195,6 +216,27 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn does_not_repoll_inner_after_eof() {
+		let inner = crate::http::Body::new(http_body_util::StreamBody::new(
+			futures_util::stream::unfold(false, |emitted| async move {
+				if emitted {
+					None
+				} else {
+					Some((
+						Ok::<_, crate::http::Error>(Frame::data(Bytes::from_static(b"body"))),
+						true,
+					))
+				}
+			}),
+		));
+		let (mut body, _handle) = RecordedBody::new(inner);
+
+		assert!(body.frame().await.is_some(), "data frame should be present");
+		assert!(body.frame().await.is_none(), "stream should report EOF");
+		assert!(body.frame().await.is_none(), "stream must remain at EOF");
+	}
+
+	#[tokio::test]
 	async fn reuses_completed_bytes() {
 		let (body, recorded) = RecordedBody::new(mock_body(vec![b"hello", b"world"]));
 
@@ -221,6 +263,7 @@ mod tests {
 
 		assert_eq!(got, Bytes::from_static(b"helloworld"));
 		assert_eq!(recorded.bytes(), Bytes::from_static(b"hellowo"));
+		assert!(recorded.exceeded_limit());
 	}
 
 	#[tokio::test]
@@ -235,6 +278,7 @@ mod tests {
 
 		assert_eq!(got, Bytes::from_static(b"hello"));
 		assert!(recorded.bytes().is_empty());
+		assert!(recorded.exceeded_limit());
 	}
 
 	#[tokio::test]

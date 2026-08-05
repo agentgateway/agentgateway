@@ -12,7 +12,7 @@ use tokio::sync::watch;
 use tracing::{Level, instrument, warn};
 
 use crate::cel::ContextBuilder;
-use crate::http::auth::BackendAuth;
+use crate::http::auth::{BackendAuth, BackendAuthKind};
 use crate::http::authorization::{HTTPAuthorizationSet, NetworkAuthorizationSet};
 use crate::http::backendtls::BackendTLS;
 use crate::http::ext_proc::InferenceRouting;
@@ -25,15 +25,16 @@ use crate::store::{BackendPolicy, HasExpressions, PolicyExpressions, RequestPoli
 use crate::types::agent::{
 	A2aPolicy, Backend, BackendKey, BackendTargetRef, BackendTrafficPolicy, BackendWithPolicies,
 	Bind, BindKey, FrontendPolicy, JwtAuthentication, Listener, ListenerKey, ListenerName,
-	McpAuthentication, PolicyInheritance, PolicyKey, PolicyTarget, Route, RouteGroupKey, RouteKey,
-	RouteName, RouteSet, TCPRoute, TCPRouteSet, TargetedPolicy, TrafficPolicy,
+	McpAuthentication, PolicyInheritance, PolicyKey, PolicyTarget, Route, RouteBackendReference,
+	RouteGroupKey, RouteKey, RouteMatch, RouteName, RouteSet, TCPRoute, TCPRouteSet, TargetedPolicy,
+	TrafficPolicy,
 };
 use crate::types::agent_xds::Diagnostics;
 use crate::types::discovery::NamespacedHostname;
 use crate::types::proto::agent::resource::Kind as XdsKind;
 use crate::types::proto::agent::{
-	Backend as XdsBackend, Bind as XdsBind, Listener as XdsListener, Policy as XdsPolicy,
-	Resource as ADPResource, Route as XdsRoute, TcpRoute as XdsTcpRoute,
+	Backend as XdsBackend, Bind as XdsBind, Listener as XdsListener, ModelRoute as XdsModelRoute,
+	Policy as XdsPolicy, Resource as ADPResource, Route as XdsRoute, TcpRoute as XdsTcpRoute,
 };
 use crate::types::{agent, frontend};
 use crate::*;
@@ -44,6 +45,7 @@ enum ResourceKind {
 	Bind(BindKey),
 	Route(RouteKey),
 	TcpRoute(RouteKey),
+	ModelRoute(RouteKey),
 	Listener(ListenerKey),
 	Backend(ListenerKey),
 }
@@ -96,6 +98,7 @@ pub struct Store {
 	policies_by_target: hashbrown::HashMap<PolicyTarget, HashSet<PolicyKey>>,
 
 	backends: HashMap<BackendKey, Arc<BackendWithPolicies>>,
+	model_routes: HashMap<RouteKey, (ListenerKey, agent::ModelRoute)>,
 
 	// Listeners we got before a Bind arrived
 	pending_listeners: HashMap<BindKey, HashMap<ListenerKey, Listener>>,
@@ -254,7 +257,7 @@ pub struct BackendPolicies {
 	pub request_mirror: Vec<filters::RequestMirror>,
 	pub transformation: BackendPolicy<http::transformation_cel::Transformation>,
 
-	pub session_persistence: Option<http::sessionpersistence::Policy>,
+	pub session_affinity: Option<http::sessionaffinity::Policy>,
 
 	pub health: Option<health::Policy>,
 
@@ -272,7 +275,11 @@ impl BackendPolicies {
 			backend_auth: other.backend_auth.or(self.backend_auth),
 			a2a: other.a2a.or(self.a2a),
 			llm_provider: other.llm_provider.or(self.llm_provider),
-			llm: other.llm.or(self.llm),
+			llm: match (self.llm, other.llm) {
+				(Some(base), Some(more)) => Some(LLMRequestPolicies::merge_llm_policies(&more, &base)),
+				(base, more) => more.or(base),
+			},
+			// Authorization composes to avoid erasing a broader deny
 			authorization: match (
 				self.authorization.into_arc(),
 				other.authorization.into_arc(),
@@ -284,8 +291,10 @@ impl BackendPolicies {
 				(None, Some(right)) => BackendPolicy::from_arc(right),
 				(None, None) => BackendPolicy::default(),
 			},
-			// TODO: is this right??
-			mcp_authorization: other.mcp_authorization.or(self.mcp_authorization),
+			mcp_authorization: match (self.mcp_authorization, other.mcp_authorization) {
+				(Some(base), Some(more)) => Some(base.merge(more)),
+				(base, more) => more.or(base),
+			},
 			mcp_authentication: other.mcp_authentication.or(self.mcp_authentication),
 			mcp_guardrails: other.mcp_guardrails.or(self.mcp_guardrails),
 			inference_routing: other.inference_routing.or(self.inference_routing),
@@ -306,7 +315,7 @@ impl BackendPolicies {
 				other.request_mirror
 			},
 			transformation: other.transformation.or(self.transformation),
-			session_persistence: other.session_persistence.or(self.session_persistence),
+			session_affinity: other.session_affinity.or(self.session_affinity),
 			health: other.health.or(self.health),
 			override_dest: other.override_dest.or(self.override_dest),
 		}
@@ -325,7 +334,11 @@ impl BackendPolicies {
 		self.authorization.register_expressions(ctx);
 		self.ext_authz.register_expressions(ctx);
 		self.transformation.register_expressions(ctx);
-		if let Some(crate::http::auth::BackendAuth::Aws(aws)) = self.backend_auth.as_ref() {
+		if let Some(BackendAuth {
+			kind: Some(BackendAuthKind::Aws(aws)),
+			..
+		}) = self.backend_auth.as_ref()
+		{
 			for expr in aws.cel_expressions() {
 				ctx.register_expression(expr);
 			}
@@ -337,6 +350,9 @@ impl BackendPolicies {
 		}
 		if let Some(health) = self.health.as_ref() {
 			health.register_expressions(ctx);
+		}
+		if let Some(session_affinity) = self.session_affinity.as_ref() {
+			session_affinity.register_expressions(ctx);
 		}
 	}
 }
@@ -361,6 +377,7 @@ pub struct RoutePolicies {
 	pub llm: RequestPolicy<llm::Policy>,
 	pub timeout: RequestPolicy<timeout::Policy>,
 	pub retry: RequestPolicy<retry::Policy>,
+	pub delay: RequestPolicy<http::delay::Policy>,
 
 	pub request_header_modifier: RequestPolicy<filters::HeaderModifier>,
 	pub response_header_modifier: RequestPolicy<filters::HeaderModifier>,
@@ -427,10 +444,13 @@ impl RoutePolicies {
 			&self.direct_response as &dyn PolicyExpressions,
 			&self.llm as &dyn PolicyExpressions,
 			&self.request_header_modifier as &dyn PolicyExpressions,
+			&self.response_header_modifier as &dyn PolicyExpressions,
 			&self.retry as &dyn PolicyExpressions,
+			&self.delay as &dyn PolicyExpressions,
 			&self.request_redirect as &dyn PolicyExpressions,
 			&self.url_rewrite as &dyn PolicyExpressions,
 			&self.cors as &dyn PolicyExpressions,
+			&self.buffer as &dyn PolicyExpressions,
 		]
 		.into_iter()
 	}
@@ -627,6 +647,7 @@ impl Store {
 			policies_by_key: Default::default(),
 			policies_by_target: Default::default(),
 			backends: Default::default(),
+			model_routes: Default::default(),
 			pending_listeners: Default::default(),
 			http_routes: Default::default(),
 			tcp_routes: Default::default(),
@@ -713,6 +734,117 @@ impl Store {
 		Arc::make_mut(routes).insert(route);
 	}
 
+	fn model_router_backend_name(listener: &ListenerKey) -> Strng {
+		strng::format!("llm:router:{listener}")
+	}
+
+	fn model_router_backend_key(listener: &ListenerKey) -> BackendKey {
+		strng::format!("/{}", Self::model_router_backend_name(listener))
+	}
+
+	fn model_router_route_key(listener: &ListenerKey) -> RouteKey {
+		strng::format!("llm:request:{listener}")
+	}
+
+	fn model_router_matches() -> Vec<RouteMatch> {
+		let mut matches = [
+			"/v1/models",
+			"/models",
+			"/v1/messages/count_tokens",
+			"/v1/chat/completions",
+			"/v1/messages",
+			"/v1/responses",
+			"/v1/responses/compact",
+			"/v1/images/generations",
+			"/v1/images/edits",
+			"/v1/images/variations",
+			"/v1/embeddings",
+			"/v1/rerank",
+			"/v2/rerank",
+		]
+		.into_iter()
+		.map(|path| RouteMatch {
+			path: agent::PathMatch::Exact(strng::new(path)),
+			method: None,
+			headers: vec![],
+			query: vec![],
+		})
+		.collect::<Vec<_>>();
+		matches.push(RouteMatch {
+			path: agent::PathMatch::Regex(
+				regex::Regex::new(r"^/v(?:[0-9]+|[0-9]+beta[0-9]+)/projects/[^/]+/locations/[^/]+/publishers/[^/]+/models/[^/]+:(?:rawPredict|streamRawPredict)$")
+					.expect("valid Vertex model route regex"),
+			),
+			method: None,
+			headers: vec![],
+			query: vec![],
+		});
+		matches
+	}
+
+	fn rebuild_model_router(&mut self, listener: &ListenerKey) {
+		let route_key = Self::model_router_route_key(listener);
+		let backend_name = Self::model_router_backend_name(listener);
+		let backend_key = Self::model_router_backend_key(listener);
+		self.remove_http_route(&route_key);
+		self.remove_backend(backend_key.clone());
+
+		let mut models = Vec::new();
+		let mut virtual_models = Vec::new();
+		for (_, model_route) in self
+			.model_routes
+			.values()
+			.filter(|(model_listener, _)| model_listener == listener)
+			.sorted_by_key(|(_, model_route)| model_route.key.clone())
+		{
+			match &model_route.kind {
+				agent::ModelRouteKind::Concrete(model) => models.push(model.clone()),
+				agent::ModelRouteKind::Virtual(model) => virtual_models.push(model.clone()),
+			}
+		}
+
+		if models.is_empty() && virtual_models.is_empty() {
+			return;
+		}
+
+		self.insert_backend(
+			backend_key.clone(),
+			BackendWithPolicies {
+				backend: Backend::LLMRouter(
+					agent::ResourceName::new(backend_name, strng::EMPTY),
+					Arc::new(crate::llm::model_router::ModelRouter::new(
+						models,
+						virtual_models,
+					)),
+				),
+				inline_policies: vec![],
+			},
+		);
+		self.insert_http_route_target(
+			RouteTarget::Listener(listener.clone()),
+			Route {
+				key: route_key,
+				service_key: None,
+				service_port: 0,
+				name: RouteName {
+					name: strng::new("llm:request"),
+					namespace: strng::new("internal"),
+					rule_name: None,
+					kind: None,
+				},
+				hostnames: vec![],
+				matches: Self::model_router_matches(),
+				backends: vec![RouteBackendReference {
+					weight: 1,
+					target: agent::BackendReference::Backend(backend_key).into(),
+					inline_policies: vec![],
+				}],
+				llm_router: None,
+				inline_policies: vec![],
+			},
+		);
+	}
+
 	fn insert_tcp_route_target(&mut self, target: RouteTarget, route: TCPRoute) {
 		let routes = self
 			.tcp_routes
@@ -721,7 +853,7 @@ impl Store {
 		Arc::make_mut(routes).insert(route);
 	}
 
-	fn upsert_bind(&mut self, key: BindKey, mut bind: Bind) {
+	fn upsert_bind(&mut self, key: BindKey, mut bind: Bind) -> anyhow::Result<()> {
 		debug!(bind=%bind.key, "insert bind");
 		let old_bind = self.binds.get(&key).cloned();
 
@@ -735,14 +867,37 @@ impl Store {
 			bind.listeners.insert(listener);
 		}
 
-		let listeners = if self.binds.contains_key(&key) {
-			None
-		} else if bind.mode == agent::BindMode::Internal {
+		// Capture (rather than swallow) any OS bind failure so callers can decide whether it
+		// is fatal. The bind is still recorded below so routing lookups (find_bind, etc.)
+		// remain consistent regardless of the caller's error handling.
+		let mut bind_error = None;
+		let was_internal = old_bind
+			.as_deref()
+			.is_some_and(|old| old.mode == agent::BindMode::Internal);
+		let transitioning_to_internal = old_bind
+			.as_deref()
+			.is_some_and(|old| old.mode != agent::BindMode::Internal)
+			&& bind.mode == agent::BindMode::Internal;
+		let address_changed = old_bind
+			.as_deref()
+			.is_some_and(|old| old.address != bind.address);
+
+		// A bind's key is stable across mode changes. Explicitly stop the accept loop when
+		// an existing bind becomes internal; merely replacing the stored Bind leaves the
+		// Gateway's listener task running. Address changes with a stable key likewise need
+		// to replace the old socket.
+		if transitioning_to_internal || (address_changed && !was_internal) {
+			let _ = self.tx.send(BindEvent::Remove(key.clone()));
+		}
+
+		let listeners = if bind.mode == agent::BindMode::Internal {
 			// Internal binds are routing-only; they never open an OS socket and thus never
 			// emit a BindEvent::Add (which is what spawns the accept loop). They are still
 			// inserted into `self.binds` below so find_bind/find_bind_by_port and in-process
 			// re-entry via proxy_bind can reach them.
 			debug!(bind=%key, "internal bind; not opening a listener socket");
+			None
+		} else if old_bind.is_some() && !was_internal && !address_changed {
 			None
 		} else {
 			match self.bind_listeners(bind.address) {
@@ -756,7 +911,7 @@ impl Store {
 					Some(listeners)
 				},
 				Err(err) => {
-					warn!(bind=%key, address=%bind.address, error=%err, "failed to start bind listener");
+					bind_error = Some(err);
 					None
 				},
 			}
@@ -770,6 +925,10 @@ impl Store {
 		if let Some(listeners) = listeners {
 			let _ = self.tx.send(BindEvent::Add(bind, listeners));
 		}
+		if let Some(err) = bind_error {
+			return Err(err.context(format!("bind {key}")));
+		}
+		Ok(())
 	}
 
 	pub fn subscribe(&mut self) -> impl Stream<Item = BindEvent> + use<> {
@@ -778,13 +937,19 @@ impl Store {
 	}
 
 	pub fn route_policies(&self, path: &RoutePath<'_>) -> RoutePolicies {
-		let listener = &path.listener;
+		let listener_name = &path.listener;
 		let gateway = self
 			.policies_by_target
-			.get(&listener.as_gateway_target_ref());
+			.get(&listener_name.as_gateway_target_ref());
+		let listener_set = listener_name
+			.as_listenerset_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
+		let listener_set_section = listener_name
+			.as_listenerset_listener_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
 		let listener = self
 			.policies_by_target
-			.get(&listener.as_listener_target_ref());
+			.get(&listener_name.as_listener_target_ref());
 		let service = path
 			.service
 			.and_then(|s| self.policies_by_target.get(&s.as_policy_target_ref()));
@@ -826,6 +991,8 @@ impl Store {
 			.iter()
 			.copied()
 			.flatten()
+			.chain(listener_set.iter().copied().flatten())
+			.chain(listener_set_section.iter().copied().flatten())
 			.chain(listener.iter().copied().flatten())
 			.chain(service.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_key.get(n))
@@ -899,6 +1066,11 @@ impl Store {
 				TrafficPolicy::Retry(p) => {
 					pol
 						.retry
+						.merge_with_inheritance(&RequestPolicy::single(p.clone()), lock_inheritance);
+				},
+				TrafficPolicy::Delay(p) => {
+					pol
+						.delay
 						.merge_with_inheritance(&RequestPolicy::single(p.clone()), lock_inheritance);
 				},
 				TrafficPolicy::RequestHeaderModifier(p) => {
@@ -1150,8 +1322,8 @@ impl Store {
 				BackendTrafficPolicy::BackendTLS(p) => {
 					pol.backend_tls.get_or_insert_with(|| p.clone());
 				},
-				BackendTrafficPolicy::BackendAuth(p) => {
-					pol.backend_auth.get_or_insert_with(|| p.clone());
+				BackendTrafficPolicy::BackendAuth(auth) => {
+					pol.backend_auth.get_or_insert_with(|| auth.clone());
 				},
 				BackendTrafficPolicy::InferenceRouting(p) => {
 					pol.inference_routing.get_or_insert_with(|| p.clone());
@@ -1188,8 +1360,8 @@ impl Store {
 				BackendTrafficPolicy::Transformation(p) => {
 					pol.transformation.set_if_unset(p);
 				},
-				BackendTrafficPolicy::SessionPersistence(p) => {
-					pol.session_persistence.get_or_insert_with(|| p.clone());
+				BackendTrafficPolicy::SessionAffinity(p) => {
+					pol.session_affinity.get_or_insert_with(|| p.clone());
 				},
 				BackendTrafficPolicy::Health(p) => {
 					pol.health.get_or_insert_with(|| p.clone());
@@ -1200,7 +1372,7 @@ impl Store {
 					}
 				},
 				BackendTrafficPolicy::McpAuthorization(p) => {
-					// Authorization policies merge, unlike others
+					// Authorization composes to avoid erasing a broader deny
 					mcp_authz.push(p.clone().into_inner());
 				},
 				BackendTrafficPolicy::McpAuthentication(p) => {
@@ -1370,11 +1542,16 @@ impl Store {
 			.cloned()
 	}
 
+	/// Finds a wildcard-address bind by port.
+	///
+	/// This is used when a CONNECT authority contains a hostname rather than an IP address. Since
+	/// the hostname is not resolved here, it must not be allowed to select a bind scoped to a
+	/// concrete address (for example, a loopback-only listener) merely because the ports match.
 	pub fn find_bind_by_port(&self, port: u16) -> Option<Arc<Bind>> {
 		self
 			.binds
 			.values()
-			.find(|b| b.address.port() == port)
+			.find(|b| b.address.ip().is_unspecified() && b.address.port() == port)
 			.cloned()
 	}
 
@@ -1452,7 +1629,11 @@ impl Store {
 		};
 		let mut bind = Arc::unwrap_or_clone(bind);
 		bind.listeners.remove(&listener);
-		self.upsert_bind(bind_key, bind);
+		// Removing a listener never opens a new socket (the bind already exists), so this
+		// cannot fail on bind; log defensively rather than propagate.
+		if let Err(err) = self.upsert_bind(bind_key, bind) {
+			warn!(error=%err, "failed to update bind after listener removal");
+		}
 	}
 
 	pub fn remove_route_group(&mut self, rg: RouteGroupKey) {
@@ -1512,13 +1693,31 @@ impl Store {
 
 	#[instrument(
         level = Level::INFO,
+        name="remove_model_route",
+        skip_all,
+        fields(model_route),
+    )]
+	pub fn remove_model_route(&mut self, model_route: RouteKey) {
+		let Some((listener, _)) = self.model_routes.remove(&model_route) else {
+			return;
+		};
+		self.rebuild_model_router(&listener);
+	}
+
+	#[instrument(
+        level = Level::INFO,
         name="insert_bind",
         skip_all,
         fields(bind=%bind.key),
     )]
 	pub fn insert_bind(&mut self, bind: Bind) {
 		let key = bind.key.clone();
-		self.upsert_bind(key, bind);
+		// XDS-delivered binds must not crash the proxy on a bind failure: a bad dynamic config
+		// should be rejected/logged, not fatal. Static local config uses `sync_local`, which
+		// surfaces the error so startup can exit(1) (see issue #87).
+		if let Err(err) = self.upsert_bind(key.clone(), bind) {
+			warn!(bind=%key, error=%err, "failed to start bind listener");
+		}
 	}
 
 	pub fn insert_backend(&mut self, key: BackendKey, b: BackendWithPolicies) {
@@ -1552,7 +1751,9 @@ impl Store {
 			let mut bind = Arc::unwrap_or_clone(b.clone());
 			bind.listeners.remove(&lis.key);
 			bind.listeners.insert(lis);
-			self.upsert_bind(bind_name, bind);
+			if let Err(err) = self.upsert_bind(bind_name.clone(), bind) {
+				warn!(bind=%bind_name, error=%err, "failed to start bind listener");
+			}
 		} else {
 			debug!("no bind found, keeping listener pending");
 			self
@@ -1571,6 +1772,20 @@ impl Store {
 	pub fn insert_route(&mut self, r: Route, ln: ListenerKey) {
 		debug!(listener=%ln, route=%r.key, "insert route");
 		self.insert_http_route_target(RouteTarget::Listener(ln), r);
+	}
+
+	pub fn insert_model_route(&mut self, r: agent::ModelRoute, ln: ListenerKey) {
+		debug!(listener=%ln, model_route=%r.key, "insert model route");
+		let old_listener = self
+			.model_routes
+			.insert(r.key.clone(), (ln.clone(), r))
+			.map(|(old_listener, _)| old_listener);
+		if let Some(old_listener) = old_listener
+			&& old_listener != ln
+		{
+			self.rebuild_model_router(&old_listener);
+		}
+		self.rebuild_model_router(&ln);
 	}
 
 	pub fn insert_tcp_route(&mut self, r: TCPRoute, ln: ListenerKey) {
@@ -1610,6 +1825,7 @@ impl Store {
 			ResourceKind::Bind(n) => self.remove_bind(n),
 			ResourceKind::Route(n) => self.remove_route(n),
 			ResourceKind::TcpRoute(n) => self.remove_tcp_route(n),
+			ResourceKind::ModelRoute(n) => self.remove_model_route(n),
 			ResourceKind::Listener(n) => self.remove_listener(n),
 			ResourceKind::Backend(n) => self.remove_backend(n),
 		}
@@ -1646,6 +1862,12 @@ impl Store {
 					.resources
 					.insert(name, ResourceKind::TcpRoute(strng::new(&w.key)));
 				self.insert_xds_tcp_route(w, diagnostics)
+			},
+			Some(XdsKind::ModelRoute(w)) => {
+				self
+					.resources
+					.insert(name, ResourceKind::ModelRoute(strng::new(&w.key)));
+				self.insert_xds_model_route(w, diagnostics)
 			},
 			Some(XdsKind::Backend(w)) => {
 				self
@@ -1713,6 +1935,15 @@ impl Store {
 			self.insert_tcp_route(route, listener_name);
 			Ok(())
 		}
+	}
+	fn insert_xds_model_route(
+		&mut self,
+		raw: XdsModelRoute,
+		diagnostics: &mut Diagnostics,
+	) -> anyhow::Result<()> {
+		let (route, listener_name) = agent::ModelRoute::from_xds(&raw, diagnostics)?;
+		self.insert_model_route(route, listener_name);
+		Ok(())
 	}
 	fn insert_xds_backend(
 		&mut self,
@@ -1865,8 +2096,9 @@ impl StoreUpdater {
 		backends: Vec<BackendWithPolicies>,
 		route_groups: Vec<(RouteGroupKey, Vec<Route>)>,
 		prev: PreviousState,
-	) -> PreviousState {
+	) -> anyhow::Result<PreviousState> {
 		let mut s = self.state.write().expect("mutex acquired");
+		let prev_bind_keys = prev.binds.clone();
 		let mut old_binds = prev.binds;
 		let mut old_routes = prev.routes;
 		let mut old_tcp_routes = prev.tcp_routes;
@@ -1881,10 +2113,22 @@ impl StoreUpdater {
 			backends: Default::default(),
 			route_groups: Default::default(),
 		};
+		// Unlike XDS (which must tolerate a bad dynamic config), a static local config that
+		// cannot open a newly added listener is a fatal misconfiguration. Only treat bind
+		// failures for binds introduced after the previous sync as errors: existing binds are
+		// not re-opened, and a reload that adds a new port after startup must not silently
+		// serve nothing on that bind (issue #87).
+		let mut bind_errors = Vec::new();
 		for b in binds {
+			let is_new_bind = !prev_bind_keys.contains(&b.key);
 			old_binds.remove(&b.key);
 			next_state.binds.insert(b.key.clone());
-			s.insert_bind(b);
+			let key = b.key.clone();
+			if let Err(err) = s.upsert_bind(key, b)
+				&& is_new_bind
+			{
+				bind_errors.push(format!("{err:#}"));
+			}
 		}
 		for b in backends {
 			// Here we use the 'name' as the key. This is appropriate for local case only
@@ -1936,7 +2180,13 @@ impl StoreUpdater {
 		for remaining_rg in old_route_groups {
 			s.remove_route_group(remaining_rg);
 		}
-		next_state
+		if !bind_errors.is_empty() {
+			anyhow::bail!(
+				"failed to start bind listener(s): {}",
+				bind_errors.join("; ")
+			);
+		}
+		Ok(next_state)
 	}
 }
 
@@ -2007,12 +2257,13 @@ mod tests {
 	use std::time::Duration;
 
 	use frozen_collections::FzHashSet;
+	use tokio_stream::StreamExt;
 
 	use super::*;
 	use crate::telemetry::log::OrderedStringMap;
 	use crate::types::agent::{
 		BackendTarget, BindProtocol, ListenerProtocol, ListenerSet, ListenerSetTarget, PolicyType,
-		ResourceName, TunnelProtocol,
+		ResourceName, Target, TunnelProtocol,
 	};
 	use crate::types::frontend::LoggingPolicy;
 
@@ -2023,6 +2274,57 @@ mod tests {
 			listener_name: strng::literal!("listener"),
 			listener_set: None,
 		}
+	}
+
+	#[tokio::test]
+	async fn bind_mode_changes_reconcile_listener_events() {
+		let probe = StdTcpListener::bind("127.0.0.1:0").expect("reserve an available port");
+		let address = probe.local_addr().expect("probe has an address");
+		drop(probe);
+
+		let mut store = Store::with_ipv6_enabled(true);
+		let mut events = store.subscribe();
+		let mut bind = Bind {
+			key: strng::literal!("bind/test"),
+			address,
+			protocol: BindProtocol::http,
+			tunnel_protocol: TunnelProtocol::Direct,
+			mode: agent::BindMode::Standard,
+			listeners: ListenerSet::default(),
+		};
+
+		store.insert_bind(bind.clone());
+		assert!(
+			matches!(events.next().await, Some(BindEvent::Add(_, _))),
+			"a new standard bind should open a listener"
+		);
+
+		bind.mode = agent::BindMode::Internal;
+		store.insert_bind(bind.clone());
+		assert!(
+			matches!(events.next().await, Some(BindEvent::Remove(key)) if key == bind.key),
+			"changing a standard bind to internal should stop its listener"
+		);
+
+		bind.mode = agent::BindMode::Standard;
+		store.insert_bind(bind.clone());
+		assert!(
+			matches!(events.next().await, Some(BindEvent::Add(_, _))),
+			"changing an internal bind to standard should open a listener"
+		);
+
+		let probe = StdTcpListener::bind("127.0.0.1:0").expect("reserve another available port");
+		bind.address = probe.local_addr().expect("probe has an address");
+		drop(probe);
+		store.insert_bind(bind.clone());
+		assert!(
+			matches!(events.next().await, Some(BindEvent::Remove(key)) if key == bind.key),
+			"changing a standard bind's address should stop its old listener"
+		);
+		assert!(
+			matches!(events.next().await, Some(BindEvent::Add(updated, _)) if updated.address == bind.address),
+			"changing a standard bind's address should open its new listener"
+		);
 	}
 
 	fn route(name: &'static str, namespace: &'static str, kind: Option<&'static str>) -> RouteName {
@@ -2112,6 +2414,302 @@ mod tests {
 	}
 
 	#[test]
+	fn model_router_matches_only_standard_endpoints() {
+		let matches = Store::model_router_matches();
+		assert!(matches.iter().any(|route_match| {
+			matches!(
+				route_match.path,
+				agent::PathMatch::Exact(ref path) if path == "/v1/chat/completions"
+			)
+		}));
+		assert!(
+			matches
+				.iter()
+				.all(|route_match| { !matches!(route_match.path, agent::PathMatch::PathPrefix(_)) })
+		);
+		let vertex = matches
+			.iter()
+			.find_map(|route_match| match &route_match.path {
+				agent::PathMatch::Regex(regex) => Some(regex),
+				_ => None,
+			})
+			.expect("Vertex raw-predict route match");
+		assert!(vertex.is_match(
+			"/v1/projects/project/locations/us-central1/publishers/google/models/gemini:rawPredict"
+		));
+		assert!(!vertex.is_match("/arbitrary/v1/chat/completions"));
+	}
+
+	#[test]
+	fn xds_model_route_builds_listener_llm_router() {
+		use agent_xds::{Handler, XdsResource};
+
+		use crate::types::proto::agent::backend_reference;
+		use crate::types::proto::agent::model_route::concrete_model::ModelVisibility;
+		use crate::types::proto::agent::model_route::{ConcreteModel, Kind};
+
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(true))));
+		let listener_key = strng::literal!("default/gw.http");
+		let model_route = crate::types::proto::agent::ModelRoute {
+			key: "default/gpt-5-mini".to_string(),
+			listener_key: listener_key.to_string(),
+			created: 0,
+			r#match: Some(crate::types::proto::agent::model_route::Match {
+				model: "gpt-5-mini".to_string(),
+			}),
+			kind: Some(Kind::ConcreteModel(ConcreteModel {
+				model_visibility: ModelVisibility::Public as i32,
+				backend: Some(crate::types::proto::agent::BackendReference {
+					port: 0,
+					kind: Some(backend_reference::Kind::Backend(
+						"default/openai".to_string(),
+					)),
+				}),
+				backend_policies: vec![],
+			})),
+			ai_policy: None,
+			authorization: None,
+		};
+
+		let mut updates = vec![XdsUpdate::Update(XdsResource {
+			name: strng::literal!("model/default/gpt-5-mini"),
+			resource: ADPResource {
+				kind: Some(XdsKind::ModelRoute(model_route)),
+			},
+		})]
+		.into_iter();
+		updater
+			.handle(Box::new(&mut updates))
+			.expect("model route accepted");
+
+		let store = updater.read();
+		let route_key = Store::model_router_route_key(&listener_key);
+		let backend_key = Store::model_router_backend_key(&listener_key);
+		let routes = store
+			.get_listener_routes(&listener_key)
+			.expect("listener should have model router route");
+		assert!(routes.contains(&route_key));
+		let backend = store
+			.backends
+			.get(&backend_key)
+			.expect("model route should synthesize router backend");
+		let Backend::LLMRouter(_, _) = &backend.backend else {
+			panic!("expected model route to synthesize router backend");
+		};
+		drop(store);
+
+		let second_model_route = crate::types::proto::agent::ModelRoute {
+			key: "default/claude-haiku".to_string(),
+			listener_key: listener_key.to_string(),
+			created: 0,
+			r#match: Some(crate::types::proto::agent::model_route::Match {
+				model: "claude-haiku".to_string(),
+			}),
+			kind: Some(Kind::ConcreteModel(ConcreteModel {
+				model_visibility: ModelVisibility::Public as i32,
+				backend: Some(crate::types::proto::agent::BackendReference {
+					port: 0,
+					kind: Some(backend_reference::Kind::Backend(
+						"default/anthropic".to_string(),
+					)),
+				}),
+				backend_policies: vec![],
+			})),
+			ai_policy: None,
+			authorization: None,
+		};
+		let mut second_update = vec![XdsUpdate::Update(XdsResource {
+			name: strng::literal!("model/default/claude-haiku"),
+			resource: ADPResource {
+				kind: Some(XdsKind::ModelRoute(second_model_route)),
+			},
+		})]
+		.into_iter();
+		updater
+			.handle(Box::new(&mut second_update))
+			.expect("second model route accepted");
+		let store = updater.read();
+		let backend = store
+			.backends
+			.get(&backend_key)
+			.expect("model route should keep synthetic router backend");
+		let Backend::LLMRouter(_, _) = &backend.backend else {
+			panic!("expected model route to keep synthetic router backend");
+		};
+		drop(store);
+
+		let mut removals = vec![
+			XdsUpdate::<ADPResource>::Remove(strng::literal!("model/default/gpt-5-mini")),
+			XdsUpdate::<ADPResource>::Remove(strng::literal!("model/default/claude-haiku")),
+		]
+		.into_iter();
+		updater
+			.handle(Box::new(&mut removals))
+			.expect("model route removal accepted");
+		let store = updater.read();
+		assert!(
+			store.get_listener_routes(&listener_key).is_none(),
+			"last model route removal should remove synthetic route"
+		);
+		assert!(
+			!store.backends.contains_key(&backend_key),
+			"last model route removal should remove synthetic backend"
+		);
+	}
+
+	#[test]
+	fn xds_model_route_rebuilds_listener_scoped_routers() {
+		use agent_xds::{Handler, XdsResource};
+
+		use crate::types::proto::agent::backend_reference;
+		use crate::types::proto::agent::model_route::concrete_model::ModelVisibility;
+		use crate::types::proto::agent::model_route::{ConcreteModel, Kind};
+
+		fn model_route(
+			key: &str,
+			listener_key: &str,
+			name: &str,
+		) -> crate::types::proto::agent::ModelRoute {
+			crate::types::proto::agent::ModelRoute {
+				key: key.to_string(),
+				listener_key: listener_key.to_string(),
+				created: 0,
+				r#match: Some(crate::types::proto::agent::model_route::Match {
+					model: name.to_string(),
+				}),
+				kind: Some(Kind::ConcreteModel(ConcreteModel {
+					model_visibility: ModelVisibility::Public as i32,
+					backend: Some(crate::types::proto::agent::BackendReference {
+						port: 0,
+						kind: Some(backend_reference::Kind::Backend(format!("/default/{name}"))),
+					}),
+					backend_policies: vec![],
+				})),
+				ai_policy: None,
+				authorization: None,
+			}
+		}
+
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(true))));
+		let listener_a = strng::literal!("default/gw.a");
+		let listener_b = strng::literal!("default/gw.b");
+
+		let mut updates = vec![
+			XdsUpdate::Update(XdsResource {
+				name: strng::literal!("model/default/a"),
+				resource: ADPResource {
+					kind: Some(XdsKind::ModelRoute(model_route(
+						"default/a",
+						&listener_a,
+						"a",
+					))),
+				},
+			}),
+			XdsUpdate::Update(XdsResource {
+				name: strng::literal!("model/default/b"),
+				resource: ADPResource {
+					kind: Some(XdsKind::ModelRoute(model_route(
+						"default/b",
+						&listener_b,
+						"b",
+					))),
+				},
+			}),
+			XdsUpdate::Update(XdsResource {
+				name: strng::literal!("model/default/c"),
+				resource: ADPResource {
+					kind: Some(XdsKind::ModelRoute(model_route(
+						"default/c",
+						&listener_a,
+						"c",
+					))),
+				},
+			}),
+		]
+		.into_iter();
+		updater
+			.handle(Box::new(&mut updates))
+			.expect("model routes accepted");
+
+		let store = updater.read();
+		let route_a = Store::model_router_route_key(&listener_a);
+		let route_b = Store::model_router_route_key(&listener_b);
+		let backend_a = Store::model_router_backend_key(&listener_a);
+		let backend_b = Store::model_router_backend_key(&listener_b);
+		assert!(
+			store
+				.get_listener_routes(&listener_a)
+				.expect("listener A should have router route")
+				.contains(&route_a)
+		);
+		assert!(
+			store
+				.get_listener_routes(&listener_b)
+				.expect("listener B should have router route")
+				.contains(&route_b)
+		);
+		let route = store
+			.get_listener_routes(&listener_a)
+			.expect("listener A route set exists")
+			.get_by_name(&RouteName {
+				name: strng::new("llm:request"),
+				namespace: strng::new("internal"),
+				rule_name: None,
+				kind: None,
+			})
+			.expect("listener A route exists");
+		assert_eq!(route.key, route_a);
+		assert!(
+			matches!(&route.backends[0].target, agent::RouteBackendTarget::Backend(key) if *key == backend_a),
+			"synthetic route should point at listener-scoped router backend"
+		);
+		assert!(store.backends.contains_key(&backend_a));
+		assert!(store.backends.contains_key(&backend_b));
+		drop(store);
+
+		let mut removals = vec![XdsUpdate::<ADPResource>::Remove(strng::literal!(
+			"model/default/a"
+		))]
+		.into_iter();
+		updater
+			.handle(Box::new(&mut removals))
+			.expect("model route removal accepted");
+		let store = updater.read();
+		assert!(
+			store.get_listener_routes(&listener_a).is_some(),
+			"listener A router should remain while another model route is attached"
+		);
+		assert!(store.backends.contains_key(&backend_a));
+		assert!(store.backends.contains_key(&backend_b));
+		drop(store);
+
+		let mut removals = vec![XdsUpdate::<ADPResource>::Remove(strng::literal!(
+			"model/default/c"
+		))]
+		.into_iter();
+		updater
+			.handle(Box::new(&mut removals))
+			.expect("last listener A model route removal accepted");
+		let store = updater.read();
+		assert!(
+			store.get_listener_routes(&listener_a).is_none(),
+			"listener A router should be removed after last model route"
+		);
+		assert!(
+			!store.backends.contains_key(&backend_a),
+			"listener A backend should be removed after last model route"
+		);
+		assert!(
+			store.get_listener_routes(&listener_b).is_some(),
+			"listener B router should be unaffected"
+		);
+		assert!(
+			store.backends.contains_key(&backend_b),
+			"listener B backend should be unaffected"
+		);
+	}
+
+	#[test]
 	fn dump_includes_listener_routes() {
 		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(true))));
 		let bind = Bind {
@@ -2166,6 +2764,138 @@ mod tests {
 				.routes
 				.as_ref()
 				.is_some_and(|routes| routes.contains(&strng::literal!("route")))
+		);
+	}
+
+	fn standard_bind(address: std::net::SocketAddr) -> Bind {
+		Bind {
+			key: strng::literal!("bind"),
+			address,
+			protocol: BindProtocol::http,
+			tunnel_protocol: TunnelProtocol::Direct,
+			mode: agent::BindMode::Standard,
+			listeners: ListenerSet::from_list([Listener {
+				key: strng::literal!("listener"),
+				name: ListenerName {
+					gateway_name: strng::literal!("gw"),
+					gateway_namespace: strng::literal!("ns"),
+					listener_name: strng::literal!("listener"),
+					listener_set: None,
+				},
+				hostname: strng::literal!("example.com"),
+				protocol: ListenerProtocol::HTTP,
+			}]),
+		}
+	}
+
+	// Regression for issue #87: a static local config that cannot open its listener socket
+	// must fail loudly (so startup can exit(1)) rather than silently binding nothing.
+	#[test]
+	fn sync_local_bind_failure_is_fatal() {
+		// Hold an active listener so the same address cannot be bound again.
+		let occupied = std::net::TcpListener::bind("127.0.0.1:0").expect("probe bind");
+		let addr = occupied.local_addr().expect("probe addr");
+
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(false))));
+		let err = updater
+			.sync_local(
+				vec![standard_bind(addr)],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				Default::default(),
+			)
+			.expect_err("bind on an occupied port must fail");
+		assert!(
+			err.to_string().contains("failed to start bind listener"),
+			"unexpected error: {err:#}"
+		);
+	}
+
+	#[test]
+	fn sync_local_bind_success_returns_ok() {
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(false))));
+		updater
+			.sync_local(
+				vec![standard_bind("127.0.0.1:0".parse().unwrap())],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				Default::default(),
+			)
+			.expect("bind on an ephemeral port should succeed");
+	}
+
+	#[test]
+	fn sync_local_new_bind_on_reload_failure_is_fatal() {
+		let occupied = std::net::TcpListener::bind("127.0.0.1:0").expect("probe bind");
+		let occupied_addr = occupied.local_addr().expect("probe addr");
+
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(false))));
+		let prev = updater
+			.sync_local(
+				vec![standard_bind("127.0.0.1:0".parse().unwrap())],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				Default::default(),
+			)
+			.expect("initial bind should succeed");
+
+		let mut new_bind = standard_bind(occupied_addr);
+		new_bind.key = strng::literal!("bind2");
+		let err = updater
+			.sync_local(
+				vec![standard_bind("127.0.0.1:0".parse().unwrap()), new_bind],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				prev,
+			)
+			.expect_err("adding a new bind on an occupied port after startup must fail");
+		assert!(
+			err.to_string().contains("failed to start bind listener"),
+			"unexpected error: {err:#}"
+		);
+	}
+
+	#[test]
+	fn sync_local_bind_failure_still_applies_config() {
+		let occupied = std::net::TcpListener::bind("127.0.0.1:0").expect("probe bind");
+		let addr = occupied.local_addr().expect("probe addr");
+
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(false))));
+		let backend_key: BackendKey = strng::literal!("ns/backend");
+		let backend = BackendWithPolicies {
+			backend: Backend::Opaque(
+				ResourceName::new(strng::literal!("backend"), strng::literal!("ns")),
+				Target::Address("127.0.0.1:8080".parse().unwrap()),
+			),
+			inline_policies: vec![],
+		};
+		let _err = updater
+			.sync_local(
+				vec![standard_bind(addr)],
+				vec![],
+				vec![],
+				vec![],
+				vec![backend],
+				vec![],
+				Default::default(),
+			)
+			.expect_err("bind on an occupied port must fail");
+
+		assert!(
+			updater.read().backend(&backend_key).is_some(),
+			"bind failure must not prevent the rest of sync_local from applying"
 		);
 	}
 
@@ -2430,6 +3160,69 @@ mod tests {
 				.cloned(),
 			Some(grpc_timeout)
 		);
+	}
+
+	#[test]
+	fn route_policies_include_listenerset_targets() {
+		let mut store = Store::default();
+		let listener_set = ResourceName::new(strng::new("my-ls"), strng::new("default"));
+		let listener_a = ListenerName {
+			listener_name: strng::new("listener-a"),
+			listener_set: Some(listener_set.clone()),
+			..listener()
+		};
+		let listener_b = ListenerName {
+			listener_name: strng::new("listener-b"),
+			listener_set: Some(listener_set),
+			..listener()
+		};
+		let set_timeout = timeout::Policy {
+			request_timeout: Some(Duration::from_secs(1)),
+			backend_request_timeout: None,
+		};
+		let section_timeout = timeout::Policy {
+			request_timeout: Some(Duration::from_secs(2)),
+			backend_request_timeout: None,
+		};
+		insert_traffic_policy(
+			&mut store,
+			"listenerset-timeout",
+			PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: None,
+			}),
+			PolicyInheritance::Default,
+			TrafficPolicy::Timeout(set_timeout.clone()),
+		);
+		insert_traffic_policy(
+			&mut store,
+			"listenerset-section-timeout",
+			PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: Some(strng::new("listener-a")),
+			}),
+			PolicyInheritance::Default,
+			TrafficPolicy::Timeout(section_timeout.clone()),
+		);
+
+		let selected_timeout = |listener| {
+			store
+				.route_policies(&RoutePath {
+					listener,
+					service: None,
+					routes: vec![],
+					route_inlines: vec![],
+				})
+				.timeout
+				.select("timeout", &request_for_policy_selection())
+				.as_deref()
+				.cloned()
+		};
+
+		assert_eq!(selected_timeout(&listener_a), Some(section_timeout));
+		assert_eq!(selected_timeout(&listener_b), Some(set_timeout));
 	}
 
 	#[test]
@@ -2979,6 +3772,73 @@ mod tests {
 		);
 		assert_eq!(policy.resolve_route("/v1/messages"), RouteType::Messages);
 		assert_eq!(policy.resolve_route("/v1/models"), RouteType::Passthrough);
+	}
+
+	#[test]
+	fn llm_config_merges() {
+		use crate::llm::policy::{
+			PromptEnrichment, PromptGuard, RegexRule, RegexRules, RequestGuard, RequestGuardKind,
+			SortedRoutes,
+		};
+		use crate::llm::{self, RouteType, SimpleChatCompletionMessage};
+
+		// attached policy (e.g. AgentgatewayPolicy.ai) with prompt guard and enrichment
+		let attached = BackendPolicies {
+			llm: Some(Arc::new(llm::Policy {
+				prompt_guard: Some(PromptGuard {
+					streaming: Default::default(),
+					request: vec![RequestGuard {
+						rejection: Default::default(),
+						kind: RequestGuardKind::Regex(RegexRules {
+							action: Default::default(),
+							rules: vec![RegexRule::Regex {
+								pattern: regex::Regex::new("blocked-word").unwrap(),
+							}],
+						}),
+					}],
+					response: vec![],
+				}),
+				prompts: Some(PromptEnrichment {
+					prepend: vec![SimpleChatCompletionMessage {
+						role: strng::new("system"),
+						content: strng::new("You are a helpful assistant."),
+					}],
+					append: vec![],
+				}),
+				..Default::default()
+			})),
+			..Default::default()
+		};
+
+		// provider level policy (e.g. AgentgatewayBackend.ai.groups.providers.policies)
+		let mut routes = SortedRoutes::default();
+		routes.insert(strng::new("/v1/messages"), RouteType::Messages);
+		let provider = BackendPolicies {
+			llm: Some(Arc::new(llm::Policy {
+				model_aliases: std::collections::HashMap::from([(
+					strng::new("fast"),
+					strng::new("gpt-4.1-nano"),
+				)]),
+				routes,
+				..Default::default()
+			})),
+			..Default::default()
+		};
+
+		let effective = attached.merge(provider).llm.expect("expected AI policy");
+		assert!(
+			effective.prompt_guard.is_some(),
+			"provider-level AI config must not disable the attached prompt guard"
+		);
+		assert!(
+			effective.prompts.is_some(),
+			"provider-level AI config must not disable the attached prompt enrichment"
+		);
+		assert_eq!(
+			effective.model_aliases.get(&strng::new("fast")),
+			Some(&strng::new("gpt-4.1-nano"))
+		);
+		assert_eq!(effective.resolve_route("/v1/messages"), RouteType::Messages);
 	}
 
 	#[test]

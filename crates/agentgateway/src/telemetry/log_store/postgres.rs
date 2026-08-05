@@ -1,8 +1,6 @@
 use std::fmt::Display;
 
-use anyhow::Context;
 use serde_json::Value;
-use sqlx::postgres::PgPoolOptions;
 use sqlx::types::Json;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
 
@@ -21,12 +19,7 @@ pub struct PostgresLogStore {
 const ANALYTICS_FILTER_OPTION_LIMIT: i64 = 500;
 
 impl PostgresLogStore {
-	pub async fn connect(url: &str) -> anyhow::Result<Self> {
-		let pool = PgPoolOptions::new()
-			.max_connections(5)
-			.connect(url)
-			.await
-			.context("failed to connect request log postgres database")?;
+	pub async fn from_pool(pool: PgPool) -> anyhow::Result<Self> {
 		sqlx::raw_sql(SCHEMA).execute(&pool).await?;
 		Ok(Self { pool })
 	}

@@ -1,0 +1,35 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/vertex-gemini/stream_tool.json
+---
+data: {"id":"gemini-tool","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":0,"id":"fc_native","type":"function","function":{"name":"get_weather","arguments":"{\"location\":\"Tokyo\"}"}}],"role":"assistant"},"finish_reason":"tool_calls"}],"created":123,"model":"gemini-2.5-pro","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":15,"completion_tokens":12,"total_tokens":27}}
+
+data: [DONE]
+
+
+
+{
+  "input_tokens": 15,
+  "output_tokens": 12,
+  "total_tokens": 27,
+  "provider_model": "gemini-2.5-pro",
+  "completion": [
+    ""
+  ],
+  "output_messages": [
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_call",
+          "id": "fc_native",
+          "name": "get_weather",
+          "arguments": {
+            "location": "Tokyo"
+          }
+        }
+      ],
+      "finish_reason": "tool_calls"
+    }
+  ]
+}

@@ -141,11 +141,8 @@ pub struct InferenceConfiguration {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub temperature: Option<f32>,
 	/// Use nucleus sampling.
-	#[serde(skip_serializing_if = "Option::is_none")]
+	#[serde(rename = "topP", skip_serializing_if = "Option::is_none")]
 	pub top_p: Option<f32>,
-	/// Only sample from the top K options for each subsequent token (if supported by model).
-	#[serde(rename = "topK", skip_serializing_if = "Option::is_none")]
-	pub top_k: Option<usize>,
 	/// The stop sequences to use.
 	#[serde(rename = "stopSequences", skip_serializing_if = "Vec::is_empty")]
 	pub stop_sequences: Vec<String>,
@@ -153,8 +150,8 @@ pub struct InferenceConfiguration {
 
 #[derive(Clone, Serialize, Debug)]
 pub struct ConverseRequest {
-	/// Specifies the model or throughput with which to run inference.
-	#[serde(rename = "modelId")]
+	/// Specifies the model or throughput used in the Converse request URI.
+	#[serde(skip_serializing)]
 	pub model_id: String,
 	/// The messages that you want to send to the model.
 	pub messages: Vec<Message>,
@@ -665,6 +662,8 @@ pub struct CohereEmbeddingRequest {
 	pub input_type: String,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub truncate: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub output_dimension: Option<u32>,
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]

@@ -44,7 +44,7 @@ import {
   uiLogAttributeExpressions,
 } from "../config";
 import { queryParam, useStickyQueryParam } from "../drawerRouteState";
-import { useGatewayConfig, useUpdateConfig } from "../hooks";
+import { useLlmConfigData, useUpdateConfig } from "../hooks";
 import {
   Drawer,
   EmptyState,
@@ -87,11 +87,23 @@ import type {
 
 export function LogsPage() {
   const navigate = useNavigate({ from: "/llm/logs" });
-  const config = useGatewayConfig();
+  const {
+    config,
+    models: configuredModels,
+    virtualModels,
+    providers,
+    isLoading: configDataLoading,
+    error: configDataError,
+  } = useLlmConfigData();
   const updateConfig = useUpdateConfig();
   const models = useMemo(
-    () => llmModelOptions(config.data?.llm),
-    [config.data],
+    () =>
+      llmModelOptions({
+        models: configuredModels,
+        virtualModels,
+        providers,
+      }),
+    [configuredModels, providers, virtualModels],
   );
   const promptLoggingEnabled = promptCompletionLoggingEnabled(config.data);
   const [settings, setSettings] = useStickyQueryParam("settings");
@@ -326,6 +338,13 @@ export function LogsPage() {
           </div>
         }
       />
+      {configDataLoading ? (
+        <StatusBanner state="loading" title="Loading LLM configuration" />
+      ) : configDataError ? (
+        <StatusBanner state="bad" title="Configuration API unavailable">
+          {configDataError.message}
+        </StatusBanner>
+      ) : null}
       {error ? (
         <StatusBanner state="bad" title="Logs API error">
           {error}
@@ -1149,25 +1168,20 @@ function LogCallRow(props: {
         <span className="log-type-chip">
           {(props.entry.genAi.operationName ?? "chat").toUpperCase()}
         </span>
+        <span className="log-call-status">
+          <span className={statusBad ? "badge bad" : "badge ok"}>
+            {props.entry.httpStatus ?? "n/a"}
+          </span>
+        </span>
         <span
           className={hasPreview ? "log-call-main" : "log-call-main no-preview"}
         >
           {hasPreview ? (
             <span className="log-call-title-row">
               <span className="log-message-preview">{preview}</span>
-              <span className={statusBad ? "badge bad" : "badge ok"}>
-                {props.entry.httpStatus ?? "n/a"}
-              </span>
             </span>
           ) : null}
           <span className="log-call-subtitle">
-            {!hasPreview ? (
-              <span className="log-call-inline-status">
-                <span className={statusBad ? "badge bad" : "badge ok"}>
-                  {props.entry.httpStatus ?? "n/a"}
-                </span>
-              </span>
-            ) : null}
             <span className="log-model-flow">
               {originalModel &&
               originalModel !== props.entry.genAi.requestModel ? (

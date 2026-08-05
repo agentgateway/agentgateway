@@ -12,6 +12,7 @@ import {
   EnumSelector,
   type EnumSelectorOption,
 } from "../components/EnumSelector";
+import { CloudRegionCombobox } from "../components/CloudRegionCombobox";
 import {
   ConfirmDialog,
   Drawer,
@@ -23,9 +24,13 @@ import {
   YamlBlock,
 } from "../components/Primitives";
 import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
-import { getLlmGuardrails, setLlmGuardrails } from "../config";
+import { setLlmGuardrails } from "../config";
 import { useStickyQueryParam } from "../drawerRouteState";
-import { useGatewayConfig, useUpdateConfig } from "../hooks";
+import {
+  useDeleteConfigResource,
+  useLlmConfigData,
+  useUpsertPolicyResource,
+} from "../hooks";
 import { cleanEmpty } from "../policies/policyUtils";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import type { GatewayConfig, LlmGuardrail } from "../types";
@@ -191,14 +196,40 @@ function GuardrailProviderIcon(props: { src: string; alt: string }) {
 }
 
 export function GuardrailsPage() {
-  const config = useGatewayConfig();
-  const update = useUpdateConfig();
+  const { config, rawConfig, hybrid, policies, isLoading, error } =
+    useLlmConfigData();
+  const upsertPolicy = useUpsertPolicyResource();
+  const deleteResource = useDeleteConfigResource();
   const help = useSchemaHelp();
-  const guardrails = useMemo(
-    () => getLlmGuardrails(config.data),
-    [config.data],
+  const guardrails = (policies.guardrails ?? null) as LlmGuardrail | null;
+  const fileOwned = Boolean(
+    rawConfig.data?.llm?.policies &&
+    Object.prototype.hasOwnProperty.call(
+      rawConfig.data.llm.policies,
+      "guardrails",
+    ),
   );
+  const saving = upsertPolicy.isPending || deleteResource.isPending;
+  const saveError =
+    upsertPolicy.error?.message ?? deleteResource.error?.message ?? null;
   const [removeAllOpen, setRemoveAllOpen] = useState(false);
+
+  function save(nextGuardrails: LlmGuardrail) {
+    upsertPolicy.mutate({
+      kind: "llm.policy",
+      id: "guardrails",
+      value: nextGuardrails,
+    });
+  }
+
+  function remove() {
+    deleteResource.mutate(
+      { kind: "llm.policy", id: "guardrails" },
+      {
+        onSuccess: () => setRemoveAllOpen(false),
+      },
+    );
+  }
 
   return (
     <div className="page-stack">
@@ -210,7 +241,7 @@ export function GuardrailsPage() {
             <button
               className="button danger"
               type="button"
-              disabled={update.isPending}
+              disabled={saving || (hybrid && fileOwned)}
               onClick={() => setRemoveAllOpen(true)}
             >
               <Trash2 size={16} />
@@ -220,18 +251,18 @@ export function GuardrailsPage() {
         }
       />
 
-      {update.isError ? (
+      {saveError ? (
         <StatusBanner state="bad" title="Save failed">
-          {update.error.message}
+          {saveError}
         </StatusBanner>
       ) : null}
 
       <Panel>
-        {config.isLoading ? (
+        {isLoading ? (
           <StatusBanner state="loading" title="Loading guardrails" />
-        ) : config.isError ? (
+        ) : error ? (
           <StatusBanner state="bad" title="Configuration API unavailable">
-            {config.error.message}
+            {error.message}
           </StatusBanner>
         ) : (
           <GuardrailsEditor
@@ -239,11 +270,10 @@ export function GuardrailsPage() {
             initial={guardrails ?? emptyGuardrails()}
             config={config.data}
             help={help}
-            saving={update.isPending}
-            saveError={update.isError ? update.error.message : null}
-            onSave={(nextGuardrails) =>
-              update.mutate((next) => setLlmGuardrails(next, nextGuardrails))
-            }
+            databaseBacked={hybrid && !fileOwned}
+            saving={saving}
+            saveError={saveError}
+            onSave={save}
           />
         )}
       </Panel>
@@ -252,13 +282,9 @@ export function GuardrailsPage() {
           title="Remove all LLM guardrails?"
           destructive
           confirmLabel="Remove guardrails"
-          confirmDisabled={update.isPending}
+          confirmDisabled={saving}
           onCancel={() => setRemoveAllOpen(false)}
-          onConfirm={() =>
-            update.mutate((next) => setLlmGuardrails(next, null), {
-              onSuccess: () => setRemoveAllOpen(false),
-            })
-          }
+          onConfirm={remove}
         >
           <p>
             Remove all request and response guardrails? LLM traffic will no
@@ -273,6 +299,7 @@ export function GuardrailsPage() {
 function GuardrailsEditor(props: {
   initial: LlmGuardrail;
   config?: GatewayConfig | null;
+  databaseBacked?: boolean;
   help: SchemaHelp;
   saving: boolean;
   saveError?: string | null;
@@ -336,6 +363,14 @@ function GuardrailsEditor(props: {
       {dirty ? (
         <ConfigDiffSaveActions
           config={props.config}
+          resourceDiff={
+            props.databaseBacked
+              ? () => ({
+                  original: props.initial,
+                  modified: buildGuardrails(draft),
+                })
+              : undefined
+          }
           diffTitle="Guardrails config diff"
           saveLabel="Save guardrails"
           saving={props.saving}
@@ -1011,11 +1046,13 @@ function BedrockGuardFields(props: {
           "region",
         )}
       >
-        <input
+        <CloudRegionCombobox
+          cloud="aws"
+          ariaLabel="AWS region"
           value={props.guard.region}
-          onChange={(event) =>
+          onChange={(value) =>
             props.onChange({
-              region: event.target.value,
+              region: value,
             } as Partial<SupportedGuardDraft>)
           }
           placeholder="us-west-2"
@@ -1072,11 +1109,13 @@ function GoogleModelArmorFields(props: {
         )}
         hint="Optional. Defaults to us-central1."
       >
-        <input
+        <CloudRegionCombobox
+          cloud="google"
+          ariaLabel="Location"
           value={props.guard.location}
-          onChange={(event) =>
+          onChange={(value) =>
             props.onChange({
-              location: event.target.value,
+              location: value,
             } as Partial<SupportedGuardDraft>)
           }
           placeholder="us-central1"

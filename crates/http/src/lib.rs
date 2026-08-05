@@ -85,4 +85,29 @@ pub mod x_headers {
 		parts.scheme = Some(scheme);
 		Uri::from_parts(parts).unwrap_or(original)
 	}
+
+	/// Sets `x-ratelimit-limit`/`-remaining`/`-reset` for the most-constrained limit. No-op if any
+	/// is already present (e.g. from an upstream rate limit service) to avoid mixing header sets.
+	pub fn set_ratelimit_headers(
+		hm: &mut HeaderMap<HeaderValue>,
+		limit: u64,
+		remaining: u64,
+		reset_seconds: u64,
+	) {
+		if hm.contains_key(&X_RATELIMIT_LIMIT)
+			|| hm.contains_key(&X_RATELIMIT_REMAINING)
+			|| hm.contains_key(&X_RATELIMIT_RESET)
+		{
+			return;
+		}
+		insert_header(hm, X_RATELIMIT_LIMIT, limit);
+		insert_header(hm, X_RATELIMIT_REMAINING, remaining);
+		insert_header(hm, X_RATELIMIT_RESET, reset_seconds);
+	}
+
+	fn insert_header(hm: &mut HeaderMap<HeaderValue>, name: HeaderName, value: u64) {
+		if let Ok(hv) = HeaderValue::try_from(value.to_string()) {
+			hm.insert(name, hv);
+		}
+	}
 }

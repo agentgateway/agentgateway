@@ -223,6 +223,9 @@ type Settings struct {
 	// is deprecated in v2.1 and will not be supported in v2.2.
 	EnableInferExt bool `split_words:"true"`
 
+	// EnableAgentgatewayModels enables the experimental AgentgatewayModel API.
+	EnableAgentgatewayModels bool `split_words:"true" default:"false"`
+
 	// ProxyImageRegistry is the default image registry to use for the proxy image.
 	ProxyImageRegistry string `split_words:"true" default:"cr.agentgateway.dev"`
 	// ProxyImageRepository is the default image repository to use for the proxy image.
@@ -252,6 +255,17 @@ type Settings struct {
 
 	// EnableExperimentalGatewayAPIFeatures enables support for experimental features and APIs
 	EnableExperimentalGatewayAPIFeatures bool `split_words:"true" default:"true"`
+
+	// ControllerName is the value written to GatewayClass.spec.controllerName that this controller
+	// reconciles; Gateways referencing a GatewayClass with this controllerName are managed here.
+	// Defaults to wellknown.DefaultAgwControllerName ("agentgateway.dev/agentgateway").
+	// A value set programmatically via setup.Options.ControllerName takes precedence over this.
+	ControllerName string `split_words:"true" default:"agentgateway.dev/agentgateway"`
+
+	// AgentgatewayClassName is the name of the primary GatewayClass this controller creates and
+	// manages. Defaults to wellknown.DefaultAgwClassName ("agentgateway").
+	// A value set programmatically via setup.Options.AgentgatewayClassName takes precedence.
+	AgentgatewayClassName string `split_words:"true" default:"agentgateway"`
 
 	// GatewayClassParametersRefs configures the GatewayParameters references to set on the default GatewayClasses.
 	// Format: JSON map where keys are GatewayClass names and values are objects with "name" (required),

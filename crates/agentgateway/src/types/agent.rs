@@ -18,11 +18,12 @@ use rustls::ServerConfig;
 use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::server::danger::ClientCertVerifier;
 use rustls_pki_types::pem::{PemObject, SectionKind};
+use secrecy::SecretString;
 use serde::{Serialize, Serializer};
 use serde_json::Value;
 
 use crate::control::caclient::CaClient;
-use crate::http::auth::BackendAuth;
+use crate::http::auth::{BackendAuth, BackendAuthCredential, BackendAuthKind};
 use crate::http::authorization::RuleSet;
 use crate::http::backendtls::ResolvedBackendTLS;
 use crate::http::ext_proc::GrpcReferenceChannel;
@@ -577,33 +578,34 @@ impl JsonSchema for ServerTLSConfig {
 }
 
 pub fn parse_cert(cert: &[u8]) -> Result<Vec<CertificateDer<'static>>, anyhow::Error> {
-	let parsed = <(SectionKind, Vec<u8>)>::pem_slice_iter(cert).collect::<Result<Vec<_>, _>>()?;
+	let parsed = <(SectionKind, Vec<u8>)>::pem_slice_iter(cert)
+		.filter_map(|section| match section {
+			Ok((SectionKind::Certificate, der)) => Some(Ok(CertificateDer::from(der))),
+			Ok(_) => None,
+			Err(err) => Some(Err(err)),
+		})
+		.collect::<Result<Vec<_>, _>>()?;
 	if parsed.is_empty() {
 		return Err(anyhow!("no certificate"));
 	}
-
-	parsed
-		.into_iter()
-		.map(|(kind, der)| {
-			if kind != SectionKind::Certificate {
-				return Err(anyhow!("no certificate"));
-			}
-			Ok(CertificateDer::from(der))
-		})
-		.collect()
+	Ok(parsed)
 }
 
 pub fn parse_key(key: &[u8]) -> Result<PrivateKeyDer<'static>, anyhow::Error> {
-	let (kind, der) = <(SectionKind, Vec<u8>)>::from_pem_slice(key).map_err(|e| match e {
-		rustls_pki_types::pem::Error::NoItemsFound => anyhow!("no key"),
-		_ => anyhow!(e),
-	})?;
-	match kind {
-		SectionKind::PrivateKey => Ok(PrivateKeyDer::Pkcs8(der.into())),
-		SectionKind::RsaPrivateKey => Ok(PrivateKeyDer::Pkcs1(der.into())),
-		SectionKind::EcPrivateKey => Ok(PrivateKeyDer::Sec1(der.into())),
-		_ => Err(anyhow!("unsupported key")),
+	let mut parsed = None;
+	for section in <(SectionKind, Vec<u8>)>::pem_slice_iter(key) {
+		let (kind, der) = section?;
+		let key = match kind {
+			SectionKind::PrivateKey => PrivateKeyDer::Pkcs8(der.into()),
+			SectionKind::RsaPrivateKey => PrivateKeyDer::Pkcs1(der.into()),
+			SectionKind::EcPrivateKey => PrivateKeyDer::Sec1(der.into()),
+			_ => continue,
+		};
+		if parsed.replace(key).is_some() {
+			return Err(anyhow!("multiple private keys"));
+		}
 	}
+	parsed.ok_or_else(|| anyhow!("no key"))
 }
 #[derive(Debug, Clone, Eq, PartialEq, serde::Serialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
@@ -733,6 +735,21 @@ pub struct Route {
 pub type RouteKey = Strng;
 pub type RouteGroupKey = Strng;
 pub type RouteRuleName = Strng;
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelRoute {
+	pub key: RouteKey,
+	pub name: Strng,
+	pub kind: ModelRouteKind,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ModelRouteKind {
+	Concrete(crate::llm::model_router::ModelRoute),
+	Virtual(crate::llm::model_router::VirtualModelRoute),
+}
 
 #[apply(schema!)]
 #[derive(Hash, Eq, PartialEq)]
@@ -2642,6 +2659,7 @@ pub enum FrontendPolicy {
 pub enum TrafficPolicy {
 	Timeout(timeout::Policy),
 	Retry(retry::Policy),
+	Delay(http::delay::Policy),
 	#[serde(rename = "ai")]
 	AI(Arc<llm::Policy>),
 	Authorization(Authorization),
@@ -2688,7 +2706,7 @@ pub enum BackendTrafficPolicy {
 	#[serde(rename = "ai")]
 	AI(Arc<llm::Policy>),
 	ExtAuthz(Arc<ext_authz::ExtAuthz>),
-	SessionPersistence(http::sessionpersistence::Policy),
+	SessionAffinity(http::sessionaffinity::Policy),
 	Transformation(Arc<crate::http::transformation_cel::Transformation>),
 	Health(health::Policy),
 
@@ -2696,6 +2714,18 @@ pub enum BackendTrafficPolicy {
 	ResponseHeaderModifier(Arc<filters::HeaderModifier>),
 	RequestRedirect(filters::RequestRedirect),
 	RequestMirror(Vec<filters::RequestMirror>),
+}
+
+impl BackendTrafficPolicy {
+	pub fn backend_auth(auth: BackendAuthKind) -> Self {
+		Self::BackendAuth(BackendAuth::new(auth))
+	}
+	pub fn backend_auth_credentials(credentials: Vec<BackendAuthCredential>) -> Self {
+		Self::BackendAuth(BackendAuth {
+			kind: None,
+			credentials,
+		})
+	}
 }
 
 #[apply(schema!)]
@@ -2802,6 +2832,11 @@ pub struct McpAuthentication {
 	pub jwt_validator: Arc<crate::http::jwt::Jwt>,
 	pub mode: McpAuthenticationMode,
 	pub client_id: Option<String>,
+	#[serde(
+		skip_serializing_if = "Option::is_none",
+		serialize_with = "crate::serdes::ser_redact"
+	)]
+	pub client_secret: Option<SecretString>,
 }
 
 #[apply(schema_enum!)]
@@ -2843,7 +2878,9 @@ pub struct LocalMcpAuthentication {
 	/// Protected resource metadata returned to MCP clients.
 	pub resource_metadata: ResourceMetadata,
 	/// JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.
-	pub jwks: FileInlineOrRemote,
+	/// If omitted, the JWKS URL is derived from the issuer and provider.
+	#[serde(default)]
+	pub jwks: Option<FileInlineOrRemote>,
 	/// Controls whether MCP requests must include a valid JWT.
 	#[serde(default)]
 	pub mode: McpAuthenticationMode,
@@ -2855,48 +2892,72 @@ pub struct LocalMcpAuthentication {
 	pub jwt_validation_options: http::jwt::JWTValidationOptions,
 	/// OAuth client ID advertised to MCP clients when needed.
 	pub client_id: Option<String>,
+	/// OAuth client secret injected into proxied token requests for confidential clients.
+	/// Currently used by the `entra` provider, whose Web-platform app registrations require a
+	/// client secret at the token endpoint.
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub client_secret: Option<SecretString>,
 }
 
 impl LocalMcpAuthentication {
+	/// Derive the JWKS URL from the issuer and provider, for configs that do not set `jwks`.
+	fn derived_jwks_url(&self) -> anyhow::Result<::http::Uri> {
+		Ok(match &self.provider {
+			None | Some(McpIDP::Auth0 { .. }) | Some(McpIDP::Okta { .. }) => {
+				format!("{}/.well-known/jwks.json", self.issuer).parse()?
+			},
+			Some(McpIDP::Descope {}) => {
+				// For agentic issuers (https://api.descope.com/v1/apps/agentic/{project-id}/{server-id}),
+				// JWKS lives at the project level: https://api.descope.com/{project-id}/.well-known/jwks.json
+				let parsed: url::Url = self.issuer.parse()?;
+				let segments: Vec<&str> = parsed.path().trim_start_matches('/').split('/').collect();
+				if segments.len() >= 5
+					&& segments[0] == "v1"
+					&& segments[1] == "apps"
+					&& segments[2] == "agentic"
+				{
+					let project_id = segments[3];
+					let base = format!(
+						"{}://{}/{}",
+						parsed.scheme(),
+						parsed.host_str().unwrap_or_default(),
+						project_id
+					);
+					format!("{base}/.well-known/jwks.json").parse()?
+				} else {
+					format!("{}/.well-known/jwks.json", self.issuer).parse()?
+				}
+			},
+			Some(McpIDP::Keycloak { .. }) => {
+				format!("{}/protocol/openid-connect/certs", self.issuer).parse()?
+			},
+			Some(McpIDP::Authentik {}) => {
+				// authentik issuers look like https://<host>/application/o/<app-slug>/
+				// (note the trailing slash) and serve JWKS at {issuer}/jwks/.
+				format!("{}/jwks/", self.issuer.trim_end_matches('/')).parse()?
+			},
+			Some(McpIDP::Entra { .. }) => http::oauth::entra_endpoints(&self.issuer)
+				.map_err(|e| anyhow!(e))?
+				.jwks_uri
+				.parse()?,
+		})
+	}
+
 	pub fn as_jwt(&self) -> anyhow::Result<http::jwt::LocalJwtConfig> {
 		let jwks = match &self.jwks {
-			FileInlineOrRemote::Remote { url } => FileInlineOrRemote::Remote {
+			None => FileInlineOrRemote::Remote {
+				url: self.derived_jwks_url()?,
+			},
+			Some(FileInlineOrRemote::Remote { url }) => FileInlineOrRemote::Remote {
 				url: if !url.to_string().is_empty() {
 					url.clone()
 				} else {
-					match &self.provider {
-						None | Some(McpIDP::Auth0 { .. }) | Some(McpIDP::Okta { .. }) => {
-							format!("{}/.well-known/jwks.json", self.issuer).parse()?
-						},
-						Some(McpIDP::Descope {}) => {
-							// For agentic issuers (https://api.descope.com/v1/apps/agentic/{project-id}/{server-id}),
-							// JWKS lives at the project level: https://api.descope.com/{project-id}/.well-known/jwks.json
-							let parsed: url::Url = self.issuer.parse()?;
-							let segments: Vec<&str> = parsed.path().trim_start_matches('/').split('/').collect();
-							if segments.len() >= 5
-								&& segments[0] == "v1"
-								&& segments[1] == "apps"
-								&& segments[2] == "agentic"
-							{
-								let project_id = segments[3];
-								let base = format!(
-									"{}://{}/{}",
-									parsed.scheme(),
-									parsed.host_str().unwrap_or_default(),
-									project_id
-								);
-								format!("{base}/.well-known/jwks.json").parse()?
-							} else {
-								format!("{}/.well-known/jwks.json", self.issuer).parse()?
-							}
-						},
-						Some(McpIDP::Keycloak { .. }) => {
-							format!("{}/protocol/openid-connect/certs", self.issuer).parse()?
-						},
-					}
+					self.derived_jwks_url()?
 				},
 			},
-			FileInlineOrRemote::Inline(_) | FileInlineOrRemote::File { .. } => self.jwks.clone(),
+			Some(jwks @ (FileInlineOrRemote::Inline(_) | FileInlineOrRemote::File { .. })) => {
+				jwks.clone()
+			},
 		};
 
 		Ok(http::jwt::LocalJwtConfig::Single {
@@ -2924,6 +2985,7 @@ impl LocalMcpAuthentication {
 			jwt_validator: Arc::new(jwt),
 			mode: self.mode,
 			client_id: self.client_id.clone(),
+			client_secret: self.client_secret.clone(),
 		})
 	}
 }
@@ -2934,6 +2996,8 @@ pub enum McpIDP {
 	Keycloak {},
 	Okta {},
 	Descope {},
+	Authentik {},
+	Entra {},
 }
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -3224,6 +3288,16 @@ AwEHoUQDQgAEwWSdCtU7tQGYtpNpJXSB5VN4yT1lRXzHh8UOgWWqiYXX1WYHk8vf
 	}
 
 	#[test]
+	fn test_parse_multiple_keys() {
+		let key = include_bytes!("../../../../examples/mcp-tls/certs/key.pem");
+		let bundle = [key.as_slice(), key.as_slice()].concat();
+		assert_eq!(
+			parse_key(&bundle).unwrap_err().to_string(),
+			"multiple private keys"
+		);
+	}
+
+	#[test]
 	fn test_parse_key_ec_p384() {
 		let ec_key = b"-----BEGIN EC PRIVATE KEY-----
 MIGkAgEBBDDLaVsYgpuTvciGqF9ULn07Kk9k9bxvZxqMFQX3VIccWAMhP3qlKC9O
@@ -3441,6 +3515,27 @@ InvalidKeyData
 	}
 
 	#[test]
+	fn test_local_mcp_authentication_entra_provider() {
+		let yaml = r#"
+issuer: "https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/v2.0"
+audiences: ["api://client-id-guid", "client-id-guid"]
+jwks: '{"keys":[]}'
+provider:
+  entra: {}
+clientId: "client-id-guid"
+clientSecret: "s3cret"
+resourceMetadata:
+  mcpResourceUri: "mcp://test"
+"#;
+		// Parse via yamlviajson, matching how config files are loaded (map-style enum variants).
+		let auth: LocalMcpAuthentication = serdes::yamlviajson::from_str(yaml).unwrap();
+		assert!(matches!(auth.provider, Some(McpIDP::Entra {})));
+		assert_eq!(auth.client_id.as_deref(), Some("client-id-guid"));
+		assert!(auth.client_secret.is_some());
+		assert!(auth.as_jwt().is_ok());
+	}
+
+	#[test]
 	fn test_local_mcp_authentication_default_jwt_validation_options() {
 		let yaml = r#"
 issuer: "https://example.com"
@@ -3534,6 +3629,31 @@ jwtValidationOptions:
 					jwt_validation_options.required_claims.is_empty(),
 					"jwt_validation_options should be propagated to LocalJwtConfig"
 				);
+			},
+			_ => panic!("Expected LocalJwtConfig::Single"),
+		}
+	}
+
+	#[test]
+	fn test_local_mcp_authentication_authentik_jwks_derivation() {
+		let auth: LocalMcpAuthentication = serde_json::from_value(serde_json::json!({
+			"issuer": "https://authentik.example.com/application/o/mcp/",
+			"audiences": ["my-client-id"],
+			"provider": {"authentik": {}},
+			"resourceMetadata": {},
+		}))
+		.unwrap();
+		let jwt_config = auth.as_jwt().unwrap();
+
+		match jwt_config {
+			http::jwt::LocalJwtConfig::Single { jwks, .. } => match jwks {
+				FileInlineOrRemote::Remote { url } => {
+					assert_eq!(
+						url.to_string(),
+						"https://authentik.example.com/application/o/mcp/jwks/"
+					);
+				},
+				other => panic!("expected remote JWKS, got {other:?}"),
 			},
 			_ => panic!("Expected LocalJwtConfig::Single"),
 		}

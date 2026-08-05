@@ -1,12 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { Bot, Pencil, Plus, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   invalidProviderApiKey,
+  isDatabaseConfigResource,
   makeEmptyLlmProvider,
   providerDisplayName,
   providerLabel,
-  removeLlmProvider,
   upsertLlmProvider,
 } from "../config";
 import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
@@ -23,7 +23,11 @@ import {
 } from "../components/Primitives";
 import { useStickyQueryParam } from "../drawerRouteState";
 import { ProviderIcon } from "../components/ProviderIcon";
-import { useGatewayConfig, useUpdateConfig } from "../hooks";
+import {
+  useDeleteConfigResource,
+  useLlmConfigData,
+  useUpsertConfigResource,
+} from "../hooks";
 import { cleanEmpty } from "../policies/policyUtils";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import type {
@@ -35,14 +39,11 @@ import type {
 import { ProviderConfigEditor } from "./models/ProviderConfigEditor";
 
 export function ProvidersPage() {
-  const config = useGatewayConfig();
-  const update = useUpdateConfig();
+  const { config, hybrid, resources, models, providers, isLoading, error } =
+    useLlmConfigData();
+  const upsertResource = useUpsertConfigResource();
+  const deleteResource = useDeleteConfigResource();
   const help = useSchemaHelp();
-  const providers = useMemo(
-    () => config.data?.llm?.providers ?? [],
-    [config.data],
-  );
-  const models = useMemo(() => config.data?.llm?.models ?? [], [config.data]);
   const [editing, setEditing] = useState<{
     previousName?: string;
     provider: LlmProvider;
@@ -63,20 +64,59 @@ export function ProvidersPage() {
             provider: structuredClone(linkedProvider),
           }
         : null);
+  const editingDatabaseProvider = Boolean(
+    hybrid &&
+    activeEditing &&
+    (!activeEditing.previousName ||
+      isDatabaseConfigResource(
+        resources,
+        "llm.provider",
+        activeEditing.previousName,
+      )),
+  );
 
   function openNewProvider() {
+    resetSaves();
     setEditing(null);
     setProviderDrawer("new");
   }
 
   function openEditProvider(provider: LlmProvider) {
+    resetSaves();
     setEditing(null);
     setProviderDrawer(provider.name);
   }
 
   function closeProviderEditor() {
+    resetSaves();
     setEditing(null);
     setProviderDrawer(null, "replace");
+  }
+
+  const saving = upsertResource.isPending || deleteResource.isPending;
+  const saveError =
+    upsertResource.error?.message ?? deleteResource.error?.message ?? null;
+  const saved = upsertResource.isSuccess || deleteResource.isSuccess;
+
+  function resetSaves() {
+    upsertResource.reset();
+    deleteResource.reset();
+  }
+
+  function saveProvider(provider: LlmProvider, previousName?: string) {
+    upsertResource.mutate(
+      { kind: "llm.provider", value: provider, previousId: previousName },
+      { onSuccess: closeProviderEditor },
+    );
+  }
+
+  function deleteProvider(name: string) {
+    deleteResource.mutate(
+      { kind: "llm.provider", id: name },
+      {
+        onSuccess: () => setDeletingProvider(null),
+      },
+    );
   }
 
   return (
@@ -96,21 +136,19 @@ export function ProvidersPage() {
         }
       />
 
-      {update.isError ? (
+      {saveError ? (
         <StatusBanner state="bad" title="Save failed">
-          {update.error.message}
+          {saveError}
         </StatusBanner>
       ) : null}
-      {update.isSuccess ? (
-        <StatusBanner state="ok" title="Configuration saved" />
-      ) : null}
+      {saved ? <StatusBanner state="ok" title="Configuration saved" /> : null}
 
       <Panel>
-        {config.isLoading ? (
+        {isLoading ? (
           <StatusBanner state="loading" title="Loading providers" />
-        ) : config.isError ? (
+        ) : error ? (
           <StatusBanner state="bad" title="Configuration API unavailable">
-            {config.error.message}
+            {error.message}
           </StatusBanner>
         ) : providers.length === 0 ? (
           <EmptyState
@@ -133,6 +171,7 @@ export function ProvidersPage() {
               <thead>
                 <tr>
                   <th>Name</th>
+                  {hybrid ? <th>Source</th> : null}
                   <th>Provider</th>
                   <th>Upstream model</th>
                   <th>Used by</th>
@@ -142,9 +181,21 @@ export function ProvidersPage() {
               <tbody>
                 {providers.map((provider) => {
                   const usage = providerUsage(provider.name, models);
+                  const databaseBacked = isDatabaseConfigResource(
+                    resources,
+                    "llm.provider",
+                    provider.name,
+                  );
                   return (
                     <tr key={provider.name}>
                       <td className="strong">{provider.name}</td>
+                      {hybrid ? (
+                        <td>
+                          <span className="badge">
+                            {databaseBacked ? "Database" : "File"}
+                          </span>
+                        </td>
+                      ) : null}
                       <td>
                         <ProviderBadge
                           provider={
@@ -188,14 +239,20 @@ export function ProvidersPage() {
                           content={
                             usage.length
                               ? "Provider is referenced by models"
-                              : "Delete provider"
+                              : hybrid && !databaseBacked
+                                ? "File-owned providers cannot be deleted here"
+                                : "Delete provider"
                           }
                         >
                           <button
                             className="icon-button danger"
                             aria-label="Delete provider"
                             type="button"
-                            disabled={usage.length > 0 || update.isPending}
+                            disabled={
+                              usage.length > 0 ||
+                              saving ||
+                              (hybrid && !databaseBacked)
+                            }
                             onClick={() => setDeletingProvider(provider.name)}
                           >
                             <Trash2 size={16} />
@@ -216,18 +273,12 @@ export function ProvidersPage() {
           key={activeEditing.previousName ?? "new"}
           initial={activeEditing.provider}
           config={config.data}
+          databaseBacked={editingDatabaseProvider}
           previousName={activeEditing.previousName}
           help={help}
-          saving={update.isPending}
+          saving={saving}
           onCancel={closeProviderEditor}
-          onSave={(provider, previousName) =>
-            update.mutate(
-              (next) => upsertLlmProvider(next, provider, previousName),
-              {
-                onSuccess: closeProviderEditor,
-              },
-            )
-          }
+          onSave={saveProvider}
         />
       ) : null}
       {deletingProvider ? (
@@ -235,13 +286,9 @@ export function ProvidersPage() {
           title="Delete provider?"
           destructive
           confirmLabel="Delete provider"
-          confirmDisabled={update.isPending}
+          confirmDisabled={saving}
           onCancel={() => setDeletingProvider(null)}
-          onConfirm={() =>
-            update.mutate((next) => removeLlmProvider(next, deletingProvider), {
-              onSuccess: () => setDeletingProvider(null),
-            })
-          }
+          onConfirm={() => deleteProvider(deletingProvider)}
         >
           <p>
             Delete <strong>{deletingProvider}</strong>? This cannot be undone.
@@ -255,6 +302,7 @@ export function ProvidersPage() {
 function ProviderEditor(props: {
   initial: LlmProvider;
   config?: GatewayConfig;
+  databaseBacked: boolean;
   previousName?: string;
   help: SchemaHelp;
   saving: boolean;
@@ -291,7 +339,19 @@ function ProviderEditor(props: {
       footer={(requestClose) => (
         <ConfigDiffSaveActions
           config={props.config}
-          diffTitle="Provider config diff"
+          resourceDiff={
+            props.databaseBacked
+              ? {
+                  original: props.previousName ? props.initial : {},
+                  modified: preview ?? {},
+                }
+              : undefined
+          }
+          diffTitle={
+            props.databaseBacked
+              ? "Provider resource diff"
+              : "Provider config diff"
+          }
           saveLabel="Save provider"
           saving={props.saving}
           saveDisabled={!provider.name.trim()}

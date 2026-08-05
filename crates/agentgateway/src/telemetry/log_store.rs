@@ -20,9 +20,16 @@ static REQUEST_LOG_STORE: OnceLock<RequestLogStore> = OnceLock::new();
 static REQUEST_LOG_STORE_BACKLOG: AtomicUsize = AtomicUsize::new(0);
 
 #[apply(schema!)]
+#[derive(Eq, PartialEq)]
 pub struct Config {
 	/// Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.
 	pub url: String,
+	/// Maximum number of connections to open in this database's connection pool. Defaults to 5.
+	/// When the request log and config stores have matching database settings, they share one pool
+	/// with this limit.
+	#[serde(default)]
+	#[cfg_attr(feature = "schema", schemars(range(min = 1)))]
+	pub max_connections: Option<u32>,
 }
 
 #[derive(Clone)]
@@ -54,9 +61,16 @@ impl RequestLogStore {
 }
 
 pub async fn setup(cfg: &Config) -> anyhow::Result<RequestLogStoreGuard> {
+	setup_with_pool(cfg, None).await
+}
+
+pub async fn setup_with_pool(
+	cfg: &Config,
+	pool: Option<crate::database::DatabasePool>,
+) -> anyhow::Result<RequestLogStoreGuard> {
 	let (tx, rx) = crossbeam::channel::unbounded();
 	let (ready_tx, ready_rx) = oneshot::channel();
-	let writer = LogStoreWorker::new(rx, cfg.clone(), ready_tx)
+	let writer = LogStoreWorker::new(rx, cfg.clone(), pool, ready_tx)
 		.worker_thread("request-log-db-writer".to_string())?;
 	ready_rx
 		.await
@@ -172,6 +186,7 @@ type QueryResponse<T> = oneshot::Sender<anyhow::Result<T>>;
 struct LogStoreWorker {
 	receiver: Receiver<LogStoreMsg>,
 	cfg: Config,
+	pool: Option<crate::database::DatabasePool>,
 	ready_tx: Option<oneshot::Sender<anyhow::Result<()>>>,
 }
 
@@ -179,11 +194,13 @@ impl LogStoreWorker {
 	fn new(
 		receiver: Receiver<LogStoreMsg>,
 		cfg: Config,
+		pool: Option<crate::database::DatabasePool>,
 		ready_tx: oneshot::Sender<anyhow::Result<()>>,
 	) -> Self {
 		Self {
 			receiver,
 			cfg,
+			pool,
 			ready_tx: Some(ready_tx),
 		}
 	}
@@ -225,7 +242,7 @@ impl LogStoreWorker {
 				return;
 			},
 		};
-		let backend = match Backend::connect(&self.cfg).await {
+		let backend = match Backend::connect(&self.cfg, self.pool.take()).await {
 			Ok(backend) => backend,
 			Err(err) => {
 				self.notify_ready(Err(err));
@@ -670,15 +687,24 @@ enum Backend {
 }
 
 impl Backend {
-	async fn connect(cfg: &Config) -> anyhow::Result<Self> {
-		if cfg.url.starts_with("postgres://") || cfg.url.starts_with("postgresql://") {
-			Ok(Self::Postgres(
-				postgres::PostgresLogStore::connect(&cfg.url).await?,
-			))
-		} else {
-			Ok(Self::Sqlite(
-				sqlite::SqliteLogStore::connect(&cfg.url).await?,
-			))
+	async fn connect(
+		cfg: &Config,
+		pool: Option<crate::database::DatabasePool>,
+	) -> anyhow::Result<Self> {
+		let pool = match pool {
+			Some(pool) => pool,
+			None => {
+				crate::database::DatabasePool::connect_with_max_connections(&cfg.url, cfg.max_connections)
+					.await?
+			},
+		};
+		match pool {
+			crate::database::DatabasePool::Sqlite(pool) => {
+				Ok(Self::Sqlite(sqlite::SqliteLogStore::from_pool(pool).await?))
+			},
+			crate::database::DatabasePool::Postgres(pool) => Ok(Self::Postgres(
+				postgres::PostgresLogStore::from_pool(pool).await?,
+			)),
 		}
 	}
 

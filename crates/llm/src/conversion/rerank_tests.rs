@@ -135,7 +135,7 @@ fn test_vertex_rerank_uses_discovery_engine_host_and_ranking_path() {
 		crate::vertex::DISCOVERY_ENGINE_HOST.as_str(),
 		"discoveryengine.googleapis.com"
 	);
-	let path = provider.get_path_for_model(RouteType::Rerank, None, false);
+	let path = provider.get_path_for_model(RouteType::Rerank, None, false, false);
 	assert!(
 		path
 			.as_str()

@@ -9,9 +9,9 @@ use agent_core::strng;
 pub use agent_llm::tokenizer::{num_tokens_from_messages, preload_tokenizers};
 pub use agent_llm::{
 	AIError, CacheTokenConvention, ChatFormat, InputFormat, LLMInfo, LLMRequest, LLMRequestParams,
-	LLMResponse, PromptCachingConfig, Provider, ProviderState, RequestType, ResponseType, RouteType,
-	SimpleChatCompletionMessage, anthropic, conversion, copilot, custom, gemini,
-	logged_response_parsing, openai, types,
+	LLMResponse, LogContentFields, PromptCachingConfig, Provider, ProviderState, RequestType,
+	ResponseType, RouteType, SimpleChatCompletionMessage, anthropic, conversion, copilot, custom,
+	gemini, logged_response_parsing, openai, types,
 };
 use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
@@ -19,7 +19,9 @@ pub use policy::Policy;
 use rand::RngExt;
 use serde::de::DeserializeOwned;
 
-use crate::http::auth::{AppliedBackendAuthLocation, AwsAuth, AzureAuth, BackendAuth, GcpAuth};
+use crate::http::auth::{
+	AppliedBackendAuthLocation, AwsAuth, AzureAuth, BackendAuth, BackendAuthKind, GcpAuth,
+};
 use crate::http::jwt::Claims;
 use crate::http::{Body, Request, Response};
 use crate::proxy::httpproxy::PolicyClient;
@@ -35,6 +37,7 @@ pub mod cost;
 pub mod policy;
 
 use policy::streaming_guardrails::GuardedSseBody;
+pub use types::{OutputMessage, OutputMessagePart, ToolCall};
 
 use crate::cel::{Executor, LLMContext, RequestSnapshot};
 use crate::proxy::dtrace;
@@ -285,7 +288,7 @@ struct ChatStreamContext {
 	buffer_limit: usize,
 	logger: agent_llm::StreamingUsageGuard,
 	model: String,
-	include_completion_in_log: bool,
+	log_content: LogContentFields,
 	tool_name_map: Option<conversion::bedrock::BedrockToolNameMap>,
 }
 
@@ -301,6 +304,10 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 	&[
 		// Direct passthrough
 		chat(InputFormat::Responses, ChatFormat::OpenAIResponses),
+		// Quirk: normally we prefer direct passthrough. However, for Gemini, we can do a better job of
+		// the conversion than Google's OpenAI compatible endpoint, so we put this first. This will
+		// only actually be used for Vertex + Gemini models.
+		chat(InputFormat::Completions, ChatFormat::VertexGemini),
 		chat(InputFormat::Completions, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Messages, ChatFormat::AnthropicMessages),
 		// Missing: Bedrock --> Bedrock
@@ -320,37 +327,88 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 	]
 };
 
-fn render_openai_completions(req: types::ChatRequest<'_>) -> Result<Vec<u8>, AIError> {
+fn render_openai_completions(
+	req: types::ChatRequest,
+	ctx: &ChatRequestContext<'_>,
+) -> Result<Vec<u8>, AIError> {
 	match req {
-		types::ChatRequest::Completions(req) => {
-			serde_json::to_vec(req).map_err(AIError::RequestMarshal)
+		types::ChatRequest::Completions(mut req) => {
+			apply_openai_moderation(&mut req.moderation, ctx)?;
+			serde_json::to_vec(&req).map_err(AIError::RequestMarshal)
 		},
-		types::ChatRequest::Messages(req) => conversion::completions::from_messages::translate(req),
-		types::ChatRequest::Responses(req) => conversion::openai_compat::from_responses::translate(req),
+		types::ChatRequest::Messages(req) => {
+			let mut translated = conversion::completions::from_messages::translate_request(&req)?;
+			apply_openai_moderation(&mut translated.moderation, ctx)?;
+			serde_json::to_vec(&translated).map_err(AIError::RequestMarshal)
+		},
+		types::ChatRequest::Responses(req) => {
+			let mut translated = conversion::openai_compat::from_responses::translate_request(&req)?;
+			apply_openai_moderation(&mut translated.moderation, ctx)?;
+			serde_json::to_vec(&translated).map_err(AIError::RequestMarshal)
+		},
 	}
 }
 
-fn render_openai_responses(req: types::ChatRequest<'_>) -> Result<Vec<u8>, AIError> {
+fn render_openai_responses(
+	req: types::ChatRequest,
+	ctx: &ChatRequestContext<'_>,
+) -> Result<Vec<u8>, AIError> {
 	match req {
-		types::ChatRequest::Responses(req) => serde_json::to_vec(req).map_err(AIError::RequestMarshal),
+		types::ChatRequest::Responses(mut req) => {
+			apply_openai_moderation(&mut req.moderation, ctx)?;
+			serde_json::to_vec(&req).map_err(AIError::RequestMarshal)
+		},
 		_ => Err(AIError::UnsupportedConversion(strng::literal!(
 			"expected responses request"
 		))),
 	}
 }
 
-fn render_anthropic_messages(req: types::ChatRequest<'_>) -> Result<Vec<u8>, AIError> {
+fn apply_openai_moderation(
+	request_moderation: &mut Option<serde_json::Value>,
+	ctx: &ChatRequestContext<'_>,
+) -> Result<(), AIError> {
+	let Some(moderation) = (match ctx.provider {
+		AIProvider::OpenAI(provider) => provider.moderation.as_ref(),
+		_ => None,
+	}) else {
+		return Ok(());
+	};
+	*request_moderation = Some(serde_json::to_value(moderation).map_err(AIError::RequestMarshal)?);
+	Ok(())
+}
+
+fn render_anthropic_messages(req: types::ChatRequest) -> Result<Vec<u8>, AIError> {
 	match req {
-		types::ChatRequest::Completions(req) => conversion::messages::from_completions::translate(req),
-		types::ChatRequest::Messages(req) => serde_json::to_vec(req).map_err(AIError::RequestMarshal),
+		types::ChatRequest::Completions(req) => conversion::messages::from_completions::translate(&req),
+		types::ChatRequest::Messages(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
 		types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"responses to messages"
 		))),
 	}
 }
 
+fn render_vertex_gemini(
+	req: types::ChatRequest,
+	ctx: &ChatRequestContext<'_>,
+) -> Result<Vec<u8>, AIError> {
+	let AIProvider::Vertex(provider) = ctx.provider else {
+		return Err(AIError::UnsupportedConversion(strng::literal!(
+			"expected vertex provider"
+		)));
+	};
+	match req {
+		types::ChatRequest::Completions(req) => {
+			conversion::vertex_gemini::from_completions::translate(&req, provider.model.as_deref())
+		},
+		_ => Err(AIError::UnsupportedConversion(strng::literal!(
+			"vertex gemini only supports completions input"
+		))),
+	}
+}
+
 fn render_bedrock_converse(
-	req: types::ChatRequest<'_>,
+	req: types::ChatRequest,
 	ctx: &ChatRequestContext<'_>,
 ) -> Result<RenderedChatRequest, AIError> {
 	let AIProvider::Bedrock(provider) = ctx.provider else {
@@ -360,16 +418,16 @@ fn render_bedrock_converse(
 	};
 	let bedrock = match req {
 		types::ChatRequest::Completions(req) => conversion::bedrock::from_completions::translate(
-			req,
+			&req,
 			provider,
 			Some(ctx.headers),
 			ctx.prompt_caching,
 		),
 		types::ChatRequest::Messages(req) => {
-			conversion::bedrock::from_messages::translate(req, provider, Some(ctx.headers))
+			conversion::bedrock::from_messages::translate(&req, provider, Some(ctx.headers))
 		},
 		types::ChatRequest::Responses(req) => conversion::bedrock::from_responses::translate(
-			req,
+			&req,
 			provider,
 			Some(ctx.headers),
 			ctx.prompt_caching,
@@ -403,22 +461,29 @@ impl ChatTranslation {
 				InputFormat::Responses => custom::ProviderFormat::Responses,
 				_ => unreachable!("chat translation selected for non-chat input"),
 			},
+			ChatFormat::VertexGemini => custom::ProviderFormat::Completions,
 		}
 	}
 
 	fn render_request(
 		&self,
-		req: types::ChatRequest<'_>,
+		req: types::ChatRequest,
 		ctx: &ChatRequestContext<'_>,
 	) -> Result<RenderedChatRequest, AIError> {
 		let body = match self.output {
-			ChatFormat::OpenAICompletions => render_openai_completions(req),
-			ChatFormat::OpenAIResponses => render_openai_responses(req),
+			ChatFormat::OpenAICompletions => render_openai_completions(req, ctx),
+			ChatFormat::OpenAIResponses => render_openai_responses(req, ctx),
 			ChatFormat::AnthropicMessages if matches!(ctx.provider, AIProvider::Vertex(_)) => {
 				vertex::prepare_anthropic_message_body(render_anthropic_messages(req)?)
 			},
 			ChatFormat::AnthropicMessages => render_anthropic_messages(req),
 			ChatFormat::BedrockConverse => return render_bedrock_converse(req, ctx),
+			ChatFormat::VertexGemini => {
+				return Ok(RenderedChatRequest {
+					body: render_vertex_gemini(req, ctx)?,
+					provider_state: Some(ProviderState::VertexGemini),
+				});
+			},
 		}?;
 		Ok(RenderedChatRequest {
 			body,
@@ -487,22 +552,40 @@ impl ChatTranslation {
 					self.input
 				))),
 			},
+			ChatFormat::VertexGemini => match self.input {
+				InputFormat::Completions => {
+					conversion::vertex_gemini::to_completions::translate_response(bytes)
+				},
+				_ => Err(AIError::UnsupportedConversion(strng::format!(
+					"from {:?} to {:?}",
+					self.output,
+					self.input
+				))),
+			},
 		}
 	}
 
 	fn stream(&self, resp: Response, ctx: ChatStreamContext) -> Response {
 		match self.output {
 			ChatFormat::OpenAICompletions => match self.input {
-				InputFormat::Completions => conversion::completions::passthrough_stream(
-					ctx.logger,
-					ctx.include_completion_in_log,
-					resp,
-				),
+				InputFormat::Completions => {
+					conversion::completions::passthrough_stream(ctx.logger, ctx.log_content, resp)
+				},
 				InputFormat::Messages => resp.map(|b| {
-					conversion::completions::from_messages::translate_stream(b, ctx.buffer_limit, ctx.logger)
+					conversion::completions::from_messages::translate_stream(
+						b,
+						ctx.buffer_limit,
+						ctx.logger,
+						ctx.log_content,
+					)
 				}),
 				InputFormat::Responses => resp.map(|b| {
-					conversion::openai_compat::to_responses::translate_stream(b, ctx.buffer_limit, ctx.logger)
+					conversion::openai_compat::to_responses::translate_stream(
+						b,
+						ctx.buffer_limit,
+						ctx.logger,
+						ctx.log_content,
+					)
 				}),
 				_ => resp,
 			},
@@ -513,7 +596,7 @@ impl ChatTranslation {
 						b,
 						ctx.buffer_limit,
 						ctx.logger,
-						ctx.include_completion_in_log,
+						ctx.log_content,
 					)
 				}),
 				_ => resp,
@@ -521,15 +604,15 @@ impl ChatTranslation {
 
 			ChatFormat::AnthropicMessages => match self.input {
 				InputFormat::Messages => resp.map(|b| {
-					conversion::messages::passthrough_stream(
+					conversion::messages::passthrough_stream(b, ctx.buffer_limit, ctx.logger, ctx.log_content)
+				}),
+				InputFormat::Completions => resp.map(|b| {
+					conversion::messages::from_completions::translate_stream(
 						b,
 						ctx.buffer_limit,
 						ctx.logger,
-						ctx.include_completion_in_log,
+						ctx.log_content,
 					)
-				}),
-				InputFormat::Completions => resp.map(|b| {
-					conversion::messages::from_completions::translate_stream(b, ctx.buffer_limit, ctx.logger)
 				}),
 				_ => resp,
 			},
@@ -545,6 +628,7 @@ impl ChatTranslation {
 							ctx.logger,
 							&ctx.model,
 							&msg,
+							ctx.log_content,
 							tool_name_map,
 						)
 					})
@@ -559,7 +643,7 @@ impl ChatTranslation {
 							ctx.logger,
 							&ctx.model,
 							&msg,
-							ctx.include_completion_in_log,
+							ctx.log_content,
 							tool_name_map,
 						)
 					})
@@ -574,10 +658,24 @@ impl ChatTranslation {
 							ctx.logger,
 							&ctx.model,
 							&msg,
+							ctx.log_content,
 							tool_name_map,
 						)
 					})
 				},
+				_ => resp,
+			},
+
+			ChatFormat::VertexGemini => match self.input {
+				InputFormat::Completions => resp.map(|b| {
+					conversion::vertex_gemini::to_completions::translate_stream(
+						b,
+						ctx.buffer_limit,
+						strng::new(&ctx.model),
+						ctx.logger,
+						ctx.log_content,
+					)
+				}),
 				_ => resp,
 			},
 		}
@@ -656,6 +754,11 @@ impl ChatTranslation {
 				},
 				_ => unsupported(),
 			},
+
+			ChatFormat::VertexGemini => match format {
+				ChatErrorFormat::Google => conversion::completions::translate_google_error(bytes),
+				_ => unsupported(),
+			},
 		}
 	}
 }
@@ -669,11 +772,18 @@ pub enum RequestResult {
 		upstream_route_type: RouteType,
 	},
 	Rejected(Response),
+	GuardrailRejected {
+		response: Response,
+		guardrail: &'static str,
+	},
 }
 
 enum PreparedRequest {
 	Ready(LLMRequest),
-	Rejected(Response),
+	GuardrailRejected {
+		response: Response,
+		guardrail: &'static str,
+	},
 }
 
 struct BufferedResponse {
@@ -786,6 +896,9 @@ impl AIProvider {
 			AIProvider::Vertex(p) if p.is_anthropic_model(request_model) => {
 				vec![ChatFormat::AnthropicMessages]
 			},
+			AIProvider::Vertex(p) if p.is_gemini_model(request_model) => {
+				vec![ChatFormat::VertexGemini, ChatFormat::OpenAICompletions]
+			},
 			AIProvider::Vertex(_) => vec![ChatFormat::OpenAICompletions],
 
 			AIProvider::Custom(p) => p
@@ -816,6 +929,7 @@ impl AIProvider {
 			(_, ChatFormat::BedrockConverse) => ChatErrorFormat::Bedrock,
 			(_, ChatFormat::AnthropicMessages) => ChatErrorFormat::Anthropic,
 			(_, ChatFormat::OpenAICompletions | ChatFormat::OpenAIResponses) => ChatErrorFormat::OpenAI,
+			(_, ChatFormat::VertexGemini) => ChatErrorFormat::Google,
 		}
 	}
 
@@ -880,26 +994,29 @@ impl AIProvider {
 		Some(match self {
 			AIProvider::OpenAI(_) | AIProvider::Gemini(_) | AIProvider::Anthropic(_) => btls,
 			AIProvider::Copilot(_) => BackendPolicies {
-				backend_auth: Some(BackendAuth::Copilot),
+				backend_auth: Some(BackendAuth::new(BackendAuthKind::Copilot)),
 				..btls
 			},
 			AIProvider::Vertex(_) => BackendPolicies {
-				backend_auth: Some(BackendAuth::Gcp(GcpAuth::default())),
+				backend_auth: Some(BackendAuth::new(BackendAuthKind::Gcp(GcpAuth::default()))),
 				..btls
 			},
 			AIProvider::Bedrock(p) => BackendPolicies {
-				backend_auth: Some(BackendAuth::Aws(AwsAuth::Implicit {
+				backend_auth: Some(BackendAuth::new(BackendAuthKind::Aws(AwsAuth::Implicit {
 					service_name: None,
+					region: None,
 					assume_role: None,
 					source_credentials_cache: p.source_credentials_cache.clone(),
 					assume_role_cache: p.assume_role_cache.clone(),
-				})),
+				}))),
 				..btls
 			},
 			AIProvider::Azure(p) => BackendPolicies {
-				backend_auth: Some(BackendAuth::Azure(AzureAuth::Implicit {
-					cached_cred: p.cached_cred.clone(),
-				})),
+				backend_auth: Some(BackendAuth::new(BackendAuthKind::Azure(
+					AzureAuth::Implicit {
+						cached_cred: p.cached_cred.clone(),
+					},
+				))),
 				..btls
 			},
 			AIProvider::Custom(_) => return None,
@@ -1065,9 +1182,13 @@ impl AIProvider {
 			AIProvider::Vertex(provider) => {
 				let request_model = llm_request.map(|l| l.request_model.as_str());
 				let streaming = llm_request.map(|l| l.streaming).unwrap_or(false);
+				let native_gemini = llm_request
+					.and_then(|l| l.provider_state.as_ref())
+					.is_some_and(|s| matches!(s, ProviderState::VertexGemini));
 				http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
-						let path = provider.get_path_for_model(route_type, request_model, streaming);
+						let path =
+							provider.get_path_for_model(route_type, request_model, streaming, native_gemini);
 						let path = Self::with_path_prefix(&path, path_prefix);
 						Self::set_path_and_query(uri, &path)?;
 						Ok(())
@@ -1287,7 +1408,7 @@ impl AIProvider {
 				parts,
 				tokenize,
 				log,
-				|req| types::ChatRequest::Completions(req),
+				types::ChatRequest::Completions,
 			)
 			.await
 	}
@@ -1314,7 +1435,7 @@ impl AIProvider {
 				parts,
 				tokenize,
 				log,
-				|req| types::ChatRequest::Messages(req),
+				types::ChatRequest::Messages,
 			)
 			.await
 	}
@@ -1401,7 +1522,7 @@ impl AIProvider {
 				parts,
 				tokenize,
 				log,
-				|req| types::ChatRequest::Responses(req),
+				types::ChatRequest::Responses,
 			)
 			.await
 	}
@@ -1599,14 +1720,18 @@ impl AIProvider {
 			if original_format.supports_prompt_guard() {
 				let http_headers = &parts.headers;
 				let claims = parts.extensions.get::<Claims>().cloned();
-				if let Some(dr) = p
-					.apply_prompt_guard(backend_info, req, http_headers, claims)
+				let original = log.as_ref().and_then(|l| l.request_snapshot.clone());
+				if let Some((response, guardrail)) = p
+					.apply_prompt_guard(backend_info, req, http_headers, claims, original.as_deref())
 					.await
 					.map_err(|e| {
 						warn!("failed to call prompt guard webhook: {e}");
 						AIError::PromptWebhookError
 					})? {
-					return Ok(PreparedRequest::Rejected(dr));
+					return Ok(PreparedRequest::GuardrailRejected {
+						response,
+						guardrail,
+					});
 				}
 			}
 		}
@@ -1641,7 +1766,7 @@ impl AIProvider {
 	) -> Result<RequestResult, AIError>
 	where
 		T: RequestType,
-		F: for<'a> FnOnce(&'a T) -> types::ChatRequest<'a>,
+		F: FnOnce(T) -> types::ChatRequest,
 	{
 		let request_model = if req.supports_model() {
 			req.model().as_deref().map(str::to_string)
@@ -1664,11 +1789,19 @@ impl AIProvider {
 			.await?;
 		let mut llm_info = match prepared {
 			PreparedRequest::Ready(llm_info) => llm_info,
-			PreparedRequest::Rejected(resp) => return Ok(RequestResult::Rejected(resp)),
+			PreparedRequest::GuardrailRejected {
+				response,
+				guardrail,
+			} => {
+				return Ok(RequestResult::GuardrailRejected {
+					response,
+					guardrail,
+				});
+			},
 		};
 
 		let rendered = chat_translation.render_request(
-			chat_request(&req),
+			chat_request(req),
 			&ChatRequestContext {
 				provider: self,
 				headers: &parts.headers,
@@ -1733,7 +1866,15 @@ impl AIProvider {
 			.await?;
 		let llm_info = match prepared {
 			PreparedRequest::Ready(llm_info) => llm_info,
-			PreparedRequest::Rejected(resp) => return Ok(RequestResult::Rejected(resp)),
+			PreparedRequest::GuardrailRejected {
+				response,
+				guardrail,
+			} => {
+				return Ok(RequestResult::GuardrailRejected {
+					response,
+					guardrail,
+				});
+			},
 		};
 		let request_model = llm_info.request_model.as_str();
 		let body = render(self, &req, &parts, request_model)?;
@@ -1756,7 +1897,7 @@ impl AIProvider {
 		rate_limit: LLMResponsePolicies,
 		req_snapshot: Option<Arc<RequestSnapshot>>,
 		log: AsyncLog<llm::LLMInfo>,
-		include_completion_in_log: bool,
+		log_content: LogContentFields,
 		model_catalog: Option<&Arc<cost::ModelCatalog>>,
 		resp: Response,
 	) -> Result<Response, AIError> {
@@ -1770,7 +1911,7 @@ impl AIProvider {
 				rate_limit,
 				req_snapshot,
 				log,
-				include_completion_in_log,
+				log_content,
 				model_catalog.cloned(),
 				resp,
 			);
@@ -1797,7 +1938,7 @@ impl AIProvider {
 						rate_limit,
 						req_snapshot,
 						log,
-						include_completion_in_log,
+						log_content,
 						model_catalog,
 						buffered,
 					)
@@ -1814,7 +1955,7 @@ impl AIProvider {
 		rate_limit: LLMResponsePolicies,
 		req_snapshot: Option<Arc<RequestSnapshot>>,
 		log: AsyncLog<llm::LLMInfo>,
-		include_completion_in_log: bool,
+		log_content: LogContentFields,
 		model_catalog: Option<&cost::ModelCatalog>,
 		buffered: BufferedResponse,
 	) -> Result<Response, AIError> {
@@ -1838,6 +1979,7 @@ impl AIProvider {
 				resp.as_mut(),
 				&prompt_guard_headers,
 				&rate_limit.prompt_guard,
+				req_snapshot.as_deref(),
 			)
 			.await
 			.map_err(|e| {
@@ -1847,7 +1989,7 @@ impl AIProvider {
 				return Ok(dr);
 			}
 
-			let llm_resp = resp.to_llm_response(include_completion_in_log);
+			let llm_resp = resp.to_llm_response(log_content);
 			let body = resp.serialize().map_err(AIError::ResponseParsing)?;
 			(llm_resp, Bytes::copy_from_slice(&body))
 		};
@@ -1899,7 +2041,7 @@ impl AIProvider {
 		if encoding.is_some() {
 			parts
 				.extensions
-				.insert(crate::cel::BufferedBody(bytes.clone()));
+				.insert(crate::cel::BufferedBody::complete(bytes.clone()));
 			parts.headers.remove(header::CONTENT_ENCODING);
 			parts.headers.remove(header::TRANSFER_ENCODING);
 		}
@@ -2054,21 +2196,36 @@ impl AIProvider {
 					headers,
 					&req.request_model,
 				)?;
-				let llm_resp = translated.to_llm_response(false);
+				let llm_resp = translated.to_llm_response(LogContentFields::default());
 				let body = translated.serialize().map_err(AIError::ResponseParsing)?;
 				Ok((llm_resp, Bytes::from(body)))
+			},
+			AIProvider::Copilot(_) => {
+				let mut resp: serde_json::Map<String, serde_json::Value> =
+					serde_json::from_slice(&bytes).map_err(logged_response_parsing(&bytes))?;
+				resp
+					.entry("object".to_string())
+					.or_insert_with(|| serde_json::Value::String("list".to_string()));
+				resp
+					.entry("model".to_string())
+					.or_insert_with(|| serde_json::Value::String(req.request_model.to_string()));
+				let normalized = serde_json::to_vec(&resp).map_err(AIError::ResponseParsing)?;
+				let resp: types::embeddings::Response =
+					serde_json::from_slice(&normalized).map_err(logged_response_parsing(&normalized))?;
+				let llm_resp = resp.to_llm_response(LogContentFields::default());
+				Ok((llm_resp, Bytes::from(normalized)))
 			},
 			AIProvider::Vertex(p) if !p.is_anthropic_model(Some(&req.request_model)) => {
 				let translated =
 					conversion::vertex::from_embeddings::translate_response(&bytes, &req.request_model)?;
-				let llm_resp = translated.to_llm_response(false);
+				let llm_resp = translated.to_llm_response(LogContentFields::default());
 				let body = translated.serialize().map_err(AIError::ResponseParsing)?;
 				Ok((llm_resp, Bytes::from(body)))
 			},
 			_ => {
 				let resp: types::embeddings::Response =
 					serde_json::from_slice(&bytes).map_err(logged_response_parsing(&bytes))?;
-				Ok((resp.to_llm_response(false), bytes))
+				Ok((resp.to_llm_response(LogContentFields::default()), bytes))
 			},
 		}
 	}
@@ -2077,20 +2234,20 @@ impl AIProvider {
 		match self {
 			AIProvider::Bedrock(_) => {
 				let translated = conversion::bedrock::from_rerank::translate_response(&bytes)?;
-				let llm_resp = translated.to_llm_response(false);
+				let llm_resp = translated.to_llm_response(LogContentFields::default());
 				let body = translated.serialize().map_err(AIError::ResponseParsing)?;
 				Ok((llm_resp, Bytes::from(body)))
 			},
 			AIProvider::Vertex(_) => {
 				let translated = conversion::vertex::from_rerank::translate_response(&bytes)?;
-				let llm_resp = translated.to_llm_response(false);
+				let llm_resp = translated.to_llm_response(LogContentFields::default());
 				let body = translated.serialize().map_err(AIError::ResponseParsing)?;
 				Ok((llm_resp, Bytes::from(body)))
 			},
 			_ => {
 				let resp =
 					types::rerank::parse_response_lenient(&bytes).map_err(logged_response_parsing(&bytes))?;
-				Ok((resp.to_llm_response(false), bytes))
+				Ok((resp.to_llm_response(LogContentFields::default()), bytes))
 			},
 		}
 	}
@@ -2134,7 +2291,7 @@ impl AIProvider {
 		response_policies: LLMResponsePolicies,
 		req_snapshot: Option<Arc<RequestSnapshot>>,
 		log: AsyncLog<llm::LLMInfo>,
-		include_completion_in_log: bool,
+		log_content: LogContentFields,
 		model_catalog: Option<Arc<cost::ModelCatalog>>,
 		resp: Response,
 	) -> Result<Response, AIError> {
@@ -2195,7 +2352,11 @@ impl AIProvider {
 				request: vec![],
 				response: response_policies.prompt_guard.clone(),
 			};
-			temp_guard.begin_streaming_response_guard(&client, &prompt_guard_headers)
+			temp_guard.begin_streaming_response_guard(
+				&client,
+				&prompt_guard_headers,
+				req_snapshot.clone(),
+			)
 		} else {
 			vec![]
 		};
@@ -2222,7 +2383,7 @@ impl AIProvider {
 					buffer_limit: buffer,
 					logger,
 					model: model.to_string(),
-					include_completion_in_log,
+					log_content,
 					tool_name_map: bedrock_tool_name_map,
 				},
 			)

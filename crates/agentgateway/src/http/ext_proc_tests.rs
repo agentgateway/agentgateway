@@ -35,7 +35,7 @@ use crate::types::agent::{
 	BackendTarget, BackendTrafficPolicy, PolicyInheritance, PolicyTarget, SimpleBackendReference,
 	Target, TargetedPolicy,
 };
-use crate::types::discovery::NamespacedHostname;
+use crate::types::discovery::{AppProtocol, NamespacedHostname};
 use crate::*;
 
 // Processing-option decoding and default behavior.
@@ -2267,6 +2267,10 @@ async fn named_backend(body: &'static str) -> MockServer {
 }
 
 fn configure_standalone_service(t: &TestBind) {
+	configure_standalone_service_with_app_protocol(t, None);
+}
+
+fn configure_standalone_service_with_app_protocol(t: &TestBind, app_protocol: Option<AppProtocol>) {
 	use crate::types::discovery::{NetworkAddress, Service};
 
 	let service = Service {
@@ -2278,6 +2282,9 @@ fn configure_standalone_service(t: &TestBind) {
 			address: "127.0.0.1".parse().unwrap(),
 		}],
 		ports: HashMap::from([(STANDALONE_SERVICE_PORT, STANDALONE_SERVICE_PORT)]),
+		app_protocols: app_protocol
+			.map(|app_protocol| HashMap::from([(STANDALONE_SERVICE_PORT, app_protocol)]))
+			.unwrap_or_default(),
 		..Default::default()
 	};
 
@@ -2407,6 +2414,67 @@ mod standalone_inference_routing {
 				.len(),
 			1,
 			"EPP-selected endpoint should receive traffic",
+		);
+	}
+
+	#[tokio::test]
+	async fn standalone_inference_routing_h2c_service_uses_http2_upstream_for_grpc() {
+		let backend = simple_mock().await;
+		let backend_addr = *backend.address();
+		let request_headers_seen = Arc::new(AtomicUsize::new(0));
+		let ext_proc = ExtProcMock::new({
+			let request_headers_seen = request_headers_seen.clone();
+			move || StandaloneInferenceRouter::new(Some(backend_addr), request_headers_seen.clone())
+		})
+		.spawn()
+		.await;
+
+		let mut t = setup_proxy_test("{}").unwrap().with_bind(simple_bind());
+		configure_standalone_service_with_app_protocol(&t, Some(AppProtocol::Http2));
+		t.attach_route(json!({
+			"name": "standalone-epp-grpc",
+			"backends": [
+				{
+					"service": {
+						"name": STANDALONE_SERVICE_REF,
+						"port": STANDALONE_SERVICE_PORT,
+					},
+					"policies": {
+						"inferenceRouting": {
+							"endpointPicker": {
+								"host": ext_proc.address.to_string(),
+							},
+							"destinationMode": "passthrough",
+						},
+					},
+				}
+			],
+		}))
+		.await;
+		let io = t.serve_http2(BIND_KEY);
+
+		let res = crate::proxy::request_builder::RequestBuilder::new(
+			Method::POST,
+			"http://lo/inference.GRPC/Generate",
+		)
+		.version(::http::Version::HTTP_2)
+		.header(::http::header::CONTENT_TYPE, "application/grpc")
+		.body(Body::from(vec![0, 0, 0, 0, 0]))
+		.send(io)
+		.await
+		.unwrap();
+		assert_eq!(res.status(), 200);
+
+		let upstream = read_body(res.into_body()).await;
+		assert_eq!(upstream.version, ::http::Version::HTTP_2);
+		assert_eq!(
+			upstream.headers.get(::http::header::CONTENT_TYPE).unwrap(),
+			"application/grpc",
+		);
+		assert_eq!(
+			request_headers_seen.load(Ordering::SeqCst),
+			1,
+			"gRPC inference routing should consult EPP before the HTTP/2 upstream call",
 		);
 	}
 
@@ -3473,6 +3541,425 @@ mod header_mutations {
 		assert_eq!(values[0], "existing");
 		assert_eq!(values[1], "new-value");
 		assert_eq!(res.headers().get("x-new").unwrap(), "added");
+	}
+}
+
+mod connect_authority_mutation {
+	use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+	use super::*;
+	use crate::types::agent::{Backend, ResourceName};
+
+	#[derive(Clone)]
+	struct RewriteAuthorityExtProc {
+		target: String,
+	}
+
+	#[async_trait::async_trait]
+	impl Handler for RewriteAuthorityExtProc {
+		async fn handle_request_headers(
+			&mut self,
+			_headers: &HttpHeaders,
+			sender: &Sender<Result<ProcessingResponse, Status>>,
+		) -> Result<(), Status> {
+			let _ = sender
+				.send(request_header_response(Some(CommonResponse {
+					header_mutation: Some(HeaderMutation {
+						set_headers: vec![HeaderValueOption {
+							header: Some(HeaderValue {
+								key: ":authority".to_string(),
+								value: self.target.clone(),
+								raw_value: self.target.clone().into_bytes(),
+							}),
+							append: None,
+							append_action: HeaderAppendAction::OverwriteIfExistsOrAdd.into(),
+						}],
+						remove_headers: vec![],
+					}),
+					..Default::default()
+				})))
+				.await;
+			Ok(())
+		}
+	}
+
+	/// A CONNECT request's URI is schemeless authority-form. ext_proc rewrites
+	/// `:authority` to point at a different backend than the client requested --
+	/// the same mutation shape that works fine for a normal GET/POST. Expect the
+	/// tunnel to establish against the rewritten target.
+	#[tokio::test]
+	async fn connect_ext_proc_authority_rewrite_to_dynamic_backend() {
+		let worker = body_mock(b"WORKER-MARKER").await;
+		let worker_addr = worker.address().to_string();
+
+		let ext_proc = ExtProcMock::new(move || RewriteAuthorityExtProc {
+			target: worker_addr.clone(),
+		})
+		.spawn()
+		.await;
+
+		let dynamic_backend = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), ());
+		let t = setup_proxy_test("{}").unwrap();
+		t.inputs()
+			.stores
+			.binds
+			.write()
+			.insert_backend(dynamic_backend.name(), dynamic_backend.into());
+		let t = t
+			.with_backend(ext_proc.address)
+			.with_bind(simple_bind())
+			.with_route(basic_named_route("/dynamic".into()))
+			.with_connect_enabled();
+		let t = t
+			.attach_route_policy_builder(json!({
+				"extProc": {
+					"host": ext_proc.address,
+					"failureMode": "failClosed",
+				}
+			}))
+			.await;
+
+		let mut io = t.serve(BIND_KEY);
+		// The "decoy" is a reachable server standing in for the client's original
+		// CONNECT target -- reachable so that if the (broken) authority mutation
+		// really is a no-op, the tunnel establishes against IT rather than merely
+		// failing DNS resolution and masking the bug.
+		let decoy = body_mock(b"DECOY-MARKER").await;
+		let connect_target = decoy.address().to_string();
+		io.write_all(
+			format!("CONNECT {connect_target} HTTP/1.1\r\nHost: {connect_target}\r\n\r\n").as_bytes(),
+		)
+		.await
+		.unwrap();
+
+		let mut response = Vec::new();
+		loop {
+			let mut chunk = [0; 1024];
+			let n = io.read(&mut chunk).await.unwrap();
+			assert!(n > 0, "CONNECT response unexpectedly closed");
+			response.extend_from_slice(&chunk[..n]);
+			if response.windows(4).any(|w| w == b"\r\n\r\n") {
+				break;
+			}
+		}
+		let response_text = String::from_utf8_lossy(&response).to_string();
+		assert!(
+			response_text.starts_with("HTTP/1.1 200 OK\r\n"),
+			"unexpected CONNECT response: {response_text}",
+		);
+
+		io.write_all(b"GET /foo HTTP/1.1\r\nHost: lo\r\nConnection: close\r\n\r\n")
+			.await
+			.unwrap();
+		let mut tunneled = Vec::new();
+		tokio::time::timeout(
+			std::time::Duration::from_secs(5),
+			io.read_to_end(&mut tunneled),
+		)
+		.await
+		.expect("timed out waiting for tunneled response")
+		.unwrap();
+		let tunneled_text = String::from_utf8_lossy(&tunneled).to_string();
+		assert!(
+			tunneled_text.contains("WORKER-MARKER"),
+			"expected the tunnel to reach the ext_proc-rewritten worker, not the client's \
+			 original CONNECT target (the decoy), got: {tunneled_text}",
+		);
+	}
+
+	/// Separate from the authority no-op bug: does a `backendTLS` policy attached
+	/// to a `dynamic: {}` route backend actually get originated for a CONNECT
+	/// tunnel?
+	#[cfg(feature = "crypto-aws-lc")]
+	#[tokio::test]
+	async fn connect_dynamic_backend_honors_inline_backend_tls() {
+		use crate::http::backendtls::{BackendTLS, ResolvedBackendTLS};
+		use crate::types::agent::{
+			BackendReference, PathMatch, Route, RouteBackendReference, RouteMatch, RouteName,
+		};
+
+		let (worker, certs) = tls_mock().await;
+		let worker_addr = worker.address().to_string();
+
+		let ext_proc = ExtProcMock::new(move || RewriteAuthorityExtProc {
+			target: worker_addr.clone(),
+		})
+		.spawn()
+		.await;
+
+		let dynamic_backend = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), ());
+		let t = setup_proxy_test("{}").unwrap();
+		t.inputs()
+			.stores
+			.binds
+			.write()
+			.insert_backend(dynamic_backend.name(), dynamic_backend.into());
+
+		// No `hostname` override
+		let backend_tls: BackendTLS = ResolvedBackendTLS {
+			root: Some(certs.root_cert.pem().into_bytes()),
+			insecure_host: true,
+			alpn: Some(vec!["http/1.1".to_string()]),
+			..Default::default()
+		}
+		.try_into()
+		.unwrap();
+		let route = Route {
+			key: "route".into(),
+			service_key: None,
+			service_port: 0,
+			name: RouteName {
+				name: "route".into(),
+				namespace: Default::default(),
+				rule_name: None,
+				kind: None,
+			},
+			hostnames: Default::default(),
+			matches: vec![RouteMatch {
+				headers: vec![],
+				path: PathMatch::PathPrefix("/".into()),
+				method: None,
+				query: vec![],
+			}],
+			llm_router: None,
+			inline_policies: Default::default(),
+			backends: vec![RouteBackendReference {
+				weight: 1,
+				target: BackendReference::Backend("/dynamic".into()).into(),
+				inline_policies: vec![BackendTrafficPolicy::BackendTLS(backend_tls)],
+			}],
+		};
+
+		let t = t
+			.with_backend(ext_proc.address)
+			.with_bind(simple_bind())
+			.with_route(route)
+			.with_connect_enabled();
+		let t = t
+			.attach_route_policy_builder(json!({
+				"extProc": {
+					"host": ext_proc.address,
+					"failureMode": "failClosed",
+				}
+			}))
+			.await;
+
+		let mut io = t.serve(BIND_KEY);
+		let decoy = body_mock(b"DECOY-MARKER").await;
+		let connect_target = decoy.address().to_string();
+		io.write_all(
+			format!("CONNECT {connect_target} HTTP/1.1\r\nHost: {connect_target}\r\n\r\n").as_bytes(),
+		)
+		.await
+		.unwrap();
+
+		let mut response = Vec::new();
+		loop {
+			let mut chunk = [0; 1024];
+			let n = io.read(&mut chunk).await.unwrap();
+			assert!(n > 0, "CONNECT response unexpectedly closed");
+			response.extend_from_slice(&chunk[..n]);
+			if response.windows(4).any(|w| w == b"\r\n\r\n") {
+				break;
+			}
+		}
+		let response_text = String::from_utf8_lossy(&response).to_string();
+		assert!(
+			response_text.starts_with("HTTP/1.1 200 OK\r\n"),
+			"unexpected CONNECT response: {response_text}",
+		);
+
+		// Plaintext bytes over the tunnel. If the gateway originates its own TLS
+		// to the worker (as it should, given the inline backendTLS policy), the
+		// TLS-only mock server terminates them and responds normally. If it
+		// doesn't (raw pass-through), the mock's TLS listener chokes on the
+		// unencrypted bytes and the connection fails/hangs.
+		io.write_all(b"GET /foo HTTP/1.1\r\nHost: lo\r\nConnection: close\r\n\r\n")
+			.await
+			.unwrap();
+		let mut tunneled = Vec::new();
+		let result = tokio::time::timeout(
+			std::time::Duration::from_secs(5),
+			io.read_to_end(&mut tunneled),
+		)
+		.await;
+		let tunneled_text = String::from_utf8_lossy(&tunneled).to_string();
+		match result {
+			Ok(Ok(_)) => assert!(
+				tunneled_text.starts_with("HTTP/1.1 200 OK\r\n"),
+				"unexpected tunneled response: {tunneled_text}",
+			),
+			Ok(Err(e)) => panic!("tunneled read failed: {e} (partial: {tunneled_text})"),
+			Err(_) => panic!(
+				"timed out waiting for tunneled response -- the plaintext bytes likely reached \
+				 the worker's TLS listener undecrypted (partial: {tunneled_text})"
+			),
+		}
+	}
+
+	/// Design question from the substrate atenet-router bug report: switching
+	/// `frontendPolicies.connect.mode` from `route` to `tunnel` would run
+	/// ext_proc on every request inside the tunnel (not just the CONNECT),
+	/// which would fix the target-port propagation gap Route mode has. But it
+	/// needs the *original* CONNECT authority (which carries both the actor
+	/// identity and the target port) available to ext_proc for each re-entered
+	/// request -- the re-entered request's own Host header is whatever the
+	/// client happens to send inside the tunnel, unrelated to the actor.
+	///
+	/// This reproduces the full topology: an outer bind terminates the CONNECT
+	/// tunnel and re-enters an inner wildcard bind, whose route's ext_proc
+	/// resolves `source.connectHeaders["host"]` (the original CONNECT
+	/// authority) instead of `request.host`, then rewrites `:authority` to the
+	/// worker exactly like the existing (working) Route-mode mutation does.
+	#[tokio::test]
+	async fn tunnel_mode_reentry_carries_connect_authority_to_ext_proc() {
+		use crate::types::agent::{BindMode, TunnelProtocol};
+
+		let worker = body_mock(b"WORKER-MARKER").await;
+		let worker_addr = worker.address().to_string();
+		let seen_authority: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+
+		let ext_proc = {
+			let seen_authority = seen_authority.clone();
+			ExtProcMock::new(move || TunnelRewriteAuthorityExtProc {
+				target: worker_addr.clone(),
+				seen_authority: seen_authority.clone(),
+			})
+			.spawn()
+			.await
+		};
+
+		let dynamic_backend = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), ());
+		let t = setup_proxy_test("{}").unwrap();
+		t.inputs()
+			.stores
+			.binds
+			.write()
+			.insert_backend(dynamic_backend.name(), dynamic_backend.into());
+
+		// Outer bind: terminates the CONNECT tunnel (Tunnel mode).
+		let mut outer = simple_bind();
+		outer.key = strng::literal!("outer");
+		outer.address = "127.0.0.1:15013".parse().unwrap();
+		outer.tunnel_protocol = TunnelProtocol::Connect;
+
+		// Inner: wildcard internal bind, re-entered regardless of the CONNECT's
+		// target port (our router serves an actor's arbitrary exposed port, so
+		// there's no fixed port to bind on ahead of time).
+		let mut inner = simple_bind();
+		inner.key = strng::literal!("bind/wildcard");
+		inner.mode = BindMode::Internal;
+
+		let t = t
+			.with_backend(ext_proc.address)
+			.with_bind(outer)
+			.with_bind(inner)
+			.with_route(basic_named_route("/dynamic".into()));
+		let t = t
+			.attach_route_policy_builder(json!({
+				"extProc": {
+					"host": ext_proc.address,
+					"failureMode": "failClosed",
+					"requestAttributes": {
+						"filter_state['dev.substrate.authority']": "source.connectHeaders[\"host\"]",
+					},
+				}
+			}))
+			.await;
+
+		let mut io = t.serve_tunnel(strng::literal!("outer"));
+		let connect_target = "test1.demo.actors.resources.substrate.ate.dev:9090";
+		io.write_all(
+			format!("CONNECT {connect_target} HTTP/1.1\r\nHost: {connect_target}\r\n\r\n").as_bytes(),
+		)
+		.await
+		.unwrap();
+
+		let mut response = Vec::new();
+		loop {
+			let mut chunk = [0; 1024];
+			let n = io.read(&mut chunk).await.unwrap();
+			assert!(n > 0, "CONNECT response unexpectedly closed");
+			response.extend_from_slice(&chunk[..n]);
+			if response.windows(4).any(|w| w == b"\r\n\r\n") {
+				break;
+			}
+		}
+		let response_text = String::from_utf8_lossy(&response).to_string();
+		assert!(
+			response_text.starts_with("HTTP/1.1 200 OK\r\n"),
+			"unexpected CONNECT response: {response_text}",
+		);
+
+		// The re-entered request's own Host is deliberately unrelated to the
+		// actor -- proving backend resolution doesn't (and can't) depend on it.
+		io.write_all(b"GET /foo HTTP/1.1\r\nHost: irrelevant.example\r\nConnection: close\r\n\r\n")
+			.await
+			.unwrap();
+		let mut tunneled = Vec::new();
+		tokio::time::timeout(
+			std::time::Duration::from_secs(5),
+			io.read_to_end(&mut tunneled),
+		)
+		.await
+		.expect("timed out waiting for tunneled response")
+		.unwrap();
+		let tunneled_text = String::from_utf8_lossy(&tunneled).to_string();
+		assert!(
+			tunneled_text.contains("WORKER-MARKER"),
+			"expected the re-entered request to reach the ext_proc-rewritten worker, \
+			 got: {tunneled_text}",
+		);
+
+		assert_eq!(
+			seen_authority.lock().unwrap().as_deref(),
+			Some(connect_target),
+			"ext_proc should have resolved the ORIGINAL CONNECT authority via \
+			 source.connectHeaders, not the re-entered request's own (unrelated) Host",
+		);
+	}
+}
+
+#[derive(Clone)]
+struct TunnelRewriteAuthorityExtProc {
+	target: String,
+	seen_authority: Arc<Mutex<Option<String>>>,
+}
+
+#[async_trait::async_trait]
+impl Handler for TunnelRewriteAuthorityExtProc {
+	async fn on_request(&mut self, request: &proto::ProcessingRequest) {
+		if let Some(ns) = request.attributes.get("envoy.filters.http.ext_proc")
+			&& let Some(v) = ns.fields.get("filter_state['dev.substrate.authority']")
+			&& let Some(prost_wkt_types::value::Kind::StringValue(s)) = &v.kind
+		{
+			*self.seen_authority.lock().unwrap() = Some(s.clone());
+		}
+	}
+
+	async fn handle_request_headers(
+		&mut self,
+		_headers: &HttpHeaders,
+		sender: &Sender<Result<ProcessingResponse, Status>>,
+	) -> Result<(), Status> {
+		let _ = sender
+			.send(request_header_response(Some(CommonResponse {
+				header_mutation: Some(HeaderMutation {
+					set_headers: vec![HeaderValueOption {
+						header: Some(HeaderValue {
+							key: ":authority".to_string(),
+							value: self.target.clone(),
+							raw_value: self.target.clone().into_bytes(),
+						}),
+						append: None,
+						append_action: HeaderAppendAction::OverwriteIfExistsOrAdd.into(),
+					}],
+					remove_headers: vec![],
+				}),
+				..Default::default()
+			})))
+			.await;
+		Ok(())
 	}
 }
 

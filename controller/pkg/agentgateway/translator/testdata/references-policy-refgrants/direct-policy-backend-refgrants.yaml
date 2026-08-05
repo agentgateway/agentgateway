@@ -126,6 +126,32 @@ output:
           grpc: {}
 status:
 - apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: allowed-backend
+    namespace: backend-ns
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: denied-backend
+    namespace: backend-ns
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted
+- apiVersion: agentgateway.dev/v1alpha1
   kind: AgentgatewayPolicy
   metadata:
     name: allowed-policy

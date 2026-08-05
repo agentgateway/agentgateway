@@ -44,6 +44,10 @@ impl Provider {
 		self.anthropic_model(request_model).is_some()
 	}
 
+	pub fn is_gemini_model(&self, request_model: Option<&str>) -> bool {
+		self.gemini_model(request_model).is_some()
+	}
+
 	pub fn prepare_anthropic_message_body(&self, body: Vec<u8>) -> Result<Vec<u8>, AIError> {
 		prepare_anthropic_message_body(body)
 	}
@@ -84,28 +88,33 @@ impl Provider {
 		route: RouteType,
 		request_model: Option<&str>,
 		streaming: bool,
+		native_gemini: bool,
 	) -> Strng {
 		let location = self
 			.region
 			.clone()
 			.unwrap_or_else(|| strng::literal!("global"));
 
-		match (route, self.anthropic_model(request_model)) {
-			(RouteType::AnthropicTokenCount, _) => {
+		match (
+			route,
+			self.anthropic_model(request_model),
+			self.gemini_model(request_model),
+		) {
+			(RouteType::AnthropicTokenCount, _, _) => {
 				strng::format!(
 					"/v1/projects/{}/locations/{}/publishers/anthropic/models/count-tokens:rawPredict",
 					self.project_id,
 					location
 				)
 			},
-			(RouteType::Rerank, _) => {
+			(RouteType::Rerank, _, _) => {
 				strng::format!(
 					"/v1/projects/{}/locations/{}/rankingConfigs/default_ranking_config:rank",
 					self.project_id,
 					location
 				)
 			},
-			(RouteType::Embeddings, _) => {
+			(RouteType::Embeddings, _, _) => {
 				let model = self.configured_model(request_model).unwrap_or_default();
 				strng::format!(
 					"/v1/projects/{}/locations/{}/publishers/google/models/{}:predict",
@@ -114,7 +123,7 @@ impl Provider {
 					model
 				)
 			},
-			(_, Some(model)) => {
+			(_, Some(model), _) => {
 				strng::format!(
 					"/v1/projects/{}/locations/{}/publishers/anthropic/models/{}:{}",
 					self.project_id,
@@ -125,6 +134,23 @@ impl Provider {
 					} else {
 						"rawPredict"
 					}
+				)
+			},
+
+			// `?alt=sse` is required on the streaming endpoint; without it Vertex returns a
+			// JSON array rather than an SSE stream.
+			(RouteType::Completions, None, Some(model)) if native_gemini => {
+				let method = if streaming {
+					"streamGenerateContent?alt=sse"
+				} else {
+					"generateContent"
+				};
+				strng::format!(
+					"/v1/projects/{}/locations/{}/publishers/google/models/{}:{}",
+					self.project_id,
+					location,
+					model,
+					method
 				)
 			},
 			_ => {
@@ -153,10 +179,39 @@ impl Provider {
 		}
 	}
 
+	fn gemini_model<'a>(&'a self, request_model: Option<&'a str>) -> Option<Strng> {
+		let model = self.configured_model(request_model)?;
+
+		let stripped: &str = model
+			.split_once("publishers/google/models/")
+			.map(|(_, m)| m)
+			.or_else(|| model.strip_prefix("models/"))
+			.or_else(|| model.strip_prefix("google/"))
+			.unwrap_or(model);
+
+		// Embedding models can share the gemini- prefix (e.g. gemini-embedding-001) but
+		// route via the Embeddings arm, not :generateContent.
+		const EMBEDDING_PREFIXES: &[&str] = &[
+			"text-embedding-",
+			"gemini-embedding-",
+			"text-multilingual-embedding-",
+			"textembedding-",
+			"multimodalembedding",
+		];
+		if EMBEDDING_PREFIXES.iter().any(|p| stripped.starts_with(p)) {
+			return None;
+		}
+
+		if stripped.starts_with("gemini-") || stripped.starts_with("gemini@") {
+			Some(strng::new(stripped))
+		} else {
+			None
+		}
+	}
+
 	fn anthropic_model<'a>(&'a self, request_model: Option<&'a str>) -> Option<Strng> {
 		let model = self.configured_model(request_model)?;
 
-		// Strip known prefixes
 		let model: &str = model
 			.split_once("publishers/anthropic/models/")
 			.map(|(_, m)| m)
@@ -258,6 +313,207 @@ mod tests {
 		};
 		let actual = p.anthropic_model(req).map(|m| m.to_string());
 		assert_eq!(actual.as_deref(), expected);
+	}
+
+	#[rstest::rstest]
+	#[case::raw_flash(None, Some("gemini-2.5-flash"), Some("gemini-2.5-flash"))]
+	#[case::raw_pro(None, Some("gemini-3-pro"), Some("gemini-3-pro"))]
+	#[case::at_separator(None, Some("gemini@001"), Some("gemini@001"))]
+	#[case::strip_publishers_prefix(
+		Some("publishers/google/models/gemini-2.5-pro"),
+		None,
+		Some("gemini-2.5-pro")
+	)]
+	#[case::strip_models_prefix(None, Some("models/gemini-2.5-flash"), Some("gemini-2.5-flash"))]
+	#[case::strip_google_prefix(None, Some("google/gemini-2.5-flash"), Some("gemini-2.5-flash"))]
+	#[case::claude_rejected(None, Some("claude-sonnet-4-5"), None)]
+	#[case::gpt_rejected(None, Some("gpt-4o"), None)]
+	#[case::text_embedding_excluded(None, Some("text-embedding-005"), None)]
+	#[case::gemini_embedding_excluded(None, Some("gemini-embedding-001"), None)]
+	#[case::multilingual_embedding_excluded(None, Some("text-multilingual-embedding-002"), None)]
+	#[case::textembedding_legacy_excluded(None, Some("textembedding-gecko@003"), None)]
+	#[case::multimodal_embedding_excluded(None, Some("multimodalembedding@001"), None)]
+	#[case::embedding_under_models_prefix(None, Some("models/gemini-embedding-001"), None)]
+	#[case::embedding_under_publishers_prefix(
+		None,
+		Some("publishers/google/models/text-embedding-005"),
+		None
+	)]
+	#[case::provider_model_precedence(
+		Some("gemini-2.5-flash"),
+		Some("claude-sonnet-4-5"),
+		Some("gemini-2.5-flash")
+	)]
+	#[case::no_model_anywhere(None, None, None)]
+	fn test_gemini_model_normalization(
+		#[case] provider: Option<&str>,
+		#[case] req: Option<&str>,
+		#[case] expected: Option<&str>,
+	) {
+		let p = Provider {
+			project_id: strng::new("test-project"),
+			model: provider.map(strng::new),
+			region: None,
+		};
+		let actual = p.gemini_model(req).map(|m| m.to_string());
+		assert_eq!(actual.as_deref(), expected);
+	}
+
+	#[test]
+	fn test_is_gemini_model_consistency_with_optional() {
+		let p = Provider {
+			project_id: strng::new("test-project"),
+			model: None,
+			region: None,
+		};
+		assert!(p.is_gemini_model(Some("gemini-2.5-flash")));
+		assert!(!p.is_gemini_model(Some("claude-sonnet-4-5")));
+		assert!(!p.is_gemini_model(Some("gemini-embedding-001")));
+		assert!(!p.is_gemini_model(None));
+	}
+
+	#[test]
+	fn test_gemini_and_anthropic_heuristics_are_disjoint() {
+		let p = Provider {
+			project_id: strng::new("test-project"),
+			model: None,
+			region: None,
+		};
+		for m in [
+			"gemini-2.5-flash",
+			"gemini-3-pro",
+			"gemini@001",
+			"claude-sonnet-4-5",
+			"claude-haiku-4-5-20251001",
+		] {
+			let g = p.is_gemini_model(Some(m));
+			let a = p.is_anthropic_model(Some(m));
+			assert!(
+				!(g && a),
+				"{m} matched both Gemini and Anthropic heuristics"
+			);
+		}
+	}
+
+	#[rstest::rstest]
+	#[case::flash(
+		None,
+		Some("gemini-2.5-flash"),
+		false,
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:generateContent"
+	)]
+	#[case::flash_streaming(
+		None,
+		Some("gemini-2.5-flash"),
+		true,
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:streamGenerateContent?alt=sse"
+	)]
+	#[case::pro_regional(
+		Some("us-central1"),
+		Some("gemini-3-pro"),
+		false,
+		"/v1/projects/p/locations/us-central1/publishers/google/models/gemini-3-pro:generateContent"
+	)]
+	#[case::path_prefix_normalized(
+		None,
+		Some("publishers/google/models/gemini-2.5-flash"),
+		false,
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:generateContent"
+	)]
+	#[case::models_prefix_normalized(
+		None,
+		Some("models/gemini-2.5-flash"),
+		false,
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:generateContent"
+	)]
+	fn test_get_path_for_gemini_native(
+		#[case] region: Option<&str>,
+		#[case] req_model: Option<&str>,
+		#[case] streaming: bool,
+		#[case] expected: &str,
+	) {
+		let p = Provider {
+			project_id: strng::new("p"),
+			model: None,
+			region: region.map(strng::new),
+		};
+		let got = p.get_path_for_model(RouteType::Completions, req_model, streaming, true);
+		assert_eq!(got.as_str(), expected);
+	}
+
+	#[rstest::rstest]
+	#[case::non_streaming(false)]
+	#[case::streaming(true)]
+	fn test_gemini_compat_translation_uses_compat_shim(#[case] streaming: bool) {
+		let p = Provider {
+			project_id: strng::new("p"),
+			model: None,
+			region: None,
+		};
+		let got = p.get_path_for_model(
+			RouteType::Completions,
+			Some("gemini-2.5-flash"),
+			streaming,
+			false,
+		);
+		assert_eq!(
+			got.as_str(),
+			"/v1/projects/p/locations/global/endpoints/openapi/chat/completions",
+			"non-native Gemini translations use the compat shim"
+		);
+	}
+
+	#[rstest::rstest]
+	#[case::claude_still_routes_anthropic(
+		Some("claude-sonnet-4-5"),
+		false,
+		"/v1/projects/p/locations/global/publishers/anthropic/models/claude-sonnet-4-5:rawPredict"
+	)]
+	#[case::claude_streaming_anthropic(
+		Some("claude-sonnet-4-5"),
+		true,
+		"/v1/projects/p/locations/global/publishers/anthropic/models/claude-sonnet-4-5:streamRawPredict"
+	)]
+	#[case::non_gemini_falls_to_compat(
+		Some("gpt-4o"),
+		false,
+		"/v1/projects/p/locations/global/endpoints/openapi/chat/completions"
+	)]
+	fn test_get_path_non_gemini_unchanged(
+		#[case] req_model: Option<&str>,
+		#[case] streaming: bool,
+		#[case] expected: &str,
+	) {
+		let p = Provider {
+			project_id: strng::new("p"),
+			model: None,
+			region: None,
+		};
+		let got = p.get_path_for_model(RouteType::Completions, req_model, streaming, false);
+		assert_eq!(got.as_str(), expected);
+	}
+
+	#[test]
+	fn test_embedding_route_takes_precedence_over_gemini_arm() {
+		let p = Provider {
+			project_id: strng::new("p"),
+			model: None,
+			region: None,
+		};
+		let path = p.get_path_for_model(
+			RouteType::Embeddings,
+			Some("gemini-embedding-001"),
+			false,
+			false,
+		);
+		assert!(
+			path.as_str().ends_with(":predict"),
+			"expected :predict, got {path}"
+		);
+		assert!(
+			!path.as_str().contains(":generateContent"),
+			"embedding route must not produce :generateContent, got {path}"
+		);
 	}
 
 	#[rstest::rstest]

@@ -16,9 +16,8 @@ impl HTTPAuthorizationSet {
 	pub fn new(rs: RuleSets) -> Self {
 		Self(rs)
 	}
-	pub fn merge(mut self, other: Self) -> Self {
-		self.0.0.extend(other.0.0);
-		self
+	pub fn merge(self, other: Self) -> Self {
+		Self(self.0.merge(other.0))
 	}
 	pub fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
 		self.0.expressions()
@@ -133,7 +132,9 @@ enum RuleSerde {
 enum RuleTypeSerde {
 	/// Allow the request when this CEL expression is true.
 	Allow(String),
-	/// Deny the request when this CEL expression is true.
+	/// Deny the request when this CEL expression is true. This mode is not
+	/// recommended because expression failures fail to deny; prefer `Allow` or
+	/// `Require`. If used, design expressions defensively against evaluation errors.
 	Deny(String),
 	/// Require this CEL expression to be true.
 	Require(String),
@@ -221,6 +222,13 @@ impl From<Vec<RuleSet>> for RuleSets {
 impl RuleSets {
 	pub fn from_arcs(value: Vec<Arc<RuleSet>>) -> Self {
 		Self(value)
+	}
+
+	/// Combine two sets so both apply: a deny in either denies, all requires must
+	/// hold, and allow rules are OR'd across both.
+	pub fn merge(mut self, other: Self) -> Self {
+		self.0.extend(other.0);
+		self
 	}
 }
 

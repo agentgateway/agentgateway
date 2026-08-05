@@ -1,5 +1,7 @@
 use axum_core::body::Body;
 use bytes::Bytes;
+use futures_util::StreamExt;
+use futures_util::stream::{self, BoxStream};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use tokio_sse_codec::{Event, Frame, SseDecoder};
@@ -7,6 +9,27 @@ use tokio_util::codec::BytesCodec;
 
 use super::passthrough::parser as passthrough_parser;
 use super::transform::parser as transform_parser;
+
+/// Append an OpenAI `[DONE]` event after a body closes successfully.
+pub fn append_done_on_success(body: Body) -> Body {
+	let done = crate::parse::encode_sse_event("", Bytes::from_static(b"[DONE]"));
+	let stream = stream::unfold(
+		(Some(body.into_data_stream().boxed()), Some(done)),
+		|(stream, done): (
+			Option<BoxStream<'static, Result<Bytes, axum_core::Error>>>,
+			Option<Bytes>,
+		)| async move {
+			let mut stream = stream?;
+			match stream.next().await {
+				Some(Ok(chunk)) => Some((Ok(chunk), (Some(stream), done))),
+				Some(Err(err)) => Some((Err(err), (None, None))),
+				None => done.map(|done| (Ok(done), (None, None))),
+			}
+		},
+	)
+	.fuse();
+	Body::from_stream(stream)
+}
 
 pub fn json_passthrough<F: DeserializeOwned>(
 	b: Body,

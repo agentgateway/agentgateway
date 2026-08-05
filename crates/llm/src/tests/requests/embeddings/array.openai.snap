@@ -8,9 +8,19 @@ info:
     - world
 ---
 {
-  "model": "text-embedding-3-small",
-  "input": [
-    "hello",
-    "world"
-  ]
+  "request": {
+    "model": "text-embedding-3-small",
+    "input": [
+      "hello",
+      "world"
+    ]
+  },
+  "parsed": {
+    "input_format": "Embeddings",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "text-embedding-3-small",
+    "provider": "openai",
+    "streaming": false,
+    "params": {}
+  }
 }

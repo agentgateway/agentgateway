@@ -12,6 +12,7 @@ use rand::distr::Distribution;
 use rand::distr::weighted::WeightedIndex;
 use serde::ser::SerializeSeq;
 use tokio::time::sleep_until;
+use twox_hash::XxHash3_64;
 
 use crate::types::discovery::{
 	Endpoint, LoadBalancer, LoadBalancerMode, LoadBalancerScopes, Service, Workload,
@@ -213,6 +214,17 @@ impl EndpointSet<Endpoint> {
 		svc_port: u16,
 		override_dest: Option<SocketAddr>,
 	) -> Option<(Arc<Endpoint>, ActiveHandle, Arc<Workload>)> {
+		self.select_endpoint_with_affinity(workloads, svc, svc_port, override_dest, None)
+	}
+
+	pub fn select_endpoint_with_affinity(
+		&self,
+		workloads: &store::WorkloadStore,
+		svc: &Service,
+		svc_port: u16,
+		override_dest: Option<SocketAddr>,
+		affinity_key: Option<&u64>,
+	) -> Option<(Arc<Endpoint>, ActiveHandle, Arc<Workload>)> {
 		let Some(target_port) = svc.ports.get(&svc_port).copied() else {
 			debug!("service {} does not have port {}", svc.hostname, svc_port);
 			return None;
@@ -220,15 +232,63 @@ impl EndpointSet<Endpoint> {
 
 		let c = match override_dest {
 			Some(o) => self.select_override(workloads, o)?,
-			None => self
-				.select_p2c(workloads, svc, svc_port, target_port)
-				.or_else(|| self.select_fallback(workloads, svc_port, target_port))?,
+			None => match affinity_key {
+				Some(key) => self.select_affinity(workloads, svc_port, target_port, key)?,
+				None => self
+					.select_p2c(workloads, svc, svc_port, target_port)
+					.or_else(|| self.select_fallback(workloads, svc_port, target_port))?,
+			},
 		};
 
 		let handle = svc
 			.endpoints
 			.start_request(c.endpoint.workload_uid.clone(), &c.info);
 		Some((c.endpoint, handle, c.workload))
+	}
+
+	/// Selects one endpoint using weighted rendezvous hashing. Locality and health semantics match
+	/// normal endpoint selection: the first locality bucket with a viable active endpoint wins;
+	/// rejected endpoints are considered only when no active endpoint is viable in any bucket.
+	fn select_affinity(
+		&self,
+		workloads: &store::WorkloadStore,
+		svc_port: u16,
+		target_port: u16,
+		affinity_key: &u64,
+	) -> Option<Candidate> {
+		for active_phase in [true, false] {
+			for bucket in &self.buckets {
+				let group = bucket.load_full();
+				if group.sampler.is_drained() {
+					continue;
+				}
+				let endpoints = if active_phase {
+					&group.active
+				} else {
+					&group.rejected
+				};
+				let selected = endpoints
+					.iter()
+					.filter(|(_, ewi)| ewi.capacity > 0)
+					.filter_map(|(key, ewi)| {
+						let workload = viable(workloads, target_port, svc_port, &ewi.endpoint)?;
+						Some((
+							weighted_rendezvous_score(affinity_key, key.as_bytes(), ewi.capacity),
+							Candidate {
+								endpoint: ewi.endpoint.clone(),
+								info: ewi.info.clone(),
+								workload,
+							},
+						))
+					})
+					.max_by(|a, b| a.0.total_cmp(&b.0))
+					.map(|(_, candidate)| candidate);
+				if selected.is_some() {
+					return selected;
+				}
+			}
+		}
+		None
 	}
 
 	/// Explicit destination bypasses bucketing and health — search every endpoint
@@ -330,6 +390,13 @@ impl EndpointSet<Endpoint> {
 				.max_by(|a, b| a.info.score().total_cmp(&b.info.score()))
 		})
 	}
+}
+
+fn weighted_rendezvous_score(affinity_key: &u64, endpoint: &[u8], weight: u32) -> f64 {
+	let hash = XxHash3_64::oneshot_with_seed(*affinity_key, endpoint);
+	// Map into (0, 1], avoiding ln(0). Weighted HRW chooses max(weight / -ln(u)).
+	let uniform = ((hash >> 11) as f64 + 0.5) / ((1_u64 << 53) as f64);
+	f64::from(weight) / -uniform.ln()
 }
 
 fn viable(
@@ -1091,6 +1158,24 @@ impl<T> ActiveEndpointsIter<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn rendezvous_score_is_stable_and_respects_weight() {
+		let affinity_key = 1234;
+		let first = weighted_rendezvous_score(&affinity_key, b"endpoint-a", 1);
+		assert_eq!(
+			first,
+			weighted_rendezvous_score(&affinity_key, b"endpoint-a", 1)
+		);
+		assert_eq!(
+			first * 4.0,
+			weighted_rendezvous_score(&affinity_key, b"endpoint-a", 4)
+		);
+		assert_ne!(
+			first,
+			weighted_rendezvous_score(&affinity_key, b"endpoint-b", 1)
+		);
+	}
 
 	// --- Ewma ---
 

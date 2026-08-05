@@ -134,6 +134,11 @@ type Webhook struct {
 	// +required
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
 
+	// CEL-computed headers to include in webhook requests.
+	// +kubebuilder:validation:MaxProperties=64
+	// +optional
+	Headers map[string]CELExpression `json:"headers,omitempty"`
+
 	// HTTP header matches used to select the headers to forward to the webhook.
 	// Request headers are used when forwarding requests and response headers
 	// are used when forwarding responses.
@@ -172,9 +177,8 @@ type OpenAIModeration struct {
 	// +optional
 	Model *string `json:"model,omitempty"`
 	// Policies for communicating with OpenAI.
-	// +kubebuilder:validation:AtLeastOneFieldSet
 	// +optional
-	Policies *BackendSimple `json:"policies,omitempty"`
+	Policies *OpenAIModerationPolicy `json:"policies,omitempty"`
 }
 
 type BedrockGuardrails struct {
@@ -192,9 +196,8 @@ type BedrockGuardrails struct {
 	Region ShortString `json:"region"`
 
 	// Policies for communicating with AWS Bedrock Guardrails.
-	// +kubebuilder:validation:AtLeastOneFieldSet
 	// +optional
-	Policies *BackendSimple `json:"policies,omitempty"`
+	Policies *BedrockGuardrailsPolicy `json:"policies,omitempty"`
 }
 
 type GoogleModelArmor struct {
@@ -213,9 +216,8 @@ type GoogleModelArmor struct {
 	Location *ShortString `json:"location,omitempty"`
 
 	// Policies for communicating with Google Model Armor.
-	// +kubebuilder:validation:AtLeastOneFieldSet
 	// +optional
-	Policies *BackendSimple `json:"policies,omitempty"`
+	Policies *GoogleModelArmorPolicy `json:"policies,omitempty"`
 }
 
 // Prompt guards to apply to requests sent by the client.

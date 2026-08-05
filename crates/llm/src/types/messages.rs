@@ -3,7 +3,9 @@ use agent_core::strng;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::types::{RequestType, ResponseType, SimpleChatCompletionMessage};
+use crate::types::{
+	OutputMessage, OutputMessagePart, RequestType, ResponseType, SimpleChatCompletionMessage,
+};
 use crate::webhook::{Message, ResponseChoice};
 use crate::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse};
 
@@ -184,6 +186,10 @@ impl RequestType for Request {
 		&mut self.model
 	}
 
+	fn to_value(&self) -> serde_json::Result<serde_json::Value> {
+		serde_json::to_value(self)
+	}
+
 	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
 		prepend_prompts_helper(&mut self.messages, &mut self.system, prompts);
 	}
@@ -249,6 +255,42 @@ impl RequestType for Request {
 			))
 		};
 		self.messages = message_prompts.into_iter().map(Into::into).collect();
+	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		match &mut self.system {
+			Some(TextBlock::Text(text)) => f(text),
+			Some(TextBlock::Array(parts)) => {
+				crate::types::scan_text_runs(
+					parts,
+					"\n",
+					|p| match p {
+						TextPart::Text { text, .. } => Some(text),
+						TextPart::Unknown(_) => None,
+					},
+					f,
+				);
+			},
+			None => {},
+		}
+		for msg in &mut self.messages {
+			match &mut msg.content {
+				Some(ContentBlock::Text(text)) => f(text),
+				Some(ContentBlock::Array(parts)) => {
+					crate::types::scan_text_runs(
+						parts,
+						" ",
+						|p| match p {
+							ContentPart::Text { text, .. } => Some(text),
+							// TODO opt-in setting to apply guards to tool results
+							ContentPart::Unknown(_) => None,
+						},
+						f,
+					);
+				},
+				None => {},
+			}
+		}
 	}
 }
 
@@ -333,8 +375,46 @@ impl From<SimpleChatCompletionMessage> for RequestMessage {
 	}
 }
 
+fn extract_output_message(resp: &Response) -> Option<Vec<OutputMessage>> {
+	let mut content = Vec::new();
+
+	for c in &resp.content {
+		let typ = c.rest.get("type").and_then(|v| v.as_str());
+		if matches!(typ, Some("tool_use" | "server_tool_use")) {
+			let id = c.rest.get("id").and_then(|v| v.as_str()).unwrap_or("");
+			let name = c.rest.get("name").and_then(|v| v.as_str()).unwrap_or("");
+			let arguments = c
+				.rest
+				.get("input")
+				.cloned()
+				.unwrap_or(serde_json::Value::Object(Default::default()));
+			content.push(OutputMessagePart::ToolCall {
+				id: strng::new(id),
+				name: strng::new(name),
+				arguments,
+			});
+		}
+	}
+
+	if content.is_empty() {
+		return None;
+	}
+
+	Some(vec![OutputMessage {
+		role: strng::new(&resp.role),
+		content,
+		finish_reason: resp.stop_reason.as_deref().map(strng::new),
+	}])
+}
+
 impl ResponseType for Response {
-	fn to_llm_response(&self, include_completion_in_log: bool) -> LLMResponse {
+	fn to_llm_response(&self, log_content: crate::LogContentFields) -> LLMResponse {
+		let output_messages = if log_content.tool_calls {
+			extract_output_message(self)
+		} else {
+			None
+		};
+
 		LLMResponse {
 			input_tokens: Some(self.usage.input_tokens),
 			input_image_tokens: None,
@@ -351,7 +431,7 @@ impl ResponseType for Response {
 			cache_creation_input_tokens: self.usage.cache_creation_input_tokens,
 			cached_input_tokens: self.usage.cache_read_input_tokens,
 			service_tier: self.usage.service_tier.as_deref().map(Into::into),
-			completion: if include_completion_in_log {
+			completion: if log_content.completion {
 				Some(
 					self
 						.content
@@ -362,6 +442,7 @@ impl ResponseType for Response {
 			} else {
 				None
 			},
+			output_messages,
 			first_token: Default::default(),
 		}
 	}
@@ -395,10 +476,19 @@ impl ResponseType for Response {
 	fn serialize(&self) -> serde_json::Result<Vec<u8>> {
 		serde_json::to_vec(&self)
 	}
+
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+		for c in &mut self.content {
+			if let Some(text) = &mut c.text {
+				f(text);
+			}
+		}
+	}
 }
 
 // 'typed' provides a typed accessor
 pub mod typed {
+	use async_openai::types::chat::PromptCacheBreakpointParam;
 	use serde::{Deserialize, Deserializer, Serialize};
 	use serde_json::Value;
 
@@ -613,6 +703,14 @@ pub mod typed {
 			#[serde(skip_serializing_if = "Option::is_none")]
 			cache_control: Option<CacheControlEphemeral>,
 		},
+	}
+
+	impl From<CacheControlEphemeral> for super::super::completions::typed::PromptCacheBreakpointParam {
+		fn from(_: CacheControlEphemeral) -> Self {
+			PromptCacheBreakpointParam {
+				mode: super::super::completions::typed::PromptCacheBreakpointMode::Explicit,
+			}
+		}
 	}
 
 	#[derive(Deserialize, Serialize, Default, Debug)]
@@ -927,9 +1025,36 @@ pub mod typed {
 		pub service_tier: Option<String>,
 	}
 
-	/// Tool definition
+	/// Tool definition. A client-defined custom tool always carries `input_schema` and no `type`
+	/// tag. An Anthropic server tool (`web_search_20250305`, `bash_20250124`, `computer_20250124`,
+	/// `text_editor_20250728`, `code_execution_20250522`, etc.) is tagged with `type` and never
+	/// carries `input_schema` since it runs server-side. `Custom` is tried first so existing custom
+	/// tool payloads (no `type` field) keep matching without a discriminant lookup.
 	#[derive(Debug, Serialize, Deserialize)]
-	pub struct Tool {
+	#[serde(untagged)]
+	pub enum Tool {
+		Custom(CustomTool),
+		Server(ServerTool),
+	}
+
+	impl Tool {
+		pub fn name(&self) -> &str {
+			match self {
+				Tool::Custom(tool) => &tool.name,
+				Tool::Server(tool) => &tool.name,
+			}
+		}
+
+		pub fn cache_control(&self) -> Option<&CacheControlEphemeral> {
+			match self {
+				Tool::Custom(tool) => tool.cache_control.as_ref(),
+				Tool::Server(tool) => tool.cache_control.as_ref(),
+			}
+		}
+	}
+
+	#[derive(Debug, Serialize, Deserialize)]
+	pub struct CustomTool {
 		/// Name of the tool
 		pub name: String,
 		/// Description of the tool
@@ -940,6 +1065,25 @@ pub mod typed {
 		/// Create a cache control breakpoint at this content block
 		#[serde(skip_serializing_if = "Option::is_none")]
 		pub cache_control: Option<CacheControlEphemeral>,
+	}
+
+	/// An Anthropic server-executed tool (runs upstream of the provider, e.g. `web_search_20250305`).
+	/// We don't model every server tool's specific fields — just enough to round-trip the block
+	/// without failing deserialization. Providers that can't execute a server tool (e.g. Bedrock)
+	/// drop it rather than crash the whole request; see `conversion::bedrock`.
+	#[derive(Debug, Serialize, Deserialize)]
+	pub struct ServerTool {
+		/// Discriminant, e.g. "web_search_20250305"
+		#[serde(rename = "type")]
+		pub tool_type: String,
+		/// Name of the tool
+		pub name: String,
+		/// Create a cache control breakpoint at this content block
+		#[serde(skip_serializing_if = "Option::is_none")]
+		pub cache_control: Option<CacheControlEphemeral>,
+		/// Any other server-tool-specific fields (max_uses, allowed_domains, etc.)
+		#[serde(flatten)]
+		pub extra: std::collections::HashMap<String, serde_json::Value>,
 	}
 
 	/// Tool choice configuration
@@ -974,8 +1118,62 @@ pub mod typed {
 		pub fields: std::collections::HashMap<String, String>,
 	}
 
+	fn extract_output_message_from_typed(
+		resp: &MessagesResponse,
+	) -> Option<Vec<super::OutputMessage>> {
+		let mut content = Vec::new();
+
+		for block in &resp.content {
+			match block {
+				ContentBlock::ToolUse {
+					id, name, input, ..
+				}
+				| ContentBlock::ServerToolUse {
+					id, name, input, ..
+				} => {
+					content.push(super::OutputMessagePart::ToolCall {
+						id: agent_core::strng::new(id),
+						name: agent_core::strng::new(name),
+						arguments: input.clone(),
+					});
+				},
+				_ => {},
+			}
+		}
+
+		if content.is_empty() {
+			return None;
+		}
+
+		let finish_reason = resp.stop_reason.as_ref().map(|sr| {
+			let s = serde_json::to_value(sr)
+				.ok()
+				.and_then(|v| v.as_str().map(String::from))
+				.unwrap_or_default();
+			agent_core::strng::new(&s)
+		});
+
+		let role_str = match resp.role {
+			Role::User => "user",
+			Role::Assistant => "assistant",
+			Role::System => "system",
+		};
+
+		Some(vec![super::OutputMessage {
+			role: agent_core::strng::new(role_str),
+			content,
+			finish_reason,
+		}])
+	}
+
 	impl super::ResponseType for MessagesResponse {
-		fn to_llm_response(&self, include_completion_in_log: bool) -> crate::LLMResponse {
+		fn to_llm_response(&self, log_content: crate::LogContentFields) -> crate::LLMResponse {
+			let output_messages = if log_content.tool_calls {
+				extract_output_message_from_typed(self)
+			} else {
+				None
+			};
+
 			crate::LLMResponse {
 				input_tokens: Some(self.usage.input_tokens as u64),
 				input_image_tokens: None,
@@ -992,7 +1190,7 @@ pub mod typed {
 				service_tier: self.usage.service_tier.as_deref().map(Into::into),
 				provider_model: Some(agent_core::strng::new(&self.model)),
 				count_tokens: None,
-				completion: if include_completion_in_log {
+				completion: if log_content.completion {
 					Some(
 						self
 							.content
@@ -1006,6 +1204,7 @@ pub mod typed {
 				} else {
 					None
 				},
+				output_messages,
 				first_token: Default::default(),
 			}
 		}
@@ -1047,5 +1246,183 @@ pub mod typed {
 		fn serialize(&self) -> serde_json::Result<Vec<u8>> {
 			serde_json::to_vec(&self)
 		}
+
+		fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+			for block in &mut self.content {
+				if let ContentBlock::Text(t) = block {
+					f(&mut t.text);
+				}
+			}
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::types::ResponseType;
+
+	fn make_typed_response_with_tool_use() -> typed::MessagesResponse {
+		typed::MessagesResponse {
+			id: "msg_test".to_string(),
+			r#type: "message".to_string(),
+			role: typed::Role::Assistant,
+			content: vec![
+				typed::ContentBlock::Text(typed::ContentTextBlock {
+					text: "I'll call the tool.".to_string(),
+					citations: None,
+					cache_control: None,
+				}),
+				typed::ContentBlock::ToolUse {
+					id: "toolu_01A".to_string(),
+					name: "get_weather".to_string(),
+					input: serde_json::json!({"location": "San Francisco"}),
+					cache_control: None,
+				},
+				typed::ContentBlock::ServerToolUse {
+					id: "srvtoolu_01B".to_string(),
+					name: "web_search".to_string(),
+					input: serde_json::json!({"query": "rust programming"}),
+					cache_control: None,
+				},
+			],
+			model: "claude-sonnet-4-20250514".to_string(),
+			stop_reason: Some(typed::StopReason::ToolUse),
+			stop_sequence: None,
+			usage: typed::Usage {
+				input_tokens: 100,
+				output_tokens: 50,
+				cache_creation_input_tokens: None,
+				cache_read_input_tokens: None,
+				service_tier: None,
+			},
+			input_audio_tokens: None,
+			output_audio_tokens: None,
+		}
+	}
+
+	#[test]
+	fn test_typed_response_output_messages_populated_when_flag_true() {
+		let response = make_typed_response_with_tool_use();
+		let llm_response = response.to_llm_response(crate::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		});
+
+		let messages = llm_response
+			.output_messages
+			.expect("output_messages should be Some");
+		assert_eq!(messages.len(), 1);
+		assert_eq!(messages[0].role.as_str(), "assistant");
+		assert_eq!(messages[0].finish_reason.as_deref(), Some("tool_use"));
+
+		let tool_calls = messages[0].tool_calls();
+		assert_eq!(tool_calls.len(), 2);
+
+		assert_eq!(tool_calls[0].id.as_str(), "toolu_01A");
+		assert_eq!(tool_calls[0].name.as_str(), "get_weather");
+		assert_eq!(
+			tool_calls[0].arguments,
+			serde_json::json!({"location":"San Francisco"})
+		);
+
+		assert_eq!(tool_calls[1].id.as_str(), "srvtoolu_01B");
+		assert_eq!(tool_calls[1].name.as_str(), "web_search");
+		assert_eq!(
+			tool_calls[1].arguments,
+			serde_json::json!({"query":"rust programming"})
+		);
+	}
+
+	#[test]
+	fn test_typed_response_text_only_omits_output_messages() {
+		let response = typed::MessagesResponse {
+			id: "msg_test2".to_string(),
+			r#type: "message".to_string(),
+			role: typed::Role::Assistant,
+			content: vec![typed::ContentBlock::Text(typed::ContentTextBlock {
+				text: "Hello!".to_string(),
+				citations: None,
+				cache_control: None,
+			})],
+			model: "claude-sonnet-4-20250514".to_string(),
+			stop_reason: Some(typed::StopReason::EndTurn),
+			stop_sequence: None,
+			usage: typed::Usage {
+				input_tokens: 50,
+				output_tokens: 20,
+				cache_creation_input_tokens: None,
+				cache_read_input_tokens: None,
+				service_tier: None,
+			},
+			input_audio_tokens: None,
+			output_audio_tokens: None,
+		};
+
+		let llm_response = response.to_llm_response(crate::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		});
+		assert!(llm_response.output_messages.is_none());
+	}
+
+	#[test]
+	fn test_weakly_typed_response_output_messages_from_rest() {
+		let response = Response {
+			id: "msg_test3".to_string(),
+			r#type: "message".to_string(),
+			role: "assistant".to_string(),
+			model: "claude-sonnet-4-20250514".to_string(),
+			stop_reason: Some("tool_use".to_string()),
+			stop_sequence: None,
+			usage: Usage {
+				input_tokens: 100,
+				output_tokens: 50,
+				cache_creation_input_tokens: None,
+				cache_read_input_tokens: None,
+				service_tier: None,
+				rest: Default::default(),
+			},
+			content: vec![
+				Content {
+					text: Some("I'll call the tool.".to_string()),
+					rest: serde_json::json!({"type": "text"}),
+				},
+				Content {
+					text: None,
+					rest: serde_json::json!({
+						"type": "tool_use",
+						"id": "toolu_01A",
+						"name": "get_weather",
+						"input": {"location": "San Francisco"}
+					}),
+				},
+			],
+			input_audio_tokens: None,
+			output_audio_tokens: None,
+			rest: Default::default(),
+		};
+
+		let llm_response = response.to_llm_response(crate::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		});
+
+		let messages = llm_response
+			.output_messages
+			.expect("output_messages should be Some");
+		assert_eq!(messages[0].role.as_str(), "assistant");
+		assert_eq!(messages[0].finish_reason.as_deref(), Some("tool_use"));
+
+		assert_eq!(messages[0].content.len(), 1);
+
+		let tool_calls = messages[0].tool_calls();
+		assert_eq!(tool_calls.len(), 1);
+		assert_eq!(tool_calls[0].id.as_str(), "toolu_01A");
+		assert_eq!(tool_calls[0].name.as_str(), "get_weather");
+		assert_eq!(
+			tool_calls[0].arguments,
+			serde_json::json!({"location":"San Francisco"})
+		);
 	}
 }

@@ -53,7 +53,7 @@ async fn tunnel_absolute_form() {
 }
 
 #[tokio::test]
-#[cfg(feature = "tls-aws-lc")]
+#[cfg(feature = "crypto-aws-lc")]
 async fn tunnel_connect() {
 	let (mock, _certs) = tls_mock().await;
 	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -211,7 +211,7 @@ async fn incoming_connect_tunnel_reenters_bind_flow() {
 	outer.key = strng::literal!("outer");
 	outer.address = "127.0.0.1:15008".parse().unwrap();
 	let mut inner = simple_bind();
-	inner.address = "127.0.0.1:18080".parse().unwrap();
+	inner.address = "0.0.0.0:18080".parse().unwrap();
 	let t = setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*mock.address())
@@ -275,6 +275,7 @@ async fn incoming_connect_tunnel_reenters_internal_bind() {
 	outer.address = outer_addr;
 	let mut inner = simple_bind();
 	inner.address = inner_addr;
+	inner.address.set_ip("0.0.0.0".parse().unwrap());
 	// The inner bind is routing-only: it must not open a listener socket.
 	inner.mode = BindMode::Internal;
 	let t = setup_proxy_test("{}")
@@ -405,7 +406,7 @@ async fn incoming_connect_tunnel_exposes_connect_headers_to_cel() {
 		outer.key = strng::literal!("outer");
 		outer.address = "127.0.0.1:15008".parse().unwrap();
 		let mut inner = simple_bind();
-		inner.address = "127.0.0.1:18080".parse().unwrap();
+		inner.address = "0.0.0.0:18080".parse().unwrap();
 		let mut t = setup_proxy_test("{}")
 			.unwrap()
 			.with_backend(*mock.address())
@@ -511,7 +512,7 @@ async fn connect_tunnel_terminates_outer_tls() {
 
 		// INNER plain bind, re-entered by the CONNECT authority port.
 		let mut inner = simple_bind();
-		inner.address = "127.0.0.1:18083".parse().unwrap();
+		inner.address = "0.0.0.0:18083".parse().unwrap();
 
 		let mut t = setup_proxy_test("{}")
 			.unwrap()
@@ -698,7 +699,7 @@ async fn connect_tunnel_obo_exchange_injects_token() {
 	outer.key = strng::literal!("outer");
 	outer.address = "127.0.0.1:15008".parse().unwrap();
 	let mut inner = simple_bind();
-	inner.address = "127.0.0.1:18080".parse().unwrap();
+	inner.address = "0.0.0.0:18080".parse().unwrap();
 	let mut t = setup_proxy_test("{}")
 		.unwrap()
 		.with_backend(*upstream.address())
@@ -908,7 +909,7 @@ async fn connect_tunnel_obo_exchange_injects_token() {
 /// minting a trusted per-SNI cert, (3) `ConnectHeaders` surviving
 /// `maybe_terminate_tls` into the OBO body, and (4) the decrypted request flowing
 /// into the `dynamic: {}` backend path.
-#[cfg(feature = "tls-aws-lc")]
+#[cfg(feature = "crypto-aws-lc")]
 #[tokio::test]
 async fn connect_tunnel_dynamic_ca_obo_dynamic_backend() {
 	use std::collections::HashMap;
@@ -1009,7 +1010,7 @@ async fn connect_tunnel_dynamic_ca_obo_dynamic_backend() {
 	// Inner bind terminates TLS with the dynamic CA (empty hostname = match any SNI).
 	let inner = Bind {
 		key: BIND_KEY,
-		address: "127.0.0.1:18082".parse().unwrap(),
+		address: "0.0.0.0:18082".parse().unwrap(),
 		listeners: ListenerSet::from_list([Listener {
 			key: LISTENER_KEY,
 			name: Default::default(),

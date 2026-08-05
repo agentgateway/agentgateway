@@ -93,6 +93,7 @@ fn build_test_request() -> crate::http::Request {
 		cached_input_tokens: None,
 		prompt: None,
 		completion: Some(vec!["Hello world".to_string()]),
+		tool_calls: None,
 		params: llm::LLMRequestParams::default(),
 		cost: None,
 		cost_rates: None,
@@ -397,7 +398,7 @@ fn test_executor_minimal_json() {
 #[test]
 fn test_buffered_body_serialization() {
 	let body_data = b"Hello, World!";
-	let buffered_body = BufferedBody(Bytes::from_static(body_data));
+	let buffered_body = BufferedBody::complete(Bytes::from_static(body_data));
 
 	// Serialize
 	let json = serde_json::to_value(&buffered_body).expect("failed to serialize");
@@ -410,7 +411,7 @@ fn test_buffered_body_serialization() {
 	let deserialized: BufferedBody = serde_json::from_value(json).expect("failed to deserialize");
 
 	// Should match original
-	assert_eq!(buffered_body.0, deserialized.0);
+	assert_eq!(buffered_body.bytes(), deserialized.bytes());
 }
 
 #[test]

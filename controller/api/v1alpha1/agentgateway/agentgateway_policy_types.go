@@ -179,26 +179,109 @@ const (
 )
 
 type BackendSimple struct {
-	// Settings for managing TCP connections to the backend.
+	// Settings for managing TCP connections to the backend
 	// +optional
 	TCP *BackendTCP `json:"tcp,omitempty"`
-	// Settings for managing TLS connections to the backend.
+	// Settings for managing TLS connections to the backend
 	//
-	// If this field is set, TLS will be initiated to the backend; the system trusted CA certificates will be used to
-	// validate the server, and the SNI will automatically be set based on the destination.
+	// When set, TLS is originated to the backend using the system trusted CA
+	// certificates, and SNI is inferred from the destination.
 	// +optional
 	TLS *BackendTLS `json:"tls,omitempty"`
-	// Settings for managing HTTP requests to the backend.
+	// Settings for managing HTTP requests to the backend
 	// +optional
 	HTTP *BackendHTTP `json:"http,omitempty"`
 
-	// Settings for managing tunnel connections, with behavior like `HTTPS_PROXY`, to the backend.
+	// Settings for managing tunnel connections to the backend, like `HTTPS_PROXY`
 	// +optional
 	Tunnel *BackendTunnel `json:"tunnel,omitempty"`
 
-	// Settings for managing authentication to the backend.
+	// Settings for managing authentication to the backend
 	// +optional
 	Auth *BackendAuth `json:"auth,omitempty"`
+}
+
+// BackendConnectionPolicy configures common connection behavior for auxiliary backend calls.
+type BackendConnectionPolicy struct {
+	// Settings for managing TCP connections to the backend
+	// +optional
+	TCP *BackendTCP `json:"tcp,omitempty"`
+
+	// Settings for managing TLS connections to the backend
+	//
+	// When set, TLS is originated to the backend using the system trusted CA
+	// certificates, and SNI is inferred from the destination.
+	// +optional
+	TLS *BackendTLS `json:"tls,omitempty"`
+
+	// Settings for managing HTTP requests to the backend
+	// +optional
+	HTTP *BackendHTTP `json:"http,omitempty"`
+
+	// Settings for managing tunnel connections to the backend, like `HTTPS_PROXY`
+	// +optional
+	Tunnel *BackendTunnel `json:"tunnel,omitempty"`
+}
+
+func (p BackendConnectionPolicy) backendSimple(auth *BackendAuth) *BackendSimple {
+	return &BackendSimple{
+		TCP:    p.TCP,
+		TLS:    p.TLS,
+		HTTP:   p.HTTP,
+		Tunnel: p.Tunnel,
+		Auth:   auth,
+	}
+}
+
+// OpenAIModerationPolicy configures calls to the OpenAI Moderation API.
+// +kubebuilder:validation:AtLeastOneFieldSet
+type OpenAIModerationPolicy struct {
+	BackendConnectionPolicy `json:",inline"`
+
+	// Settings for authenticating to OpenAI.
+	// +optional
+	Auth *OpenAIModerationAuth `json:"auth,omitempty"`
+}
+
+func (p *OpenAIModerationPolicy) BackendSimple() *BackendSimple {
+	if p == nil {
+		return nil
+	}
+	return p.BackendConnectionPolicy.backendSimple(p.Auth.BackendAuth())
+}
+
+// BedrockGuardrailsPolicy configures calls to AWS Bedrock Guardrails.
+// +kubebuilder:validation:AtLeastOneFieldSet
+type BedrockGuardrailsPolicy struct {
+	BackendConnectionPolicy `json:",inline"`
+
+	// Settings for authenticating to AWS Bedrock Guardrails.
+	// +optional
+	Auth *BedrockGuardrailsAuth `json:"auth,omitempty"`
+}
+
+func (p *BedrockGuardrailsPolicy) BackendSimple() *BackendSimple {
+	if p == nil {
+		return nil
+	}
+	return p.BackendConnectionPolicy.backendSimple(p.Auth.BackendAuth())
+}
+
+// GoogleModelArmorPolicy configures calls to Google Model Armor.
+// +kubebuilder:validation:AtLeastOneFieldSet
+type GoogleModelArmorPolicy struct {
+	BackendConnectionPolicy `json:",inline"`
+
+	// Settings for authenticating to Google Model Armor.
+	// +optional
+	Auth *GoogleModelArmorAuth `json:"auth,omitempty"`
+}
+
+func (p *GoogleModelArmorPolicy) BackendSimple() *BackendSimple {
+	if p == nil {
+		return nil
+	}
+	return p.BackendConnectionPolicy.backendSimple(p.Auth.BackendAuth())
 }
 
 type Health struct {
@@ -225,6 +308,8 @@ type BackendEviction struct {
 	// If all endpoints are evicted, the load balancer falls back to returning evicted endpoints
 	// rather than failing entirely.
 	// If unset, defaults to `3s`.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="evictionDuration must be at least 1 second"
 	// +kubebuilder:default="3s"
@@ -249,13 +334,12 @@ type BackendEviction struct {
 	// +optional
 	ConsecutiveFailures *int32 `json:"consecutiveFailures,omitempty"`
 
-	// EWMA health score threshold, expressed as 0 to 100.
-	// When set, a backend is only evicted if its computed health drops below this value after an unhealthy response.
-	// For example, 50 means the backend is evicted when its EWMA health falls below 50% following failures.
-	// Unlike consecutiveFailures (which counts consecutive failures), this uses a sliding-window average
-	// so a single success in a stream of failures can delay eviction.
-	// When both consecutiveFailures and healthThreshold are set, the backend is evicted when either condition is met.
-	// When neither is set, a single unhealthy response triggers eviction.
+	// EWMA health score threshold, from 0 to 100. When set, a backend is evicted
+	// only if its computed health drops below this value after an unhealthy
+	// response (e.g. 50 evicts when EWMA health falls below 50%). Unlike
+	// consecutiveFailures, this sliding-window average lets a single success delay
+	// eviction. If both are set, either condition evicts; if neither, a single
+	// unhealthy response evicts.
 	//
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=100
@@ -395,15 +479,11 @@ const (
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) && self.insecureSkipVerify == 'All' ? !has(self.caCertificateRefs) : true",message="insecureSkipVerify All and caCertificateRefs may not be set together"
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames) : true",message="insecureSkipVerify and verifySubjectAltNames may not be set together"
 type BackendTLS struct {
-	// Enables mutual TLS to the backend, using the
-	// specified key (`tls.key`) and cert (`tls.crt`) from the referenced
-	// credential source, defaulting to a Kubernetes `Secret`.
-	//
-	// An optional `ca.cert` field, if present, will be used to verify the
-	// server certificate. If `caCertificateRefs` is also specified, the
-	// `caCertificateRefs` field takes priority.
-	//
-	// If unspecified, no client certificate will be used.
+	// Enables mutual TLS to the backend using `tls.key` and `tls.crt` from the
+	// referenced credential source (defaulting to a Kubernetes `Secret`). An
+	// optional `ca.cert`, if present, verifies the server certificate, but
+	// `caCertificateRefs` takes priority. If unspecified, no client certificate
+	// is used.
 	//
 	// +listType=atomic
 	// +kubebuilder:validation:MaxItems=1
@@ -418,15 +498,13 @@ type BackendTLS struct {
 	// +optional
 	CACertificateRefs []corev1.LocalObjectReference `json:"caCertificateRefs,omitempty"`
 
-	// Originates TLS but skips verification of the backend's certificate.
-	// WARNING: This is an insecure option that should only be used if the risks are understood.
+	// Originates TLS but skips verification of the backend's certificate
+	// WARNING: insecure; only use if the risks are understood
 	//
-	// There are two modes:
-	// * `All` disables all TLS verification.
-	// * `Hostname` verifies the CA certificate is trusted, but ignores any
-	//   mismatch of hostname or SANs. Note that this method is still insecure;
-	//   prefer setting `verifySubjectAltNames` to customize the valid hostnames
-	//   if possible.
+	// Modes:
+	// * `All` disables all TLS verification
+	// * `Hostname` trusts the CA certificate but ignores hostname/SAN mismatches.
+	//   Still insecure; prefer `verifySubjectAltNames` where possible.
 	//
 	// +optional
 	InsecureSkipVerify *InsecureTLSMode `json:"insecureSkipVerify,omitempty"`
@@ -591,6 +669,8 @@ type FrontendHTTP struct {
 	// Timeout before an unused connection is
 	// closed.
 	// If unset, this defaults to 10 minutes.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http1IdleTimeout must be at least 1 second"
 	// +optional
@@ -623,10 +703,14 @@ type FrontendHTTP struct {
 	// If unset, this defaults to `16Ki`.
 	// +optional
 	HTTP2MaxHeaderSize *ByteSize `json:"http2MaxHeaderSize,omitempty"`
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http2KeepaliveInterval must be at least 1 second"
 	// +optional
 	HTTP2KeepaliveInterval *metav1.Duration `json:"http2KeepaliveInterval,omitempty"`
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http2KeepaliveTimeout must be at least 1 second"
 	// +optional
@@ -634,6 +718,8 @@ type FrontendHTTP struct {
 	// Maximum time a connection is allowed to remain open.
 	// After this duration, the connection is gracefully closed after the current in-flight request completes.
 	// Useful for ensuring even traffic distribution behind load balancers during scaling events.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="maxConnectionDuration must be at least 1 second"
 	// +optional
@@ -644,6 +730,8 @@ type FrontendHTTP struct {
 type FrontendTLS struct {
 	// Deadline for a TLS handshake to
 	// complete. If unset, this defaults to `15s`.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('100ms')",message="handshakeTimeout must be at least 100ms"
 	// +optional
@@ -738,6 +826,8 @@ type Keepalive struct {
 
 	// Time a connection needs to be idle before keepalive probes start being sent.
 	// If unset, this defaults to 180s.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="time must be at least 1 second"
 	// +optional
@@ -745,6 +835,8 @@ type Keepalive struct {
 
 	// Time between keepalive probes.
 	// If unset, this defaults to 180s.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="interval must be at least 1 second"
 	// +optional
@@ -870,6 +962,11 @@ type Traffic struct {
 	//
 	// +optional
 	Buffer *Buffer `json:"buffer,omitempty"`
+
+	// Injects artificial latency before forwarding requests, for
+	// fault-injection testing.
+	// +optional
+	Delay *Delay `json:"delay,omitempty"`
 }
 
 // Direct response policy.
@@ -1090,6 +1187,8 @@ type RemoteJWKS struct {
 	// +kubebuilder:validation:MaxLength=2000
 	JwksPath string `json:"jwksPath"`
 	// +optional
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('5m')",message="cacheDuration must be at least 5m."
 	// +kubebuilder:default="5m"
@@ -1189,7 +1288,7 @@ const (
 	APIKeyAuthenticationModePermissive APIKeyAuthenticationMode = "Permissive"
 )
 
-// +kubebuilder:validation:ExactlyOneOf=secretRef;secretSelector
+// +kubebuilder:validation:ExactlyOneOf=secretRef;secretSelector;configMapSelector
 type APIKeyAuthentication struct {
 	// Validation mode for API key authentication.
 	// +kubebuilder:default=Strict
@@ -1197,8 +1296,9 @@ type APIKeyAuthentication struct {
 	Mode APIKeyAuthenticationMode `json:"mode,omitempty"`
 
 	// Credential source, defaulting to a Kubernetes
-	// `Secret`, storing a set of API keys. If there are many Secret-backed
-	// keys, `secretSelector` can be used instead.
+	// `Secret`, storing a set of API keys. If many keys are needed,
+	// `secretSelector` or `configMapSelector` can be used instead.
+	// Note that ConfigMap-backed API keys only support `keyHash`.
 	//
 	// Each entry in the credential data represents one API key. The key is an
 	// arbitrary identifier. The value can either be:
@@ -1270,6 +1370,39 @@ type APIKeyAuthentication struct {
 	// +optional
 	SecretSelector *SecretSelector `json:"secretSelector,omitempty"`
 
+	// Selects multiple Kubernetes `ConfigMap` resources
+	// containing API keys. It is ConfigMap-only; use `secretRef` or
+	// `secretSelector` for Secret-backed credentials. If the same key is
+	// defined in multiple ConfigMaps, the behavior is undefined.
+	//
+	// Because ConfigMaps are not confidential, every entry sourced from a
+	// ConfigMap must use `keyHash`; a raw `key` value is rejected.
+	//
+	// Each entry in the `ConfigMap` data represents one API key. The key is
+	// an arbitrary identifier. The value must be a JSON object with
+	// `keyHash`, plus optional `metadata`. `keyHash` contains a hashed API
+	// key in `sha256:<hex>` format. `metadata` contains arbitrary JSON
+	// metadata associated with the key, which may be used by other
+	// policies. For example, you may write an authorization policy allowing
+	// `apiKey.group == 'sales'`.
+	//
+	// Example:
+	//
+	//	apiVersion: v1
+	//	kind: ConfigMap
+	//	metadata:
+	//	  name: api-key
+	//	data:
+	//	  client1: |
+	//	    {
+	//	      "keyHash": "sha256:efa299afb8c12a36e47a790cbbf929caa06d13285950410463fb759af17d0dad",
+	//	      "metadata": {
+	//	        "group": "sales"
+	//	      }
+	//	    }
+	// +optional
+	ConfigMapSelector *ConfigMapSelector `json:"configMapSelector,omitempty"`
+
 	// Where API keys are read from.
 	// If omitted, credentials are read from the `Authorization` header with the `Bearer ` prefix.
 	// +optional
@@ -1303,6 +1436,12 @@ type SecretSelector struct {
 	MatchLabels map[string]string `json:"matchLabels"`
 }
 
+type ConfigMapSelector struct {
+	// Labels that must be present on each selected ConfigMap.
+	// +required
+	MatchLabels map[string]string `json:"matchLabels"`
+}
+
 // +k8s:enum
 type HostnameRewriteMode string
 
@@ -1311,8 +1450,9 @@ const (
 	HostnameRewriteModeNone HostnameRewriteMode = "None"
 )
 
-// +kubebuilder:validation:ExactlyOneOf=key;secretRef;passthrough;aws;azure;gcp;oauthTokenExchange
-// +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) || has(self.passthrough) : true",message="location may only be set for key or passthrough auth"
+// +kubebuilder:validation:AtMostOneOf=key;secretRef;passthrough;aws;azure;gcp;oauthTokenExchange;crossAppAccess;jwtSign
+// +kubebuilder:validation:XValidation:rule="has(self.credentials) || has(self.key) || has(self.secretRef) || has(self.passthrough) || has(self.aws) || has(self.azure) || has(self.gcp) || has(self.oauthTokenExchange) || has(self.crossAppAccess) || has(self.jwtSign)",message="must specify credentials, or at most one of key/secretRef/passthrough/aws/azure/gcp/oauthTokenExchange/crossAppAccess/jwtSign (credentials may be combined with a primary auth kind)"
+// +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) || has(self.passthrough) : true",message="location may only be set for key, secretRef, or passthrough auth"
 type BackendAuth struct {
 	// Inline key to use as the value of the
 	// `Authorization` header. This option is the least secure; usage of a
@@ -1321,20 +1461,16 @@ type BackendAuth struct {
 	// +optional
 	InlineKey *string `json:"key,omitempty"`
 
-	// Credential source, defaulting to a Kubernetes
-	// `Secret`, storing the key to use as the authorization value. When using
-	// the default Secret resolver, this must be stored in the `Authorization`
-	// key by default; override via `secretRef.key`. A `Bearer ` prefix on the
-	// stored value is stripped only when reading the default `Authorization`
-	// key.
+	// Credential source for the authorization value, defaulting to a Kubernetes
+	// `Secret`. By default, the value is read from the `Authorization` key; set
+	// `secretRef.key` to override it. A `Bearer ` prefix is stripped only from
+	// the default `Authorization` key.
 	// +optional
 	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
 
-	// Passes through an existing token that has been sent by the
-	// client and validated. Other policies, like JWT and API key
-	// authentication, will strip the original client credentials. Passthrough backend authentication
-	// causes the original token to be added back into the request. If there are no client authentication policies on the
-	// request, the original token would be unchanged, so this would have no effect.
+	// Reuses a client token already validated by another policy. Those policies
+	// may strip client credentials; passthrough adds the original token back to
+	// the backend request. Without client auth policies, this has no effect.
 	// +optional
 	Passthrough *BackendAuthPassthrough `json:"passthrough,omitempty"`
 
@@ -1359,11 +1495,197 @@ type BackendAuth struct {
 	// +optional
 	OAuthTokenExchange *OAuthTokenExchange `json:"oauthTokenExchange,omitempty"`
 
+	// Cross App Access (Identity Assertion / ID-JAG) authentication.
+	// +optional
+	CrossAppAccess *CrossAppAccessAuth `json:"crossAppAccess,omitempty"`
+
+	// Signs a short-lived JWT with a private key on each request and sends it
+	// to the backend, for upstreams that require per-request keypair JWTs
+	// (e.g. the Snowflake SQL API) rather than a static credential.
+	// +optional
+	JwtSign *JwtSignAuth `json:"jwtSign,omitempty"`
+
 	// Where backend credentials are inserted.
 	// If omitted, credentials are written to the `Authorization` header with the `Bearer ` prefix.
-	// This applies to `key`, `secretRef`, and `passthrough`.
+	// This applies to `key`, `secretRef`, and `passthrough`. Entries in `credentials` carry their own location.
 	// +optional
 	Location *AuthorizationLocation `json:"location,omitempty"`
+
+	// Credentials is a list of additional credentials to inject on the
+	// backend request. Each entry resolves a Secret key and writes its value
+	// to the entry's location. `credentials` is independent of the primary
+	// `key`/`secretRef`/`passthrough` mechanism and may be set on its own or
+	// alongside it.
+	//
+	// +optional
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=8
+	// +listType=atomic
+	Credentials []BackendAuthCredential `json:"credentials,omitempty"`
+}
+
+// BackendAuthCredential specifies one additional credential to inject on the
+// backend request.
+type BackendAuthCredential struct {
+	// Where the credential is inserted on the backend request.
+	// +required
+	Location AuthorizationLocation `json:"location"`
+
+	// SecretRef references a Kubernetes Secret holding the credential value, and
+	// optionally overrides the key read from it. Defaults to `Authorization`,
+	// matching the key convention used by the top-level `secretRef`.
+	// +required
+	SecretRef LocalSecretKeyRef `json:"secretRef"`
+}
+
+// OpenAIModerationAuth configures credentials for OpenAI Moderation requests.
+// +kubebuilder:validation:ExactlyOneOf=key;secretRef
+type OpenAIModerationAuth struct {
+	// Inline key to use as the value of the
+	// `Authorization` header. This option is the least secure; usage of a
+	// `Secret` is preferred.
+	// +kubebuilder:validation:MaxLength=2048
+	// +optional
+	InlineKey *string `json:"key,omitempty"`
+
+	// Credential source for the authorization value, defaulting to a Kubernetes
+	// `Secret`. By default, the value is read from the `Authorization` key; set
+	// `secretRef.key` to override it. A `Bearer ` prefix is stripped only from
+	// the default `Authorization` key.
+	// +optional
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
+
+	// Where backend credentials are inserted. Defaults to the `Authorization`
+	// header with the `Bearer ` prefix. Applies to `key` and `secretRef`.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
+}
+
+func (a *OpenAIModerationAuth) BackendAuth() *BackendAuth {
+	if a == nil {
+		return nil
+	}
+	return &BackendAuth{
+		InlineKey: a.InlineKey,
+		SecretRef: a.SecretRef,
+		Location:  a.Location,
+	}
+}
+
+// BedrockGuardrailsAuth configures credentials for AWS Bedrock Guardrails requests.
+// +kubebuilder:validation:ExactlyOneOf=key;secretRef;aws
+// +kubebuilder:validation:XValidation:rule="has(self.location) ? has(self.key) || has(self.secretRef) : true",message="location may only be set for key or secretRef auth"
+type BedrockGuardrailsAuth struct {
+	// AWS authentication method for Bedrock Guardrails. Use `aws: {}` for
+	// default AWS SDK credential discovery.
+	// +optional
+	AWS *AwsAuth `json:"aws,omitempty"`
+
+	// Inline API key to use as the value of the `Authorization` header.
+	// This option is the least secure; usage of a `Secret` is preferred.
+	// +kubebuilder:validation:MaxLength=2048
+	// +optional
+	InlineKey *string `json:"key,omitempty"`
+
+	// Credential source for the API key, defaulting to a Kubernetes `Secret`.
+	// By default, the value is read from the `Authorization` key; set
+	// `secretRef.key` to override it. A `Bearer ` prefix is stripped only from
+	// the default `Authorization` key.
+	// +optional
+	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
+
+	// Where API keys are inserted. Defaults to the `Authorization` header with
+	// the `Bearer ` prefix. Applies to `key` and `secretRef`.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
+}
+
+func (a *BedrockGuardrailsAuth) BackendAuth() *BackendAuth {
+	if a == nil {
+		return nil
+	}
+	return &BackendAuth{
+		InlineKey: a.InlineKey,
+		SecretRef: a.SecretRef,
+		AWS:       a.AWS,
+		Location:  a.Location,
+	}
+}
+
+// GoogleModelArmorAuth configures credentials for Google Model Armor requests.
+// +kubebuilder:validation:ExactlyOneOf=gcp
+type GoogleModelArmorAuth struct {
+	// Google authentication method for Model Armor. Use `gcp: {}` for default
+	// Google credential discovery.
+	//
+	// +optional
+	GCP *GcpAuth `json:"gcp,omitempty"`
+}
+
+func (a *GoogleModelArmorAuth) BackendAuth() *BackendAuth {
+	if a == nil {
+		return nil
+	}
+	return &BackendAuth{
+		GCP: a.GCP,
+	}
+}
+
+// Cross App Access settings for backend authentication.
+type CrossAppAccessAuth struct {
+	// User identity provider authorization server, used for the RFC 8693 ID-JAG exchange.
+	// +required
+	IdentityProvider CrossAppAccessEndpoint `json:"identityProvider"`
+
+	// Resource authorization server, used for the RFC 7523 jwt-bearer exchange.
+	// +required
+	ResourceAuthorizationServer CrossAppAccessEndpoint `json:"resourceAuthorizationServer"`
+
+	// Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.
+	// +required
+	Audience ShortString `json:"audience"`
+
+	// Resources sent to the token endpoint.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
+	// +optional
+	Resources []string `json:"resources,omitempty"`
+
+	// Scopes sent to the token endpoint.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
+	// +optional
+	Scopes []string `json:"scopes,omitempty"`
+
+	// Subject token sent to the identity provider. Defaults to an OpenID Connect
+	// ID token read from the Authorization Bearer header.
+	// +optional
+	SubjectToken *CrossAppAccessSubjectToken `json:"subjectToken,omitempty"`
+
+	// Response cache configuration.
+	// +optional
+	Cache *OAuthTokenCache `json:"cache,omitempty"`
+}
+
+type CrossAppAccessSubjectToken struct {
+	// Where to read the subject token. Defaults to the Authorization Bearer header.
+	// +optional
+	Source *AuthorizationExtractionLocation `json:"source,omitempty"`
+}
+
+type CrossAppAccessEndpoint struct {
+	// Token endpoint backend.
+	// +required
+	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+
+	// Token endpoint path; defaults to "/". Must start with "/".
+	// +kubebuilder:validation:Pattern=`^/`
+	// +optional
+	Path *string `json:"path,omitempty"`
+
+	// Client authentication for the token endpoint.
+	// +required
+	ClientAuth OAuthClientAuth `json:"clientAuth"`
 }
 
 // OAuth token exchange settings for backend authentication.
@@ -1385,6 +1707,8 @@ type OAuthTokenExchange struct {
 	GrantType *OAuthGrantType `json:"grantType,omitempty"`
 
 	// Subject token / assertion source and type. Defaults to Authorization Bearer, AccessToken.
+	// The token type may be a built-in value or a custom absolute URI for providers
+	// that support custom token exchange profiles.
 	// +optional
 	SubjectToken *OAuthTokenSpec `json:"subjectToken,omitempty"`
 
@@ -1396,7 +1720,7 @@ type OAuthTokenExchange struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
 	// +optional
-	Audiences []string `json:"audiences,omitempty"`
+	Audiences []ShortString `json:"audiences,omitempty"`
 
 	// Scopes sent to the token endpoint.
 	// +kubebuilder:validation:MinItems=1
@@ -1410,7 +1734,9 @@ type OAuthTokenExchange struct {
 	// +optional
 	Resources []string `json:"resources,omitempty"`
 
-	// RFC 8693 requested_token_type.
+	// RFC 8693 requested_token_type. Unlike subject/actor token types, only the
+	// built-in values may be requested; custom URIs are not supported here.
+	// +kubebuilder:validation:Enum=AccessToken;Jwt;IdToken;IdJag
 	// +optional
 	RequestedTokenType *OAuthTokenType `json:"requestedTokenType,omitempty"`
 
@@ -1446,7 +1772,8 @@ type OAuthTokenSpec struct {
 	// +optional
 	Source *AuthorizationExtractionLocation `json:"source,omitempty"`
 
-	// OAuth token type. Empty defaults to AccessToken.
+	// OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
+	// are supported for subject tokens.
 	// +optional
 	TokenType *OAuthTokenType `json:"tokenType,omitempty"`
 }
@@ -1457,7 +1784,8 @@ type OAuthActorToken struct {
 	// +required
 	Source AuthorizationExtractionLocation `json:"source"`
 
-	// OAuth token type. Empty defaults to AccessToken.
+	// OAuth token type. Empty defaults to AccessToken. Custom absolute URI values
+	// are supported for actor tokens.
 	// +optional
 	TokenType *OAuthTokenType `json:"tokenType,omitempty"`
 
@@ -1466,7 +1794,10 @@ type OAuthActorToken struct {
 	MayAct *OAuthMayActValidationMode `json:"mayAct,omitempty"`
 }
 
-// +k8s:enum
+// OAuthTokenType is an RFC 8693 token type. The built-in values below are
+// translated to their URN form; any other value must be a custom absolute URI
+// and is passed through unchanged. It is intentionally not a closed enum so
+// subject/actor tokens can use provider-specific token type URIs.
 type OAuthTokenType string
 
 const (
@@ -1509,25 +1840,36 @@ type OAuthClientAuth struct {
 	// +optional
 	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
 
-	// privateKeyJwt client assertion settings. Required when method is PrivateKeyJwt.
+	// Client assertion settings. Required when method is PrivateKeyJwt.
 	// +optional
 	PrivateKeyJWT *OAuthPrivateKeyJWT `json:"privateKeyJwt,omitempty"`
 
-	// Defaults to ClientSecretBasic.
+	// Client authentication method. Defaults to ClientSecretBasic.
 	// +optional
 	Method *OAuthClientAuthMethod `json:"method,omitempty"`
 }
 
 // OAuthPrivateKeyJWT configures RFC 7523 private_key_jwt client authentication.
+// +kubebuilder:validation:XValidation:rule="has(self.certificateRef) == has(self.certificateHeader)",message="certificateRef and certificateHeader must be set together"
 type OAuthPrivateKeyJWT struct {
-	// Secret providing the `signingKey` key by default with a PEM-encoded RSA
-	// or EC private key; override the key name via `signingKeyRef.key`.
+	// PEM-encoded RSA or EC private key; key defaults to `signingKey`.
 	// +required
 	SigningKeyRef LocalSecretKeyRef `json:"signingKeyRef"`
 
+	// PEM-encoded X.509 certificate chain, leaf first, for certificateHeader. The
+	// leaf public key should match signingKeyRef; a mismatch only logs a warning
+	// but the token endpoint will reject the assertions. Required when
+	// certificateHeader is set. The key defaults to `certificate`.
+	// +optional
+	CertificateRef *LocalSecretKeyRef `json:"certificateRef,omitempty"`
+
+	// JWS certificate header. Required when certificateRef is set.
+	// +optional
+	CertificateHeader *OAuthPrivateKeyJWTCertificateHeader `json:"certificateHeader,omitempty"`
+
 	// JWS signing algorithm. Defaults to RS256.
 	// +optional
-	Alg *OAuthPrivateKeyJWTSigningAlgorithm `json:"alg,omitempty"`
+	Alg *JwtSigningAlg `json:"alg,omitempty"`
 
 	// Optional JWS key ID header.
 	// +optional
@@ -1540,15 +1882,61 @@ type OAuthPrivateKeyJWT struct {
 }
 
 // +k8s:enum
-type OAuthPrivateKeyJWTSigningAlgorithm string
+type OAuthPrivateKeyJWTCertificateHeader string
 
 const (
-	OAuthPrivateKeyJWTSigningAlgorithmRS256 OAuthPrivateKeyJWTSigningAlgorithm = "RS256"
-	OAuthPrivateKeyJWTSigningAlgorithmRS384 OAuthPrivateKeyJWTSigningAlgorithm = "RS384"
-	OAuthPrivateKeyJWTSigningAlgorithmRS512 OAuthPrivateKeyJWTSigningAlgorithm = "RS512"
-	OAuthPrivateKeyJWTSigningAlgorithmES256 OAuthPrivateKeyJWTSigningAlgorithm = "ES256"
-	OAuthPrivateKeyJWTSigningAlgorithmES384 OAuthPrivateKeyJWTSigningAlgorithm = "ES384"
+	OAuthPrivateKeyJWTCertificateHeaderX5C     OAuthPrivateKeyJWTCertificateHeader = "x5c"
+	OAuthPrivateKeyJWTCertificateHeaderX5TS256 OAuthPrivateKeyJWTCertificateHeader = "x5t#S256"
 )
+
+// +k8s:enum
+type JwtSigningAlg string
+
+const (
+	JwtSigningAlgRS256 JwtSigningAlg = "RS256"
+	JwtSigningAlgRS384 JwtSigningAlg = "RS384"
+	JwtSigningAlgRS512 JwtSigningAlg = "RS512"
+	JwtSigningAlgPS256 JwtSigningAlg = "PS256"
+	JwtSigningAlgES256 JwtSigningAlg = "ES256"
+	JwtSigningAlgES384 JwtSigningAlg = "ES384"
+)
+
+// JwtSignAuth signs a short-lived JWT with a private key on each request and
+// sends it to the backend, for upstreams that require per-request keypair
+// JWTs (e.g. the Snowflake SQL API) rather than a static credential.
+type JwtSignAuth struct {
+	// Secret providing the `signingKey` key with a PEM-encoded RSA or EC private key.
+	// +required
+	SigningKeyRef LocalSecretObjectRef `json:"signingKeyRef"`
+
+	// JWS signing algorithm. Defaults to RS256.
+	// +optional
+	Alg *JwtSigningAlg `json:"alg,omitempty"`
+
+	// Optional JWS key ID header.
+	// +optional
+	KeyID *string `json:"kid,omitempty"`
+
+	// Static claims added to every token (e.g. iss, sub, aud). Values may be
+	// any JSON value (e.g. a string, number, bool, or array). iat, exp, and
+	// nbf are reserved for the signer and cannot be configured here; the
+	// controller rejects them at translation time.
+	// +optional
+	Claims map[string]apiextensionsv1.JSON `json:"claims,omitempty"`
+
+	// Token lifetime used for exp. Defaults to 300s.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
+	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="ttl must be at least 1 second"
+	// +optional
+	TTL *metav1.Duration `json:"ttl,omitempty"`
+
+	// Where the signed token is written on the backend request.
+	// Defaults to the Authorization header with a "Bearer " prefix.
+	// +optional
+	Location *AuthorizationLocation `json:"location,omitempty"`
+}
 
 type OAuthTokenCache struct {
 	// +optional
@@ -1561,6 +1949,9 @@ type OAuthInMemoryTokenCache struct {
 	MaxEntries *uint32 `json:"maxEntries,omitempty"`
 
 	// TTL used when the token endpoint omits expires_in. Default 300s.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
+	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +optional
 	DefaultTTL *metav1.Duration `json:"defaultTtl,omitempty"`
 }
@@ -1582,11 +1973,10 @@ type GcpAuth struct {
 	//
 	// +optional
 	Type *GcpAuthType `json:"type,omitempty"`
-	// Credential source, defaulting to a Kubernetes
-	// `Secret`, containing ADC-compatible Google credential JSON. When using
-	// the default Secret resolver, this must be stored in the `credentials.json`
-	// key by default; override via `secretRef.key`. When omitted, ambient
-	// credentials are used.
+	// Credential source for ADC-compatible Google credential JSON, defaulting to
+	// a Kubernetes `Secret`. By default, the value is read from
+	// `credentials.json`; set `secretRef.key` to override it. When omitted,
+	// ambient credentials are used.
 	//
 	// +optional
 	SecretRef *LocalSecretKeyRef `json:"secretRef,omitempty"`
@@ -1602,10 +1992,9 @@ type GcpAuth struct {
 //
 // +kubebuilder:validation:XValidation:rule="!(has(self.secretRef) && has(self.assumeRole))",message="secretRef and assumeRole are mutually exclusive"
 type AwsAuth struct {
-	// Credential source, defaulting to a Kubernetes
-	// `Secret`, containing the AWS credentials. When using the default Secret
-	// resolver, the `Secret` must have keys `accessKey`, `secretKey`, and
-	// optionally `sessionToken`.
+	// Credential source for AWS credentials, defaulting to a Kubernetes `Secret`.
+	// The default Secret resolver expects `accessKey`, `secretKey`, and optional
+	// `sessionToken` keys.
 	// +optional
 	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
 
@@ -1621,6 +2010,14 @@ type AwsAuth struct {
 	//
 	// +optional
 	ServiceName *ShortString `json:"serviceName,omitempty"`
+
+	// AWS SigV4 signing region, for example `us-east-1`. Set this when the
+	// target AWS service is in a different region than the gateway. If unset,
+	// typed AWS backends may provide this automatically; otherwise the ambient
+	// AWS region is used.
+	//
+	// +optional
+	Region *ShortString `json:"region,omitempty"`
 }
 
 // AWS STS AssumeRole settings for backend authentication.
@@ -1649,9 +2046,8 @@ type AwsAssumeRole struct {
 	// +optional
 	SessionNameExpression *CELExpression `json:"sessionNameExpression,omitempty"`
 
-	// Tags are session tags passed to STS AssumeRole. Once activated as cost
-	// allocation tags, they appear in the AWS Cost & Usage Report for cost
-	// attribution. STS allows at most 50 session tags per role session.
+	// Session tags passed to STS AssumeRole for cost attribution in the AWS Cost
+	// & Usage Report, once activated. STS allows at most 50 per role session.
 	//
 	// +optional
 	// +listType=map
@@ -1678,10 +2074,9 @@ type AwsSessionTag struct {
 	// +kubebuilder:validation:MaxLength=256
 	Value *string `json:"value,omitempty"`
 
-	// Expression is a CEL expression evaluated against each request to produce
-	// the tag value, for example `jwt.sub` or `request.headers["x-app"]`. If the
-	// expression does not produce a valid tag value at request time, the request
-	// is rejected.
+	// CEL expression evaluated against each request to produce the tag value,
+	// for example `jwt.sub` or `request.headers["x-app"]`. Requests with invalid
+	// tag values are rejected.
 	//
 	// +optional
 	Expression *CELExpression `json:"expression,omitempty"`
@@ -1694,10 +2089,9 @@ type AwsSessionTag struct {
 //
 // +kubebuilder:validation:AtMostOneOf=secretRef;managedIdentity;workloadIdentity
 type AzureAuth struct {
-	// Credential source, defaulting to a Kubernetes
-	// `Secret`, containing the Azure credentials. When using the default Secret
-	// resolver, the `Secret` must have keys `clientID`, `tenantID`, and
-	// `clientSecret`.
+	// Credential source for Azure credentials, defaulting to a Kubernetes
+	// `Secret`. The default Secret resolver expects `clientID`, `tenantID`, and
+	// `clientSecret` keys.
 	//
 	// +optional
 	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
@@ -1707,12 +2101,9 @@ type AzureAuth struct {
 	// +optional
 	ManagedIdentity *AzureManagedIdentity `json:"managedIdentity,omitempty"`
 
-	// Workload identity authentication settings. Uses the federated token
-	// projected into the data plane pod (via the `AZURE_FEDERATED_TOKEN_FILE`,
-	// `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, and `AZURE_AUTHORITY_HOST`
-	// environment variables) to authenticate. This is the recommended method
-	// when running on Azure Kubernetes Service (AKS) with Workload Identity
-	// enabled.
+	// Workload identity authentication settings. Uses the federated token and
+	// Azure env vars projected into the data plane pod. Recommended on AKS with
+	// Workload Identity enabled.
 	//
 	// +optional
 	WorkloadIdentity *AzureWorkloadIdentity `json:"workloadIdentity,omitempty"`
@@ -1968,16 +2359,26 @@ type MCPAuthentication struct {
 	// If set, the gateway will not proxy registration requests to the IDP and instead return this client ID.
 	// +optional
 	ClientID *string `json:"clientId,omitempty"`
+
+	// Reference to a Kubernetes Secret holding the OAuth client secret of the app
+	// registration identified by `clientId` (for example Entra ID confidential clients,
+	// which require the secret at the token endpoint). The gateway injects it into the
+	// token requests it proxies to the provider. Defaults to the `clientSecret` key;
+	// override via `clientSecretRef.key`.
+	// +optional
+	ClientSecretRef *LocalSecretKeyRef `json:"clientSecretRef,omitempty"`
 }
 
 // +k8s:enum
 type McpIDP string
 
 const (
-	Auth0    McpIDP = "Auth0"
-	Keycloak McpIDP = "Keycloak"
-	Okta     McpIDP = "Okta"
-	Descope  McpIDP = "Descope"
+	Auth0     McpIDP = "Auth0"
+	Keycloak  McpIDP = "Keycloak"
+	Okta      McpIDP = "Okta"
+	Descope   McpIDP = "Descope"
+	Authentik McpIDP = "Authentik"
+	Entra     McpIDP = "Entra"
 )
 
 type BackendTunnel struct {
@@ -1988,21 +2389,16 @@ type BackendTunnel struct {
 }
 
 type BackendHTTP struct {
-	// HTTP protocol version to use when connecting to
-	// the backend.
-	// If not specified, the version is automatically determined:
-	// * `Service` types can specify it with `appProtocol` on the `Service`
-	//   port.
-	// * If traffic is identified as gRPC, `HTTP2` is used.
-	// * If the incoming traffic was plaintext HTTP, the original protocol will
-	//   be used.
-	// * If the incoming traffic was HTTPS, `HTTP1` will be used. This is
-	//   because most clients will transparently upgrade HTTPS traffic to
-	//   `HTTP2`, even if the backend doesn't support it.
+	// HTTP protocol version for backend connections. If unset, it is inferred:
+	// `Service` appProtocol, `HTTP2` for gRPC, the original protocol for
+	// plaintext HTTP, or `HTTP1` for HTTPS because clients often upgrade HTTPS
+	// to HTTP/2 even when the backend does not support it.
 	// +optional
 	Version *HTTPVersion `json:"version,omitempty"`
 
 	// Deadline for receiving a response from the backend.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1ms')",message="requestTimeout must be at least 1ms"
 	// +optional
@@ -2024,6 +2420,8 @@ type BackendTCP struct {
 	Keepalive *Keepalive `json:"keepalive,omitempty"`
 	// Deadline for establishing a connection to
 	// the destination.
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('100ms')",message="connectTimeout must be at least 100ms"
 	// +optional
@@ -2175,10 +2573,12 @@ const (
 	// BodySendModeNone does not send the body to the external processor.
 	BodySendModeNone BodySendMode = "None"
 	// BodySendModeBuffered buffers the full body before sending it to the
-	// external processor. It returns an error if the body exceeds 8KB.
+	// external processor. Returns an error if the body exceeds the
+	// configured body buffer limit.
 	BodySendModeBuffered BodySendMode = "Buffered"
-	// BodySendModeBufferedPartial buffers up to 8KB. If the body exceeds that
-	// limit, it sends the buffered prefix instead of returning an error.
+	// BodySendModeBufferedPartial buffers up to the configured body buffer limit.
+	// If the body exceeds that limit, it sends the buffered prefix instead of
+	// returning an error.
 	BodySendModeBufferedPartial BodySendMode = "BufferedPartial"
 	// BodySendModeFullDuplexStreamed streams the body to the external processor.
 	BodySendModeFullDuplexStreamed BodySendMode = "FullDuplexStreamed"
@@ -2209,17 +2609,13 @@ const (
 // External processor request and response phase settings.
 type ProcessingOptions struct {
 	// How request bodies are sent to the external processor.
-	// `Buffered` buffers the full body and returns an error if it exceeds 8KB.
-	// `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
-	// body exceeds that limit. Defaults to `FullDuplexStreamed`.
+	// Defaults to `FullDuplexStreamed`.
 	// +optional
 	// +kubebuilder:default=FullDuplexStreamed
 	RequestBodyMode *BodySendMode `json:"requestBodyMode,omitempty"`
 
 	// How response bodies are sent to the external processor.
-	// `Buffered` buffers the full body and returns an error if it exceeds 8KB.
-	// `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
-	// body exceeds that limit. Defaults to `FullDuplexStreamed`.
+	// Defaults to `FullDuplexStreamed`.
 	// +optional
 	// +kubebuilder:default=FullDuplexStreamed
 	ResponseBodyMode *BodySendMode `json:"responseBodyMode,omitempty"`
@@ -2255,11 +2651,24 @@ type ProcessingOptions struct {
 	AllowModeOverride bool `json:"allowModeOverride,omitempty"`
 }
 
+// NamespacedMetadataContext holds the CEL expressions for a single metadata
+// namespace, keyed by the metadata key within that namespace.
+type NamespacedMetadataContext map[string]CELExpression
+
 type ExtProc struct {
 	// External Processor server to reach.
 	// Supported types: `Service` and `Backend`.
 	// +optional
 	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
+
+	// Behavior when the external processor is unavailable or returns an error.
+	// "FailOpen" allows the request to continue, as long as the request body has not
+	// been sent (or started streaming) to the ext_proc. Once the request body has
+	// started streaming to the ext_proc, the request will fail closed on error.
+	// "FailClosed" (default) rejects the request on any failure.
+	// +optional
+	FailureMode FailureMode `json:"failureMode,omitempty"`
+
 	// How request and response phases are sent to ext_proc.
 	// +optional
 	ProcessingOptions *ProcessingOptions `json:"processingOptions,omitempty"`
@@ -2270,7 +2679,7 @@ type ExtProc struct {
 	// CEL expressions evaluated per request.
 	// +optional
 	// +kubebuilder:validation:MaxProperties=64
-	MetadataContext map[string]map[string]CELExpression `json:"metadataContext,omitempty"`
+	MetadataContext map[string]NamespacedMetadataContext `json:"metadataContext,omitempty"`
 
 	// Request attributes to send to the external processor in the request
 	// `attributes` field of the ProcessingRequest. Values are CEL expressions
@@ -2754,10 +3163,25 @@ type Timeouts struct {
 	// Timeout for an individual request from the gateway to a backend. This covers the time from when
 	// the request first starts being sent from the gateway to when the full response has been received from the backend.
 	//
+	// +kubebuilder:validation:Type=string
+	// +kubebuilder:validation:MaxLength=32
 	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('100ms')",message="request must be at least 1ms"
 	// +optional
 	Request *metav1.Duration `json:"request,omitempty"`
+}
+
+// Artificial latency injection for fault-injection testing.
+type Delay struct {
+	// Latency to inject before forwarding the request to the backend. Either a duration string such
+	// as `2s`, or a CEL expression evaluated against the request that returns a duration (e.g.
+	// `duration("500ms")`) or a number interpreted as milliseconds (e.g. `random() < 0.1 ? 500 : 0`
+	// for probabilistic delay, or `int(random() * 500)` for jitter). A non-positive result injects
+	// no delay.
+	//
+	// The injected delay counts against the request timeout.
+	// +required
+	Duration CELExpression `json:"duration"`
 }
 
 // Retry policy.

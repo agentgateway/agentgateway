@@ -157,6 +157,21 @@ impl WaypointIdentity {
 			},
 		}
 	}
+
+	/// Checks whether this waypoint fronts `svc`, and may therefore serve traffic for it. That is
+	/// either as the service's primary waypoint, or as one of the weighted waypoints the service
+	/// is being migrated across: the client picks one of those per connection, while `waypoint`
+	/// keeps naming the primary.
+	pub fn fronts_service(
+		&self,
+		svc: &Service,
+		get_service_at: impl Fn(&NetworkAddress) -> Option<(Strng, Strng)>,
+	) -> bool {
+		svc.fronting_waypoints().any(|wp| match &wp.destination {
+			gatewayaddress::Destination::Address(addr) => self.matches_address(addr, &get_service_at),
+			gatewayaddress::Destination::Hostname(nh) => self.matches_hostname(nh),
+		})
+	}
 }
 
 #[derive(Debug, Eq, PartialEq, Hash, Clone)]
@@ -575,6 +590,12 @@ pub struct Service {
 	#[serde(default, skip_serializing_if = "is_default")]
 	pub waypoint: Option<GatewayAddress>,
 
+	/// The full set of waypoints fronting this service while it is being migrated from one
+	/// waypoint to another. `waypoint` stays populated with the primary.
+	/// Empty when no migration is in progress.
+	#[serde(default, skip_serializing_if = "is_default")]
+	pub weighted_waypoints: Vec<WeightedWaypoint>,
+
 	#[serde(default, skip_serializing_if = "is_default")]
 	pub load_balancer: Option<LoadBalancer>,
 
@@ -588,6 +609,26 @@ pub struct Service {
 }
 
 impl Service {
+	/// The waypoints that may serve traffic for this service. A non-empty weighted set is
+	/// authoritative and includes the primary; otherwise the single primary waypoint is used.
+	pub fn fronting_waypoints(&self) -> impl Iterator<Item = &GatewayAddress> {
+		self
+			.waypoint
+			.iter()
+			.filter(|_| self.weighted_waypoints.is_empty())
+			.chain(self.weighted_waypoints.iter().map(|w| &w.destination))
+	}
+
+	/// Whether any waypoint fronts this service.
+	pub fn has_fronting_waypoint(&self) -> bool {
+		self.fronting_waypoints().next().is_some()
+	}
+
+	/// The destinations of every waypoint fronting this service, for diagnostics.
+	pub fn fronting_waypoint_destinations(&self) -> Vec<&gatewayaddress::Destination> {
+		self.fronting_waypoints().map(|w| &w.destination).collect()
+	}
+
 	pub fn port_is_http2(&self, port: u16) -> bool {
 		matches!(
 			self.app_protocols.get(&port),
@@ -620,6 +661,13 @@ impl Service {
 				.map(|lb| lb.health_policy == LoadBalancerHealthPolicy::AllowAll)
 				.unwrap_or(false)
 	}
+}
+
+#[derive(Debug, Hash, Eq, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct WeightedWaypoint {
+	pub destination: GatewayAddress,
+	pub weight: u32,
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy, serde::Serialize, serde::Deserialize)]
@@ -929,6 +977,20 @@ impl TryFrom<&XdsService> for Service {
 			Some(w) => Some(GatewayAddress::try_from(w)?),
 			None => None,
 		};
+		let weighted_waypoints = s
+			.weighted_waypoints
+			.iter()
+			.map(|w| -> Result<WeightedWaypoint, ProtoError> {
+				let destination = w
+					.destination
+					.as_ref()
+					.ok_or(ProtoError::MissingRequiredField)?;
+				Ok(WeightedWaypoint {
+					destination: GatewayAddress::try_from(destination)?,
+					weight: w.weight,
+				})
+			})
+			.collect::<Result<Vec<_>, _>>()?;
 		let lb = if let Some(lb) = &s.load_balancing {
 			Some(LoadBalancer {
 				routing_preferences: lb
@@ -986,6 +1048,7 @@ impl TryFrom<&XdsService> for Service {
 				})
 				.collect(),
 			waypoint,
+			weighted_waypoints,
 			load_balancer: lb,
 			ip_families,
 			ingress_use_waypoint: s.ingress_use_waypoint,
@@ -1046,5 +1109,160 @@ impl TryFrom<XdsScope> for LoadBalancerScopes {
 			XdsScope::Network => Ok(LoadBalancerScopes::Network),
 			_ => Err(ProtoError::EnumParse("invalid target".to_string())),
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::net::Ipv4Addr;
+
+	use super::*;
+
+	fn waypoint_id(gateway: &str, namespace: &str) -> WaypointIdentity {
+		WaypointIdentity {
+			gateway: gateway.into(),
+			namespace: namespace.into(),
+		}
+	}
+
+	fn hostname_waypoint(gateway: &str, namespace: &str) -> GatewayAddress {
+		GatewayAddress {
+			destination: gatewayaddress::Destination::Hostname(NamespacedHostname {
+				namespace: namespace.into(),
+				hostname: strng::format!("{gateway}.{namespace}.svc.cluster.local"),
+			}),
+			hbone_mtls_port: 15008,
+		}
+	}
+
+	fn address_waypoint(last_octet: u8) -> GatewayAddress {
+		GatewayAddress {
+			destination: gatewayaddress::Destination::Address(NetworkAddress {
+				network: "".into(),
+				address: IpAddr::V4(Ipv4Addr::new(10, 0, 0, last_octet)),
+			}),
+			hbone_mtls_port: 15008,
+		}
+	}
+
+	fn weighted_waypoint(destination: GatewayAddress, weight: u32) -> WeightedWaypoint {
+		WeightedWaypoint {
+			destination,
+			weight,
+		}
+	}
+
+	/// Resolves 10.0.0.1 to primary-wp.ns1 and 10.0.0.2 to canary-wp.ns1; anything else is unknown.
+	fn resolve_vip(addr: &NetworkAddress) -> Option<(Strng, Strng)> {
+		match addr.address {
+			IpAddr::V4(v4) if v4 == Ipv4Addr::new(10, 0, 0, 1) => {
+				Some(("primary-wp".into(), "ns1".into()))
+			},
+			IpAddr::V4(v4) if v4 == Ipv4Addr::new(10, 0, 0, 2) => {
+				Some(("canary-wp".into(), "ns1".into()))
+			},
+			_ => None,
+		}
+	}
+
+	#[test]
+	fn fronting_waypoints_uses_weighted_set_when_present() {
+		let svc = Service {
+			waypoint: Some(hostname_waypoint("primary-wp", "ns1")),
+			weighted_waypoints: vec![
+				weighted_waypoint(hostname_waypoint("primary-wp", "ns1"), 95),
+				weighted_waypoint(hostname_waypoint("canary-wp", "ns1"), 5),
+			],
+			..Default::default()
+		};
+		assert_eq!(svc.fronting_waypoints().count(), 2);
+	}
+
+	#[test]
+	fn fronts_service_matches_primary_waypoint() {
+		let svc = Service {
+			waypoint: Some(hostname_waypoint("primary-wp", "ns1")),
+			..Default::default()
+		};
+		assert!(waypoint_id("primary-wp", "ns1").fronts_service(&svc, resolve_vip));
+	}
+
+	#[test]
+	fn fronts_service_matches_weighted_waypoint() {
+		// The mixed canary pairing: some other waypoint is primary, we are only the canary. istiod
+		// publishes both as weighted waypoints while `waypoint` keeps naming the primary.
+		let svc = Service {
+			waypoint: Some(hostname_waypoint("primary-wp", "ns1")),
+			weighted_waypoints: vec![
+				weighted_waypoint(hostname_waypoint("primary-wp", "ns1"), 95),
+				weighted_waypoint(hostname_waypoint("canary-wp", "ns1"), 5),
+			],
+			..Default::default()
+		};
+		assert!(waypoint_id("canary-wp", "ns1").fronts_service(&svc, resolve_vip));
+		// The primary still fronts it too, so traffic left on the primary is served.
+		assert!(waypoint_id("primary-wp", "ns1").fronts_service(&svc, resolve_vip));
+	}
+
+	#[test]
+	fn fronts_service_matches_neither() {
+		let svc = Service {
+			waypoint: Some(hostname_waypoint("primary-wp", "ns1")),
+			weighted_waypoints: vec![
+				weighted_waypoint(hostname_waypoint("primary-wp", "ns1"), 95),
+				weighted_waypoint(hostname_waypoint("canary-wp", "ns1"), 5),
+			],
+			..Default::default()
+		};
+		// Right name, wrong namespace, and an unrelated waypoint entirely.
+		assert!(!waypoint_id("canary-wp", "ns2").fronts_service(&svc, resolve_vip));
+		assert!(!waypoint_id("other-wp", "ns1").fronts_service(&svc, resolve_vip));
+	}
+
+	#[test]
+	fn fronts_service_with_no_waypoints() {
+		let svc = Service::default();
+		assert!(!waypoint_id("primary-wp", "ns1").fronts_service(&svc, resolve_vip));
+	}
+
+	#[test]
+	fn fronts_service_matches_weighted_waypoint_by_address() {
+		// Address destinations resolve through the VIP lookup rather than the hostname.
+		let svc = Service {
+			waypoint: Some(address_waypoint(1)),
+			weighted_waypoints: vec![
+				weighted_waypoint(address_waypoint(1), 95),
+				weighted_waypoint(address_waypoint(2), 5),
+			],
+			..Default::default()
+		};
+		assert!(waypoint_id("canary-wp", "ns1").fronts_service(&svc, resolve_vip));
+		assert!(waypoint_id("primary-wp", "ns1").fronts_service(&svc, resolve_vip));
+		assert!(!waypoint_id("other-wp", "ns1").fronts_service(&svc, resolve_vip));
+	}
+
+	#[test]
+	fn fronts_service_unresolvable_address_does_not_match() {
+		// An address we cannot resolve must not be treated as ours.
+		let svc = Service {
+			waypoint: Some(address_waypoint(99)),
+			..Default::default()
+		};
+		assert!(!waypoint_id("primary-wp", "ns1").fronts_service(&svc, resolve_vip));
+	}
+
+	#[test]
+	fn service_rejects_weighted_waypoint_without_destination() {
+		let svc = XdsService {
+			weighted_waypoints: vec![workload::WeightedWaypoint {
+				destination: None,
+				weight: 5,
+			}],
+			..Default::default()
+		};
+		assert!(matches!(
+			Service::try_from(&svc),
+			Err(ProtoError::MissingRequiredField)
+		));
 	}
 }

@@ -59,6 +59,9 @@ curl -s http://localhost:3000/exchange -H "authorization: Bearer $SUBJECT_TOKEN"
 The gateway POSTs to Keycloak's token endpoint as the confidential client
 `requester-client` (`clientSecretBasic`), exchanging the user's token for one
 scoped to `audience=target-client`, and forwards *that* token upstream.
+For RFC 8693 token exchange, the gateway sends
+`requested_token_type=urn:ietf:params:oauth:token-type:access_token` unless you
+configure a different `requestedTokenType`.
 
 Decoded result (inbound vs forwarded):
 
@@ -99,6 +102,25 @@ Edit `config.yaml` and re-`curl` (hot-reloaded):
 - **Custom subject source** — `subjectToken: { source: { ... }, tokenType: ... }`
   to read the subject from a non-default header, query param, cookie, or CEL
   expression.
+- **Validated JWT subject** — validate the inbound bearer token at the route,
+  then read that validated token explicitly during backend token exchange:
+
+  ```yaml
+  routes:
+    policies:
+      jwtAuth:
+        issuer: https://idp.example.com
+        audiences: [example-api]
+        jwks:
+          url: https://idp.example.com/.well-known/jwks.json
+    backends:
+      policies:
+        backendAuth:
+          oauthTokenExchange:
+            subjectToken:
+              source:
+                expression: jwt.rawToken.unredacted()
+  ```
 
 ## Cleanup
 

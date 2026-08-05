@@ -259,6 +259,13 @@ export function TrafficPolicySection(props: {
 
       {drawerOpen ? (
         <Drawer
+          // Remount when switching between the catalog and an individual
+          // policy's editor so Drawer's own dirty-tracking (any click on a
+          // dropdown option anywhere inside it) doesn't linger after a save
+          // has already committed the policy via onSave/setPolicy above —
+          // otherwise closing the catalog view falsely prompts to discard
+          // changes that were already saved.
+          key={selected ?? "catalog"}
           title={selectedMeta ? selectedMeta.title : props.title}
           variant="nested"
           onClose={closeDrawer}

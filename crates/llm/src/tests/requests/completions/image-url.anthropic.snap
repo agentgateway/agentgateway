@@ -1,0 +1,52 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/completions/image-url.json
+info:
+  model: claude-sonnet-4-20250514
+  messages:
+    - role: user
+      content:
+        - type: text
+          text: "What's in this image?"
+        - type: image_url
+          image_url:
+            url: "https://example.com/image.png"
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "What's in this image?"
+          },
+          {
+            "type": "image",
+            "source": {
+              "type": "url",
+              "url": "https://example.com/image.png"
+            }
+          }
+        ]
+      }
+    ],
+    "model": "claude-sonnet-4-20250514",
+    "max_tokens": 4096
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-sonnet-4-20250514",
+    "provider": "anthropic",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "What's in this image?"
+      }
+    ]
+  }
+}

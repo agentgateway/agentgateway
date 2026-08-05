@@ -21,7 +21,7 @@ import { claudeSubscriptionWarning } from "../claudeSubscription";
 import { providerLabel } from "../config";
 import { hasKeyValue, keyLabel, maskKey } from "../credentialDisplay";
 import { llmGatewayOrigin } from "../gatewayUrls";
-import { useGatewayConfig } from "../hooks";
+import { useLlmConfigData } from "../hooks";
 import {
   isWildcardModelName,
   modelProviderLabel,
@@ -36,6 +36,7 @@ import codexIcon from "../assets/codex-color.svg";
 import curlIcon from "../assets/curl.svg";
 import cursorIcon from "../assets/cursor.svg";
 import githubCopilotIcon from "../assets/providers/copilot.svg";
+import gooseIcon from "../assets/goose.svg";
 import opencodeIcon from "../assets/opencode.svg";
 import windsurfIcon from "../assets/windsurf.svg";
 
@@ -49,6 +50,7 @@ type ClientRecipe = {
     | "curl"
     | "cursor"
     | "copilot"
+    | "goose"
     | "opencode"
     | "windsurf";
   provider?: ProviderName;
@@ -68,16 +70,15 @@ type RequestModelOption =
   | { kind: "virtual"; name: string; icon: ReactNode; searchText: string };
 
 export function ClientSetupPage() {
-  const config = useGatewayConfig();
-  const models = useMemo(() => config.data?.llm?.models ?? [], [config.data]);
-  const virtualModels = useMemo(
-    () => config.data?.llm?.virtualModels ?? [],
-    [config.data],
-  );
-  const providers = useMemo(
-    () => config.data?.llm?.providers ?? [],
-    [config.data],
-  );
+  const {
+    config,
+    models,
+    virtualModels,
+    providers,
+    apiKeys,
+    isLoading: modelsLoading,
+    error: configDataError,
+  } = useLlmConfigData();
   const modelOptions = useMemo(
     () => [
       ...models.map((item) => ({
@@ -100,14 +101,7 @@ export function ClientSetupPage() {
     ],
     [models, providers, virtualModels],
   );
-  const virtualKeys = useMemo(
-    () => config.data?.llm?.policies?.apiKey?.keys ?? [],
-    [config.data],
-  );
-  const rawVirtualKeys = useMemo(
-    () => virtualKeys.filter(hasKeyValue),
-    [virtualKeys],
-  );
+  const rawVirtualKeys = useMemo(() => apiKeys.filter(hasKeyValue), [apiKeys]);
   const derivedBaseUrl = llmGatewayOrigin(config.data);
   const [baseUrl, setBaseUrl] = useState(derivedBaseUrl);
   const [baseUrlTouched, setBaseUrlTouched] = useState(false);
@@ -158,7 +152,7 @@ export function ClientSetupPage() {
   const recipes = clientRecipes({
     baseUrl: effectiveBaseUrl,
     model: requestModel || "model",
-    apiKey: apiKey || "agw_sk_...",
+    apiKey,
   });
   const activeRecipe =
     recipes.find((recipe) => recipe.id === selectedIntegration) ?? recipes[0];
@@ -169,12 +163,12 @@ export function ClientSetupPage() {
         title="Client Setup"
         description="Generate connection settings and snippets for OpenAI-compatible LLM clients."
       />
-      {config.isError ? (
+      {configDataError ? (
         <StatusBanner state="bad" title="Configuration API unavailable">
-          {config.error.message}
+          {configDataError.message}
         </StatusBanner>
       ) : null}
-      {modelOptions.length === 0 && !config.isLoading ? (
+      {modelOptions.length === 0 && !modelsLoading ? (
         <StatusBanner state="warn" title="No models configured">
           Create an LLM model before wiring clients to the gateway.
         </StatusBanner>
@@ -292,9 +286,7 @@ export function ClientSetupPage() {
             </div>
             <div>
               <span>Auth</span>
-              <code>
-                Authorization: Bearer {apiKey ? maskKey(apiKey) : "..."}
-              </code>
+              <code>{apiKey ? `Bearer ${maskKey(apiKey)}` : "None"}</code>
             </div>
           </div>
         </Panel>
@@ -411,6 +403,20 @@ function clientRecipes(args: {
   const base = args.baseUrl.replace(/\/$/, "");
   const v1 = `${base}/v1`;
   const completions = `${v1}/chat/completions`;
+  const requiredApiKey = args.apiKey || "dummy_key";
+  const continuation = "\\";
+  const curlAuthorization = args.apiKey
+    ? `  -H ${JSON.stringify(`Authorization: Bearer ${args.apiKey}`)} ${continuation}\n`
+    : "";
+  const openCodeApiKey = args.apiKey
+    ? `,
+        "apiKey": "{env:AGENTGATEWAY_API_KEY}"`
+    : "";
+  const openCodeApiKeyExport = args.apiKey
+    ? `
+
+export AGENTGATEWAY_API_KEY=${JSON.stringify(args.apiKey)}  # Alternatively, type /connect to enter your API key.`
+    : "";
   return [
     {
       id: "curl",
@@ -419,9 +425,8 @@ function clientRecipes(args: {
         "Minimal raw HTTP request for debugging client connectivity.",
       icon: "curl",
       language: "bash",
-      code: `curl ${JSON.stringify(completions)} \\
-  -H "Authorization: Bearer ${args.apiKey}" \\
-  -H "Content-Type: application/json" \\
+      code: `curl ${JSON.stringify(completions)} ${continuation}
+${curlAuthorization}  -H "Content-Type: application/json" ${continuation}
   -d '{
     "model": "${args.model}",
     "messages": [
@@ -436,10 +441,10 @@ function clientRecipes(args: {
         "Use the gateway URL and key with Claude-compatible model routes when configured.",
       icon: "claude",
       language: "bash",
-      code: `export ANTHROPIC_AUTH_TOKEN="${args.apiKey}"
-export ANTHROPIC_BASE_URL="${base}"
+      code: `export ANTHROPIC_AUTH_TOKEN=${JSON.stringify(requiredApiKey)}
+export ANTHROPIC_BASE_URL=${JSON.stringify(base)}
 
-claude --model "${args.model}"`,
+claude --model ${JSON.stringify(args.model)}`,
     },
     {
       id: "claude-desktop",
@@ -469,7 +474,7 @@ claude --model "${args.model}"`,
       ],
       language: "text",
       code: `Gateway URL: ${base}
-API Key: ${args.apiKey}`,
+API Key: ${requiredApiKey}`,
     },
     {
       id: "codex",
@@ -478,7 +483,7 @@ API Key: ${args.apiKey}`,
         "Use OpenAI-compatible environment variables when running Codex against the gateway.",
       icon: "codex",
       language: "bash",
-      code: `export OPENAI_API_KEY='${args.apiKey}'
+      code: `export OPENAI_API_KEY=${JSON.stringify(requiredApiKey)}
 # If Codex has an existing login it can impact functionality. Better if it's logged out.
 # If you don't want to override your Codex configuration, you can set up a new dedicated configuration file.
 export CODEX_HOME=/tmp/codex-gateway-home && mkdir -p $CODEX_HOME # optional
@@ -514,8 +519,7 @@ cat > opencode.json <<'EOF'
       "npm": "@ai-sdk/openai-compatible",
       "name": "Agentgateway",
       "options": {
-        "baseURL": "${v1}",
-        "apiKey": "{env:AGENTGATEWAY_API_KEY}"
+        "baseURL": "${v1}"${openCodeApiKey}
       },
       "models": {
         "${args.model}": {
@@ -526,9 +530,40 @@ cat > opencode.json <<'EOF'
   }
 }
 EOF
-
-export AGENTGATEWAY_API_KEY='${args.apiKey}'  # Alternatively, type /connect to enter your API key.
+${openCodeApiKeyExport}
 opencode`,
+    },
+    {
+      id: "goose",
+      title: "Goose",
+      description:
+        "Point Goose's OpenAI provider at the gateway host and chat completions path.",
+      icon: "goose",
+      steps: [
+        <>
+          Run <code>goose configure</code> &gt;{" "}
+          <strong>Configure Providers</strong> &gt; <strong>OpenAI</strong>, or
+          export the variables below before starting a session.
+        </>,
+        <>
+          To persist the settings, add them to{" "}
+          <code>~/.config/goose/config.yaml</code>.
+        </>,
+        <>
+          <code>goose configure</code> cannot enter custom model names; set{" "}
+          <code>GOOSE_MODEL</code> in <code>config.yaml</code> for models
+          missing from the provider list.
+        </>,
+      ],
+      language: "bash",
+      code: `export GOOSE_PROVIDER=openai
+export GOOSE_MODEL=${JSON.stringify(args.model)}
+export OPENAI_HOST=${JSON.stringify(base)}
+export OPENAI_BASE_PATH=v1/chat/completions
+# Goose requires a non-empty key; the gateway holds the real provider credentials.
+export OPENAI_API_KEY=${JSON.stringify(requiredApiKey)}
+
+goose session`,
     },
     {
       id: "cursor",
@@ -551,7 +586,7 @@ opencode`,
       ],
       language: "text",
       code: `Override OpenAI Base URL: ${base}
-OpenAI API Key: ${args.apiKey}
+OpenAI API Key: ${requiredApiKey}
 Custom model: ${args.model}`,
     },
     {
@@ -608,7 +643,7 @@ Custom model: ${args.model}`,
       code: `import OpenAI from "openai";
 
 const client = new OpenAI({
-  apiKey: "${args.apiKey}",
+  apiKey: "${requiredApiKey}",
   baseURL: "${v1}",
 });
 
@@ -629,7 +664,7 @@ console.log(response.choices[0]?.message?.content);`,
       code: `from openai import OpenAI
 
 client = OpenAI(
-    api_key="${args.apiKey}",
+    api_key="${requiredApiKey}",
     base_url="${v1}",
 )
 
@@ -686,6 +721,13 @@ function ClientSetupIcon(props: { recipe: ClientRecipe; compact?: boolean }) {
     return (
       <span className={className}>
         <img src={githubCopilotIcon} alt="" aria-hidden="true" />
+      </span>
+    );
+  }
+  if (props.recipe.icon === "goose") {
+    return (
+      <span className={className}>
+        <img src={gooseIcon} alt="" aria-hidden="true" />
       </span>
     );
   }
@@ -785,7 +827,10 @@ const pythonRules: CodeRule[] = [
 const bashRules: CodeRule[] = [
   { className: "code-comment", pattern: /#.*/y },
   { className: "code-string", pattern: /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/y },
-  { className: "code-keyword", pattern: /\b(?:curl|export|claude|codex)\b/y },
+  {
+    className: "code-keyword",
+    pattern: /\b(?:curl|export|claude|codex|goose)\b/y,
+  },
   { className: "code-flag", pattern: /--?[A-Za-z][\w-]*/y },
   { className: "code-number", pattern: /\b\d+(?:\.\d+)?\b/y },
 ];

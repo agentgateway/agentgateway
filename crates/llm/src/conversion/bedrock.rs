@@ -131,6 +131,16 @@ fn restore_tool_name(map: Option<&BedrockToolNameMap>, name: &str) -> String {
 		.unwrap_or_else(|| name.to_string())
 }
 
+fn responses_output_status(stop_reason: &bedrock::StopReason) -> responses::typed::OutputStatus {
+	match stop_reason {
+		bedrock::StopReason::MaxTokens
+		| bedrock::StopReason::ModelContextWindowExceeded
+		| bedrock::StopReason::ContentFiltered
+		| bedrock::StopReason::GuardrailIntervened => responses::typed::OutputStatus::Incomplete,
+		_ => responses::typed::OutputStatus::Completed,
+	}
+}
+
 struct CanonicalImage {
 	media_type: String,
 	bytes_base64: String,
@@ -346,6 +356,13 @@ pub mod from_embeddings {
 					.get("truncate")
 					.and_then(|v| v.as_str())
 					.map(|s| s.to_string()),
+				// Cohere Embed v4 calls OpenAI's `dimensions` parameter `output_dimension`.
+				// https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-embed-v4.html
+				output_dimension: if model.contains("embed-v4") {
+					typed.dimensions
+				} else {
+					None
+				},
 			};
 			serde_json::to_vec(&bedrock_req).map_err(AIError::RequestMarshal)
 		} else {
@@ -461,8 +478,6 @@ pub mod from_completions {
 
 	use axum_core::body::Body;
 	use bytes::Bytes;
-	use futures_util::StreamExt;
-	use futures_util::stream::{self, BoxStream};
 	use itertools::Itertools;
 	use types::bedrock;
 	use types::completions::typed as completions;
@@ -493,12 +508,10 @@ pub mod from_completions {
 							}
 						},
 						completions::RequestUserMessageContentPart::ImageUrl(image) => {
-							if image.image_url.url.starts_with("data:") {
-								out.push(
-									super::CanonicalImage::from_data_url(&image.image_url.url)?
-										.into_bedrock_content_block(),
-								);
-							}
+							out.push(
+								super::CanonicalImage::from_data_url(&image.image_url.url)?
+									.into_bedrock_content_block(),
+							);
 						},
 						completions::RequestUserMessageContentPart::InputAudio(_)
 						| completions::RequestUserMessageContentPart::File(_) => {},
@@ -563,8 +576,11 @@ pub mod from_completions {
 			for call in tool_calls {
 				match call {
 					completions::MessageToolCalls::Function(call) => {
-						let input = serde_json::from_str::<serde_json::Value>(&call.function.arguments)
-							.unwrap_or_else(|_| serde_json::Value::String(call.function.arguments.clone()));
+						// Converse rejects non-object toolUse.input values, despite input being a document.
+						let input = match serde_json::from_str::<serde_json::Value>(&call.function.arguments) {
+							Ok(serde_json::Value::Object(input)) => serde_json::Value::Object(input),
+							_ => serde_json::json!({}),
+						};
 						content.push(bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
 							tool_use_id: call.id.clone(),
 							name: tool_name_map.register(&call.function.name),
@@ -572,8 +588,10 @@ pub mod from_completions {
 						}));
 					},
 					completions::MessageToolCalls::Custom(call) => {
-						let input = serde_json::from_str::<serde_json::Value>(&call.custom_tool.input)
-							.unwrap_or_else(|_| serde_json::Value::String(call.custom_tool.input.clone()));
+						let input = match serde_json::from_str::<serde_json::Value>(&call.custom_tool.input) {
+							Ok(serde_json::Value::Object(input)) => serde_json::Value::Object(input),
+							_ => serde_json::json!({}),
+						};
 						content.push(bedrock::ContentBlock::ToolUse(bedrock::ToolUseBlock {
 							tool_use_id: call.id.clone(),
 							name: tool_name_map.register(&call.custom_tool.name),
@@ -682,10 +700,9 @@ pub mod from_completions {
 			max_tokens: req.max_tokens(),
 			temperature: req.temperature,
 			top_p: req.top_p,
-			// Map Anthropic-style vendor extension to Bedrock topK when provided
-			top_k: req.vendor_extensions.top_k,
 			stop_sequences: req.stop_sequence(),
 		};
+		let top_k = req.vendor_extensions.top_k;
 
 		let tool_choice = match req.tool_choice {
 			Some(completions::ToolChoiceOption::Function(completions::NamedToolChoice { function })) => {
@@ -793,10 +810,10 @@ pub mod from_completions {
 			req
 				.reasoning_effort
 				.as_ref()
-				.and_then(reasoning_effort_to_enabled_budget)
+				.and_then(crate::types::thinking_budget_for_reasoning_effort)
 		});
 
-		let additional_model_request_fields = enabled_thinking_budget.map(|budget| {
+		let mut additional_model_request_fields = enabled_thinking_budget.map(|budget| {
 			serde_json::json!({
 				"thinking": {
 					"type": "enabled",
@@ -804,6 +821,16 @@ pub mod from_completions {
 				}
 			})
 		});
+		// Anthropic manual thinking is incompatible with custom sampling parameters.
+		if enabled_thinking_budget.is_none()
+			&& let Some(top_k) = top_k
+		{
+			additional_model_request_fields
+				.get_or_insert_with(|| serde_json::json!({}))
+				.as_object_mut()
+				.expect("additional model request fields must be a JSON object")
+				.insert("top_k".to_string(), top_k.into());
+		}
 		let output_config = req
 			.response_format
 			.as_ref()
@@ -869,17 +896,9 @@ pub mod from_completions {
 					.push(bedrock::Tool::CachePoint(helpers::create_cache_point()));
 			}
 		}
+		helpers::ensure_tool_config_for_history(&mut bedrock_request);
 
 		Ok((bedrock_request, tool_name_map))
-	}
-
-	fn reasoning_effort_to_enabled_budget(effort: &completions::ReasoningEffort) -> Option<u64> {
-		match effort {
-			completions::ReasoningEffort::None => None,
-			completions::ReasoningEffort::Minimal | completions::ReasoningEffort::Low => Some(1024),
-			completions::ReasoningEffort::Medium => Some(2048),
-			completions::ReasoningEffort::High | completions::ReasoningEffort::Xhigh => Some(4096),
-		}
 	}
 
 	fn completions_response_format_to_bedrock_output_config(
@@ -967,6 +986,7 @@ pub mod from_completions {
 		log: StreamingUsageGuard,
 		model: &str,
 		message_id: &str,
+		log_content: crate::LogContentFields,
 		tool_name_map: Option<super::BedrockToolNameMap>,
 	) -> Body {
 		// This is static for all chunks!
@@ -974,6 +994,10 @@ pub mod from_completions {
 		let mut saw_token = false;
 		// Track tool call JSON buffers by content block index
 		let mut tool_calls: HashMap<i32, String> = HashMap::new();
+		let mut logged_tool_calls =
+			crate::conversion::messages::StreamingToolCalls::new(log_content.tool_calls);
+		let mut completion = log_content.completion.then(String::new);
+		let mut finish_reason = None;
 		let model = model.to_string();
 		let message_id = message_id.to_string();
 		let body = parse::aws_sse::transform(b, buffer_limit, move |f| {
@@ -996,6 +1020,13 @@ pub mod from_completions {
 					// Track tool call starts for streaming
 					if let Some(bedrock::ContentBlockStart::ToolUse(tu)) = start.start {
 						tool_calls.insert(start.content_block_index, String::new());
+						let name = super::restore_tool_name(tool_name_map.as_ref(), &tu.name);
+						logged_tool_calls.start(
+							start.content_block_index as usize,
+							tu.tool_use_id.as_str(),
+							name.as_str(),
+							&serde_json::Value::Null,
+						);
 						// Emit the start of a tool call
 						let d = completions::StreamResponseDelta {
 							tool_calls: Some(vec![completions::ChatCompletionMessageToolCallChunk {
@@ -1003,7 +1034,7 @@ pub mod from_completions {
 								id: Some(tu.tool_use_id),
 								r#type: Some(completions::FunctionType::Function),
 								function: Some(completions::FunctionCallStream {
-									name: Some(super::restore_tool_name(tool_name_map.as_ref(), &tu.name)),
+									name: Some(name),
 									arguments: None,
 								}),
 							}]),
@@ -1059,9 +1090,13 @@ pub mod from_completions {
 								tracing::debug!(?other, "unhandled Bedrock reasoning content delta variant",);
 							},
 							bedrock::ContentBlockDelta::Text(t) => {
+								if let Some(completion) = completion.as_mut() {
+									completion.push_str(&t);
+								}
 								dr.content = Some(t);
 							},
 							bedrock::ContentBlockDelta::ToolUse(tu) => {
+								logged_tool_calls.append_arguments(d.content_block_index as usize, &tu.input);
 								// Accumulate tool call JSON and emit deltas
 								if let Some(json_buffer) = tool_calls.get_mut(&d.content_block_index) {
 									json_buffer.push_str(&tu.input);
@@ -1114,14 +1149,15 @@ pub mod from_completions {
 					mk(vec![choice], None)
 				},
 				bedrock::ConverseStreamOutput::MessageStop(stop) => {
-					let finish_reason = Some(translate_stop_reason(&stop.stop_reason));
+					let translated_finish_reason = translate_stop_reason(&stop.stop_reason);
+					finish_reason = crate::types::serialize_str(&translated_finish_reason);
 
 					// Just send a blob with the finish reason
 					let choice = completions::ChatChoiceStream {
 						index: 0,
 						logprobs: None,
 						delta: completions::StreamResponseDelta::default(),
-						finish_reason,
+						finish_reason: Some(translated_finish_reason),
 					};
 					mk(vec![choice], None)
 				},
@@ -1134,6 +1170,11 @@ pub mod from_completions {
 							r.response.cached_input_tokens = usage.cache_read_input_tokens.map(|i| i as u64);
 							r.response.cache_creation_input_tokens =
 								usage.cache_write_input_tokens.map(|i| i as u64);
+							if let Some(completion) = completion.take() {
+								r.response.completion = Some(vec![completion]);
+							}
+							r.response.output_messages =
+								logged_tool_calls.take_output_messages(finish_reason.take());
 						});
 
 						mk(
@@ -1144,11 +1185,18 @@ pub mod from_completions {
 								total_tokens: usage.total_tokens as u32,
 								cache_read_input_tokens: usage.cache_read_input_tokens.map(|i| i as u64),
 								cache_creation_input_tokens: usage.cache_write_input_tokens.map(|i| i as u64),
-								prompt_tokens_details: usage.cache_read_input_tokens.map(|i| UsagePromptDetails {
-									cached_tokens: Some(i as u64),
-									audio_tokens: None,
-									rest: Default::default(),
-								}),
+								prompt_tokens_details: match (
+									usage.cache_read_input_tokens,
+									usage.cache_write_input_tokens,
+								) {
+									(None, None) => None,
+									(cached_tokens, cache_write_tokens) => Some(UsagePromptDetails {
+										cached_tokens: cached_tokens.map(|i| i as u64),
+										audio_tokens: None,
+										cache_write_tokens: cache_write_tokens.map(|i| i as u64),
+										rest: Default::default(),
+									}),
+								},
 								// TODO: can we get reasoning tokens?
 								completion_tokens_details: None,
 							}),
@@ -1160,29 +1208,7 @@ pub mod from_completions {
 			}
 		});
 
-		append_done_on_success(body.into_data_stream())
-	}
-
-	pub(super) fn append_done_on_success<S>(stream: S) -> Body
-	where
-		S: futures_core::Stream<Item = Result<Bytes, axum_core::Error>> + Send + 'static,
-	{
-		let done = crate::parse::encode_sse_event("", Bytes::from_static(b"[DONE]"));
-		let stream = stream::unfold(
-			(Some(stream.boxed()), Some(done)),
-			|(stream, done): (
-				Option<BoxStream<'static, Result<Bytes, axum_core::Error>>>,
-				Option<Bytes>,
-			)| async move {
-				let mut stream = stream?;
-				match stream.next().await {
-					Some(Ok(chunk)) => Some((Ok(chunk), (Some(stream), done))),
-					Some(Err(err)) => Some((Err(err), (None, None))),
-					None => done.map(|done| (Ok(done), (None, None))),
-				}
-			},
-		);
-		Body::from_stream(stream)
+		parse::sse::append_done_on_success(body)
 	}
 
 	pub fn translate_stop_reason(
@@ -1243,7 +1269,7 @@ pub mod from_messages {
 	) -> Result<(bedrock::ConverseRequest, super::BedrockToolNameMap), AIError> {
 		let mut tool_name_map = super::BedrockToolNameMap::default();
 		for tool in req.tools.iter().flatten() {
-			tool_name_map.register(&tool.name);
+			tool_name_map.register(tool.name());
 		}
 		if let Some(messages::ToolChoice::Tool { name, .. }) = &req.tool_choice {
 			tool_name_map.register(name);
@@ -1295,6 +1321,13 @@ pub mod from_messages {
 		let pending_tool_config = if let Some(tools) = req.tools {
 			let mut bedrock_tools = Vec::with_capacity(tools.len());
 			for tool in tools {
+				let messages::Tool::Custom(tool) = tool else {
+					// Bedrock's Converse API has no native equivalent of an Anthropic server tool
+					// (e.g. web_search_20250305) executing upstream of the model. Drop it rather
+					// than fail the whole request; the model just won't see this tool offered.
+					tracing::debug!("Unsupported server tool in Bedrock conversion: {:?}", tool);
+					continue;
+				};
 				bedrock_tools.push((
 					bedrock::Tool::ToolSpec(bedrock::ToolSpecification {
 						name: tool_name_map.register(&tool.name),
@@ -1532,9 +1565,9 @@ pub mod from_messages {
 				req.temperature
 			},
 			top_p: if thinking_enabled { None } else { req.top_p },
-			top_k: if thinking_enabled { None } else { req.top_k },
 			stop_sequences: req.stop_sequences,
 		};
+		let top_k = if thinking_enabled { None } else { req.top_k };
 
 		let tool_config = pending_tool_config.map(|(tools, tool_choice)| {
 			let mut bedrock_tools = Vec::with_capacity(tools.len() * 2);
@@ -1575,6 +1608,10 @@ pub mod from_messages {
 				.expect("additional model request fields must be a JSON object")
 				.insert(key.to_string(), value);
 		};
+
+		if let Some(top_k) = top_k {
+			upsert_additional_field("top_k", top_k.into());
+		}
 
 		// Preserve explicit output_config in Anthropic's model-specific envelope.
 		if let Some(output_config) = requested_output_config_json {
@@ -1619,23 +1656,22 @@ pub mod from_messages {
 			Some(metadata)
 		};
 
-		Ok((
-			bedrock::ConverseRequest {
-				model_id: req.model,
-				messages,
-				system: system_content,
-				inference_config: Some(inference_config),
-				output_config,
-				tool_config,
-				guardrail_config,
-				additional_model_request_fields: additional_fields,
-				prompt_variables: None,
-				additional_model_response_field_paths: None,
-				request_metadata: metadata,
-				performance_config: None,
-			},
-			tool_name_map,
-		))
+		let mut bedrock_request = bedrock::ConverseRequest {
+			model_id: req.model,
+			messages,
+			system: system_content,
+			inference_config: Some(inference_config),
+			output_config,
+			tool_config,
+			guardrail_config,
+			additional_model_request_fields: additional_fields,
+			prompt_variables: None,
+			additional_model_response_field_paths: None,
+			request_metadata: metadata,
+			performance_config: None,
+		};
+		helpers::ensure_tool_config_for_history(&mut bedrock_request);
+		Ok((bedrock_request, tool_name_map))
 	}
 
 	fn messages_output_format_to_bedrock_output_config(
@@ -1707,14 +1743,16 @@ pub mod from_messages {
 		log: StreamingUsageGuard,
 		model: &str,
 		_message_id: &str,
-		include_completion_in_log: bool,
+		log_content: crate::LogContentFields,
 		tool_name_map: Option<super::BedrockToolNameMap>,
 	) -> Body {
 		let mut saw_token = false;
 		let mut seen_blocks: HashSet<i32> = HashSet::new();
 		let mut pending_stop_reason: Option<bedrock::StopReason> = None;
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
-		let mut completion = include_completion_in_log.then(String::new);
+		let mut completion = log_content.completion.then(String::new);
+		let mut tool_calls =
+			crate::conversion::messages::StreamingToolCalls::new(log_content.tool_calls);
 		let model = model.to_string();
 		parse::aws_sse::transform_multi(b, buffer_limit, move |aws_event| {
 			let event = match bedrock::ConverseStreamOutput::deserialize(aws_event) {
@@ -1762,11 +1800,21 @@ pub mod from_messages {
 				bedrock::ConverseStreamOutput::ContentBlockStart(start) => {
 					seen_blocks.insert(start.content_block_index);
 					let content_block = match start.start {
-						Some(bedrock::ContentBlockStart::ToolUse(s)) => messages::ContentBlock::ToolUse {
-							id: s.tool_use_id,
-							name: super::restore_tool_name(tool_name_map.as_ref(), &s.name),
-							input: serde_json::json!({}),
-							cache_control: None,
+						Some(bedrock::ContentBlockStart::ToolUse(s)) => {
+							let name = super::restore_tool_name(tool_name_map.as_ref(), &s.name);
+							let input = serde_json::json!({});
+							tool_calls.start(
+								start.content_block_index as usize,
+								s.tool_use_id.as_str(),
+								name.as_str(),
+								&input,
+							);
+							messages::ContentBlock::ToolUse {
+								id: s.tool_use_id,
+								name,
+								input,
+								cache_control: None,
+							}
 						},
 						Some(bedrock::ContentBlockStart::ReasoningContent) => {
 							messages::ContentBlock::Thinking {
@@ -1859,6 +1907,7 @@ pub mod from_messages {
 								},
 							},
 							bedrock::ContentBlockDelta::ToolUse(tu) => {
+								tool_calls.append_arguments(delta.content_block_index as usize, &tu.input);
 								messages::ContentBlockDelta::InputJsonDelta {
 									partial_json: tu.input,
 								}
@@ -1906,6 +1955,17 @@ pub mod from_messages {
 					let mut out = Vec::new();
 					let stop = pending_stop_reason.take();
 					let usage = pending_usage.take();
+					let finish_reason = stop
+						.as_ref()
+						.map(|stop_reason| translate_stop_reason(*stop_reason))
+						.as_ref()
+						.and_then(crate::types::serialize_str);
+					let mut output_messages = tool_calls.take_output_messages(finish_reason);
+					log.update(|r| {
+						if let Some(output_messages) = output_messages.take() {
+							r.response.output_messages = Some(output_messages);
+						}
+					});
 
 					if let (Some(stop_reason), Some(usage_data)) = (stop, usage) {
 						let event = messages::MessagesStreamEvent::MessageDelta {
@@ -1976,7 +2036,7 @@ pub mod from_responses {
 	use types::bedrock;
 	use types::responses::typed as responses;
 
-	use super::helpers;
+	use super::{helpers, responses_output_status};
 	use crate::bedrock::Provider;
 	use crate::conversion::completions::parse_data_url;
 	use crate::types::ResponseType;
@@ -2165,6 +2225,7 @@ pub mod from_responses {
 					ToolChoiceParam::AllowedTools(_)
 					| ToolChoiceParam::Mcp(_)
 					| ToolChoiceParam::Custom(_)
+					| ToolChoiceParam::ProgrammaticToolCalling(_)
 					| ToolChoiceParam::ApplyPatch
 					| ToolChoiceParam::Shell => {
 						tracing::warn!("Unsupported tool choice for Bedrock: {:?}", tc);
@@ -2193,6 +2254,7 @@ pub mod from_responses {
 			InputParam::Text(text) => vec![InputItem::from(InputMessage {
 				content: vec![InputContent::InputText(InputTextContent {
 					text: text.clone(),
+					prompt_cache_breakpoint: None,
 				})],
 				role: InputRole::User,
 				status: None,
@@ -2517,7 +2579,6 @@ pub mod from_responses {
 			max_tokens: req.max_output_tokens.unwrap_or(4096) as usize,
 			temperature: req.temperature,
 			top_p: req.top_p,
-			top_k: None,
 			stop_sequences: vec![],
 		};
 		let output_config = req
@@ -2529,7 +2590,7 @@ pub mod from_responses {
 				.reasoning
 				.as_ref()
 				.and_then(|r| r.effort.as_ref())
-				.and_then(responses_reasoning_effort_to_enabled_budget)
+				.and_then(crate::types::thinking_budget_for_reasoning_effort)
 		});
 		let additional_model_request_fields = enabled_thinking_budget.map(|budget| {
 			serde_json::json!({
@@ -2597,6 +2658,7 @@ pub mod from_responses {
 					.push(bedrock::Tool::CachePoint(create_cache_point()));
 			}
 		}
+		ensure_tool_config_for_history(&mut bedrock_request);
 
 		tracing::debug!(
 			"Bedrock request - messages: {}, system blocks: {}, tools: {}, tool_choice: {:?}",
@@ -2625,17 +2687,6 @@ pub mod from_responses {
 			.vendor_extensions
 			.as_ref()
 			.and_then(|v| v.thinking_budget_tokens)
-	}
-
-	fn responses_reasoning_effort_to_enabled_budget(
-		effort: &responses::ReasoningEffort,
-	) -> Option<u64> {
-		match effort {
-			responses::ReasoningEffort::None => None,
-			responses::ReasoningEffort::Minimal | responses::ReasoningEffort::Low => Some(1024),
-			responses::ReasoningEffort::Medium => Some(2048),
-			responses::ReasoningEffort::High | responses::ReasoningEffort::Xhigh => Some(4096),
-		}
 	}
 
 	fn responses_text_format_to_bedrock_output_config(
@@ -2685,15 +2736,8 @@ pub mod from_responses {
 			.map_err(logged_response_parsing(bytes))?;
 		let adapter = super::ConverseResponseAdapter::from_response(resp, model)?;
 		let typed = adapter.to_responses_typed(tool_name_map);
-		let mut passthrough =
+		let passthrough =
 			json::convert::<_, types::responses::Response>(&typed).map_err(AIError::ResponseParsing)?;
-		passthrough.rest = serde_json::Value::Object(serde_json::Map::new());
-		if let Some(usage) = passthrough.usage.as_mut() {
-			usage.rest = serde_json::Value::Object(serde_json::Map::new());
-		}
-		if matches!(adapter.stop_reason, bedrock::StopReason::ToolUse) {
-			passthrough.status = "requires_action".to_string();
-		}
 		Ok(Box::new(passthrough))
 	}
 
@@ -2720,12 +2764,16 @@ pub mod from_responses {
 		log: StreamingUsageGuard,
 		model: &str,
 		_message_id: &str,
+		log_content: crate::LogContentFields,
 		tool_name_map: Option<super::BedrockToolNameMap>,
 	) -> Body {
 		let mut saw_token = false;
 		let mut pending_stop_reason: Option<bedrock::StopReason> = None;
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
 		let mut seen_blocks: HashSet<i32> = HashSet::new();
+		let mut completion = log_content.completion.then(String::new);
+		let mut logged_tool_calls =
+			crate::conversion::messages::StreamingToolCalls::new(log_content.tool_calls);
 
 		// Track tool calls for streaming: (content_block_index -> (item_id, name, json_buffer, output_index))
 		// output_index is the stable position of this tool call in the response output array.
@@ -2809,6 +2857,12 @@ pub mod from_responses {
 							let output_index = next_output_index;
 							next_output_index += 1;
 							let restored_name = super::restore_tool_name(tool_name_map.as_ref(), &tu.name);
+							logged_tool_calls.start(
+								start.content_block_index as usize,
+								tu.tool_use_id.as_str(),
+								restored_name.as_str(),
+								&serde_json::Value::Null,
+							);
 							tool_calls.insert(
 								start.content_block_index,
 								(
@@ -2829,6 +2883,7 @@ pub mod from_responses {
 										call_id: tool_call_item_id.clone(),
 										namespace: None,
 										name: restored_name,
+										caller: None,
 										id: Some(tool_call_item_id),
 										status: Some(OutputStatus::InProgress),
 									}),
@@ -2864,6 +2919,9 @@ pub mod from_responses {
 					if let Some(d) = delta.delta {
 						match d {
 							bedrock::ContentBlockDelta::Text(text) => {
+								if let Some(completion) = completion.as_mut() {
+									completion.push_str(&text);
+								}
 								sequence_number += 1;
 								let delta_event =
 									ResponseStreamEvent::ResponseOutputTextDelta(ResponseTextDeltaEvent {
@@ -2906,6 +2964,7 @@ pub mod from_responses {
 								_ => {},
 							},
 							bedrock::ContentBlockDelta::ToolUse(tu) => {
+								logged_tool_calls.append_arguments(delta.content_block_index as usize, &tu.input);
 								if let Some((item_id, _name, buffer, output_index)) =
 									tool_calls.get_mut(&delta.content_block_index)
 								{
@@ -2957,6 +3016,7 @@ pub mod from_responses {
 									call_id: item_id.clone(),
 									namespace: None,
 									name,
+									caller: None,
 									id: Some(item_id),
 									status: Some(OutputStatus::Completed),
 								}),
@@ -2995,6 +3055,12 @@ pub mod from_responses {
 					}
 
 					let mut out: Vec<(&'static str, ResponseStreamEvent)> = Vec::new();
+					let stop = pending_stop_reason.take();
+					let usage_data = pending_usage.take();
+					let output_status = stop
+						.as_ref()
+						.map(responses_output_status)
+						.unwrap_or(OutputStatus::Completed);
 
 					sequence_number += 1;
 					let message_done_event =
@@ -3006,20 +3072,37 @@ pub mod from_responses {
 								id: message_item_id.clone(),
 								role: AssistantRole::Assistant,
 								phase: None,
-								status: OutputStatus::Completed,
+								status: output_status,
 							}),
 						});
 					out.push(("event", message_done_event));
 
-					let stop = pending_stop_reason.take();
-					let usage_data = pending_usage.take();
+					let response_status = match stop.as_ref() {
+						Some(bedrock::StopReason::EndTurn)
+						| Some(bedrock::StopReason::StopSequence)
+						| Some(bedrock::StopReason::ToolUse)
+						| None => responses::Status::Completed,
+						Some(bedrock::StopReason::MaxTokens)
+						| Some(bedrock::StopReason::ModelContextWindowExceeded) => responses::Status::Incomplete,
+						Some(bedrock::StopReason::ContentFiltered)
+						| Some(bedrock::StopReason::GuardrailIntervened) => responses::Status::Failed,
+					};
+					let finish_reason = crate::types::serialize_str(&response_status);
+					log.update(|r| {
+						if let Some(completion) = completion.take() {
+							r.response.completion = Some(vec![completion]);
+						}
+						r.response.output_messages =
+							logged_tool_calls.take_output_messages(finish_reason.clone());
+					});
 
 					let usage_obj = usage_data.map(|u| ResponseUsage {
 						input_tokens: u.input_tokens as u32,
 						output_tokens: u.output_tokens as u32,
-						total_tokens: (u.input_tokens + u.output_tokens) as u32,
+						total_tokens: u.total_tokens as u32,
 						input_tokens_details: InputTokenDetails {
 							cached_tokens: u.cache_read_input_tokens.unwrap_or(0) as u32,
+							cache_write_tokens: u.cache_write_input_tokens.map(|tokens| tokens as u32),
 						},
 						output_tokens_details: OutputTokenDetails {
 							reasoning_tokens: 0,
@@ -3150,6 +3233,34 @@ mod helpers {
 			.collect()
 	});
 	use crate::types::bedrock;
+
+	// Bedrock requires toolConfig when the conversation contains tool history. Use a
+	// static placeholder instead of advertising historical tool names the model could call.
+	pub fn ensure_tool_config_for_history(req: &mut bedrock::ConverseRequest) {
+		if req.tool_config.is_some() {
+			return;
+		}
+		let has_tool_blocks = req.messages.iter().any(|message| {
+			message.content.iter().any(|block| {
+				matches!(
+					block,
+					bedrock::ContentBlock::ToolUse(_) | bedrock::ContentBlock::ToolResult(_)
+				)
+			})
+		});
+		if has_tool_blocks {
+			req.tool_config = Some(bedrock::ToolConfiguration {
+				tools: vec![bedrock::Tool::ToolSpec(bedrock::ToolSpecification {
+					name: "agentgateway_dummy_do_not_call".to_string(),
+					description: None,
+					input_schema: Some(bedrock::ToolInputSchema::Json(
+						serde_json::json!({ "type": "object" }),
+					)),
+				})],
+				tool_choice: None,
+			});
+		}
+	}
 
 	pub fn create_cache_point() -> bedrock::CachePointBlock {
 		bedrock::CachePointBlock {
@@ -3451,13 +3562,18 @@ impl ConverseResponseAdapter {
 				completion_tokens_details: None,
 
 				cache_read_input_tokens: token_usage.cache_read_input_tokens.map(|i| i as u64),
-				prompt_tokens_details: token_usage
-					.cache_read_input_tokens
-					.map(|i| UsagePromptDetails {
-						cached_tokens: Some(i as u64),
+				prompt_tokens_details: match (
+					token_usage.cache_read_input_tokens,
+					token_usage.cache_write_input_tokens,
+				) {
+					(None, None) => None,
+					(cached_tokens, cache_write_tokens) => Some(UsagePromptDetails {
+						cached_tokens: cached_tokens.map(|i| i as u64),
 						audio_tokens: None,
+						cache_write_tokens: cache_write_tokens.map(|i| i as u64),
 						rest: Default::default(),
 					}),
+				},
 				cache_creation_input_tokens: token_usage.cache_write_input_tokens.map(|i| i as u64),
 			})
 			.unwrap_or_default();
@@ -3482,6 +3598,7 @@ impl ConverseResponseAdapter {
 		let response_id = format!("resp_{:016x}", rand::rng().random::<u64>());
 		let response_builder =
 			crate::types::responses::ResponseBuilder::new(response_id, self.model.clone());
+		let output_status = responses_output_status(&self.stop_reason);
 
 		// Convert Bedrock content blocks to Responses OutputItem
 		let mut outputs: Vec<responsest::OutputItem> = Vec::new();
@@ -3524,8 +3641,9 @@ impl ConverseResponseAdapter {
 							call_id: tool_use.tool_use_id.clone(),
 							namespace: None,
 							name: restore_tool_name(tool_name_map, &tool_use.name),
+							caller: None,
 							id: Some(tool_use.tool_use_id.clone()),
-							status: Some(responsest::OutputStatus::Completed),
+							status: Some(output_status),
 						},
 					));
 				},
@@ -3544,7 +3662,7 @@ impl ConverseResponseAdapter {
 				role: responsest::AssistantRole::Assistant,
 				phase: None,
 				content: text_parts,
-				status: responsest::OutputStatus::Completed,
+				status: output_status,
 			}));
 		}
 
@@ -3589,9 +3707,10 @@ impl ConverseResponseAdapter {
 		let usage = self.usage.map(|u| responsest::ResponseUsage {
 			input_tokens: u.input_tokens as u32,
 			output_tokens: u.output_tokens as u32,
-			total_tokens: (u.input_tokens + u.output_tokens) as u32,
+			total_tokens: u.total_tokens as u32,
 			input_tokens_details: responsest::InputTokenDetails {
 				cached_tokens: u.cache_read_input_tokens.unwrap_or(0) as u32,
+				cache_write_tokens: u.cache_write_input_tokens.map(|tokens| tokens as u32),
 			},
 			output_tokens_details: responsest::OutputTokenDetails {
 				reasoning_tokens: 0,

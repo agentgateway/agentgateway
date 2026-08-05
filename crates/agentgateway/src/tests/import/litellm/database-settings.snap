@@ -1,0 +1,34 @@
+---
+source: crates/agentgateway/src/import.rs
+description: src/tests/import/litellm/database-settings.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat
+        provider: openAI
+        params:
+          model: gpt-4o
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat
+  - sourcePath: general_settings.database_url
+    status: manual
+    message: LiteLLM database configuration was not reused; generated config uses a new agentgateway SQLite database. Configure PostgreSQL manually if desired
+  - sourcePath: environment_variables.DATABASE_URL
+    status: manual
+    message: LiteLLM database configuration was not reused; generated config uses a new agentgateway SQLite database. Configure PostgreSQL manually if desired
+  - sourcePath: litellm_settings.database_url
+    status: manual
+    message: LiteLLM database configuration was not reused; generated config uses a new agentgateway SQLite database. Configure PostgreSQL manually if desired

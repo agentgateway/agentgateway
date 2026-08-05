@@ -8,11 +8,21 @@ info:
       content: "Hello, how are you?"
 ---
 {
-  "messages": [
-    {
-      "role": "user",
-      "content": "Hello, how are you?"
-    }
-  ],
-  "model": "claude-3-5-sonnet-20241022"
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Hello, how are you?"
+      }
+    ],
+    "model": "claude-3-5-sonnet-20241022"
+  },
+  "parsed": {
+    "input_format": "CountTokens",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-3-5-sonnet-20241022",
+    "provider": "anthropic",
+    "streaming": false,
+    "params": {}
+  }
 }

@@ -1,0 +1,32 @@
+---
+source: crates/agentgateway/src/import.rs
+description: src/tests/import/litellm/environment-references.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat
+        provider: azure
+        params:
+          model: gpt-4o
+          baseUrl: $AZURE_API_BASE
+          azureApiVersion: $AZURE_API_VERSION
+          apiKey: $AZURE_API_KEY
+        defaults:
+          temperature: $DEFAULT_TEMPERATURE
+          stop:
+            - $STOP_SEQUENCE
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat

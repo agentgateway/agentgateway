@@ -1,0 +1,159 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  namespace: default
+  name: idp-token-endpoint
+spec:
+  static:
+    host: idp.example.com
+    port: 443
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  namespace: default
+  name: resource-token-endpoint
+spec:
+  static:
+    host: resource.example.com
+    port: 443
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  namespace: default
+  name: static-backend
+spec:
+  static:
+    host: example.com
+    port: 8888
+  policies:
+    auth:
+      crossAppAccess:
+        identityProvider:
+          backendRef:
+            group: agentgateway.dev
+            kind: AgentgatewayBackend
+            name: idp-token-endpoint
+          path: /oauth/token
+          clientAuth:
+            clientId: gateway-at-idp
+            method: ClientSecretPost
+        resourceAuthorizationServer:
+          backendRef:
+            group: agentgateway.dev
+            kind: AgentgatewayBackend
+            name: resource-token-endpoint
+          path: /token
+          clientAuth:
+            clientId: gateway-at-resource
+            method: ClientSecretPost
+        audience: https://resource.example.com
+        resources:
+        - https://api.example.com
+        scopes:
+        - read
+        - write
+
+---
+# Output
+output:
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      key: default/idp-token-endpoint
+      name:
+        name: idp-token-endpoint
+        namespace: default
+      static:
+        host: idp.example.com
+        port: 443
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      key: default/resource-token-endpoint
+      name:
+        name: resource-token-endpoint
+        namespace: default
+      static:
+        host: resource.example.com
+        port: 443
+- gateway:
+    Name: basic
+    Namespace: default
+  resource:
+    backend:
+      inlinePolicies:
+      - auth:
+          crossAppAccess:
+            audience: https://resource.example.com
+            identityProvider:
+              clientAuth:
+                clientId: gateway-at-idp
+                method: CLIENT_SECRET_POST
+              tokenEndpoint:
+                backend: default/idp-token-endpoint
+              tokenEndpointPath: /oauth/token
+            resourceAuthorizationServer:
+              clientAuth:
+                clientId: gateway-at-resource
+                method: CLIENT_SECRET_POST
+              tokenEndpoint:
+                backend: default/resource-token-endpoint
+              tokenEndpointPath: /token
+            resources:
+            - https://api.example.com
+            scopes:
+            - read
+            - write
+      key: default/static-backend
+      name:
+        name: static-backend
+        namespace: default
+      static:
+        host: example.com
+        port: 8888
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: idp-token-endpoint
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: resource-token-endpoint
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayBackend
+  metadata:
+    name: static-backend
+    namespace: default
+  spec: null
+  status:
+    conditions:
+    - lastTransitionTime: fake
+      message: Backend successfully accepted
+      reason: Accepted
+      status: "True"
+      type: Accepted

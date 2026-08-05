@@ -25,6 +25,7 @@ func testApiKeyAuthRoutePolicy(t base.Test) {
 	t.Apply(
 		manifest("apikeyauth", "insecure-route.yaml"),
 		manifest("apikeyauth", "secured-route.yaml"),
+		manifest("apikeyauth", "secured-route-configmap.yaml"),
 	)
 
 	t.HTTPRouteAccepted("route-example-insecure", base.Namespace)
@@ -33,8 +34,15 @@ func testApiKeyAuthRoutePolicy(t base.Test) {
 	t.HTTPRouteAccepted("route-secure", base.Namespace)
 	assertApiKeyResponse(t, "secureroute.com", "k-1230", http.StatusOK)
 	assertApiKeyResponse(t, "secureroute.com", "k-4560", http.StatusOK)
+	assertApiKeyResponse(t, "secureroute.com", "k-7890", http.StatusOK)
 	assertApiKeyResponse(t, "secureroute.com", "nosuchkey", http.StatusUnauthorized)
 	assertApiKeyResponse(t, "secureroute.com", "", http.StatusUnauthorized)
+
+	t.HTTPRouteAccepted("route-secure-cm", base.Namespace)
+	assertApiKeyResponse(t, "secureroutecm.com", "k-1230", http.StatusOK)
+	assertApiKeyResponse(t, "secureroutecm.com", "k-4560", http.StatusOK)
+	assertApiKeyResponse(t, "secureroutecm.com", "nosuchkey", http.StatusUnauthorized)
+	assertApiKeyResponse(t, "secureroutecm.com", "", http.StatusUnauthorized)
 }
 
 func testApiKeyAuthGatewayPolicy(t base.Test) {

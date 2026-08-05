@@ -21,39 +21,57 @@ info:
       content: Say hi
 ---
 {
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "type": "text",
-          "text": "Say hi"
-        }
-      ]
-    }
-  ],
-  "model": "gpt-5.6-terra",
-  "reasoning_effort": "none",
-  "max_completion_tokens": 64,
-  "stream": false,
-  "tools": [
-    {
-      "type": "function",
-      "function": {
-        "name": "get_weather",
-        "description": "Get the weather for a location",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "location": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "location"
-          ]
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Say hi"
+          }
+        ]
+      }
+    ],
+    "model": "gpt-5.6-terra",
+    "reasoning_effort": "none",
+    "max_completion_tokens": 64,
+    "stream": false,
+    "tools": [
+      {
+        "type": "function",
+        "function": {
+          "name": "get_weather",
+          "description": "Get the weather for a location",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "location": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "location"
+            ]
+          }
         }
       }
-    }
-  ]
+    ]
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-5.6-terra",
+    "provider": "openai",
+    "streaming": false,
+    "params": {
+      "max_tokens": 64
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Say hi"
+      }
+    ]
+  }
 }

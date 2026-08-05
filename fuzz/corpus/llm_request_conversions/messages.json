@@ -1,0 +1,1 @@
+{"model":"claude-3-5-sonnet","system":"system prompt","messages":[{"role":"user","content":[{"type":"text","text":"hello"}]}],"max_tokens":32}

@@ -20,27 +20,20 @@ info:
       content: What is the weather like in San Francisco?
 ---
 {
-  "messages": [
-    {
-      "role": "user",
-      "content": [
-        {
-          "type": "text",
-          "text": "What is the weather like in San Francisco?"
-        }
-      ]
-    }
-  ],
-  "model": "claude-opus-4-6",
-  "max_completion_tokens": 1024,
-  "stream": false,
-  "tools": [
-    {
-      "type": "function",
-      "function": {
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "What is the weather like in San Francisco?"
+      }
+    ],
+    "model": "claude-opus-4-6",
+    "max_tokens": 1024,
+    "tools": [
+      {
         "name": "get_weather",
         "description": "Get the current weather in a given location",
-        "parameters": {
+        "input_schema": {
           "type": "object",
           "properties": {
             "location": {
@@ -53,6 +46,22 @@ info:
           ]
         }
       }
-    }
-  ]
+    ]
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "claude-opus-4-6",
+    "provider": "anthropic",
+    "streaming": false,
+    "params": {
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "What is the weather like in San Francisco?"
+      }
+    ]
+  }
 }

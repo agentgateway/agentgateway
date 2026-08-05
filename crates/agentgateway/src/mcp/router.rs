@@ -47,7 +47,11 @@ impl App {
 		if backend_policies.mcp_authentication.is_some() {
 			return None;
 		}
-		if !req.uri().path().contains("/.well-known/") {
+		if !matches!(
+			req.method(),
+			&::http::Method::GET | &::http::Method::OPTIONS
+		) || !auth::is_well_known_endpoint(req.uri().path())
+		{
 			return None;
 		}
 		match backend.targets.first().map(|t| &t.spec) {
@@ -84,9 +88,8 @@ impl App {
 						namespace: backend_group_name.namespace.as_ref(),
 						section: Some(t.name.as_ref()),
 					};
-					let backend_policies = backend_policies
-						.clone()
-						.merge(binds.sub_backend_policies(sub_backend_target, inline_pols));
+					let target_policies = binds.sub_backend_policies(sub_backend_target, inline_pols);
+					let backend_policies = backend_policies.clone().merge(target_policies);
 					tracing::trace!("merged policies {:?}", backend_policies);
 					Ok::<_, ProxyError>(Arc::new(McpTarget {
 						name: t.name.clone(),
@@ -154,6 +157,7 @@ impl App {
 					.handle(
 						req,
 						RelayInputs {
+							backend_id: backend_group_name.clone(),
 							backend: backends.clone(),
 							policies: authorization_policies.clone(),
 							mcp_guardrails: mcp_guardrails.clone(),
@@ -175,6 +179,7 @@ impl App {
 					.handle(
 						req,
 						RelayInputs {
+							backend_id: backend_group_name,
 							backend: backends.clone(),
 							policies: authorization_policies.clone(),
 							mcp_guardrails: mcp_guardrails.clone(),

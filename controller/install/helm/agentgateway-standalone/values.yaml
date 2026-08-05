@@ -1,31 +1,49 @@
+# Image pull Secrets attached to the agentgateway pod.
 imagePullSecrets: []
+
+# Labels added to every resource created by the chart.
 commonLabels: {}
+
+# Override the chart label name, generated resource name, or release namespace.
 nameOverride: ""
 fullnameOverride: ""
-namespaceOverride: agentgateway-system
+namespaceOverride: ""
 
-global:
-  imageRegistry: ""
-
+# Number of agentgateway pods. Both supported modes allow multiple replicas.
 replicaCount: 1
 
-# Default to Recreate because the chart defaults to a single replica with
-# SQLite on an RWO PVC. Postgres + RWX users can override this strategy.
-strategy:
-  type: Recreate
+# Configuration persistence mode:
+# - readonly: serve the static config below from a read-only ConfigMap.
+# - database: use the static config as a baseline and store UI-managed changes in Postgres.
+mode: readonly
 
+# Optional Kubernetes Deployment strategy override.
+strategy: {}
+
+# Agentgateway image. May also be a complete image reference string, for example:
+# image: localhost:5000/agentgateway:dev
 image:
   registry: cr.agentgateway.dev
   repository: agentgateway
   tag: ""
   pullPolicy: IfNotPresent
 
+# ServiceAccount used by the agentgateway pod.
 serviceAccount:
   create: true
   annotations: {}
   name: ""
 
-podAnnotations: {}
+# Annotations added to the agentgateway pod.
+podAnnotations:
+  prometheus.io/path: "/metrics"
+  prometheus.io/port: "15020"
+  prometheus.io/scrape: "true"
+
+# Labels added to the agentgateway pod.
+podLabels: {}
+
+# Pod- and container-level security contexts.
 podSecurityContext: {}
 securityContext:
   allowPrivilegeEscalation: false
@@ -35,42 +53,21 @@ securityContext:
     drop:
     - ALL
 
+# Compute resource requests and limits for agentgateway.
 resources:
   requests:
     cpu: 100m
     memory: 128Mi
 
+# Kubernetes scheduling constraints.
 nodeSelector: {}
 tolerations: []
 affinity: {}
 
-admin:
-  service:
-    enabled: true
-    type: ClusterIP
-    port: 15000
-    annotations: {}
-    extraLabels: {}
-    clusterIP: ""
-    clusterIPs: []
-    externalIPs: []
-    externalName: ""
-    loadBalancerIP: ""
-    loadBalancerSourceRanges: []
-    loadBalancerClass: ""
-    externalTrafficPolicy: ""
-    internalTrafficPolicy: ""
-    healthCheckNodePort: null
-    sessionAffinity: ""
-    sessionAffinityConfig: {}
-    ipFamilies: []
-    ipFamilyPolicy: ""
-    publishNotReadyAddresses: false
-    allocateLoadBalancerNodePorts: null
-    trafficDistribution: ""
-
+# Service exposure for the unified gateway listener.
 gateway:
   service:
+    # Creates the primary Service named after the Helm release.
     enabled: true
     type: LoadBalancer
     annotations: {}
@@ -95,54 +92,37 @@ gateway:
     ports:
     - name: http
       port: 80
-      targetPort: 8080
-      protocol: TCP
-    - name: https
-      port: 443
-      targetPort: 8443
-      protocol: TCP
-    - name: mcp
-      port: 3000
-      targetPort: 3000
-      protocol: TCP
-    - name: llm
-      port: 4000
       targetPort: 4000
       protocol: TCP
+  # Additional Services selecting the same agentgateway pods.
   extraServices: []
 
-persistence:
-  enabled: true
-  existingClaim: ""
-  storageClassName: ""
-  accessModes:
-  - ReadWriteOnce
-  size: 1Gi
+# Prometheus Operator integration. Enabling this creates a PodMonitor and
+# exposes the metrics container port.
+monitoring:
+  enabled: false
   annotations: {}
+  extraLabels: {}
+  podMonitor:
+    enabled: true
+    interval: 15s
 
-configBootstrap:
-  image:
-    registry: docker.io
-    repository: library/busybox
-    tag: "1.36"
-  overwrite: false
-  securityContext:
-    allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: true
-    capabilities:
-      drop:
-      - ALL
-
+# Standalone agentgateway configuration. The chart manages
+# config.storage and config.database based on mode.
 config: {}
-configYaml: ""
 
+# Postgres connection used by database mode.
 database:
-  type: sqlite
-  sqlite:
-    path: /config/data.db
   postgres:
+    # Required in database mode. This value is rendered into the ConfigMap.
     url: ""
 
+# Secret containing the OIDC_COOKIE_SECRET key. When unset, the chart references
+# <release name>-oidc as an optional Secret.
+oidc:
+  cookieSecretName: ""
+
+# Additional pod customization hooks.
 extraContainers: []
 extraEnv: []
 extraVolumes: []

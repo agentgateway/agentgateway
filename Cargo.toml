@@ -1,22 +1,23 @@
 [patch.crates-io]
 schemars = { git = "https://github.com/howardjohn/schemars", rev = "f3e45a59786debf49e67d6bd6d8dcffc004d39ff" }
 http-serde = { git = "https://gitlab.com/howardjohn/http-serde", rev = "c2e482be0ddf029895ba72ef8749b9f94b388fc7" }
-wiremock = { git = "https://github.com/howardjohn/wiremock-rs", rev = "e55f5b96083125fdabc3e62f92790ee15ae3a10d" }
-rmcp = { git = "https://github.com/howardjohn/rust-sdk", rev = "7366ffc42beb89f27410ae348a67001beb4c6ba5" }
+wiremock = { git = "https://github.com/howardjohn/wiremock-rs", rev = "79e5f488d8bc3bce2f7b397b5791b5caef5129e6" }
+async-openai = { git = "https://github.com/howardjohn/async-openai", rev = "681e3c6e382fa8bf8abf511d45ada73c25c659b6" }
 
 [workspace]
 resolver = "2"
 members = [
     "crates/agentgateway",
     "crates/agentgateway-app",
-    "crates/llm",
     "crates/cel-fork/cel",
     "crates/cel-fork/cel-derive",
     "crates/celx",
+    "crates/llm",
     "crates/pool",
     "crates/core",
     "crates/http",
     "crates/hbone",
+    "crates/htpasswd-verify-fork",
     "crates/protos",
     "crates/xds",
     "crates/xtask",
@@ -27,9 +28,12 @@ default-members = [
     "crates/cel-fork/cel",
     "crates/cel-fork/cel-derive",
     "crates/celx",
+    "crates/llm",
     "crates/pool",
     "crates/core",
+    "crates/http",
     "crates/hbone",
+    "crates/htpasswd-verify-fork",
     "crates/protos",
     "crates/xds",
 ]
@@ -65,11 +69,9 @@ aws-config = { version = "1.8", default-features = false, features = ["default-h
 aws-credential-types = "1.2"
 aws-sigv4 = "1.4"
 aws-types = "1.3"
-aws-smithy-eventstream = "0.60"
+aws-smithy-eventstream = "0.61"
 aws-smithy-types = "1.3"
 aws-lc-rs = "1.17"
-openssl = "0.10"
-rustls-openssl = { version = "0.3", features = ["tls12"] }
 axum = { version = "0.8", features = ["macros"] }
 axum-core = "0.5"
 axum-extra = { version = "0.12", features = ["json-lines", "typed-header"] }
@@ -79,7 +81,7 @@ multer = "3.0.0"
 azure_identity = { version = "1.0", default-features = false }
 azure_core = { version = "1.0", default-features = false }
 typespec_client_core = { default-features = false, version = "1.0" }
-base64 = "0.22"
+base64 = "0.23.0"
 cookie = { version = "0.18", default-features = false }
 bcrypt = "0.19"
 bytes = { version = "1.11", features = ["serde"] }
@@ -122,7 +124,7 @@ indexmap = { version = "2.13", features = ["serde"] }
 insta = { version = "1.47", features = ["json", "redactions", "filters", "yaml"] }
 ipnet = { version = "2.12", features = ["serde"] }
 itertools = "0.15"
-jsonwebtoken = { version = "10.4", features = ["aws_lc_rs"] }
+jsonwebtoken = { version = "10.4" }
 lazy_static = "1.5"
 libc = "0.2"
 notify = "8.2"
@@ -143,12 +145,15 @@ phonenumber = "0.3"
 pin-project-lite = "0.2"
 pingora-pool = "0.8"
 ppp = "2.3"
-pprof-alloc = "0.4"
+pprof-alloc = "0.5"
+# NOTE: the "frame-pointer" feature is NOT enabled here. pprof 0.15's
+# frame-pointer unwinder only supports x86_64/aarch64/riscv64/loongarch64, and
+# its call site is not arch-gated, so enabling it breaks the build on other
+# arches (e.g. s390x). Consumers add "frame-pointer" per-target where supported.
 pprof = { version = "0.15", features = [
     "protobuf",
     "protobuf-codec",
     "criterion",
-    "frame-pointer"
 ] }
 pretty_env_logger = "0.5"
 prometheus-client = "0.25"
@@ -209,7 +214,7 @@ subtle = "2"
 tempfile = "3.27"
 thiserror = "2.0"
 tiktoken-rs = "0.12"
-tokio = { version = "1.52", features = ["full", "macros", "sync"] }
+tokio = { version = "1.53", features = ["full", "macros", "sync"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["tls12", "logging"] }
 tokio-stream = { version = "0.1", features = ["net", "sync"] }
 tokio-test = "0.4"
@@ -232,6 +237,7 @@ tracing-subscriber = { version = "0.3", features = [
     "registry",
     "json",
 ] }
+twox-hash = { version = "2.1", default-features = false, features = ["std", "xxhash3_64"] }
 url = "2.5"
 uuid = { version = "1.23", features = ["v4", "v7"] }
 wiremock = { version = "0.6", features = ["tls"] }
@@ -251,11 +257,11 @@ serde_with = { version = "3.20", features = [
 ], default-features = false }
 value-bag = { version = "1.12", features = ["serde", "value-bag-serde1"] }
 time = "0.3"
-tikv-jemallocator = { version = "0.6", features = [
+tikv-jemallocator = { version = "0.7", features = [
     "profiling",
     "unprefixed_malloc_on_supported_platforms",
 ] }
-jemalloc_pprof = { version = "0.8", features = ["symbolize"] }
+jemalloc_pprof = { version = "0.9", features = ["symbolize"] }
 protox = "0.9"
 async-compression = { version = "0.4", features = [
     "brotli",

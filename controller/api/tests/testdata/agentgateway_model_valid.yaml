@@ -1,0 +1,195 @@
+# AgentgatewayModel resources attach directly to a Gateway listener. The listener
+# must include agentgateway.dev/AgentgatewayModel in allowedRoutes.kinds.
+#
+# A model is either concrete (provider) or virtual (virtualModel), never both.
+
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: bedrock
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  provider: Bedrock
+  bedrock: {}
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: openai-default
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  match:
+    model: gpt-5-mini
+  provider: OpenAI
+  baseURL: https://api.openai.com
+  policies:
+    authorization:
+      policy:
+        matchExpressions:
+        - 'request.headers["x-model-access"] == "allowed"'
+    auth:
+      key: example-api-key
+    health:
+      unhealthyCondition: response.code >= 500
+    tls:
+      insecureSkipVerify: All
+    tunnel:
+      backendRef:
+        name: egress-proxy
+        port: 8080
+    headers:
+      request:
+        add:
+        - name: x-model-request-policy
+          value: enabled
+      response:
+        add:
+        - name: x-model-response-policy
+          value: enabled
+    promptGuard:
+      request:
+      - regex:
+          matches:
+          - blocked
+          action: Reject
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: suffix-wildcard
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  match:
+    model: '*-latest'
+  provider: OpenAI
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: openai-models
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  match:
+    model: openai/*
+  visibility: Internal
+  provider: OpenAI
+  policies:
+    transformations:
+    - field: model
+      expression: 'llmRequest.model.stripPrefix("openai/")'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: anthropic-models
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  match:
+    model: anthropic/*
+  visibility: Internal
+  provider: Anthropic
+  policies:
+    transformations:
+    - field: model
+      expression: 'llmRequest.model.stripPrefix("anthropic/")'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: llama-inference-pool
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  match:
+    model: local/llama-3.3
+  provider: Custom
+  policies:
+    transformations:
+    - field: model
+      expression: 'llmRequest.model.stripPrefix("local/")'
+  custom:
+    backendRef:
+      group: inference.networking.k8s.io
+      kind: InferencePool
+      name: llama-pool
+    formats:
+    - type: Completions
+    - type: Embeddings
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: fast
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  virtualModel:
+    weighted:
+      targets:
+      - modelRef:
+          name: anthropic-models
+        model: anthropic/claude-haiku-4-5
+        weight: 60
+      - modelRef:
+          name: openai-models
+        model: openai/gpt-5-mini
+        weight: 40
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: resilient
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  virtualModel:
+    failover:
+      targets:
+      - modelRef:
+          name: openai-models
+        model: openai/gpt-5-mini
+        priority: 0
+      - modelRef:
+          name: anthropic-models
+        model: anthropic/claude-haiku-4-5
+        priority: 1
+      - modelRef:
+          name: anthropic-models
+        model: anthropic/claude-sonnet-4-5
+        priority: 1
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: smart
+spec:
+  parentRefs:
+  - name: ai-gateway
+    sectionName: llm
+  virtualModel:
+    conditional:
+      targets:
+      - when: 'json(request.body).route == "code"'
+        modelRef:
+          name: anthropic-models
+        model: anthropic/claude-sonnet-4-5
+      - when: 'json(request.body).route == "fast"'
+        modelRef:
+          name: openai-models
+        model: openai/gpt-5-mini
+      - modelRef:
+          name: anthropic-models
+        model: anthropic/claude-haiku-4-5

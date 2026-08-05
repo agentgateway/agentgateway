@@ -26,20 +26,26 @@ spec:
   traffic:
     apiKeyAuthentication:
       mode: Strict
-      secretRef:
-        name: gw-apikey-auth
+      configMapSelector:
+        matchLabels:
+          app: gw-apikey-auth
 ---
 apiVersion: v1
-kind: Secret
+kind: ConfigMap
 metadata:
   name: gw-apikey-auth
   namespace: agentgateway-base
-stringData:
+  labels:
+    app: gw-apikey-auth
+data:
   client1: |
     {
-      "key": "k-123",
+      "keyHash": "sha256:3605a9e4358da4302f8acea41f0f52cef85d0e3f727c7b020fc7305aec8d56b4",
       "metadata": {
         "group": "sales"
       }
     }
-  client2: "k-456"
+  client2: |
+    {
+      "keyHash": "sha256:efe96124b410574ffd343d0c9f342ce51d5aee47046ca355f85a50e23db3c37c"
+    }

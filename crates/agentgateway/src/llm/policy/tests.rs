@@ -16,6 +16,7 @@ async fn webhook_fail_open_emits_single_metric() {
 			rejection: Default::default(),
 			kind: RequestGuardKind::Webhook(Webhook {
 				target: SimpleBackendReference::Invalid,
+				headers: Default::default(),
 				forward_header_matches: vec![],
 				failure_mode: FailureMode::FailOpen,
 			}),
@@ -25,7 +26,7 @@ async fn webhook_fail_open_emits_single_metric() {
 
 	let client = crate::test_helpers::policy_client();
 	let blocked = guard
-		.apply_realtime_request_guards("hello world", &client)
+		.apply_realtime_request_guards("hello world", &client, None)
 		.await;
 	assert!(blocked.is_none(), "FailOpen must not block the request");
 
@@ -1340,7 +1341,7 @@ mod prompt_guard_config_tests {
 fn test_bedrock_guardrails_user_credentials_take_precedence() {
 	use secrecy::SecretString;
 
-	use crate::http::auth::{AwsAuth, BackendAuth};
+	use crate::http::auth::{AwsAuth, BackendAuth, BackendAuthKind};
 	use crate::store::BindStore;
 	use crate::types::agent::BackendTrafficPolicy;
 
@@ -1348,7 +1349,7 @@ fn test_bedrock_guardrails_user_credentials_take_precedence() {
 		guardrail_identifier: strng::new("test-guardrail"),
 		guardrail_version: strng::new("1"),
 		region: strng::new("us-east-1"),
-		policies: vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Aws(
+		policies: vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Aws(
 			AwsAuth::ExplicitConfig {
 				access_key_id: SecretString::new("AKIAIOSFODNN7EXAMPLE".into()),
 				secret_access_key: SecretString::new("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".into()),
@@ -1368,7 +1369,10 @@ fn test_bedrock_guardrails_user_credentials_take_precedence() {
 	assert!(
 		matches!(
 			resolved.backend_auth,
-			Some(BackendAuth::Aws(AwsAuth::ExplicitConfig { .. }))
+			Some(BackendAuth {
+				kind: Some(BackendAuthKind::Aws(AwsAuth::ExplicitConfig { .. })),
+				..
+			})
 		),
 		"Expected user-provided explicit AWS credentials to take precedence over \
 		 the implicit fallback, but got: {:?}",
@@ -1377,8 +1381,48 @@ fn test_bedrock_guardrails_user_credentials_take_precedence() {
 }
 
 #[test]
+fn test_bedrock_guardrails_api_key_auth_takes_precedence() {
+	use secrecy::SecretString;
+
+	use crate::http::auth::{BackendAuth, BackendAuthKind};
+	use crate::store::BindStore;
+	use crate::types::agent::BackendTrafficPolicy;
+
+	let guardrails = BedrockGuardrails {
+		guardrail_identifier: strng::new("test-guardrail"),
+		guardrail_version: strng::new("1"),
+		region: strng::new("us-east-1"),
+		policies: vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
+			value: SecretString::new("bedrock-api-key".into()),
+			location: None,
+		})],
+	};
+
+	let pols = guardrails.build_request_policies();
+
+	let store = BindStore::default();
+	let resolved = store.inline_backend_policies(&pols);
+
+	assert!(
+		matches!(
+			resolved.backend_auth,
+			Some(BackendAuth {
+				kind: Some(BackendAuthKind::Key {
+					value: _,
+					location: _
+				}),
+				..
+			})
+		),
+		"Expected Bedrock API key auth to take precedence over \
+		 the implicit AWS fallback, but got: {:?}",
+		resolved.backend_auth
+	);
+}
+
+#[test]
 fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
-	use crate::http::auth::{AwsAuth, BackendAuth};
+	use crate::http::auth::{AwsAuth, BackendAuth, BackendAuthKind};
 	use crate::store::BindStore;
 
 	let guardrails = BedrockGuardrails {
@@ -1396,11 +1440,14 @@ fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
 	assert!(
 		matches!(
 			resolved.backend_auth,
-			Some(BackendAuth::Aws(AwsAuth::Implicit {
-				service_name: None,
-				assume_role: None,
+			Some(BackendAuth {
+				kind: Some(BackendAuthKind::Aws(AwsAuth::Implicit {
+					service_name: None,
+					assume_role: None,
+					..
+				})),
 				..
-			}))
+			})
 		),
 		"Expected implicit AWS auth when no user credentials are provided, but got: {:?}",
 		resolved.backend_auth
@@ -1411,7 +1458,7 @@ fn test_bedrock_guardrails_implicit_auth_used_when_no_user_credentials() {
 fn test_google_model_armor_user_credentials_take_precedence() {
 	use secrecy::SecretString;
 
-	use crate::http::auth::BackendAuth;
+	use crate::http::auth::{BackendAuth, BackendAuthKind};
 	use crate::store::BindStore;
 	use crate::types::agent::BackendTrafficPolicy;
 
@@ -1419,7 +1466,7 @@ fn test_google_model_armor_user_credentials_take_precedence() {
 		template_id: strng::new("test-template"),
 		project_id: strng::new("test-project"),
 		location: Some(strng::new("us-central1")),
-		policies: vec![BackendTrafficPolicy::BackendAuth(BackendAuth::Key {
+		policies: vec![BackendTrafficPolicy::backend_auth(BackendAuthKind::Key {
 			value: SecretString::new("user-provided-api-key".into()),
 			location: None,
 		})],
@@ -1433,9 +1480,12 @@ fn test_google_model_armor_user_credentials_take_precedence() {
 	assert!(
 		matches!(
 			resolved.backend_auth,
-			Some(BackendAuth::Key {
-				value: _,
-				location: _
+			Some(BackendAuth {
+				kind: Some(BackendAuthKind::Key {
+					value: _,
+					location: _
+				}),
+				..
 			})
 		),
 		"Expected user-provided Key auth to take precedence over \
@@ -1446,7 +1496,7 @@ fn test_google_model_armor_user_credentials_take_precedence() {
 
 #[test]
 fn test_google_model_armor_implicit_auth_used_when_no_user_credentials() {
-	use crate::http::auth::BackendAuth;
+	use crate::http::auth::{BackendAuth, BackendAuthKind};
 	use crate::store::BindStore;
 
 	let model_armor = GoogleModelArmor {
@@ -1462,8 +1512,622 @@ fn test_google_model_armor_implicit_auth_used_when_no_user_credentials() {
 	let resolved = store.inline_backend_policies(&pols);
 
 	assert!(
-		matches!(resolved.backend_auth, Some(BackendAuth::Gcp(_))),
+		matches!(
+			resolved.backend_auth,
+			Some(BackendAuth {
+				kind: Some(BackendAuthKind::Gcp(_)),
+				..
+			})
+		),
 		"Expected implicit GCP auth when no user credentials are provided, but got: {:?}",
 		resolved.backend_auth
+	);
+}
+
+#[cfg(test)]
+#[derive(Clone, Copy)]
+enum ChatFmt {
+	Anthropic,
+	Completions,
+	Responses,
+}
+
+#[cfg(test)]
+enum Expect {
+	Masked(serde_json::Value),
+	Rejected,
+	Unchanged,
+}
+
+#[cfg(test)]
+fn email_and_ssn() -> Vec<RegexRule> {
+	vec![
+		RegexRule::Builtin {
+			builtin: Builtin::Email,
+		},
+		RegexRule::Builtin {
+			builtin: Builtin::Ssn,
+		},
+	]
+}
+
+#[cfg(test)]
+fn ssn_only() -> Vec<RegexRule> {
+	vec![RegexRule::Builtin {
+		builtin: Builtin::Ssn,
+	}]
+}
+
+#[test]
+fn regex_evaluation_does_not_mutate_until_enforced() {
+	let mut req: crate::llm::types::completions::Request =
+		serde_json::from_value(serde_json::json!({
+			"model": "gpt-4o",
+			"messages": [{"role": "user", "content": "my ssn is 123-45-6789"}]
+		}))
+		.unwrap();
+	let before = serde_json::to_value(&req).unwrap();
+	let rules = RegexRules {
+		action: Action::Mask,
+		rules: ssn_only(),
+	};
+
+	let rejection = RequestRejection::default();
+	let result = Policy::evaluate_regex_request(&mut req, &rules, &rejection);
+	assert!(matches!(&result, GuardrailOutcome::Masked(_)));
+	assert_eq!(serde_json::to_value(&req).unwrap(), before);
+
+	let (action, rejection) = Policy::apply_request_guard_outcome(result, &mut req).unwrap();
+	assert_eq!(action, GuardrailAction::Mask);
+	assert!(rejection.is_none());
+	assert_ne!(serde_json::to_value(&req).unwrap(), before);
+}
+
+#[cfg(test)]
+fn run_apply_regex(
+	fmt: ChatFmt,
+	action: Action,
+	rules: Vec<RegexRule>,
+	input: serde_json::Value,
+) -> (GuardrailAction, serde_json::Value) {
+	let rules = RegexRules { action, rules };
+	let rejection = RequestRejection::default();
+	match fmt {
+		ChatFmt::Anthropic => {
+			let mut req: crate::llm::types::messages::Request = serde_json::from_value(input).unwrap();
+			let action = Policy::apply_regex(&mut req, &rules, &rejection).unwrap();
+			(action, serde_json::to_value(&req).unwrap())
+		},
+		ChatFmt::Completions => {
+			let mut req: crate::llm::types::completions::Request = serde_json::from_value(input).unwrap();
+			let action = Policy::apply_regex(&mut req, &rules, &rejection).unwrap();
+			(action, serde_json::to_value(&req).unwrap())
+		},
+		ChatFmt::Responses => {
+			let mut req: crate::llm::types::responses::Request = serde_json::from_value(input).unwrap();
+			let action = Policy::apply_regex(&mut req, &rules, &rejection).unwrap();
+			(action, serde_json::to_value(&req).unwrap())
+		},
+	}
+}
+
+/// Same as `run_apply_regex`, but for `Policy::apply_regex_response`.
+#[cfg(test)]
+fn run_apply_regex_response(
+	fmt: ChatFmt,
+	action: Action,
+	rules: Vec<RegexRule>,
+	input: serde_json::Value,
+) -> (GuardrailAction, serde_json::Value) {
+	let rules = RegexRules { action, rules };
+	let rejection = RequestRejection::default();
+	match fmt {
+		ChatFmt::Anthropic => {
+			let mut resp: crate::llm::types::messages::Response = serde_json::from_value(input).unwrap();
+			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
+			(action, serde_json::to_value(&resp).unwrap())
+		},
+		ChatFmt::Completions => {
+			let mut resp: crate::llm::types::completions::Response =
+				serde_json::from_value(input).unwrap();
+			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
+			(action, serde_json::to_value(&resp).unwrap())
+		},
+		ChatFmt::Responses => {
+			let mut resp: crate::llm::types::responses::Response = serde_json::from_value(input).unwrap();
+			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
+			(action, serde_json::to_value(&resp).unwrap())
+		},
+	}
+}
+
+#[cfg(test)]
+#[rstest::rstest]
+#[case::anthropic_mask_tool_output_untouched(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	email_and_ssn(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"system": "You are a helpful assistant. Contact admin@example.com for help.",
+		"messages": [
+			{"role": "user", "content": "list pods"},
+			{"role": "assistant", "content": [
+				{"type": "text", "text": "Calling the tool."},
+				{"type": "tool_use", "id": "toolu_01", "name": "k8s_get_resources", "input": {"ns": "kagent"}}
+			]},
+			{"role": "user", "content": [
+				{"type": "tool_result", "tool_use_id": "toolu_01", "content": "pod-a Running, owner ssn 123-45-6789"}
+			]},
+			{"role": "user", "content": [
+				{"type": "tool_result", "tool_use_id": "toolu_02", "content": [
+					{"type": "text", "text": "reach ops@example.com"},
+					{"type": "image", "source": {"type": "base64", "data": "aGk="}}
+				]}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"system": "You are a helpful assistant. Contact <EMAIL_ADDRESS> for help.",
+		"messages": [
+			{"role": "user", "content": "list pods"},
+			{"role": "assistant", "content": [
+				{"type": "text", "text": "Calling the tool."},
+				{"type": "tool_use", "id": "toolu_01", "name": "k8s_get_resources", "input": {"ns": "kagent"}}
+			]},
+			{"role": "user", "content": [
+				{"type": "tool_result", "tool_use_id": "toolu_01", "content": "pod-a Running, owner ssn 123-45-6789"}
+			]},
+			{"role": "user", "content": [
+				{"type": "tool_result", "tool_use_id": "toolu_02", "content": [
+					{"type": "text", "text": "reach ops@example.com"},
+					{"type": "image", "source": {"type": "base64", "data": "aGk="}}
+				]}
+			]}
+		]
+	}))
+)]
+#[case::anthropic_reject_matches_regular_message(
+	ChatFmt::Anthropic,
+	Action::Reject,
+	ssn_only(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": "my ssn is 123-45-6789"}
+		]
+	}),
+	Expect::Rejected
+)]
+#[case::anthropic_reject_does_not_reach_tool_output(
+	ChatFmt::Anthropic,
+	Action::Reject,
+	ssn_only(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "tool_result", "tool_use_id": "toolu_01", "content": [
+					{"type": "text", "text": "owner ssn 123-45-6789"}
+				]}
+			]}
+		]
+	}),
+	Expect::Unchanged
+)]
+#[case::completions_mask_tool_output_untouched(
+	ChatFmt::Completions,
+	Action::Mask,
+	email_and_ssn(),
+	serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": "email admin@example.com about the pods"},
+			{"role": "assistant", "content": null, "tool_calls": [
+				{"id": "call_01", "type": "function", "function": {"name": "list_pods", "arguments": "{}"}}
+			]},
+			{"role": "tool", "tool_call_id": "call_01", "content": "pod-a Running"},
+			{"role": "tool", "tool_call_id": "call_02", "content": [
+				{"type": "text", "text": "owner ssn 123-45-6789"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": "email <EMAIL_ADDRESS> about the pods"},
+			{"role": "assistant", "tool_calls": [
+				{"id": "call_01", "type": "function", "function": {"name": "list_pods", "arguments": "{}"}}
+			]},
+			{"role": "tool", "tool_call_id": "call_01", "content": "pod-a Running"},
+			{"role": "tool", "tool_call_id": "call_02", "content": [
+				{"type": "text", "text": "owner ssn 123-45-6789"}
+			]}
+		]
+	}))
+)]
+#[case::completions_reject_does_not_reach_tool_output(
+	ChatFmt::Completions,
+	Action::Reject,
+	ssn_only(),
+	serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "tool", "tool_call_id": "call_01", "content": "owner ssn 123-45-6789"}
+		]
+	}),
+	Expect::Unchanged
+)]
+#[case::responses_mask_tool_output_untouched(
+	ChatFmt::Responses,
+	Action::Mask,
+	email_and_ssn(),
+	serde_json::json!({
+		"model": "gpt-4o",
+		"input": [
+			{"role": "user", "content": [
+				{"type": "input_text", "text": "email admin@example.com about the pods"}
+			]},
+			{"type": "function_call", "call_id": "call_01", "name": "list_pods", "arguments": "{}"},
+			{"type": "function_call_output", "call_id": "call_01", "output": "pod-a Running, owner ssn 123-45-6789"},
+			{"type": "function_call_output", "call_id": "call_02", "output": [
+				{"type": "output_text", "text": "billing contact admin@example.com"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "gpt-4o",
+		"input": [
+			{"role": "user", "content": [
+				{"type": "input_text", "text": "email <EMAIL_ADDRESS> about the pods"}
+			]},
+			{"type": "function_call", "call_id": "call_01", "name": "list_pods", "arguments": "{}"},
+			{"type": "function_call_output", "call_id": "call_01", "output": "pod-a Running, owner ssn 123-45-6789"},
+			{"type": "function_call_output", "call_id": "call_02", "output": [
+				{"type": "output_text", "text": "billing contact admin@example.com"}
+			]}
+		]
+	}))
+)]
+#[case::responses_reject_does_not_reach_tool_output(
+	ChatFmt::Responses,
+	Action::Reject,
+	ssn_only(),
+	serde_json::json!({
+		"model": "gpt-4o",
+		"input": [
+			{"type": "function_call_output", "call_id": "call_01", "output": "owner ssn 123-45-6789"}
+		]
+	}),
+	Expect::Unchanged
+)]
+fn test_apply_regex_preserves_tool_structure(
+	#[case] fmt: ChatFmt,
+	#[case] action: Action,
+	#[case] rules: Vec<RegexRule>,
+	#[case] input: serde_json::Value,
+	#[case] expected: Expect,
+) {
+	let (action, actual) = run_apply_regex(fmt, action, rules, input);
+	match expected {
+		Expect::Masked(expected) => {
+			assert_eq!(action, GuardrailAction::Mask);
+			assert_eq!(actual, expected);
+		},
+		Expect::Rejected => assert_eq!(action, GuardrailAction::Reject),
+		Expect::Unchanged => assert_eq!(action, GuardrailAction::Allow),
+	}
+}
+
+#[cfg(test)]
+#[rstest::rstest]
+#[case::anthropic_mask(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	ssn_only(),
+	serde_json::json!({
+		"id": "msg_01", "type": "message", "role": "assistant", "model": "claude-sonnet-5",
+		"stop_reason": "tool_use", "stop_sequence": null,
+		"usage": {"input_tokens": 10, "output_tokens": 20},
+		"content": [
+			{"type": "text", "text": "Looking up the patient, ssn 123-45-6789 on file."},
+			{"type": "tool_use", "id": "toolu_01", "name": "lookup_patient", "input": {"name": "John Doe"}}
+		]
+	}),
+	Some(serde_json::json!({
+		"id": "msg_01", "type": "message", "role": "assistant", "model": "claude-sonnet-5",
+		"stop_reason": "tool_use", "stop_sequence": null,
+		"usage": {"input_tokens": 10, "output_tokens": 20},
+		"content": [
+			{"type": "text", "text": "Looking up the patient, ssn <SSN> on file."},
+			{"type": "tool_use", "id": "toolu_01", "name": "lookup_patient", "input": {"name": "John Doe"}}
+		]
+	}))
+)]
+#[case::anthropic_reject(
+	ChatFmt::Anthropic,
+	Action::Reject,
+	ssn_only(),
+	serde_json::json!({
+		"id": "msg_01", "type": "message", "role": "assistant", "model": "claude-sonnet-5",
+		"stop_reason": "tool_use", "stop_sequence": null,
+		"usage": {"input_tokens": 10, "output_tokens": 20},
+		"content": [
+			{"type": "text", "text": "ssn 123-45-6789"},
+			{"type": "tool_use", "id": "toolu_01", "name": "lookup_patient", "input": {"name": "John Doe"}}
+		]
+	}),
+	None
+)]
+#[case::completions_mask(
+	ChatFmt::Completions,
+	Action::Mask,
+	ssn_only(),
+	serde_json::json!({
+		"model": "gpt-4o",
+		"usage": null,
+		"choices": [
+			{"message": {"role": "assistant", "content": "ssn 123-45-6789"}},
+			{"message": {"role": "assistant", "content": null, "tool_calls": [
+				{"id": "call_01", "type": "function", "function": {"name": "list_pods", "arguments": "{}"}}
+			]}}
+		]
+	}),
+	Some(serde_json::json!({
+		"model": "gpt-4o",
+		"usage": null,
+		"choices": [
+			{"message": {"role": "assistant", "content": "ssn <SSN>"}},
+			{"message": {"role": "assistant", "tool_calls": [
+				{"id": "call_01", "type": "function", "function": {"name": "list_pods", "arguments": "{}"}}
+			]}}
+		]
+	}))
+)]
+#[case::responses_mask(
+	ChatFmt::Responses,
+	Action::Mask,
+	ssn_only(),
+	serde_json::json!({
+		"id": "resp_01", "status": "completed", "model": "gpt-4o",
+		"output": [
+			{"type": "message", "id": "msg_01", "role": "assistant", "status": "completed", "content": [
+				{"type": "output_text", "annotations": [], "logprobs": null, "text": "Intro, all good."},
+				{"type": "output_text", "annotations": [], "logprobs": null, "text": "ssn 123-45-6789"}
+			]},
+			{"type": "function_call", "arguments": "{}", "call_id": "call_01", "name": "list_pods"}
+		]
+	}),
+	Some(serde_json::json!({
+		"id": "resp_01", "status": "completed", "model": "gpt-4o",
+		"output": [
+			{"type": "message", "id": "msg_01", "role": "assistant", "status": "completed", "content": [
+				{"type": "output_text", "annotations": [], "logprobs": null, "text": "Intro, all good."},
+				{"type": "output_text", "annotations": [], "logprobs": null, "text": "ssn <SSN>"}
+			]},
+			{"type": "function_call", "arguments": "{}", "call_id": "call_01", "name": "list_pods"}
+		]
+	}))
+)]
+fn test_apply_regex_response_preserves_tool_structure(
+	#[case] fmt: ChatFmt,
+	#[case] action: Action,
+	#[case] rules: Vec<RegexRule>,
+	#[case] input: serde_json::Value,
+	#[case] expected: Option<serde_json::Value>,
+) {
+	let (action, actual) = run_apply_regex_response(fmt, action, rules, input);
+	match expected {
+		Some(expected) => {
+			assert_eq!(action, GuardrailAction::Mask);
+			assert_eq!(actual, expected);
+		},
+		None => assert_eq!(action, GuardrailAction::Reject),
+	}
+}
+
+#[cfg(test)]
+#[rstest::rstest]
+#[case::completions_reject_across_blocks(
+	ChatFmt::Completions,
+	Action::Reject,
+	vec![RegexRule::Regex { pattern: regex::Regex::new("secret token").unwrap() }],
+	serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "Please use this secret"},
+				{"type": "text", "text": "token to authenticate"}
+			]}
+		]
+	}),
+	Expect::Rejected
+)]
+#[case::anthropic_reject_across_blocks(
+	ChatFmt::Anthropic,
+	Action::Reject,
+	vec![RegexRule::Regex { pattern: regex::Regex::new("secret token").unwrap() }],
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "Please use this secret"},
+				{"type": "text", "text": "token to authenticate"}
+			]}
+		]
+	}),
+	Expect::Rejected
+)]
+#[case::responses_reject_across_blocks(
+	ChatFmt::Responses,
+	Action::Reject,
+	vec![RegexRule::Regex { pattern: regex::Regex::new("secret\ntoken").unwrap() }],
+	serde_json::json!({
+		"model": "gpt-4o",
+		"input": [
+			{"role": "user", "content": [
+				{"type": "input_text", "text": "Please use this secret"},
+				{"type": "input_text", "text": "token to authenticate"}
+			]}
+		]
+	}),
+	Expect::Rejected
+)]
+#[case::completions_mask_collapses_run(
+	ChatFmt::Completions,
+	Action::Mask,
+	vec![RegexRule::Regex { pattern: regex::Regex::new("secret token").unwrap() }],
+	serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "Please use this secret"},
+				{"type": "text", "text": "token to authenticate"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "Please use this <masked> to authenticate"}
+			]}
+		]
+	}))
+)]
+#[case::anthropic_mask_collapsed_run_keeps_last_blocks_cache_control(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	email_and_ssn(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact admin@example.com"},
+				{"type": "text", "text": "for help", "cache_control": {"type": "ephemeral"}}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "contact <EMAIL_ADDRESS> for help", "cache_control": {"type": "ephemeral"}}
+			]}
+		]
+	}))
+)]
+#[case::mask_preserves_non_text_block_between_runs(
+	ChatFmt::Anthropic,
+	Action::Mask,
+	ssn_only(),
+	serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "my ssn is 123-45-6789"},
+				{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "aGk="}},
+				{"type": "text", "text": "thanks"}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "claude-sonnet-5",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "my ssn is <SSN>"},
+				{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "aGk="}},
+				{"type": "text", "text": "thanks"}
+			]}
+		]
+	}))
+)]
+#[case::untouched_run_is_not_collapsed(
+	ChatFmt::Completions,
+	Action::Mask,
+	ssn_only(),
+	serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "no pii"},
+				{"type": "text", "text": "in here"}
+			]},
+			{"role": "user", "content": "my ssn is 123-45-6789"}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": [
+				{"type": "text", "text": "no pii"},
+				{"type": "text", "text": "in here"}
+			]},
+			{"role": "user", "content": "my ssn is <SSN>"}
+		]
+	}))
+)]
+#[case::no_match_across_separate_messages(
+	ChatFmt::Completions,
+	Action::Reject,
+	vec![RegexRule::Regex { pattern: regex::Regex::new("secret token").unwrap() }],
+	serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [
+			{"role": "user", "content": "Please use this secret"},
+			{"role": "user", "content": "token to authenticate"}
+		]
+	}),
+	Expect::Unchanged
+)]
+fn test_apply_regex_text_runs(
+	#[case] fmt: ChatFmt,
+	#[case] action: Action,
+	#[case] rules: Vec<RegexRule>,
+	#[case] input: serde_json::Value,
+	#[case] expected: Expect,
+) {
+	let (action, actual) = run_apply_regex(fmt, action, rules, input);
+	match expected {
+		Expect::Masked(expected) => {
+			assert_eq!(action, GuardrailAction::Mask);
+			assert_eq!(actual, expected);
+		},
+		Expect::Rejected => assert_eq!(action, GuardrailAction::Reject),
+		Expect::Unchanged => assert_eq!(action, GuardrailAction::Allow),
+	}
+}
+
+#[cfg(test)]
+#[test]
+fn test_zero_width_pattern_is_a_noop() {
+	let (action, actual) = run_apply_regex(
+		ChatFmt::Completions,
+		Action::Mask,
+		vec![RegexRule::Regex {
+			pattern: regex::Regex::new("z*").unwrap(),
+		}],
+		serde_json::json!({
+			"model": "gpt-4o",
+			"messages": [{"role": "user", "content": "hello world"}]
+		}),
+	);
+	assert_eq!(action, GuardrailAction::Allow);
+	assert_eq!(
+		actual,
+		serde_json::json!({
+			"model": "gpt-4o",
+			"messages": [{"role": "user", "content": "hello world"}]
+		})
 	);
 }

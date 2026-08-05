@@ -23,7 +23,11 @@ import {
 } from "../components/Primitives";
 import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { useStickyQueryParam } from "../drawerRouteState";
-import { useConfigDumpMode, useGatewayConfig, useUpdateConfig } from "../hooks";
+import {
+  useConfigDumpMode,
+  useRawGatewayConfig,
+  useUpdateConfig,
+} from "../hooks";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import {
   listenerContexts,
@@ -74,7 +78,7 @@ export function TrafficListenersPage() {
 }
 
 function TrafficListenersEditorPage() {
-  const config = useGatewayConfig();
+  const config = useRawGatewayConfig();
   const update = useUpdateConfig();
   const help = useSchemaHelp();
   const listeners = useMemo(() => listenerContexts(config.data), [config.data]);
