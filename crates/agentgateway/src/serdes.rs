@@ -1,12 +1,28 @@
 use std::path::PathBuf;
 
 pub use agent_core::serdes::*;
+use anyhow::Context;
 use openapiv3::OpenAPI;
 use serde::de::DeserializeOwned;
 
 use crate::resource_manager::{ResourceFetcher, ResourceKind, ResourceRef};
 
 define_schema_aliases!();
+
+/// Loads [`FileOrInline`] values through the resource manager so file-backed
+/// values participate in config reloads.
+pub async fn load_file_or_inline(
+	value: &FileOrInline,
+	resources: &ResourceFetcher,
+) -> anyhow::Result<String> {
+	match value {
+		FileOrInline::Inline(value) => Ok(value.clone()),
+		FileOrInline::File { file } => {
+			let bytes = resources.fetch(ResourceRef::File(file.clone())).await?;
+			String::from_utf8(bytes.to_vec()).context("resource is not valid UTF-8")
+		},
+	}
+}
 
 #[derive(Debug, Clone, serde::Deserialize)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]

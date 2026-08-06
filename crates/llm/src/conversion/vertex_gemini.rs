@@ -251,8 +251,8 @@ pub mod from_completions {
 
 		// Vertex rejects `id` and correlates functionResponse to functionCall positionally, so each
 		// response group must follow the assistant's tool_calls order even when a client returns the
-		// `tool` messages out of order. Reorder only the functionResponse parts (leaving any filler
-		// text in place), then drop the now-unused correlation id.
+		// `tool` messages out of order. Reorder the functionResponse parts, then drop the now-unused
+		// correlation id.
 		for content in &mut contents {
 			let mut ordered: Vec<vg::Part> = content
 				.parts
@@ -418,25 +418,38 @@ pub mod from_completions {
 		})
 	}
 
-	/// Append `parts` as a content entry of `role`, merging into the previous entry
-	/// when the role matches (Gemini requires user/model alternation).
+	/// Append `parts` as a content entry of `role`, merging compatible parts into the
+	/// previous entry when the role matches (Gemini requires user/model alternation).
 	///
-	/// For user entries, also enforces the Vertex invariant that every user turn must
-	/// contain at least one text part (image-only turns are rejected otherwise).
+	/// Function responses must remain in their own user entry: Gemini 3 rejects a
+	/// functionResponse with sibling parts. Other user entries retain a text filler when
+	/// necessary (for example, image-only turns).
 	fn push_content(contents: &mut Vec<vg::Content>, role: &str, mut parts: Vec<vg::Part>) {
 		if parts.is_empty() {
 			return;
 		}
+		let has_function_response = parts
+			.iter()
+			.any(|p| matches!(p, vg::Part::FunctionResponse(_)));
 		if let Some(last) = contents.last_mut()
 			&& last.role.as_deref() == Some(role)
+			&& last
+				.parts
+				.iter()
+				.any(|p| matches!(p, vg::Part::FunctionResponse(_)))
+				== has_function_response
 		{
-			if role == "user" && !last.parts.iter().any(is_text_part) && !parts.iter().any(is_text_part) {
+			if role == "user"
+				&& !has_function_response
+				&& !last.parts.iter().any(is_text_part)
+				&& !parts.iter().any(is_text_part)
+			{
 				parts.push(text_part(" "));
 			}
 			last.parts.extend(parts);
 			return;
 		}
-		if role == "user" && !parts.iter().any(is_text_part) {
+		if role == "user" && !has_function_response && !parts.iter().any(is_text_part) {
 			parts.push(text_part(" "));
 		}
 		contents.push(vg::Content {
@@ -932,8 +945,6 @@ pub mod to_completions {
 	use std::time::Instant;
 
 	use axum_core::body::Body;
-	use futures_util::StreamExt;
-	use futures_util::stream::{self, BoxStream};
 	use serde_json::Value;
 
 	use super::*;
@@ -1405,31 +1416,7 @@ pub mod to_completions {
 				None => vec![],
 			}
 		});
-		append_done_on_close(body.into_data_stream())
-	}
-
-	/// Gemini ends the HTTP stream without a `[DONE]` sentinel; append one on successful close
-	/// (mirrors `conversion::bedrock::from_completions::append_done_on_success`).
-	fn append_done_on_close<S>(stream: S) -> Body
-	where
-		S: futures_core::Stream<Item = Result<Bytes, axum_core::Error>> + Send + 'static,
-	{
-		let done = crate::parse::encode_sse_event("", Bytes::from_static(b"[DONE]"));
-		let stream = stream::unfold(
-			(Some(stream.boxed()), Some(done)),
-			|(stream, done): (
-				Option<BoxStream<'static, Result<Bytes, axum_core::Error>>>,
-				Option<Bytes>,
-			)| async move {
-				let mut stream = stream?;
-				match stream.next().await {
-					Some(Ok(chunk)) => Some((Ok(chunk), (Some(stream), done))),
-					Some(Err(err)) => Some((Err(err), (None, None))),
-					None => done.map(|done| (Ok(done), (None, None))),
-				}
-			},
-		);
-		Body::from_stream(stream)
+		parse::sse::append_done_on_success(body)
 	}
 
 	/// Prompt, completion, and total token counts from Gemini usage metadata

@@ -344,8 +344,16 @@ async fn local_ratelimit() {
 
 	let res = send_request(io.clone(), Method::GET, "http://lo").await;
 	assert_eq!(res.status(), 200);
+	// Allowed responses advertise the current limit so clients can self-throttle.
+	assert_eq!(res.hdr("x-ratelimit-limit"), "1");
+	assert_eq!(res.hdr("x-ratelimit-remaining"), "0");
+	assert!(!res.hdr("x-ratelimit-reset").is_empty());
+
 	let res = send_request(io.clone(), Method::GET, "http://lo").await;
 	assert_eq!(res.status(), 429);
+	// The 429 still carries the limit info.
+	assert_eq!(res.hdr("x-ratelimit-limit"), "1");
+	assert_eq!(res.hdr("x-ratelimit-remaining"), "0");
 }
 
 #[tokio::test]

@@ -25,7 +25,7 @@ info:
     "max_tokens": 4096,
     "thinking": {
       "type": "enabled",
-      "budget_tokens": 8192
+      "budget_tokens": 4095
     }
   },
   "parsed": {

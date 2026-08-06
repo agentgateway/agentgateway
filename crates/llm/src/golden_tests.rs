@@ -498,6 +498,7 @@ mod responses {
 				".response.id" => "[id]",
 				".response.output.*.id" => "[id]",
 				".response.created" => "[date]",
+				".response.created_at" => "[date]",
 			});
 		});
 	}
@@ -611,10 +612,14 @@ mod responses {
 	];
 	const BEDROCK_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", ALL_BEDROCK),
+		("max_tokens", &[BEDROCK_TO_RESPONSES]),
 		("tool", ALL_BEDROCK),
 		("reasoning", ALL_BEDROCK),
 		("reasoning_unsigned", ALL_BEDROCK),
-		("cache_write", &[BEDROCK_TO_COMPLETIONS]),
+		(
+			"cache_write",
+			&[BEDROCK_TO_COMPLETIONS, BEDROCK_TO_RESPONSES],
+		),
 	];
 	const ALL_ANTHROPIC: &[&str] = &[
 		MESSAGES_TO_MESSAGES,
@@ -630,6 +635,7 @@ mod responses {
 	const ALL_COMPLETIONS: &[&str] = &[
 		COMPLETIONS_TO_COMPLETIONS,
 		COMPLETIONS_TO_MESSAGES,
+		COMPLETIONS_TO_RESPONSES,
 		COMPLETIONS_TO_DETECT,
 	];
 	const COMPLETIONS_RESPONSES: &[(&str, &[&str])] = &[
@@ -643,7 +649,10 @@ mod responses {
 		("gemini_zero_completion_tokens", ALL_COMPLETIONS),
 		("gemini_with_completion_tokens", ALL_COMPLETIONS),
 		("tool_call", ALL_COMPLETIONS),
-		("truncated_tool_call", &[COMPLETIONS_TO_COMPLETIONS]),
+		(
+			"truncated_tool_call",
+			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_RESPONSES],
+		),
 	];
 	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", &[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT]),
@@ -757,6 +766,9 @@ mod responses {
 					}),
 					COMPLETIONS_TO_MESSAGES => test_response(provider, &path, |i| {
 						conversion::completions::from_messages::translate_response(&i)
+					}),
+					COMPLETIONS_TO_RESPONSES => test_response(provider, &path, |i| {
+						conversion::openai_compat::to_responses::translate_response(&i, "input-model")
 					}),
 					COMPLETIONS_TO_DETECT => test_response(provider, &path, |bytes| {
 						Ok(Box::new(

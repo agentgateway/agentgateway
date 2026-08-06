@@ -227,6 +227,76 @@ spec:
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayModel
 metadata:
+  name: protected-primary-down
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  visibility: Internal
+  provider: OpenAI
+  baseURL: http://model-routing-primary.default.svc.cluster.local:9235
+  policies:
+    authorization:
+      policy:
+        matchExpressions:
+        - request.headers["x-model-access"] == "allowed"
+    health:
+      eviction:
+        consecutiveFailures: 1
+    transformations:
+    - field: model
+      expression: '"agw-protected-primary-down"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: protected-fallback
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  visibility: Internal
+  provider: OpenAI
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  policies:
+    authorization:
+      policy:
+        matchExpressions:
+        - request.headers["x-model-access"] == "allowed"
+    transformations:
+    - field: model
+      expression: '"agw-protected-fallback"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: protected-resilient
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  virtualModel:
+    failover:
+      targets:
+      - modelRef:
+          name: protected-primary-down
+        priority: 0
+      - modelRef:
+          name: protected-fallback
+        priority: 1
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
   name: invalid-target
   namespace: default
 spec:

@@ -34,7 +34,8 @@ Useful flags, with their legacy environment variable fallback:
 - `-agw.skip-bug-report=true` (`SKIP_BUG_REPORT=true`): skip failure dump collection.
 - `-agw.skip-dump=true` (`SKIP_DUMP=true`): skip Kubernetes state dumping.
 - `-agw.port-forward=true` (`USE_PORTFORWARD` set): send Gateway traffic through port-forwarding.
-- `-agw.trace=true` / `-agw.verbose=true` (`AGW_E2E_TRACE=true` or `E2E_VERBOSE=true`): log setup/apply/wait timings.
+- `-agw.trace=true` (`AGW_E2E_TRACE=true`): log setup/apply/wait timings.
+- `-agw.verbose=true` (`E2E_VERBOSE=true`): log timings and each failed Istio retry attempt.
 - `-agw.install-namespace=<namespace>` (`INSTALL_NAMESPACE`): override the install namespace.
 - `-agw.cluster-name=<name>` (`CLUSTER_NAME`): select the Kind cluster name.
 - `-agw.kube-context=<context>` (`KUBE_CTX`): select the kube context.

@@ -131,6 +131,16 @@ fn restore_tool_name(map: Option<&BedrockToolNameMap>, name: &str) -> String {
 		.unwrap_or_else(|| name.to_string())
 }
 
+fn responses_output_status(stop_reason: &bedrock::StopReason) -> responses::typed::OutputStatus {
+	match stop_reason {
+		bedrock::StopReason::MaxTokens
+		| bedrock::StopReason::ModelContextWindowExceeded
+		| bedrock::StopReason::ContentFiltered
+		| bedrock::StopReason::GuardrailIntervened => responses::typed::OutputStatus::Incomplete,
+		_ => responses::typed::OutputStatus::Completed,
+	}
+}
+
 struct CanonicalImage {
 	media_type: String,
 	bytes_base64: String,
@@ -468,8 +478,6 @@ pub mod from_completions {
 
 	use axum_core::body::Body;
 	use bytes::Bytes;
-	use futures_util::StreamExt;
-	use futures_util::stream::{self, BoxStream};
 	use itertools::Itertools;
 	use types::bedrock;
 	use types::completions::typed as completions;
@@ -692,10 +700,9 @@ pub mod from_completions {
 			max_tokens: req.max_tokens(),
 			temperature: req.temperature,
 			top_p: req.top_p,
-			// Map Anthropic-style vendor extension to Bedrock topK when provided
-			top_k: req.vendor_extensions.top_k,
 			stop_sequences: req.stop_sequence(),
 		};
+		let top_k = req.vendor_extensions.top_k;
 
 		let tool_choice = match req.tool_choice {
 			Some(completions::ToolChoiceOption::Function(completions::NamedToolChoice { function })) => {
@@ -806,7 +813,7 @@ pub mod from_completions {
 				.and_then(crate::types::thinking_budget_for_reasoning_effort)
 		});
 
-		let additional_model_request_fields = enabled_thinking_budget.map(|budget| {
+		let mut additional_model_request_fields = enabled_thinking_budget.map(|budget| {
 			serde_json::json!({
 				"thinking": {
 					"type": "enabled",
@@ -814,6 +821,16 @@ pub mod from_completions {
 				}
 			})
 		});
+		// Anthropic manual thinking is incompatible with custom sampling parameters.
+		if enabled_thinking_budget.is_none()
+			&& let Some(top_k) = top_k
+		{
+			additional_model_request_fields
+				.get_or_insert_with(|| serde_json::json!({}))
+				.as_object_mut()
+				.expect("additional model request fields must be a JSON object")
+				.insert("top_k".to_string(), top_k.into());
+		}
 		let output_config = req
 			.response_format
 			.as_ref()
@@ -1191,30 +1208,7 @@ pub mod from_completions {
 			}
 		});
 
-		append_done_on_success(body.into_data_stream())
-	}
-
-	pub(super) fn append_done_on_success<S>(stream: S) -> Body
-	where
-		S: futures_core::Stream<Item = Result<Bytes, axum_core::Error>> + Send + 'static,
-	{
-		let done = crate::parse::encode_sse_event("", Bytes::from_static(b"[DONE]"));
-		let stream = stream::unfold(
-			(Some(stream.boxed()), Some(done)),
-			|(stream, done): (
-				Option<BoxStream<'static, Result<Bytes, axum_core::Error>>>,
-				Option<Bytes>,
-			)| async move {
-				let mut stream = stream?;
-				match stream.next().await {
-					Some(Ok(chunk)) => Some((Ok(chunk), (Some(stream), done))),
-					Some(Err(err)) => Some((Err(err), (None, None))),
-					None => done.map(|done| (Ok(done), (None, None))),
-				}
-			},
-		)
-		.fuse();
-		Body::from_stream(stream)
+		parse::sse::append_done_on_success(body)
 	}
 
 	pub fn translate_stop_reason(
@@ -1571,9 +1565,9 @@ pub mod from_messages {
 				req.temperature
 			},
 			top_p: if thinking_enabled { None } else { req.top_p },
-			top_k: if thinking_enabled { None } else { req.top_k },
 			stop_sequences: req.stop_sequences,
 		};
+		let top_k = if thinking_enabled { None } else { req.top_k };
 
 		let tool_config = pending_tool_config.map(|(tools, tool_choice)| {
 			let mut bedrock_tools = Vec::with_capacity(tools.len() * 2);
@@ -1614,6 +1608,10 @@ pub mod from_messages {
 				.expect("additional model request fields must be a JSON object")
 				.insert(key.to_string(), value);
 		};
+
+		if let Some(top_k) = top_k {
+			upsert_additional_field("top_k", top_k.into());
+		}
 
 		// Preserve explicit output_config in Anthropic's model-specific envelope.
 		if let Some(output_config) = requested_output_config_json {
@@ -2038,7 +2036,7 @@ pub mod from_responses {
 	use types::bedrock;
 	use types::responses::typed as responses;
 
-	use super::helpers;
+	use super::{helpers, responses_output_status};
 	use crate::bedrock::Provider;
 	use crate::conversion::completions::parse_data_url;
 	use crate::types::ResponseType;
@@ -2581,7 +2579,6 @@ pub mod from_responses {
 			max_tokens: req.max_output_tokens.unwrap_or(4096) as usize,
 			temperature: req.temperature,
 			top_p: req.top_p,
-			top_k: None,
 			stop_sequences: vec![],
 		};
 		let output_config = req
@@ -2739,15 +2736,8 @@ pub mod from_responses {
 			.map_err(logged_response_parsing(bytes))?;
 		let adapter = super::ConverseResponseAdapter::from_response(resp, model)?;
 		let typed = adapter.to_responses_typed(tool_name_map);
-		let mut passthrough =
+		let passthrough =
 			json::convert::<_, types::responses::Response>(&typed).map_err(AIError::ResponseParsing)?;
-		passthrough.rest = serde_json::Value::Object(serde_json::Map::new());
-		if let Some(usage) = passthrough.usage.as_mut() {
-			usage.rest = serde_json::Value::Object(serde_json::Map::new());
-		}
-		if matches!(adapter.stop_reason, bedrock::StopReason::ToolUse) {
-			passthrough.status = "requires_action".to_string();
-		}
 		Ok(Box::new(passthrough))
 	}
 
@@ -3065,6 +3055,12 @@ pub mod from_responses {
 					}
 
 					let mut out: Vec<(&'static str, ResponseStreamEvent)> = Vec::new();
+					let stop = pending_stop_reason.take();
+					let usage_data = pending_usage.take();
+					let output_status = stop
+						.as_ref()
+						.map(responses_output_status)
+						.unwrap_or(OutputStatus::Completed);
 
 					sequence_number += 1;
 					let message_done_event =
@@ -3076,13 +3072,11 @@ pub mod from_responses {
 								id: message_item_id.clone(),
 								role: AssistantRole::Assistant,
 								phase: None,
-								status: OutputStatus::Completed,
+								status: output_status,
 							}),
 						});
 					out.push(("event", message_done_event));
 
-					let stop = pending_stop_reason.take();
-					let usage_data = pending_usage.take();
 					let response_status = match stop.as_ref() {
 						Some(bedrock::StopReason::EndTurn)
 						| Some(bedrock::StopReason::StopSequence)
@@ -3105,7 +3099,7 @@ pub mod from_responses {
 					let usage_obj = usage_data.map(|u| ResponseUsage {
 						input_tokens: u.input_tokens as u32,
 						output_tokens: u.output_tokens as u32,
-						total_tokens: (u.input_tokens + u.output_tokens) as u32,
+						total_tokens: u.total_tokens as u32,
 						input_tokens_details: InputTokenDetails {
 							cached_tokens: u.cache_read_input_tokens.unwrap_or(0) as u32,
 							cache_write_tokens: u.cache_write_input_tokens.map(|tokens| tokens as u32),
@@ -3604,6 +3598,7 @@ impl ConverseResponseAdapter {
 		let response_id = format!("resp_{:016x}", rand::rng().random::<u64>());
 		let response_builder =
 			crate::types::responses::ResponseBuilder::new(response_id, self.model.clone());
+		let output_status = responses_output_status(&self.stop_reason);
 
 		// Convert Bedrock content blocks to Responses OutputItem
 		let mut outputs: Vec<responsest::OutputItem> = Vec::new();
@@ -3648,7 +3643,7 @@ impl ConverseResponseAdapter {
 							name: restore_tool_name(tool_name_map, &tool_use.name),
 							caller: None,
 							id: Some(tool_use.tool_use_id.clone()),
-							status: Some(responsest::OutputStatus::Completed),
+							status: Some(output_status),
 						},
 					));
 				},
@@ -3667,7 +3662,7 @@ impl ConverseResponseAdapter {
 				role: responsest::AssistantRole::Assistant,
 				phase: None,
 				content: text_parts,
-				status: responsest::OutputStatus::Completed,
+				status: output_status,
 			}));
 		}
 
@@ -3712,7 +3707,7 @@ impl ConverseResponseAdapter {
 		let usage = self.usage.map(|u| responsest::ResponseUsage {
 			input_tokens: u.input_tokens as u32,
 			output_tokens: u.output_tokens as u32,
-			total_tokens: (u.input_tokens + u.output_tokens) as u32,
+			total_tokens: u.total_tokens as u32,
 			input_tokens_details: responsest::InputTokenDetails {
 				cached_tokens: u.cache_read_input_tokens.unwrap_or(0) as u32,
 				cache_write_tokens: u.cache_write_input_tokens.map(|tokens| tokens as u32),

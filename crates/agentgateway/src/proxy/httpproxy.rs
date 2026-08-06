@@ -156,9 +156,10 @@ async fn apply_request_policies(
 	l: &mut RequestLog,
 	req: &mut Request,
 	rp: &mut ResponsePolicies,
-) -> Result<(), ProxyResponse> {
+) -> Result<Option<Arc<retry::Policy>>, ProxyResponse> {
 	// TODO we only need allow policies to be timeout-aware because we odn't have
 	// a unified timeout guard that applies during policy evalutation
+	rp.timeout = pol.timeout.select("timeout", req).as_deref().cloned();
 	if let Some(timeout) = rp.timeout.as_ref().and_then(|t| t.request_timeout) {
 		req.extensions_mut().insert(http::filters::RequestDeadline(
 			l.start.as_instant() + timeout,
@@ -202,6 +203,19 @@ async fn apply_request_policies(
 		.authorization
 		.apply_without_response("authorization", c, l, req, rp.headers())
 		.await?;
+
+	let mut route_retry = pol.retry.select("retry", req);
+	// Evaluate the retry precondition (if any) against the request before it is consumed.
+	if let Some(retry) = route_retry.as_ref()
+		&& let Some(pre) = retry.precondition.as_ref()
+	{
+		let exec = cel::Executor::new_request(req);
+		if !exec.eval_bool(pre.as_ref()) {
+			debug!("retry precondition not met, disabling retries");
+			route_retry = None;
+		}
+	}
+	l.retry_backoff = route_retry.as_ref().and_then(|r| r.backoff);
 
 	rp.llm_request_policies.local_rate_limit = pol
 		.local_rate_limit
@@ -283,9 +297,9 @@ async fn apply_request_policies(
 		.direct_response
 		.apply_without_response("direct response", c, l, req, rp.headers())
 		.await?;
-	// Mirror, timeout, and retry are handled separately.
 
-	Ok(())
+	// Mirror is handled separately
+	Ok(route_retry)
 }
 
 async fn apply_backend_policies(
@@ -484,8 +498,20 @@ async fn apply_llm_request_policies(
 		.filter(|rate_limit| rate_limit.spec.limit_type == http::localratelimit::RateLimitType::Tokens)
 		.cloned()
 		.collect::<Vec<_>>();
+	let mut local_status: Option<http::localratelimit::RateLimitStatus> = None;
 	for lrl in &local_rate_limit {
-		lrl.check_llm_request(llm_req)?;
+		local_status = http::localratelimit::RateLimitStatus::most_constrained(
+			local_status,
+			lrl.check_llm_request(llm_req)?,
+		);
+	}
+	if let Some(status) = local_status {
+		http::x_headers::set_ratelimit_headers(
+			response_headers,
+			status.limit,
+			status.remaining,
+			status.reset_seconds,
+		);
 	}
 	let (rl_resp, response) = if let Some(rrl) = &policies.remote_rate_limit {
 		// For the LLM request side, request either the count of the input tokens (if tokenization was done)
@@ -870,29 +896,9 @@ impl HTTPProxy {
 		let route_policies = inputs.stores.read_binds().route_policies(&route_path);
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
-		let mut route_retry = route_policies.retry.select("retry", &req);
-		log.retry_backoff = route_retry.as_ref().and_then(|r| r.backoff);
-		// Evaluate the retry precondition (if any) against the request before it is consumed.
-		if let Some(retry) = route_retry.as_ref()
-			&& let Some(pre) = retry.precondition.as_ref()
-		{
-			let exec = cel::Executor::new_request(&req);
-			if !exec.eval_bool(pre.as_ref()) {
-				debug!("retry precondition not met, disabling retries");
-				route_retry = None;
-			}
-		}
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
-		// Others are set only when they have gotten to the appropriate phase of the request, so we simulate
-		// a middleware-style approach where if the request side never runs, neither does the response side.
-		response_policies.timeout = route_policies
-			.timeout
-			.select("timeout", &req)
-			.as_deref()
-			.cloned();
-
-		apply_request_policies(
+		let route_retry = apply_request_policies(
 			&route_policies,
 			&self.policy_client(),
 			log,
@@ -1637,7 +1643,7 @@ pub async fn build_transport(
 	};
 	if let Some(tun) = backend_tunnel {
 		let backend = super::resolve_simple_backend_with_policies(&tun.proxy, inputs)?;
-		let pols = crate::proxy::tcpproxy::get_backend_policies(inputs, &backend, &[], None);
+		let pols = crate::proxy::tcpproxy::get_backend_policies(inputs, &backend, &tun.policies, None);
 		let call = TCPProxy::build_backend_call(&mut None, None, inputs, &backend.backend, pols, None)?;
 		let tunnel_backend_tls = call.backend_policies.backend_tls.clone();
 		let tunnel_auth = call.backend_policies.backend_auth.clone();
@@ -2082,7 +2088,13 @@ async fn make_backend_call(
 
 	let (mut backend_call, mut maybe_inference) = match backend {
 		Backend::AI(n, ai) => {
-			let (provider, handle) = ai.select_provider().ok_or(ProxyError::NoHealthyEndpoints)?;
+			let affinity_key = policies
+				.session_affinity
+				.as_ref()
+				.and_then(|policy| policy.affinity_key(&req));
+			let (provider, handle) = ai
+				.select_provider(affinity_key)
+				.ok_or(ProxyError::NoHealthyEndpoints)?;
 			log.add(move |l| l.request_handle = Some(handle));
 			let sub_backend_name = BackendTargetRef::Backend {
 				name: n.name.as_ref(),
@@ -2337,7 +2349,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ProxyError::AI)?,
 						RouteType::Messages => Box::pin(llm.provider.process_messages_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2346,7 +2358,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ProxyError::AI)?,
 						RouteType::Responses => Box::pin(llm.provider.process_responses_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2355,7 +2367,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ProxyError::AI)?,
 						RouteType::Embeddings => Box::pin(llm.provider.process_embeddings_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2364,7 +2376,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ProxyError::AI)?,
 						RouteType::Rerank => Box::pin(llm.provider.process_rerank_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2373,7 +2385,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ProxyError::AI)?,
 						RouteType::AnthropicTokenCount => Box::pin(llm.provider.process_count_tokens_request(
 							&backend_info,
 							req,
@@ -2381,7 +2393,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ProxyError::AI)?,
 						RouteType::Detect => Box::pin(llm.provider.process_detect_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2389,7 +2401,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(|e| ProxyError::Processing(e.into()))?,
+						.map_err(ProxyError::AI)?,
 						_ => unreachable!(),
 					};
 					let (mut req, llm_request, upstream_route_type) = match r {
@@ -2667,7 +2679,7 @@ async fn make_backend_call(
 				.assert_size::<{ 4 * 1024 }>(),
 		)
 		.await
-		.map_err(|e| ProxyError::Processing(e.into()))?
+		.map_err(ProxyError::AI)?
 	} else {
 		resp
 	};
@@ -2790,7 +2802,7 @@ pub fn build_service_call(
 			svc.as_ref(),
 			port,
 			service_override.destination,
-			service_override.affinity_key.as_ref(),
+			service_override.affinity_key,
 		)
 		.ok_or(ProxyError::NoHealthyEndpoints)?;
 
@@ -3229,6 +3241,7 @@ mod tests {
 		PromptGuard, PromptGuardStreamingMode, RegexRule, RegexRules, RequestRejection, ResponseGuard,
 		ResponseGuardKind,
 	};
+	use crate::proxy::request_builder::RequestBuilder;
 	use crate::store::LLMRequestPolicies;
 	use crate::test_helpers::proxymock;
 	use crate::types::agent::{Backend, ResourceName, Target};
@@ -3558,6 +3571,84 @@ mod tests {
 			Some("trailers")
 		);
 		assert!(!req.headers().contains_key("x-original-url"));
+	}
+
+	#[tokio::test]
+	async fn llm_session_affinity_pins_provider() {
+		let first = wiremock::MockServer::start().await;
+		let second = wiremock::MockServer::start().await;
+		for mock in [&first, &second] {
+			Mock::given(wiremock::matchers::any())
+				.respond_with(ResponseTemplate::new(200).set_body_raw(
+					include_bytes!("../../../llm/src/tests/response/completions/basic.json").to_vec(),
+					"application/json",
+				))
+				.mount(mock)
+				.await;
+		}
+
+		let mut bind = proxymock::setup_proxy_test("{}").expect("proxy test harness");
+		bind
+			.attach_route(json!({
+				"name": "route",
+				"backends": [{
+					"ai": {
+						"groups": [{
+							"providers": [
+								{
+									"name": "first",
+									"hostOverride": first.address().to_string(),
+									"provider": { "openAI": {} }
+								},
+								{
+									"name": "second",
+									"hostOverride": second.address().to_string(),
+									"provider": { "openAI": {} }
+								}
+							]
+						}]
+					},
+					"policies": {
+						"sessionAffinity": {
+							"source": "request.headers['codex-session-id']"
+						},
+						"ai": {
+							"routes": { "/v1/chat/completions": "completions" }
+						}
+					}
+				}]
+			}))
+			.await;
+		bind = bind.with_bind(proxymock::simple_bind());
+		let io = bind.serve_http(proxymock::BIND_KEY);
+
+		for _ in 0..8 {
+			let response = RequestBuilder::new(Method::POST, "http://lo/v1/chat/completions")
+				.header("codex-session-id", "session-a")
+				.body(http::Body::from(
+					include_bytes!("../../../llm/src/tests/requests/completions/basic.json").to_vec(),
+				))
+				.send(io.clone())
+				.await
+				.expect("request succeeds");
+			assert_eq!(response.status(), 200);
+			proxymock::read_body_raw(response.into_body()).await;
+		}
+
+		let first_requests = first
+			.received_requests()
+			.await
+			.expect("first provider request recording")
+			.len();
+		let second_requests = second
+			.received_requests()
+			.await
+			.expect("second provider request recording")
+			.len();
+		assert!(
+			matches!((first_requests, second_requests), (8, 0) | (0, 8)),
+			"expected one provider to receive every request, got {first_requests} and {second_requests}"
+		);
 	}
 
 	#[tokio::test]

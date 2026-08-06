@@ -1558,30 +1558,55 @@ fn ssn_only() -> Vec<RegexRule> {
 	}]
 }
 
+#[test]
+fn regex_evaluation_does_not_mutate_until_enforced() {
+	let mut req: crate::llm::types::completions::Request =
+		serde_json::from_value(serde_json::json!({
+			"model": "gpt-4o",
+			"messages": [{"role": "user", "content": "my ssn is 123-45-6789"}]
+		}))
+		.unwrap();
+	let before = serde_json::to_value(&req).unwrap();
+	let rules = RegexRules {
+		action: Action::Mask,
+		rules: ssn_only(),
+	};
+
+	let rejection = RequestRejection::default();
+	let result = Policy::evaluate_regex_request(&mut req, &rules, &rejection);
+	assert!(matches!(&result, GuardrailOutcome::Masked(_)));
+	assert_eq!(serde_json::to_value(&req).unwrap(), before);
+
+	let (action, rejection) = Policy::apply_request_guard_outcome(result, &mut req).unwrap();
+	assert_eq!(action, GuardrailAction::Mask);
+	assert!(rejection.is_none());
+	assert_ne!(serde_json::to_value(&req).unwrap(), before);
+}
+
 #[cfg(test)]
 fn run_apply_regex(
 	fmt: ChatFmt,
 	action: Action,
 	rules: Vec<RegexRule>,
 	input: serde_json::Value,
-) -> (GuardrailOutcome, serde_json::Value) {
+) -> (GuardrailAction, serde_json::Value) {
 	let rules = RegexRules { action, rules };
 	let rejection = RequestRejection::default();
 	match fmt {
 		ChatFmt::Anthropic => {
 			let mut req: crate::llm::types::messages::Request = serde_json::from_value(input).unwrap();
-			let outcome = Policy::apply_regex(&mut req, &rules, &rejection).unwrap();
-			(outcome, serde_json::to_value(&req).unwrap())
+			let action = Policy::apply_regex(&mut req, &rules, &rejection).unwrap();
+			(action, serde_json::to_value(&req).unwrap())
 		},
 		ChatFmt::Completions => {
 			let mut req: crate::llm::types::completions::Request = serde_json::from_value(input).unwrap();
-			let outcome = Policy::apply_regex(&mut req, &rules, &rejection).unwrap();
-			(outcome, serde_json::to_value(&req).unwrap())
+			let action = Policy::apply_regex(&mut req, &rules, &rejection).unwrap();
+			(action, serde_json::to_value(&req).unwrap())
 		},
 		ChatFmt::Responses => {
 			let mut req: crate::llm::types::responses::Request = serde_json::from_value(input).unwrap();
-			let outcome = Policy::apply_regex(&mut req, &rules, &rejection).unwrap();
-			(outcome, serde_json::to_value(&req).unwrap())
+			let action = Policy::apply_regex(&mut req, &rules, &rejection).unwrap();
+			(action, serde_json::to_value(&req).unwrap())
 		},
 	}
 }
@@ -1593,25 +1618,25 @@ fn run_apply_regex_response(
 	action: Action,
 	rules: Vec<RegexRule>,
 	input: serde_json::Value,
-) -> (GuardrailOutcome, serde_json::Value) {
+) -> (GuardrailAction, serde_json::Value) {
 	let rules = RegexRules { action, rules };
 	let rejection = RequestRejection::default();
 	match fmt {
 		ChatFmt::Anthropic => {
 			let mut resp: crate::llm::types::messages::Response = serde_json::from_value(input).unwrap();
-			let outcome = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
-			(outcome, serde_json::to_value(&resp).unwrap())
+			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
+			(action, serde_json::to_value(&resp).unwrap())
 		},
 		ChatFmt::Completions => {
 			let mut resp: crate::llm::types::completions::Response =
 				serde_json::from_value(input).unwrap();
-			let outcome = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
-			(outcome, serde_json::to_value(&resp).unwrap())
+			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
+			(action, serde_json::to_value(&resp).unwrap())
 		},
 		ChatFmt::Responses => {
 			let mut resp: crate::llm::types::responses::Response = serde_json::from_value(input).unwrap();
-			let outcome = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
-			(outcome, serde_json::to_value(&resp).unwrap())
+			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
+			(action, serde_json::to_value(&resp).unwrap())
 		},
 	}
 }
@@ -1788,14 +1813,14 @@ fn test_apply_regex_preserves_tool_structure(
 	#[case] input: serde_json::Value,
 	#[case] expected: Expect,
 ) {
-	let (outcome, actual) = run_apply_regex(fmt, action, rules, input);
+	let (action, actual) = run_apply_regex(fmt, action, rules, input);
 	match expected {
 		Expect::Masked(expected) => {
-			assert!(matches!(outcome, GuardrailOutcome::Masked));
+			assert_eq!(action, GuardrailAction::Mask);
 			assert_eq!(actual, expected);
 		},
-		Expect::Rejected => assert!(matches!(outcome, GuardrailOutcome::Rejected(_))),
-		Expect::Unchanged => assert!(matches!(outcome, GuardrailOutcome::None)),
+		Expect::Rejected => assert_eq!(action, GuardrailAction::Reject),
+		Expect::Unchanged => assert_eq!(action, GuardrailAction::Allow),
 	}
 }
 
@@ -1896,13 +1921,13 @@ fn test_apply_regex_response_preserves_tool_structure(
 	#[case] input: serde_json::Value,
 	#[case] expected: Option<serde_json::Value>,
 ) {
-	let (outcome, actual) = run_apply_regex_response(fmt, action, rules, input);
+	let (action, actual) = run_apply_regex_response(fmt, action, rules, input);
 	match expected {
 		Some(expected) => {
-			assert!(matches!(outcome, GuardrailOutcome::Masked));
+			assert_eq!(action, GuardrailAction::Mask);
 			assert_eq!(actual, expected);
 		},
-		None => assert!(matches!(outcome, GuardrailOutcome::Rejected(_))),
+		None => assert_eq!(action, GuardrailAction::Reject),
 	}
 }
 
@@ -2072,21 +2097,21 @@ fn test_apply_regex_text_runs(
 	#[case] input: serde_json::Value,
 	#[case] expected: Expect,
 ) {
-	let (outcome, actual) = run_apply_regex(fmt, action, rules, input);
+	let (action, actual) = run_apply_regex(fmt, action, rules, input);
 	match expected {
 		Expect::Masked(expected) => {
-			assert!(matches!(outcome, GuardrailOutcome::Masked));
+			assert_eq!(action, GuardrailAction::Mask);
 			assert_eq!(actual, expected);
 		},
-		Expect::Rejected => assert!(matches!(outcome, GuardrailOutcome::Rejected(_))),
-		Expect::Unchanged => assert!(matches!(outcome, GuardrailOutcome::None)),
+		Expect::Rejected => assert_eq!(action, GuardrailAction::Reject),
+		Expect::Unchanged => assert_eq!(action, GuardrailAction::Allow),
 	}
 }
 
 #[cfg(test)]
 #[test]
 fn test_zero_width_pattern_is_a_noop() {
-	let (outcome, actual) = run_apply_regex(
+	let (action, actual) = run_apply_regex(
 		ChatFmt::Completions,
 		Action::Mask,
 		vec![RegexRule::Regex {
@@ -2097,7 +2122,7 @@ fn test_zero_width_pattern_is_a_noop() {
 			"messages": [{"role": "user", "content": "hello world"}]
 		}),
 	);
-	assert!(matches!(outcome, GuardrailOutcome::None));
+	assert_eq!(action, GuardrailAction::Allow);
 	assert_eq!(
 		actual,
 		serde_json::json!({

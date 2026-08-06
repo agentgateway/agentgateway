@@ -29,7 +29,6 @@ info:
 ---
 {
   "request": {
-    "modelId": "gpt-4o",
     "messages": [
       {
         "role": "user",

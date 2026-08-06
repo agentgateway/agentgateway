@@ -298,6 +298,10 @@ func (s *Syncer) buildFinalListenerSetStatus(
 						invalidListenerCount++
 						ListenerMessageProtocolConflict := "Found conflicting protocols on listeners, a single port can only contain listeners with compatible protocols"
 						ReportListenerSetListenerConflicts(&lsStatus.Listeners[idx], i.Obj, string(gwv1.ListenerReasonProtocolConflict), ListenerMessageProtocolConflict)
+					} else if obj.Conflict == translator.ListenerConflictBindMode {
+						invalidListenerCount++
+						listenerMessageBindModeConflict := "Found conflicting bind modes on listeners; the higher-precedence listener determines whether the shared port is internal"
+						ReportListenerSetListenerConflicts(&lsStatus.Listeners[idx], i.Obj, "BindModeConflict", listenerMessageBindModeConflict)
 					}
 				}
 				lsStatus.Listeners[idx].AttachedRoutes = counts[string(l.Name)]
@@ -419,6 +423,11 @@ func (s *Syncer) buildAgwResources(
 	// (resources for additional gateway classes should be created by the downstream providing them)
 	filteredGateways := krt.NewCollection(gateways, func(ctx krt.HandlerContext, gw *translator.GatewayListener) **translator.GatewayListener {
 		if _, isAdditionalClass := s.additionalGatewayClasses[gw.ParentInfo.ParentGatewayClassName]; isAdditionalClass {
+			return nil
+		}
+		if gw.Conflict == translator.ListenerConflictBindMode {
+			// Bind mode is selected by listener precedence. Keep the losing listener
+			// available to status reporting, but do not program it or attach routes.
 			return nil
 		}
 		return &gw
@@ -573,7 +582,6 @@ func (s *Syncer) buildBindsFromGateway(listeners []*translator.GatewayListener) 
 		protocol       api.Bind_Protocol
 		tunnelProtocol api.Bind_TunnelProtocol
 		sawInternal    bool
-		sawStandard    bool
 	}
 	byPort := map[uint32]*bindInfo{}
 	for _, listener := range listeners {
@@ -593,13 +601,12 @@ func (s *Syncer) buildBindsFromGateway(listeners []*translator.GatewayListener) 
 			if tp := s.getTunnelProtocol(listener); tp != api.Bind_DIRECT {
 				bi.tunnelProtocol = tp
 			}
-			// A bind is internal only if every contributing listener agrees. Disagreement
-			// (sawInternal && sawStandard) is reported as Accepted=False in translation and
-			// leaves the bind standard here.
+			// A bind is internal if any contributing listener marks it internal. Translation
+			// reports disagreement as Accepted=False, but the bind must fail closed: a
+			// standard listener (including one from a delegated ListenerSet) must not make
+			// another listener's internal route externally reachable.
 			if listener.ParentInfo.Internal {
 				bi.sawInternal = true
-			} else {
-				bi.sawStandard = true
 			}
 		}
 	}
@@ -608,7 +615,7 @@ func (s *Syncer) buildBindsFromGateway(listeners []*translator.GatewayListener) 
 	for _, port := range slices.Sort(maps.Keys(byPort)) { // sorted for deterministic output
 		bi := byPort[port]
 		mode := api.Bind_STANDARD
-		if bi.sawInternal && !bi.sawStandard {
+		if bi.sawInternal {
 			mode = api.Bind_INTERNAL
 		}
 		bind := translator.AgwBind{

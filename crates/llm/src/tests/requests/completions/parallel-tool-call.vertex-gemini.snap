@@ -70,9 +70,6 @@ info:
             }
           },
           {
-            "text": " "
-          },
-          {
             "functionResponse": {
               "name": "get_weather",
               "response": {

@@ -148,6 +148,8 @@ jobs:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         persist-credentials: false
+        # git-restore-mtime needs full history to find each file's latest change.
+        fetch-depth: 0
     - name: Check Runner Info
       run: |
         cat /sys/fs/cgroup/cpu.stat || true
@@ -158,8 +160,22 @@ jobs:
       uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
       with:
         toolchain: "${{ env.RUST_VERSION }}"
+    - name: Restore source mtimes
+      run: ./tools/git-restore-mtime --commit-time
+    # rust-cache includes nested .cargo/config.toml files in its exact cache key,
+    # but not in its fallback restore prefix. Keying this synthetic config by the
+    # crates/ Git tree makes Rust input changes update the cache, while changes
+    # elsewhere can exactly reuse it without another cache write.
+    - name: Set Rust cache generation
+      run: |
+        mkdir -p .github/rust-cache/.cargo
+        printf '# generation = %s\n' "$(git rev-parse HEAD:crates)" > .github/rust-cache/.cargo/config.toml
     - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       with:
+        # Workspace artifacts are cheap to cache and can avoid rebuilding when Rust
+        # inputs have not changed. Fallback restores remain best-effort because their
+        # prefix deliberately excludes the source generation above.
+        cache-workspace-crates: true
         # Github cache will restore from 'main' OR the current branch.
         # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
         # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
@@ -202,12 +218,25 @@ jobs:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         persist-credentials: false
+        # git-restore-mtime needs full history to find each file's latest change.
+        fetch-depth: 0
     - name: Install Rust
       uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
       with:
         toolchain: "${{ env.RUST_VERSION }}"
+    - name: Restore source mtimes
+      run: ./tools/git-restore-mtime --commit-time
+    # Match the E2E job's exact and fallback cache keys so this job can share them.
+    - name: Set Rust cache generation
+      run: |
+        mkdir -p .github/rust-cache/.cargo
+        printf '# generation = %s\n' "$(git rev-parse HEAD:crates)" > .github/rust-cache/.cargo/config.toml
     - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
       with:
+        # Workspace artifacts are cheap to cache and can avoid rebuilding when Rust
+        # inputs have not changed. Fallback restores remain best-effort because their
+        # prefix deliberately excludes the source generation above.
+        cache-workspace-crates: true
         # We only read the cache from 'E2E' job, since they should have identical cache.
         save-if: "false"
         shared-key: "controller-e2e" # Pull E2E job's cache
@@ -224,7 +253,7 @@ jobs:
       run: TEST_MODE=conformance ./controller/test/setup/setup-kind-ci.sh
     - name: Conformance
       run: |
-        make -C controller all-conformance
+        make -C controller agw-conformance
     - name: Debug Info
       if: ${{ failure() }}
       run: |
@@ -257,4 +286,80 @@ jobs:
         cat-yamls ./controller/_test/conformance/*.yaml >> $GITHUB_STEP_SUMMARY
         echo -e '```\n' >> $GITHUB_STEP_SUMMARY
         echo -e '# Conformance Timings\n' >> $GITHUB_STEP_SUMMARY
+        cat controller/_test/ci-step-timings.log >> $GITHUB_STEP_SUMMARY
+
+  controller-gie-conformance:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
+        # git-restore-mtime needs full history to find each file's latest change.
+        fetch-depth: 0
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+      with:
+        toolchain: "${{ env.RUST_VERSION }}"
+    - name: Restore source mtimes
+      run: ./tools/git-restore-mtime --commit-time
+    # Match the E2E job's exact and fallback cache keys so this job can share them.
+    - name: Set Rust cache generation
+      run: |
+        mkdir -p .github/rust-cache/.cargo
+        printf '# generation = %s\n' "$(git rev-parse HEAD:crates)" > .github/rust-cache/.cargo/config.toml
+    - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      with:
+        # Workspace artifacts are cheap to cache and can avoid rebuilding when Rust
+        # inputs have not changed. Fallback restores remain best-effort because their
+        # prefix deliberately excludes the source generation above.
+        cache-workspace-crates: true
+        # We only read the cache from 'E2E' job, since they should have identical cache.
+        save-if: "false"
+        shared-key: "controller-e2e" # Pull E2E job's cache
+    - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+      with:
+        go-version: "${{ env.GO_VERSION }}"
+        cache-dependency-path: |
+          **/*.sum
+          .github/workflows/cache-e2e
+    - name: Set Path
+      run: |
+        echo "./tools" >> $GITHUB_PATH
+    - name: Setup
+      run: TEST_MODE=conformance ./controller/test/setup/setup-kind-ci.sh
+    - name: GIE Conformance
+      run: |
+        make -C controller gie-conformance
+    - name: Debug Info
+      if: ${{ failure() }}
+      run: |
+        kubectl describe deployment -A
+        kubectl get pods -A
+        kubectl logs -n agentgateway-system -l app.kubernetes.io/name=agentgateway
+    - name: Upload cargo timings
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+      with:
+        name: cargo-timings-gie-conformance
+        path: target/cargo-timings/cargo-timing*.html
+        retention-days: 2
+    - name: Summary
+      run: |
+        cat-yamls () {
+          local files=("$@")
+          local count=$#
+
+          for ((i=0; i<count-1; i++)); do
+          cat "${files[i]}"
+          echo -e "\n---"
+          done
+
+          if [ $count -gt 0 ]; then
+          cat "${files[count-1]}"
+          fi
+        }
+
+        echo -e '\n# GIE Conformance Reports\n\n```yaml' >> $GITHUB_STEP_SUMMARY
+        cat-yamls ./controller/_test/conformance/*.yaml >> $GITHUB_STEP_SUMMARY
+        echo -e '```\n' >> $GITHUB_STEP_SUMMARY
+        echo -e '# GIE Conformance Timings\n' >> $GITHUB_STEP_SUMMARY
         cat controller/_test/ci-step-timings.log >> $GITHUB_STEP_SUMMARY

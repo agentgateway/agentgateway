@@ -2,10 +2,10 @@ package agentgateway
 
 // PolicyConditionType is a type of condition for a policy. This type should be
 // used with a Policy resource `Status.Conditions` field.
-type PolicyConditionType string
+type PolicyConditionType = string
 
 // PolicyConditionReason is a reason for a policy condition.
-type PolicyConditionReason string
+type PolicyConditionReason = string
 
 const (
 	// PolicyConditionAccepted indicates whether the policy has been accepted or rejected, and why.

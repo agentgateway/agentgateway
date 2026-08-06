@@ -12,4 +12,4 @@ mod parse;
 mod parser;
 
 pub use parser::*;
-pub use references::ExpressionReferences;
+pub use references::{CallSignature, ExpressionReferences};

@@ -21,7 +21,6 @@ info:
 ---
 {
   "request": {
-    "modelId": "claude-opus-4-6",
     "messages": [
       {
         "role": "user",

@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"istio.io/istio/pkg/kube/krt"
+	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -116,11 +117,13 @@ func TestResolverBackendRefGrant(t *testing.T) {
 				},
 				DefaultNamespace: tt.ownerNS,
 				Remote: agentgateway.RemoteJWKS{
-					JwksPath: "keys",
-					BackendRef: gwv1.BackendObjectReference{
-						Name:      gwv1.ObjectName(targetName),
-						Namespace: tt.refNamespace,
-						Port:      new(gwv1.PortNumber(80)),
+					JwksPath: ptr.Of(agentgateway.LongString("keys")),
+					PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
+						BackendRef: &gwv1.BackendObjectReference{
+							Name:      gwv1.ObjectName(targetName),
+							Namespace: tt.refNamespace,
+							Port:      new(gwv1.PortNumber(80)),
+						},
 					},
 				},
 			})

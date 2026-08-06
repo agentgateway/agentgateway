@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"istio.io/istio/pkg/test/util/assert"
+	"istio.io/istio/pkg/test/util/retry"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -118,6 +119,7 @@ func assertSuccess(t base.Test, gateway base.Gateway, clientCert *x509.Certifica
 		curl.WithHostHeader(frontendTLSHostname),
 		curl.WithTLSConfig(tlsConfig),
 		curl.WithPath("/"),
+		curl.WithTimeout(time.Second),
 	}
 
 	gateway.Send(t, base.ExpectOK(), opts...)
@@ -148,17 +150,17 @@ func assertFailure(t base.Test, gateway base.Gateway, clientCert *x509.Certifica
 		curl.WithHostHeader(frontendTLSHostname),
 		curl.WithTLSConfig(tlsConfig),
 		curl.WithPath("/"),
+		curl.WithTimeout(time.Second),
 	)
 
-	connectionError := fmt.Errorf("failed to connect to gateway %s/%s (%s)", gateway.Namespace, gateway.Name, addr)
-	assert.Consistently(t, func() error {
+	retry.UntilSuccessOrFail(t, func() error {
 		r, err := curl.ExecuteRequest(opts...)
 		if err != nil {
-			return connectionError
+			return nil
 		}
 		r.Body.Close()
-		return nil
-	}, connectionError, 10*time.Second)
+		return fmt.Errorf("unexpectedly connected to gateway %s/%s (%s)", gateway.Namespace, gateway.Name, addr)
+	}, retry.Converge(3), retry.Timeout(10*time.Second))
 }
 
 func gateway(t base.Test) base.Gateway {

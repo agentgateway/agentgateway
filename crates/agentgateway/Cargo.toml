@@ -9,11 +9,13 @@ publish = { workspace = true }
 path = "src/lib.rs"
 
 [features]
-default = ["jemalloc", "mimalloc", "tls-aws-lc"]
+default = ["jemalloc", "mimalloc", "crypto-aws-lc"]
 jemalloc = ["dep:tikv-jemallocator", "dep:jemalloc_pprof"]
 mimalloc = ["pprof-alloc/allocator-mimalloc", "dep:mimalloc"]
-tls-aws-lc = ["rustls/aws_lc_rs", "tokio-rustls/aws_lc_rs"]
-tls-openssl = ["dep:openssl", "dep:rustls-openssl"]
+# Crypto provider selection. `crypto-aws-lc` (the default) is currently the only
+# backend; it pulls in aws-lc-rs. Selecting a different backend in the future
+# drops aws-lc-rs entirely.
+crypto-aws-lc = ["dep:aws-lc-rs", "rustls/aws_lc_rs", "tokio-rustls/aws_lc_rs", "jsonwebtoken/aws_lc_rs"]
 ui = []
 schema = ["schemars", "agent-core/schema", "agent-llm/schema"]
 internal_benches = ["divan"]
@@ -37,9 +39,7 @@ aws-config.workspace = true
 aws-credential-types.workspace = true
 aws-sigv4.workspace = true
 aws-types.workspace = true
-aws-lc-rs.workspace = true
-openssl = { workspace = true, optional = true }
-rustls-openssl = { workspace = true, optional = true }
+aws-lc-rs = { workspace = true, optional = true }
 aws-smithy-eventstream.workspace = true
 aws-smithy-types.workspace = true
 axum-core.workspace = true
@@ -129,7 +129,6 @@ serde_urlencoded.workspace = true
 serde_with.workspace = true
 serde_yaml.workspace = true
 serde-untagged.workspace = true
-sha2.workspace = true
 stacker.workspace = true
 shellexpand.workspace = true
 socket2.workspace = true
