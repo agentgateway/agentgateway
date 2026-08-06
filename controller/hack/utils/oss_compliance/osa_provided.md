@@ -10,7 +10,7 @@ Name|Version|License
 [go-jose/v4](https://github.com/go-jose/go-jose)|v4.1.4|Apache License 2.0
 [go-logr/logr](https://github.com/go-logr/logr)|v1.4.4|Apache License 2.0
 [jwt/v5](https://github.com/golang-jwt/jwt)|v5.3.1|MIT License
-[google/cel-go](https://github.com/google/cel-go)|v0.28.1|Apache License 2.0
+[google/cel-go](https://github.com/google/cel-go)|v0.30.0|Apache License 2.0
 [google/go-cmp](https://github.com/google/go-cmp)|v0.7.0|BSD 3-clause "New" or "Revised" License
 [google/uuid](https://github.com/google/uuid)|v1.6.0|BSD 3-clause "New" or "Revised" License
 [grpc-ecosystem/go-grpc-middleware](https://github.com/grpc-ecosystem/go-grpc-middleware)|v1.4.0|Apache License 2.0
