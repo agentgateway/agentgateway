@@ -338,8 +338,7 @@ async fn sends_form_params() {
 	assert_eq!(pairs["subject_token"], "subj-jwt");
 	assert_eq!(pairs["subject_token_type"], TOKEN_TYPE_ACCESS);
 	assert_eq!(pairs["audience"], "https://upstream.example");
-	assert_eq!(pairs["requested_token_type"], TOKEN_TYPE_ACCESS);
-	for k in ["scope", "resource", "client_id"] {
+	for k in ["scope", "resource", "client_id", "requested_token_type"] {
 		assert!(!pairs.contains_key(k), "unset param {k} must not be sent");
 	}
 }
@@ -396,7 +395,10 @@ async fn sends_custom_subject_token_type() {
 	.unwrap();
 	let pairs = sent_form_params(&mock).await;
 	assert_eq!(pairs["subject_token_type"], "urn:company:domain:human");
-	assert_eq!(pairs["requested_token_type"], TOKEN_TYPE_ACCESS);
+	assert!(
+		!pairs.contains_key("requested_token_type"),
+		"requested_token_type must be omitted when unset"
+	);
 }
 
 #[tokio::test]
@@ -1298,11 +1300,11 @@ async fn rejects_invalid_token_response(
 	TOKEN_TYPE_ACCESS,
 	"expected"
 )]
-#[case::missing_requested_type_defaults_to_access(
+#[case::explicit_access_mismatch(
 	OAuthGrantType::TokenExchange,
-	None,
+	Some(TOKEN_TYPE_ACCESS),
 	TOKEN_TYPE_JWT,
-	TOKEN_TYPE_ACCESS
+	"expected"
 )]
 #[tokio::test]
 async fn rejects_mismatched_issued_token_type(
@@ -1331,6 +1333,59 @@ async fn rejects_mismatched_issued_token_type(
 	.await
 	.unwrap_err();
 	assert!(err.to_string().contains(expected_err), "got: {err}");
+}
+
+#[tokio::test]
+async fn unset_requested_token_type_accepts_any_issued_type() {
+	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(json!({
+		"access_token": "t",
+		"token_type": "Bearer",
+		"issued_token_type": TOKEN_TYPE_JWT,
+	})))
+	.await;
+	let a = OAuthTokenExchangeAuth {
+		grant_type: OAuthGrantType::TokenExchange,
+		requested_token_type: None,
+		..base_auth(endpoint(&mock))
+	};
+
+	let token = fetch_token(
+		&policy_client(),
+		&a,
+		exchange_req("subj", TOKEN_TYPE_ACCESS),
+	)
+	.await
+	.expect("unset requested_token_type should not validate issued_token_type");
+	assert_eq!(token.expose_secret(), "t");
+
+	let pairs = sent_form_params(&mock).await;
+	assert!(
+		!pairs.contains_key("requested_token_type"),
+		"requested_token_type must be omitted when unset"
+	);
+}
+
+#[tokio::test]
+async fn unset_requested_token_type_accepts_response_without_issued_token_type() {
+	let mock = mock_token_endpoint(ResponseTemplate::new(200).set_body_json(json!({
+		"access_token": "t",
+		"token_type": "Bearer",
+	})))
+	.await;
+	let a = OAuthTokenExchangeAuth {
+		grant_type: OAuthGrantType::TokenExchange,
+		requested_token_type: None,
+		..base_auth(endpoint(&mock))
+	};
+
+	let token = fetch_token(
+		&policy_client(),
+		&a,
+		exchange_req("subj", TOKEN_TYPE_ACCESS),
+	)
+	.await
+	.expect("unset requested_token_type should accept a missing issued_token_type");
+	assert_eq!(token.expose_secret(), "t");
 }
 
 #[tokio::test]
