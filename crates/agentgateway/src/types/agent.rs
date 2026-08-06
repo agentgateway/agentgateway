@@ -1280,8 +1280,12 @@ pub enum Backend {
 	LLMRouter(ResourceName, Arc<crate::llm::model_router::ModelRouter>),
 	#[serde(rename = "aws", serialize_with = "serialize_backend_tuple")]
 	Aws(ResourceName, crate::aws::AwsBackendConfig),
+	/// The second field, when set, is a CEL expression evaluated against the
+	/// request (with any ext_proc/extAuthz dynamic metadata already attached)
+	/// to compute the dial target, in place of the default behavior of reading
+	/// the request's current :authority/URI (see target_from_request).
 	#[serde(serialize_with = "serialize_backend_tuple")]
-	Dynamic(ResourceName, ()),
+	Dynamic(ResourceName, Option<Arc<crate::cel::Expression>>),
 	/// In-process admin service backend. This is only valid for HTTP routes.
 	#[serde(serialize_with = "serialize_backend_tuple")]
 	Internal(ResourceName, InternalBackend),

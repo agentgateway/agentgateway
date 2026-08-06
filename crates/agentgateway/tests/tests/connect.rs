@@ -1024,7 +1024,7 @@ async fn connect_tunnel_dynamic_ca_obo_dynamic_backend() {
 
 	// `dynamic: {}` backend: the upstream is resolved from the decrypted request's
 	// Host/authority (DFP), proven on direct requests by `dfp_uses_host_port`.
-	let dynamic_backend = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), ());
+	let dynamic_backend = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), None);
 	let t = setup_proxy_test("{}").unwrap();
 	t.inputs()
 		.stores

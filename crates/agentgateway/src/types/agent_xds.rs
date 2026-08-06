@@ -1770,7 +1770,8 @@ pub(crate) fn backend_with_policies_from_proto(
 			};
 			Backend::Opaque(name.into(), target)
 		},
-		Some(backend::Kind::Dynamic(_)) => Backend::Dynamic(name.into(), ()),
+		// xDS-driven dynamic backends don't support a CEL target expression yet.
+		Some(backend::Kind::Dynamic(_)) => Backend::Dynamic(name.into(), None),
 		Some(backend::Kind::Aws(a)) => {
 			let aws_config = match &a.service {
 				Some(proto::agent::aws_backend::Service::AgentCore(ac)) => {

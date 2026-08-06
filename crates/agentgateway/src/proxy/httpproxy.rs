@@ -1824,6 +1824,38 @@ fn target_from_request(req: &Request) -> Result<Target, ProxyError> {
 	Ok(Target::from((host, port)))
 }
 
+/// Evaluates a `Backend::Dynamic` target expression, if one is configured, in
+/// place of the default of reading the request's own :authority/URI. The CEL
+/// context includes any dynamic metadata a route policy (extProc, extAuthz)
+/// already attached to the request -- e.g. `extproc.workerPodIp` -- so the
+/// destination can come from that instead of requiring the policy to rewrite
+/// the request's authority for `target_from_request`/`connect_authority_target`
+/// to then read back. Returns `Ok(None)` when there's no expression, so the
+/// caller falls back to its own default.
+fn dynamic_backend_target_override(
+	req: &Request,
+	expr: &Option<Arc<crate::cel::Expression>>,
+) -> Result<Option<Target>, ProxyError> {
+	let Some(expr) = expr else {
+		return Ok(None);
+	};
+	let exec = crate::cel::Executor::new_request(req);
+	let value = exec
+		.eval(expr)
+		.map_err(|e| ProxyError::ProcessingString(format!("dynamic backend target expression: {e}")))?;
+	let json = value
+		.json()
+		.map_err(|e| ProxyError::ProcessingString(format!("dynamic backend target expression: {e}")))?;
+	let serde_json::Value::String(s) = json else {
+		return Err(ProxyError::ProcessingString(
+			"dynamic backend target expression must evaluate to a host:port string".to_string(),
+		));
+	};
+	let target = Target::try_from(s.as_str())
+		.map_err(|e| ProxyError::ProcessingString(format!("dynamic backend target {s:?}: {e}")))?;
+	Ok(Some(target))
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn apply_inference_routing(
 	policies: &BackendPolicies,
@@ -2197,8 +2229,12 @@ async fn make_backend_call(
 				.into(),
 			);
 		},
-		Backend::Dynamic(_, _) => {
-			let backend_call = BackendCall::from_shared(target_from_request(&req)?, policies);
+		Backend::Dynamic(_, expr) => {
+			let target = match dynamic_backend_target_override(&req, expr)? {
+				Some(target) => target,
+				None => target_from_request(&req)?,
+			};
+			let backend_call = BackendCall::from_shared(target, policies);
 			(backend_call, None)
 		},
 		Backend::Internal(_, _) => (
@@ -2252,10 +2288,14 @@ async fn make_backend_call(
 	.await?;
 
 	// For Dynamic backends, re-resolve the target from the (now potentially transformed)
-	// request URI. This allows policies like `:authority` overrides (e.g., VPC endpoint
-	// routing) to take effect on the actual upstream connection target.
-	if matches!(backend, Backend::Dynamic(_, _)) {
-		backend_call.target = target_from_request(&req)?;
+	// request URI (or re-evaluate the target expression, if any dynamic metadata it reads
+	// could have been affected). This allows policies like `:authority` overrides (e.g., VPC
+	// endpoint routing) to take effect on the actual upstream connection target.
+	if let Backend::Dynamic(_, expr) = backend {
+		backend_call.target = match dynamic_backend_target_override(&req, expr)? {
+			Some(target) => target,
+			None => target_from_request(&req)?,
+		};
 	}
 
 	log.add(|l| {
@@ -2704,10 +2744,13 @@ fn build_connect_backend_call(
 			)
 		},
 		Backend::Opaque(_, target) => Ok(BackendCall::from_shared(target.clone(), policies)),
-		Backend::Dynamic(_, _) => Ok(BackendCall::from_shared(
-			connect_authority_target(req)?,
-			policies,
-		)),
+		Backend::Dynamic(_, expr) => {
+			let target = match dynamic_backend_target_override(req, expr)? {
+				Some(target) => target,
+				None => connect_authority_target(req)?,
+			};
+			Ok(BackendCall::from_shared(target, policies))
+		},
 		Backend::Invalid => Err(ProxyError::BackendDoesNotExist),
 		Backend::AI(_, _)
 		| Backend::LLMRouter(_, _)

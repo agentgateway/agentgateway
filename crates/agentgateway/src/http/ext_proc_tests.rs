@@ -27,7 +27,7 @@ use crate::http::{Body, ext_proc};
 use crate::llm::custom;
 use crate::test_helpers::extprocmock::{
 	ExtProcMock, Handler, immediate_response, request_body_response, request_header_response,
-	response_body_response, response_header_response,
+	request_header_response_with_dynamic_metadata, response_body_response, response_header_response,
 };
 use crate::test_helpers::proxymock::*;
 use crate::test_helpers::{MockInstance, ratelimitmock};
@@ -1870,6 +1870,115 @@ mod dynamic_metadata_flow {
 	}
 }
 
+mod dynamic_backend_target {
+	use super::*;
+	use crate::types::agent::{Backend, ResourceName};
+
+	struct WorkerTargetExtProc {
+		target: String,
+	}
+
+	#[async_trait::async_trait]
+	impl Handler for WorkerTargetExtProc {
+		async fn handle_request_headers(
+			&mut self,
+			_headers: &HttpHeaders,
+			sender: &mpsc::Sender<Result<ProcessingResponse, Status>>,
+		) -> Result<(), Status> {
+			use prost_wkt_types::value::Kind;
+			use prost_wkt_types::{Struct, Value};
+			let metadata = Struct {
+				fields: HashMap::from([(
+					"workerTarget".to_string(),
+					Value {
+						kind: Some(Kind::StringValue(self.target.clone())),
+					},
+				)]),
+			};
+			let _ = sender
+				.send(request_header_response_with_dynamic_metadata(
+					None, metadata,
+				))
+				.await;
+			Ok(())
+		}
+	}
+
+	/// A `dynamic: { target: ... }` backend should dial wherever the CEL
+	/// expression says, reading dynamic metadata an extProc policy already set
+	/// -- not the request's own :authority. The request below points at an
+	/// unrelated host to prove the dial target came from extProc's metadata,
+	/// not from the request itself.
+	#[tokio::test]
+	async fn reads_extproc_metadata_instead_of_request_authority() {
+		let mock = simple_mock().await;
+		let worker_target = mock.address().to_string();
+
+		let ext_proc = ExtProcMock::new(move || WorkerTargetExtProc {
+			target: worker_target.clone(),
+		})
+		.spawn()
+		.await;
+
+		let target_backend = Backend::Dynamic(
+			ResourceName::new("dyn-target".into(), "".into()),
+			Some(Arc::new(
+				Expression::new_strict("extproc.workerTarget").unwrap(),
+			)),
+		);
+		let route = basic_named_route(target_backend.name());
+
+		let t = setup_proxy_test("{}")
+			.unwrap()
+			.with_raw_backend(target_backend.clone().into())
+			.with_backend(ext_proc.address)
+			.with_bind(simple_bind())
+			.with_route(route)
+			.attach_route_policy_builder(json!({
+				"extProc": {
+					"host": ext_proc.address,
+					"failureMode": "failClosed",
+				},
+			}))
+			.await;
+
+		let io = t.serve_http(strng::new("bind"));
+		let res = crate::proxy::request_builder::RequestBuilder::new(
+			Method::GET,
+			"http://totally-unrelated-host",
+		)
+		.send(io)
+		.await
+		.unwrap();
+		assert_eq!(res.status(), 200);
+	}
+
+	/// Omitting `target` keeps today's behavior: the request's own
+	/// :authority/URI is the dial target.
+	#[tokio::test]
+	async fn falls_back_to_request_authority_when_unset() {
+		let mock = simple_mock().await;
+		let target_backend = Backend::Dynamic(ResourceName::new("dyn-target".into(), "".into()), None);
+		let route = basic_named_route(target_backend.name());
+
+		let t = setup_proxy_test("{}")
+			.unwrap()
+			.with_raw_backend(target_backend.clone().into())
+			.with_bind(simple_bind())
+			.with_route(route);
+
+		let io = t.serve_http(strng::new("bind"));
+		let res = crate::proxy::request_builder::RequestBuilder::new(
+			Method::GET,
+			&format!("http://{}", mock.address()),
+		)
+		.send(io)
+		.await
+		.unwrap();
+		assert_eq!(res.status(), 200);
+	}
+}
+
 // Shared proxy setup helpers used by the test groups below.
 pub async fn setup_ext_proc_mock<T: Handler + Send + Sync + 'static>(
 	mock: MockServer,
@@ -3599,7 +3708,7 @@ mod connect_authority_mutation {
 		.spawn()
 		.await;
 
-		let dynamic_backend = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), ());
+		let dynamic_backend = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), None);
 		let t = setup_proxy_test("{}").unwrap();
 		t.inputs()
 			.stores
@@ -3688,7 +3797,7 @@ mod connect_authority_mutation {
 		.spawn()
 		.await;
 
-		let dynamic_backend = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), ());
+		let dynamic_backend = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), None);
 		let t = setup_proxy_test("{}").unwrap();
 		t.inputs()
 			.stores
@@ -3830,7 +3939,7 @@ mod connect_authority_mutation {
 			.await
 		};
 
-		let dynamic_backend = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), ());
+		let dynamic_backend = Backend::Dynamic(ResourceName::new("dynamic".into(), "".into()), None);
 		let t = setup_proxy_test("{}").unwrap();
 		t.inputs()
 			.stores

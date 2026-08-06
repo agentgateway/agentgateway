@@ -4985,6 +4985,7 @@
 |`binds[].listeners[].routes[].backends[].host`|string|Hostname or IP address of the upstream to route to.|
 |`binds[].listeners[].routes[].backends[].internal`|string|Route to the in-process admin service instead of a network upstream.<br>Selects how an internal backend maps proxy requests to the admin API.|
 |`binds[].listeners[].routes[].backends[].dynamic`|object||
+|`binds[].listeners[].routes[].backends[].dynamic.target`|string|CEL expression evaluated against the request to compute the dial<br>target (e.g. `extproc.workerPodIp + ":" + string(extproc.workerPodPort)`<br>to read dynamic metadata an extProc policy already set). Must<br>evaluate to a `host:port` string. If unset, the target is read from<br>the request's own :authority/URI, as today.|
 |`binds[].listeners[].routes[].backends[].mcp`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets`|[]object|MCP server targets to multiplex together.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].sse`|object|Connect to a remote MCP server over HTTP with Server-Sent Events (SSE) streaming.|
@@ -37515,6 +37516,7 @@
 |`routeGroups[].routes[].backends[].host`|string|Hostname or IP address of the upstream to route to.|
 |`routeGroups[].routes[].backends[].internal`|string|Route to the in-process admin service instead of a network upstream.<br>Selects how an internal backend maps proxy requests to the admin API.|
 |`routeGroups[].routes[].backends[].dynamic`|object||
+|`routeGroups[].routes[].backends[].dynamic.target`|string|CEL expression evaluated against the request to compute the dial<br>target (e.g. `extproc.workerPodIp + ":" + string(extproc.workerPodPort)`<br>to read dynamic metadata an extProc policy already set). Must<br>evaluate to a `host:port` string. If unset, the target is read from<br>the request's own :authority/URI, as today.|
 |`routeGroups[].routes[].backends[].mcp`|object||
 |`routeGroups[].routes[].backends[].mcp.targets`|[]object|MCP server targets to multiplex together.|
 |`routeGroups[].routes[].backends[].mcp.targets[].sse`|object|Connect to a remote MCP server over HTTP with Server-Sent Events (SSE) streaming.|
@@ -55118,6 +55120,7 @@
 |`routes[].backends[].host`|string|Hostname or IP address of the upstream to route to.|
 |`routes[].backends[].internal`|string|Route to the in-process admin service instead of a network upstream.<br>Selects how an internal backend maps proxy requests to the admin API.|
 |`routes[].backends[].dynamic`|object||
+|`routes[].backends[].dynamic.target`|string|CEL expression evaluated against the request to compute the dial<br>target (e.g. `extproc.workerPodIp + ":" + string(extproc.workerPodPort)`<br>to read dynamic metadata an extProc policy already set). Must<br>evaluate to a `host:port` string. If unset, the target is read from<br>the request's own :authority/URI, as today.|
 |`routes[].backends[].mcp`|object||
 |`routes[].backends[].mcp.targets`|[]object|MCP server targets to multiplex together.|
 |`routes[].backends[].mcp.targets[].sse`|object|Connect to a remote MCP server over HTTP with Server-Sent Events (SSE) streaming.|

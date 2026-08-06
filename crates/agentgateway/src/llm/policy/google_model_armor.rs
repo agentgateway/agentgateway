@@ -371,7 +371,7 @@ async fn send_model_armor_request<T: Serialize>(
 
 	let mock_be = Backend::Dynamic(
 		ResourceName::new(strng::literal!("_google-model-armor"), strng::literal!("")),
-		(),
+		None,
 	);
 
 	let resp = client
