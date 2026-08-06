@@ -243,6 +243,7 @@ func (s *setup) Start(ctx context.Context) error {
 	policySelector := policyselection.NewSelector(agwCollections.AgentgatewayPolicies, agwCollections.BackendTLSPolicies)
 	resolver := remotehttp.NewResolver(remotehttp.Inputs{
 		ConfigMaps:     agwCollections.ConfigMaps,
+		Secrets:        agwCollections.Secrets,
 		Services:       agwCollections.Services,
 		Backends:       agwCollections.Backends,
 		PolicySelector: policySelector,

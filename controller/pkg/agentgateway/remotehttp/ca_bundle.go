@@ -11,19 +11,39 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
+
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/cacert"
 )
 
-func caBundleFromConfigMaps(
+func caBundleFromBackendTLSRefs(
 	krtctx krt.HandlerContext,
 	cfgmaps krt.Collection[*corev1.ConfigMap],
+	secrets krt.Collection[*corev1.Secret],
 	namespace string,
-	refs []corev1.LocalObjectReference,
+	refs []agentgateway.LocalCACertificateRef,
 ) (*x509.CertPool, string, error) {
-	names := make([]string, 0, len(refs))
+	certPool := x509.NewCertPool()
+	h := sha256.New()
+
 	for _, ref := range refs {
-		names = append(names, ref.Name)
+		caCRT, err := cacert.Resolve(krtctx, cfgmaps, secrets, namespace, ref)
+		if err != nil {
+			return nil, "", err
+		}
+		nn := types.NamespacedName{Name: string(ref.Name), Namespace: namespace}
+		if !certPool.AppendCertsFromPEM([]byte(caCRT)) {
+			return nil, "", fmt.Errorf("error appending CA cert from %s %s", cacert.Kind(ref.Kind), nn)
+		}
+		_, _ = h.Write([]byte(cacert.Kind(ref.Kind)))
+		_, _ = h.Write([]byte{0})
+		_, _ = h.Write([]byte(nn.String()))
+		_, _ = h.Write([]byte{0})
+		_, _ = h.Write([]byte(caCRT))
+		_, _ = h.Write([]byte{0})
 	}
-	return caBundleFromConfigMapNames(krtctx, cfgmaps, namespace, names)
+
+	return certPool, hex.EncodeToString(h.Sum(nil)), nil
 }
 
 func caBundleFromGatewayRefs(
@@ -49,10 +69,7 @@ func caBundleFromConfigMapNames(
 	h := sha256.New()
 
 	for _, name := range names {
-		nn := types.NamespacedName{
-			Name:      name,
-			Namespace: namespace,
-		}
+		nn := types.NamespacedName{Name: name, Namespace: namespace}
 		cfgmap := ptr.Flatten(krt.FetchOne(krtctx, cfgmaps, krt.FilterObjectName(nn)))
 		if cfgmap == nil {
 			return nil, "", fmt.Errorf("ConfigMap %s not found", nn)

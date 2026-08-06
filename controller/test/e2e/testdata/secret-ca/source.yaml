@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ca
+  namespace: agentgateway-base
+data:
+  ca.crt: invalid
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ca
+  namespace: agentgateway-base
+type: Opaque
+data:
+  ca.crt: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUJlekNDQVNDZ0F3SUJBZ0lSQU9ubW9jOWFWU1preUo1OVU5cis2S0F3Q2dZSUtvWkl6ajBFQXdJd0d6RVoKTUJjR0ExVUVBeE1RWVdkbGJuUm5ZWFJsZDJGNUxtUmxkakFlRncweU5URXdNVFV4T1RRek16WmFGdzB6TlRFdwpNVE14T1RRek16WmFNQnN4R1RBWEJnTlZCQU1URUdGblpXNTBaMkYwWlhkaGVTNWtaWFl3V1RBVEJnY3Foa2pPClBRSUJCZ2dxaGtqT1BRTUJCd05DQUFTY1B1QWc2NSs5RDJZdU9yRmw0eEFZT0I2aDI0NjBRaFpUSVN0RTFQSFAKTUlPVUpBQXFCZEFXQUg1Skc0VWlWVUgvdEtZRWQ3M0NmYUJzSFNOck9KbExvMFV3UXpBT0JnTlZIUThCQWY4RQpCQU1DQVFZd0VnWURWUjBUQVFIL0JBZ3dCZ0VCL3dJQkFUQWRCZ05WSFE0RUZnUVVjd3RNaC85RmZKdmNSOUpVCmJJU091czdZRE1vd0NnWUlLb1pJemowRUF3SURTUUF3UmdJaEFMMmFnZkVJOVRCbDA2MFkwYUdRN1NYNjlhTEMKNy9pZmpMbUgzOFNHT1dDSkFpRUE2M05SeWY1b3o2cnp2dklIcEs4T00yaFNIcVdRRlFuaEJUQ2J5ek5BZTVVPQotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: secret-ca
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+  - group: ""
+    kind: Service
+    name: backend
+  backend:
+    tls:
+      sni: localhost
+      caCertificateRefs:
+      - name: ca
+        kind: Secret

@@ -14,6 +14,36 @@ spec:
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
+  name: backend-tls-configmap-ca
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    tls:
+      caCertificateRefs:
+        - name: ca-bundle
+          kind: ConfigMap
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tls-secret-ca
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    tls:
+      caCertificateRefs:
+        - name: ca-bundle
+          kind: Secret
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
   name: backend-mtls
 spec:
   targetRefs:

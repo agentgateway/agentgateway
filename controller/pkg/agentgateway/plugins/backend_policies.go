@@ -10,7 +10,6 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/structpb"
 	"istio.io/istio/pkg/config"
-	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/maps"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
@@ -21,6 +20,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/cacert"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
@@ -425,20 +425,19 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 		}
 	}
 
-	// Build CA bundle from referenced ConfigMaps, if provided
-	// If we were using mTLS, we may be overriding the previously set p.Root -- this is intended
+	// Explicit CA refs take precedence over mTLS CA material.
 	if len(tls.CACertificateRefs) > 0 {
 		var sb strings.Builder
 		for _, ref := range tls.CACertificateRefs {
-			nn := types.NamespacedName{Namespace: policy.Namespace, Name: ref.Name}
-			cfgmap := krt.FetchOne(ctx.Krt, ctx.Collections.ConfigMaps, krt.FilterObjectName(nn))
-			if cfgmap == nil {
-				errs = append(errs, fmt.Errorf("ConfigMap %s not found", nn))
-				continue
-			}
-			pem, err := GetCACertFromConfigMap(ptr.Flatten(cfgmap))
+			pem, err := cacert.Resolve(
+				ctx.Krt,
+				ctx.Collections.ConfigMaps,
+				ctx.Collections.Secrets,
+				policy.Namespace,
+				ref,
+			)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("error extracting CA cert from ConfigMap %s: %w", nn, err))
+				errs = append(errs, err)
 				continue
 			}
 			if sb.Len() > 0 {
@@ -446,8 +445,7 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 			}
 			sb.WriteString(pem)
 		}
-		// If we have a root set here, set it
-		// This may send an empty root, so that we trust nothing rather than system certs.
+		// An explicit but invalid source trusts nothing rather than system certs.
 		p.Root = []byte(sb.String())
 	}
 
