@@ -1421,8 +1421,10 @@ pub enum LocalBackend {
 		/// CEL expression evaluated against the request to compute the dial
 		/// target (e.g. `extproc.workerPodIp + ":" + string(extproc.workerPodPort)`
 		/// to read dynamic metadata an extProc policy already set). Must
-		/// evaluate to a `host:port` string. If unset, the target is read from
-		/// the request's own :authority/URI, as today.
+		/// evaluate to a `host:port` string. The expression and any policy that
+		/// supplies its dynamic metadata are trusted to select the dial target.
+		/// If unset, the target is read from the request's own :authority/URI, as
+		/// today.
 		#[serde(default, skip_serializing_if = "Option::is_none")]
 		target: Option<Arc<crate::cel::Expression>>,
 	},

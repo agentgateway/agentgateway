@@ -1840,12 +1840,14 @@ fn dynamic_backend_target_override(
 		return Ok(None);
 	};
 	let exec = crate::cel::Executor::new_request(req);
-	let value = exec
-		.eval(expr)
-		.map_err(|e| ProxyError::ProcessingString(format!("dynamic backend target expression: {e}")))?;
-	let json = value
-		.json()
-		.map_err(|e| ProxyError::ProcessingString(format!("dynamic backend target expression: {e}")))?;
+	let value = exec.eval(expr).map_err(|e| {
+		ProxyError::ProcessingString(format!("dynamic backend target expression eval: {e}"))
+	})?;
+	let json = value.json().map_err(|e| {
+		ProxyError::ProcessingString(format!(
+			"dynamic backend target expression JSON conversion: {e}"
+		))
+	})?;
 	let serde_json::Value::String(s) = json else {
 		return Err(ProxyError::ProcessingString(
 			"dynamic backend target expression must evaluate to a host:port string".to_string(),

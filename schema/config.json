@@ -7424,7 +7424,7 @@
               "type": "object",
               "properties": {
                 "target": {
-                  "description": "CEL expression evaluated against the request to compute the dial\ntarget (e.g. `extproc.workerPodIp + \":\" + string(extproc.workerPodPort)`\nto read dynamic metadata an extProc policy already set). Must\nevaluate to a `host:port` string. If unset, the target is read from\nthe request's own :authority/URI, as today.",
+                  "description": "CEL expression evaluated against the request to compute the dial\ntarget (e.g. `extproc.workerPodIp + \":\" + string(extproc.workerPodPort)`\nto read dynamic metadata an extProc policy already set). Must\nevaluate to a `host:port` string. The expression and any policy that\nsupplies its dynamic metadata are trusted to select the dial target.\nIf unset, the target is read from the request's own :authority/URI, as\ntoday.",
                   "anyOf": [
                     {
                       "$ref": "#/$defs/Expression"

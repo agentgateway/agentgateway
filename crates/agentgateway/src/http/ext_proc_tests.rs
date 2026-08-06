@@ -1977,6 +1977,64 @@ mod dynamic_backend_target {
 		.unwrap();
 		assert_eq!(res.status(), 200);
 	}
+
+	#[tokio::test]
+	async fn rejects_non_string_target_expression_results() {
+		let target_backend = Backend::Dynamic(
+			ResourceName::new("dyn-target".into(), "".into()),
+			Some(Arc::new(Expression::new_strict("42").unwrap())),
+		);
+		let route = basic_named_route(target_backend.name());
+		let t = setup_proxy_test("{}")
+			.unwrap()
+			.with_raw_backend(target_backend.into())
+			.with_bind(simple_bind())
+			.with_route(route);
+
+		let res = crate::proxy::request_builder::RequestBuilder::new(
+			Method::GET,
+			"http://totally-unrelated-host",
+		)
+		.send(t.serve_http(strng::new("bind")))
+		.await
+		.unwrap();
+		assert_eq!(res.status(), 503);
+		let body = read_body_raw(res.into_body()).await;
+		assert!(
+			body
+				.as_ref()
+				.starts_with(b"processing failed: dynamic backend target expression must evaluate")
+		);
+	}
+
+	#[tokio::test]
+	async fn rejects_invalid_target_expression_results() {
+		let target_backend = Backend::Dynamic(
+			ResourceName::new("dyn-target".into(), "".into()),
+			Some(Arc::new(
+				Expression::new_strict("'not-a-hostport'").unwrap(),
+			)),
+		);
+		let route = basic_named_route(target_backend.name());
+		let t = setup_proxy_test("{}")
+			.unwrap()
+			.with_raw_backend(target_backend.into())
+			.with_bind(simple_bind())
+			.with_route(route);
+
+		let res = crate::proxy::request_builder::RequestBuilder::new(
+			Method::GET,
+			"http://totally-unrelated-host",
+		)
+		.send(t.serve_http(strng::new("bind")))
+		.await
+		.unwrap();
+		assert_eq!(res.status(), 503);
+		let body = read_body_raw(res.into_body()).await;
+		assert!(body.as_ref().starts_with(
+			b"processing failed: dynamic backend target \"not-a-hostport\": invalid host:port"
+		));
+	}
 }
 
 // Shared proxy setup helpers used by the test groups below.
