@@ -34,7 +34,6 @@ info:
       }
     ],
     "model": "gpt-5.6-terra",
-    "reasoning_effort": "none",
     "max_completion_tokens": 64,
     "stream": false,
     "tools": [

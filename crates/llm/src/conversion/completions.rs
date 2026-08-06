@@ -1028,7 +1028,7 @@ pub mod from_messages {
 			|| model.starts_with("gpt-5.1")
 			|| model.starts_with("gpt-5.2");
 		let reasoning_effort = if !tools.is_empty() && !supports_reasoning_with_tools {
-			Some(completions::ReasoningEffort::None)
+			None
 		} else {
 			reasoning_effort
 		};
