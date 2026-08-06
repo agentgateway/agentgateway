@@ -77,6 +77,12 @@ build: $(UI_PREREQ)
 build-target: $(UI_PREREQ)
 	cargo build $(UI_FEATURE) $(CARGO_BUILD_ARGS) --target $(TARGET) --profile $(PROFILE)
 
+# Build with the SymCrypt provider instead of the default aws-lc-rs. --no-default-features
+# also drops jemalloc/mimalloc, which the Linux allocator requires, so they are re-added.
+.PHONY: build-symcrypt
+build-symcrypt: $(UI_PREREQ)
+	cargo build --release --no-default-features --features jemalloc,mimalloc,crypto-symcrypt $(UI_FEATURE) $(CARGO_BUILD_ARGS)
+
 # lint
 .PHONY: lint
 lint:
