@@ -12,10 +12,11 @@ path = "src/lib.rs"
 default = ["jemalloc", "mimalloc", "crypto-aws-lc"]
 jemalloc = ["dep:tikv-jemallocator", "dep:jemalloc_pprof"]
 mimalloc = ["pprof-alloc/allocator-mimalloc", "dep:mimalloc"]
-# Crypto provider selection. `crypto-aws-lc` (the default) is currently the only
-# backend; it pulls in aws-lc-rs. Selecting a different backend in the future
-# drops aws-lc-rs entirely.
+# Crypto provider selection. `crypto-aws-lc` (the default) backs all crypto with
+# aws-lc-rs. `crypto-symcrypt` routes TLS/AEAD/hash/RNG through SymCrypt and falls
+# back to aws-lc-rs for JWT and certificate issuance (no SymCrypt hook there).
 crypto-aws-lc = ["dep:aws-lc-rs", "rustls/aws_lc_rs", "tokio-rustls/aws_lc_rs", "jsonwebtoken/aws_lc_rs"]
+crypto-symcrypt = ["dep:symcrypt", "dep:rustls-symcrypt", "dep:aws-lc-rs", "jsonwebtoken/aws_lc_rs"]
 ui = []
 schema = ["schemars", "agent-core/schema", "agent-llm/schema"]
 internal_benches = ["divan"]
@@ -40,6 +41,8 @@ aws-credential-types.workspace = true
 aws-sigv4.workspace = true
 aws-types.workspace = true
 aws-lc-rs = { workspace = true, optional = true }
+symcrypt = { workspace = true, optional = true }
+rustls-symcrypt = { workspace = true, optional = true }
 aws-smithy-eventstream.workspace = true
 aws-smithy-types.workspace = true
 axum-core.workspace = true

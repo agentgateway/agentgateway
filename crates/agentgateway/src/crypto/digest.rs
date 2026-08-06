@@ -57,6 +57,43 @@ fn to_array(bytes: &[u8]) -> [u8; SHA256_LEN] {
 	out
 }
 
+/// Computes the SHA-256 digest of `data` in one shot (SymCrypt backend).
+#[cfg(feature = "crypto-symcrypt")]
+pub fn sha256(data: &[u8]) -> [u8; SHA256_LEN] {
+	symcrypt::hash::sha256(data)
+}
+
+/// Incremental SHA-256 hasher, for data supplied in multiple pieces.
+#[cfg(feature = "crypto-symcrypt")]
+pub struct Sha256(symcrypt::hash::Sha256State);
+
+#[cfg(feature = "crypto-symcrypt")]
+impl Sha256 {
+	/// Creates a new, empty SHA-256 hasher.
+	pub fn new() -> Self {
+		Self(symcrypt::hash::Sha256State::new())
+	}
+
+	/// Adds `data` to the running digest.
+	pub fn update(&mut self, data: impl AsRef<[u8]>) {
+		use symcrypt::hash::HashState;
+		self.0.append(data.as_ref());
+	}
+
+	/// Consumes the hasher and returns the final digest.
+	pub fn finalize(mut self) -> [u8; SHA256_LEN] {
+		use symcrypt::hash::HashState;
+		self.0.result()
+	}
+}
+
+#[cfg(feature = "crypto-symcrypt")]
+impl Default for Sha256 {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::{Sha256, sha256};

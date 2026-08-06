@@ -17,8 +17,14 @@ pub fn fill(dest: &mut [u8]) -> Result<(), RandError> {
 	SystemRandom::new().fill(dest).map_err(|_| RandError)
 }
 
+/// Fills `dest` with cryptographically-secure random bytes (SymCrypt backend).
+#[cfg(feature = "crypto-symcrypt")]
+pub fn fill(dest: &mut [u8]) -> Result<(), RandError> {
+	symcrypt::symcrypt_random(dest);
+	Ok(())
+}
+
 /// Returns `len` cryptographically-secure random bytes.
-#[cfg(feature = "crypto-aws-lc")]
 pub fn bytes(len: usize) -> Result<Vec<u8>, RandError> {
 	let mut out = vec![0u8; len];
 	fill(&mut out)?;
