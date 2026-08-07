@@ -5032,7 +5032,7 @@
           "$ref": "#/$defs/WebhookFailureMode"
         },
         "action": {
-          "description": "Whether to enforce the webhook's verdict or only observe it.\nDefaults to `reject` (enforce).",
+          "description": "Whether to enforce the webhook's verdict or only observe it.\nDefaults to `reject` (enforce).\n\n`audit` overrides `failureMode`: an observe-only guard never affects\ntraffic, so webhook errors fail open (recorded as `FailOpen`) even when\n`failureMode` is `failClosed`.",
           "$ref": "#/$defs/RejectAuditAction"
         }
       },
@@ -5116,7 +5116,7 @@
           "type": "string"
         },
         "action": {
-          "description": "Whether to enforce the guardrail's verdict or only observe it.\n\n`reject` (the default) enforces the guardrail: a `BLOCKED` assessment\nrejects the request/response and an `ANONYMIZED` assessment masks the\nmatched content, exactly as before.\n\n`audit` runs the guardrail in observe mode: it is still invoked and its\nassessment is recorded (metrics + structured log), but the request and\nresponse are never blocked or masked — the outcome always passes through.\nUse this to evaluate a guardrail's behavior without affecting traffic.\n`audit` guarantees non-enforcement gateway-side even when the AWS resource\nis configured to `BLOCK`/`ANONYMIZE`.",
+          "description": "Whether to enforce the guardrail's verdict or only observe it.\n\n`reject` (the default) enforces the guardrail: a `BLOCKED` assessment\nrejects the request/response and an `ANONYMIZED` assessment masks the\nmatched content, exactly as before.\n\n`audit` runs the guardrail in observe mode: it is still invoked and its\nassessment is recorded (metrics + structured log), but the request and\nresponse are never blocked or masked — the outcome always passes through.\nUse this to evaluate a guardrail's behavior without affecting traffic.\n`audit` guarantees non-enforcement gateway-side even when the AWS resource\nis configured to `BLOCK`/`ANONYMIZE`, and even when the guardrail service\nis unreachable (provider errors fail open and record `FailOpen`).",
           "$ref": "#/$defs/RejectAuditAction"
         },
         "policies": {

@@ -1607,6 +1607,10 @@ const (
 	// Audit (observe) mode: the guard is invoked and its verdict recorded
 	// (metrics + structured log), but the request/response is never blocked
 	// or masked.
+	//
+	// Version-skew hazard: data planes that predate this value map unknown
+	// ActionKind values to MASK and will *mutate* content. Upgrade all data
+	// planes before configuring a regex guard with AUDIT.
 	BackendPolicySpec_Ai_AUDIT BackendPolicySpec_Ai_ActionKind = 3
 )
 

@@ -57,6 +57,47 @@ async fn webhook_fail_open_emits_single_metric() {
 	);
 }
 
+/// In audit mode a provider error must never affect traffic — even when the
+/// webhook is configured `failClosed` (the default). Audit overrides the
+/// failure mode: the request passes through and records `FailOpen`, not a
+/// rejection and not `Allow`.
+#[tokio::test]
+async fn audit_mode_fails_open_on_provider_error_despite_fail_closed() {
+	use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
+	use crate::types::agent::SimpleBackendReference;
+
+	let guard = RequestGuard {
+		rejection: Default::default(),
+		kind: RequestGuardKind::Webhook(Webhook {
+			target: SimpleBackendReference::Invalid,
+			headers: Default::default(),
+			forward_header_matches: vec![],
+			failure_mode: FailureMode::FailClosed,
+			action: RejectAuditAction::Audit,
+		}),
+	};
+	let client = crate::test_helpers::policy_client();
+	let headers = ::http::HeaderMap::new();
+	let mut req = TextRequest {
+		content: "hello world".to_string(),
+	};
+
+	let result =
+		Policy::apply_single_request_guard(&guard, &mut req, &headers, &client, None, None).await;
+	let (action, rejection) = result.expect("audit mode must not propagate provider errors");
+	assert_eq!(
+		action,
+		GuardrailAction::FailOpen,
+		"an erroring audit guard records FailOpen, not Allow"
+	);
+	assert!(rejection.is_none(), "audit mode must never block traffic");
+	Policy::record_guardrail_trip(&client, GuardrailPhase::Request, action);
+	assert_eq!(
+		guardrail_metric(&client, GuardrailPhase::Request, GuardrailAction::FailOpen),
+		1
+	);
+}
+
 /// Reads a single `guardrail_checks` counter for `(phase, action)`.
 #[cfg(test)]
 fn guardrail_metric(
@@ -154,6 +195,62 @@ async fn audit_mode_records_audit_and_passes_through_on_match() {
 		guardrail_metric(&client, GuardrailPhase::Response, GuardrailAction::Reject),
 		0
 	);
+}
+
+/// The Bedrock audit decision, driven through the shared helper both the
+/// request and response paths call: enforce-worthy assessments (blocked or
+/// anonymized) yield `Audit`; detect-only and benign assessments yield `None`.
+/// Never a rejection or a mask, regardless of what AWS would have done.
+#[test]
+fn bedrock_audit_outcome_maps_would_enforce_to_audit() {
+	use serde_json::json;
+	let guardrails = BedrockGuardrails {
+		guardrail_identifier: "gr-test".into(),
+		guardrail_version: "DRAFT".into(),
+		region: "us-west-2".into(),
+		action: RejectAuditAction::Audit,
+		policies: vec![],
+	};
+	let outcome = |v: serde_json::Value| -> GuardrailOutcome<RequestGuardMutation> {
+		let resp: bedrock_guardrails::ApplyGuardrailResponse = serde_json::from_value(v).unwrap();
+		Policy::bedrock_audit_outcome(
+			&resp,
+			&guardrails,
+			bedrock_guardrails::GuardrailSource::Input,
+		)
+	};
+
+	let blocked = outcome(json!({
+		"action": "GUARDRAIL_INTERVENED",
+		"assessments": [{ "contentPolicy": { "filters": [{ "action": "BLOCKED", "type": "HATE" }] } }]
+	}));
+	assert!(
+		matches!(blocked, GuardrailOutcome::Audit),
+		"a would-block assessment audits, never rejects"
+	);
+
+	let anonymized = outcome(json!({
+		"action": "GUARDRAIL_INTERVENED",
+		"outputs": [{"text": "redacted {NAME}"}],
+		"assessments": [{ "sensitiveInformationPolicy": { "piiEntities": [{ "action": "ANONYMIZED", "type": "NAME" }] } }]
+	}));
+	assert!(
+		matches!(anonymized, GuardrailOutcome::Audit),
+		"a would-mask assessment audits, never masks"
+	);
+
+	// A detect-mode resource (top-level NONE, per-filter detected) is logged
+	// but records Allow — it would not have enforced.
+	let detect_only = outcome(json!({
+		"action": "NONE",
+		"assessments": [{ "contentPolicy": {
+			"filters": [{ "action": "NONE", "confidence": "LOW", "detected": true, "type": "VIOLENCE" }]
+		} }]
+	}));
+	assert!(matches!(detect_only, GuardrailOutcome::None));
+
+	let benign = outcome(json!({ "action": "NONE", "assessments": [{}] }));
+	assert!(matches!(benign, GuardrailOutcome::None));
 }
 
 /// A streamed response evaluated over many windows records exactly one metric
