@@ -1605,7 +1605,11 @@ fn resolve_backend_tls(
 	http_version_override: Option<::http::Version>,
 ) -> Result<VersionedBackendTLS, ProxyError> {
 	match &backend_tls.source {
-		BackendTLSSource::Static(_) => Ok(backend_tls.config_for(http_version_override)),
+		BackendTLSSource::Static(per_alpn_config) => Ok(VersionedBackendTLS {
+			hostname_override: backend_tls.hostname_override.clone(),
+			config: per_alpn_config.config_for(http_version_override),
+			peer_identity_mode: transport::tls::PeerIdentityMode::Istio,
+		}),
 		BackendTLSSource::Spiffe(spiffe_tls) => {
 			let spiffe = inputs.spiffe.as_ref().ok_or_else(|| {
 				ProxyError::Processing(anyhow!(

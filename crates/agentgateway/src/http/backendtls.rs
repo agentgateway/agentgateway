@@ -53,7 +53,7 @@ impl PerAlpnConfig {
 		}
 	}
 
-	fn config_for(&self, version_override: Option<http::Version>) -> Arc<ClientConfig> {
+	pub fn config_for(&self, version_override: Option<http::Version>) -> Arc<ClientConfig> {
 		match version_override {
 			Some(http::Version::HTTP_11) if self.allow_custom_alpn => self
 				.h1
@@ -109,23 +109,19 @@ impl BackendTLS {
 		matches!(self.source, BackendTLSSource::Spiffe(_))
 	}
 
-	pub fn base_config(&self) -> VersionedBackendTLS {
-		self.config_for(None)
-	}
-
 	/// Returns the static config for the requested HTTP version. Only valid for
 	/// [`BackendTLSSource::Static`]; SPIFFE-sourced backends are resolved at connection time via
 	/// `proxy::httpproxy::resolve_backend_tls` and must not reach here.
-	pub fn config_for(&self, version_override: Option<http::Version>) -> VersionedBackendTLS {
-		match &self.source {
-			BackendTLSSource::Static(config) => VersionedBackendTLS {
-				hostname_override: self.hostname_override.clone(),
-				config: config.config_for(version_override),
-				peer_identity_mode: tls::PeerIdentityMode::Istio,
-			},
-			BackendTLSSource::Spiffe(_) => {
-				unreachable!("SPIFFE backend TLS must be resolved via resolve_backend_tls, not config_for")
-			},
+	pub fn base_config(&self) -> VersionedBackendTLS {
+		let BackendTLSSource::Static(config) = &self.source else {
+			panic!(
+				"base_config is only valid for static backend TLS; SPIFFE backends resolve per connection"
+			)
+		};
+		VersionedBackendTLS {
+			hostname_override: self.hostname_override.clone(),
+			config: config.config_for(None),
+			peer_identity_mode: tls::PeerIdentityMode::Istio,
 		}
 	}
 }
