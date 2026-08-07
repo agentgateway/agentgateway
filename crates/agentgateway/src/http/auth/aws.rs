@@ -455,7 +455,7 @@ fn validate_session_tag_value(key: &str, value: &str) -> anyhow::Result<()> {
 /// numbers, and booleans (common JWT claim types) stringify via
 /// [`cel::Value::as_string`]; anything else (null, lists, maps) is an error so
 /// misattribution fails closed.
-fn cel_value_to_string(v: cel::Value) -> anyhow::Result<String> {
+pub(crate) fn cel_value_to_string(v: cel::Value) -> anyhow::Result<String> {
 	// Materialize Dynamic so nested lookups (e.g. JWT claims) are concrete values.
 	v.always_materialize_owned()
 		.as_string()

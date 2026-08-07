@@ -1,5 +1,6 @@
+use std::collections::HashSet;
 use std::str::FromStr;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use ::http::request::Parts;
 use ::http::uri::{Authority, PathAndQuery};
@@ -122,7 +123,7 @@ pub struct NamedAIProvider {
 pub enum AIProvider {
 	OpenAI(openai::Provider),
 	Gemini(gemini::Provider),
-	Vertex(vertex::Provider),
+	Vertex(VertexProvider),
 	Anthropic(anthropic::Provider),
 	Bedrock(BedrockProvider),
 	Azure(AzureProvider),
@@ -219,6 +220,241 @@ impl std::ops::DerefMut for AzureProvider {
 	}
 }
 
+// Wraps `vertex::Provider` (like `BedrockProvider`/`AzureProvider`) to add operator
+// config the wire provider does not carry. Intentionally NOT `deny_unknown_fields`
+// since we use `flatten` (serde cannot enforce it through a flattened field).
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(feature = "schema", schemars(rename = "VertexProvider"))]
+pub struct VertexProvider {
+	#[serde(flatten)]
+	pub provider: vertex::Provider,
+	/// Billing labels attached to native Gemini `generateContent` requests for cost
+	/// attribution. Labels sent by the client are preserved unless a key conflicts,
+	/// in which case the operator-configured value wins. A label value is either
+	/// static (`value`) or a CEL expression evaluated against each request
+	/// (`expression`).
+	#[serde(
+		default,
+		skip_serializing_if = "VertexLabels::is_empty",
+		deserialize_with = "de_vertex_labels",
+		serialize_with = "ser_vertex_labels"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<VertexLabel>"))]
+	pub labels: VertexLabels,
+}
+
+impl VertexProvider {
+	pub fn new(provider: vertex::Provider) -> Self {
+		Self {
+			provider,
+			labels: Default::default(),
+		}
+	}
+
+	pub fn cel_expressions(&self) -> impl Iterator<Item = &cel::Expression> {
+		self.labels.expressions()
+	}
+
+	/// Resolves the operator-configured labels against the request. Returns `None`
+	/// when no labels are configured.
+	pub fn resolve_labels(
+		&self,
+		req: Option<&RequestSnapshot>,
+	) -> anyhow::Result<Option<serde_json::Map<String, serde_json::Value>>> {
+		if self.labels.is_empty() {
+			return Ok(None);
+		}
+		let exec = Executor::new_request_snapshot(req);
+		self.labels.resolve(&exec).map(Some)
+	}
+}
+
+impl std::ops::Deref for VertexProvider {
+	type Target = vertex::Provider;
+
+	fn deref(&self) -> &Self::Target {
+		&self.provider
+	}
+}
+
+impl std::ops::DerefMut for VertexProvider {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.provider
+	}
+}
+
+/// A billing label attached to native Vertex Gemini `generateContent` requests for
+/// cost attribution. Exactly one of `value` and `expression` must be set.
+#[apply(schema!)]
+pub struct VertexLabel {
+	/// Label key.
+	pub key: String,
+	/// Static label value.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub value: Option<String>,
+	/// CEL expression evaluated against each request to produce the label value, for
+	/// example `jwt.sub` or `request.headers["x-team"]`. If the expression does not
+	/// produce a valid label value at request time, the request is rejected.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub expression: Option<Arc<cel::Expression>>,
+}
+
+// Cloud label limits: https://cloud.google.com/resource-manager/docs/labels-overview#requirements
+const MAX_VERTEX_LABELS: usize = 64;
+const MAX_VERTEX_LABEL_KEY_LEN: usize = 63;
+const MAX_VERTEX_LABEL_VALUE_LEN: usize = 63;
+
+/// The characters Google Cloud accepts in label keys: lowercase letters, numbers,
+/// underscores, and dashes; the first character must be a lowercase letter.
+static VERTEX_LABEL_KEY_CHARSET: LazyLock<regex::Regex> = LazyLock::new(|| {
+	regex::Regex::new(r"^[\p{Ll}\p{Lo}][\p{Ll}\p{Lo}\p{N}_-]*$").expect("static regex compiles")
+});
+
+/// The characters Google Cloud accepts in label values.
+static VERTEX_LABEL_VALUE_CHARSET: LazyLock<regex::Regex> =
+	LazyLock::new(|| regex::Regex::new(r"^[\p{Ll}\p{Lo}\p{N}_-]*$").expect("static regex compiles"));
+
+fn validate_vertex_label_key(key: &str) -> anyhow::Result<()> {
+	let len = key.chars().count();
+	if !(1..=MAX_VERTEX_LABEL_KEY_LEN).contains(&len) {
+		anyhow::bail!("label key must be 1-{MAX_VERTEX_LABEL_KEY_LEN} characters, got {len}");
+	}
+	if !VERTEX_LABEL_KEY_CHARSET.is_match(key) {
+		anyhow::bail!("label key {key:?} contains characters Google Cloud does not accept");
+	}
+	Ok(())
+}
+
+fn validate_vertex_label_value(key: &str, value: &str) -> anyhow::Result<()> {
+	let len = value.chars().count();
+	if len > MAX_VERTEX_LABEL_VALUE_LEN {
+		anyhow::bail!(
+			"label {key:?} value must be at most {MAX_VERTEX_LABEL_VALUE_LEN} characters, got {len}"
+		);
+	}
+	if !VERTEX_LABEL_VALUE_CHARSET.is_match(value) {
+		anyhow::bail!("label {key:?} value {value:?} contains characters Google Cloud does not accept");
+	}
+	Ok(())
+}
+
+/// Operator-configured Vertex billing labels in their runtime form: static values
+/// pre-resolved, dynamic (CEL) values compiled and evaluated per request.
+#[derive(Debug, Clone, Default)]
+pub struct VertexLabels {
+	// (key, value) pairs, sorted by key.
+	static_labels: Arc<[(String, String)]>,
+	// (key, expression) pairs, sorted by key.
+	dynamic_labels: Arc<[(String, Arc<cel::Expression>)]>,
+}
+
+impl VertexLabels {
+	/// Validates and splits configured labels into static and dynamic sets. All
+	/// constraints that can be checked without a request are checked here, so config
+	/// errors surface at load time rather than per request.
+	pub fn try_new(labels: Vec<VertexLabel>) -> anyhow::Result<Self> {
+		if labels.len() > MAX_VERTEX_LABELS {
+			anyhow::bail!(
+				"at most {MAX_VERTEX_LABELS} labels are allowed, got {}",
+				labels.len()
+			);
+		}
+		let mut keys = HashSet::with_capacity(labels.len());
+		let mut static_labels = Vec::new();
+		let mut dynamic_labels = Vec::new();
+		for label in labels {
+			validate_vertex_label_key(&label.key)?;
+			if !keys.insert(label.key.clone()) {
+				anyhow::bail!("duplicate label key {:?}", label.key);
+			}
+			match (label.value, label.expression) {
+				(Some(value), None) => {
+					validate_vertex_label_value(&label.key, &value)?;
+					static_labels.push((label.key, value));
+				},
+				(None, Some(expression)) => dynamic_labels.push((label.key, expression)),
+				_ => anyhow::bail!(
+					"label {:?} must set exactly one of 'value' or 'expression'",
+					label.key
+				),
+			}
+		}
+		static_labels.sort();
+		dynamic_labels.sort_by(|(a, _), (b, _)| a.cmp(b));
+		Ok(Self {
+			static_labels: static_labels.into(),
+			dynamic_labels: dynamic_labels.into(),
+		})
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.static_labels.is_empty() && self.dynamic_labels.is_empty()
+	}
+
+	pub fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
+		self.dynamic_labels.iter().map(|(_, e)| e.as_ref())
+	}
+
+	/// Evaluates dynamic labels against the request and merges them with the static
+	/// labels. Fails closed: an expression that cannot produce a valid label value
+	/// is an error.
+	fn resolve(&self, exec: &Executor) -> anyhow::Result<serde_json::Map<String, serde_json::Value>> {
+		let mut resolved = serde_json::Map::new();
+		for (key, value) in self.static_labels.iter() {
+			resolved.insert(key.clone(), serde_json::Value::String(value.clone()));
+		}
+		for (key, expr) in self.dynamic_labels.iter() {
+			let value = exec
+				.eval(expr)
+				.map_err(anyhow::Error::from)
+				.and_then(crate::http::auth::aws::cel_value_to_string)
+				.and_then(|value| {
+					validate_vertex_label_value(key, &value)?;
+					Ok(value)
+				})
+				.map_err(|e| {
+					anyhow::anyhow!(
+						"label {:?} (expression {:?}): {e}",
+						key,
+						expr.original_expression
+					)
+				})?;
+			resolved.insert(key.clone(), serde_json::Value::String(value));
+		}
+		Ok(resolved)
+	}
+}
+
+fn de_vertex_labels<'de, D>(deserializer: D) -> Result<VertexLabels, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	let labels = Vec::<VertexLabel>::deserialize(deserializer)?;
+	VertexLabels::try_new(labels).map_err(serde::de::Error::custom)
+}
+
+fn ser_vertex_labels<S>(labels: &VertexLabels, serializer: S) -> Result<S::Ok, S::Error>
+where
+	S: serde::Serializer,
+{
+	let static_entries = labels.static_labels.iter().map(|(key, value)| VertexLabel {
+		key: key.clone(),
+		value: Some(value.clone()),
+		expression: None,
+	});
+	let dynamic_entries = labels
+		.dynamic_labels
+		.iter()
+		.map(|(key, expression)| VertexLabel {
+			key: key.clone(),
+			value: None,
+			expression: Some(expression.clone()),
+		});
+	serializer.collect_seq(static_entries.chain(dynamic_entries))
+}
+
 impl AIProvider {
 	pub fn bedrock(provider: bedrock::Provider) -> Self {
 		Self::Bedrock(BedrockProvider::new(provider))
@@ -226,6 +462,10 @@ impl AIProvider {
 
 	pub fn azure(provider: azure::Provider) -> Self {
 		Self::Azure(AzureProvider::new(provider))
+	}
+
+	pub fn vertex(provider: vertex::Provider) -> Self {
+		Self::Vertex(VertexProvider::new(provider))
 	}
 }
 
@@ -283,6 +523,7 @@ struct ChatRequestContext<'a> {
 	provider: &'a AIProvider,
 	headers: &'a HeaderMap,
 	prompt_caching: Option<&'a policy::PromptCachingConfig>,
+	request_snapshot: Option<&'a RequestSnapshot>,
 }
 
 // Context provider to each response translation
@@ -407,7 +648,14 @@ fn render_vertex_gemini(
 	};
 	match req {
 		types::ChatRequest::Completions(req) => {
-			conversion::vertex_gemini::from_completions::translate(&req, provider.model.as_deref())
+			let labels = provider
+				.resolve_labels(ctx.request_snapshot)
+				.map_err(|e| AIError::LabelResolution(strng::new(e.to_string())))?;
+			conversion::vertex_gemini::from_completions::translate(
+				&req,
+				provider.model.as_deref(),
+				labels.as_ref(),
+			)
 		},
 		_ => Err(AIError::UnsupportedConversion(strng::literal!(
 			"vertex gemini only supports completions input"
@@ -1808,12 +2056,14 @@ impl AIProvider {
 			},
 		};
 
+		let request_snapshot = log.as_ref().and_then(|l| l.request_snapshot.clone());
 		let rendered = chat_translation.render_request(
 			chat_request(req),
 			&ChatRequestContext {
 				provider: self,
 				headers: &parts.headers,
 				prompt_caching: policies.and_then(|p| p.prompt_caching.as_ref()),
+				request_snapshot: request_snapshot.as_deref(),
 			},
 		)?;
 		llm_info.provider_state = rendered.provider_state;
