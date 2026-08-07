@@ -9519,7 +9519,7 @@ spec:
                           be set
                         rule: '[has(self.selector),has(self.static)].filter(x,x==true).size()
                           == 1'
-                    maxItems: 32
+                    maxItems: 128
                     minItems: 1
                     type: array
                     x-kubernetes-list-map-keys:

@@ -593,7 +593,7 @@ type MCPBackend struct {
 	// +listType=map
 	// +listMapKey=name
 	// +kubebuilder:validation:MinItems=1
-	// +kubebuilder:validation:MaxItems=32
+	// +kubebuilder:validation:MaxItems=128
 	// +required
 	Targets []McpTargetSelector `json:"targets"`
 
