@@ -30,7 +30,6 @@ const pages = [
 ] as const;
 
 test("core pages render with mocked gateway data", async ({ page }) => {
-  test.slow();
   await mockGateway(page);
 
   for (const [path, heading] of pages) {

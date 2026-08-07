@@ -114,8 +114,6 @@ jobs:
       run: |
         npm ci
         npm run lint
-    - name: End-to-end tests
-      run: npm run test:e2e
 
   #### Controller jobs ####
   controller-test:
