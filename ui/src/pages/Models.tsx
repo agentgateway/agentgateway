@@ -634,10 +634,9 @@ function ModelEditor(props: {
   const [transformation, setTransformation] = useState<Record<string, string>>(
     () => expressionMap(props.initial.transformation),
   );
-  const [finalTransformation, setFinalTransformation] =
-    useState<Record<string, string>>(() =>
-      expressionMap(props.initial.finalTransformation),
-    );
+  const [finalTransformation, setFinalTransformation] = useState<
+    Record<string, string>
+  >(() => expressionMap(props.initial.finalTransformation));
   const [health, setHealth] = useState<LlmModel["health"]>(
     () => props.initial.health ?? null,
   );
@@ -898,9 +897,7 @@ function ModelEditor(props: {
                 promptCaching={promptCaching}
                 authorization={authorization}
                 setTransformation={setTransformation}
-                setFinalTransformation={
-                  setFinalTransformation
-                }
+                setFinalTransformation={setFinalTransformation}
                 setHealth={setHealth}
                 setDefaultsText={setDefaultsText}
                 setOverridesText={setOverridesText}
@@ -1062,8 +1059,7 @@ function ModelPoliciesInline(props: {
   const transformationEnabled =
     Object.keys(expressionMap(props.model.transformation)).length > 0;
   const finalTransformationEnabled =
-    Object.keys(expressionMap(props.model.finalTransformation))
-      .length > 0;
+    Object.keys(expressionMap(props.model.finalTransformation)).length > 0;
   const defaultsEnabled = Boolean(
     props.model.defaults && Object.keys(props.model.defaults).length,
   );
@@ -1254,9 +1250,9 @@ function buildModelPolicyPatch(args: {
     const transformation = cleanEmpty(args.transformation) as
       | LlmModel["transformation"]
       | undefined;
-    const finalTransformation = cleanEmpty(
-      args.finalTransformation,
-    ) as LlmModel["finalTransformation"] | undefined;
+    const finalTransformation = cleanEmpty(args.finalTransformation) as
+      | LlmModel["finalTransformation"]
+      | undefined;
     const health = cleanEmpty(args.health) as LlmModel["health"] | undefined;
     const requestHeaders = cleanEmpty(args.requestHeaders) as
       | LlmModel["requestHeaders"]
@@ -1279,8 +1275,7 @@ function buildModelPolicyPatch(args: {
             ? transformation
             : null,
         finalTransformation:
-          finalTransformation &&
-          Object.keys(finalTransformation).length
+          finalTransformation && Object.keys(finalTransformation).length
             ? finalTransformation
             : null,
         requestHeaders:
@@ -1319,8 +1314,7 @@ function modelPolicySummary(model: Partial<LlmModel>) {
     model.transformation && Object.keys(model.transformation).length
       ? "transformation"
       : null,
-    model.finalTransformation &&
-    Object.keys(model.finalTransformation).length
+    model.finalTransformation && Object.keys(model.finalTransformation).length
       ? "final transformation"
       : null,
     model.requestHeaders ? "request headers" : null,
