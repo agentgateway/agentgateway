@@ -27,6 +27,12 @@
     "backends": {
       "type": "array",
       "items": true
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DumpModel"
+      }
     }
   },
   "additionalProperties": false,
@@ -36,7 +42,8 @@
     "binds",
     "routes",
     "policies",
-    "backends"
+    "backends",
+    "models"
   ],
   "$defs": {
     "DumpBind": {
@@ -842,6 +849,244 @@
         "tcpMesh",
         "routeGroups"
       ]
+    },
+    "DumpModel": {
+      "type": "object",
+      "properties": {
+        "listenerKey": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ModelRouteKind"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "listenerKey",
+        "key",
+        "name",
+        "kind"
+      ]
+    },
+    "ModelRouteKind": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "concrete": {
+              "$ref": "#/$defs/ModelRoute"
+            }
+          },
+          "required": [
+            "concrete"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "virtual": {
+              "$ref": "#/$defs/VirtualModelRoute"
+            }
+          },
+          "required": [
+            "virtual"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ModelRoute": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "created": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "visibility": {
+          "$ref": "#/$defs/ModelVisibility"
+        },
+        "headerMatches": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/HeaderMatch"
+            }
+          }
+        },
+        "backend": {
+          "$ref": "#/$defs/RouteBackendReference"
+        },
+        "policies": true,
+        "backendPolicies": {
+          "type": "array",
+          "items": true
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "created",
+        "visibility",
+        "headerMatches",
+        "backend",
+        "policies",
+        "backendPolicies"
+      ]
+    },
+    "ModelVisibility": {
+      "oneOf": [
+        {
+          "description": "Public models can be requested directly by clients and are included in the model list.",
+          "type": "string",
+          "const": "public"
+        },
+        {
+          "description": "Internal models can be targeted by virtual models but cannot be requested directly.",
+          "type": "string",
+          "const": "internal"
+        }
+      ]
+    },
+    "VirtualModelRoute": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "created": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "llmPolicy": true,
+        "routing": {
+          "$ref": "#/$defs/VirtualModelRouting"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "created",
+        "llmPolicy",
+        "routing"
+      ]
+    },
+    "VirtualModelRouting": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "weighted": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/WeightedTarget"
+              }
+            }
+          },
+          "required": [
+            "weighted"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "failover": {
+              "type": "object",
+              "properties": {
+                "backend": {
+                  "$ref": "#/$defs/RouteBackendReference"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "backend"
+              ]
+            }
+          },
+          "required": [
+            "failover"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "conditional": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ConditionalTarget"
+              }
+            }
+          },
+          "required": [
+            "conditional"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "WeightedTarget": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "model",
+        "weight"
+      ]
+    },
+    "ConditionalTarget": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "model",
+        "when"
+      ]
+    },
+    "Expression": {
+      "type": "string"
     }
   }
 }

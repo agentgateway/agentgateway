@@ -184,6 +184,22 @@ impl CacheTokenConvention {
 	pub fn pending() -> Self {
 		Self::InputIncludesCache
 	}
+
+	/// Normalize a provider-reported input token count so it always includes
+	/// tokens read from and written to cache.
+	pub fn include_cache_tokens(
+		self,
+		input_tokens: u64,
+		cached_input_tokens: Option<u64>,
+		cache_creation_input_tokens: Option<u64>,
+	) -> u64 {
+		match self {
+			Self::InputIncludesCache => input_tokens,
+			Self::InputExcludesCache => input_tokens
+				.saturating_add(cached_input_tokens.unwrap_or_default())
+				.saturating_add(cache_creation_input_tokens.unwrap_or_default()),
+		}
+	}
 }
 
 #[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize, ::cel::DynamicType)]
@@ -232,10 +248,28 @@ impl LLMInfo {
 	pub fn input_tokens(&self) -> Option<u64> {
 		self.response.input_tokens.or(self.request.input_tokens)
 	}
+
+	/// Return a cache-inclusive input token count with consistent semantics across providers.
+	/// Falls back to the request-side tokenizer when the response has no usage count.
+	pub fn normalized_input_tokens(&self) -> Option<u64> {
+		self
+			.response
+			.input_tokens
+			.map(|input_tokens| {
+				self.request.cache_convention.include_cache_tokens(
+					input_tokens,
+					self.response.cached_input_tokens,
+					self.response.cache_creation_input_tokens,
+				)
+			})
+			.or(self.request.input_tokens)
+	}
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct LLMResponse {
+	/// Provider-reported input tokens. Whether this includes cache tokens is described by the
+	/// corresponding request's [`CacheTokenConvention`].
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub input_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]

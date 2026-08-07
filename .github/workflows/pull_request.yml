@@ -48,19 +48,15 @@ jobs:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         persist-credentials: false
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        # The Rust build cache restores source mtimes from each path's history.
+        fetch-depth: 0
+    - name: Set up Rust build cache
+      uses: ./.github/actions/rust-build-cache
       with:
-        toolchain: "${{ env.RUST_VERSION }}"
-    - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-      # GHA 10gb cache cannot handle all 3 builds. However, because we put all the heavy linux caches on Blacksmith,
-      # we have space for windows and mac.
-      # If we change up the runners, consider if we have space for all three (note: Blacksmith has 25gb though)
-      with:
-        # Github cache will restore from 'main' OR the current branch.
-        # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
-        # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
-        save-if: ${{ github.ref == 'refs/heads/main' }}
+        rust-version: "${{ env.RUST_VERSION }}"
+        cache-key: proxy-test
+        # PRs restore the default branch cache; only postsubmit rolls it forward.
+        save: ${{ github.ref == 'refs/heads/main' }}
     - name: Start validation dependencies
       if: ${{ startsWith(matrix.os, 'blacksmith-') }}
       run: tools/manage-validation-deps.sh start
@@ -118,6 +114,15 @@ jobs:
       run: |
         npm ci
         npm run lint
+    - name: End-to-end tests
+      run: npm run test:e2e
+    - name: Upload Playwright traces
+      if: failure()
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+      with:
+        name: playwright-ui-traces
+        path: ui/test-results
+        retention-days: 2
 
   #### Controller jobs ####
   controller-test:
@@ -126,12 +131,13 @@ jobs:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         persist-credentials: false
-    - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+    - name: Set up controller Go build cache
+      uses: ./.github/actions/controller-build-cache
       with:
         go-version: "${{ env.GO_VERSION }}"
-        cache-dependency-path: |
-          **/*.sum
-          .github/workflows/cache-lint
+        go-cache-name: controller-test
+        # PRs can restore the default branch caches, but only postsubmit rolls them forward.
+        save: ${{ github.ref == 'refs/heads/main' }}
     - name: Test
       run: go test -race ./...
 
@@ -141,12 +147,13 @@ jobs:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         persist-credentials: false
-    - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+    - name: Set up controller Go build cache
+      uses: ./.github/actions/controller-build-cache
       with:
         go-version: "${{ env.GO_VERSION }}"
-        cache-dependency-path: |
-          **/*.sum
-          .github/workflows/cache-test
+        go-cache-name: controller-lint
+        # PRs can restore the default branch caches, but only postsubmit rolls them forward.
+        save: ${{ github.ref == 'refs/heads/main' }}
     - name: Lint
       run: make -C controller analyze
     - name: go mod tidy

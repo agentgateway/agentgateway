@@ -52,27 +52,29 @@ func TestFrontendTLS(tt *testing.T) {
 		caManifest(t, "invalid1", []byte("invalid1")),
 		tlsSecretManifest(t, "gateway-cert", ca1, server, serverKey),
 	)
+	// Keep one Gateway for all subtests. Updates below apply directly because t.Apply would
+	// register subtest cleanup and delete/recreate the Gateway between cases.
+	t.Apply(manifest("frontendtls", "gateway-ca1.yaml"))
 
 	t.Run("ClientCertValidation", func(t base.Test) {
-		t.Apply(manifest("frontendtls", "gateway-ca1.yaml"))
 		gateway := gateway(t)
 		assertSuccess(t, gateway, client1, client1Key, ca1)
 		assertFailure(t, gateway, client2, client2Key, ca1)
 	})
 	t.Run("ClientCertValidationAllowInsecureFallback", func(t base.Test) {
-		t.Apply(manifest("frontendtls", "gateway-ca1-with-insecure-fallback.yaml"))
+		assert.NoError(t, t.E2EClusterContext().Client.ApplyYAMLFiles("", manifest("frontendtls", "gateway-ca1-with-insecure-fallback.yaml")))
 		gateway := gateway(t)
 		assertSuccess(t, gateway, client1, client1Key, ca1)
 		assertSuccess(t, gateway, client2, client2Key, ca1)
 	})
 	t.Run("ClientCertValidationWithMultipleCAs", func(t base.Test) {
-		t.Apply(manifest("frontendtls", "gateway-ca1-ca2.yaml"))
+		assert.NoError(t, t.E2EClusterContext().Client.ApplyYAMLFiles("", manifest("frontendtls", "gateway-ca1-ca2.yaml")))
 		gateway := gateway(t)
 		assertSuccess(t, gateway, client1, client1Key, ca1)
 		assertSuccess(t, gateway, client2, client2Key, ca1)
 	})
 	t.Run("ClientCertValidationWithSomeCARefsInvalid", func(t base.Test) {
-		t.Apply(manifest("frontendtls", "gateway-ca1-invalid1.yaml"))
+		assert.NoError(t, t.E2EClusterContext().Client.ApplyYAMLFiles("", manifest("frontendtls", "gateway-ca1-invalid1.yaml")))
 		gateway := gateway(t)
 		assertListenerConditions(t, map[gwv1.ListenerConditionType]metav1.ConditionStatus{
 			gwv1.ListenerConditionAccepted:     metav1.ConditionTrue,
@@ -83,7 +85,7 @@ func TestFrontendTLS(tt *testing.T) {
 		assertFailure(t, gateway, client2, client2Key, ca1)
 	})
 	t.Run("ClientCertValidationWithAllCARefsInvalid", func(t base.Test) {
-		t.Apply(manifest("frontendtls", "gateway-invalid1-invalid2.yaml"))
+		assert.NoError(t, t.E2EClusterContext().Client.ApplyYAMLFiles("", manifest("frontendtls", "gateway-invalid1-invalid2.yaml")))
 		assertListenerConditions(t, map[gwv1.ListenerConditionType]metav1.ConditionStatus{
 			gwv1.ListenerConditionAccepted:     metav1.ConditionFalse,
 			gwv1.ListenerConditionProgrammed:   metav1.ConditionFalse,

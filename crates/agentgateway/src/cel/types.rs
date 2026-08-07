@@ -1409,10 +1409,16 @@ pub struct LLMContext {
 	pub response_model: Option<Strng>,
 	/// The provider of the LLM.
 	pub provider: Strng,
-	/// The number of tokens in the input/prompt.
+	/// The total number of tokens in the input/prompt, including tokens read from or written to
+	/// cache. This has consistent semantics across providers.
 	#[dynamic(rename = "inputTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub input_tokens: Option<u64>,
+	/// The provider-reported number of tokens in the input/prompt. This is inconsistent across
+	/// providers: some include cached tokens while others exclude them.
+	#[dynamic(rename = "providerInputTokens")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub provider_input_tokens: Option<u64>,
 	/// The number of image tokens in the input/prompt.
 	#[dynamic(rename = "inputImageTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -1457,10 +1463,16 @@ pub struct LLMContext {
 	#[dynamic(rename = "reasoningTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub reasoning_tokens: Option<u64>,
-	/// The total number of tokens for the request.
+	/// The total number of input and output tokens for the request. Input tokens include tokens read
+	/// from or written to cache, giving this field consistent semantics across providers.
 	#[dynamic(rename = "totalTokens")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub total_tokens: Option<u64>,
+	/// The provider-reported total number of tokens for the request. This is inconsistent across
+	/// providers because some include cached input tokens while others exclude them.
+	#[dynamic(rename = "providerTotalTokens")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub provider_total_tokens: Option<u64>,
 	/// The service tier the provider served the request under.
 	#[dynamic(rename = "serviceTier")]
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -1512,16 +1524,21 @@ pub struct LLMContext {
 
 impl LLMContext {
 	pub fn from_llm_info(value: LLMInfo, model_catalog: Option<&llm::cost::ModelCatalog>) -> Self {
+		let legacy_token_semantics = *LEGACY_LLM_USAGE_TOKEN_SEMANTICS;
 		let projection = model_catalog.map(|catalog| catalog.project(&value));
+		let normalized_input_tokens = value.normalized_input_tokens();
+		let cache_convention = value.request.cache_convention;
 
 		let resp = value.response;
 		let mut base = LLMContext {
+			provider_input_tokens: resp.input_tokens,
 			output_tokens: resp.output_tokens,
 			output_image_tokens: resp.output_image_tokens,
 			output_text_tokens: resp.output_text_tokens,
 			output_audio_tokens: resp.output_audio_tokens,
 			count_tokens: resp.count_tokens,
-			total_tokens: resp.total_tokens,
+			total_tokens: None,
+			provider_total_tokens: resp.total_tokens,
 			first_token: resp.first_token,
 			time_to_first_token: None,
 			time_per_output_token: None,
@@ -1542,9 +1559,23 @@ impl LLMContext {
 			..LLMContext::from(value.request)
 		};
 
-		if let Some(pt) = resp.input_tokens {
-			// Better info, override
-			base.input_tokens = Some(pt);
+		if legacy_token_semantics {
+			base.input_tokens = base.provider_input_tokens.or(base.input_tokens);
+			base.total_tokens = base.provider_total_tokens;
+		} else {
+			base.input_tokens = normalized_input_tokens;
+		}
+		if !legacy_token_semantics {
+			base.total_tokens = match (base.input_tokens, base.output_tokens) {
+				(Some(input), Some(output)) => Some(input.saturating_add(output)),
+				_ => resp.total_tokens.map(|total| {
+					cache_convention.include_cache_tokens(
+						total,
+						resp.cached_input_tokens,
+						resp.cache_creation_input_tokens,
+					)
+				}),
+			};
 		}
 
 		if let Some(projection) = projection {
@@ -1596,6 +1627,7 @@ impl From<llm::LLMRequest> for LLMContext {
 			request_model,
 			provider,
 			input_tokens,
+			provider_input_tokens: None,
 			params,
 			prompt,
 
@@ -1609,6 +1641,7 @@ impl From<llm::LLMRequest> for LLMContext {
 			output_text_tokens: None,
 			output_audio_tokens: None,
 			total_tokens: None,
+			provider_total_tokens: None,
 			completion: None,
 			tool_calls: None,
 			reasoning_tokens: None,
@@ -1624,6 +1657,11 @@ impl From<llm::LLMRequest> for LLMContext {
 		}
 	}
 }
+
+static LEGACY_LLM_USAGE_TOKEN_SEMANTICS: Lazy<bool> = Lazy::new(|| {
+	std::env::var("AGENTGATEWAY_LEGACY_LLM_USAGE_TOKEN_SEMANTICS")
+		.is_ok_and(|value| value.eq_ignore_ascii_case("true"))
+});
 
 fn to_value_str<'a, T: AsRef<str>>(c: &'a &'a T) -> Value<'a> {
 	Value::String(c.as_ref().into())
@@ -2294,6 +2332,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 			response_model: Some("gpt-4-turbo".into()),
 			provider: "fake-ai".into(),
 			input_tokens: Some(100),
+			provider_input_tokens: Some(100),
 			input_image_tokens: Some(60),
 			input_text_tokens: Some(40),
 			input_audio_tokens: Some(5),
@@ -2305,6 +2344,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 			output_audio_tokens: Some(3),
 			reasoning_tokens: Some(30),
 			total_tokens: Some(150),
+			provider_total_tokens: Some(150),
 			service_tier: Some("default".into()),
 			first_token: None,
 			time_to_first_token: Some(chrono::Duration::milliseconds(123).into()),

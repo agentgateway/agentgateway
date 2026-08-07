@@ -1999,6 +1999,13 @@ pub struct DumpBind {
 }
 
 #[apply(schema_ser_schema!)]
+pub struct DumpModel {
+	pub listener_key: ListenerKey,
+	#[serde(flatten)]
+	pub model: agent::ModelRoute,
+}
+
+#[apply(schema_ser_schema!)]
 pub struct Dump {
 	pub binds: Vec<DumpBind>,
 	pub routes: RoutesDump,
@@ -2006,6 +2013,7 @@ pub struct Dump {
 	pub policies: Vec<Arc<TargetedPolicy>>,
 	#[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
 	pub backends: Vec<Arc<BackendWithPolicies>>,
+	pub models: Vec<DumpModel>,
 }
 
 impl StoreUpdater {
@@ -2056,10 +2064,20 @@ impl StoreUpdater {
 			.sorted_by_key(|k| k.0)
 			.map(|k| k.1.clone())
 			.collect();
+		let models = store
+			.model_routes
+			.iter()
+			.sorted_by_key(|entry| entry.0)
+			.map(|(_, (listener_key, model))| DumpModel {
+				listener_key: listener_key.clone(),
+				model: model.clone(),
+			})
+			.collect();
 		Dump {
 			binds,
 			policies,
 			backends,
+			models,
 			routes: RoutesDump {
 				http_mesh: store
 					.http_routes
@@ -2501,6 +2519,19 @@ mod tests {
 			panic!("expected model route to synthesize router backend");
 		};
 		drop(store);
+		let dump = serde_json::to_value(updater.dump()).expect("config dump serializes");
+		assert_eq!(
+			dump
+				.pointer("/models/0/key")
+				.and_then(|value| value.as_str()),
+			Some("default/gpt-5-mini")
+		);
+		assert_eq!(
+			dump
+				.pointer("/models/0/listenerKey")
+				.and_then(|value| value.as_str()),
+			Some("default/gw.http")
+		);
 
 		let second_model_route = crate::types::proto::agent::ModelRoute {
 			key: "default/claude-haiku".to_string(),

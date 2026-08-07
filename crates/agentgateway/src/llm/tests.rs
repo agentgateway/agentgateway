@@ -89,6 +89,53 @@ fn streaming_amend_on_drop_updates_local_rate_limit() {
 	);
 }
 
+#[test]
+fn streaming_amend_on_drop_uses_cache_inclusive_input_tokens() {
+	let rate_limit =
+		crate::http::localratelimit::RateLimit::try_from(crate::http::localratelimit::RateLimitSpec {
+			max_tokens: 10,
+			tokens_per_fill: 10,
+			fill_interval: std::time::Duration::from_secs(60),
+			limit_type: crate::http::localratelimit::RateLimitType::Tokens,
+		})
+		.unwrap();
+	let mut request = llm_request_with_tokens(Some(5));
+	request.cache_convention = CacheTokenConvention::InputExcludesCache;
+	let log = AsyncLog::default();
+	log.store(Some(LLMInfo {
+		request,
+		response: LLMResponse {
+			input_tokens: Some(2),
+			cached_input_tokens: Some(2),
+			cache_creation_input_tokens: Some(1),
+			output_tokens: Some(4),
+			..Default::default()
+		},
+	}));
+
+	let mut amend = AmendOnDrop::new(
+		log,
+		LLMResponsePolicies {
+			local_rate_limit: vec![rate_limit.clone()],
+			..Default::default()
+		},
+		None,
+		None,
+	);
+	amend.report_usage();
+
+	assert!(
+		rate_limit
+			.check_llm_request(&llm_request_with_tokens(Some(7)))
+			.is_err()
+	);
+	assert!(
+		rate_limit
+			.check_llm_request(&llm_request_with_tokens(Some(6)))
+			.is_ok()
+	);
+}
+
 fn test_root() -> &'static Path {
 	Path::new("../llm/src/tests")
 }

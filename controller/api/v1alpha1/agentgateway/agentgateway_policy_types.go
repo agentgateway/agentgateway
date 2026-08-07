@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"math"
 
-	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -495,6 +494,22 @@ const (
 	InsecureTLSModeHostname InsecureTLSMode = "Hostname"
 )
 
+// LocalCACertificateRef references a same-namespace CA certificate source.
+// An omitted kind defaults to ConfigMap.
+//
+// +structType=atomic
+type LocalCACertificateRef struct {
+	// Name of the referenced CA certificate source.
+	// +required
+	Name gwv1.ObjectName `json:"name"`
+
+	// Kind of the referenced CA certificate source. Omitted defaults to ConfigMap.
+	// +kubebuilder:default=ConfigMap
+	// +kubebuilder:validation:Enum=ConfigMap;Secret
+	// +optional
+	Kind string `json:"kind,omitempty"`
+}
+
 // +kubebuilder:validation:AtMostOneOf=verifySubjectAltNames;insecureSkipVerify
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) && self.insecureSkipVerify == 'All' ? !has(self.caCertificateRefs) : true",message="insecureSkipVerify All and caCertificateRefs may not be set together"
 // +kubebuilder:validation:XValidation:rule="has(self.insecureSkipVerify) ? !has(self.verifySubjectAltNames) : true",message="insecureSkipVerify and verifySubjectAltNames may not be set together"
@@ -509,14 +524,14 @@ type BackendTLS struct {
 	// +kubebuilder:validation:MaxItems=1
 	// +optional
 	MtlsCertificateRef []LocalSecretObjectRef `json:"mtlsCertificateRef,omitempty"`
-	// CA certificate `ConfigMap` to use to
-	// verify the server certificate.
-	// If unset, the system's trusted certificates are used.
+	// CA certificate source to use to verify the server certificate. Omitted kind
+	// and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
+	// key is required. If unset, the system's trusted certificates are used.
 	//
 	// +listType=atomic
 	// +kubebuilder:validation:MaxItems=1
 	// +optional
-	CACertificateRefs []corev1.LocalObjectReference `json:"caCertificateRefs,omitempty"`
+	CACertificateRefs []LocalCACertificateRef `json:"caCertificateRefs,omitempty"`
 
 	// Originates TLS but skips verification of the backend's certificate
 	// WARNING: insecure; only use if the risks are understood
@@ -2741,6 +2756,7 @@ type ExtProcConditional struct {
 	Policy ExtProc `json:"policy"`
 }
 
+// +kubebuilder:validation:ConditionalPolicy
 // +kubebuilder:validation:XValidation:rule="has(self.conditional) ? (!has(self.backendRef) && !has(self.url)) : [has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url must be set unless conditional is set"
 type ExtProcOrConditional struct {
 	// +optional
@@ -2793,6 +2809,7 @@ type ExtAuthConditional struct {
 	Policy ExtAuth `json:"policy"`
 }
 
+// +kubebuilder:validation:ConditionalPolicy
 // +kubebuilder:validation:XValidation:rule="has(self.conditional) ? (!has(self.backendRef) && !has(self.url)) : [has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url must be set unless conditional is set"
 // +kubebuilder:validation:XValidation:rule="has(self.conditional) || [has(self.grpc),has(self.http)].filter(x,x==true).size() == 1",message="exactly one of the fields in [grpc http] must be set"
 type ExtAuthOrConditional struct {

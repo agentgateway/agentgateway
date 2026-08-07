@@ -34,6 +34,7 @@ type BackendResolver func(krt.HandlerContext, types.NamespacedName) (*ResolvedBa
 
 type Inputs struct {
 	ConfigMaps       krt.Collection[*corev1.ConfigMap]
+	Secrets          krt.Collection[*corev1.Secret]
 	Services         krt.Collection[*corev1.Service]
 	Backends         krt.Collection[*agentgateway.AgentgatewayBackend]
 	PolicySelector   policyselection.Selector
@@ -55,6 +56,7 @@ type Resolver interface {
 
 type defaultResolver struct {
 	cfgmaps          krt.Collection[*corev1.ConfigMap]
+	secrets          krt.Collection[*corev1.Secret]
 	services         krt.Collection[*corev1.Service]
 	backendResolvers map[schema.GroupKind]BackendResolver
 	policySelector   policyselection.Selector
@@ -108,6 +110,7 @@ func NewResolver(inputs Inputs) Resolver {
 	}
 	return &defaultResolver{
 		cfgmaps:          inputs.ConfigMaps,
+		secrets:          inputs.Secrets,
 		services:         inputs.Services,
 		backendResolvers: backendResolvers,
 		policySelector:   inputs.PolicySelector,

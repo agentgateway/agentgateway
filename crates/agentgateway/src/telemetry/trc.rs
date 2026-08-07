@@ -22,7 +22,7 @@ use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, TracingC
 
 #[derive(Clone, Debug)]
 pub struct Tracer {
-	pub provider: SdkTracerProvider,
+	pub provider: super::NonBlockingDrop<SdkTracerProvider>,
 	pub processor: SharedSpanProcessor,
 	pub fields: Arc<LoggingFields>,
 	pub(crate) filter: Option<Arc<cel::Expression>>,
@@ -264,7 +264,7 @@ impl Tracer {
 			(provider, processor)
 		};
 		Ok(Tracer {
-			provider,
+			provider: super::NonBlockingDrop::new(provider),
 			processor,
 			fields,
 			filter: config.filter.clone(),
@@ -824,7 +824,7 @@ mod tests {
 			.build();
 		(
 			Tracer {
-				provider,
+				provider: crate::telemetry::NonBlockingDrop::new(provider),
 				processor,
 				fields: Arc::new(LoggingFields::default()),
 				filter: None,

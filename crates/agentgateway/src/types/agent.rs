@@ -736,16 +736,14 @@ pub type RouteKey = Strng;
 pub type RouteGroupKey = Strng;
 pub type RouteRuleName = Strng;
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct ModelRoute {
 	pub key: RouteKey,
 	pub name: Strng,
 	pub kind: ModelRouteKind,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub enum ModelRouteKind {
 	Concrete(crate::llm::model_router::ModelRoute),
 	Virtual(crate::llm::model_router::VirtualModelRoute),
@@ -1282,8 +1280,14 @@ pub enum Backend {
 	LLMRouter(ResourceName, Arc<crate::llm::model_router::ModelRouter>),
 	#[serde(rename = "aws", serialize_with = "serialize_backend_tuple")]
 	Aws(ResourceName, crate::aws::AwsBackendConfig),
+	/// The second field, when set, is a CEL expression evaluated against the
+	/// request (with any ext_proc/extAuthz dynamic metadata already attached)
+	/// to compute the dial target. The expression and any policy that supplies
+	/// its dynamic metadata are trusted to select that target. This replaces the
+	/// default behavior of reading the request's current :authority/URI (see
+	/// target_from_request).
 	#[serde(serialize_with = "serialize_backend_tuple")]
-	Dynamic(ResourceName, ()),
+	Dynamic(ResourceName, Option<Arc<crate::cel::Expression>>),
 	/// In-process admin service backend. This is only valid for HTTP routes.
 	#[serde(serialize_with = "serialize_backend_tuple")]
 	Internal(ResourceName, InternalBackend),

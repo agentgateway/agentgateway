@@ -126,7 +126,7 @@ func TestResolve(t *testing.T) {
 		{
 			name: "service prefers exact section name policy match",
 			inputs: []any{
-				testService("oauth2-discovery", "default", []corev1.ServicePort{
+				testService([]corev1.ServicePort{
 					{Name: "http", Port: 8080},
 					{Name: "https", Port: 8443},
 				}),
@@ -187,7 +187,7 @@ func TestResolve(t *testing.T) {
 		{
 			name: "service backend tls policy supports named port section match",
 			inputs: []any{
-				testService("oauth2-discovery", "default", []corev1.ServicePort{
+				testService([]corev1.ServicePort{
 					{Name: "http", Port: 8080},
 					{Name: "https", Port: 8443},
 				}),
@@ -396,7 +396,7 @@ func TestResolve(t *testing.T) {
 		{
 			name: "service hashes ca bundle into resolved transport",
 			inputs: []any{
-				testService("oauth2-discovery", "default", []corev1.ServicePort{{Name: "https", Port: 8443}}),
+				testService([]corev1.ServicePort{{Name: "https", Port: 8443}}),
 				&corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: "default"},
 					Data: map[string]string{
@@ -416,7 +416,7 @@ func TestResolve(t *testing.T) {
 						Backend: &agentgateway.BackendFull{
 							BackendSimple: agentgateway.BackendSimple{
 								TLS: &agentgateway.BackendTLS{
-									CACertificateRefs: []corev1.LocalObjectReference{{Name: "ca"}},
+									CACertificateRefs: []agentgateway.LocalCACertificateRef{{Name: "ca"}},
 								},
 							},
 						},
@@ -538,11 +538,11 @@ func TestResolveURLValidation(t *testing.T) {
 	}
 }
 
-func testService(name, namespace string, ports []corev1.ServicePort) *corev1.Service {
+func testService(ports []corev1.ServicePort) *corev1.Service {
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
+			Name:      "oauth2-discovery",
+			Namespace: "default",
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: ports,

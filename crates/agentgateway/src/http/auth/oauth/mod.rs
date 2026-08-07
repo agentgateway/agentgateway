@@ -66,8 +66,9 @@ pub struct OAuthTokenExchangeAuth {
 	/// `resource` parameters with the target service URIs.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	resources: Vec<String>,
-	/// `requested_token_type` parameter. Under token exchange, unset defaults to
-	/// access_token because this policy forwards bearer access tokens.
+	/// `requested_token_type` parameter. When unset it is omitted from the request
+	/// (RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)
+	/// reject an explicit access_token value paired with a custom `subject_token_type`.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	requested_token_type: Option<OAuthTokenType>,
@@ -328,7 +329,7 @@ impl OAuthTokenExchangeAuth {
 
 	fn requested_token_type_param(&self) -> Option<OAuthTokenType> {
 		match self.grant_type {
-			OAuthGrantType::TokenExchange => Some(self.requested_token_type.clone().unwrap_or_default()),
+			OAuthGrantType::TokenExchange => self.requested_token_type.clone(),
 			OAuthGrantType::JwtBearer => None,
 		}
 	}

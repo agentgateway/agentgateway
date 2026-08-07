@@ -2616,7 +2616,7 @@ fn response_prompt_guard_headers(
 fn amend_tokens(rate_limit: store::LLMResponsePolicies, llm_resp: &LLMInfo, exec: Executor) {
 	let input_mismatch = match (
 		llm_resp.request.input_tokens,
-		llm_resp.response.input_tokens,
+		llm_resp.normalized_input_tokens(),
 	) {
 		// Already counted 'req'
 		(Some(req), Some(resp)) => (resp as i64) - (req as i64),

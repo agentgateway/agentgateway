@@ -263,7 +263,7 @@ binds:
 		.backends
 		.iter()
 		.find_map(|backend| match &backend.backend {
-			Backend::Dynamic(name, ()) => Some(name),
+			Backend::Dynamic(name, _) => Some(name),
 			_ => None,
 		})
 		.expect("normalized dynamic backend");
@@ -271,6 +271,34 @@ binds:
 		backend.to_string(),
 		"/ns/name/bind/1080/listener0/default/route0/backend0"
 	);
+}
+
+#[tokio::test]
+async fn test_local_dynamic_backend_target_expression_normalizes() {
+	let normalized = normalize_test_yaml(
+		r#"
+binds:
+- port: 1080
+  listeners:
+  - routes:
+    - backends:
+      - dynamic:
+          target: extproc.workerTarget
+"#,
+	)
+	.await
+	.expect("dynamic backend with a target expression should normalize");
+
+	let expr = normalized
+		.backends
+		.iter()
+		.find_map(|backend| match &backend.backend {
+			Backend::Dynamic(_, expr) => Some(expr.clone()),
+			_ => None,
+		})
+		.expect("normalized dynamic backend")
+		.expect("target expression should be set");
+	assert_eq!(expr.original_expression, "extproc.workerTarget");
 }
 
 #[test]
