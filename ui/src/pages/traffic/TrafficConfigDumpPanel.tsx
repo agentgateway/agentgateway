@@ -39,6 +39,10 @@ export type DumpListenerRow = {
 	listener: DumpListener;
 };
 
+type RuntimeDumpListenerRow = DumpListenerRow & {
+	conflicted: boolean;
+};
+
 export type DumpRouteRow = {
 	type: 'HTTP' | 'TCP';
 	source: 'listener' | 'mesh' | 'route group';
@@ -106,11 +110,9 @@ export function TrafficDumpListenersView(props: {
 	isLoading?: boolean;
 	error?: Error | null;
 }) {
-	const inventory = props.dump ? buildTrafficInventory(props.dump) : null;
+	const rows = props.dump?.binds.flatMap(buildRuntimeListenerRows) ?? [];
 	const [selectedListenerKey, setSelectedListenerKey] = useStickyQueryParam('listener');
-	const selectedListener = inventory?.listeners.find(
-		({ listener }) => listener.key === selectedListenerKey
-	);
+	const selectedListener = rows.find(({ listener }) => listener.key === selectedListenerKey);
 	return (
 		<Panel>
 			{props.isLoading ? (
@@ -119,7 +121,7 @@ export function TrafficDumpListenersView(props: {
 				<StatusBanner state="bad" title="Config dump unavailable">
 					{props.error.message}
 				</StatusBanner>
-			) : !inventory?.listeners.length ? (
+			) : !rows.length ? (
 				<EmptyState
 					title="No runtime listeners"
 					description="No listeners are present in the active gateway dump."
@@ -127,24 +129,30 @@ export function TrafficDumpListenersView(props: {
 			) : (
 				<div className="traffic-bind-list">
 					{props.dump?.binds.map(bind => {
-						const listeners = Object.values(bind.listeners ?? {});
+						const bindRows = rows.filter(row => row.bind.key === bind.key);
+						const conflictCount = bindRows.filter(row => row.conflicted).length;
 						return (
 							<section className="traffic-bind readonly" key={bind.key}>
 								<div className="traffic-bind-header">
 									<div>
 										<h3>{bindDisplayName(bind.address)}</h3>
 										<p>
-											{listeners.length} listeners · {listenerRouteCount(bind)} routes
+											{bindRows.length} listeners · {listenerRouteCount(bind)} routes
 										</p>
 									</div>
 									<div className="button-row">
 										<span className="badge">{bind.tunnelProtocol ?? 'direct'}</span>
 										<span className="badge">{bindProtocolLabel(bind.protocol)}</span>
+										{conflictCount ? (
+											<span className="badge bad">
+												{conflictCount} listeners involved in port conflicts
+											</span>
+										) : null}
 									</div>
 								</div>
-								{listeners.length ? (
+								{bindRows.length ? (
 									<RuntimeListenerTable
-										rows={listeners.map(listener => ({ bind, listener }))}
+										rows={bindRows}
 										onSelect={listener => setSelectedListenerKey(listener.key)}
 									/>
 								) : (
@@ -247,7 +255,7 @@ export function TrafficDumpRoutesView(props: {
 }
 
 function RuntimeListenerTable(props: {
-	rows: DumpListenerRow[];
+	rows: RuntimeDumpListenerRow[];
 	onSelect: (listener: DumpListener) => void;
 }) {
 	return (
@@ -256,6 +264,7 @@ function RuntimeListenerTable(props: {
 				<thead>
 					<tr>
 						<th>Name</th>
+						<th>Port conflict</th>
 						<th>Hostname</th>
 						<th>Protocol</th>
 						<th>Routes</th>
@@ -264,10 +273,16 @@ function RuntimeListenerTable(props: {
 					</tr>
 				</thead>
 				<tbody>
-					{props.rows.map(({ listener }) => (
+					{props.rows.map(({ listener, conflicted }) => (
 						<tr key={listener.key}>
-							<td className="strong">{listener.listenerName || listener.key}</td>
-							<td>{listener.hostname || '*'}</td>
+							<td>
+								<div className="resource-name-cell">
+									<strong>{listenerDisplayName(listener)}</strong>
+									<small>{listenerSourceDisplayName(listener)}</small>
+								</div>
+							</td>
+							<td>{conflicted ? <span className="badge bad">Conflict</span> : '—'}</td>
+							<td>{listenerHostname(listener)}</td>
 							<td>
 								<span className="badge">{listenerProtocolLabel(listener.protocol)}</span>
 							</td>
@@ -278,7 +293,7 @@ function RuntimeListenerTable(props: {
 									<button
 										className="icon-button"
 										type="button"
-										aria-label={`View ${listener.listenerName || listener.key}`}
+										aria-label={`View ${qualifiedListenerDisplayName(listener)}`}
 										onClick={() => props.onSelect(listener)}
 									>
 										<Eye size={16} />
@@ -298,7 +313,7 @@ function ListenerDumpDrawer(props: { row: DumpListenerRow; onClose: () => void }
 	const routeCount = listenerRouteObjectCount(listener);
 	const backendCount = listenerBackendCount(listener);
 	return (
-		<Drawer title={listener.listenerName || listener.key} onClose={props.onClose}>
+		<Drawer title={qualifiedListenerDisplayName(listener)} onClose={props.onClose}>
 			<div className="drawer-summary-list">
 				<div>
 					<span>Bind</span>
@@ -306,7 +321,7 @@ function ListenerDumpDrawer(props: { row: DumpListenerRow; onClose: () => void }
 				</div>
 				<div>
 					<span>Hostname</span>
-					<strong>{listener.hostname || '*'}</strong>
+					<strong>{listenerHostname(listener)}</strong>
 				</div>
 				<div>
 					<span>Protocol</span>
@@ -408,6 +423,30 @@ export function buildTrafficInventory(dump: AdminConfigDump) {
 	};
 }
 
+function buildRuntimeListenerRows(bind: DumpBind): RuntimeDumpListenerRow[] {
+	// XDS dumps currently contain protocol-specific binds. If they start
+	// exposing `auto` binds, HTTP/TLS multiplexing must be handled here too.
+	const listeners = Object.values(bind.listeners ?? {});
+	return listeners.map(listener => ({
+		bind,
+		listener,
+		conflicted: listeners.some(
+			peer => peer !== listener && runtimeListenersConflict(listener, peer)
+		)
+	}));
+}
+
+function runtimeListenersConflict(left: DumpListener, right: DumpListener) {
+	const leftFamily = listenerProtocolFamily(left);
+	const rightFamily = listenerProtocolFamily(right);
+	if (leftFamily !== rightFamily) return true;
+
+	// HTTP and TLS-family traffic can be selected by hostname, while opaque
+	// protocols such as TCP require the bind to contain exactly one listener.
+	if (leftFamily !== 'http' && leftFamily !== 'tls') return true;
+	return listenerHostname(left) === listenerHostname(right);
+}
+
 function isTargetedPolicy(value: unknown): value is TargetedPolicy {
 	return Boolean(
 		value && typeof value === 'object' && typeof (value as { key?: unknown }).key === 'string'
@@ -456,6 +495,11 @@ function listenerProtocolLabel(protocol: DumpListener['protocol']) {
 	return Object.keys(protocol)[0] ?? 'unknown';
 }
 
+function listenerProtocolFamily(listener: DumpListener) {
+	const protocol = listenerProtocolLabel(listener.protocol);
+	return protocol === 'HTTPS' || protocol === 'TLS' ? 'tls' : protocol.toLowerCase();
+}
+
 function bindProtocolLabel(protocol: DumpBind['protocol']) {
 	if (typeof protocol === 'string') return protocol;
 	return Object.keys(protocol)[0] ?? 'unknown';
@@ -480,6 +524,20 @@ function routeDisplayName(route: Route | TCPRoute) {
 
 function listenerDisplayName(listener: DumpListener) {
 	return listener.listenerName || listener.key;
+}
+
+function qualifiedListenerDisplayName(listener: DumpListener) {
+	return `${listenerSourceDisplayName(listener)} listener ${listenerDisplayName(listener)}`;
+}
+
+function listenerSourceDisplayName(listener: DumpListener) {
+	return listener.listenerSet
+		? `ListenerSet ${listener.listenerSet.namespace}/${listener.listenerSet.name}`
+		: `Gateway ${listener.gatewayNamespace}/${listener.gatewayName}`;
+}
+
+function listenerHostname(listener: DumpListener) {
+	return listener.hostname || '*';
 }
 
 function routeListenerCell(row: DumpRouteRow) {
