@@ -4,21 +4,28 @@
 
 use cel::extractors::{Argument, This};
 use cel::objects::StringValue;
-use cel::{Context, ExecutionError, FunctionContext, ResolveResult, Value};
+use cel::{Context, ExecutionError, FunctionContext, FunctionMeta, ResolveResult, Value};
 
 pub fn insert_all(ctx: &mut Context) {
-	ctx.add_function("charAt", char_at);
-	ctx.add_function("indexOf", index_of);
-	ctx.add_function("lastIndexOf", last_index_of);
-	ctx.add_function("join", join);
-	ctx.add_function("lowerAscii", lower_ascii);
-	ctx.add_function("stripPrefix", strip_prefix);
-	ctx.add_function("stripSuffix", strip_suffix);
-	ctx.add_function("upperAscii", upper_ascii);
-	ctx.add_function("trim", trim);
-	ctx.add_function("replace", replace);
-	ctx.add_function("split", split);
-	ctx.add_function("substring", substring);
+	// All of these load their receiver strictly (never falling back to the
+	// first argument), so every one is method-only. Arity counts include the
+	// receiver, per FunctionMeta's convention.
+	ctx.add_function_with_meta("charAt", FunctionMeta::method(2), char_at);
+	ctx.add_function_with_meta("indexOf", FunctionMeta::method(2).up_to(3), index_of);
+	ctx.add_function_with_meta(
+		"lastIndexOf",
+		FunctionMeta::method(2).up_to(3),
+		last_index_of,
+	);
+	ctx.add_function_with_meta("join", FunctionMeta::method(1).up_to(2), join);
+	ctx.add_function_with_meta("lowerAscii", FunctionMeta::method(1), lower_ascii);
+	ctx.add_function_with_meta("stripPrefix", FunctionMeta::method(2), strip_prefix);
+	ctx.add_function_with_meta("stripSuffix", FunctionMeta::method(2), strip_suffix);
+	ctx.add_function_with_meta("upperAscii", FunctionMeta::method(1), upper_ascii);
+	ctx.add_function_with_meta("trim", FunctionMeta::method(1), trim);
+	ctx.add_function_with_meta("replace", FunctionMeta::method(3).up_to(4), replace);
+	ctx.add_function_with_meta("split", FunctionMeta::method(2).up_to(3), split);
+	ctx.add_function_with_meta("substring", FunctionMeta::method(2).up_to(3), substring);
 }
 
 pub fn char_at<'a>(

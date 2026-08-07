@@ -645,3 +645,168 @@ struct Vars<'a> {
 	foo: &'a str,
 	bar: &'a str,
 }
+
+mod static_checking {
+	use cel::check::DiagnosticKind;
+	use cel::{Context, FunctionContext, Program, ReceiverStyle, context};
+
+	use crate::insert_all;
+
+	fn celx_ctx() -> Context {
+		let mut ctx = Context::default();
+		insert_all(&mut ctx);
+		crate::declare_opaque_methods(&mut ctx);
+		ctx
+	}
+
+	/// Guard against `Option<FunctionMeta>` silently spreading. Runs over a
+	/// context that also includes the built-ins, so it subsumes the cel
+	/// crate's twin of this test.
+	#[test]
+	fn every_registered_function_has_metadata() {
+		let ctx = celx_ctx();
+		let missing: Vec<&str> = ctx
+			.functions
+			.keys()
+			.filter(|name| ctx.function_meta(name).is_none())
+			.map(String::as_str)
+			.collect();
+		assert!(
+			missing.is_empty(),
+			"functions registered without metadata: {missing:?}"
+		);
+	}
+
+	/// Every name in the declared opaque surface must actually dispatch to
+	/// something, so the declaration cannot drift above the dispatch it
+	/// describes.
+	#[test]
+	fn declared_opaque_methods_dispatch() {
+		let ctx = celx_ctx();
+		let cidr = crate::cidr::Cidr::new("10.0.0.0/8").unwrap();
+		let ip = crate::cidr::IP::new("10.1.2.3").unwrap();
+		let resolver = context::DefaultVariableResolver;
+		for name in ctx.opaque_methods().expect("surface is declared") {
+			let mut ftx = FunctionContext::new(name, None, &ctx, &[], &resolver);
+			let handled = cel::objects::Opaque::call_function(&cidr, name, &mut ftx).is_some()
+				|| cel::objects::Opaque::call_function(&ip, name, &mut ftx).is_some();
+			assert!(handled, "declared opaque method {name} did not dispatch");
+		}
+	}
+
+	/// Drift guard for declared receiver styles and minimums, the twin of the
+	/// cel crate's `declared_minimums_match_runtime_behavior` over this
+	/// crate's wider context: a call that the metadata rules out must
+	/// actually fail at runtime.
+	#[test]
+	fn declared_shapes_match_runtime_behavior() {
+		let ctx = celx_ctx();
+		let names: Vec<String> = ctx.functions.keys().cloned().collect();
+		for name in names {
+			let Some(meta) = ctx.function_meta(&name) else {
+				continue;
+			};
+			let expr = match meta.receiver {
+				// A bare call with the arguments a correct method call would
+				// pass explicitly must fail for lack of a receiver.
+				ReceiverStyle::Required => {
+					let args = vec!["'a'"; meta.min_args.saturating_sub(1)].join(", ");
+					format!("{name}({args})")
+				},
+				// A zero-argument bare call must fail when a minimum is declared.
+				_ if meta.min_args > 0 => format!("{name}()"),
+				_ => continue,
+			};
+			let Ok(program) = Program::compile(&expr) else {
+				continue;
+			};
+			assert!(
+				program.execute(&ctx).is_err(),
+				"{expr} succeeded at runtime but metadata declares {meta:?}"
+			);
+
+			// The bare-call probe above fails for lack of a receiver whatever
+			// the declared minimum says, so for method-only functions also
+			// probe the method form below its minimum and require a genuine
+			// arity error from at least one receiver/argument-form pairing
+			// (functions differ in the receiver types and literal-vs-ident
+			// arguments they accept before arity is checked).
+			if meta.receiver == ReceiverStyle::Required && meta.min_args >= 2 {
+				let receivers = ["'a'", "[1]", "{'a': 'b'}"];
+				let arity_error = receivers
+					.iter()
+					.flat_map(|receiver| ["'a'", "x"].map(|arg| (*receiver, arg)))
+					.any(|(receiver, arg)| {
+						let args = vec![arg; meta.min_args - 2].join(", ");
+						let expr = format!("{receiver}.{name}({args})");
+						let Ok(program) = Program::compile(&expr) else {
+							return false;
+						};
+						matches!(
+							program.execute(&ctx),
+							Err(cel::ExecutionError::InvalidArgumentCount { .. })
+						)
+					});
+				assert!(
+					arity_error,
+					"no probe produced an arity error for {name} below its declared minimum {}",
+					meta.min_args
+				);
+			}
+		}
+	}
+
+	/// Diagnostics must be phrased in terms of what the user wrote: checking
+	/// runs before optimization, so the rewrites to `precompiled_matches` and
+	/// `jsonField` are never visible.
+	#[test]
+	fn diagnostics_name_what_the_user_wrote() {
+		let ctx = celx_ctx();
+		let clean = Program::compile_unoptimized("'abc'.matches('a+') && json(x).f == 'z'").unwrap();
+		assert_eq!(clean.check(&ctx), vec![]);
+
+		let broken = Program::compile_unoptimized("'abc'.matches() || json(x, y).f == 'z'").unwrap();
+		let diags = broken.check(&ctx);
+		assert_eq!(diags.len(), 2);
+		assert_eq!(diags[0].function, "matches");
+		assert_eq!(diags[0].kind, DiagnosticKind::TooFewArguments { min: 1 });
+		assert_eq!(diags[1].function, "json");
+		assert_eq!(diags[1].kind, DiagnosticKind::TooManyArguments { max: 1 });
+	}
+
+	/// The string extension functions are method-only; the checker knows.
+	#[test]
+	fn method_only_functions_reject_bare_calls() {
+		let ctx = celx_ctx();
+		let diags = Program::compile_unoptimized("split(x, ',')")
+			.unwrap()
+			.check(&ctx);
+		assert_eq!(diags.len(), 1);
+		assert_eq!(diags[0].kind, DiagnosticKind::ReceiverMissing);
+		assert_eq!(
+			Program::compile_unoptimized("x.split(',')")
+				.unwrap()
+				.check(&ctx),
+			vec![]
+		);
+	}
+
+	/// Qualified namespaces must not be mistaken for method calls.
+	#[test]
+	fn qualified_namespaces_are_not_methods() {
+		let ctx = celx_ctx();
+		for expr in [
+			"math.ceil(1.2)",
+			"math.least(1, 2, 3)",
+			"base64.encode('x')",
+			"url.decode('x')",
+			"sha256.encode('x')",
+		] {
+			assert_eq!(
+				Program::compile_unoptimized(expr).unwrap().check(&ctx),
+				vec![],
+				"{expr}"
+			);
+		}
+	}
+}
