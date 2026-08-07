@@ -1,4 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import type { RuntimeInfo } from "../../src/api/runtimeApi";
+import type { DumpBind, DumpListener } from "../../src/gateway-admin";
+import type { AdminConfigDump } from "../../src/types";
 import {
   configWithClaudeSubscriptionKey,
   emptyConfig,
@@ -29,6 +32,86 @@ const pages = [
   ["/settings", "UI Settings"],
 ] as const;
 
+function runtimeListener(
+  key: string,
+  listenerName: string,
+  protocol: DumpListener["protocol"],
+  hostname: string,
+  listenerSet?: DumpListener["listenerSet"],
+): DumpListener {
+  return {
+    key,
+    gatewayName: "gw",
+    gatewayNamespace: "default",
+    listenerName,
+    listenerSet,
+    hostname,
+    protocol,
+  };
+}
+
+function runtimeBind(
+  port: number,
+  protocol: DumpBind["protocol"],
+  listeners: DumpListener[],
+): DumpBind {
+  return {
+    key: `${port}/default/gw`,
+    address: `0.0.0.0:${port}`,
+    protocol,
+    tunnelProtocol: "direct",
+    mode: "standard",
+    listeners: Object.fromEntries(
+      listeners
+        .map((listener) => [listener.key, listener] as const)
+        .sort(([left], [right]) => left.localeCompare(right)),
+    ),
+  };
+}
+
+async function mockRuntimeTraffic(page: Page, binds: DumpBind[]) {
+  const runtime = {
+    build: {
+      version: "test",
+      gitRevision: "test",
+      rustVersion: "test",
+      buildProfile: "test",
+      buildTarget: "test",
+    },
+    ui: { gatewayMode: "xds", configStoreMode: "file" },
+  } satisfies RuntimeInfo;
+  const dump = {
+    workloads: [],
+    services: [],
+    binds,
+    routes: { httpMesh: {}, tcpMesh: {}, routeGroups: {} },
+    policies: [],
+    backends: [],
+    models: [],
+  } satisfies AdminConfigDump;
+
+  await page.route("**/api/runtime", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(runtime),
+    }),
+  );
+  await page.route("**/config_dump", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(dump),
+    }),
+  );
+}
+
+function runtimeBindSection(page: Page, port: number): Locator {
+  return page.locator("section.traffic-bind").filter({
+    has: page.getByRole("heading", { name: `Port ${port}`, exact: true }),
+  });
+}
+
 test("core pages render with mocked gateway data", async ({ page }) => {
   await mockGateway(page);
 
@@ -39,6 +122,214 @@ test("core pages render with mocked gateway data", async ({ page }) => {
       "Configuration API unavailable",
     );
   }
+});
+
+test("flags only incompatible runtime listeners sharing a port", async ({
+  page,
+}) => {
+  await mockRuntimeTraffic(page, [
+    runtimeBind(80, "http", [
+      runtimeListener("default/gw.http", "http", "HTTP", "app.example.com"),
+      runtimeListener("default/valid-ls.tcp", "tcp", "TCP", "", {
+        name: "valid-ls",
+        namespace: "default",
+      }),
+      runtimeListener(
+        "default/duplicate-ls.http-copy",
+        "http-copy",
+        "HTTP",
+        "app.example.com",
+        { name: "duplicate-ls", namespace: "default" },
+      ),
+    ]),
+    runtimeBind(8081, "http", [
+      runtimeListener(
+        "default/gw.api-exact",
+        "api-exact",
+        "HTTP",
+        "api.example.com",
+      ),
+      runtimeListener(
+        "default/wildcard-ls.api-wildcard",
+        "api-wildcard",
+        "HTTP",
+        "*.example.com",
+        { name: "wildcard-ls", namespace: "default" },
+      ),
+    ]),
+    runtimeBind(8082, "http", [
+      runtimeListener("default/gw.catch-all", "catch-all", "HTTP", ""),
+      runtimeListener(
+        "default/fallback-ls.catch-all-copy",
+        "catch-all-copy",
+        "HTTP",
+        "",
+        { name: "fallback-ls", namespace: "default" },
+      ),
+    ]),
+    runtimeBind(443, "tls", [
+      runtimeListener(
+        "default/gw.https",
+        "https",
+        { HTTPS: null },
+        "app.example.com",
+      ),
+      runtimeListener(
+        "default/tls-ls.tls",
+        "tls",
+        { TLS: null },
+        "api.example.com",
+        { name: "tls-ls", namespace: "default" },
+      ),
+    ]),
+    runtimeBind(8443, "tls", [
+      runtimeListener(
+        "default/gw.secure",
+        "secure",
+        { HTTPS: null },
+        "secure.example.com",
+      ),
+      runtimeListener(
+        "default/secure-ls.secure",
+        "secure",
+        { TLS: null },
+        "secure.example.com",
+        { name: "secure-ls", namespace: "default" },
+      ),
+    ]),
+    runtimeBind(9000, "tcp", [
+      runtimeListener("default/gw.tcp-one", "tcp-one", "TCP", ""),
+      runtimeListener("default/tcp-ls.tcp-two", "tcp-two", "TCP", "", {
+        name: "tcp-ls",
+        namespace: "default",
+      }),
+    ]),
+  ]);
+
+  await page.goto("/traffic/listeners");
+
+  await expect(page.getByText("Readonly mode")).toBeVisible();
+
+  const mixed = runtimeBindSection(page, 80);
+  await expect(
+    mixed.getByText("3 listeners involved in port conflicts"),
+  ).toBeVisible();
+  await expect(mixed.getByText("Involved", { exact: true })).toHaveCount(3);
+  await mixed
+    .getByRole("button", {
+      name: "View Gateway default/gw listener http",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText("Protocol and hostname conflicts detected on Port 80", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page.locator(".listener-conflict-banner")).toContainText(
+    "ListenerSet default/valid-ls listener tcp uses an incompatible protocol (TCP).",
+  );
+  await expect(page.locator(".listener-conflict-banner")).toContainText(
+    "ListenerSet default/duplicate-ls listener http-copy uses the same hostname (app.example.com).",
+  );
+  await page.getByRole("button", { name: "Close" }).click();
+
+  const compatibleBinds = [
+    {
+      port: 443,
+      listeners: [
+        "View Gateway default/gw listener https",
+        "View ListenerSet default/tls-ls listener tls",
+      ],
+    },
+    {
+      port: 8081,
+      listeners: [
+        "View Gateway default/gw listener api-exact",
+        "View ListenerSet default/wildcard-ls listener api-wildcard",
+      ],
+    },
+  ];
+  for (const { port, listeners } of compatibleBinds) {
+    const compatible = runtimeBindSection(page, port);
+    await expect(compatible).toBeVisible();
+    for (const name of listeners) {
+      await expect(
+        compatible.getByRole("button", { name, exact: true }),
+      ).toBeVisible();
+    }
+    await expect(compatible.getByText("Involved", { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(
+      compatible.getByText(/listeners involved in port conflicts/),
+    ).toHaveCount(0);
+
+    await compatible
+      .getByRole("button", { name: listeners[0], exact: true })
+      .click();
+    await expect(page.locator(".listener-conflict-banner")).toHaveCount(0);
+    await page.getByRole("button", { name: "Close" }).click();
+  }
+
+  const fallbackHostname = runtimeBindSection(page, 8082);
+  await expect(
+    fallbackHostname.getByText("2 listeners involved in port conflicts"),
+  ).toBeVisible();
+  await fallbackHostname
+    .getByRole("button", {
+      name: "View Gateway default/gw listener catch-all",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText("Hostname conflict detected on Port 8082", { exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".listener-conflict-banner")).toContainText(
+    "ListenerSet default/fallback-ls listener catch-all-copy uses the same hostname (*).",
+  );
+  await page.getByRole("button", { name: "Close" }).click();
+
+  const sameTlsHostname = runtimeBindSection(page, 8443);
+  await expect(
+    sameTlsHostname.getByText("2 listeners involved in port conflicts"),
+  ).toBeVisible();
+  await sameTlsHostname
+    .getByRole("button", {
+      name: "View Gateway default/gw listener secure",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText("Hostname conflict detected on Port 8443", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "ListenerSet default/secure-ls listener secure uses the same hostname (secure.example.com).",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Close" }).click();
+
+  const tcp = runtimeBindSection(page, 9000);
+  await expect(
+    tcp.getByText("2 listeners involved in port conflicts"),
+  ).toBeVisible();
+  await tcp
+    .getByRole("button", {
+      name: "View ListenerSet default/tcp-ls listener tcp-two",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page.getByText("Protocol conflict detected on Port 9000", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Gateway default/gw listener tcp-one also uses TCP; this bind can contain only one TCP listener.",
+      { exact: true },
+    ),
+  ).toBeVisible();
 });
 
 test("onboards all surfaces from a completely empty config", async ({

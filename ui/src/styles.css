@@ -2645,6 +2645,10 @@ a {
   margin-bottom: 18px;
 }
 
+.listener-conflict-banner {
+  margin-bottom: 18px;
+}
+
 .drawer-summary-list > div {
   display: grid;
   gap: 4px;
@@ -4709,6 +4713,11 @@ textarea {
   font-size: 13px;
 }
 
+.traffic-bind-header .button-row {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .traffic-policy-section {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -5719,8 +5728,18 @@ details summary {
 
 @media (max-width: 620px) {
   .page-header,
-  .editor-title {
+  .editor-title,
+  .traffic-bind-header {
     flex-direction: column;
+  }
+
+  .traffic-bind-header .button-row {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .traffic-bind-header .badge {
+    white-space: normal;
   }
 
   .eyebrow {
