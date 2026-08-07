@@ -806,9 +806,7 @@ fn import_litellm_model(
 		});
 		return None;
 	};
-	if upstream_model.contains('*')
-		&& upstream_model != "*"
-		&& upstream_model != public_name.as_str()
+	if upstream_model.contains('*') && upstream_model != "*" && upstream_model != public_name.as_str()
 	{
 		findings.push(ImportFinding {
 			source_path: format!("{source_path}.litellm_params.model"),
@@ -922,7 +920,10 @@ fn split_provider(model: &str) -> (&str, &str) {
 }
 
 fn is_supported_model_pattern(pattern: &str) -> bool {
-	let wildcard_count = pattern.chars().filter(|character| *character == '*').count();
+	let wildcard_count = pattern
+		.chars()
+		.filter(|character| *character == '*')
+		.count();
 	wildcard_count == 0
 		|| (wildcard_count == 1
 			&& (pattern == "*" || pattern.starts_with('*') || pattern.ends_with('*')))

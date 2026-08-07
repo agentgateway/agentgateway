@@ -36,10 +36,10 @@ findings:
     message: Imported model deployment for *-preview
   - sourcePath: "model_list[3].model_name"
     status: unsupported
-    message: LiteLLM model wildcards must appear at most once, at the beginning or end; the model was not emitted
+    message: "LiteLLM model wildcards must appear at most once, at the beginning or end; the model was not emitted"
   - sourcePath: "model_list[4].litellm_params.model"
     status: unsupported
-    message: LiteLLM model wildcards must appear at most once, at the beginning or end; the model was not emitted
+    message: "LiteLLM model wildcards must appear at most once, at the beginning or end; the model was not emitted"
   - sourcePath: "model_list[5].litellm_params.model"
     status: unsupported
     message: LiteLLM upstream wildcard rewrites cannot be represented safely and the model was not emitted
