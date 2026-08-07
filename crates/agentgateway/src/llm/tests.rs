@@ -860,6 +860,106 @@ async fn provider_model_is_set_before_llm_transformations() {
 }
 
 #[tokio::test]
+async fn messages_to_completions_post_conversion_transformation() {
+	use crate::llm::policy::Policy;
+
+	async fn create_llm_request(vec_body: Vec<u8>, policy: Option<&Policy>) -> (Request, RouteType) {
+		let provider = AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		});
+		let backend_info = openai_test_backend_info();
+		let req = ::http::Request::builder()
+			.uri("/v1/messages")
+			.header(::http::header::CONTENT_TYPE, "application/json")
+			.body(Body::from(vec_body))
+			.unwrap();
+		let RequestResult::Success {
+			request: forwarded,
+			upstream_route_type,
+			..
+		} = provider
+			.process_messages_request(&backend_info, policy, req, false, &mut None)
+			.await
+			.expect("Anthropic messages request should translate to OpenAI completions")
+		else {
+			panic!("expected forwarded request");
+		};
+		(forwarded, upstream_route_type)
+	}
+	let expr = |e: &str| std::sync::Arc::new(crate::cel::Expression::new_strict(e).unwrap());
+
+	let policy = Policy {
+		post_conversion_transformations: Some(
+			[
+				// Only true post-conversion: `system` became messages[0].
+				(
+					"converted_message_count".to_string(),
+					expr("llmRequest.messages.size()"),
+				),
+				// Mutate a field carried through the conversion.
+				("max_tokens".to_string(), expr("32")),
+				("reasoning_effort".to_string(), expr("null")),
+			]
+			.into_iter()
+			.collect(),
+		),
+		..Default::default()
+	};
+
+	let vec_body = br#"{
+				"model": "gpt-4o",
+				"max_tokens": 64,
+				"system": "be brief",
+				"messages": [{"role": "user", "content": "hello"}],
+				"tools": [{
+					"name": "get_weather",
+					"description": "Look up the weather",
+					"input_schema": {
+						"type": "object",
+						"properties": {"city": {"type": "string"}},
+						"required": ["city"]
+					}
+				}]
+			}"#
+		.to_vec();
+
+	let (forwarded, upstream_route_type) = create_llm_request(vec_body.clone(), Some(&policy)).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(upstream_route_type, RouteType::Completions);
+	// The request really was converted to completions format.
+	assert_eq!(forwarded_json["messages"][0]["role"], json!("system"));
+	// 2 (system + user), not the 1 message the client sent.
+	assert_eq!(forwarded_json["converted_message_count"], json!(2));
+	assert_eq!(forwarded_json["max_tokens"], json!(32));
+	// Indexing returns Null for a missing key too, so assert on key presence.
+	let reasoning_effort = forwarded_json.get("reasoning_effort");
+	assert!(
+		reasoning_effort.is_none(),
+		"reasoning_effort should be removed, got: {reasoning_effort:?}"
+	);
+
+	let (forwarded, upstream_route_type) = create_llm_request(vec_body, None).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+	assert_eq!(upstream_route_type, RouteType::Completions);
+	// The request really was converted to completions format.
+	assert_eq!(forwarded_json["messages"][0]["role"], json!("system"));
+	// 2 (system + user), not the 1 message the client sent.
+	assert_eq!(forwarded_json["max_completion_tokens"], json!(64));
+	// Indexing returns Null for a missing key too, so assert on key presence.
+	let reasoning_effort = forwarded_json.get("reasoning_effort");
+	assert!(
+		reasoning_effort.is_some(),
+		"reasoning_effort should not be empty, got: {reasoning_effort:?}"
+	);
+}
+
+#[tokio::test]
 async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
 	use crate::http::auth::BackendInfo;
 	use crate::llm::policy::Policy;

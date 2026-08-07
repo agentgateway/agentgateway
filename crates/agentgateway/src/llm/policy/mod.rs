@@ -128,6 +128,10 @@ pub struct Policy {
 	/// Request body values computed from CEL expressions.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub transformations: Option<HashMap<String, Arc<cel::Expression>>>,
+	/// Request body values computed from CEL expressions.
+	/// These are applied after conversion to the provider's request format.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub post_conversion_transformations: Option<HashMap<String, Arc<cel::Expression>>>,
 	/// Messages to add before or after the client prompt.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prompts: Option<PromptEnrichment>,
@@ -177,6 +181,13 @@ impl crate::store::HasExpressions for Policy {
 			.iter()
 			.flatten()
 			.map(|(_, expr)| expr.as_ref())
+			.chain(
+				self
+					.post_conversion_transformations
+					.iter()
+					.flatten()
+					.map(|(_, expr)| expr.as_ref()),
+			)
 			.chain(
 				self
 					.prompt_guard
@@ -705,11 +716,12 @@ impl Policy {
 		}
 		for (k, v) in to_set.into_iter() {
 			match v {
+				// Null or none values should remove the field from the request body, rather than setting it to null.
+				Some(serde_json::Value::Null) | None => {
+					map.remove(k);
+				},
 				Some(v) => {
 					map.insert(k.clone(), v);
-				},
-				None => {
-					map.remove(k);
 				},
 			}
 		}
@@ -717,6 +729,44 @@ impl Policy {
 			map.entry(k.clone()).or_insert_with(|| v.clone());
 		}
 		Ok(serde_json::Value::Object(map))
+	}
+
+	pub fn apply_post_conversion_transformations(
+		&self,
+		body: Vec<u8>,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<Vec<u8>, AIError> {
+		if self.post_conversion_transformations.is_none() {
+			// Fast path: avoid the parse/serialize round-trip entirely.
+			return Ok(body);
+		}
+		let v: serde_json::Value =
+			serde_json::from_slice(body.as_slice()).map_err(AIError::RequestParsing)?;
+		let exec = cel::Executor::new_llm(log.as_ref().and_then(|x| x.request_snapshot.as_deref()), &v);
+		let to_set: Vec<_> = self
+			.post_conversion_transformations
+			.iter()
+			.flatten()
+			.map(|(k, expr)| (k, Self::eval_transformation_expression(expr, &exec)))
+			.collect();
+
+		let serde_json::Value::Object(mut map) = v else {
+			return Err(AIError::MissingField(
+				"converted request must be an object".into(),
+			));
+		};
+		for (k, v) in to_set.into_iter() {
+			match v {
+				// Null or none values should remove the field from the request body, rather than setting it to null.
+				Some(serde_json::Value::Null) | None => {
+					map.remove(k);
+				},
+				Some(v) => {
+					map.insert(k.clone(), v);
+				},
+			}
+		}
+		serde_json::to_vec(&serde_json::Value::Object(map)).map_err(AIError::RequestMarshal)
 	}
 
 	fn eval_transformation_expression(

@@ -469,10 +469,14 @@ func translateModelPolicies(ctx RouteContext, namespace string, model *agentgate
 }
 
 func translateModelRouteAIPolicy(ctx RouteContext, namespace string, policies *agentgateway.ModelPolicies) (*api.BackendPolicySpec_Ai, error) {
-	if policies == nil || len(policies.Transformations) == 0 {
+	if policies == nil || (len(policies.Transformations) == 0 && len(policies.PostConversionTransformations) == 0) {
 		return nil, nil
 	}
-	translated, err := translateInlineModelBackendPolicy(ctx, namespace, &agentgateway.BackendFull{AI: &agentgateway.BackendAI{Transformations: policies.Transformations}})
+	translated, err := translateInlineModelBackendPolicy(ctx, namespace,
+		&agentgateway.BackendFull{AI: &agentgateway.BackendAI{
+			Transformations:               policies.Transformations,
+			PostConversionTransformations: policies.PostConversionTransformations,
+		}})
 	if err != nil {
 		return nil, err
 	}

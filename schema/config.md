@@ -2471,6 +2471,7 @@
 |`binds[].listeners[].routes[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`binds[].listeners[].routes[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`binds[].listeners[].routes[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`binds[].listeners[].routes[].policies.ai.postConversionTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`binds[].listeners[].routes[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`binds[].listeners[].routes[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`binds[].listeners[].routes[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -8571,6 +8572,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.postConversionTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -11872,6 +11874,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.postConversionTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -15136,6 +15139,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`binds[].listeners[].routes[].backends[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`binds[].listeners[].routes[].backends[].policies.ai.postConversionTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`binds[].listeners[].routes[].backends[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`binds[].listeners[].routes[].backends[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`binds[].listeners[].routes[].backends[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -19971,6 +19975,7 @@
 |`policies[].policy.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`policies[].policy.ai.overrides`|object|Request body values that replace client-provided values.|
 |`policies[].policy.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`policies[].policy.ai.postConversionTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`policies[].policy.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`policies[].policy.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`policies[].policy.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -26068,6 +26073,7 @@
 |`backends[].ai.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`backends[].ai.policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`backends[].ai.policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`backends[].ai.policies.ai.postConversionTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`backends[].ai.policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`backends[].ai.policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`backends[].ai.policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -29369,6 +29375,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`backends[].ai.groups[].providers[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`backends[].ai.groups[].providers[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`backends[].ai.groups[].providers[].policies.ai.postConversionTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`backends[].ai.groups[].providers[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`backends[].ai.groups[].providers[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`backends[].ai.groups[].providers[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -32631,6 +32638,7 @@
 |`backends[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`backends[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`backends[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`backends[].policies.ai.postConversionTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`backends[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`backends[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`backends[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -34999,6 +35007,7 @@
 |`routeGroups[].routes[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routeGroups[].routes[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`routeGroups[].routes[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`routeGroups[].routes[].policies.ai.postConversionTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routeGroups[].routes[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`routeGroups[].routes[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`routeGroups[].routes[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -41099,6 +41108,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.postConversionTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -44400,6 +44410,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.postConversionTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -47664,6 +47675,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routeGroups[].routes[].backends[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`routeGroups[].routes[].backends[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`routeGroups[].routes[].backends[].policies.ai.postConversionTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routeGroups[].routes[].backends[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`routeGroups[].routes[].backends[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`routeGroups[].routes[].backends[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -52602,6 +52614,7 @@
 |`routes[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routes[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`routes[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`routes[].policies.ai.postConversionTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routes[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`routes[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`routes[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -58702,6 +58715,7 @@
 |`routes[].backends[].ai.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routes[].backends[].ai.policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`routes[].backends[].ai.policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`routes[].backends[].ai.policies.ai.postConversionTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routes[].backends[].ai.policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`routes[].backends[].ai.policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`routes[].backends[].ai.policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -62003,6 +62017,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.postConversionTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -65267,6 +65282,7 @@
 |`routes[].backends[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routes[].backends[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`routes[].backends[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`routes[].backends[].policies.ai.postConversionTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routes[].backends[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`routes[].backends[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`routes[].backends[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -66333,6 +66349,7 @@
 |`llm.models[].defaults`|object|defaults allows setting default values for the request. If these are not present in the request body, they will be set.<br>To override even when set, use `overrides`.|
 |`llm.models[].overrides`|object|overrides allows setting values for the request, overriding any existing values|
 |`llm.models[].transformation`|object|transformation allows setting values from CEL expressions for the request, overriding any existing values.|
+|`llm.models[].postConversionTransformation`|object|post_conversion_transformation allows setting values from CEL expressions for the request, overriding any existing values.<br>Occurs after conversion of the request to the provider format, allowing for provider-specific transformations.|
 |`llm.models[].requestHeaders`|object|requestHeaders modifies headers in requests to the LLM provider.|
 |`llm.models[].requestHeaders.add`|object|Headers to append without replacing existing values.|
 |`llm.models[].requestHeaders.set`|object|Headers to set, replacing any existing values.|
@@ -75122,6 +75139,7 @@
 |`mcp.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`mcp.policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`mcp.policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`mcp.policies.ai.postConversionTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`mcp.policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`mcp.policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`mcp.policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|

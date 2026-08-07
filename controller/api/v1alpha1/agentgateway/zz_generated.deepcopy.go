@@ -1371,6 +1371,13 @@ func (in *BackendAI) DeepCopyInto(out *BackendAI) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.PostConversionTransformations != nil {
+		in, out := &in.PostConversionTransformations, &out.PostConversionTransformations
+		*out = make([]FieldTransformation, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.ModelAliases != nil {
 		in, out := &in.ModelAliases, &out.ModelAliases
 		*out = make(map[string]string, len(*in))
@@ -4104,6 +4111,13 @@ func (in *ModelPolicies) DeepCopyInto(out *ModelPolicies) {
 	*out = *in
 	if in.Transformations != nil {
 		in, out := &in.Transformations, &out.Transformations
+		*out = make([]FieldTransformation, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+	if in.PostConversionTransformations != nil {
+		in, out := &in.PostConversionTransformations, &out.PostConversionTransformations
 		*out = make([]FieldTransformation, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
