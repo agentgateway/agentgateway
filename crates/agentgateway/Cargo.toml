@@ -191,7 +191,6 @@ tokio = { workspace = true }
 
 [dev-dependencies]
 # Enable the SPIFFE Workload API bindings for tests only (fake agent for SPIFFE dataplane tests).
-# With resolver v2 this dev-dependency feature is NOT applied to production builds.
 protos = { workspace = true, features = ["spiffe-test-server"] }
 assert_matches.workspace = true
 divan.workspace = true
