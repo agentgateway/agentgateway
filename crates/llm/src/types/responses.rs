@@ -758,7 +758,7 @@ fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {
 }
 
 pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMessagePart> {
-	let (id, name, arguments) = match item {
+	let (id, name, arguments): (&str, &str, serde_json::Value) = match item {
 		OutputItem::FunctionCall(call) => {
 			let arguments = match serde_json::from_str(&call.arguments) {
 				Ok(arguments) => arguments,
@@ -775,6 +775,21 @@ pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMess
 			};
 			(&call.call_id, &call.name, arguments)
 		},
+		OutputItem::LocalShellCall(call) => (
+			&call.call_id,
+			"local_shell",
+			serde_json::to_value(&call.action).ok()?,
+		),
+		OutputItem::ShellCall(call) => (
+			&call.call_id,
+			"shell",
+			serde_json::to_value(&call.action).ok()?,
+		),
+		OutputItem::ApplyPatchCall(call) => (
+			&call.call_id,
+			"apply_patch",
+			serde_json::to_value(&call.operation).ok()?,
+		),
 		_ => return None,
 	};
 	Some(OutputMessagePart::ToolCall {
@@ -976,14 +991,14 @@ pub mod typed {
 	use async_openai::types::responses as openai_responses;
 	// Re-export async-openai Responses API types for cleaner usage
 	pub use async_openai::types::responses::{
-		AssistantRole, CreateResponse, CustomToolCallOutput, CustomToolCallOutputOutput,
-		EasyInputContent, EasyInputMessage, ErrorObject, FunctionCallOutput, FunctionShellCallStatus,
-		FunctionToolCall, IncompleteDetails, InputContent, InputItem, InputMessage, InputParam,
-		InputRole, InputTextContent, InputTokenDetails, Item, MessageItem, MessagePhase, OutputContent,
-		OutputItem, OutputMessage, OutputMessageContent, OutputStatus, OutputTextContent,
-		OutputTokenDetails, Reasoning, ReasoningEffort, RefusalContent, Response,
-		ResponseCompletedEvent, ResponseContentPartAddedEvent, ResponseContentPartDoneEvent,
-		ResponseCreatedEvent, ResponseCustomToolCallInputDeltaEvent,
+		ApplyPatchCallStatus, AssistantRole, CreateResponse, CustomToolCallOutput,
+		CustomToolCallOutputOutput, EasyInputContent, EasyInputMessage, ErrorObject,
+		FunctionCallOutput, FunctionShellCallStatus, FunctionToolCall, IncompleteDetails, InputContent,
+		InputItem, InputMessage, InputParam, InputRole, InputTextContent, InputTokenDetails, Item,
+		MessageItem, MessagePhase, OutputContent, OutputItem, OutputMessage, OutputMessageContent,
+		OutputStatus, OutputTextContent, OutputTokenDetails, Reasoning, ReasoningEffort,
+		RefusalContent, Response, ResponseCompletedEvent, ResponseContentPartAddedEvent,
+		ResponseContentPartDoneEvent, ResponseCreatedEvent, ResponseCustomToolCallInputDeltaEvent,
 		ResponseCustomToolCallInputDoneEvent, ResponseErrorEvent, ResponseFailedEvent,
 		ResponseFunctionCallArgumentsDeltaEvent, ResponseFunctionCallArgumentsDoneEvent,
 		ResponseInProgressEvent, ResponseIncompleteEvent, ResponseOutputItemAddedEvent,
@@ -1134,6 +1149,74 @@ mod tests {
 		assert_eq!(
 			tool_calls[0].arguments,
 			serde_json::json!({"location":"San Francisco"})
+		);
+	}
+
+	#[test]
+	fn test_response_wrapped_tool_calls_populated_when_flag_true() {
+		let output = [
+			serde_json::json!({
+				"type": "custom_tool_call",
+				"id": "ctc_1",
+				"call_id": "call_custom",
+				"name": "python",
+				"input": "print(1)"
+			}),
+			serde_json::json!({
+				"type": "local_shell_call",
+				"id": "lsc_1",
+				"call_id": "call_local_shell",
+				"action": {"command":["pwd"],"env":{},"timeout_ms":1000,"user":null,"working_directory":"/tmp"},
+				"status": "completed"
+			}),
+			serde_json::json!({
+				"type": "shell_call",
+				"id": "shc_1",
+				"call_id": "call_shell",
+				"action": {"commands":["true"],"timeout_ms":1000,"max_output_length":1024},
+				"status": "completed",
+				"environment": {"type":"local"}
+			}),
+			serde_json::json!({
+				"type": "apply_patch_call",
+				"id": "apc_1",
+				"call_id": "call_apply_patch",
+				"operation": {"type":"create_file","path":"verified.txt","diff":"ok"},
+				"status": "completed"
+			}),
+		]
+		.into_iter()
+		.map(|item| serde_json::from_value(item).expect("valid wrapped tool call"))
+		.collect();
+		let response = response_with_output(output);
+
+		let llm_response = response.to_llm_response(crate::LogContentFields {
+			completion: false,
+			tool_calls: true,
+		});
+		let tool_calls = llm_response
+			.output_messages
+			.expect("output_messages should be present")[0]
+			.tool_calls();
+
+		assert_eq!(tool_calls.len(), 4);
+		assert_eq!(tool_calls[0].id.as_str(), "call_custom");
+		assert_eq!(tool_calls[0].name.as_str(), "python");
+		assert_eq!(tool_calls[0].arguments, serde_json::json!("print(1)"));
+		assert_eq!(tool_calls[1].name.as_str(), "local_shell");
+		assert_eq!(
+			tool_calls[1].arguments,
+			serde_json::json!({"command":["pwd"],"env":{},"timeout_ms":1000,"user":null,"working_directory":"/tmp"})
+		);
+		assert_eq!(tool_calls[2].name.as_str(), "shell");
+		assert_eq!(
+			tool_calls[2].arguments,
+			serde_json::json!({"commands":["true"],"timeout_ms":1000,"max_output_length":1024})
+		);
+		assert_eq!(tool_calls[3].name.as_str(), "apply_patch");
+		assert_eq!(
+			tool_calls[3].arguments,
+			serde_json::json!({"type":"create_file","path":"verified.txt","diff":"ok"})
 		);
 	}
 

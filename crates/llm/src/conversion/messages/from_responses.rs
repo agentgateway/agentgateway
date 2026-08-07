@@ -741,13 +741,20 @@ fn wrapped_response_tool(
 			"status": status,
 			"environment": {"type": "local"},
 		})),
-		WrappedKind::ApplyPatch => Ok(serde_json::json!({
-			"type": "apply_patch_call",
-			"id": id,
-			"call_id": call_id,
-			"operation": input["operation"],
-			"status": "completed",
-		})),
+		WrappedKind::ApplyPatch => {
+			let status = if status == "in_progress" {
+				"in_progress"
+			} else {
+				"completed"
+			};
+			Ok(serde_json::json!({
+				"type": "apply_patch_call",
+				"id": id,
+				"call_id": call_id,
+				"operation": input["operation"],
+				"status": status,
+			}))
+		},
 	}
 }
 
@@ -1044,7 +1051,15 @@ fn set_output_item_status(
 				responses::OutputStatus::Incomplete => responses::FunctionShellCallStatus::Incomplete,
 			};
 		},
-		responses::OutputItem::ApplyPatchCall(_) | responses::OutputItem::CustomToolCall(_) => {},
+		responses::OutputItem::ApplyPatchCall(call) => {
+			call.status = match status {
+				responses::OutputStatus::InProgress => responses::ApplyPatchCallStatus::InProgress,
+				responses::OutputStatus::Completed | responses::OutputStatus::Incomplete => {
+					responses::ApplyPatchCallStatus::Completed
+				},
+			};
+		},
+		responses::OutputItem::CustomToolCall(_) => {},
 		_ => return Err(()),
 	}
 	Ok(())

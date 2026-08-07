@@ -1015,6 +1015,41 @@ async fn stream_tools_ping_and_sequential_blocks_use_standard_lifecycles() {
 }
 
 #[tokio::test]
+async fn stream_apply_patch_transitions_from_in_progress_to_completed() {
+	let mut frames = vec![
+		stream_message_start(),
+		block_start(
+			0,
+			json!({"type":"tool_use","id":"call","name":"agentgateway__responses__apply_patch_6","input":{}}),
+		),
+		block_delta(
+			0,
+			json!({"type":"input_json_delta","partial_json":"{\"operation\":{\"type\":\"create_file\",\"path\":\"verified.txt\",\"diff\":\"ok\"}}"}),
+		),
+		block_stop(0),
+	];
+	frames.extend(stream_terminal("tool_use", 1));
+
+	let events = translated_stream(frames, buffered_state()).await;
+	let added = events
+		.iter()
+		.find(|event| event["type"] == "response.output_item.added")
+		.expect("apply_patch added event");
+	let done = events
+		.iter()
+		.find(|event| event["type"] == "response.output_item.done")
+		.expect("apply_patch done event");
+
+	assert_eq!(added["item"]["type"], "apply_patch_call");
+	assert_eq!(added["item"]["status"], "in_progress");
+	assert_eq!(done["item"]["status"], "completed");
+	assert_eq!(
+		events.last().expect("terminal")["response"]["output"][0]["status"],
+		"completed"
+	);
+}
+
+#[tokio::test]
 async fn stream_ping_after_message_delta_before_stop_is_accepted() {
 	let frames = vec![
 		stream_message_start(),
