@@ -899,7 +899,7 @@ async fn messages_to_completions_post_conversion_transformation() {
 				),
 				// Mutate a field carried through the conversion.
 				("max_tokens".to_string(), expr("32")),
-				("reasoning_effort".to_string(), expr("null")),
+				("reasoning_effort".to_string(), expr("fail(\"remove\")")),
 			]
 			.into_iter()
 			.collect(),

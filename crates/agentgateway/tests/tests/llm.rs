@@ -937,7 +937,7 @@ async fn llm_post_conversion_transformation_applies_after_messages_translation()
 				"routes": { "/v1/messages": "messages" },
 				"postConversionTransformations": {
 					// Drop a field the converter added.
-					"reasoning_effort": "null",
+					"reasoning_effort": r#"fail("remove")"#,
 					// Observe the converted message list.
 					"converted_message_count": "llmRequest.messages.size()"
 				}

@@ -716,12 +716,11 @@ impl Policy {
 		}
 		for (k, v) in to_set.into_iter() {
 			match v {
-				// Null or none values should remove the field from the request body, rather than setting it to null.
-				Some(serde_json::Value::Null) | None => {
-					map.remove(k);
-				},
 				Some(v) => {
 					map.insert(k.clone(), v);
+				},
+				None => {
+					map.remove(k);
 				},
 			}
 		}
@@ -757,12 +756,11 @@ impl Policy {
 		};
 		for (k, v) in to_set.into_iter() {
 			match v {
-				// Null or none values should remove the field from the request body, rather than setting it to null.
-				Some(serde_json::Value::Null) | None => {
-					map.remove(k);
-				},
 				Some(v) => {
 					map.insert(k.clone(), v);
+				},
+				None => {
+					map.remove(k);
 				},
 			}
 		}
