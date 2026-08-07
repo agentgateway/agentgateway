@@ -781,19 +781,25 @@ fn import_litellm_model(
 		},
 	};
 	let (provider_prefix, upstream_model) = split_provider(&model_id);
-	for (path, pattern) in [
-		(format!("{source_path}.model_name"), public_name.as_str()),
+	for (path, pattern, configured_pattern) in [
+		(
+			format!("{source_path}.model_name"),
+			public_name.as_str(),
+			public_name.as_str(),
+		),
 		(
 			format!("{source_path}.litellm_params.model"),
 			upstream_model,
+			model_id.as_str(),
 		),
 	] {
 		if !is_supported_model_pattern(pattern) {
 			findings.push(ImportFinding {
 				source_path: path,
 				status: ImportStatus::Unsupported,
-				message: "LiteLLM model wildcards must appear at most once, at the beginning or end; the model was not emitted"
-					.to_string(),
+				message: format!(
+					"LiteLLM model wildcard pattern {configured_pattern:?} must contain at most one wildcard, at the beginning or end; the model was not emitted"
+				),
 			});
 			return None;
 		}
@@ -811,8 +817,9 @@ fn import_litellm_model(
 		findings.push(ImportFinding {
 			source_path: format!("{source_path}.litellm_params.model"),
 			status: ImportStatus::Unsupported,
-			message: "LiteLLM upstream wildcard rewrites cannot be represented safely and the model was not emitted"
-				.to_string(),
+			message: format!(
+				"LiteLLM upstream wildcard rewrite from public model pattern {public_name:?} to upstream model pattern {model_id:?} cannot be represented safely and the model was not emitted"
+			),
 		});
 		return None;
 	}
