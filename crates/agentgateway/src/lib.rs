@@ -172,9 +172,9 @@ pub struct RawConfig {
 	xds_address: Option<String>,
 	/// Authentication token for communicating with the xDS control plane.
 	xds_auth_token: Option<String>,
-	/// Endpoint of the local SPIFFE Workload API (e.g. `unix:///run/spire/agent.sock`).
+	/// Local SPIFFE Workload API configuration
 	/// When set, listeners and backends may source their TLS identity from SPIFFE.
-	spiffe_endpoint: Option<String>,
+	spiffe: Option<RawSpiffeConfig>,
 	/// Kubernetes namespace for this gateway instance.
 	namespace: Option<String>,
 	/// Name of this gateway. Required when xDS is configured.
@@ -483,6 +483,12 @@ pub struct RawLoggingFields {
 		schemars(with = "std::collections::HashMap<String, String>")
 	)]
 	add: IndexMap<String, String>,
+}
+
+#[apply(schema_de!)]
+pub struct RawSpiffeConfig {
+	/// SPIFFE Workload API Endpoint (e.g. `unix:///run/spire/agent.sock`).
+	endpoint: Option<String>,
 }
 
 #[derive(Clone, Debug)]

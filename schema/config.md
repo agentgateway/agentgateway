@@ -41,7 +41,8 @@
 |`config.caAuthToken`|string|Authentication token for communicating with the Certificate Authority.|
 |`config.xdsAddress`|string|Address of the xDS control plane used for dynamic configuration.|
 |`config.xdsAuthToken`|string|Authentication token for communicating with the xDS control plane.|
-|`config.spiffeEndpoint`|string|Endpoint of the local SPIFFE Workload API (e.g. `unix:///run/spire/agent.sock`).<br>When set, listeners and backends may source their TLS identity from SPIFFE.|
+|`config.spiffe`|object|Local SPIFFE Workload API configuration<br>When set, listeners and backends may source their TLS identity from SPIFFE.|
+|`config.spiffe.endpoint`|string|SPIFFE Workload API Endpoint (e.g. `unix:///run/spire/agent.sock`).|
 |`config.namespace`|string|Kubernetes namespace for this gateway instance.|
 |`config.gateway`|string|Name of this gateway. Required when xDS is configured.|
 |`config.trustDomain`|string|SPIFFE trust domain for this gateway.|
@@ -111,7 +112,7 @@
 |`binds[].listeners[].hostname`|string|Can be a wildcard|
 |`binds[].listeners[].protocol`|enum|Protocol this listener accepts: HTTP, HTTPS, TCP, TLS, or HBONE.<br>Possible values: `HTTP`, `HTTPS`, `TLS`, `TCP`, `HBONE`.|
 |`binds[].listeners[].tls`|object|TLS configuration, used with the HTTPS and TLS protocols.|
-|`binds[].listeners[].tls.mode`|enum|Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA<br>mode uses cert/key as a CA for on-demand SNI leaf certificate issuance.<br>Required unless `spiffe` is set.<br>Possible values: `static`, `dynamicCa`.|
+|`binds[].listeners[].tls.mode`|enum|Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA<br>mode uses cert/key as a CA for on-demand SNI leaf certificate issuance.<br>Unused when `spiffe` is set.<br>Possible values: `static`, `dynamicCa`.|
 |`binds[].listeners[].tls.cert`|string|Path to the TLS certificate file (leaf certificate, or CA certificate in dynamic CA mode).<br>Required unless `spiffe` is set.|
 |`binds[].listeners[].tls.key`|string|Path to the TLS private key file.|
 |`binds[].listeners[].tls.root`|string|Path to a root CA certificate file used to validate client certificates (mTLS).<br>Omit for one-way server TLS. Not used when `spiffe` is set.|
@@ -47885,7 +47886,7 @@
 |`gateways.*.listeners[].hostname`|string|Hostname defines what hostnames are served under this listener. Can be a wildcard.<br>This allows serving multiple domains with different TLS configurations.<br>If unset, all domains will be served (implicit wildcard).|
 |`gateways.*.listeners[].protocol`|enum|protocol controls whether this listener accepts HTTP/HTTPS routes or TCP/TLS routes. When omitted, listeners<br>default to HTTP, or HTTPS when tls is set.<br>Possible values: `HTTP`, `HTTPS`, `TCP`, `TLS`, `null`.|
 |`gateways.*.listeners[].tls`|object|tls enables HTTPS for this listener.|
-|`gateways.*.listeners[].tls.mode`|enum|Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA<br>mode uses cert/key as a CA for on-demand SNI leaf certificate issuance.<br>Required unless `spiffe` is set.<br>Possible values: `static`, `dynamicCa`.|
+|`gateways.*.listeners[].tls.mode`|enum|Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA<br>mode uses cert/key as a CA for on-demand SNI leaf certificate issuance.<br>Unused when `spiffe` is set.<br>Possible values: `static`, `dynamicCa`.|
 |`gateways.*.listeners[].tls.cert`|string|Path to the TLS certificate file (leaf certificate, or CA certificate in dynamic CA mode).<br>Required unless `spiffe` is set.|
 |`gateways.*.listeners[].tls.key`|string|Path to the TLS private key file.|
 |`gateways.*.listeners[].tls.root`|string|Path to a root CA certificate file used to validate client certificates (mTLS).<br>Omit for one-way server TLS. Not used when `spiffe` is set.|
@@ -49172,7 +49173,7 @@
 |`gateways.*.listeners[].apiKey.location.cookie.name`|string|Cookie name containing the credential.|
 |`gateways.*.listeners[].apiKey.location.expression`|string|Read the credential from a CEL expression evaluated against the incoming request.<br>CEL expression that returns the credential string. This location can extract credentials but cannot insert them.|
 |`gateways.*.tls`|object|tls enables HTTPS for this gateway. Maybe not be set with `listeners`|
-|`gateways.*.tls.mode`|enum|Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA<br>mode uses cert/key as a CA for on-demand SNI leaf certificate issuance.<br>Required unless `spiffe` is set.<br>Possible values: `static`, `dynamicCa`.|
+|`gateways.*.tls.mode`|enum|Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA<br>mode uses cert/key as a CA for on-demand SNI leaf certificate issuance.<br>Unused when `spiffe` is set.<br>Possible values: `static`, `dynamicCa`.|
 |`gateways.*.tls.cert`|string|Path to the TLS certificate file (leaf certificate, or CA certificate in dynamic CA mode).<br>Required unless `spiffe` is set.|
 |`gateways.*.tls.key`|string|Path to the TLS private key file.|
 |`gateways.*.tls.root`|string|Path to a root CA certificate file used to validate client certificates (mTLS).<br>Omit for one-way server TLS. Not used when `spiffe` is set.|
@@ -65860,7 +65861,7 @@
 |`llm.gateways`|string|gateways attaches the LLM routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.<br>When omitted and a gateway named `default` exists, the LLM API routes attach to it unless `port` is set.|
 |`llm.port`|integer|port defines the port to serve the LLM routes under. Deprecated; use `gateways` instead.|
 |`llm.tls`|object|tls defines the TLS settings to serve the LLM routes under when using `port`. Deprecated; use `gateways` instead.|
-|`llm.tls.mode`|enum|Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA<br>mode uses cert/key as a CA for on-demand SNI leaf certificate issuance.<br>Required unless `spiffe` is set.<br>Possible values: `static`, `dynamicCa`.|
+|`llm.tls.mode`|enum|Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA<br>mode uses cert/key as a CA for on-demand SNI leaf certificate issuance.<br>Unused when `spiffe` is set.<br>Possible values: `static`, `dynamicCa`.|
 |`llm.tls.cert`|string|Path to the TLS certificate file (leaf certificate, or CA certificate in dynamic CA mode).<br>Required unless `spiffe` is set.|
 |`llm.tls.key`|string|Path to the TLS private key file.|
 |`llm.tls.root`|string|Path to a root CA certificate file used to validate client certificates (mTLS).<br>Omit for one-way server TLS. Not used when `spiffe` is set.|

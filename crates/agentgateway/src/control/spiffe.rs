@@ -1,8 +1,8 @@
 //! SPIFFE Workload API integration.
 //!
 //! [`SpiffeClient`] wraps a [`X509Source`], which connects to the local SPIFFE Workload API
-//! endpoint (a unix socket, supplied via `spiffeEndpoint`) and keeps the
-//! gateway's X.509-SVID and trust bundles up to date in the background, rotating them automatically.
+//! endpoint and keeps the gateway's X.509-SVID and trust bundles up to date in the background,
+//! rotating them automatically.
 //!
 //! From the current SVID (the cert chain + private key) it builds, on demand, both a
 //! [`ServerConfig`] for terminating TLS on listeners and a [`ClientConfig`] for outbound mTLS to
@@ -19,8 +19,7 @@ use crate::*;
 #[derive(serde::Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Config {
-	/// Endpoint of the SPIFFE Workload API (e.g. `unix:///run/spire/agent.sock`), from the
-	/// `spiffeEndpoint` config.
+	/// Endpoint of the SPIFFE Workload API (e.g. `unix:///run/spire/agent.sock`)
 	pub endpoint: String,
 }
 

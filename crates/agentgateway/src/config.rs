@@ -232,8 +232,10 @@ pub fn parse_config(
 		None
 	};
 
-	let spiffe_endpoint = empty_to_none(raw.spiffe_endpoint);
-	let spiffe = spiffe_endpoint.map(|endpoint| crate::control::spiffe::Config { endpoint });
+	let spiffe = raw
+		.spiffe
+		.and_then(|cfg| cfg.endpoint)
+		.map(|endpoint| crate::control::spiffe::Config { endpoint });
 
 	let network = parse("NETWORK")?.or(raw.network).unwrap_or_default();
 
@@ -1717,13 +1719,13 @@ config:
 	fn spiffe_enabled_from_raw_endpoint_field() {
 		let _env = lock_env();
 		let config = parse_config(
-			"config:\n  spiffeEndpoint: unix:///run/spire/agent.sock\n".to_string(),
+			"config:\n  spiffe:\n    endpoint: unix:///run/spire/agent.sock\n".to_string(),
 			None,
 		)
 		.expect("config should parse");
 		let spiffe = config
 			.spiffe
-			.expect("spiffeEndpoint should enable the SPIFFE Workload API");
+			.expect("spiffe.endpoint should enable the SPIFFE Workload API");
 		assert_eq!(spiffe.endpoint, "unix:///run/spire/agent.sock");
 	}
 }

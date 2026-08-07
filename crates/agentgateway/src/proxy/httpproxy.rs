@@ -1613,7 +1613,7 @@ fn resolve_backend_tls(
 		BackendTLSSource::Spiffe(spiffe_tls) => {
 			let spiffe = inputs.spiffe.as_ref().ok_or_else(|| {
 				ProxyError::Processing(anyhow!(
-					"backend TLS is configured for SPIFFE, but SPIFFE is not enabled; set config.spiffeEndpoint"
+					"backend TLS is configured for SPIFFE, but SPIFFE is not enabled; set config.spiffe.endpoint"
 				))
 			})?;
 			let alpns = spiffe_backend_alpns(spiffe_tls, http_version_override);

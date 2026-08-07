@@ -210,11 +210,15 @@
             "null"
           ]
         },
-        "spiffeEndpoint": {
-          "description": "Endpoint of the local SPIFFE Workload API (e.g. `unix:///run/spire/agent.sock`).\nWhen set, listeners and backends may source their TLS identity from SPIFFE.",
-          "type": [
-            "string",
-            "null"
+        "spiffe": {
+          "description": "Local SPIFFE Workload API configuration\nWhen set, listeners and backends may source their TLS identity from SPIFFE.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawSpiffeConfig"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "namespace": {
@@ -713,6 +717,19 @@
           "const": "hybrid"
         }
       ]
+    },
+    "RawSpiffeConfig": {
+      "type": "object",
+      "properties": {
+        "endpoint": {
+          "description": "SPIFFE Workload API Endpoint (e.g. `unix:///run/spire/agent.sock`).",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
     },
     "RawStandardAttributes": {
       "type": "object",
@@ -1225,7 +1242,7 @@
       "type": "object",
       "properties": {
         "mode": {
-          "description": "Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA\nmode uses cert/key as a CA for on-demand SNI leaf certificate issuance.\nRequired unless `spiffe` is set.",
+          "description": "Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA\nmode uses cert/key as a CA for on-demand SNI leaf certificate issuance.\nUnused when `spiffe` is set.",
           "$ref": "#/$defs/LocalTLSServerMode",
           "default": "static"
         },

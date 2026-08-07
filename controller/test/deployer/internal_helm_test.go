@@ -591,10 +591,8 @@ wIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQBtestcertdata
 			InputFile: "agentgateway-spiffe",
 			Validate: func(t *testing.T, outputYaml string) {
 				t.Helper()
-				assert.Contains(t, outputYaml, "spiffeEndpoint:",
-					"ConfigMap should set config.spiffeEndpoint when spiffe is configured")
-				assert.Contains(t, outputYaml, "unix:///spiffe-workload-api/spire-agent.sock",
-					"spiffeEndpoint should point to the default CSI mount path/socket")
+				assert.Contains(t, outputYaml, "spiffe:\n        endpoint: unix:///spiffe-workload-api/spire-agent.sock",
+					"ConfigMap should set config.spiffe.endpoint to the default CSI mount path/socket")
 				assert.Contains(t, outputYaml, "driver: csi.spiffe.io",
 					"deployment should mount the SPIFFE CSI driver volume by default")
 				assert.Contains(t, outputYaml, "name: spiffe-workload-api",

@@ -415,11 +415,12 @@ async fn test_basic_config() {
 async fn test_spiffe_tls_config_normalizes() {
 	// A SPIFFE-sourced HTTPS listener needs no cert/key files and should normalize without
 	// contacting the Workload API (the connection is established lazily at runtime). SPIFFE must be enabled
-	// (spiffeEndpoint) for a listener to reference it.
+	// (spiffe.endpoint) for a listener to reference it.
 	normalize_test_config(
 		r#"
 config:
-  spiffeEndpoint: unix:///run/spire/agent.sock
+  spiffe:
+    endpoint: unix:///run/spire/agent.sock
 binds:
 - port: 3000
   listeners:
@@ -530,11 +531,12 @@ async fn spiffe_rejected_incompatible_option(#[case] yaml: &str, #[case] expecte
 #[tokio::test]
 async fn test_spiffe_backend_tls_config_normalizes() {
 	// A SPIFFE-sourced upstream (backend) mTLS policy needs no cert/key files; the ClientConfig is
-	// built lazily from the SPIFFE Workload API at connection time. SPIFFE must be enabled (spiffeEndpoint).
+	// built lazily from the SPIFFE Workload API at connection time. SPIFFE must be enabled (spiffe.endpoint).
 	normalize_test_config(
 		r#"
 config:
-  spiffeEndpoint: unix:///run/spire/agent.sock
+  spiffe:
+    endpoint: unix:///run/spire/agent.sock
 binds:
 - port: 3000
   listeners:

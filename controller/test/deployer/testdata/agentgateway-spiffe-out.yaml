@@ -15,7 +15,8 @@ apiVersion: v1
 data:
   config.yaml: |
     config:
-      spiffeEndpoint: unix:///spiffe-workload-api/spire-agent.sock
+      spiffe:
+        endpoint: unix:///spiffe-workload-api/spire-agent.sock
 kind: ConfigMap
 metadata:
   labels:
@@ -73,7 +74,7 @@ spec:
   template:
     metadata:
       annotations:
-        checksum/config: 7bfbc27d38022082296539eebe3b4299d1345e54550b17913714926dd292eca4
+        checksum/config: 1fecbb9679993727ec1f1c44d1c2aa717c9f50f51bdee703272ab2ec3e51f92d
         checksum/session-key: 2a8abfa8cb9906290437854193ca6bca41d4d4e26d1d454bd66a35158095e737
         prometheus.io/path: /metrics
         prometheus.io/port: "15020"
