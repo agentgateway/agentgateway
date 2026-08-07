@@ -2183,7 +2183,7 @@ type BackendAI struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
 	// +optional
-	PostConversionTransformations []FieldTransformation `json:"postConversionTransformations,omitempty"`
+	FinalTransformations []FieldTransformation `json:"finalTransformations,omitempty"`
 
 	// Maps friendly model names to actual provider model names.
 	// Example: `{"fast": "gpt-3.5-turbo", "smart": "gpt-4-turbo"}`.

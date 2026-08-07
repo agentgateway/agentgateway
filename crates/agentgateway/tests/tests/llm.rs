@@ -917,7 +917,7 @@ async fn llm_openai_messages_translation_with_host_override_path_behavior(
 }
 
 #[tokio::test]
-async fn llm_post_conversion_transformation_applies_after_messages_translation() {
+async fn llm_final_transformation_applies_after_messages_translation() {
 	let mock = body_mock(include_bytes!(
 		"../../../llm/src/tests/response/completions/basic.json"
 	))
@@ -935,7 +935,7 @@ async fn llm_post_conversion_transformation_applies_after_messages_translation()
 		.attach_route_policy(json!({
 			"ai": {
 				"routes": { "/v1/messages": "messages" },
-				"postConversionTransformations": {
+				"finalTransformations": {
 					// Drop a field the converter added.
 					"reasoning_effort": r#"fail("remove")"#,
 					// Observe the converted message list.

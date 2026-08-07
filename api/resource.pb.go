@@ -13028,8 +13028,8 @@ type BackendPolicySpec_Ai struct {
 	// CEL transformation expressions to evaluate and set in the LLM request.
 	// Expressions are evaluated against the current request body and behave like overrides.
 	// This happens after conversion (converting an api interface to another like messages->chat completions)
-	PostConversionTransformations map[string]string                      `protobuf:"bytes,9,rep,name=post_conversion_transformations,json=postConversionTransformations,proto3" json:"post_conversion_transformations,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Prompts                       *BackendPolicySpec_Ai_PromptEnrichment `protobuf:"bytes,4,opt,name=prompts,proto3" json:"prompts,omitempty"`
+	FinalTransformations map[string]string                      `protobuf:"bytes,9,rep,name=final_transformations,json=finalTransformations,proto3" json:"final_transformations,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Prompts              *BackendPolicySpec_Ai_PromptEnrichment `protobuf:"bytes,4,opt,name=prompts,proto3" json:"prompts,omitempty"`
 	// Model aliases - map from alias name to actual model name
 	ModelAliases  map[string]string                   `protobuf:"bytes,5,rep,name=model_aliases,json=modelAliases,proto3" json:"model_aliases,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	PromptCaching *BackendPolicySpec_Ai_PromptCaching `protobuf:"bytes,6,opt,name=prompt_caching,json=promptCaching,proto3" json:"prompt_caching,omitempty"`
@@ -13100,9 +13100,9 @@ func (x *BackendPolicySpec_Ai) GetTransformations() map[string]string {
 	return nil
 }
 
-func (x *BackendPolicySpec_Ai) GetPostConversionTransformations() map[string]string {
+func (x *BackendPolicySpec_Ai) GetFinalTransformations() map[string]string {
 	if x != nil {
-		return x.PostConversionTransformations
+		return x.FinalTransformations
 	}
 	return nil
 }
@@ -18081,7 +18081,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\xce^\n" +
+	"\x04kind\"\xa8^\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -18104,13 +18104,13 @@ const file_resource_proto_rawDesc = "" +
 	"\x0ebackend_tunnel\x18\x10 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.BackendTunnelH\x00R\rbackendTunnel\x12X\n" +
 	"\text_authz\x18\x11 \x01(\v29.agentgateway.dev.resource.TrafficPolicySpec.ExternalAuthH\x00R\bextAuthz\x12c\n" +
 	"\x0emcp_guardrails\x18\x12 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.McpGuardrailsH\x00R\rmcpGuardrails\x12Y\n" +
-	"\rauthorization\x18\x13 \x01(\v21.agentgateway.dev.resource.TrafficPolicySpec.RBACH\x00R\rauthorization\x1a\xcc/\n" +
+	"\rauthorization\x18\x13 \x01(\v21.agentgateway.dev.resource.TrafficPolicySpec.RBACH\x00R\rauthorization\x1a\xa6/\n" +
 	"\x02Ai\x12^\n" +
 	"\fprompt_guard\x18\x01 \x01(\v2;.agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuardR\vpromptGuard\x12Y\n" +
 	"\bdefaults\x18\x02 \x03(\v2=.agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntryR\bdefaults\x12\\\n" +
 	"\toverrides\x18\x03 \x03(\v2>.agentgateway.dev.resource.BackendPolicySpec.Ai.OverridesEntryR\toverrides\x12n\n" +
-	"\x0ftransformations\x18\b \x03(\v2D.agentgateway.dev.resource.BackendPolicySpec.Ai.TransformationsEntryR\x0ftransformations\x12\x9a\x01\n" +
-	"\x1fpost_conversion_transformations\x18\t \x03(\v2R.agentgateway.dev.resource.BackendPolicySpec.Ai.PostConversionTransformationsEntryR\x1dpostConversionTransformations\x12Z\n" +
+	"\x0ftransformations\x18\b \x03(\v2D.agentgateway.dev.resource.BackendPolicySpec.Ai.TransformationsEntryR\x0ftransformations\x12~\n" +
+	"\x15final_transformations\x18\t \x03(\v2I.agentgateway.dev.resource.BackendPolicySpec.Ai.FinalTransformationsEntryR\x14finalTransformations\x12Z\n" +
 	"\aprompts\x18\x04 \x01(\v2@.agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichmentR\aprompts\x12f\n" +
 	"\rmodel_aliases\x18\x05 \x03(\v2A.agentgateway.dev.resource.BackendPolicySpec.Ai.ModelAliasesEntryR\fmodelAliases\x12d\n" +
 	"\x0eprompt_caching\x18\x06 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.Ai.PromptCachingR\rpromptCaching\x12S\n" +
@@ -18224,8 +18224,8 @@ const file_resource_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aB\n" +
 	"\x14TransformationsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aP\n" +
-	"\"PostConversionTransformationsEntry\x12\x10\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aG\n" +
+	"\x19FinalTransformationsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a?\n" +
 	"\x11ModelAliasesEntry\x12\x10\n" +
@@ -18957,7 +18957,7 @@ var file_resource_proto_goTypes = []any{
 	nil, // 219: agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntry
 	nil, // 220: agentgateway.dev.resource.BackendPolicySpec.Ai.OverridesEntry
 	nil, // 221: agentgateway.dev.resource.BackendPolicySpec.Ai.TransformationsEntry
-	nil, // 222: agentgateway.dev.resource.BackendPolicySpec.Ai.PostConversionTransformationsEntry
+	nil, // 222: agentgateway.dev.resource.BackendPolicySpec.Ai.FinalTransformationsEntry
 	nil, // 223: agentgateway.dev.resource.BackendPolicySpec.Ai.ModelAliasesEntry
 	nil, // 224: agentgateway.dev.resource.BackendPolicySpec.Ai.RoutesEntry
 	nil, // 225: agentgateway.dev.resource.BackendPolicySpec.Ai.Webhook.HeadersEntry
@@ -19286,7 +19286,7 @@ var file_resource_proto_depIdxs = []int32{
 	219, // 275: agentgateway.dev.resource.BackendPolicySpec.Ai.defaults:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntry
 	220, // 276: agentgateway.dev.resource.BackendPolicySpec.Ai.overrides:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.OverridesEntry
 	221, // 277: agentgateway.dev.resource.BackendPolicySpec.Ai.transformations:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.TransformationsEntry
-	222, // 278: agentgateway.dev.resource.BackendPolicySpec.Ai.post_conversion_transformations:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.PostConversionTransformationsEntry
+	222, // 278: agentgateway.dev.resource.BackendPolicySpec.Ai.final_transformations:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.FinalTransformationsEntry
 	206, // 279: agentgateway.dev.resource.BackendPolicySpec.Ai.prompts:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.PromptEnrichment
 	223, // 280: agentgateway.dev.resource.BackendPolicySpec.Ai.model_aliases:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.ModelAliasesEntry
 	218, // 281: agentgateway.dev.resource.BackendPolicySpec.Ai.prompt_caching:type_name -> agentgateway.dev.resource.BackendPolicySpec.Ai.PromptCaching

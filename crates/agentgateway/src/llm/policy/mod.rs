@@ -131,7 +131,7 @@ pub struct Policy {
 	/// Request body values computed from CEL expressions.
 	/// These are applied after conversion to the provider's request format.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
-	pub post_conversion_transformations: Option<HashMap<String, Arc<cel::Expression>>>,
+	pub final_transformations: Option<HashMap<String, Arc<cel::Expression>>>,
 	/// Messages to add before or after the client prompt.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub prompts: Option<PromptEnrichment>,
@@ -183,7 +183,7 @@ impl crate::store::HasExpressions for Policy {
 			.map(|(_, expr)| expr.as_ref())
 			.chain(
 				self
-					.post_conversion_transformations
+					.final_transformations
 					.iter()
 					.flatten()
 					.map(|(_, expr)| expr.as_ref()),
@@ -730,12 +730,12 @@ impl Policy {
 		Ok(serde_json::Value::Object(map))
 	}
 
-	pub fn apply_post_conversion_transformations(
+	pub fn apply_final_transformations(
 		&self,
 		body: Vec<u8>,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<Vec<u8>, AIError> {
-		if self.post_conversion_transformations.is_none() {
+		if self.final_transformations.is_none() {
 			// Fast path: avoid the parse/serialize round-trip entirely.
 			return Ok(body);
 		}
@@ -743,7 +743,7 @@ impl Policy {
 			serde_json::from_slice(body.as_slice()).map_err(AIError::RequestParsing)?;
 		let exec = cel::Executor::new_llm(log.as_ref().and_then(|x| x.request_snapshot.as_deref()), &v);
 		let to_set: Vec<_> = self
-			.post_conversion_transformations
+			.final_transformations
 			.iter()
 			.flatten()
 			.map(|(k, expr)| (k, Self::eval_transformation_expression(expr, &exec)))

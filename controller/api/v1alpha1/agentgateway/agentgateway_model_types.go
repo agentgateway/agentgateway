@@ -127,7 +127,7 @@ type ModelPolicies struct {
 	// +listType=map
 	// +listMapKey=field
 	// +optional
-	PostConversionTransformations []FieldTransformation `json:"postConversionTransformations,omitempty"`
+	FinalTransformations []FieldTransformation `json:"finalTransformations,omitempty"`
 
 	// Authorization rules that clients must satisfy to use this model.
 	// +optional

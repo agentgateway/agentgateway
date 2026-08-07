@@ -1078,16 +1078,16 @@ fn convert_backend_ai_policy(
 					.collect::<Result<_, _>>()?,
 			)
 		},
-		post_conversion_transformations: if ai.post_conversion_transformations.is_empty() {
+		final_transformations: if ai.final_transformations.is_empty() {
 			None
 		} else {
 			Some(
-				ai.post_conversion_transformations
+				ai.final_transformations
 					.iter()
 					.map(|(k, v)| {
 						let ve = permissive_cel_expression_arc(
 							diagnostics,
-							format!("backend.ai.post_conversion_transformations.{k}"),
+							format!("backend.ai.final_transformations.{k}"),
 							v,
 						);
 						Ok::<_, ProtoError>((k.to_owned(), ve))
@@ -4675,7 +4675,7 @@ mod tests {
 				)]
 				.into_iter()
 				.collect(),
-				post_conversion_transformations: vec![("max_tokens".to_string(), "80".to_string())]
+				final_transformations: vec![("max_tokens".to_string(), "80".to_string())]
 					.into_iter()
 					.collect(),
 				prompt_guard: None,
@@ -4709,9 +4709,9 @@ mod tests {
 				.expect("transformation_policy should be set");
 
 			let post_transformation_policy = ai_policy
-				.post_conversion_transformations
+				.final_transformations
 				.as_ref()
-				.expect("post_conversion_transformations should be set");
+				.expect("final_transformations should be set");
 
 			// Verify defaults have correct types and values
 			let temp_val = defaults.get("temperature").unwrap();

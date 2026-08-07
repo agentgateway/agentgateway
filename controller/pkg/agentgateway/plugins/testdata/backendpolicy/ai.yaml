@@ -22,7 +22,7 @@ spec:
       defaults:
       - field: logit_bias
         value: {"50256": -100}
-      postConversionTransformations:
+      finalTransformations:
       - field: unsupported_provider_field
         expression: "null"
       - field: max_tokens
@@ -129,14 +129,14 @@ output:
         ai:
           defaults:
             logit_bias: '{"50256":-100}'
+          finalTransformations:
+            max_tokens: "1024"
+            unsupported_provider_field: "null"
           modelAliases:
             fast: amazon.nova-micro-v1:0
             smart: anthropic.claude-3-5-sonnet-20241022-v2:0
           overrides:
             model: '"gpt-4"'
-          postConversionTransformations:
-            max_tokens: "1024"
-            unsupported_provider_field: "null"
           promptCaching:
             cacheMessages: true
             cacheSystem: true

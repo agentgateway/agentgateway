@@ -1818,7 +1818,7 @@ impl AIProvider {
 		llm_info.provider_state = rendered.provider_state;
 		// Couldn't find a better place to apply it, needs to be after rendered. but before generating the request.
 		let body = match policies {
-			Some(p) => p.apply_post_conversion_transformations(rendered.body, log)?,
+			Some(p) => p.apply_final_transformations(rendered.body, log)?,
 			None => rendered.body,
 		};
 		parts.headers.remove(header::CONTENT_LENGTH);
@@ -1892,7 +1892,7 @@ impl AIProvider {
 		let body = render(self, &req, &parts, request_model)?;
 		// Couldn't find a better place to apply it, needs to be after rendered. but before generating the request.
 		let body = match policies {
-			Some(p) => p.apply_post_conversion_transformations(body, log)?,
+			Some(p) => p.apply_final_transformations(body, log)?,
 			None => body,
 		};
 		parts.headers.remove(header::CONTENT_LENGTH);

@@ -634,9 +634,9 @@ function ModelEditor(props: {
   const [transformation, setTransformation] = useState<Record<string, string>>(
     () => expressionMap(props.initial.transformation),
   );
-  const [postConversionTransformation, setPostConversionTransformation] =
+  const [finalTransformation, setFinalTransformation] =
     useState<Record<string, string>>(() =>
-      expressionMap(props.initial.postConversionTransformation),
+      expressionMap(props.initial.finalTransformation),
     );
   const [health, setHealth] = useState<LlmModel["health"]>(
     () => props.initial.health ?? null,
@@ -668,7 +668,7 @@ function ModelEditor(props: {
     explicitModel,
     customModelExpression,
     transformation,
-    postConversionTransformation,
+    finalTransformation,
     health,
     defaultsText,
     overridesText,
@@ -684,7 +684,7 @@ function ModelEditor(props: {
     saveAttempted && invalidApiKey ? "Enter a value, or choose Unset." : null;
   const policyPatch = buildModelPolicyPatch({
     transformation,
-    postConversionTransformation,
+    finalTransformation,
     health,
     defaultsText,
     overridesText,
@@ -889,7 +889,7 @@ function ModelEditor(props: {
                 model={props.initial}
                 help={props.help}
                 transformation={transformation}
-                postConversionTransformation={postConversionTransformation}
+                finalTransformation={finalTransformation}
                 health={health}
                 defaultsText={defaultsText}
                 overridesText={overridesText}
@@ -898,8 +898,8 @@ function ModelEditor(props: {
                 promptCaching={promptCaching}
                 authorization={authorization}
                 setTransformation={setTransformation}
-                setPostConversionTransformation={
-                  setPostConversionTransformation
+                setFinalTransformation={
+                  setFinalTransformation
                 }
                 setHealth={setHealth}
                 setDefaultsText={setDefaultsText}
@@ -1040,7 +1040,7 @@ function ModelPoliciesInline(props: {
   model: LlmModel;
   help: SchemaHelp;
   transformation: Record<string, string>;
-  postConversionTransformation: Record<string, string>;
+  finalTransformation: Record<string, string>;
   health: LlmModel["health"];
   defaultsText: string;
   overridesText: string;
@@ -1049,7 +1049,7 @@ function ModelPoliciesInline(props: {
   promptCaching: LlmModel["promptCaching"];
   authorization: AuthorizationDraft | null;
   setTransformation: (value: Record<string, string>) => void;
-  setPostConversionTransformation: (value: Record<string, string>) => void;
+  setFinalTransformation: (value: Record<string, string>) => void;
   setHealth: (value: LlmModel["health"] | null) => void;
   setDefaultsText: (value: string) => void;
   setOverridesText: (value: string) => void;
@@ -1061,8 +1061,8 @@ function ModelPoliciesInline(props: {
   const patch = buildModelPolicyPatch(props);
   const transformationEnabled =
     Object.keys(expressionMap(props.model.transformation)).length > 0;
-  const postConversionTransformationEnabled =
-    Object.keys(expressionMap(props.model.postConversionTransformation))
+  const finalTransformationEnabled =
+    Object.keys(expressionMap(props.model.finalTransformation))
       .length > 0;
   const defaultsEnabled = Boolean(
     props.model.defaults && Object.keys(props.model.defaults).length,
@@ -1104,23 +1104,23 @@ function ModelPoliciesInline(props: {
           icon={<SlidersHorizontal size={17} />}
           title="Post-conversion transformation"
           description={
-            Object.keys(props.postConversionTransformation).length
-              ? `${Object.keys(props.postConversionTransformation).length} fields configured`
+            Object.keys(props.finalTransformation).length
+              ? `${Object.keys(props.finalTransformation).length} fields configured`
               : "No fields configured"
           }
-          defaultOpen={postConversionTransformationEnabled}
+          defaultOpen={finalTransformationEnabled}
         >
           <KeyValueEditor
             label="Provider request fields"
             tooltip={props.help.field<LlmModel>(
               "LocalLLMModels",
-              "postConversionTransformation",
+              "finalTransformation",
             )}
-            values={props.postConversionTransformation}
+            values={props.finalTransformation}
             keyPlaceholder="field name"
             valuePlaceholder="CEL expression"
             valueKind="cel"
-            onChange={props.setPostConversionTransformation}
+            onChange={props.setFinalTransformation}
           />
         </CollapsiblePolicySection>
         <CollapsiblePolicySection
@@ -1239,7 +1239,7 @@ function ModelPoliciesInline(props: {
 
 function buildModelPolicyPatch(args: {
   transformation: Record<string, string>;
-  postConversionTransformation: Record<string, string>;
+  finalTransformation: Record<string, string>;
   health: LlmModel["health"];
   defaultsText: string;
   overridesText: string;
@@ -1254,9 +1254,9 @@ function buildModelPolicyPatch(args: {
     const transformation = cleanEmpty(args.transformation) as
       | LlmModel["transformation"]
       | undefined;
-    const postConversionTransformation = cleanEmpty(
-      args.postConversionTransformation,
-    ) as LlmModel["postConversionTransformation"] | undefined;
+    const finalTransformation = cleanEmpty(
+      args.finalTransformation,
+    ) as LlmModel["finalTransformation"] | undefined;
     const health = cleanEmpty(args.health) as LlmModel["health"] | undefined;
     const requestHeaders = cleanEmpty(args.requestHeaders) as
       | LlmModel["requestHeaders"]
@@ -1278,10 +1278,10 @@ function buildModelPolicyPatch(args: {
           transformation && Object.keys(transformation).length
             ? transformation
             : null,
-        postConversionTransformation:
-          postConversionTransformation &&
-          Object.keys(postConversionTransformation).length
-            ? postConversionTransformation
+        finalTransformation:
+          finalTransformation &&
+          Object.keys(finalTransformation).length
+            ? finalTransformation
             : null,
         requestHeaders:
           requestHeaders && Object.keys(requestHeaders).length
@@ -1319,8 +1319,8 @@ function modelPolicySummary(model: Partial<LlmModel>) {
     model.transformation && Object.keys(model.transformation).length
       ? "transformation"
       : null,
-    model.postConversionTransformation &&
-    Object.keys(model.postConversionTransformation).length
+    model.finalTransformation &&
+    Object.keys(model.finalTransformation).length
       ? "post-conversion transformation"
       : null,
     model.requestHeaders ? "request headers" : null,
@@ -2013,9 +2013,9 @@ function ModelPolicyState(props: { model: LlmModel; warnings: number }) {
     props.model.transformation && Object.keys(props.model.transformation).length
       ? "transformation"
       : null,
-    props.model.postConversionTransformation &&
-    Object.keys(props.model.postConversionTransformation).length
-      ? "postConversionTransformation"
+    props.model.finalTransformation &&
+    Object.keys(props.model.finalTransformation).length
+      ? "finalTransformation"
       : null,
     props.model.requestHeaders ? "requestHeaders" : null,
     props.model.responseHeaders ? "responseHeaders" : null,

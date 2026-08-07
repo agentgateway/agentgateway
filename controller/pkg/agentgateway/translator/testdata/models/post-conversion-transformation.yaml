@@ -33,7 +33,7 @@ spec:
     transformations:
     - field: model
       expression: '"gpt-5-mini-transformed"'
-    postConversionTransformations:
+    finalTransformations:
     - field: unsupported_provider_field
       expression: "null"
     - field: max_tokens
@@ -82,7 +82,7 @@ output:
   resource:
     modelRoute:
       aiPolicy:
-        postConversionTransformations:
+        finalTransformations:
           max_tokens: "1024"
           type: '"text_completion"'
           unsupported_provider_field: "null"

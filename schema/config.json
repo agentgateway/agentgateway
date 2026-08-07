@@ -4710,7 +4710,7 @@
             "$ref": "#/$defs/Expression"
           }
         },
-        "postConversionTransformations": {
+        "finalTransformations": {
           "description": "Request body values computed from CEL expressions.\nThese are applied after conversion to the provider's request format.",
           "type": [
             "object",
@@ -11138,8 +11138,8 @@
             "$ref": "#/$defs/Expression"
           }
         },
-        "postConversionTransformation": {
-          "description": "post_conversion_transformation allows setting values from CEL expressions for the request, overriding any existing values.\nOccurs after conversion of the request to the provider format, allowing for provider-specific transformations.",
+        "finalTransformation": {
+          "description": "final_transformation allows setting values from CEL expressions for the request, overriding any existing values.\nOccurs after conversion of the request to the provider format, allowing for provider-specific transformations.",
           "type": [
             "object",
             "null"

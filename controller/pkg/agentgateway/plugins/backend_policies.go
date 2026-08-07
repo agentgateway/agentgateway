@@ -783,9 +783,9 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 		// Still set it so it wipes out the value on error, mirroring the header value.
 		translatedAIPolicy.Transformations[xfm.Field] = string(xfm.Expression)
 	}
-	for _, xfm := range aiSpec.PostConversionTransformations {
-		if translatedAIPolicy.PostConversionTransformations == nil {
-			translatedAIPolicy.PostConversionTransformations = make(map[string]string)
+	for _, xfm := range aiSpec.FinalTransformations {
+		if translatedAIPolicy.FinalTransformations == nil {
+			translatedAIPolicy.FinalTransformations = make(map[string]string)
 		}
 
 		if !isCEL(xfm.Expression) {
@@ -793,7 +793,7 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 		}
 
 		// Still set it so it wipes out the value on error, mirroring the header value.
-		translatedAIPolicy.PostConversionTransformations[xfm.Field] = string(xfm.Expression)
+		translatedAIPolicy.FinalTransformations[xfm.Field] = string(xfm.Expression)
 	}
 
 	if aiSpec.PromptGuard != nil {

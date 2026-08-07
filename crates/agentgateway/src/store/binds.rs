@@ -519,10 +519,10 @@ impl LLMRequestPolicies {
 				.transformations
 				.clone()
 				.or_else(|| fallback.transformations.clone()),
-			post_conversion_transformations: preferred
-				.post_conversion_transformations
+			final_transformations: preferred
+				.final_transformations
 				.clone()
-				.or_else(|| fallback.post_conversion_transformations.clone()),
+				.or_else(|| fallback.final_transformations.clone()),
 			prompts: preferred
 				.prompts
 				.clone()

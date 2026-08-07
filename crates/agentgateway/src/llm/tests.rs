@@ -860,7 +860,7 @@ async fn provider_model_is_set_before_llm_transformations() {
 }
 
 #[tokio::test]
-async fn messages_to_completions_post_conversion_transformation() {
+async fn messages_to_completions_final_transformation() {
 	use crate::llm::policy::Policy;
 
 	async fn create_llm_request(vec_body: Vec<u8>, policy: Option<&Policy>) -> (Request, RouteType) {
@@ -890,7 +890,7 @@ async fn messages_to_completions_post_conversion_transformation() {
 	let expr = |e: &str| std::sync::Arc::new(crate::cel::Expression::new_strict(e).unwrap());
 
 	let policy = Policy {
-		post_conversion_transformations: Some(
+		final_transformations: Some(
 			[
 				// Only true post-conversion: `system` became messages[0].
 				(
