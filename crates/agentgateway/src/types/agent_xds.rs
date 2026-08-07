@@ -4675,12 +4675,9 @@ mod tests {
 				)]
 				.into_iter()
 				.collect(),
-				post_conversion_transformations: vec![(
-					"max_tokens".to_string(),
-					"80".to_string(),
-				)]
-				.into_iter()
-				.collect(),
+				post_conversion_transformations: vec![("max_tokens".to_string(), "80".to_string())]
+					.into_iter()
+					.collect(),
 				prompt_guard: None,
 				prompts: None,
 				model_aliases: Default::default(),
