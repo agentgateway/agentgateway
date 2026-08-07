@@ -23,6 +23,27 @@ fn with_default_timeout(mut req: crate::http::Request) -> crate::http::Request {
 	req
 }
 
+/// Unwrap a guard provider's call result under an `action` mode. In `Audit`
+/// mode a provider error must never affect traffic — the whole point of audit
+/// is zero enforcement — so the error is logged and mapped to `FailOpen`
+/// (recorded as such) instead of propagating, which would surface as a 503.
+/// In `Reject` mode the error propagates and the caller's failure mode applies.
+macro_rules! audit_fail_open {
+	($result:expr, $action:expr, $guard:literal) => {
+		match $result {
+			Ok(resp) => resp,
+			Err(e) if $action == RejectAuditAction::Audit => {
+				tracing::warn!(
+					guard = $guard,
+					"guard unavailable in audit mode, failing open: {e}"
+				);
+				return Ok(GuardrailOutcome::FailOpen);
+			},
+			Err(e) => return Err(e),
+		}
+	};
+}
+
 /// Emit a structured record that a guard ran in `Audit` mode and what it would
 /// have done, without enforcing. Content-free: no prompt/response or matched
 /// text is logged, only the guard kind, phase, and the would-be action. Bedrock
@@ -910,7 +931,11 @@ impl Policy {
 		moderation: &Moderation,
 		rejection: &RequestRejection,
 	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
-		let resp = moderation::send_request(req, claims, client, moderation).await?;
+		let resp = audit_fail_open!(
+			moderation::send_request(req, claims, client, moderation).await,
+			moderation.action,
+			"openAIModeration"
+		);
 		if resp.results.iter().any(|r| r.flagged) {
 			// Audit mode: record the would-be rejection and pass through.
 			if moderation.action == RejectAuditAction::Audit {
@@ -930,26 +955,17 @@ impl Policy {
 		guardrails: &BedrockGuardrails,
 		rejection: &RequestRejection,
 	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
-		let resp = bedrock_guardrails::send_request(req, claims, client, guardrails).await?;
-		// Audit mode: never block or mask. Log the per-filter assessment whenever
-		// the guardrail detected anything (this includes a detect-mode resource,
-		// whose top-level action is NONE but whose filters set `detected`), then
-		// report `Audit` only when it *would* have enforced — so the Audit metric
-		// means the same "would-enforce" event here as for every other guard kind.
-		// Benign traffic falls through to `None` and records `Allow`.
+		let resp = audit_fail_open!(
+			bedrock_guardrails::send_request(req, claims, client, guardrails).await,
+			guardrails.action,
+			"bedrockGuardrails"
+		);
 		if guardrails.action == RejectAuditAction::Audit {
-			if resp.has_detection() {
-				resp.log_audit(
-					&guardrails.guardrail_identifier,
-					&guardrails.guardrail_version,
-					bedrock_guardrails::GuardrailSource::Input,
-				);
-			}
-			return Ok(if resp.would_enforce() {
-				GuardrailOutcome::Audit
-			} else {
-				GuardrailOutcome::None
-			});
+			return Ok(Self::bedrock_audit_outcome(
+				&resp,
+				guardrails,
+				bedrock_guardrails::GuardrailSource::Input,
+			));
 		}
 		if resp.is_blocked() {
 			Ok(GuardrailOutcome::Rejected(rejection.as_response()))
@@ -980,24 +996,17 @@ impl Policy {
 			return Ok(GuardrailOutcome::None);
 		}
 
-		let guardrail_resp =
-			bedrock_guardrails::send_response(content, claims, client, guardrails).await?;
-		// Audit mode: never block or mask. Log on any detection (incl. a
-		// detect-mode resource with top-level action NONE), report `Audit` only
-		// when it would have enforced, else `None` → `Allow`. See the request path.
+		let guardrail_resp = audit_fail_open!(
+			bedrock_guardrails::send_response(content, claims, client, guardrails).await,
+			guardrails.action,
+			"bedrockGuardrails"
+		);
 		if guardrails.action == RejectAuditAction::Audit {
-			if guardrail_resp.has_detection() {
-				guardrail_resp.log_audit(
-					&guardrails.guardrail_identifier,
-					&guardrails.guardrail_version,
-					bedrock_guardrails::GuardrailSource::Output,
-				);
-			}
-			return Ok(if guardrail_resp.would_enforce() {
-				GuardrailOutcome::Audit
-			} else {
-				GuardrailOutcome::None
-			});
+			return Ok(Self::bedrock_audit_outcome(
+				&guardrail_resp,
+				guardrails,
+				bedrock_guardrails::GuardrailSource::Output,
+			));
 		}
 		if guardrail_resp.is_blocked() {
 			Ok(GuardrailOutcome::Rejected(rejection.as_response()))
@@ -1022,7 +1031,11 @@ impl Policy {
 		model_armor: &GoogleModelArmor,
 		rejection: &RequestRejection,
 	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
-		let resp = google_model_armor::send_request(req, claims, client, model_armor).await?;
+		let resp = audit_fail_open!(
+			google_model_armor::send_request(req, claims, client, model_armor).await,
+			model_armor.action,
+			"googleModelArmor"
+		);
 		if resp.is_blocked() {
 			if model_armor.action == RejectAuditAction::Audit {
 				log_guardrail_audit("googleModelArmor", GuardrailPhase::Request, "REJECT");
@@ -1043,14 +1056,18 @@ impl Policy {
 	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
 		let audit = config.action == RejectAuditAction::Audit;
 		if let Some(ref analyze_text) = config.analyze_text {
-			let resp = azure_content_safety::send_analyze_text_for_request(
-				req,
-				claims.clone(),
-				client,
-				config,
-				analyze_text,
-			)
-			.await?;
+			let resp = audit_fail_open!(
+				azure_content_safety::send_analyze_text_for_request(
+					req,
+					claims.clone(),
+					client,
+					config,
+					analyze_text,
+				)
+				.await,
+				config.action,
+				"azureContentSafety"
+			);
 			let threshold = analyze_text.severity_threshold.unwrap_or(2);
 			if resp.is_blocked(threshold) {
 				if audit {
@@ -1061,14 +1078,18 @@ impl Policy {
 			}
 		}
 		if let Some(ref detect_jailbreak) = config.detect_jailbreak {
-			let resp = azure_content_safety::send_detect_jailbreak_for_request(
-				req,
-				claims.clone(),
-				client,
-				config,
-				detect_jailbreak,
-			)
-			.await?;
+			let resp = audit_fail_open!(
+				azure_content_safety::send_detect_jailbreak_for_request(
+					req,
+					claims.clone(),
+					client,
+					config,
+					detect_jailbreak,
+				)
+				.await,
+				config.action,
+				"azureContentSafety"
+			);
 			if resp.jailbreak_detected() {
 				if audit {
 					log_guardrail_audit("azureContentSafety", GuardrailPhase::Request, "REJECT");
@@ -1093,8 +1114,11 @@ impl Policy {
 			return Ok(GuardrailOutcome::None);
 		}
 
-		let guardrail_resp =
-			google_model_armor::send_response(content, claims, client, model_armor).await?;
+		let guardrail_resp = audit_fail_open!(
+			google_model_armor::send_response(content, claims, client, model_armor).await,
+			model_armor.action,
+			"googleModelArmor"
+		);
 		if guardrail_resp.is_blocked() {
 			if model_armor.action == RejectAuditAction::Audit {
 				log_guardrail_audit("googleModelArmor", GuardrailPhase::Response, "REJECT");
@@ -1120,14 +1144,18 @@ impl Policy {
 		}
 
 		if let Some(ref analyze_text) = config.analyze_text {
-			let guardrail_resp = azure_content_safety::send_analyze_text_for_response(
-				content,
-				claims,
-				client,
-				config,
-				analyze_text,
-			)
-			.await?;
+			let guardrail_resp = audit_fail_open!(
+				azure_content_safety::send_analyze_text_for_response(
+					content,
+					claims,
+					client,
+					config,
+					analyze_text,
+				)
+				.await,
+				config.action,
+				"azureContentSafety"
+			);
 			let threshold = analyze_text.severity_threshold.unwrap_or(2);
 			if guardrail_resp.is_blocked(threshold) {
 				if config.action == RejectAuditAction::Audit {
@@ -1139,6 +1167,33 @@ impl Policy {
 		}
 		// Note: detect_jailbreak is request-only, not applied to responses.
 		Ok(GuardrailOutcome::None)
+	}
+
+	/// The audit-mode decision for a Bedrock guardrail assessment. Never blocks
+	/// or masks. Logs the per-filter assessment whenever the guardrail detected
+	/// anything (this includes a detect-mode resource, whose top-level action is
+	/// NONE but whose filters set `detected`), then reports `Audit` only when it
+	/// *would* have enforced — so the Audit metric means the same
+	/// "would-enforce" event here as for every other guard kind. Benign traffic
+	/// falls through to `None` and records `Allow`. Shared by the request and
+	/// response paths so the two cannot drift.
+	fn bedrock_audit_outcome<Mask>(
+		resp: &bedrock_guardrails::ApplyGuardrailResponse,
+		guardrails: &BedrockGuardrails,
+		source: bedrock_guardrails::GuardrailSource,
+	) -> GuardrailOutcome<Mask> {
+		if resp.has_detection() {
+			resp.log_audit(
+				&guardrails.guardrail_identifier,
+				&guardrails.guardrail_version,
+				source,
+			);
+		}
+		if resp.would_enforce() {
+			GuardrailOutcome::Audit
+		} else {
+			GuardrailOutcome::None
+		}
 	}
 
 	fn response_texts(resp: &dyn ResponseType) -> Vec<String> {
@@ -1267,6 +1322,13 @@ impl Policy {
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
 		let whr = match webhook::send_request(client, webhook, context, &headers, messages).await {
 			Ok(whr) => whr,
+			// Audit mode overrides `failure_mode`: an observe-only guard must not
+			// block traffic even when unreachable and configured `failClosed` (the
+			// default), so the audit guarantee holds without a second knob.
+			Err(e) if webhook.action == RejectAuditAction::Audit => {
+				warn!("webhook guardrail unavailable in audit mode, failing open: {e}");
+				return Ok(GuardrailOutcome::FailOpen);
+			},
 			Err(e) => {
 				return match webhook.failure_mode {
 					FailureMode::FailOpen => {
@@ -1351,6 +1413,11 @@ impl Policy {
 		.await
 		{
 			Ok(whr) => whr,
+			// Audit mode overrides `failure_mode`: see evaluate_webhook_request.
+			Err(e) if webhook.action == RejectAuditAction::Audit => {
+				warn!("webhook guardrail unavailable in audit mode, failing open: {e}");
+				return Ok(GuardrailOutcome::FailOpen);
+			},
 			Err(e) => {
 				return match webhook.failure_mode {
 					FailureMode::FailOpen => {
@@ -1768,6 +1835,10 @@ pub struct Webhook {
 	pub failure_mode: FailureMode,
 	/// Whether to enforce the webhook's verdict or only observe it.
 	/// Defaults to `reject` (enforce).
+	///
+	/// `audit` overrides `failureMode`: an observe-only guard never affects
+	/// traffic, so webhook errors fail open (recorded as `FailOpen`) even when
+	/// `failureMode` is `failClosed`.
 	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
 	pub action: RejectAuditAction,
 }
@@ -1814,7 +1885,8 @@ pub struct BedrockGuardrails {
 	/// response are never blocked or masked — the outcome always passes through.
 	/// Use this to evaluate a guardrail's behavior without affecting traffic.
 	/// `audit` guarantees non-enforcement gateway-side even when the AWS resource
-	/// is configured to `BLOCK`/`ANONYMIZE`.
+	/// is configured to `BLOCK`/`ANONYMIZE`, and even when the guardrail service
+	/// is unreachable (provider errors fail open and record `FailOpen`).
 	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
 	pub action: RejectAuditAction,
 	/// Backend policies for AWS authentication (optional, defaults to implicit AWS auth)
