@@ -514,3 +514,51 @@ fn invalid_functions() {
 	// TODO(https://github.com/cel-rust/cel-rust/issues/269)
 	assert!(Value::resolve(&expr.expression, &ctx, &resolver).is_ok())
 }
+
+#[test]
+fn contains_free_function_syntax() {
+	let ctx = Context::default();
+	let resolver = context::DefaultVariableResolver;
+
+	let expr = Program::compile("contains('abc', 'b')").unwrap();
+	let res = Value::resolve(&expr.expression, &ctx, &resolver).unwrap();
+	assert_eq!(res.json().unwrap(), json!(true));
+
+	let expr = Program::compile("contains('abc', 'z')").unwrap();
+	let res = Value::resolve(&expr.expression, &ctx, &resolver).unwrap();
+	assert_eq!(res.json().unwrap(), json!(false));
+}
+
+#[test]
+fn contains_method_syntax_sanity_check() {
+	let ctx = Context::default();
+	let resolver = context::DefaultVariableResolver;
+
+	let expr = Program::compile("'abc'.contains('b')").unwrap();
+	let res = Value::resolve(&expr.expression, &ctx, &resolver).unwrap();
+	assert_eq!(res.json().unwrap(), json!(true));
+
+	let expr = Program::compile("'abc'.contains('z')").unwrap();
+	let res = Value::resolve(&expr.expression, &ctx, &resolver).unwrap();
+	assert_eq!(res.json().unwrap(), json!(false));
+}
+
+#[test]
+fn free_function_syntax_generalizes() {
+	let ctx = Context::default();
+	let resolver = context::DefaultVariableResolver;
+
+	let cases = [
+		("startsWith('abc', 'a')", true),
+		("startsWith('abc', 'z')", false),
+		("endsWith('abc', 'c')", true),
+		("endsWith('abc', 'z')", false),
+		("matches('abc', '^a')", true),
+		("matches('abc', '^z')", false),
+	];
+	for (expr_str, expected) in cases {
+		let expr = Program::compile(expr_str).unwrap();
+		let res = Value::resolve(&expr.expression, &ctx, &resolver).unwrap();
+		assert_eq!(res.json().unwrap(), json!(expected), "expr: {expr_str}");
+	}
+}
