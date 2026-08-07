@@ -42,7 +42,6 @@
 |`config.xdsAddress`|string|Address of the xDS control plane used for dynamic configuration.|
 |`config.xdsAuthToken`|string|Authentication token for communicating with the xDS control plane.|
 |`config.spiffeEndpoint`|string|Endpoint of the local SPIFFE Workload API (e.g. `unix:///run/spire/agent.sock`).<br>When set, listeners and backends may source their TLS identity from SPIFFE.|
-|`config.spiffeConnectTimeout`|string|How long to wait for the initial connection to the SPIFFE Workload API before failing<br>startup. Defaults to 10s.|
 |`config.namespace`|string|Kubernetes namespace for this gateway instance.|
 |`config.gateway`|string|Name of this gateway. Required when xDS is configured.|
 |`config.trustDomain`|string|SPIFFE trust domain for this gateway.|

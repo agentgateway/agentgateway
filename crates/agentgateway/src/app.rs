@@ -68,7 +68,7 @@ pub async fn run(
 	};
 	let spiffe = if let Some(cfg) = &config.spiffe {
 		let client = Arc::new(
-			spiffe::SpiffeClient::new(cfg.endpoint.clone(), cfg.connect_timeout)
+			spiffe::SpiffeClient::new(cfg.endpoint.clone())
 				.await
 				.context("connect to SPIFFE workload API")?,
 		);

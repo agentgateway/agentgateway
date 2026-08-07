@@ -11,8 +11,7 @@ metadata:
   name: my-agwp
   namespace: default
 spec:
-  spiffe:
-    connectTimeout: 15
+  spiffe: {}
 ---
 kind: Gateway
 apiVersion: gateway.networking.k8s.io/v1

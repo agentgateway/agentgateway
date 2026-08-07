@@ -217,14 +217,6 @@
             "null"
           ]
         },
-        "spiffeConnectTimeout": {
-          "description": "How long to wait for the initial connection to the SPIFFE Workload API before failing\nstartup. Defaults to 10s.",
-          "type": [
-            "string",
-            "null"
-          ],
-          "default": null
-        },
         "namespace": {
           "description": "Kubernetes namespace for this gateway instance.",
           "type": [

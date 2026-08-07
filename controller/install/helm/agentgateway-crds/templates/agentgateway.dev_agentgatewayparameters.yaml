@@ -954,14 +954,6 @@ spec:
                   (via the `agentgateway.dev/tls-certificate-source: SPIFFE` listener option and the
                   AgentgatewayPolicy `backend.tls.certificateSource: SPIFFE` field respectively).
                 properties:
-                  connectTimeout:
-                    description: |-
-                      How long to wait (in seconds) for the initial connection to the SPIFFE Workload API
-                      before failing startup. Rendered into the gateway config as `spiffeConnectTimeout`.
-                      Defaults to 10.
-                    format: int64
-                    minimum: 1
-                    type: integer
                   enabled:
                     description: |-
                       Explicitly turns SPIFFE integration on or off for this gateway. When unset, the presence

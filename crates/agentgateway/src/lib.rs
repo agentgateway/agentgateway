@@ -175,11 +175,6 @@ pub struct RawConfig {
 	/// Endpoint of the local SPIFFE Workload API (e.g. `unix:///run/spire/agent.sock`).
 	/// When set, listeners and backends may source their TLS identity from SPIFFE.
 	spiffe_endpoint: Option<String>,
-	/// How long to wait for the initial connection to the SPIFFE Workload API before failing
-	/// startup. Defaults to 10s.
-	#[serde(default, with = "serde_dur_option")]
-	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
-	spiffe_connect_timeout: Option<Duration>,
 	/// Kubernetes namespace for this gateway instance.
 	namespace: Option<String>,
 	/// Name of this gateway. Required when xDS is configured.
@@ -324,9 +319,6 @@ mod defaults {
 	use std::time::Duration;
 
 	pub fn connect_timeout() -> Duration {
-		Duration::from_secs(10)
-	}
-	pub fn spiffe_connect_timeout() -> Duration {
 		Duration::from_secs(10)
 	}
 	pub fn pool_idle_timeout() -> Duration {

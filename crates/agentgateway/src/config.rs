@@ -233,13 +233,7 @@ pub fn parse_config(
 	};
 
 	let spiffe_endpoint = empty_to_none(raw.spiffe_endpoint);
-	let spiffe_connect_timeout = raw
-		.spiffe_connect_timeout
-		.unwrap_or_else(crate::defaults::spiffe_connect_timeout);
-	let spiffe = spiffe_endpoint.map(|endpoint| crate::control::spiffe::Config {
-		endpoint,
-		connect_timeout: spiffe_connect_timeout,
-	});
+	let spiffe = spiffe_endpoint.map(|endpoint| crate::control::spiffe::Config { endpoint });
 
 	let network = parse("NETWORK")?.or(raw.network).unwrap_or_default();
 
@@ -1731,10 +1725,5 @@ config:
 			.spiffe
 			.expect("spiffeEndpoint should enable the SPIFFE Workload API");
 		assert_eq!(spiffe.endpoint, "unix:///run/spire/agent.sock");
-		// Defaults when spiffeConnectTimeout is not set.
-		assert_eq!(
-			spiffe.connect_timeout,
-			crate::defaults::spiffe_connect_timeout()
-		);
 	}
 }

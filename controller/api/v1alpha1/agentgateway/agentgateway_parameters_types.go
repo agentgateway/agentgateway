@@ -283,14 +283,6 @@ type SpiffeSpec struct {
 	//
 	// +optional
 	Source *SpiffeWorkloadAPISource `json:"source,omitempty"`
-
-	// How long to wait (in seconds) for the initial connection to the SPIFFE Workload API
-	// before failing startup. Rendered into the gateway config as `spiffeConnectTimeout`.
-	// Defaults to 10.
-	//
-	// +optional
-	// +kubebuilder:validation:Minimum=1
-	ConnectTimeout *int64 `json:"connectTimeout,omitempty"`
 }
 
 // SpiffeWorkloadAPISource describes how the SPIFFE Workload API socket is mounted into the

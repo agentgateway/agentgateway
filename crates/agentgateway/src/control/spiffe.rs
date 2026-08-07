@@ -22,9 +22,6 @@ pub struct Config {
 	/// Endpoint of the SPIFFE Workload API (e.g. `unix:///run/spire/agent.sock`), from the
 	/// `spiffeEndpoint` config.
 	pub endpoint: String,
-	/// How long to wait for the initial connection to the Workload API before failing startup.
-	#[serde(with = "crate::serde_dur")]
-	pub connect_timeout: Duration,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -109,23 +106,17 @@ impl std::fmt::Debug for SpiffeClient {
 
 impl SpiffeClient {
 	/// Connects to the SPIFFE Workload API and performs the initial SVID/bundle sync.
-	pub async fn new(endpoint: String, connect_timeout: Duration) -> Result<Self, Error> {
-		info!(endpoint = %endpoint, timeout = ?connect_timeout, "connecting to SPIFFE workload API");
-		let build = async {
-			X509Source::builder()
-				.endpoint(endpoint.clone())
-				.build()
-				.await
-		};
-		let source = match tokio::time::timeout(connect_timeout, build).await {
-			Ok(Ok(source)) => source,
-			Ok(Err(e)) => {
+	pub async fn new(endpoint: String) -> Result<Self, Error> {
+		info!(endpoint = %endpoint, "connecting to SPIFFE workload API");
+		let source: X509Source = match X509Source::builder()
+			.endpoint(endpoint.clone())
+			.build()
+			.await
+		{
+			Ok(source) => source,
+			Err(e) => {
 				warn!(endpoint = %endpoint, error = %e, "failed to connect to SPIFFE workload API");
 				return Err(Error::Source(e));
-			},
-			Err(_) => {
-				warn!(endpoint = %endpoint, timeout = ?connect_timeout, "timed out connecting to SPIFFE workload API");
-				return Err(Error::Timeout(connect_timeout, endpoint));
 			},
 		};
 		let client = Self {
@@ -573,7 +564,7 @@ mod tests {
 		)
 		.await;
 
-		let client = SpiffeClient::new(endpoint, Duration::from_secs(5))
+		let client = SpiffeClient::new(endpoint)
 			.await
 			.expect("SpiffeClient should connect to the fake Workload API");
 
@@ -602,7 +593,7 @@ mod tests {
 			None,
 		)
 		.await;
-		let client = SpiffeClient::new(endpoint, Duration::from_secs(5))
+		let client = SpiffeClient::new(endpoint)
 			.await
 			.expect("SpiffeClient should connect to the fake Workload API");
 
@@ -715,7 +706,7 @@ mod tests {
 		)
 		.await;
 		let spiffe = Arc::new(
-			SpiffeClient::new(endpoint, Duration::from_secs(5))
+			SpiffeClient::new(endpoint)
 				.await
 				.expect("SpiffeClient should connect to the fake Workload API"),
 		);
@@ -788,7 +779,7 @@ mod tests {
 		)
 		.await;
 		let spiffe = Arc::new(
-			SpiffeClient::new(endpoint, Duration::from_secs(5))
+			SpiffeClient::new(endpoint)
 				.await
 				.expect("SpiffeClient should connect to the fake Workload API"),
 		);
@@ -842,7 +833,7 @@ mod tests {
 		)
 		.await;
 
-		let client = SpiffeClient::new(endpoint, Duration::from_secs(5))
+		let client = SpiffeClient::new(endpoint)
 			.await
 			.expect("SpiffeClient should connect to the fake Workload API");
 
