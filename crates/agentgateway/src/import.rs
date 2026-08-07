@@ -780,20 +780,24 @@ fn import_litellm_model(
 			None
 		},
 	};
-	if public_name.contains('*') || model_id.contains('*') {
-		let wildcard_path = if public_name.contains('*') {
-			format!("{source_path}.model_name")
-		} else {
-			format!("{source_path}.litellm_params.model")
-		};
-		findings.push(ImportFinding {
-			source_path: wildcard_path,
-			status: ImportStatus::Unsupported,
-			message: "LiteLLM wildcard models are not yet supported and were not emitted".to_string(),
-		});
-		return None;
-	}
 	let (provider_prefix, upstream_model) = split_provider(&model_id);
+	for (path, pattern) in [
+		(format!("{source_path}.model_name"), public_name.as_str()),
+		(
+			format!("{source_path}.litellm_params.model"),
+			upstream_model,
+		),
+	] {
+		if !is_supported_model_pattern(pattern) {
+			findings.push(ImportFinding {
+				source_path: path,
+				status: ImportStatus::Unsupported,
+				message: "LiteLLM model wildcards must appear at most once, at the beginning or end; the model was not emitted"
+					.to_string(),
+			});
+			return None;
+		}
+	}
 	let Some(provider) = map_provider(provider_prefix) else {
 		findings.push(ImportFinding {
 			source_path: format!("{source_path}.litellm_params.model"),
@@ -802,9 +806,23 @@ fn import_litellm_model(
 		});
 		return None;
 	};
+	if upstream_model.contains('*')
+		&& upstream_model != "*"
+		&& upstream_model != public_name.as_str()
+	{
+		findings.push(ImportFinding {
+			source_path: format!("{source_path}.litellm_params.model"),
+			status: ImportStatus::Unsupported,
+			message: "LiteLLM upstream wildcard rewrites cannot be represented safely and the model was not emitted"
+				.to_string(),
+		});
+		return None;
+	}
 
 	let mut output_params = Map::new();
-	output_params.insert("model".to_string(), json!(upstream_model));
+	if !upstream_model.contains('*') {
+		output_params.insert("model".to_string(), json!(upstream_model));
+	}
 	move_litellm_provider_params(&mut params, &mut output_params);
 
 	let rpm = params.remove("rpm");
@@ -901,6 +919,13 @@ fn split_provider(model: &str) -> (&str, &str) {
 		Some((provider, model)) => (provider, model),
 		None => ("openai", model),
 	}
+}
+
+fn is_supported_model_pattern(pattern: &str) -> bool {
+	let wildcard_count = pattern.chars().filter(|character| *character == '*').count();
+	wildcard_count == 0
+		|| (wildcard_count == 1
+			&& (pattern == "*" || pattern.starts_with('*') || pattern.ends_with('*')))
 }
 
 fn map_provider(provider: &str) -> Option<&'static str> {
@@ -1161,7 +1186,7 @@ mod tests {
 	}
 
 	#[test]
-	fn reports_wildcard_models_without_emitting_malformed_names() {
+	fn imports_safe_wildcard_models_and_reports_unsupported_patterns() {
 		assert_litellm_golden("wildcard-model");
 	}
 
