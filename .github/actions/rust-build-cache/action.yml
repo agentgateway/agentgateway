@@ -44,10 +44,14 @@ runs:
       mkdir -p .github/rust-cache/.cargo .github/rust-cache-state
 
       crates_generation="$(git rev-parse HEAD:crates)"
-      proto_generation="$(git rev-parse HEAD:crates/protos/proto)-$(git rev-parse HEAD:crates/protos/build.rs)"
 
-      printf '# generation = %s\n' "$crates_generation" > .github/rust-cache/.cargo/config.toml
-      echo "protos=$proto_generation" >> "$GITHUB_OUTPUT"
+      # v2 ensures immutable caches created before the commit marker was added
+      # are restored only as fallbacks, then replaced by a marker-bearing cache.
+      printf '# generation-v2 = %s\n' "$crates_generation" > .github/rust-cache/.cargo/config.toml
+      {
+        echo "commit=$(git rev-parse HEAD)"
+        echo "crates=$crates_generation"
+      } >> "$GITHUB_OUTPUT"
 
   - name: Restore Rust cache
     uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
@@ -56,26 +60,71 @@ runs:
       # Workspace artifacts are normally omitted. Stable source mtimes and the
       # source-aware key above make them useful across fresh runners.
       cache-workspace-crates: true
-      # Keep the proto generation that produced cached build-script output. A
-      # fallback can then retain dependencies while safely regenerating changed protos.
+      # Keep the source commit and crates generation that produced the target
+      # artifacts so fallback restores can invalidate only changed inputs.
       cache-directories: .github/rust-cache-state
       save-if: ${{ inputs.save }}
 
-  # A fallback may contain old generated protos whose cached mtime is newer than
-  # the Git-restored source. Cargo would incorrectly skip build.rs in that case.
-  - name: Validate cached Rust proto generation
+  # The exact cache key contains the crates tree, but rust-cache deliberately
+  # omits it from the fallback prefix. A fallback can therefore come from a
+  # newer main build than an older PR commit. Since git-restore-mtime preserves
+  # that old commit time, Cargo could incorrectly accept the newer artifacts.
+  # Touch every input whose content differs from the commit that wrote the cache
+  # after restoring it, making the source unambiguously newer. For legacy caches
+  # without a producer marker, use the checkout's first parent as an approximation.
+  - name: Invalidate changed Rust sources from fallback cache
     shell: bash
     env:
-      CURRENT_PROTOS: ${{ steps.rust-cache-generation.outputs.protos }}
+      CURRENT_COMMIT: ${{ steps.rust-cache-generation.outputs.commit }}
+      CURRENT_CRATES: ${{ steps.rust-cache-generation.outputs.crates }}
     run: |
-      cached_protos="$(cat .github/rust-cache-state/protos 2>/dev/null || true)"
+      cached_commit="$(cat .github/rust-cache-state/commit 2>/dev/null || true)"
+      cached_crates="$(cat .github/rust-cache-state/crates 2>/dev/null || true)"
 
-      echo "Cached proto generation: ${cached_protos:-missing}"
-      echo "Current proto generation: $CURRENT_PROTOS"
+      echo "Cached Rust commit: ${cached_commit:-missing}"
+      echo "Cached crates generation: ${cached_crates:-missing}"
+      echo "Current Rust commit: $CURRENT_COMMIT"
+      echo "Current crates generation: $CURRENT_CRATES"
 
-      if [[ "$cached_protos" != "$CURRENT_PROTOS" ]]; then
-        echo "Proto inputs changed; forcing crates/protos/build.rs to rerun"
-        touch crates/protos/build.rs
+      if [[ "$cached_crates" != "$CURRENT_CRATES" ]]; then
+        # Legacy caches predate the producer-commit marker. Approximate them
+        # with the checked-out commit's first parent: for GitHub PR merge refs
+        # this is the main revision the PR was tested against.
+        if ! [[ "$cached_commit" =~ ^[0-9a-f]{40}$ ]] || ! git cat-file -e "${cached_commit}^{commit}"; then
+          cached_commit="$(git rev-parse "${CURRENT_COMMIT}^1" 2>/dev/null || true)"
+          echo "Approximated cached Rust commit: ${cached_commit:-unavailable}"
+        fi
+
+        if [[ "$cached_commit" =~ ^[0-9a-f]{40}$ ]] && git cat-file -e "${cached_commit}^{commit}"; then
+          echo "Rust sources differ from fallback cache; touching changed inputs"
+          git diff --name-only -z --diff-filter=ACMRTUXB "$cached_commit" "$CURRENT_COMMIT" -- crates |
+          while IFS= read -r -d '' changed_file; do
+            if [[ -e "$changed_file" ]]; then
+              echo "Touching $changed_file"
+              touch "./$changed_file"
+            fi
+          done
+
+          # A deleted input cannot be touched. In that uncommon case invalidate
+          # all remaining workspace inputs and let Cargo determine dependencies.
+          if ! git diff --quiet --diff-filter=D "$cached_commit" "$CURRENT_COMMIT" -- crates; then
+            echo "Rust inputs were deleted; touching the entire workspace"
+            git ls-files -z -- crates |
+            while IFS= read -r -d '' workspace_file; do
+              [[ ! -e "$workspace_file" ]] || touch "./$workspace_file"
+            done
+          fi
+        else
+          echo "Cached Rust commit and first parent are unavailable; touching the entire workspace"
+          git ls-files -z -- crates |
+          while IFS= read -r -d '' workspace_file; do
+            [[ ! -e "$workspace_file" ]] || touch "./$workspace_file"
+          done
+        fi
+      else
+        echo "Crates generation matches; restored workspace artifacts are current"
       fi
 
-      printf '%s\n' "$CURRENT_PROTOS" > .github/rust-cache-state/protos
+      rm -f .github/rust-cache-state/protos
+      printf '%s\n' "$CURRENT_COMMIT" > .github/rust-cache-state/commit
+      printf '%s\n' "$CURRENT_CRATES" > .github/rust-cache-state/crates
