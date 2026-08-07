@@ -347,11 +347,6 @@ impl ServerTLSConfig {
 		}
 	}
 
-	/// Whether this listener sources its serving identity from SPIFFE.
-	pub fn is_spiffe(&self) -> bool {
-		matches!(self.source, ServerTlsCertificateSource::Spiffe { .. })
-	}
-
 	/// config_for returns the appropriate config for the requested ALPN
 	/// If none is return, it means the certificates were invalid.
 	pub async fn config_for(

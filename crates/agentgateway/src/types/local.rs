@@ -3185,7 +3185,6 @@ async fn convert(
 		workloads,
 		services,
 	};
-	validate_spiffe_enabled(config, &normalized)?;
 	Ok(normalized)
 }
 
@@ -3244,63 +3243,6 @@ fn gateway_config_has_route_kind(gateway: &LocalGateway, kind: GatewayRouteKind)
 			.map(|protocol| gateway_route_kind(protocol) == kind)
 			.unwrap_or(false)
 	})
-}
-
-/// Fail fast if any listener or backend sources its TLS identity from SPIFFE while SPIFFE is not
-/// enabled. Without this, the misconfiguration surfaces only later — per TLS handshake for
-/// listeners and per request for backends — with the gateway otherwise reporting healthy.
-fn validate_spiffe_enabled(
-	config: &Config,
-	normalized: &NormalizedLocalConfig,
-) -> anyhow::Result<()> {
-	if config.spiffe.is_some() {
-		return Ok(());
-	}
-	let listener_uses_spiffe = normalized
-		.binds
-		.iter()
-		.flat_map(|b| b.listeners.iter())
-		.any(|l| match &l.protocol {
-			ListenerProtocol::HTTPS(t) => t.is_spiffe(),
-			ListenerProtocol::TLS(Some(t)) => t.is_spiffe(),
-			_ => false,
-		});
-	// Backend TLS may attach to a standalone backend, to a route's backend reference (HTTP and
-	// TCP alike), or arrive embedded in a policy that itself dials an auxiliary service
-	// (ext_authz, guardrails, telemetry exporters, ...). Scan all of them.
-	let route_backend_policies = normalized
-		.listener_routes
-		.iter()
-		.chain(normalized.route_groups.iter())
-		.flat_map(|(_, routes)| routes.iter())
-		.flat_map(|r| r.backends.iter().flat_map(|b| b.inline_policies.iter()));
-	let tcp_route_backend_policies = normalized
-		.listener_tcp_routes
-		.iter()
-		.flat_map(|(_, routes)| routes.iter())
-		.flat_map(|r| r.backends.iter().flat_map(|b| b.inline_policies.iter()));
-	let backend_uses_spiffe = normalized
-		.backends
-		.iter()
-		.flat_map(|b| b.inline_policies.iter())
-		.chain(route_backend_policies)
-		.chain(tcp_route_backend_policies)
-		.any(backend_policy_is_spiffe);
-	let targeted_policy_uses_spiffe = normalized
-		.policies
-		.iter()
-		.any(|p| matches!(&p.policy, PolicyType::Backend(b) if backend_policy_is_spiffe(b)));
-	if listener_uses_spiffe || backend_uses_spiffe || targeted_policy_uses_spiffe {
-		bail!(
-			"TLS is configured to source identity from SPIFFE (tls.spiffe / backendTLS.spiffe), but SPIFFE is not enabled; set config.spiffeEndpoint"
-		);
-	}
-	Ok(())
-}
-
-/// Whether this backend policy is a SPIFFE-sourced `BackendTLS` policy.
-fn backend_policy_is_spiffe(p: &BackendTrafficPolicy) -> bool {
-	matches!(p, BackendTrafficPolicy::BackendTLS(bt) if bt.is_spiffe())
 }
 
 fn validate_local_listener_ports(config: &LocalConfig) -> anyhow::Result<()> {
