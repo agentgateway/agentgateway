@@ -26,6 +26,7 @@ use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::{FailureMode, mergestream, upstream};
 use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
+use crate::telemetry::trc::TraceParent;
 use crate::types::agent::{McpPrefixMode, McpTargetSpec};
 use crate::*;
 
@@ -50,10 +51,17 @@ impl IncomingRequestContext {
 		}
 	}
 	pub fn new(parts: &::http::request::Parts) -> Self {
+		let mut headers = parts.headers.clone();
+		if let Some(tp) = parts.extensions.get::<TraceParent>() {
+			headers.insert(
+				http::x_headers::TRACEPARENT,
+				::http::HeaderValue::from_bytes(format!("{tp:?}").as_bytes()).unwrap(),
+			);
+		}
 		Self {
 			method: parts.method.clone(),
 			uri: parts.uri.clone(),
-			headers: parts.headers.clone(),
+			headers,
 			ext: parts.extensions.clone(),
 			authority: parts.uri.authority().cloned(),
 		}
@@ -731,5 +739,42 @@ mod tests {
 		let mut req = ping_request();
 		ctx.stamp_trace_context(&mut req.get_meta_mut().0);
 		assert!(req.get_meta().0.get("traceparent").is_none());
+	}
+
+	const GATEWAY_TP: &str = "00-4bf92f3577b34da6a3ce929d0e0e4736-076240a3c93307bf-01";
+	const CALLER_TP: &str = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+
+	// Inbound request carries the caller's traceparent; the gateway's own span must win.
+	fn ctx_with_stale_traceparent() -> IncomingRequestContext {
+		let mut req = ::http::Request::builder()
+			.uri("http://example/")
+			.header("traceparent", CALLER_TP)
+			.header("tracestate", "vendor=abc")
+			.body(())
+			.unwrap();
+		req
+			.extensions_mut()
+			.insert(TraceParent::try_from(GATEWAY_TP).unwrap());
+		IncomingRequestContext::new(&req.into_parts().0)
+	}
+
+	#[test]
+	fn apply_prefers_gateway_span() {
+		let ctx = ctx_with_stale_traceparent();
+		let mut req = empty_upstream_req();
+		ctx.apply(&mut req).unwrap();
+		assert_eq!(req.headers().get("traceparent").unwrap(), GATEWAY_TP);
+		// Other trace headers still pass through untouched.
+		assert_eq!(req.headers().get("tracestate").unwrap(), "vendor=abc");
+	}
+
+	#[test]
+	fn stamp_trace_context_prefers_gateway_span() {
+		let ctx = ctx_with_stale_traceparent();
+		let mut req = ping_request();
+		ctx.stamp_trace_context(&mut req.get_meta_mut().0);
+		let meta = &req.get_meta().0;
+		assert_eq!(meta.get("traceparent").unwrap(), GATEWAY_TP);
+		assert_eq!(meta.get("tracestate").unwrap(), "vendor=abc");
 	}
 }

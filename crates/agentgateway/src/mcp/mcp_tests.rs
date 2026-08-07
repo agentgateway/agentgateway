@@ -1931,6 +1931,116 @@ async fn elicitation_roundtrip_completes_tool_call() {
 	);
 }
 
+// The traceparent forwarded to the MCP upstream must carry the gateway's own span id, not the
+// caller's, so the upstream's SERVER span nests under the gateway span like HTTP backends do.
+#[tokio::test]
+async fn mcp_upstream_traceparent_is_gateway_span() {
+	use wiremock::{Mock, ResponseTemplate};
+
+	use crate::types::agent::{
+		ListenerName, SimpleBackendReference, SimpleBackendReferenceWithPolicies, Target,
+		TracingConfig, TracingPolicy, TracingProtocol,
+	};
+
+	let upstream = wiremock::MockServer::start().await;
+	let upstream_frame = concat!(
+		"data: {\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{",
+		"\"protocolVersion\":\"2025-06-18\",",
+		"\"capabilities\":{\"tools\":{}},",
+		"\"serverInfo\":{\"name\":\"mock\",\"version\":\"0.0.1\"}",
+		"}}\n\n",
+	);
+	Mock::given(wiremock::matchers::method("POST"))
+		.respond_with(ResponseTemplate::new(200).set_body_raw(upstream_frame, "text/event-stream"))
+		.mount(&upstream)
+		.await;
+
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(*upstream.address(), true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(*upstream.address()));
+	// Tracing must be active for the gateway to create its own span. Exported spans are
+	// not inspected; the collector target is just the upstream mock.
+	t.with_policy(TargetedPolicy {
+		key: "frontend/tracing".into(),
+		name: None,
+		target: PolicyTarget::Gateway(ListenerName::default().into()),
+		inheritance: Default::default(),
+		policy: FrontendPolicy::Tracing(Arc::new(TracingPolicy {
+			config: TracingConfig {
+				target: SimpleBackendReferenceWithPolicies {
+					target: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(
+						*upstream.address(),
+					))),
+					policies: vec![],
+				},
+				attributes: Default::default(),
+				resources: Default::default(),
+				remove: vec![],
+				random_sampling: None,
+				client_sampling: None,
+				filter: None,
+				path: "/v1/traces".to_string(),
+				protocol: TracingProtocol::Http,
+			},
+			fields: Default::default(),
+			tracer: once_cell::sync::OnceCell::new(),
+		}))
+		.into(),
+	});
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let initialize = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {
+				"name": "test-client",
+				"version": "0.0.1"
+			}
+		}
+	});
+
+	let caller_trace_id = "4bf92f3577b34da6a3ce929d0e0e4736";
+	let response = mcp_json_post(&client, &url, &initialize)
+		.header(
+			"traceparent",
+			format!("00-{caller_trace_id}-00f067aa0ba902b7-01"),
+		)
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+
+	// The gateway's span id is `span.id` in the access log; the upstream must see exactly it.
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("mcp.method.name", "initialize"),
+		("trace.id", caller_trace_id),
+	])
+	.await
+	.unwrap();
+	let expected = format!(
+		"00-{caller_trace_id}-{}-01",
+		log["span.id"].as_str().unwrap()
+	);
+	// The mock also receives span exports; pick out the JSON-RPC initialize call.
+	let reqs = upstream.received_requests().await.unwrap();
+	let init = reqs
+		.iter()
+		.find(|r| {
+			serde_json::from_slice::<serde_json::Value>(&r.body)
+				.is_ok_and(|b| b["method"] == "initialize")
+		})
+		.expect("upstream initialize request");
+	let tp = init.headers.get("traceparent").unwrap().to_str().unwrap();
+	assert_eq!(tp, expected);
+}
+
 // Forwarded modern responses may come back as a single JSON object or as an SSE stream.
 // Validation-layer errors are always plain JSON.
 async fn read_response_message(response: reqwest::Response) -> serde_json::Value {
