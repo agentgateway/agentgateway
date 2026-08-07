@@ -404,6 +404,11 @@ struct TextRequest {
 }
 
 impl crate::llm::RequestType for TextRequest {
+	// No request body is ever rendered from this.
+	fn body_is_json(&self) -> bool {
+		false
+	}
+
 	fn supports_model(&self) -> bool {
 		false
 	}
@@ -730,12 +735,16 @@ impl Policy {
 		Ok(serde_json::Value::Object(map))
 	}
 
+	pub fn has_final_transformations(&self) -> bool {
+		self.final_transformations.is_some()
+	}
+
 	pub fn apply_final_transformations(
 		&self,
 		body: Vec<u8>,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<Vec<u8>, AIError> {
-		if self.final_transformations.is_none() {
+		if !self.has_final_transformations() {
 			// Fast path: avoid the parse/serialize round-trip entirely.
 			return Ok(body);
 		}

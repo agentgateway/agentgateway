@@ -350,6 +350,9 @@ impl Request {
 }
 
 impl RequestType for Request {
+	fn body_is_json(&self) -> bool {
+		true
+	}
 	fn model(&mut self) -> &mut Option<String> {
 		&mut self.model
 	}

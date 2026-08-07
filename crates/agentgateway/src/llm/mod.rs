@@ -1892,8 +1892,12 @@ impl AIProvider {
 		let body = render(self, &req, &parts, request_model)?;
 		// Couldn't find a better place to apply it, needs to be after rendered. but before generating the request.
 		let body = match policies {
-			Some(p) => p.apply_final_transformations(body, log)?,
-			None => body,
+			Some(p) if req.body_is_json() => p.apply_final_transformations(body, log)?,
+			Some(p) if p.has_final_transformations() => {
+				warn!("skipping final transformations: request body is not json");
+				body
+			},
+			_ => body,
 		};
 		parts.headers.remove(header::CONTENT_LENGTH);
 		let req = Request::from_parts(parts, Body::from(body));
