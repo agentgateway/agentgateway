@@ -7,7 +7,7 @@
 //! From the current SVID (the cert chain + private key) it builds, on demand, both a
 //! [`ServerConfig`] for terminating TLS on listeners and a [`ClientConfig`] for outbound mTLS to
 //! upstream backends.
-use ::spiffe::{X509Source, X509SourceUpdates};
+use ::spiffe::{X509Context, X509Source, X509SourceUpdates, X509Svid};
 use rustls::client::danger::ServerCertVerifier;
 use rustls::server::danger::ClientCertVerifier;
 use rustls::{ClientConfig, ServerConfig};
@@ -168,10 +168,11 @@ impl SpiffeClient {
 	}
 
 	fn build_server_config(&self, alpns: Vec<Vec<u8>>) -> Result<ServerConfig, Error> {
+		let ctx = self.source.x509_context()?;
 		let provider = transport::tls::provider();
 		// Verify inbound client SVIDs against the gateway's local trust domain bundle.
-		let verifier = self.build_client_verifier(provider.clone())?;
-		let (chain, key, spiffe_id) = self.svid_identity()?;
+		let verifier = build_client_verifier(&ctx, provider.clone())?;
+		let (chain, key, spiffe_id) = svid_identity(&ctx)?;
 
 		let mut config = ServerConfig::builder_with_provider(provider)
 			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
@@ -224,10 +225,11 @@ impl SpiffeClient {
 		alpns: Vec<Vec<u8>>,
 		verify_sans: Vec<String>,
 	) -> Result<ClientConfig, Error> {
+		let ctx = self.source.x509_context()?;
 		let provider = transport::tls::provider();
 		let sans_count = verify_sans.len();
-		let verifier = self.build_server_verifier(verify_sans)?;
-		let (chain, key, spiffe_id) = self.svid_identity()?;
+		let verifier = build_server_verifier(&ctx, verify_sans)?;
+		let (chain, key, spiffe_id) = svid_identity(&ctx)?;
 		let mut config = ClientConfig::builder_with_provider(provider)
 			.with_protocol_versions(transport::tls::ALL_TLS_VERSIONS)
 			.expect("client config must be valid")
@@ -248,87 +250,88 @@ impl SpiffeClient {
 		);
 		Ok(config)
 	}
+}
 
-	/// Builds a `RootCertStore` from the gateway's own trust domain bundle, federated bundles are ignored
-	fn local_roots(&self, purpose: &str) -> Result<Arc<rustls::RootCertStore>, Error> {
-		let svid = self.source.svid()?;
-		let td = svid.spiffe_id().trust_domain();
-		let bundle = self
-			.source
-			.try_bundle_for_trust_domain(td)
-			.ok_or(Error::EmptyBundle)?;
-		let mut roots = rustls::RootCertStore::empty();
-		for authority in bundle.authorities() {
-			roots
-				.add(CertificateDer::from(authority.as_bytes().to_vec()))
-				.map_err(Error::Rustls)?;
-		}
-		if roots.is_empty() {
-			return Err(Error::EmptyBundle);
-		}
-		debug!(trust_domain = %td, purpose, "loaded SPIFFE trust bundle");
-		Ok(Arc::new(roots))
+fn snapshot_svid(ctx: &X509Context) -> Result<&Arc<X509Svid>, Error> {
+	ctx.default_svid().ok_or(Error::NoSvid)
+}
+
+/// Builds a `RootCertStore` from the gateway's own trust domain bundle, federated bundles are ignored
+fn local_roots(ctx: &X509Context, purpose: &str) -> Result<Arc<rustls::RootCertStore>, Error> {
+	let svid = snapshot_svid(ctx)?;
+	let td = svid.spiffe_id().trust_domain();
+	let bundle = ctx.bundle_set().get(td).ok_or(Error::EmptyBundle)?;
+	let mut roots = rustls::RootCertStore::empty();
+	for authority in bundle.authorities() {
+		roots
+			.add(CertificateDer::from(authority.as_bytes().to_vec()))
+			.map_err(Error::Rustls)?;
 	}
-
-	fn build_client_verifier(
-		&self,
-		provider: Arc<rustls::crypto::CryptoProvider>,
-	) -> Result<Arc<dyn ClientCertVerifier>, Error> {
-		let roots = self.local_roots("client certificate verification")?;
-		let verifier =
-			rustls::server::WebPkiClientVerifier::builder_with_provider(roots, provider).build()?;
-		Ok(verifier)
+	if roots.is_empty() {
+		return Err(Error::EmptyBundle);
 	}
+	debug!(trust_domain = %td, purpose, "loaded SPIFFE trust bundle");
+	Ok(Arc::new(roots))
+}
 
-	fn build_server_verifier(
-		&self,
-		verify_sans: Vec<String>,
-	) -> Result<Arc<dyn ServerCertVerifier>, Error> {
-		// Verify the upstream SVID against the gateway's local trust domain bundle, then optionally
-		// pin its SPIFFE ID. Note that SPIFFE SVIDs carry a `spiffe://` URI SAN and no DNS SAN, so
-		// standard WebPKI hostname verification does not apply.
+fn build_client_verifier(
+	ctx: &X509Context,
+	provider: Arc<rustls::crypto::CryptoProvider>,
+) -> Result<Arc<dyn ClientCertVerifier>, Error> {
+	let roots = local_roots(ctx, "client certificate verification")?;
+	let verifier =
+		rustls::server::WebPkiClientVerifier::builder_with_provider(roots, provider).build()?;
+	Ok(verifier)
+}
 
-		let roots = self.local_roots("upstream server verification")?;
-		let verifier: Arc<dyn ServerCertVerifier> = if verify_sans.is_empty() {
-			// No SPIFFE ID pinned: accept any SVID that chains to the bundle.
-			let inner = rustls::client::WebPkiServerVerifier::builder_with_provider(
-				roots,
-				transport::tls::provider(),
-			)
-			.build()?;
-			Arc::new(transport::tls::insecure::NoServerNameVerification::new(
-				inner,
-			))
-		} else {
-			let alt_names = verify_sans
-				.iter()
-				.cloned()
-				.map(transport::tls::ExtendedServerName::try_from)
-				.collect::<Result<Box<[_]>, _>>()
-				.map_err(|e| Error::InvalidSan(e.to_string()))?;
-			Arc::new(transport::tls::insecure::AltHostnameVerifier::new(
-				roots, alt_names,
-			))
-		};
-		Ok(verifier)
-	}
+fn build_server_verifier(
+	ctx: &X509Context,
+	verify_sans: Vec<String>,
+) -> Result<Arc<dyn ServerCertVerifier>, Error> {
+	// Verify the upstream SVID against the gateway's local trust domain bundle, then optionally
+	// pin its SPIFFE ID. Note that SPIFFE SVIDs carry a `spiffe://` URI SAN and no DNS SAN, so
+	// standard WebPKI hostname verification does not apply.
 
-	/// Extracts the current SVID's certificate chain, private key, and SPIFFE ID string.
-	fn svid_identity(
-		&self,
-	) -> Result<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>, String), Error> {
-		let svid = self.source.svid()?;
-		let chain: Vec<CertificateDer<'static>> = svid
-			.cert_chain()
+	let roots = local_roots(ctx, "upstream server verification")?;
+	let verifier: Arc<dyn ServerCertVerifier> = if verify_sans.is_empty() {
+		// No SPIFFE ID pinned: accept any SVID that chains to the bundle.
+		let inner = rustls::client::WebPkiServerVerifier::builder_with_provider(
+			roots,
+			transport::tls::provider(),
+		)
+		.build()?;
+		Arc::new(transport::tls::insecure::NoServerNameVerification::new(
+			inner,
+		))
+	} else {
+		let alt_names = verify_sans
 			.iter()
-			.map(|c| CertificateDer::from(c.as_bytes().to_vec()))
-			.collect();
-		// The SPIFFE Workload API always returns the key as PKCS#8 DER.
-		let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(
-			svid.private_key().as_bytes().to_vec(),
-		));
-		Ok((chain, key, svid.spiffe_id().to_string()))
-	}
+			.cloned()
+			.map(transport::tls::ExtendedServerName::try_from)
+			.collect::<Result<Box<[_]>, _>>()
+			.map_err(|e| Error::InvalidSan(e.to_string()))?;
+		Arc::new(transport::tls::insecure::AltHostnameVerifier::new(
+			roots, alt_names,
+		))
+	};
+	Ok(verifier)
+}
+
+/// Extracts the certificate chain, private key, and SPIFFE ID string from the X%09Context
+fn svid_identity(
+	ctx: &X509Context,
+) -> Result<(Vec<CertificateDer<'static>>, PrivateKeyDer<'static>, String), Error> {
+	let svid = snapshot_svid(ctx)?;
+	let chain: Vec<CertificateDer<'static>> = svid
+		.cert_chain()
+		.iter()
+		.map(|c| CertificateDer::from(c.as_bytes().to_vec()))
+		.collect();
+	// The SPIFFE Workload API always returns the key as PKCS#8 DER.
+	let key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(
+		svid.private_key().as_bytes().to_vec(),
+	));
+	Ok((chain, key, svid.spiffe_id().to_string()))
 }
 
 // The SPIFFE Workload API is a Unix-domain-socket protocol, limited to unix.
@@ -601,8 +604,9 @@ mod tests {
 			.expect("SpiffeClient should connect to the fake Workload API");
 
 		let provider = transport::tls::provider();
-		let client_verifier = client.build_client_verifier(provider).unwrap();
-		let server_verifier = client.build_server_verifier(vec![]).unwrap();
+		let ctx = client.source.x509_context().unwrap();
+		let client_verifier = build_client_verifier(&ctx, provider).unwrap();
+		let server_verifier = build_server_verifier(&ctx, vec![]).unwrap();
 		let now = UnixTime::now();
 		let sni = ServerName::try_from("example.org").unwrap();
 
@@ -635,9 +639,11 @@ mod tests {
 		);
 
 		// SPIFFE-ID pinning: the matching ID is accepted, a valid but unpinned ID is rejected.
-		let pinned = client
-			.build_server_verifier(vec!["spiffe://example.org/ns/default/sa/peer".to_string()])
-			.unwrap();
+		let pinned = build_server_verifier(
+			&ctx,
+			vec!["spiffe://example.org/ns/default/sa/peer".to_string()],
+		)
+		.unwrap();
 		assert!(
 			pinned
 				.verify_server_cert(&legit, &[], &sni, &[], now)
