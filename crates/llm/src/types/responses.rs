@@ -464,13 +464,11 @@ impl RequestType for Request {
 }
 
 fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {
-	let mut content = Vec::new();
-
-	for item in &resp.output {
-		if let OutputItem::FunctionCall(_) = item {
-			content.extend(output_item_tool_call_part(item));
-		}
-	}
+	let content: Vec<_> = resp
+		.output
+		.iter()
+		.filter_map(output_item_tool_call_part)
+		.collect();
 
 	if content.is_empty() {
 		return None;
@@ -484,17 +482,28 @@ fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {
 }
 
 pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMessagePart> {
-	let OutputItem::FunctionCall(call) = item else {
-		return None;
-	};
-	let arguments = match serde_json::from_str(&call.arguments) {
-		Ok(arguments) => arguments,
-		Err(_) if call.arguments.trim().is_empty() => serde_json::Value::Object(Default::default()),
-		Err(_) => serde_json::Value::String(call.arguments.clone()),
+	let (id, name, arguments) = match item {
+		OutputItem::FunctionCall(call) => {
+			let arguments = match serde_json::from_str(&call.arguments) {
+				Ok(arguments) => arguments,
+				Err(_) if call.arguments.trim().is_empty() => serde_json::Value::Object(Default::default()),
+				Err(_) => serde_json::Value::String(call.arguments.clone()),
+			};
+			(&call.call_id, &call.name, arguments)
+		},
+		OutputItem::CustomToolCall(call) => {
+			let arguments = match serde_json::from_str(&call.input) {
+				Ok(arguments) => arguments,
+				Err(_) if call.input.trim().is_empty() => serde_json::Value::Object(Default::default()),
+				Err(_) => serde_json::Value::String(call.input.clone()),
+			};
+			(&call.call_id, &call.name, arguments)
+		},
+		_ => return None,
 	};
 	Some(OutputMessagePart::ToolCall {
-		id: strng::new(&call.call_id),
-		name: strng::new(&call.name),
+		id: strng::new(id),
+		name: strng::new(name),
 		arguments,
 	})
 }

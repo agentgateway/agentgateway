@@ -1,0 +1,54 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/responses/stream-custom-tool.json
+---
+event: response.created
+data: {"type":"response.created","sequence_number":0,"response":{"created_at":123,"id":"","model":"gpt-5.6-luna","object":"response","output":[],"status":"in_progress"}}
+
+event: response.output_item.added
+data: {"type":"response.output_item.added","sequence_number":1,"output_index":0,"item":{"type":"custom_tool_call","id":"ctc_123","call_id":"call_xxx","name":"exec","input":""}}
+
+event: response.custom_tool_call_input.delta
+data: {"type":"response.custom_tool_call_input.delta","sequence_number":2,"output_index":0,"item_id":"ctc_123","delta":"const r = await tools.exec_command({cmd:\"echo\"}); "}
+
+event: response.custom_tool_call_input.delta
+data: {"type":"response.custom_tool_call_input.delta","sequence_number":3,"output_index":0,"item_id":"ctc_123","delta":"text(r.output);"}
+
+event: response.custom_tool_call_input.done
+data: {"type":"response.custom_tool_call_input.done","sequence_number":4,"output_index":0,"item_id":"ctc_123","input":"const r = await tools.exec_command({cmd:\"echo\"}); text(r.output);"}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":5,"output_index":0,"item":{"type":"custom_tool_call","id":"ctc_123","call_id":"call_xxx","name":"exec","input":"const r = await tools.exec_command({cmd:\"echo\"}); text(r.output);"}}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":6,"response":{"created_at":123,"id":"","model":"gpt-5.6-luna","object":"response","output":[{"type":"custom_tool_call","id":"ctc_123","call_id":"call_xxx","name":"exec","input":"const r = await tools.exec_command({cmd:\"echo\"}); text(r.output);"}],"status":"completed","usage":{"input_tokens":10,"input_tokens_details":{"cached_tokens":4},"output_tokens":5,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":15}}}
+
+data: [DONE]
+
+
+
+{
+  "input_tokens": 10,
+  "output_tokens": 5,
+  "total_tokens": 15,
+  "reasoning_tokens": 0,
+  "cached_input_tokens": 4,
+  "provider_model": "gpt-5.6-luna",
+  "completion": [
+    ""
+  ],
+  "output_messages": [
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_call",
+          "id": "call_123",
+          "name": "exec",
+          "arguments": "const r = await tools.exec_command({cmd:\"echo\"}); text(r.output);"
+        }
+      ],
+      "finish_reason": "completed"
+    }
+  ]
+}

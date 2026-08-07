@@ -656,6 +656,7 @@ mod responses {
 	];
 	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", &[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT]),
+		("custom-tool", &[RESPONSES_TO_RESPONSES]),
 		("truncated_tool_call", &[RESPONSES_TO_RESPONSES]),
 	];
 	const EMBEDDING_RESPONSES: &[(&str, &str)] = &[
@@ -706,6 +707,7 @@ mod responses {
 	const VERTEX_GEMINI_STREAM_RESPONSES: &[&str] = &["stream_tool"];
 	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream", &[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT]),
+		("stream-custom-tool", &[RESPONSES_TO_RESPONSES]),
 		(
 			"stream-image",
 			&[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT],
