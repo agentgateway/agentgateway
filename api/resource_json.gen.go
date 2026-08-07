@@ -1546,6 +1546,94 @@ func (this *BackendPolicySpec_McpAuthorization) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for BackendPolicySpec_McpDirectResponse
+func (this *BackendPolicySpec_McpDirectResponse) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_McpDirectResponse
+func (this *BackendPolicySpec_McpDirectResponse) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for BackendPolicySpec_McpDirectResponse_Annotations
+func (this *BackendPolicySpec_McpDirectResponse_Annotations) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_McpDirectResponse_Annotations
+func (this *BackendPolicySpec_McpDirectResponse_Annotations) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for BackendPolicySpec_McpDirectResponse_TextContent
+func (this *BackendPolicySpec_McpDirectResponse_TextContent) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_McpDirectResponse_TextContent
+func (this *BackendPolicySpec_McpDirectResponse_TextContent) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for BackendPolicySpec_McpDirectResponse_ResourceLink
+func (this *BackendPolicySpec_McpDirectResponse_ResourceLink) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_McpDirectResponse_ResourceLink
+func (this *BackendPolicySpec_McpDirectResponse_ResourceLink) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for BackendPolicySpec_McpDirectResponse_ContentBlock
+func (this *BackendPolicySpec_McpDirectResponse_ContentBlock) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_McpDirectResponse_ContentBlock
+func (this *BackendPolicySpec_McpDirectResponse_ContentBlock) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for BackendPolicySpec_McpDirectResponse_CallToolResult
+func (this *BackendPolicySpec_McpDirectResponse_CallToolResult) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_McpDirectResponse_CallToolResult
+func (this *BackendPolicySpec_McpDirectResponse_CallToolResult) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for BackendPolicySpec_McpDirectResponse_DirectResponse
+func (this *BackendPolicySpec_McpDirectResponse_DirectResponse) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_McpDirectResponse_DirectResponse
+func (this *BackendPolicySpec_McpDirectResponse_DirectResponse) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for BackendPolicySpec_McpDirectResponse_DirectResponseRule
+func (this *BackendPolicySpec_McpDirectResponse_DirectResponseRule) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for BackendPolicySpec_McpDirectResponse_DirectResponseRule
+func (this *BackendPolicySpec_McpDirectResponse_DirectResponseRule) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for BackendPolicySpec_McpAuthentication
 func (this *BackendPolicySpec_McpAuthentication) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
