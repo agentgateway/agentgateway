@@ -1,0 +1,138 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw-audit
+  namespace: default
+spec:
+  targetRefs:
+    - kind: HTTPRoute
+      name: test
+      group: gateway.networking.k8s.io
+  backend:
+    ai:
+      promptGuard:
+        request:
+          - response:
+              message: "regex rejected on request"
+            regex:
+              action: Audit
+              builtins:
+                - CreditCard
+              matches:
+                - 'bad.*'
+          - openAIModeration:
+              action: Audit
+          - bedrockGuardrails:
+              action: Audit
+              identifier: bedrock-guardrail-identifier
+              version: DRAFT
+              region: us-west-2
+          - googleModelArmor:
+              action: Audit
+              templateId: model-armor-template-id
+              projectId: model-armor-project-id
+              location: us-central1
+          - webhook:
+              action: Audit
+              backendRef:
+                name: webhook
+                kind: Service
+                group: ""
+                port: 80
+              failureMode: FailClosed
+        response:
+          - bedrockGuardrails:
+              action: Audit
+              identifier: bedrock-guardrail-identifier
+              version: DRAFT
+              region: us-west-2
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webhook
+  namespace: default
+spec:
+  ports:
+    - port: 80
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
+        ai:
+          promptGuard:
+            request:
+            - regex:
+                action: AUDIT
+                rules:
+                - regex: bad.*
+                - builtin: CREDIT_CARD
+              rejection:
+                body: cmVnZXggcmVqZWN0ZWQgb24gcmVxdWVzdA==
+            - openaiModeration:
+                action: REJECT_AUDIT_ACTION_AUDIT
+            - bedrockGuardrails:
+                action: REJECT_AUDIT_ACTION_AUDIT
+                identifier: bedrock-guardrail-identifier
+                region: us-west-2
+                version: DRAFT
+            - googleModelArmor:
+                action: REJECT_AUDIT_ACTION_AUDIT
+                location: us-central1
+                projectId: model-armor-project-id
+                templateId: model-armor-template-id
+            - webhook:
+                action: REJECT_AUDIT_ACTION_AUDIT
+                backend:
+                  port: 80
+                  service:
+                    hostname: webhook.default.svc.cluster.local
+                    namespace: default
+            response:
+            - bedrockGuardrails:
+                action: REJECT_AUDIT_ACTION_AUDIT
+                identifier: bedrock-guardrail-identifier
+                region: us-west-2
+                version: DRAFT
+      key: backend/default/agw-audit:ai:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw-audit
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw-audit
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway
