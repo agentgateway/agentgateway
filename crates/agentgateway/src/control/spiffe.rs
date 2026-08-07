@@ -7,7 +7,7 @@
 //! From the current SVID (the cert chain + private key) it builds, on demand, both a
 //! [`ServerConfig`] for terminating TLS on listeners and a [`ClientConfig`] for outbound mTLS to
 //! upstream backends.
-use ::spiffe::X509Source;
+use ::spiffe::{X509Source, X509SourceUpdates};
 use rustls::client::danger::ServerCertVerifier;
 use rustls::server::danger::ClientCertVerifier;
 use rustls::{ClientConfig, ServerConfig};
@@ -93,6 +93,7 @@ impl<K: Eq + std::hash::Hash, V> RotatingCache<K, V> {
 #[derive(Clone)]
 pub struct SpiffeClient {
 	source: Arc<X509Source>,
+	updates: X509SourceUpdates,
 	server_cache: Arc<Mutex<RotatingCache<ServerConfigKey, ServerConfig>>>,
 	client_cache: Arc<Mutex<RotatingCache<ClientConfigCacheKey, ClientConfig>>>,
 }
@@ -118,8 +119,10 @@ impl SpiffeClient {
 				return Err(Error::Source(e));
 			},
 		};
+		let updates = source.updated();
 		let client = Self {
 			source: Arc::new(source),
+			updates,
 			server_cache: Arc::new(Mutex::new(RotatingCache::default())),
 			client_cache: Arc::new(Mutex::new(RotatingCache::default())),
 		};
@@ -146,7 +149,7 @@ impl SpiffeClient {
 	/// federation across trust domains is not supported.
 	/// Use the `source.spiffeId` CEL field for applying further restrictions.
 	pub fn server_config(&self, alpns: Vec<Vec<u8>>) -> Result<Arc<ServerConfig>, Error> {
-		let seq = self.source.updated().last();
+		let seq = self.updates.last();
 		let key = ServerConfigKey {
 			alpns: alpns.clone(),
 		};
@@ -196,7 +199,8 @@ impl SpiffeClient {
 		alpns: Vec<Vec<u8>>,
 		verify_sans: Vec<String>,
 	) -> Result<Arc<ClientConfig>, Error> {
-		let seq = self.source.updated().last();
+		// Sequence sampled before the SVID read; see server_config.
+		let seq = self.updates.last();
 		let key = ClientConfigCacheKey {
 			alpns: alpns.clone(),
 			verify_sans: verify_sans.clone(),
