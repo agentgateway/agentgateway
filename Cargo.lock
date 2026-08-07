@@ -6789,6 +6789,7 @@ dependencies = [
  "sqlx-postgres",
  "sqlx-sqlite",
  "syn 2.0.119",
+ "thiserror 2.0.19",
  "tokio",
  "url",
 ]
