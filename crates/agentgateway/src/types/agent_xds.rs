@@ -4677,7 +4677,7 @@ mod tests {
 				.collect(),
 				post_conversion_transformations: vec![(
 					"max_tokens".to_string(),
-					"\"Always answer in JSON\"".to_string(),
+					"80".to_string(),
 				)]
 				.into_iter()
 				.collect(),
