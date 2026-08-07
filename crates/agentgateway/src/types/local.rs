@@ -1230,7 +1230,7 @@ enum LocalListenerProtocol {
 pub struct LocalTLSServerConfig {
 	/// Certificate source mode. Static mode uses cert/key as the leaf certificate; dynamic CA
 	/// mode uses cert/key as a CA for on-demand SNI leaf certificate issuance.
-	/// Required unless `spiffe` is set.
+	/// Unused when `spiffe` is set.
 	#[serde(default)]
 	pub mode: LocalTLSServerMode,
 	/// Path to the TLS certificate file (leaf certificate, or CA certificate in dynamic CA mode).
