@@ -509,6 +509,37 @@ spec:
                                         maxItems: 64
                                         minItems: 1
                                         type: array
+                                      finalTransformations:
+                                        description: |-
+                                          CEL transformations to compute and set fields in the request body.
+                                          The expression result overwrites any existing value for that field.
+                                          This has a higher priority than `overrides` if both are set for the same
+                                          key.
+                                          Those transformations are applied after the request is converted to the provider's format, so they can be used to set provider-specific fields.
+                                        items:
+                                          description: |-
+                                            Maps a request JSON field to a CEL expression.
+                                            The expression is evaluated against the current request body and its result
+                                            is assigned to the configured field.
+                                          properties:
+                                            expression:
+                                              description: CEL expression used to
+                                                compute the field value.
+                                              maxLength: 16384
+                                              minLength: 1
+                                              type: string
+                                            field:
+                                              description: Name of the field to set.
+                                              maxLength: 256
+                                              minLength: 1
+                                              type: string
+                                          required:
+                                          - expression
+                                          - field
+                                          type: object
+                                        maxItems: 64
+                                        minItems: 1
+                                        type: array
                                       modelAliases:
                                         additionalProperties:
                                           type: string
@@ -4155,10 +4186,10 @@ spec:
                                     type: object
                                     x-kubernetes-validations:
                                     - message: at least one of the fields in [defaults
-                                        modelAliases overrides prompt promptCaching
-                                        promptGuard routes transformations] must be
-                                        set
-                                      rule: '[has(self.defaults),has(self.modelAliases),has(self.overrides),has(self.prompt),has(self.promptCaching),has(self.promptGuard),has(self.routes),has(self.transformations)].filter(x,x==true).size()
+                                        finalTransformations modelAliases overrides
+                                        prompt promptCaching promptGuard routes transformations]
+                                        must be set
+                                      rule: '[has(self.defaults),has(self.finalTransformations),has(self.modelAliases),has(self.overrides),has(self.prompt),has(self.promptCaching),has(self.promptGuard),has(self.routes),has(self.transformations)].filter(x,x==true).size()
                                         >= 1'
                                   auth:
                                     description: Settings for managing authentication
@@ -9690,6 +9721,37 @@ spec:
                         maxItems: 64
                         minItems: 1
                         type: array
+                      finalTransformations:
+                        description: |-
+                          CEL transformations to compute and set fields in the request body.
+                          The expression result overwrites any existing value for that field.
+                          This has a higher priority than `overrides` if both are set for the same
+                          key.
+                          Those transformations are applied after the request is converted to the provider's format, so they can be used to set provider-specific fields.
+                        items:
+                          description: |-
+                            Maps a request JSON field to a CEL expression.
+                            The expression is evaluated against the current request body and its result
+                            is assigned to the configured field.
+                          properties:
+                            expression:
+                              description: CEL expression used to compute the field
+                                value.
+                              maxLength: 16384
+                              minLength: 1
+                              type: string
+                            field:
+                              description: Name of the field to set.
+                              maxLength: 256
+                              minLength: 1
+                              type: string
+                          required:
+                          - expression
+                          - field
+                          type: object
+                        maxItems: 64
+                        minItems: 1
+                        type: array
                       modelAliases:
                         additionalProperties:
                           type: string
@@ -12825,10 +12887,10 @@ spec:
                         type: array
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [defaults modelAliases
-                        overrides prompt promptCaching promptGuard routes transformations]
-                        must be set
-                      rule: '[has(self.defaults),has(self.modelAliases),has(self.overrides),has(self.prompt),has(self.promptCaching),has(self.promptGuard),has(self.routes),has(self.transformations)].filter(x,x==true).size()
+                    - message: at least one of the fields in [defaults finalTransformations
+                        modelAliases overrides prompt promptCaching promptGuard routes
+                        transformations] must be set
+                      rule: '[has(self.defaults),has(self.finalTransformations),has(self.modelAliases),has(self.overrides),has(self.prompt),has(self.promptCaching),has(self.promptGuard),has(self.routes),has(self.transformations)].filter(x,x==true).size()
                         >= 1'
                   auth:
                     description: Settings for managing authentication to the backend

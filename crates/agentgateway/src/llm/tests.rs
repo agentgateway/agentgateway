@@ -907,6 +907,197 @@ async fn provider_model_is_set_before_llm_transformations() {
 }
 
 #[tokio::test]
+async fn messages_to_completions_final_transformation() {
+	use crate::llm::policy::Policy;
+
+	async fn create_llm_request(vec_body: Vec<u8>, policy: Option<&Policy>) -> (Request, RouteType) {
+		let provider = AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		});
+		let backend_info = openai_test_backend_info();
+		let req = ::http::Request::builder()
+			.uri("/v1/messages")
+			.header(::http::header::CONTENT_TYPE, "application/json")
+			.body(Body::from(vec_body))
+			.unwrap();
+		let RequestResult::Success {
+			request: forwarded,
+			upstream_route_type,
+			..
+		} = provider
+			.process_messages_request(&backend_info, policy, req, false, &mut None)
+			.await
+			.expect("Anthropic messages request should translate to OpenAI completions")
+		else {
+			panic!("expected forwarded request");
+		};
+		(forwarded, upstream_route_type)
+	}
+	let expr = |e: &str| std::sync::Arc::new(crate::cel::Expression::new_strict(e).unwrap());
+
+	let policy = Policy {
+		final_transformations: Some(
+			[
+				// Only true final-conversion: `system` became messages[0].
+				(
+					"converted_message_count".to_string(),
+					expr("llmRequest.messages.size()"),
+				),
+				// Mutate a field carried through the conversion.
+				("max_tokens".to_string(), expr("32")),
+				("reasoning_effort".to_string(), expr("fail(\"remove\")")),
+			]
+			.into_iter()
+			.collect(),
+		),
+		..Default::default()
+	};
+
+	let vec_body = br#"{
+				"model": "gpt-4o",
+				"max_tokens": 64,
+				"system": "be brief",
+				"messages": [{"role": "user", "content": "hello"}],
+				"tools": [{
+					"name": "get_weather",
+					"description": "Look up the weather",
+					"input_schema": {
+						"type": "object",
+						"properties": {"city": {"type": "string"}},
+						"required": ["city"]
+					}
+				}]
+			}"#
+		.to_vec();
+
+	let (forwarded, upstream_route_type) = create_llm_request(vec_body.clone(), Some(&policy)).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(upstream_route_type, RouteType::Completions);
+	// The request really was converted to completions format.
+	assert_eq!(forwarded_json["messages"][0]["role"], json!("system"));
+	// 2 (system + user), not the 1 message the client sent.
+	assert_eq!(forwarded_json["converted_message_count"], json!(2));
+	assert_eq!(forwarded_json["max_tokens"], json!(32));
+	// Indexing returns Null for a missing key too, so assert on key presence.
+	let reasoning_effort = forwarded_json.get("reasoning_effort");
+	assert!(
+		reasoning_effort.is_none(),
+		"reasoning_effort should be removed, got: {reasoning_effort:?}"
+	);
+
+	let (forwarded, upstream_route_type) = create_llm_request(vec_body, None).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+	assert_eq!(upstream_route_type, RouteType::Completions);
+	// The request really was converted to completions format.
+	assert_eq!(forwarded_json["messages"][0]["role"], json!("system"));
+	// 2 (system + user), not the 1 message the client sent.
+	assert_eq!(forwarded_json["max_completion_tokens"], json!(64));
+	// Indexing returns Null for a missing key too, so assert on key presence.
+	let reasoning_effort = forwarded_json.get("reasoning_effort");
+	assert!(
+		reasoning_effort.is_some(),
+		"reasoning_effort should not be empty, got: {reasoning_effort:?}"
+	);
+}
+
+#[tokio::test]
+async fn detect_final_transformations_skip_opaque_bodies() {
+	use crate::llm::policy::Policy;
+
+	async fn create_detect_request(
+		content_type: &str,
+		body: &[u8],
+		policy: Option<&Policy>,
+	) -> (Request, RouteType) {
+		let provider = AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		});
+		let backend_info = openai_test_backend_info();
+		let req = ::http::Request::builder()
+			.uri("/v1/passthrough")
+			.header(::http::header::CONTENT_TYPE, content_type)
+			.body(Body::from(body.to_vec()))
+			.unwrap();
+		let RequestResult::Success {
+			request: forwarded,
+			upstream_route_type,
+			..
+		} = provider
+			.process_detect_request(&backend_info, policy, req, &mut None)
+			.await
+			.expect("detect request should process")
+		else {
+			panic!("expected forwarded request");
+		};
+		(forwarded, upstream_route_type)
+	}
+
+	let expr = |e: &str| std::sync::Arc::new(crate::cel::Expression::new_strict(e).unwrap());
+	let policy = Policy {
+		final_transformations: Some(
+			[("max_tokens".to_string(), expr("32"))]
+				.into_iter()
+				.collect(),
+		),
+		..Default::default()
+	};
+
+	// Inner spaces and key order survive only if the body is never round-tripped through serde.
+	let json_body = br#"{ "model": "gpt-4o", "max_tokens": 64 }"#;
+
+	// A non-JSON content type is passed through opaquely even when the body happens to parse as
+	// JSON, so final transformations must not rewrite (or re-serialize) it.
+	let (forwarded, route_type) = create_detect_request("text/plain", json_body, Some(&policy)).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	assert_eq!(route_type, RouteType::Detect);
+	assert_eq!(
+		forwarded_body.as_ref(),
+		json_body.as_slice(),
+		"passthrough body must be forwarded byte-for-byte"
+	);
+
+	// A body that fails to parse falls back to raw passthrough, which must not become an error.
+	let raw_body = b"\x00\x01not json at all";
+	let (forwarded, route_type) =
+		create_detect_request("application/octet-stream", raw_body, Some(&policy)).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	assert_eq!(route_type, RouteType::Detect);
+	assert_eq!(forwarded_body.as_ref(), raw_body.as_slice());
+
+	// Malformed JSON under a JSON content type takes the same raw fallback.
+	let bad_json = br#"{"model": "gpt-4o", "#;
+	let (forwarded, route_type) =
+		create_detect_request("application/json", bad_json, Some(&policy)).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	assert_eq!(route_type, RouteType::Detect);
+	assert_eq!(forwarded_body.as_ref(), bad_json.as_slice());
+
+	// A genuine JSON detect body is still transformed: this is the behavior the guard preserves.
+	let (forwarded, route_type) =
+		create_detect_request("application/json", json_body, Some(&policy)).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+	assert_eq!(route_type, RouteType::Detect);
+	assert_eq!(forwarded_json["max_tokens"], json!(32));
+	assert_eq!(forwarded_json["model"], json!("gpt-4o"));
+
+	// Without a policy the JSON body is unchanged apart from the parse/serialize round trip.
+	let (forwarded, _) = create_detect_request("application/json", json_body, None).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+	assert_eq!(forwarded_json["max_tokens"], json!(64));
+}
+
+#[tokio::test]
 async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
 	use crate::http::auth::BackendInfo;
 	use crate::llm::policy::Policy;

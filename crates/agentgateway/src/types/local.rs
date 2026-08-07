@@ -795,6 +795,10 @@ pub struct LocalLLMModels {
 	/// transformation allows setting values from CEL expressions for the request, overriding any existing values.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	transformation: Option<HashMap<String, Arc<cel::Expression>>>,
+	/// final_transformation allows setting values from CEL expressions for the request, overriding any existing values.
+	/// Occurs after conversion of the request to the provider format, allowing for provider-specific transformations.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	final_transformation: Option<HashMap<String, Arc<cel::Expression>>>,
 	/// requestHeaders modifies headers in requests to the LLM provider.
 	#[serde(default)]
 	request_headers: Option<filters::HeaderModifier>,
@@ -4352,6 +4356,7 @@ async fn convert_llm_config(
 			defaults: model_config.defaults.clone(),
 			overrides: model_config.overrides.clone(),
 			transformations: model_config.transformation.clone(),
+			final_transformations: model_config.final_transformation.clone(),
 			prompt_guard,
 			prompts: None,
 			model_aliases: Default::default(),

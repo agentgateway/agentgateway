@@ -120,6 +120,15 @@ type ModelPolicies struct {
 	// +optional
 	Transformations []FieldTransformation `json:"transformations,omitempty"`
 
+	// CEL transformations applied to fields in the provider request body.
+	// After conversion from one provider format to another, these transformations are applied to the converted request body.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
+	// +listType=map
+	// +listMapKey=field
+	// +optional
+	FinalTransformations []FieldTransformation `json:"finalTransformations,omitempty"`
+
 	// Authorization rules that clients must satisfy to use this model.
 	// +optional
 	Authorization *Authorization `json:"authorization,omitempty"`

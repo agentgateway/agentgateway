@@ -317,6 +317,10 @@ fn extract_output_messages(choices: &[Choice]) -> Option<Vec<OutputMessage>> {
 }
 
 impl super::RequestType for Request {
+	fn body_is_json(&self) -> bool {
+		true
+	}
+
 	fn model(&mut self) -> &mut Option<String> {
 		&mut self.model
 	}

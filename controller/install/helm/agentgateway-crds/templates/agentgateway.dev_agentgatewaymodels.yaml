@@ -1357,6 +1357,36 @@ spec:
                     required:
                     - policy
                     type: object
+                  finalTransformations:
+                    description: |-
+                      CEL transformations applied to fields in the provider request body.
+                      After conversion from one provider format to another, these transformations are applied to the converted request body.
+                    items:
+                      description: |-
+                        Maps a request JSON field to a CEL expression.
+                        The expression is evaluated against the current request body and its result
+                        is assigned to the configured field.
+                      properties:
+                        expression:
+                          description: CEL expression used to compute the field value.
+                          maxLength: 16384
+                          minLength: 1
+                          type: string
+                        field:
+                          description: Name of the field to set.
+                          maxLength: 256
+                          minLength: 1
+                          type: string
+                      required:
+                      - expression
+                      - field
+                      type: object
+                    maxItems: 64
+                    minItems: 1
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - field
+                    x-kubernetes-list-type: map
                   headers:
                     description: Request and response header changes applied to provider
                       traffic.
@@ -4790,9 +4820,10 @@ spec:
                       rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
                 type: object
                 x-kubernetes-validations:
-                - message: at least one of the fields in [auth authorization headers
-                    health promptGuard tls transformations tunnel] must be set
-                  rule: '[has(self.auth),has(self.authorization),has(self.headers),has(self.health),has(self.promptGuard),has(self.tls),has(self.transformations),has(self.tunnel)].filter(x,x==true).size()
+                - message: at least one of the fields in [auth authorization finalTransformations
+                    headers health promptGuard tls transformations tunnel] must be
+                    set
+                  rule: '[has(self.auth),has(self.authorization),has(self.finalTransformations),has(self.headers),has(self.health),has(self.promptGuard),has(self.tls),has(self.transformations),has(self.tunnel)].filter(x,x==true).size()
                     >= 1'
               provider:
                 description: |-

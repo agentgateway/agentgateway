@@ -60,6 +60,10 @@ impl RequestType for Request {
 		false
 	}
 
+	fn body_is_json(&self) -> bool {
+		matches!(self, Self::Json(_))
+	}
+
 	fn to_value(&self) -> serde_json::Result<serde_json::Value> {
 		match self {
 			Self::Raw(body) => serde_json::from_slice(body),

@@ -634,6 +634,9 @@ function ModelEditor(props: {
   const [transformation, setTransformation] = useState<Record<string, string>>(
     () => expressionMap(props.initial.transformation),
   );
+  const [finalTransformation, setFinalTransformation] = useState<
+    Record<string, string>
+  >(() => expressionMap(props.initial.finalTransformation));
   const [health, setHealth] = useState<LlmModel["health"]>(
     () => props.initial.health ?? null,
   );
@@ -664,6 +667,7 @@ function ModelEditor(props: {
     explicitModel,
     customModelExpression,
     transformation,
+    finalTransformation,
     health,
     defaultsText,
     overridesText,
@@ -679,6 +683,7 @@ function ModelEditor(props: {
     saveAttempted && invalidApiKey ? "Enter a value, or choose Unset." : null;
   const policyPatch = buildModelPolicyPatch({
     transformation,
+    finalTransformation,
     health,
     defaultsText,
     overridesText,
@@ -883,6 +888,7 @@ function ModelEditor(props: {
                 model={props.initial}
                 help={props.help}
                 transformation={transformation}
+                finalTransformation={finalTransformation}
                 health={health}
                 defaultsText={defaultsText}
                 overridesText={overridesText}
@@ -891,6 +897,7 @@ function ModelEditor(props: {
                 promptCaching={promptCaching}
                 authorization={authorization}
                 setTransformation={setTransformation}
+                setFinalTransformation={setFinalTransformation}
                 setHealth={setHealth}
                 setDefaultsText={setDefaultsText}
                 setOverridesText={setOverridesText}
@@ -1030,6 +1037,7 @@ function ModelPoliciesInline(props: {
   model: LlmModel;
   help: SchemaHelp;
   transformation: Record<string, string>;
+  finalTransformation: Record<string, string>;
   health: LlmModel["health"];
   defaultsText: string;
   overridesText: string;
@@ -1038,6 +1046,7 @@ function ModelPoliciesInline(props: {
   promptCaching: LlmModel["promptCaching"];
   authorization: AuthorizationDraft | null;
   setTransformation: (value: Record<string, string>) => void;
+  setFinalTransformation: (value: Record<string, string>) => void;
   setHealth: (value: LlmModel["health"] | null) => void;
   setDefaultsText: (value: string) => void;
   setOverridesText: (value: string) => void;
@@ -1049,6 +1058,8 @@ function ModelPoliciesInline(props: {
   const patch = buildModelPolicyPatch(props);
   const transformationEnabled =
     Object.keys(expressionMap(props.model.transformation)).length > 0;
+  const finalTransformationEnabled =
+    Object.keys(expressionMap(props.model.finalTransformation)).length > 0;
   const defaultsEnabled = Boolean(
     props.model.defaults && Object.keys(props.model.defaults).length,
   );
@@ -1083,6 +1094,29 @@ function ModelPoliciesInline(props: {
             valuePlaceholder="CEL expression"
             valueKind="cel"
             onChange={props.setTransformation}
+          />
+        </CollapsiblePolicySection>
+        <CollapsiblePolicySection
+          icon={<SlidersHorizontal size={17} />}
+          title="Final transformation"
+          description={
+            Object.keys(props.finalTransformation).length
+              ? `${Object.keys(props.finalTransformation).length} fields configured`
+              : "No fields configured"
+          }
+          defaultOpen={finalTransformationEnabled}
+        >
+          <KeyValueEditor
+            label="Provider request fields"
+            tooltip={props.help.field<LlmModel>(
+              "LocalLLMModels",
+              "finalTransformation",
+            )}
+            values={props.finalTransformation}
+            keyPlaceholder="field name"
+            valuePlaceholder="CEL expression"
+            valueKind="cel"
+            onChange={props.setFinalTransformation}
           />
         </CollapsiblePolicySection>
         <CollapsiblePolicySection
@@ -1201,6 +1235,7 @@ function ModelPoliciesInline(props: {
 
 function buildModelPolicyPatch(args: {
   transformation: Record<string, string>;
+  finalTransformation: Record<string, string>;
   health: LlmModel["health"];
   defaultsText: string;
   overridesText: string;
@@ -1214,6 +1249,9 @@ function buildModelPolicyPatch(args: {
     const overrides = parseOptionalYamlMapping(args.overridesText);
     const transformation = cleanEmpty(args.transformation) as
       | LlmModel["transformation"]
+      | undefined;
+    const finalTransformation = cleanEmpty(args.finalTransformation) as
+      | LlmModel["finalTransformation"]
       | undefined;
     const health = cleanEmpty(args.health) as LlmModel["health"] | undefined;
     const requestHeaders = cleanEmpty(args.requestHeaders) as
@@ -1235,6 +1273,10 @@ function buildModelPolicyPatch(args: {
         transformation:
           transformation && Object.keys(transformation).length
             ? transformation
+            : null,
+        finalTransformation:
+          finalTransformation && Object.keys(finalTransformation).length
+            ? finalTransformation
             : null,
         requestHeaders:
           requestHeaders && Object.keys(requestHeaders).length
@@ -1271,6 +1313,9 @@ function modelPolicySummary(model: Partial<LlmModel>) {
     model.overrides && Object.keys(model.overrides).length ? "overrides" : null,
     model.transformation && Object.keys(model.transformation).length
       ? "transformation"
+      : null,
+    model.finalTransformation && Object.keys(model.finalTransformation).length
+      ? "final transformation"
       : null,
     model.requestHeaders ? "request headers" : null,
     model.responseHeaders ? "response headers" : null,
@@ -1961,6 +2006,10 @@ function ModelPolicyState(props: { model: LlmModel; warnings: number }) {
       : null,
     props.model.transformation && Object.keys(props.model.transformation).length
       ? "transformation"
+      : null,
+    props.model.finalTransformation &&
+    Object.keys(props.model.finalTransformation).length
+      ? "finalTransformation"
       : null,
     props.model.requestHeaders ? "requestHeaders" : null,
     props.model.responseHeaders ? "responseHeaders" : null,

@@ -2190,6 +2190,16 @@ type BackendAI struct {
 	// +optional
 	Transformations []FieldTransformation `json:"transformations,omitempty"`
 
+	// CEL transformations to compute and set fields in the request body.
+	// The expression result overwrites any existing value for that field.
+	// This has a higher priority than `overrides` if both are set for the same
+	// key.
+	// Those transformations are applied after the request is converted to the provider's format, so they can be used to set provider-specific fields.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=64
+	// +optional
+	FinalTransformations []FieldTransformation `json:"finalTransformations,omitempty"`
+
 	// Maps friendly model names to actual provider model names.
 	// Example: `{"fast": "gpt-3.5-turbo", "smart": "gpt-4-turbo"}`.
 	// Note: This field is only applicable when using the agentgateway data plane.
