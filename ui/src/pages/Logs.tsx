@@ -1,21 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
-  ArrowDown,
   ArrowRight,
-  ArrowUp,
-  Bot,
   Braces,
   Check,
   ChevronDown,
   ChevronRight,
-  Clock3,
   Copy,
   Download,
   RefreshCw,
-  Route,
   Settings,
   User,
+  Wrench,
 } from "lucide-react";
 import {
   analyticsSummary,
@@ -39,10 +35,12 @@ import { MultiCheckboxDropdown } from "../components/MultiCheckboxDropdown";
 import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import {
   promptCompletionLoggingEnabled,
+  providerDisplayName,
   setPromptCompletionLogging,
   setUiLogAttributeExpressions,
   uiLogAttributeExpressions,
 } from "../config";
+import { ProviderIcon } from "../components/ProviderIcon";
 import { queryParam, useStickyQueryParam } from "../drawerRouteState";
 import { useLlmConfigData, useUpdateConfig } from "../hooks";
 import {
@@ -332,7 +330,7 @@ export function LogsPage() {
               disabled={loading}
               onClick={load}
             >
-              <RefreshCw size={16} />
+              <RefreshCw size={16} className={loading ? "spin" : undefined} />
               Refresh
             </button>
           </div>
@@ -404,6 +402,9 @@ export function LogsPage() {
               onChange={(event) => setStream(event.target.checked)}
             />
             Stream
+            {stream ? (
+              <span className="stream-live-dot" aria-label="streaming" />
+            ) : null}
           </label>
           {hasAnalyticsFilters(logFilters) || status ? (
             <button
@@ -421,40 +422,63 @@ export function LogsPage() {
       </Panel>
 
       <Panel className="logs-results-panel">
-        <div className="logs-section-header">
-          <div>
-            <h3>Recent calls</h3>
-            <p>
+        {visibleLogs.length === 0 ? (
+          <EmptyState
+            title={loading ? "Loading logs" : "No log entries"}
+            description={
+              loading
+                ? "Fetching recent LLM calls."
+                : "No LLM calls match the current filters."
+            }
+          />
+        ) : (
+          <div className="log-table-wrap">
+            <table className="log-table">
+              <colgroup>
+                <col className="col-time" />
+                <col className="col-status" />
+                <col className="col-model" />
+                <col className="col-prompt" />
+                <col className="col-duration" />
+                <col className="col-in" />
+                <col className="col-out" />
+                <col className="col-cache" />
+                <col className="col-cost" />
+                <col className="col-chevron" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th className="center">Status</th>
+                  <th>Model</th>
+                  <th>Prompt</th>
+                  <th className="num">Duration</th>
+                  <th className="num">In</th>
+                  <th className="num">Out</th>
+                  <th className="num">Cache</th>
+                  <th className="num">Cost</th>
+                  <th aria-label="Expand" />
+                </tr>
+              </thead>
+              {visibleLogs.map((entry) => (
+                <LogCallRow
+                  key={entry.id}
+                  entry={entry}
+                  detail={expandedId === entry.id ? (expanded ?? entry) : entry}
+                  expanded={expandedId === entry.id}
+                  loading={expandedId === entry.id && expandedLoading}
+                  onToggle={() => void expand(entry)}
+                  onOpenSettings={() => setSettings("logs")}
+                />
+              ))}
+            </table>
+            <div className="log-table-footer">
               {loading
                 ? "Refreshing..."
-                : `${formatNumber(visibleLogs.length)} rows`}
-            </p>
+                : `Showing ${formatNumber(visibleLogs.length)} recent calls`}
+            </div>
           </div>
-          {stream ? <span className="badge ok">streaming</span> : null}
-        </div>
-        <div className="log-call-list">
-          {visibleLogs.length === 0 ? (
-            <EmptyState
-              title={loading ? "Loading logs" : "No log entries"}
-              description={
-                loading
-                  ? "Fetching recent LLM calls."
-                  : "No LLM calls match the current filters."
-              }
-            />
-          ) : null}
-          {visibleLogs.map((entry) => (
-            <LogCallRow
-              key={entry.id}
-              entry={entry}
-              detail={expandedId === entry.id ? (expanded ?? entry) : entry}
-              expanded={expandedId === entry.id}
-              loading={expandedId === entry.id && expandedLoading}
-              onToggle={() => void expand(entry)}
-              onOpenSettings={() => setSettings("logs")}
-            />
-          ))}
-        </div>
+        )}
       </Panel>
 
       {settings === "logs" ? (
@@ -1056,12 +1080,35 @@ function analyticsMetricLabel(metric: AnalyticsMetric) {
   return "Tokens";
 }
 
-function formatCost(value: number) {
-  if (value === 0) return "$0.00";
-  if (value >= 10) return `$${value.toFixed(2)}`;
-  if (value >= 0.01) return `$${value.toFixed(4)}`;
-  // Sub-cent: show 2 significant figures, strip trailing zeros
-  return `$${parseFloat(value.toPrecision(2))}`;
+function formatCost(value: number, minimumFractionDigits = 0) {
+  let formatted: string;
+  if (value === 0) formatted = "$0.00";
+  else if (value >= 10) formatted = `$${value.toFixed(2)}`;
+  else if (value >= 0.01) formatted = `$${value.toFixed(4)}`;
+  else {
+    // Sub-cent: show 2 significant figures in fixed decimal notation. Converting
+    // through a number would turn sufficiently small values back into `6e-7`.
+    const exponent = Math.floor(Math.log10(Math.abs(value)));
+    const fractionDigits = Math.min(100, Math.max(2, 1 - exponent));
+    const fixed = value
+      .toFixed(fractionDigits)
+      .replace(/0+$/, "")
+      .replace(/\.$/, "");
+    formatted = `$${fixed}`;
+  }
+
+  const decimal = formatted.indexOf(".");
+  const fractionDigits = decimal < 0 ? 0 : formatted.length - decimal - 1;
+  if (fractionDigits >= minimumFractionDigits) return formatted;
+  return `${formatted}${decimal < 0 ? "." : ""}${"0".repeat(
+    minimumFractionDigits - fractionDigits,
+  )}`;
+}
+
+function costFractionDigits(value: number) {
+  const formatted = formatCost(value);
+  const decimal = formatted.indexOf(".");
+  return decimal < 0 ? 0 : formatted.length - decimal - 1;
 }
 
 function analyticsRecordCost(value: unknown) {
@@ -1132,6 +1179,56 @@ function findLastMessage(
   return null;
 }
 
+function formatDuration(ms: number | null | undefined) {
+  if (ms == null || !Number.isFinite(ms)) return "n/a";
+  if (ms < 1000) return `${formatNumber(Math.round(ms))} ms`;
+  if (ms < 10_000) return `${(ms / 1000).toFixed(2)} s`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
+  return `${(ms / 60_000).toFixed(1)} min`;
+}
+
+const compactNumberFormat = new Intl.NumberFormat(undefined, {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+function formatCompactNumber(value: number | null | undefined) {
+  return typeof value === "number" ? compactNumberFormat.format(value) : "—";
+}
+
+const PROVIDER_ICON_KEYS = [
+  "openai",
+  "anthropic",
+  "gemini",
+  "vertex",
+  "bedrock",
+  "azure",
+  "copilot",
+  "cohere",
+  "ollama",
+  "baseten",
+  "cerebras",
+  "deepinfra",
+  "deepseek",
+  "groq",
+  "huggingface",
+  "mistral",
+  "openrouter",
+  "togetherai",
+  "xai",
+  "fireworks",
+];
+
+function providerIconName(name: string | null | undefined) {
+  if (!name) return "custom";
+  const normalized = name.trim().toLowerCase();
+  const match = PROVIDER_ICON_KEYS.find(
+    (key) => normalized === key || normalized.includes(key),
+  );
+  if (!match) return name;
+  return match === "xai" ? "xAI" : match;
+}
+
 function LogCallRow(props: {
   entry: LogEntry;
   detail: LogEntry;
@@ -1141,125 +1238,237 @@ function LogCallRow(props: {
   onOpenSettings?: () => void;
 }) {
   const originalModel = originalModelForLog(props.entry);
-  const identity = logIdentity(props.entry);
   const statusBad = Boolean(
     props.entry.error || (props.entry.httpStatus ?? 0) >= 400,
   );
   const preview = logMessagePreview(props.entry);
-  const hasPreview = Boolean(preview);
+  const requestModel = props.entry.genAi.requestModel ?? null;
+  const responseModel = props.entry.genAi.responseModel ?? null;
+  const primaryModel = originalModel ?? requestModel ?? "unknown model";
+  const resolvedModel = responseModel ?? requestModel;
+  const showResolved = Boolean(resolvedModel && resolvedModel !== primaryModel);
+  const operation = props.entry.genAi.operationName ?? "chat";
+  const provider = props.entry.genAi.providerName ?? null;
   return (
-    <article
-      className={props.expanded ? "log-call-card expanded" : "log-call-card"}
+    <tbody
+      className={
+        props.expanded
+          ? `log-row expanded ${statusBad ? "bad" : "ok"}`
+          : `log-row ${statusBad ? "bad" : "ok"}`
+      }
     >
-      <button
-        className="log-call-summary"
-        type="button"
-        onClick={props.onToggle}
+      <tr
+        className="log-row-summary"
+        tabIndex={0}
+        role="button"
         aria-expanded={props.expanded}
+        onClick={props.onToggle}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            props.onToggle();
+          }
+        }}
       >
-        <span
-          className={statusBad ? "log-status-rail bad" : "log-status-rail ok"}
-          aria-hidden="true"
-        />
-        <span className="log-call-time">
-          <span>{formatDate(props.entry.completedAt)}</span>
-          <small>{formatRelativeTime(props.entry.completedAt)}</small>
-        </span>
-        <span className="log-type-chip">
-          {(props.entry.genAi.operationName ?? "chat").toUpperCase()}
-        </span>
-        <span className="log-call-status">
-          <span className={statusBad ? "badge bad" : "badge ok"}>
-            {props.entry.httpStatus ?? "n/a"}
-          </span>
-        </span>
-        <span
-          className={hasPreview ? "log-call-main" : "log-call-main no-preview"}
-        >
-          {hasPreview ? (
-            <span className="log-call-title-row">
-              <span className="log-message-preview">{preview}</span>
+        <td className="log-td-time">
+          <span className="log-cell-lines">
+            <span className="log-cell-primary">
+              {formatRelativeTime(props.entry.completedAt)}
             </span>
-          ) : null}
-          <span className="log-call-subtitle">
-            <span className="log-model-flow">
-              {originalModel &&
-              originalModel !== props.entry.genAi.requestModel ? (
-                <>
-                  <strong>{originalModel}</strong>
-                  <ArrowRight size={14} />
-                </>
-              ) : null}
-              <strong>
-                {props.entry.genAi.requestModel ?? "unknown model"}
-              </strong>
-              {props.entry.genAi.responseModel &&
-              props.entry.genAi.responseModel !==
-                props.entry.genAi.requestModel ? (
-                <>
-                  <ArrowRight size={14} />
-                  <strong>{props.entry.genAi.responseModel}</strong>
-                </>
-              ) : null}
+            <span className="log-cell-secondary">
+              {formatDate(props.entry.completedAt)}
             </span>
-            <span className="log-identity-chip">
-              provider: {props.entry.genAi.providerName ?? "unknown provider"}
+          </span>
+        </td>
+        <td className="log-td-status">
+          <span
+            className={statusBad ? "log-status-pill bad" : "log-status-pill ok"}
+          >
+            {props.entry.httpStatus ?? "err"}
+          </span>
+        </td>
+        <td className="log-td-model">
+          <span className="log-model-cell">
+            <ProviderIcon provider={providerIconName(provider)} />
+            <span className="log-cell-lines">
+              <span className="log-cell-primary log-model-name">
+                {primaryModel}
+              </span>
+              <span className="log-cell-secondary">
+                {operation !== "chat" ? (
+                  <span className="log-op-chip">{operation}</span>
+                ) : null}
+                <span className="log-meta-item log-provider-label">
+                  {providerDisplayName(provider ?? "unknown")}
+                </span>
+                {showResolved ? (
+                  <span className="log-meta-item log-model-resolved">
+                    <ArrowRight size={11} />
+                    {resolvedModel}
+                  </span>
+                ) : null}
+              </span>
             </span>
-            {identity.user ? (
-              <span className="log-identity-chip">user: {identity.user}</span>
-            ) : null}
-            {identity.group ? (
-              <span className="log-identity-chip">group: {identity.group}</span>
-            ) : null}
           </span>
-        </span>
-        <span className="log-call-metrics">
-          <span>
-            <Clock3 size={14} />
-            {formatNumber(props.entry.durationMs)} ms
+        </td>
+        <td className="log-td-prompt">
+          <span
+            className={preview ? "log-call-preview" : "log-call-preview empty"}
+          >
+            {preview || "—"}
           </span>
-          <TokenSummary entry={props.entry} />
+        </td>
+        <td className="log-td-num">{formatDuration(props.entry.durationMs)}</td>
+        <TokenCells entry={props.entry} />
+        <td className="log-td-num">
           <CostSummary entry={props.entry} />
-        </span>
-        <ChevronDown className="log-call-chevron" size={18} />
-      </button>
+        </td>
+        <td className="log-td-chevron">
+          <ChevronDown className="log-call-chevron" size={16} />
+        </td>
+      </tr>
       {props.expanded ? (
-        <div className="expanded-log">
-          <div className="editor-title">
-            <div>
-              <h3>Request detail</h3>
+        <tr className="log-row-detail">
+          <td colSpan={10}>
+            <div className="expanded-log">
+              {props.loading ? (
+                <StatusBanner state="loading" title="Loading log payload" />
+              ) : null}
+              <LogDetailView
+                entry={props.detail}
+                onOpenSettings={props.onOpenSettings}
+              />
             </div>
-            <button
-              className="button"
-              type="button"
-              onClick={() => downloadJson(props.detail)}
-            >
-              <Download size={16} />
-              JSON
-            </button>
-          </div>
-          {props.loading ? (
-            <StatusBanner state="loading" title="Loading log payload" />
-          ) : null}
-          <LogDetailView
-            entry={props.detail}
-            onOpenSettings={props.onOpenSettings}
-          />
-        </div>
+          </td>
+        </tr>
       ) : null}
-    </article>
+    </tbody>
   );
 }
+type LogUsageDetail = {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  reasoningTokens?: number;
+  inputAudioTokens?: number;
+  outputAudioTokens?: number;
+  timeToFirstTokenMs?: number;
+  tokensPerSecond?: number;
+  inputCost?: number;
+  outputCost?: number;
+  cacheReadCost?: number;
+  cacheWriteCost?: number;
+  reasoningCost?: number;
+  inputAudioCost?: number;
+  outputAudioCost?: number;
+  totalCost?: number;
+  costDigits: number;
+};
+
+function logUsageDetail(entry: LogEntry): LogUsageDetail {
+  const a = entry.attributes;
+  const inputTokens =
+    entry.usage.inputTokens ??
+    attributeNumber(a, ["gen_ai.usage.input_tokens"]);
+  const outputTokens =
+    entry.usage.outputTokens ??
+    attributeNumber(a, ["gen_ai.usage.output_tokens"]);
+  const totalTokens =
+    entry.usage.totalTokens ??
+    attributeNumber(a, ["gen_ai.usage.total_tokens"]);
+  const timeToFirstToken = attributeNumber(a, ["agw.ai.time_to_first_token"]);
+  const timePerOutputToken = attributeNumber(a, [
+    "agw.ai.time_per_output_token",
+  ]);
+  const costs = {
+    inputCost: attributeNumber(a, ["agw.ai.usage.cost.input"]),
+    outputCost: attributeNumber(a, ["agw.ai.usage.cost.output"]),
+    cacheReadCost: attributeNumber(a, ["agw.ai.usage.cost.cacheRead"]),
+    cacheWriteCost: attributeNumber(a, ["agw.ai.usage.cost.cacheWrite"]),
+    reasoningCost: attributeNumber(a, ["agw.ai.usage.cost.reasoning"]),
+    inputAudioCost: attributeNumber(a, ["agw.ai.usage.cost.inputAudio"]),
+    outputAudioCost: attributeNumber(a, ["agw.ai.usage.cost.outputAudio"]),
+    totalCost: entry.cost ?? attributeNumber(a, ["agw.ai.usage.cost.total"]),
+  };
+  const costDigits = Math.max(
+    0,
+    ...Object.values(costs)
+      .filter((cost): cost is number => cost != null && cost > 0)
+      .map(costFractionDigits),
+  );
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    cacheReadTokens: attributeNumber(a, [
+      "gen_ai.usage.cache_read.input_tokens",
+      "cacheTokens",
+      "cachedTokens",
+      "cache_tokens",
+      "cached_tokens",
+    ]),
+    cacheWriteTokens: attributeNumber(a, [
+      "gen_ai.usage.cache_creation.input_tokens",
+    ]),
+    reasoningTokens: attributeNumber(a, ["gen_ai.usage.reasoning_tokens"]),
+    inputAudioTokens: attributeNumber(a, ["gen_ai.usage.input_audio_tokens"]),
+    outputAudioTokens: attributeNumber(a, ["gen_ai.usage.output_audio_tokens"]),
+    timeToFirstTokenMs:
+      timeToFirstToken != null ? timeToFirstToken * 1000 : undefined,
+    tokensPerSecond:
+      timePerOutputToken != null && timePerOutputToken > 0
+        ? 1 / timePerOutputToken
+        : undefined,
+    ...costs,
+    costDigits,
+  };
+}
+
 function LogDetailView(props: {
   entry: LogEntry;
   onOpenSettings?: () => void;
 }) {
   const messages = logConversation(props.entry);
+  const usage = logUsageDetail(props.entry);
+  const identity = logIdentity(props.entry);
+  const provider = props.entry.genAi.providerName ?? null;
+  const original = originalModelForLog(props.entry);
+  const request = props.entry.genAi.requestModel ?? null;
+  const response = props.entry.genAi.responseModel ?? null;
+  const primaryModel = original ?? request ?? "unknown model";
+  const hasRouting =
+    (original != null && request != null && original !== request) ||
+    (response != null && request != null && response !== request);
+  const userAgent = stringValue(
+    attributeValue(props.entry.attributes, "user_agent.name"),
+  );
   return (
     <div className="log-detail-view">
-      <div className="log-debug-grid">
-        <LogModelFlow entry={props.entry} />
-        <LogTimingPanel entry={props.entry} />
+      <div className="log-detail-top">
+        <div className="log-detail-title">
+          <ProviderIcon provider={providerIconName(provider)} />
+          <div className="log-detail-title-text">
+            <h3>
+              {providerDisplayName(provider ?? "unknown")}
+              <span className="log-detail-title-sep">/</span>
+              <span className="log-detail-title-model">{primaryModel}</span>
+            </h3>
+            <div className="log-detail-id-row">
+              <code>{props.entry.id}</code>
+              <CopyButton value={props.entry.id} />
+            </div>
+          </div>
+        </div>
+        <button
+          className="button"
+          type="button"
+          onClick={() => downloadJson(props.entry)}
+        >
+          <Download size={15} />
+          JSON
+        </button>
       </div>
 
       {props.entry.error ? (
@@ -1268,12 +1477,114 @@ function LogDetailView(props: {
         </StatusBanner>
       ) : null}
 
-      {messages.length ? (
-        <section className="log-conversation">
-          <div className="section-heading compact">
-            <h3>Conversation</h3>
+      <div className="log-stat-row">
+        <LogStat
+          label="Duration"
+          value={formatDuration(props.entry.durationMs)}
+        />
+        {usage.timeToFirstTokenMs != null ? (
+          <LogStat
+            label="First token"
+            value={formatDuration(usage.timeToFirstTokenMs)}
+          />
+        ) : null}
+        {usage.tokensPerSecond != null ? (
+          <LogStat
+            label="Speed"
+            value={`${formatNumber(Math.round(usage.tokensPerSecond))} tok/s`}
+          />
+        ) : null}
+        <LogStat
+          label="Tokens"
+          value={
+            usage.totalTokens != null ? formatNumber(usage.totalTokens) : "n/a"
+          }
+        />
+        {usage.cacheReadTokens != null &&
+        usage.inputTokens != null &&
+        usage.inputTokens > 0 ? (
+          <LogStat
+            label="Cache hit"
+            value={`${Math.min(
+              Math.round((usage.cacheReadTokens / usage.inputTokens) * 100),
+              100,
+            )}%`}
+          />
+        ) : null}
+        <LogStat
+          label="Cost"
+          value={
+            usage.totalCost != null && usage.totalCost > 0
+              ? formatCost(usage.totalCost, usage.costDigits)
+              : "n/a"
+          }
+        />
+      </div>
+
+      <div className="log-detail-grid">
+        <section className="log-detail-section">
+          <h4>Request</h4>
+          {hasRouting ? (
+            <div className="model-route">
+              <ModelRouteStep
+                label="Client requested"
+                value={original ?? request ?? "n/a"}
+              />
+              <ModelRouteStep label="Gateway sent" value={request ?? "n/a"} />
+              <ModelRouteStep
+                label="Provider returned"
+                value={response ?? "n/a"}
+                last
+              />
+            </div>
+          ) : null}
+          <div className="log-field-grid">
+            {!hasRouting ? (
+              <LogField label="Model" value={primaryModel} mono />
+            ) : null}
+            <LogField
+              label="Provider"
+              value={providerDisplayName(provider ?? "unknown")}
+            />
+            <LogField
+              label="Operation"
+              value={props.entry.genAi.operationName ?? "unknown"}
+            />
+            <LogField
+              label="HTTP status"
+              value={String(props.entry.httpStatus ?? "n/a")}
+            />
+            {userAgent ? <LogField label="Client" value={userAgent} /> : null}
+            {identity.user ? (
+              <LogField label="User" value={identity.user} />
+            ) : null}
+            {identity.group ? (
+              <LogField label="Group" value={identity.group} />
+            ) : null}
+            <LogField
+              label="Completed"
+              value={formatDate(props.entry.completedAt)}
+            />
           </div>
-          <div className="mini-chat log-mini-chat">
+        </section>
+        <section className="log-detail-section">
+          <h4>Usage</h4>
+          <LogUsagePanel usage={usage} />
+        </section>
+      </div>
+
+      {messages.length ? (
+        <details className="log-conversation">
+          <summary>
+            <ChevronRight className="log-conversation-chevron" size={15} />
+            <span className="log-conversation-title">Conversation</span>
+            <span className="log-conversation-count">
+              {messages.length === 1
+                ? "1 message"
+                : `${formatNumber(messages.length)} messages`}
+            </span>
+          </summary>
+          <div className="log-thread">
             {messages.map((message, index) => (
               <LogMessageView
                 message={message}
@@ -1281,7 +1592,7 @@ function LogDetailView(props: {
               />
             ))}
           </div>
-        </section>
+        </details>
       ) : (
         <StatusBanner state="info" title="Prompt logging is off">
           Enable "Include prompts and completions in logs" in{" "}
@@ -1308,345 +1619,371 @@ function LogDetailView(props: {
   );
 }
 
-function LogModelFlow(props: { entry: LogEntry }) {
-  const original = originalModelForLog(props.entry);
-  const identity = logIdentity(props.entry);
-  const request = props.entry.genAi.requestModel ?? "n/a";
-  const response = props.entry.genAi.responseModel ?? "n/a";
-  const hasRouting =
-    (original && original !== request) ||
-    (response && response !== request && response !== "n/a");
+function LogStat(props: { label: string; value: string; sub?: string }) {
   return (
-    <section className="log-debug-panel model-flow">
-      <div className="log-debug-panel-title">
-        <Route size={15} />
-        <h3>Model{hasRouting ? " flow" : ""}</h3>
-      </div>
-      {hasRouting ? (
-        <div className="model-flow-steps">
-          <ModelFlowStep label="Client requested" value={original ?? request} />
-          <ArrowRight size={15} />
-          <ModelFlowStep label="Gateway sent" value={request} />
-          <ArrowRight size={15} />
-          <ModelFlowStep label="Provider returned" value={response} />
-        </div>
-      ) : (
-        <div className="model-flow-simple">
-          <strong>{request}</strong>
-          <span>
-            {response !== "n/a" && response !== request
-              ? `returned as ${response}`
-              : "no routing"}
-          </span>
-        </div>
-      )}
-      <div className="log-debug-note">
-        <span>{props.entry.genAi.providerName ?? "unknown provider"}</span>
-        <span>{props.entry.genAi.operationName ?? "unknown operation"}</span>
-        {identity.user ? <span>user: {identity.user}</span> : null}
-        {identity.group ? <span>group: {identity.group}</span> : null}
-      </div>
-    </section>
-  );
-}
-
-function ModelFlowStep(props: { label: string; value: string }) {
-  return (
-    <div className="model-flow-step">
-      <span>{props.label}</span>
-      <strong>{props.value}</strong>
+    <div className="log-stat">
+      <span className="log-stat-label">{props.label}</span>
+      <span className="log-stat-value">{props.value}</span>
+      {props.sub ? <span className="log-stat-sub">{props.sub}</span> : null}
     </div>
   );
 }
 
-function LogTimingPanel(props: { entry: LogEntry }) {
-  const a = props.entry.attributes;
-  const inputTokens =
-    props.entry.usage.inputTokens ??
-    attributeNumber(a, ["gen_ai.usage.input_tokens"]);
-  const outputTokens =
-    props.entry.usage.outputTokens ??
-    attributeNumber(a, ["gen_ai.usage.output_tokens"]);
-  const totalTokens =
-    props.entry.usage.totalTokens ??
-    attributeNumber(a, ["gen_ai.usage.total_tokens"]);
-  const cacheReadTokens = attributeNumber(a, [
-    "gen_ai.usage.cache_read.input_tokens",
-    "cacheTokens",
-    "cachedTokens",
-    "cache_tokens",
-    "cached_tokens",
-  ]);
-  const cacheWriteTokens = attributeNumber(a, [
-    "gen_ai.usage.cache_creation.input_tokens",
-  ]);
-  const reasoningTokens = attributeNumber(a, ["gen_ai.usage.reasoning_tokens"]);
-  const inputAudioTokens = attributeNumber(a, [
-    "gen_ai.usage.input_audio_tokens",
-  ]);
-  const outputAudioTokens = attributeNumber(a, [
-    "gen_ai.usage.output_audio_tokens",
-  ]);
-
-  const inputCost = attributeNumber(a, ["agw.ai.usage.cost.input"]);
-  const outputCost = attributeNumber(a, ["agw.ai.usage.cost.output"]);
-  const cacheReadCost = attributeNumber(a, ["agw.ai.usage.cost.cacheRead"]);
-  const cacheWriteCost = attributeNumber(a, ["agw.ai.usage.cost.cacheWrite"]);
-  const reasoningCost = attributeNumber(a, ["agw.ai.usage.cost.reasoning"]);
-  const inputAudioCost = attributeNumber(a, ["agw.ai.usage.cost.inputAudio"]);
-  const outputAudioCost = attributeNumber(a, ["agw.ai.usage.cost.outputAudio"]);
-  const totalCost =
-    props.entry.cost ?? attributeNumber(a, ["agw.ai.usage.cost.total"]);
-
-  const showBar =
-    inputTokens != null &&
-    outputTokens != null &&
-    inputTokens + outputTokens > 0;
+function LogField(props: { label: string; value: string; mono?: boolean }) {
   return (
-    <section className="log-debug-panel">
-      <div className="log-debug-panel-title">
-        <Clock3 size={15} />
-        <h3>Timing and usage</h3>
-      </div>
-      {showBar ? (
-        <TokenBar
-          input={inputTokens!}
-          output={outputTokens!}
-          cache={cacheReadTokens ?? undefined}
-        />
-      ) : null}
-      <div className="log-fact-list">
-        <LogFact
-          label="Duration"
-          value={`${formatNumber(props.entry.durationMs)} ms`}
-        />
-        <UsageFact label="Input" tokens={inputTokens} cost={inputCost} />
-        <UsageFact label="Output" tokens={outputTokens} cost={outputCost} />
-        {cacheReadTokens || cacheReadCost ? (
-          <UsageFact
-            label="Cache read"
-            tokens={cacheReadTokens}
-            cost={cacheReadCost}
-          />
-        ) : null}
-        {cacheWriteTokens || cacheWriteCost ? (
-          <UsageFact
-            label="Cache write"
-            tokens={cacheWriteTokens}
-            cost={cacheWriteCost}
-          />
-        ) : null}
-        {reasoningTokens || reasoningCost ? (
-          <UsageFact
-            label="Reasoning"
-            tokens={reasoningTokens}
-            cost={reasoningCost}
-          />
-        ) : null}
-        {inputAudioTokens || inputAudioCost ? (
-          <UsageFact
-            label="Audio in"
-            tokens={inputAudioTokens}
-            cost={inputAudioCost}
-          />
-        ) : null}
-        {outputAudioTokens || outputAudioCost ? (
-          <UsageFact
-            label="Audio out"
-            tokens={outputAudioTokens}
-            cost={outputAudioCost}
-          />
-        ) : null}
-        <UsageFact
-          label="Total"
-          tokens={totalTokens}
-          cost={totalCost}
-          alwaysShow
-        />
-      </div>
-    </section>
-  );
-}
-
-function UsageFact(props: {
-  label: string;
-  tokens?: number | null;
-  cost?: number | null;
-  alwaysShow?: boolean;
-}) {
-  if (!props.alwaysShow && !props.tokens && !props.cost) return null;
-  const parts: string[] = [];
-  if (props.tokens != null) parts.push(`${formatNumber(props.tokens)} tokens`);
-  if (props.cost != null && props.cost > 0) parts.push(formatCost(props.cost));
-  return (
-    <div className="log-fact">
-      <span>{props.label}</span>
-      <strong>{parts.length ? parts.join(" / ") : "n/a"}</strong>
+    <div className="log-field">
+      <span className="log-field-label">{props.label}</span>
+      <span className={props.mono ? "log-field-value mono" : "log-field-value"}>
+        {props.value}
+      </span>
     </div>
   );
 }
 
-function LogFact(props: {
+function ModelRouteStep(props: {
   label: string;
   value: string;
-  mono?: boolean;
-  copyable?: string;
+  last?: boolean;
 }) {
   return (
-    <div className="log-fact">
-      <span>{props.label}</span>
-      <strong className={props.mono ? "mono" : undefined}>
-        {props.value}
-        {props.copyable ? <CopyButton value={props.copyable} /> : null}
-      </strong>
+    <div className={props.last ? "model-route-step last" : "model-route-step"}>
+      <span className="model-route-marker" aria-hidden="true" />
+      <span className="model-route-label">{props.label}</span>
+      <code className="model-route-value">{props.value}</code>
     </div>
   );
 }
 
+function LogUsagePanel(props: { usage: LogUsageDetail }) {
+  const usage = props.usage;
+  const inputBreakdown =
+    usage.inputTokens != null
+      ? splitInputTokens(
+          usage.inputTokens,
+          usage.cacheReadTokens,
+          usage.cacheWriteTokens,
+          usage.inputAudioTokens,
+        )
+      : null;
+  const outputBreakdownUnavailable =
+    (usage.reasoningTokens == null && Boolean(usage.reasoningCost)) ||
+    (usage.outputAudioTokens == null && Boolean(usage.outputAudioCost));
+  const outputBreakdown =
+    usage.outputTokens != null && !outputBreakdownUnavailable
+      ? splitOutputTokens(
+          usage.outputTokens,
+          usage.reasoningTokens,
+          usage.outputAudioTokens,
+        )
+      : null;
+  const showBar =
+    usage.inputTokens != null &&
+    usage.outputTokens != null &&
+    usage.inputTokens + usage.outputTokens > 0;
+  const showCostBar = [
+    usage.inputCost,
+    usage.cacheReadCost,
+    usage.cacheWriteCost,
+    usage.inputAudioCost,
+    usage.outputCost,
+    usage.reasoningCost,
+    usage.outputAudioCost,
+  ].some((cost) => cost != null && cost > 0);
+  const allRows: Array<{
+    label: string;
+    swatch?:
+      | "input"
+      | "output"
+      | "reasoning"
+      | "audio"
+      | "cache-read"
+      | "cache-write";
+    tokens?: number | null;
+    cost?: number | null;
+    kind?: "input-group" | "input-detail" | "output-group" | "output-detail";
+  }> = [
+    {
+      label: "Input",
+      kind: "input-group",
+    },
+    {
+      label: "Uncached",
+      swatch: "input",
+      tokens: inputBreakdown?.uncached,
+      cost: usage.inputCost,
+      kind: "input-detail",
+    },
+    {
+      label: "Cache write",
+      swatch: "cache-write",
+      tokens: inputBreakdown?.cacheWrite ?? usage.cacheWriteTokens,
+      cost: usage.cacheWriteCost,
+      kind: "input-detail",
+    },
+    {
+      label: "Cache read",
+      swatch: "cache-read",
+      tokens: inputBreakdown?.cacheRead ?? usage.cacheReadTokens,
+      cost: usage.cacheReadCost,
+      kind: "input-detail",
+    },
+    {
+      label: "Audio",
+      swatch: "audio",
+      tokens: inputBreakdown?.audio ?? usage.inputAudioTokens,
+      cost: usage.inputAudioCost,
+      kind: "input-detail",
+    },
+    {
+      label: "Output",
+      kind: "output-group",
+    },
+    {
+      label: "Reported total",
+      tokens: outputBreakdownUnavailable ? usage.outputTokens : undefined,
+      kind: "output-detail",
+    },
+    {
+      label: "Generated",
+      swatch: "output",
+      tokens: outputBreakdown?.generated,
+      cost: usage.outputCost,
+      kind: "output-detail",
+    },
+    {
+      label: "Reasoning",
+      swatch: "reasoning",
+      tokens: outputBreakdown?.reasoning ?? usage.reasoningTokens,
+      cost: usage.reasoningCost,
+      kind: "output-detail",
+    },
+    {
+      label: "Audio",
+      swatch: "audio",
+      tokens: outputBreakdown?.audio ?? usage.outputAudioTokens,
+      cost: usage.outputAudioCost,
+      kind: "output-detail",
+    },
+  ];
+  const rows = allRows.filter(
+    (row) =>
+      row.label === "Input" ||
+      row.label === "Uncached" ||
+      row.label === "Output" ||
+      row.label === "Generated" ||
+      Boolean(row.tokens) ||
+      Boolean(row.cost),
+  );
+  return (
+    <div className="log-usage">
+      {showBar || showCostBar ? (
+        <div className="log-usage-bars">
+          {showBar ? (
+            <div className="log-usage-bar-row">
+              <span className="log-usage-bar-label">Tokens</span>
+              <TokenBar
+                input={usage.inputTokens!}
+                output={usage.outputTokens!}
+                cacheRead={usage.cacheReadTokens ?? undefined}
+                cacheWrite={usage.cacheWriteTokens ?? undefined}
+                inputAudio={usage.inputAudioTokens ?? undefined}
+                reasoning={usage.reasoningTokens ?? undefined}
+                outputAudio={usage.outputAudioTokens ?? undefined}
+                splitOutput={!outputBreakdownUnavailable}
+              />
+            </div>
+          ) : null}
+          {showCostBar ? (
+            <div className="log-usage-bar-row">
+              <span className="log-usage-bar-label">Cost</span>
+              <CostBar usage={usage} />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="log-usage-table">
+        <div className="log-usage-row head">
+          <span />
+          <span>Tokens</span>
+          <span>Cost</span>
+        </div>
+        {rows.map((row) => (
+          <div
+            className={`log-usage-row${row.kind ? ` ${row.kind}` : ""}`}
+            key={`${row.kind ?? "other"}-${row.label}`}
+          >
+            <span className="log-usage-label">
+              {row.swatch ? (
+                <span
+                  className={`log-usage-swatch ${row.swatch}`}
+                  aria-hidden="true"
+                />
+              ) : null}
+              {row.label}
+            </span>
+            <span className="log-usage-tokens">
+              {row.tokens != null ? formatNumber(row.tokens) : ""}
+            </span>
+            <span className="log-usage-cost">
+              {row.cost != null && row.cost > 0
+                ? formatCost(row.cost, usage.costDigits)
+                : ""}
+            </span>
+          </div>
+        ))}
+        <div className="log-usage-row total">
+          <span className="log-usage-label">Total</span>
+          <span className="log-usage-tokens">
+            {usage.totalTokens != null ? formatNumber(usage.totalTokens) : ""}
+          </span>
+          <span className="log-usage-cost">
+            {usage.totalCost != null && usage.totalCost > 0
+              ? formatCost(usage.totalCost, usage.costDigits)
+              : ""}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const LOG_ROLE_LABELS: Record<RenderedLogMessage["role"], string> = {
+  system: "System",
+  user: "User",
+  assistant: "Assistant",
+  tool: "Tool",
+};
+
 function LogMessageView(props: { message: RenderedLogMessage }) {
-  const Icon =
-    props.message.role === "assistant"
-      ? Bot
-      : props.message.role === "tool"
-        ? Braces
-        : User;
-  const isSystem = props.message.role === "system";
-  const isLongSystem = isSystem && props.message.content.length > 240;
-  const [systemCollapsed, setSystemCollapsed] = useState(isLongSystem);
+  const message = props.message;
+  const content = message.content;
+  const isSystem = message.role === "system";
+  const collapsible = content.length > (isSystem ? 280 : 2000);
+  const [collapsed, setCollapsed] = useState(collapsible);
+  const hasToolCalls = Boolean(message.toolCalls?.length);
 
   return (
-    <div className={`chat-message ${props.message.role}`}>
-      <div className="chat-avatar">
-        <Icon size={16} />
-      </div>
-      <div className="chat-bubble">
-        {props.message.toolCalls?.length ? (
-          <div className="tool-call-summary">
-            {props.message.content.trim() ? (
-              <p>{props.message.content}</p>
-            ) : null}
-            {props.message.toolCalls.map((call, index) => (
-              <ToolCallRow call={call} key={`${call.name}-${index}`} />
-            ))}
-          </div>
-        ) : props.message.role === "tool" ? (
-          <div className="tool-call-summary">
-            <ToolResultRow
-              name={props.message.name}
-              content={props.message.content}
-            />
-          </div>
-        ) : isSystem ? (
+    <article className={`log-msg ${message.role}`}>
+      <header className="log-msg-header">
+        <span className="log-msg-role">{LOG_ROLE_LABELS[message.role]}</span>
+        {message.role === "tool" && message.name ? (
+          <code className="log-msg-name">{message.name}</code>
+        ) : null}
+        {content ? (
+          <span className="log-msg-meta">
+            {formatNumber(content.length)} chars
+          </span>
+        ) : null}
+        {content ? <CopyButton value={content} /> : null}
+      </header>
+      <div className="log-msg-body">
+        {message.role === "tool" ? (
+          <LogToolBlock
+            kind="result"
+            name={message.name ?? "unknown"}
+            content={content}
+          />
+        ) : content ? (
           <>
-            <span
-              className={systemCollapsed ? "chat-bubble-collapsed" : undefined}
+            <div
+              className={
+                collapsed ? "log-msg-content collapsed" : "log-msg-content"
+              }
             >
-              {props.message.content}
-            </span>
-            {isLongSystem ? (
+              {content}
+            </div>
+            {collapsible ? (
               <button
-                className="chat-message-system-toggle"
+                className="log-msg-toggle"
                 type="button"
-                onClick={() => setSystemCollapsed((c) => !c)}
+                onClick={() => setCollapsed((current) => !current)}
               >
-                {systemCollapsed ? (
+                {collapsed ? (
                   <ChevronRight size={12} />
                 ) : (
                   <ChevronDown size={12} />
                 )}
-                {systemCollapsed
-                  ? `Show full system prompt (${props.message.content.length} chars)`
+                {collapsed
+                  ? `Show all (${formatNumber(content.length)} chars)`
                   : "Collapse"}
               </button>
             ) : null}
           </>
-        ) : (
-          props.message.content
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ToolCallRow(props: { call: { name: string; arguments?: unknown } }) {
-  const [expanded, setExpanded] = useState(false);
-  const summary = summarizeLogValue(props.call.arguments);
-  const hasArgs =
-    props.call.arguments != null &&
-    props.call.arguments !== "" &&
-    summary !== "{}";
-  return (
-    <div className="tool-call-row">
-      <span className="tool-pill">Tool call</span>
-      <strong>{props.call.name}</strong>
-      {hasArgs ? (
-        <div className="tool-call-args">
-          {expanded ? (
-            <div className="tool-call-args-block">
-              <JsonBlock value={props.call.arguments} />
-            </div>
-          ) : (
-            <span className="tool-call-args-summary">{summary}</span>
-          )}
-          <button
-            className="tool-call-args-toggle"
-            type="button"
-            onClick={() => setExpanded((e) => !e)}
-          >
-            {expanded ? "Collapse" : "Expand args"}
-          </button>
-        </div>
-      ) : (
-        <small className="tool-call-args-summary">no args</small>
-      )}
-    </div>
-  );
-}
-
-function ToolResultRow(props: { name?: string; content: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const isLong = props.content.length > 120;
-  const parsed = (() => {
-    try {
-      return JSON.parse(props.content);
-    } catch {
-      return null;
-    }
-  })();
-  return (
-    <div className="tool-call-row">
-      <span className="tool-pill">Tool result</span>
-      <strong>{props.name || "unknown"}</strong>
-      <div className="tool-call-args">
-        {expanded ? (
-          <div className="tool-call-args-block">
-            {parsed != null ? (
-              <JsonBlock value={parsed} />
-            ) : (
-              <span
-                style={{
-                  whiteSpace: "pre-wrap",
-                  fontSize: 12,
-                  fontFamily: "var(--mono)",
-                }}
-              >
-                {props.content}
-              </span>
-            )}
-          </div>
-        ) : (
-          <span className="tool-call-args-summary">{props.content}</span>
-        )}
-        {isLong ? (
-          <button
-            className="tool-call-args-toggle"
-            type="button"
-            onClick={() => setExpanded((e) => !e)}
-          >
-            {expanded ? "Collapse" : "Expand result"}
-          </button>
+        ) : null}
+        {hasToolCalls
+          ? message.toolCalls!.map((call, index) => (
+              <LogToolBlock
+                kind="call"
+                name={call.name}
+                args={call.arguments}
+                key={`${call.name}-${index}`}
+              />
+            ))
+          : null}
+        {!content && !hasToolCalls ? (
+          <span className="log-msg-empty">empty message</span>
         ) : null}
       </div>
+    </article>
+  );
+}
+
+function LogToolBlock(props: {
+  kind: "call" | "result";
+  name: string;
+  args?: unknown;
+  content?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const isCall = props.kind === "call";
+  const summary = isCall
+    ? summarizeLogValue(props.args)
+    : (props.content ?? "");
+  const parsedResult =
+    !isCall && props.content
+      ? (() => {
+          try {
+            return JSON.parse(props.content) as unknown;
+          } catch {
+            return null;
+          }
+        })()
+      : null;
+  const expandable = isCall
+    ? props.args != null && props.args !== "" && summary !== "{}"
+    : summary.length > 120 || parsedResult != null;
+  return (
+    <div className={open ? "log-tool-block open" : "log-tool-block"}>
+      <button
+        className="log-tool-head"
+        type="button"
+        disabled={!expandable}
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        {isCall ? <Wrench size={13} /> : <Braces size={13} />}
+        <span className="log-tool-kind">{isCall ? "tool call" : "result"}</span>
+        <code className="log-tool-name">{props.name}</code>
+        {!open ? (
+          <span className="log-tool-summary">
+            {summary || (isCall ? "no args" : "empty result")}
+          </span>
+        ) : null}
+        {expandable ? (
+          <ChevronDown className="log-tool-chevron" size={14} />
+        ) : null}
+      </button>
+      {open ? (
+        <div className="log-tool-body">
+          {isCall ? (
+            <JsonBlock value={props.args} />
+          ) : parsedResult != null ? (
+            <JsonBlock value={parsedResult} />
+          ) : (
+            <pre className="log-tool-text">{props.content}</pre>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1770,6 +2107,7 @@ function messageFromUnknown(value: unknown): RenderedLogMessage[] {
 function normalizeRole(value: unknown): RenderedLogMessage["role"] {
   if (value === "system" || value === "assistant" || value === "tool")
     return value;
+  if (value === "developer") return "system";
   return "user";
 }
 
@@ -1831,42 +2169,55 @@ function downloadJson(value: unknown) {
   URL.revokeObjectURL(url);
 }
 
-function TokenSummary(props: { entry: LogEntry }) {
+function TokenCells(props: { entry: LogEntry }) {
   const input = props.entry.usage.inputTokens;
   const output = props.entry.usage.outputTokens;
-  const cache = attributeNumber(props.entry.attributes, [
+  const cacheRead = attributeNumber(props.entry.attributes, [
+    "gen_ai.usage.cache_read.input_tokens",
     "cacheTokens",
     "cachedTokens",
     "cache_tokens",
     "cached_tokens",
   ]);
-  const total = props.entry.usage.totalTokens;
-  const detail = [
-    `in: ${formatNumber(input)}`,
-    `out: ${formatNumber(output)}`,
-    `cache: ${formatNumber(cache)}`,
-    `total: ${formatNumber(total)}`,
-  ].join("\n");
-
+  const cachePercent =
+    cacheRead != null && cacheRead > 0 && input != null && input > 0
+      ? Math.min(Math.round((cacheRead / input) * 100), 100)
+      : null;
   return (
-    <span className="token-summary">
-      <span>
-        <ArrowDown size={14} />
-        {input == null ? "—" : formatNumber(input)}
-      </span>
-      <span>
-        <ArrowUp size={14} />
-        {output == null ? "—" : formatNumber(output)}
-      </span>
-      <span className="token-tooltip" aria-hidden="true">
-        {detail}
-      </span>
-    </span>
+    <>
+      <td
+        className="log-td-num"
+        title={
+          input != null ? `${formatNumber(input)} input tokens` : undefined
+        }
+      >
+        {input == null ? "—" : formatCompactNumber(input)}
+      </td>
+      <td
+        className="log-td-num"
+        title={
+          output != null ? `${formatNumber(output)} output tokens` : undefined
+        }
+      >
+        {output == null ? "—" : formatCompactNumber(output)}
+      </td>
+      <td
+        className="log-td-num"
+        title={
+          cacheRead != null
+            ? `${formatNumber(cacheRead)} cached input tokens`
+            : undefined
+        }
+      >
+        {cachePercent == null ? "—" : `${cachePercent}%`}
+      </td>
+    </>
   );
 }
 
 function CostSummary(props: { entry: LogEntry }) {
-  if (props.entry.cost == null) return null;
+  if (props.entry.cost == null)
+    return <span className="log-cost-summary empty">—</span>;
   return (
     <span className="log-cost-summary">{formatCost(props.entry.cost)}</span>
   );
@@ -1904,26 +2255,194 @@ function CopyButton(props: { value: string }) {
   );
 }
 
-function TokenBar(props: { input: number; output: number; cache?: number }) {
-  const total = props.input + props.output + (props.cache ?? 0);
+function TokenBar(props: {
+  input: number;
+  output: number;
+  cacheRead?: number;
+  cacheWrite?: number;
+  inputAudio?: number;
+  reasoning?: number;
+  outputAudio?: number;
+  splitOutput: boolean;
+}) {
+  const {
+    input,
+    cacheRead,
+    cacheWrite,
+    uncached,
+    audio: inputAudio,
+  } = splitInputTokens(
+    props.input,
+    props.cacheRead,
+    props.cacheWrite,
+    props.inputAudio,
+  );
+  const {
+    output,
+    generated,
+    reasoning,
+    audio: outputAudio,
+  } = splitOutputTokens(props.output, props.reasoning, props.outputAudio);
+  const total = input + output;
   if (!total) return null;
-  const inputPct = (props.input / total) * 100;
-  const outputPct = (props.output / total) * 100;
-  const cachePct = ((props.cache ?? 0) / total) * 100;
+  const inputPct = (uncached / total) * 100;
+  const cacheReadPct = (cacheRead / total) * 100;
+  const cacheWritePct = (cacheWrite / total) * 100;
+  const inputAudioPct = (inputAudio / total) * 100;
+  const outputPct = (output / total) * 100;
+  const generatedPct = (generated / total) * 100;
+  const reasoningPct = (reasoning / total) * 100;
+  const outputAudioPct = (outputAudio / total) * 100;
   const title = [
-    `in: ${formatNumber(props.input)}`,
-    `out: ${formatNumber(props.output)}`,
-    props.cache != null ? `cache: ${formatNumber(props.cache)}` : null,
+    `input: ${formatNumber(input)}`,
+    `uncached: ${formatNumber(uncached)}`,
+    cacheRead ? `cache read: ${formatNumber(cacheRead)}` : null,
+    cacheWrite ? `cache write: ${formatNumber(cacheWrite)}` : null,
+    inputAudio ? `input audio: ${formatNumber(inputAudio)}` : null,
+    props.splitOutput ? `generated: ${formatNumber(generated)}` : null,
+    props.splitOutput && reasoning
+      ? `reasoning: ${formatNumber(reasoning)}`
+      : null,
+    props.splitOutput && outputAudio
+      ? `output audio: ${formatNumber(outputAudio)}`
+      : null,
+    !props.splitOutput ? `output: ${formatNumber(output)}` : null,
   ]
     .filter(Boolean)
     .join(" / ");
   return (
-    <div className="token-bar" title={title}>
-      <div className="token-bar-input" style={{ width: `${inputPct}%` }} />
-      <div className="token-bar-output" style={{ width: `${outputPct}%` }} />
-      {props.cache ? (
-        <div className="token-bar-cache" style={{ width: `${cachePct}%` }} />
-      ) : null}
+    <UsageBar
+      title={title}
+      segments={[
+        { key: "input", value: inputPct, className: "token-bar-input" },
+        {
+          key: "cache-read",
+          value: cacheReadPct,
+          className: "token-bar-cache-read",
+        },
+        {
+          key: "cache-write",
+          value: cacheWritePct,
+          className: "token-bar-cache-write",
+        },
+        {
+          key: "input-audio",
+          value: inputAudioPct,
+          className: "token-bar-audio",
+        },
+        {
+          key: "combined-output",
+          value: props.splitOutput ? 0 : outputPct,
+          className: "token-bar-output",
+        },
+        {
+          key: "generated",
+          value: props.splitOutput ? generatedPct : 0,
+          className: "token-bar-output",
+        },
+        {
+          key: "reasoning",
+          value: props.splitOutput ? reasoningPct : 0,
+          className: "token-bar-reasoning",
+        },
+        {
+          key: "output-audio",
+          value: props.splitOutput ? outputAudioPct : 0,
+          className: "token-bar-audio",
+        },
+      ]}
+    />
+  );
+}
+
+function CostBar(props: { usage: LogUsageDetail }) {
+  const usage = props.usage;
+  const components = [
+    ["input", usage.inputCost, "token-bar-input"],
+    ["cache read", usage.cacheReadCost, "token-bar-cache-read"],
+    ["cache write", usage.cacheWriteCost, "token-bar-cache-write"],
+    ["input audio", usage.inputAudioCost, "token-bar-audio"],
+    ["generated", usage.outputCost, "token-bar-output"],
+    ["reasoning", usage.reasoningCost, "token-bar-reasoning"],
+    ["output audio", usage.outputAudioCost, "token-bar-audio"],
+  ] as const;
+  const total = components.reduce(
+    (sum, [, cost]) => sum + Math.max(cost ?? 0, 0),
+    0,
+  );
+  if (!total) return null;
+  const title = components
+    .filter(([, cost]) => cost != null && cost > 0)
+    .map(([label, cost]) => `${label}: ${formatCost(cost!)}`)
+    .join(" / ");
+  return (
+    <UsageBar
+      title={title}
+      segments={components.map(([key, cost, className]) => ({
+        key,
+        value: (Math.max(cost ?? 0, 0) / total) * 100,
+        className,
+      }))}
+    />
+  );
+}
+
+function UsageBar(props: {
+  title: string;
+  segments: Array<{ key: string; value: number; className: string }>;
+}) {
+  return (
+    <div className="token-bar" title={props.title}>
+      {props.segments
+        .filter((segment) => segment.value > 0)
+        .map((segment) => (
+          <div
+            className={segment.className}
+            key={segment.key}
+            style={{ width: `${segment.value}%` }}
+          />
+        ))}
     </div>
   );
+}
+
+function splitInputTokens(
+  inputTokens: number,
+  cacheReadTokens?: number,
+  cacheWriteTokens?: number,
+  inputAudioTokens?: number,
+) {
+  const input = Math.max(inputTokens, 0);
+  const audio = Math.min(Math.max(inputAudioTokens ?? 0, 0), input);
+  const cacheRead = Math.min(Math.max(cacheReadTokens ?? 0, 0), input - audio);
+  const cacheWrite = Math.min(
+    Math.max(cacheWriteTokens ?? 0, 0),
+    input - audio - cacheRead,
+  );
+  return {
+    input,
+    uncached: input - audio - cacheRead - cacheWrite,
+    cacheRead,
+    cacheWrite,
+    audio,
+  };
+}
+
+function splitOutputTokens(
+  outputTokens: number,
+  reasoningTokens?: number,
+  outputAudioTokens?: number,
+) {
+  const output = Math.max(outputTokens, 0);
+  const reasoning = Math.min(Math.max(reasoningTokens ?? 0, 0), output);
+  const audio = Math.min(
+    Math.max(outputAudioTokens ?? 0, 0),
+    output - reasoning,
+  );
+  return {
+    output,
+    generated: output - reasoning - audio,
+    reasoning,
+    audio,
+  };
 }

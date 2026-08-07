@@ -1549,6 +1549,14 @@ impl Drop for DropOnLog {
 						.and_then(|l| l.output_tokens)
 						.map(Into::into),
 				),
+				// Not part of official semconv
+				(
+					"gen_ai.usage.reasoning_tokens",
+					llm_response
+						.as_ref()
+						.and_then(|l| l.reasoning_tokens)
+						.map(Into::into),
+				),
 				(
 					"agw.ai.time_to_first_token",
 					time_to_first_token.map(Into::into),
@@ -1567,6 +1575,14 @@ impl Drop for DropOnLog {
 					llm_response
 						.as_ref()
 						.and_then(|l| l.output_image_tokens)
+						.map(Into::into),
+				),
+				// Not part of official semconv
+				(
+					"gen_ai.usage.input_audio_tokens",
+					llm_response
+						.as_ref()
+						.and_then(|l| l.input_audio_tokens)
 						.map(Into::into),
 				),
 				// Not part of official semconv
@@ -2508,7 +2524,10 @@ mod tests {
 			input_tokens: Some(50),
 			cached_input_tokens: Some(40),
 			cache_creation_input_tokens: Some(10),
+			input_audio_tokens: Some(3),
 			output_tokens: Some(20),
+			output_audio_tokens: Some(4),
+			reasoning_tokens: Some(5),
 			total_tokens: Some(70),
 			..Default::default()
 		};
@@ -2550,6 +2569,18 @@ mod tests {
 		assert_eq!(
 			value("gen_ai.usage.cache_creation.input_tokens"),
 			Some(&opentelemetry::Value::I64(10))
+		);
+		assert_eq!(
+			value("gen_ai.usage.reasoning_tokens"),
+			Some(&opentelemetry::Value::I64(5))
+		);
+		assert_eq!(
+			value("gen_ai.usage.input_audio_tokens"),
+			Some(&opentelemetry::Value::I64(3))
+		);
+		assert_eq!(
+			value("gen_ai.usage.output_audio_tokens"),
+			Some(&opentelemetry::Value::I64(4))
 		);
 	}
 
