@@ -855,19 +855,19 @@ llm:
 		"LLM request route should route through the LLMRouter backend"
 	);
 	assert!(
-        llm_route
-            .backends
-            .iter()
-            .any(|backend| matches!(&backend.target, RouteBackendTarget::Backend(name) if name.as_str() == "/llm:router")),
-        "LLM request route should target the LLMRouter backend"
-    );
+		llm_route
+			.backends
+			.iter()
+			.any(|backend| matches!(&backend.target, RouteBackendTarget::Backend(name) if name.as_str() == "/llm:router")),
+		"LLM request route should target the LLMRouter backend"
+	);
 	assert!(
-        normalized
-            .backends
-            .iter()
-            .any(|backend| matches!(&backend.backend, Backend::LLMRouter(name, _) if name.name.as_str() == "llm:router")),
-        "normalized config should contain the LLMRouter backend"
-    );
+		normalized
+			.backends
+			.iter()
+			.any(|backend| matches!(&backend.backend, Backend::LLMRouter(name, _) if name.name.as_str() == "llm:router")),
+		"normalized config should contain the LLMRouter backend"
+	);
 }
 
 #[tokio::test]
