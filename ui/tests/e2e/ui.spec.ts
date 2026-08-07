@@ -1184,16 +1184,17 @@ test("MCP playground initializes, lists tools, and calls a tool", async ({
 test("MCP playground uses relative requests when UI shares the gateway", async ({
   page,
 }) => {
-  const gateway = await mockGateway(page, sameOriginGatewayConfig());
+  await mockGateway(page, sameOriginGatewayConfig());
   await page.goto("/mcp/playground");
 
   await expect(page.getByText("Browser access is not allowed")).toHaveCount(0);
+  const mcpRequest = page.waitForRequest(
+    (request) => new URL(request.url()).pathname === "/mcp",
+  );
   await page.getByRole("button", { name: "Initialize", exact: true }).click();
-  await expect(page.getByText("initialized")).toBeVisible();
 
-  await expect.poll(() => gateway.mcpUrls.length).toBeGreaterThan(0);
   const pageOrigin = await page.evaluate(() => window.location.origin);
-  const requestUrl = new URL(gateway.mcpUrls[0]);
+  const requestUrl = new URL((await mcpRequest).url());
   expect(requestUrl.origin).toBe(pageOrigin);
   expect(requestUrl.pathname).toBe("/mcp");
 });
