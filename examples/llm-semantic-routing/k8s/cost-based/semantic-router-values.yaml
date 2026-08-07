@@ -1,4 +1,4 @@
-# Helm deployment settings for the local classification and embedding models.
+# Helm deployment settings for the cost-based semantic-routing example.
 router:
   skipProcessing:
     enabled: true

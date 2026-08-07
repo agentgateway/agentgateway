@@ -89,6 +89,8 @@ mod requests {
 			insta::assert_json_snapshot!(snapshot_name, report, {
 				".request.id" => "[id]",
 				".request.created" => "[date]",
+				".request.metadata" => insta::sorted_redaction(),
+				".request.additionalModelRequestFields.metadata" => insta::sorted_redaction(),
 			});
 		});
 	}
@@ -146,7 +148,13 @@ mod requests {
 		("basic", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
 		("system_message", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
 		("tools", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
+		("server_tools", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
 		("reasoning", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
+		("metadata", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
+		(
+			"structured-output",
+			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX],
+		),
 		("cache_control", &[COMPLETIONS]),
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
 		("reasoning_replay", &[BEDROCK]),
@@ -157,6 +165,8 @@ mod requests {
 		("instructions", &[BEDROCK, GEMINI]),
 		("input-list", &[BEDROCK, GEMINI]),
 		("parallel-tool-call", &[BEDROCK, GEMINI]),
+		("structured-output", &[BEDROCK]),
+		("input-media", &[BEDROCK]),
 		("cache_control", &[GEMINI]),
 	];
 	const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
@@ -165,7 +175,9 @@ mod requests {
 	];
 	const EMBEDDINGS_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[OPENAI, BEDROCK_TITAN, BEDROCK_COHERE, VERTEX]),
+		("cohere-v4", &[BEDROCK_COHERE]),
 		("array", &[OPENAI, BEDROCK_COHERE, VERTEX]),
+		("full", &[VERTEX]),
 	];
 	const RERANK_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[COHERE, BEDROCK, VERTEX]),
@@ -274,6 +286,12 @@ mod requests {
 			guardrail_identifier: None,
 			guardrail_version: None,
 		};
+		let cohere_v4 = bedrock::Provider {
+			model: Some(strng::new("cohere.embed-v4:0")),
+			region: strng::new("us-west-2"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+		};
 		for (name, providers) in EMBEDDINGS_REQUESTS {
 			let path = format!("requests/embeddings/{name}.json");
 			for provider in *providers {
@@ -285,7 +303,12 @@ mod requests {
 						conversion::bedrock::from_embeddings::translate(i, &titan)
 					}),
 					BEDROCK_COHERE => test_request(BEDROCK_COHERE, &path, |i| {
-						conversion::bedrock::from_embeddings::translate(i, &cohere)
+						let provider = if *name == "cohere-v4" {
+							&cohere_v4
+						} else {
+							&cohere
+						};
+						conversion::bedrock::from_embeddings::translate(i, provider)
 					}),
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::embeddings::Request| {
 						conversion::vertex::from_embeddings::translate(i)
@@ -475,6 +498,7 @@ mod responses {
 				".response.id" => "[id]",
 				".response.output.*.id" => "[id]",
 				".response.created" => "[date]",
+				".response.created_at" => "[date]",
 			});
 		});
 	}
@@ -588,10 +612,14 @@ mod responses {
 	];
 	const BEDROCK_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", ALL_BEDROCK),
+		("max_tokens", &[BEDROCK_TO_RESPONSES]),
 		("tool", ALL_BEDROCK),
 		("reasoning", ALL_BEDROCK),
 		("reasoning_unsigned", ALL_BEDROCK),
-		("cache_write", &[BEDROCK_TO_COMPLETIONS]),
+		(
+			"cache_write",
+			&[BEDROCK_TO_COMPLETIONS, BEDROCK_TO_RESPONSES],
+		),
 	];
 	const ALL_ANTHROPIC: &[&str] = &[
 		MESSAGES_TO_MESSAGES,
@@ -607,6 +635,7 @@ mod responses {
 	const ALL_COMPLETIONS: &[&str] = &[
 		COMPLETIONS_TO_COMPLETIONS,
 		COMPLETIONS_TO_MESSAGES,
+		COMPLETIONS_TO_RESPONSES,
 		COMPLETIONS_TO_DETECT,
 	];
 	const COMPLETIONS_RESPONSES: &[(&str, &[&str])] = &[
@@ -620,7 +649,10 @@ mod responses {
 		("gemini_zero_completion_tokens", ALL_COMPLETIONS),
 		("gemini_with_completion_tokens", ALL_COMPLETIONS),
 		("tool_call", ALL_COMPLETIONS),
-		("truncated_tool_call", &[COMPLETIONS_TO_COMPLETIONS]),
+		(
+			"truncated_tool_call",
+			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_RESPONSES],
+		),
 	];
 	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[
 		("basic", &[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT]),
@@ -734,6 +766,9 @@ mod responses {
 					}),
 					COMPLETIONS_TO_MESSAGES => test_response(provider, &path, |i| {
 						conversion::completions::from_messages::translate_response(&i)
+					}),
+					COMPLETIONS_TO_RESPONSES => test_response(provider, &path, |i| {
+						conversion::openai_compat::to_responses::translate_response(&i, "input-model")
 					}),
 					COMPLETIONS_TO_DETECT => test_response(provider, &path, |bytes| {
 						Ok(Box::new(

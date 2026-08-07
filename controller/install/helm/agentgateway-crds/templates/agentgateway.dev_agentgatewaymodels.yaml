@@ -839,7 +839,9 @@ spec:
                             minItems: 1
                             type: array
                           backendRef:
-                            description: RFC 8693 token endpoint backend.
+                            description: |-
+                              `backendRef` selects a backend for this policy.
+                              Mutually exclusive with `url`.
                             properties:
                               group:
                                 default: ""
@@ -1223,8 +1225,17 @@ spec:
                                   are supported for subject tokens.
                                 type: string
                             type: object
-                        required:
-                        - backendRef
+                          url:
+                            description: |-
+                              `url` directly specifies the HTTP(S) endpoint for this policy.
+                              When the scheme is `https`, backend TLS is enabled automatically.
+                              Mutually exclusive with `backendRef`.
+                              URLs are opaque; referencing a Kubernetes service hostname like `hello.ns.svc.cluster.local`
+                              will not apply Service policies or load balancing.
+                            maxLength: 1024
+                            minLength: 1
+                            pattern: ^https?://[^/?#@]+(/[^?#]*)?$
+                            type: string
                         type: object
                         x-kubernetes-validations:
                         - message: actorToken is only valid with TokenExchange grantType
@@ -1237,6 +1248,12 @@ spec:
                         - message: requestedTokenType IdJag is only supported by crossAppAccess
                           rule: '!has(self.requestedTokenType) || self.requestedTokenType
                             != ''IdJag'''
+                        - message: path may not be set when url is set
+                          rule: 'has(self.url) ? !has(self.path) : true'
+                        - message: exactly one of the fields in [backendRef url] must
+                            be set
+                          rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
+                            == 1'
                       passthrough:
                         description: |-
                           Reuses a client token already validated by another policy. Those policies
@@ -2148,8 +2165,8 @@ spec:
                                       properties:
                                         backendRef:
                                           description: |-
-                                            Proxy server to reach.
-                                            Supported types: `Service` and `Backend`.
+                                            `backendRef` selects a backend for this policy.
+                                            Mutually exclusive with `url`.
                                           properties:
                                             group:
                                               default: ""
@@ -2198,9 +2215,26 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
-                                      required:
-                                      - backendRef
+                                        url:
+                                          description: |-
+                                            `url` directly specifies the HTTP(S) endpoint for this policy.
+                                            When the scheme is `https`, backend TLS is enabled automatically.
+                                            Mutually exclusive with `backendRef`.
+                                            URLs are opaque; referencing a Kubernetes service hostname like `hello.ns.svc.cluster.local`
+                                            will not apply Service policies or load balancing.
+                                          maxLength: 1024
+                                          minLength: 1
+                                          pattern: ^https?://[^/?#@]+(/[^?#]*)?$
+                                          type: string
                                       type: object
+                                      x-kubernetes-validations:
+                                      - message: exactly one of the fields in [backendRef
+                                          url] must be set
+                                        rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
+                                          == 1'
+                                      - message: url must not include a path for backend
+                                          tunnel
+                                        rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
                                   type: object
                                   x-kubernetes-validations:
                                   - message: at least one of the fields in [auth http
@@ -2558,8 +2592,8 @@ spec:
                                       properties:
                                         backendRef:
                                           description: |-
-                                            Proxy server to reach.
-                                            Supported types: `Service` and `Backend`.
+                                            `backendRef` selects a backend for this policy.
+                                            Mutually exclusive with `url`.
                                           properties:
                                             group:
                                               default: ""
@@ -2608,9 +2642,26 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
-                                      required:
-                                      - backendRef
+                                        url:
+                                          description: |-
+                                            `url` directly specifies the HTTP(S) endpoint for this policy.
+                                            When the scheme is `https`, backend TLS is enabled automatically.
+                                            Mutually exclusive with `backendRef`.
+                                            URLs are opaque; referencing a Kubernetes service hostname like `hello.ns.svc.cluster.local`
+                                            will not apply Service policies or load balancing.
+                                          maxLength: 1024
+                                          minLength: 1
+                                          pattern: ^https?://[^/?#@]+(/[^?#]*)?$
+                                          type: string
                                       type: object
+                                      x-kubernetes-validations:
+                                      - message: exactly one of the fields in [backendRef
+                                          url] must be set
+                                        rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
+                                          == 1'
+                                      - message: url must not include a path for backend
+                                          tunnel
+                                        rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
                                   type: object
                                   x-kubernetes-validations:
                                   - message: at least one of the fields in [auth http
@@ -2987,8 +3038,8 @@ spec:
                                       properties:
                                         backendRef:
                                           description: |-
-                                            Proxy server to reach.
-                                            Supported types: `Service` and `Backend`.
+                                            `backendRef` selects a backend for this policy.
+                                            Mutually exclusive with `url`.
                                           properties:
                                             group:
                                               default: ""
@@ -3037,9 +3088,26 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
-                                      required:
-                                      - backendRef
+                                        url:
+                                          description: |-
+                                            `url` directly specifies the HTTP(S) endpoint for this policy.
+                                            When the scheme is `https`, backend TLS is enabled automatically.
+                                            Mutually exclusive with `backendRef`.
+                                            URLs are opaque; referencing a Kubernetes service hostname like `hello.ns.svc.cluster.local`
+                                            will not apply Service policies or load balancing.
+                                          maxLength: 1024
+                                          minLength: 1
+                                          pattern: ^https?://[^/?#@]+(/[^?#]*)?$
+                                          type: string
                                       type: object
+                                      x-kubernetes-validations:
+                                      - message: exactly one of the fields in [backendRef
+                                          url] must be set
+                                        rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
+                                          == 1'
+                                      - message: url must not include a path for backend
+                                          tunnel
+                                        rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
                                   type: object
                                   x-kubernetes-validations:
                                   - message: at least one of the fields in [auth http
@@ -3757,8 +3825,8 @@ spec:
                                       properties:
                                         backendRef:
                                           description: |-
-                                            Proxy server to reach.
-                                            Supported types: `Service` and `Backend`.
+                                            `backendRef` selects a backend for this policy.
+                                            Mutually exclusive with `url`.
                                           properties:
                                             group:
                                               default: ""
@@ -3807,9 +3875,26 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
-                                      required:
-                                      - backendRef
+                                        url:
+                                          description: |-
+                                            `url` directly specifies the HTTP(S) endpoint for this policy.
+                                            When the scheme is `https`, backend TLS is enabled automatically.
+                                            Mutually exclusive with `backendRef`.
+                                            URLs are opaque; referencing a Kubernetes service hostname like `hello.ns.svc.cluster.local`
+                                            will not apply Service policies or load balancing.
+                                          maxLength: 1024
+                                          minLength: 1
+                                          pattern: ^https?://[^/?#@]+(/[^?#]*)?$
+                                          type: string
                                       type: object
+                                      x-kubernetes-validations:
+                                      - message: exactly one of the fields in [backendRef
+                                          url] must be set
+                                        rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
+                                          == 1'
+                                      - message: url must not include a path for backend
+                                          tunnel
+                                        rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
                                   type: object
                                   x-kubernetes-validations:
                                   - message: at least one of the fields in [auth http
@@ -4167,8 +4252,8 @@ spec:
                                       properties:
                                         backendRef:
                                           description: |-
-                                            Proxy server to reach.
-                                            Supported types: `Service` and `Backend`.
+                                            `backendRef` selects a backend for this policy.
+                                            Mutually exclusive with `url`.
                                           properties:
                                             group:
                                               default: ""
@@ -4217,9 +4302,26 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
-                                      required:
-                                      - backendRef
+                                        url:
+                                          description: |-
+                                            `url` directly specifies the HTTP(S) endpoint for this policy.
+                                            When the scheme is `https`, backend TLS is enabled automatically.
+                                            Mutually exclusive with `backendRef`.
+                                            URLs are opaque; referencing a Kubernetes service hostname like `hello.ns.svc.cluster.local`
+                                            will not apply Service policies or load balancing.
+                                          maxLength: 1024
+                                          minLength: 1
+                                          pattern: ^https?://[^/?#@]+(/[^?#]*)?$
+                                          type: string
                                       type: object
+                                      x-kubernetes-validations:
+                                      - message: exactly one of the fields in [backendRef
+                                          url] must be set
+                                        rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
+                                          == 1'
+                                      - message: url must not include a path for backend
+                                          tunnel
+                                        rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
                                   type: object
                                   x-kubernetes-validations:
                                   - message: at least one of the fields in [auth http
@@ -4624,8 +4726,8 @@ spec:
                     properties:
                       backendRef:
                         description: |-
-                          Proxy server to reach.
-                          Supported types: `Service` and `Backend`.
+                          `backendRef` selects a backend for this policy.
+                          Mutually exclusive with `url`.
                         properties:
                           group:
                             default: ""
@@ -4669,9 +4771,25 @@ spec:
                         - message: Must have port for Service reference
                           rule: '(size(self.group) == 0 && self.kind == ''Service'')
                             ? has(self.port) : true'
-                    required:
-                    - backendRef
+                      url:
+                        description: |-
+                          `url` directly specifies the HTTP(S) endpoint for this policy.
+                          When the scheme is `https`, backend TLS is enabled automatically.
+                          Mutually exclusive with `backendRef`.
+                          URLs are opaque; referencing a Kubernetes service hostname like `hello.ns.svc.cluster.local`
+                          will not apply Service policies or load balancing.
+                        maxLength: 1024
+                        minLength: 1
+                        pattern: ^https?://[^/?#@]+(/[^?#]*)?$
+                        type: string
                     type: object
+                    x-kubernetes-validations:
+                    - message: exactly one of the fields in [backendRef url] must
+                        be set
+                      rule: '[has(self.backendRef),has(self.url)].filter(x,x==true).size()
+                        == 1'
+                    - message: url must not include a path for backend tunnel
+                      rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
                 type: object
                 x-kubernetes-validations:
                 - message: at least one of the fields in [auth authorization headers

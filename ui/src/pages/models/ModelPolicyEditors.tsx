@@ -45,7 +45,7 @@ export function HealthPolicyEditor(props: {
           onChange={(value) =>
             patchHealth({ unhealthyExpression: value || null })
           }
-          placeholder="response.status >= 500"
+          placeholder="response.code >= 500"
         />
       </FieldGroup>
       <div className="form-grid">

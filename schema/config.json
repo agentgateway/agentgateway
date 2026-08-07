@@ -1781,8 +1781,7 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "localRateLimit": {
           "description": "Local rate limits for incoming requests.",
@@ -2646,8 +2645,7 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "http": {
           "description": "HTTP protocol settings for this backend.",
@@ -3545,7 +3543,7 @@
         },
         "alg": {
           "description": "JWS signing algorithm. Defaults to RS256.",
-          "$ref": "#/$defs/SigningAlg",
+          "$ref": "#/$defs/JwtSigningAlg",
           "default": "RS256"
         },
         "kid": {
@@ -3559,7 +3557,7 @@
           "description": "Static claims added to every token (e.g. iss, sub, aud). Values may be\nany JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,\nand `nbf` are reserved for the signer and cannot be configured here.",
           "type": "object",
           "additionalProperties": true,
-          "minProperties": 1
+          "default": {}
         },
         "ttl": {
           "description": "Token lifetime used for `exp`. Defaults to 300s.",
@@ -3582,11 +3580,10 @@
       },
       "additionalProperties": false,
       "required": [
-        "signingKey",
-        "claims"
+        "signingKey"
       ]
     },
-    "SigningAlg": {
+    "JwtSigningAlg": {
       "type": "string",
       "enum": [
         "RS256",
@@ -3929,7 +3926,7 @@
               ]
             },
             "alg": {
-              "$ref": "#/$defs/SigningAlg",
+              "$ref": "#/$defs/JwtSigningAlg",
               "default": "RS256"
             },
             "kid": {
@@ -4383,6 +4380,17 @@
         "proxy": {
           "description": "Proxy backend used to tunnel the connection.",
           "$ref": "#/$defs/SimpleLocalBackendSerde"
+        },
+        "policies": {
+          "description": "Policies to connect to the proxy backend",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -8075,9 +8083,89 @@
             "string",
             "null"
           ]
+        },
+        "moderation": {
+          "description": "Configuration for running OpenAI inline moderation on request input and generated output.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpenAIModeration"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
+    },
+    "OpenAIModeration": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "description": "The moderation model to use. Defaults to `omni-moderation-latest`.",
+          "type": "string",
+          "default": "omni-moderation-latest"
+        },
+        "policy": {
+          "description": "Policies to apply to request input and generated output.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpenAIModerationPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "OpenAIModerationPolicy": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "description": "Policy for request input moderation.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpenAIModerationConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output": {
+          "description": "Policy for generated output moderation.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpenAIModerationConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "OpenAIModerationConfig": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/OpenAIModerationMode"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ]
+    },
+    "OpenAIModerationMode": {
+      "type": "string",
+      "enum": [
+        "score",
+        "block"
+      ]
     },
     "GeminiProvider": {
       "type": "object",
@@ -8348,8 +8436,7 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "http": {
           "description": "HTTP protocol settings for this backend.",
@@ -8494,6 +8581,18 @@
           ],
           "default": null
         },
+        "sessionAffinity": {
+          "description": "Apply best-effort session affinity using a request value selected by a CEL expression.\nRequests with the same value are consistently load balanced to the same healthy service\nendpoint or AI provider, but may be remapped when the available backends change.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionAffinityPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "ai": {
           "description": "Mark this as LLM traffic to enable LLM processing.",
           "anyOf": [
@@ -8602,6 +8701,20 @@
           "type": "string",
           "const": "passthrough"
         }
+      ]
+    },
+    "SessionAffinityPolicy": {
+      "description": "Configures best-effort session affinity using an existing request attribute.\n\nThe source CEL expression selects the affinity value. Requests with the same value are\nconsistently load balanced to the same healthy service endpoint or AI provider. Unlike session\npersistence, this policy does not identify or track a previously selected backend, so changes to\nthe available backends may remap a value.",
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "CEL expression evaluated against request state. It must return a string or bytes value.\nExamples: `request.headers[\"x-session-id\"]` or `string(source.address)`.",
+          "$ref": "#/$defs/Expression"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source"
       ]
     },
     "LocalAIProviders": {
@@ -10932,8 +11045,7 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "health": {
           "description": "Outlier detection and health checking for this provider backend.",
@@ -11111,8 +11223,7 @@
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "health": {
           "description": "health configures outlier detection for this model backend.",

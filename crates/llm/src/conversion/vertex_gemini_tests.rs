@@ -185,6 +185,11 @@ fn vertex_omits_tool_call_id_on_function_parts() {
 
 	let fr = &g["contents"][2]["parts"][0]["functionResponse"];
 	assert_eq!(fr["name"], "get_weather");
+	assert_eq!(
+		g["contents"][2]["parts"].as_array().unwrap().len(),
+		1,
+		"functionResponse must not have sibling parts"
+	);
 	assert!(
 		fr.get("id").is_none(),
 		"functionResponse must not carry `id`: Vertex rejects it"

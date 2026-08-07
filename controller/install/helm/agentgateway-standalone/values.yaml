@@ -40,6 +40,9 @@ podAnnotations:
   prometheus.io/port: "15020"
   prometheus.io/scrape: "true"
 
+# Labels added to the agentgateway pod.
+podLabels: {}
+
 # Pod- and container-level security contexts.
 podSecurityContext: {}
 securityContext:

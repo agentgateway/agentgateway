@@ -398,25 +398,25 @@ message Key {
   AuthorizationLocation authorization_location = 2;
 }
 
+enum JwtSigningAlg {
+  JWT_SIGNING_ALG_UNSPECIFIED = 0;
+  RS256                   = 1;
+  RS384                   = 2;
+  RS512                   = 3;
+  ES256                   = 4;
+  ES384                   = 5;
+  PS256                   = 6;
+}
+
 // Signs a short-lived JWT with a private key on each request and sends it to
 // the backend. For upstreams that require per-request keypair JWTs (e.g. the
 // Snowflake SQL API) rather than a static credential.
 message JwtSign {
-  enum SigningAlg {
-    SIGNING_ALG_UNSPECIFIED = 0; // defaults to RS256
-    RS256                   = 1;
-    RS384                   = 2;
-    RS512                   = 3;
-    ES256                   = 4;
-    ES384                   = 5;
-    PS256                   = 6;
-  }
-
   // PEM-encoded private signing key. RSA keys are used with RS*/PS*
   // algorithms; EC keys are used with ES* algorithms.
   string signing_key = 1;
   // JWS signing algorithm. Defaults to RS256.
-  SigningAlg alg = 2;
+  JwtSigningAlg alg = 2;
   // Optional JWS key ID header.
   optional string kid = 3;
   // Static claims added to every token (e.g. iss, sub, aud). iat, exp, and
@@ -427,6 +427,10 @@ message JwtSign {
   // Where the signed token is written. Defaults to the Authorization header
   // with a "Bearer " prefix.
   AuthorizationLocation authorization_location = 6;
+  // Set by the control plane when jwtSign configuration cannot be translated.
+  // Control-plane-only: never set from user-facing config. When present, the
+  // data plane accepts the policy but rejects every request that uses it.
+  optional string translation_error = 7;
 }
 
 // GCP-specific backend authentication.
@@ -823,6 +827,8 @@ message FrontendPolicySpec {
     BackendReference provider_backend = 1;
     repeated TracingAttribute attributes = 2;
     repeated TracingAttribute resources = 3;
+    // Inline backend policies (e.g. TLS, auth) for the tracing backend.
+    repeated BackendPolicySpec inline_policies = 10;
 
     // remove is a list of attribute keys to remove from emitted spans.
     // This is applied before `attributes` are evaluated/added, so it can drop defaults
@@ -949,6 +955,8 @@ message TrafficPolicySpec {
       string value = 2; // CEL expr
     }
     FailureMode failure_mode = 4;
+    // Inline backend policies (e.g. TLS, auth) for the remote rate limit backend.
+    repeated BackendPolicySpec inline_policies = 5;
   }
   message LocalRateLimit {
     enum Type {
@@ -998,6 +1006,8 @@ message TrafficPolicySpec {
     repeated string include_request_headers = 6;
     BodyOptions include_request_body = 7;
     Cache cache = 8;
+    // Inline backend policies (e.g. TLS, auth) for the external authorization backend.
+    repeated BackendPolicySpec inline_policies = 9;
     reserved "timeout";
   }
   message RBAC {
@@ -1166,6 +1176,8 @@ message TrafficPolicySpec {
     }
     map<string, NamespacedMetadataContext> metadata_context = 5;
     ProcessingOptions processing_options = 6;
+    // Inline backend policies (e.g. TLS, auth) for the external processor backend.
+    repeated BackendPolicySpec inline_policies = 7;
   }
   enum PolicyPhase {
     ROUTE = 0;
@@ -1560,6 +1572,8 @@ message BackendPolicySpec {
   }
   message BackendTunnel {
     BackendReference proxy = 1;
+    // Inline backend policies (e.g. TLS, auth) for the tunnel proxy backend.
+    repeated BackendPolicySpec inline_policies = 2;
   }
   message BackendTCP {
     KeepaliveConfig keepalive = 1;
@@ -1648,6 +1662,8 @@ message BackendPolicySpec {
       // Header names never forwarded to the policy server, even if they appear
       // in `allowed_request_headers`. Case-insensitive.
       repeated string disallowed_request_headers = 5;
+      // Inline backend policies (e.g. TLS, auth) for the policy server.
+      repeated BackendPolicySpec inline_policies = 6;
     }
 
     // Processor is a single policy processor. Today only `remote` is defined.
@@ -1691,6 +1707,10 @@ message BackendPolicySpec {
     BackendTunnel backend_tunnel = 16;
     TrafficPolicySpec.ExternalAuth ext_authz = 17;
     McpGuardrails mcp_guardrails = 18;
+    // Authorization evaluated after a backend or AI provider is selected.
+    // AI failover providers use this to preserve the authorization policy of
+    // the concrete model from which the provider was lowered.
+    TrafficPolicySpec.RBAC authorization = 19;
   }
 }
 
@@ -1720,6 +1740,25 @@ message AIBackend {
   }
   message OpenAI {
     optional string model = 1;
+    Moderation moderation = 2;
+    message Moderation {
+      // The moderation model to use. Defaults to `omni-moderation-latest`.
+      string model = 1;
+      // Policies to apply to request input and generated output.
+      ModerationPolicy policy = 2;
+    }
+    message ModerationPolicy {
+      ModerationConfig input = 1;
+      ModerationConfig output = 2;
+    }
+    message ModerationConfig {
+      ModerationMode mode = 1;
+    }
+    enum ModerationMode {
+      MODERATION_MODE_UNSPECIFIED = 0;
+      MODERATION_MODE_SCORE = 1;
+      MODERATION_MODE_BLOCK = 2;
+    }
   }
   message Gemini {
     optional string model = 1;
@@ -1886,10 +1925,15 @@ message BackendReference {
     string namespace = 1;
     string hostname = 2;
   }
+  message Inline {
+    string hostname = 1;
+    uint32 port = 2;
+  }
   oneof kind {
     Service service = 1;
     // A Backend object. The format is "<backend key>"
     string backend = 2;
+    Inline inline = 4;
   }
   // Port, used only with 'service' type
   uint32 port = 3;
@@ -1911,16 +1955,6 @@ message OAuthClientAuth {
   }
 
   message PrivateKeyJwt {
-    enum SigningAlg {
-      SIGNING_ALG_UNSPECIFIED = 0; // defaults to RS256
-      RS256                   = 1;
-      RS384                   = 2;
-      RS512                   = 3;
-      ES256                   = 4;
-      ES384                   = 5;
-      PS256                   = 6;
-    }
-
     enum CertificateHeader {
       CERTIFICATE_HEADER_UNSPECIFIED = 0;
       X5C                            = 1;
@@ -1931,7 +1965,7 @@ message OAuthClientAuth {
     // algorithms; EC keys are used with ES* algorithms.
     string signing_key = 1;
     // JWS signing algorithm. Defaults to RS256.
-    SigningAlg alg = 2;
+    JwtSigningAlg alg = 2;
     // Optional JWS key ID header.
     optional string kid = 3;
     // Audience for the client assertion, typically the token endpoint URL.
@@ -2000,6 +2034,8 @@ message OAuthTokenExchange {
   BackendReference token_endpoint = 1;
   // Token endpoint path on the backend that must start with "/" (defaults to "/")
   optional string token_endpoint_path = 7;
+  // Inline backend policies (e.g. TLS, auth) for the token endpoint.
+  repeated BackendPolicySpec inline_policies = 15;
 
   // ----- Grant and incoming tokens -----
   // Selects which RFC the request follows. Defaults to TOKEN_EXCHANGE (RFC 8693)
@@ -2061,6 +2097,8 @@ message CrossAppAccessAuth {
     optional string token_endpoint_path = 2;
     // Client authentication used when calling this token endpoint.
     OAuthClientAuth client_auth = 3;
+    // Inline backend policies (e.g. TLS, auth) for the token endpoint.
+    repeated BackendPolicySpec inline_policies = 4;
   }
 
   message SubjectToken {

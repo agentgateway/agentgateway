@@ -294,6 +294,15 @@ func modelFailoverBackend(ctx RouteContext, model *agentgateway.AgentgatewayMode
 		if err != nil {
 			return nil, err
 		}
+		if refModel.Spec.Policies != nil && refModel.Spec.Policies.Authorization != nil {
+			authorization, err := plugins.TranslateAuthorization(refModel.Spec.Policies.Authorization)
+			if err != nil {
+				return nil, err
+			}
+			provider.InlinePolicies = append(provider.InlinePolicies, &api.BackendPolicySpec{
+				Kind: &api.BackendPolicySpec_Authorization{Authorization: authorization},
+			})
+		}
 		transformations, err := translateModelRouteAIPolicy(ctx, refModel.Namespace, refModel.Spec.Policies)
 		if err != nil {
 			return nil, err

@@ -1,0 +1,14 @@
+{
+  "model": "anthropic.claude-3-sonnet",
+  "max_tokens": 100,
+  "metadata": {
+    "user_id": "{\"device_id\":\"704cb53c2074e9\",\"account_uuid\":\"\",\"session_id\":\"180423cd-fe24-4f48-bbde-b4ab5bfd36e7\"}",
+    "department": "engineering"
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "Hello"
+    }
+  ]
+}

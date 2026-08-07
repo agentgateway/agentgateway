@@ -15,6 +15,7 @@ use indexmap::IndexMap;
 use itertools::Itertools;
 use secrecy::SecretString;
 
+use crate::http::auth::jwt_sign::LocalJwtSignAuth;
 use crate::http::auth::{BackendAuth, BackendAuthKind};
 use crate::http::backendtls::{LocalBackendTLS, ResolvedBackendTLS};
 use crate::http::transformation_cel::{LocalTransformationConfig, Transformation};
@@ -466,7 +467,7 @@ pub struct LocalLLMProviderDefaults {
 	/// Authentication configuration for connecting to the LLM provider.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	auth: Option<BackendAuth>,
+	auth: Option<LocalBackendAuth>,
 	/// Outlier detection and health checking for this provider backend.
 	#[serde(default)]
 	health: Option<health::LocalHealthPolicy>,
@@ -806,7 +807,7 @@ pub struct LocalLLMModels {
 	/// auth configures authentication when connecting to the LLM provider.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	auth: Option<BackendAuth>,
+	auth: Option<LocalBackendAuth>,
 	/// health configures outlier detection for this model backend.
 	#[serde(default)]
 	health: Option<health::LocalHealthPolicy>,
@@ -1551,6 +1552,7 @@ impl LocalBackend {
 					mcp_guardrails: None,
 					a2a: None,
 					inference_routing: None,
+					session_affinity: None,
 					ai: None,
 					response_header_modifier: None,
 					request_redirect: None,
@@ -2142,23 +2144,25 @@ where
 		.map_err(serde::de::Error::custom)
 }
 
-pub fn de_backend_auth<'de, D>(deserializer: D) -> Result<Option<BackendAuth>, D::Error>
+pub fn de_backend_auth<'de, D>(deserializer: D) -> Result<Option<LocalBackendAuth>, D::Error>
 where
 	D: Deserializer<'de>,
 {
-	fn validate_auth<E: serde::de::Error>(auth: BackendAuthKind) -> Result<BackendAuthKind, E> {
+	fn validate_auth<E: serde::de::Error>(
+		auth: LocalBackendAuthKind,
+	) -> Result<LocalBackendAuthKind, E> {
 		match auth {
-			BackendAuthKind::OAuthTokenExchange(auth) => {
+			LocalBackendAuthKind::OAuthTokenExchange(auth) => {
 				// OAuth has a few cross-field checks serde won't catch on its own.
 				// Keep them here so untagged compat parsing still returns the real error.
 				auth.validate_load().map_err(serde::de::Error::custom)?;
-				Ok(BackendAuthKind::OAuthTokenExchange(auth))
+				Ok(LocalBackendAuthKind::OAuthTokenExchange(auth))
 			},
-			BackendAuthKind::CrossAppAccess(auth) => {
+			LocalBackendAuthKind::CrossAppAccess(auth) => {
 				// The derived exchange is built on deserialize; validate here so untagged
 				// compat parsing still returns the real cross-field error.
 				auth.validate_load().map_err(serde::de::Error::custom)?;
-				Ok(BackendAuthKind::CrossAppAccess(auth))
+				Ok(LocalBackendAuthKind::CrossAppAccess(auth))
 			},
 			auth => Ok(auth),
 		}
@@ -2166,22 +2170,22 @@ where
 
 	Option::<BackendAuthCompat>::deserialize(deserializer)?
 		.map(|auth| match auth {
-			BackendAuthCompat::PlainKey { key } => Ok(BackendAuth {
-				kind: Some(BackendAuthKind::Key {
+			BackendAuthCompat::PlainKey { key } => Ok(LocalBackendAuth {
+				kind: Some(LocalBackendAuthKind::Key {
 					value: key,
 					location: None,
 				}),
 				credentials: Vec::new(),
 			}),
-			BackendAuthCompat::FullWithCredentials { auth, credentials } => Ok(BackendAuth {
+			BackendAuthCompat::FullWithCredentials { auth, credentials } => Ok(LocalBackendAuth {
 				kind: Some(validate_auth::<D::Error>(auth)?),
 				credentials,
 			}),
-			BackendAuthCompat::CredentialsOnly { credentials } => Ok(BackendAuth {
+			BackendAuthCompat::CredentialsOnly { credentials } => Ok(LocalBackendAuth {
 				kind: None,
 				credentials,
 			}),
-			BackendAuthCompat::Full(auth) => Ok(BackendAuth {
+			BackendAuthCompat::Full(auth) => Ok(LocalBackendAuth {
 				kind: Some(validate_auth::<D::Error>(auth)?),
 				credentials: Vec::new(),
 			}),
@@ -2200,13 +2204,95 @@ enum BackendAuthCompat {
 	},
 	FullWithCredentials {
 		#[serde(flatten)]
-		auth: BackendAuthKind,
+		auth: LocalBackendAuthKind,
 		credentials: Vec<crate::http::auth::BackendAuthCredential>,
 	},
 	CredentialsOnly {
 		credentials: Vec<crate::http::auth::BackendAuthCredential>,
 	},
-	Full(BackendAuthKind),
+	Full(LocalBackendAuthKind),
+}
+
+#[derive(Debug, Clone)]
+pub struct LocalBackendAuth {
+	kind: Option<LocalBackendAuthKind>,
+	credentials: Vec<crate::http::auth::BackendAuthCredential>,
+}
+
+impl LocalBackendAuth {
+	async fn try_into(
+		self,
+		resources: &crate::resource_manager::ResourceFetcher,
+	) -> anyhow::Result<BackendAuth> {
+		let kind = match self.kind {
+			Some(LocalBackendAuthKind::Passthrough { location }) => {
+				Some(BackendAuthKind::Passthrough { location })
+			},
+			Some(LocalBackendAuthKind::Key { value, location }) => {
+				Some(BackendAuthKind::Key { value, location })
+			},
+			Some(LocalBackendAuthKind::Gcp(auth)) => Some(BackendAuthKind::Gcp(auth)),
+			Some(LocalBackendAuthKind::Aws(auth)) => Some(BackendAuthKind::Aws(auth)),
+			Some(LocalBackendAuthKind::Azure(auth)) => Some(BackendAuthKind::Azure(auth)),
+			Some(LocalBackendAuthKind::Copilot) => Some(BackendAuthKind::Copilot),
+			Some(LocalBackendAuthKind::JwtSign(auth)) => Some(BackendAuthKind::JwtSign(Box::new(
+				(*auth).try_into(resources).await?,
+			))),
+			Some(LocalBackendAuthKind::OAuthTokenExchange(auth)) => {
+				Some(BackendAuthKind::OAuthTokenExchange(auth))
+			},
+			Some(LocalBackendAuthKind::CrossAppAccess(auth)) => {
+				Some(BackendAuthKind::CrossAppAccess(auth))
+			},
+			None => None,
+		};
+		Ok(BackendAuth {
+			kind,
+			credentials: self.credentials,
+		})
+	}
+}
+
+#[apply(schema_de!)]
+#[cfg_attr(feature = "schema", schemars(rename = "BackendAuth"))]
+enum LocalBackendAuthKind {
+	/// Forward the validated incoming JWT to the backend.
+	Passthrough {
+		/// Where to place the forwarded credential in the backend request.
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		location: Option<crate::http::auth::AuthorizationLocation>,
+	},
+	/// Send a configured secret value to the backend.
+	Key {
+		/// Secret value to send to the backend.
+		#[cfg_attr(feature = "schema", schemars(with = "FileOrInline"))]
+		#[serde(deserialize_with = "deser_key_from_file")]
+		value: SecretString,
+		/// Where to place the secret in the backend request.
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		location: Option<crate::http::auth::AuthorizationLocation>,
+	},
+	/// Authenticate to Google Cloud services.
+	#[serde(rename = "gcp")]
+	Gcp(crate::http::auth::GcpAuth),
+	/// Sign backend requests with AWS credentials.
+	#[serde(rename = "aws")]
+	Aws(crate::http::auth::AwsAuth),
+	/// Authenticate to Azure services.
+	#[serde(rename = "azure")]
+	Azure(crate::http::auth::AzureAuth),
+	/// Authenticate to GitHub Copilot.
+	#[serde(rename = "copilot")]
+	Copilot,
+	/// Sign a short-lived JWT with a private key on each request.
+	#[serde(rename = "jwtSign")]
+	JwtSign(Box<LocalJwtSignAuth>),
+	/// Use OAuth token exchange flows to obtain a backend access token.
+	#[serde(rename = "oauthTokenExchange")]
+	OAuthTokenExchange(Box<crate::http::auth::OAuthTokenExchangeAuth>),
+	/// Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.
+	#[serde(rename = "crossAppAccess")]
+	CrossAppAccess(Box<crate::http::auth::CrossAppAccessAuth>),
 }
 
 #[apply(schema_de!)]
@@ -2381,7 +2467,7 @@ pub struct SimpleLocalBackendPolicies {
 	/// Authentication credentials sent to this backend.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	pub backend_auth: Option<BackendAuth>,
+	pub backend_auth: Option<LocalBackendAuth>,
 
 	/// HTTP protocol settings for this backend.
 	#[serde(default)]
@@ -2432,11 +2518,17 @@ pub struct LocalBackendPolicies {
 	/// Route requests through an endpoint picker before forwarding to this backend.
 	#[serde(default)]
 	pub inference_routing: Option<crate::http::ext_proc::InferenceRouting>,
+	/// Apply best-effort session affinity using a request value selected by a CEL expression.
+	/// Requests with the same value are consistently load balanced to the same healthy service
+	/// endpoint or AI provider, but may be remapped when the available backends change.
+	#[serde(default)]
+	pub session_affinity: Option<http::sessionaffinity::Policy>,
 	/// Mark this as LLM traffic to enable LLM processing.
 	#[serde(default)]
 	pub ai: Option<llm::Policy>,
 }
 
+#[derive(Clone, Copy)]
 enum InferenceRoutingScope {
 	ServiceRouteBackend,
 	NonServiceRouteBackend,
@@ -2448,23 +2540,40 @@ fn validate_inference_routing_scope(
 	policies: Option<&LocalBackendPolicies>,
 	scope: InferenceRoutingScope,
 ) -> anyhow::Result<()> {
-	if policies.is_none_or(|p| p.inference_routing.is_none()) {
+	let Some(policies) = policies else {
 		return Ok(());
+	};
+	if policies.inference_routing.is_some() {
+		let name = "inferenceRouting";
+		match scope {
+			InferenceRoutingScope::ServiceRouteBackend => {},
+			InferenceRoutingScope::NonServiceRouteBackend => {
+				bail!("{name} is only supported on service route backends")
+			},
+			InferenceRoutingScope::NamedBackend => {
+				bail!("{name} is only supported on service route backends, not named backends")
+			},
+			InferenceRoutingScope::AIProviderPolicies => {
+				bail!("{name} is only supported on service route backends, not AI provider policies")
+			},
+		}
 	}
-	match scope {
-		InferenceRoutingScope::ServiceRouteBackend => Ok(()),
-		InferenceRoutingScope::NonServiceRouteBackend => {
-			bail!("inferenceRouting is only supported on service route backends")
+	Ok(())
+}
+
+fn validate_route_backend_policy_scope(
+	backend: &LocalBackend,
+	policies: Option<&LocalBackendPolicies>,
+) -> anyhow::Result<()> {
+	let is_service = matches!(backend, LocalBackend::Service { .. });
+	validate_inference_routing_scope(
+		policies,
+		if is_service {
+			InferenceRoutingScope::ServiceRouteBackend
+		} else {
+			InferenceRoutingScope::NonServiceRouteBackend
 		},
-		InferenceRoutingScope::NamedBackend => {
-			bail!("inferenceRouting is only supported on service route backends, not named backends")
-		},
-		InferenceRoutingScope::AIProviderPolicies => {
-			bail!(
-				"inferenceRouting is only supported on service route backends, not AI provider policies"
-			)
-		},
-	}
+	)
 }
 
 impl LocalBackendPolicies {
@@ -2487,6 +2596,7 @@ impl LocalBackendPolicies {
 			mcp_guardrails,
 			a2a,
 			inference_routing,
+			session_affinity,
 			ai,
 			response_header_modifier,
 			request_redirect,
@@ -2531,14 +2641,18 @@ impl LocalBackendPolicies {
 		if let Some(p) = inference_routing {
 			pols.push(BackendTrafficPolicy::InferenceRouting(p))
 		}
+		if let Some(p) = session_affinity {
+			pols.push(BackendTrafficPolicy::SessionAffinity(p))
+		}
 		if let Some(p) = backend_tls {
 			pols.push(BackendTrafficPolicy::BackendTLS(
 				p.try_into(resources).await?,
 			))
 		}
-		if let Some(mut p) = backend_auth {
-			p.resolve(resources).await?;
-			pols.push(BackendTrafficPolicy::BackendAuth(p))
+		if let Some(p) = backend_auth {
+			pols.push(BackendTrafficPolicy::BackendAuth(
+				p.try_into(resources).await?,
+			))
 		}
 		if let Some(p) = ext_authz {
 			pols.push(BackendTrafficPolicy::ExtAuthz(Arc::new(
@@ -2684,7 +2798,7 @@ pub struct FilterOrPolicy {
 	/// Authentication credentials sent to the backend.
 	#[serde(default, deserialize_with = "de_backend_auth")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<BackendAuthCompat>"))]
-	backend_auth: Option<BackendAuth>,
+	backend_auth: Option<LocalBackendAuth>,
 	/// Local rate limits for incoming requests.
 	#[serde(default)]
 	local_rate_limit: Option<LocalRateLimitPolicy>,
@@ -4104,7 +4218,10 @@ async fn convert_llm_config(
 				AIProvider::Anthropic(anthropic::Provider { model })
 			},
 			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::OpenAI) => {
-				AIProvider::OpenAI(openai::Provider { model })
+				AIProvider::OpenAI(openai::Provider {
+					model,
+					moderation: None,
+				})
 			},
 			LocalModelAIProvider::Builtin(LocalBuiltinModelAIProvider::Copilot) => {
 				AIProvider::Copilot(copilot::Provider { model })
@@ -4197,9 +4314,10 @@ async fn convert_llm_config(
 				p.try_into(resources).await?,
 			));
 		}
-		if let Some(mut p) = model_config.auth.clone() {
-			p.resolve(resources).await?;
-			pols.push(BackendTrafficPolicy::BackendAuth(p));
+		if let Some(p) = model_config.auth.clone() {
+			pols.push(BackendTrafficPolicy::BackendAuth(
+				p.try_into(resources).await?,
+			));
 		}
 		if let Some(p) = model_config.backend_tunnel.clone() {
 			pols.push(BackendTrafficPolicy::Tunnel(p));
@@ -4741,14 +4859,7 @@ pub async fn convert_route(
 	let mut backend_refs = Vec::new();
 	let mut external_backends = Vec::new();
 	for (idx, b) in backends.iter().enumerate() {
-		validate_inference_routing_scope(
-			b.policies.as_ref(),
-			if matches!(b.backend, LocalBackend::Service { .. }) {
-				InferenceRoutingScope::ServiceRouteBackend
-			} else {
-				InferenceRoutingScope::NonServiceRouteBackend
-			},
-		)?;
+		validate_route_backend_policy_scope(&b.backend, b.policies.as_ref())?;
 		let backend_key = strng::format!("{key}/backend{idx}");
 		let policies = b
 			.policies
@@ -5031,9 +5142,10 @@ pub(crate) async fn split_policies_for_target(
 	if let Some(p) = backend_tunnel {
 		backend_policies.push(BackendTrafficPolicy::Tunnel(p))
 	}
-	if let Some(mut p) = backend_auth {
-		p.resolve(resources).await?;
-		backend_policies.push(BackendTrafficPolicy::BackendAuth(p))
+	if let Some(p) = backend_auth {
+		backend_policies.push(BackendTrafficPolicy::BackendAuth(
+			p.try_into(resources).await?,
+		))
 	}
 
 	// Route policies (AI is dual-role when targeting a backend)

@@ -82,7 +82,11 @@ export function Shell() {
     enabled: Boolean(mode.data && mode.data.mode !== "dump"),
   });
   const [theme, setTheme] = useState(
-    () => localStorage.getItem("theme") ?? "light",
+    () =>
+      localStorage.getItem("theme") ??
+      (window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light"),
   );
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const mobileNavRef = useDismissiblePopover<HTMLDivElement>(
@@ -128,7 +132,6 @@ export function Shell() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem("theme", theme);
   }, [theme]);
 
   useEffect(() => {
@@ -221,7 +224,11 @@ export function Shell() {
                 className="icon-button"
                 type="button"
                 aria-label="Toggle theme"
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                onClick={() => {
+                  const next = theme === "dark" ? "light" : "dark";
+                  localStorage.setItem("theme", next);
+                  setTheme(next);
+                }}
               >
                 {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
               </button>

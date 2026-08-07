@@ -257,6 +257,7 @@ function step_push_proxy_to_local_registry() {
 function step_deploy_helm() {
 	helm upgrade -i --create-namespace --namespace agentgateway-system agentgateway-crds ./controller/install/helm/agentgateway-crds/
 	helm upgrade -i --namespace agentgateway-system agentgateway ./controller/install/helm/agentgateway  \
+	  --wait --timeout=5m \
 	  --set image.registry=localhost:5000 \
 	  --set-string image.tag="${TAG}"\
 	   --set controller.image.repository=agentgateway-controller \
@@ -327,12 +328,12 @@ function main() {
   (await $PID_KIND && run_step "deploy-metallb" step_deploy_metallb) &
   (await $PID_KIND && run_step "create-local-kind-registry" step_create_local_kind_registry) & PID_REGISTRY=$!
 
-  (await $PID_REGISTRY $PID_BUILD_CONTROLLER && run_step "push-go-controller-to-local-registry" step_push_go_controller_to_local_registry) &
+  (await $PID_REGISTRY $PID_BUILD_CONTROLLER && run_step "push-go-controller-to-local-registry" step_push_go_controller_to_local_registry) & PID_PUSH_CONTROLLER=$!
   (await $PID_REGISTRY $PID_BUILD_PROXY && run_step "push-proxy-to-local-registry" step_push_proxy_to_local_registry) &
 
   (await $PID_REGISTRY && run_step "preload-images" step_preload_images) &
   (await $PID_KIND && run_step "deploy-gateway-api" step_setup_gateway_api) & PID_GATEWAY_API=$!
-  (await $PID_GATEWAY_API && run_step "deploy-helm" step_deploy_helm "$@") &
+  (await $PID_GATEWAY_API $PID_PUSH_CONTROLLER && run_step "deploy-helm" step_deploy_helm "$@") &
 
   # Wait each one, not just a raw `wait`, to ensure we fail on errors
   for pid in $(jobs -p); do

@@ -1,3 +1,7 @@
+#[cfg(test)]
+#[path = "openai_compat_tests.rs"]
+mod tests;
+
 pub mod from_responses {
 	use types::completions::typed as completions;
 	use types::responses::typed as responses;
@@ -6,10 +10,16 @@ pub mod from_responses {
 
 	/// Translate an OpenAI Responses request into an OpenAI-compatible chat completions request.
 	pub fn translate(req: &types::responses::Request) -> Result<Vec<u8>, AIError> {
+		let xlated = translate_request(req)?;
+		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+	}
+
+	pub fn translate_request(
+		req: &types::responses::Request,
+	) -> Result<types::completions::typed::Request, AIError> {
 		let typed =
 			json::convert::<_, responses::CreateResponse>(req).map_err(AIError::RequestMarshal)?;
-		let xlated = translate_internal(typed);
-		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+		Ok(translate_internal(typed))
 	}
 
 	fn translate_internal(req: responses::CreateResponse) -> completions::Request {
@@ -244,20 +254,25 @@ pub mod from_responses {
 						},
 					},
 					Item::FunctionCall(call) => {
-						messages.push(completions::RequestMessage::Assistant(
-							completions::RequestAssistantMessage {
-								tool_calls: Some(vec![completions::MessageToolCalls::Function(
-									completions::MessageToolCall {
-										id: call.call_id.clone(),
-										function: completions::FunctionCall {
-											name: call.name.clone(),
-											arguments: call.arguments.clone(),
-										},
-									},
-								)]),
-								..Default::default()
+						let tool_call = completions::MessageToolCalls::Function(completions::MessageToolCall {
+							id: call.call_id.clone(),
+							function: completions::FunctionCall {
+								name: call.name.clone(),
+								arguments: call.arguments.clone(),
 							},
-						));
+						});
+						if let Some(completions::RequestMessage::Assistant(message)) = messages.last_mut()
+							&& let Some(tool_calls) = &mut message.tool_calls
+						{
+							tool_calls.push(tool_call);
+						} else {
+							messages.push(completions::RequestMessage::Assistant(
+								completions::RequestAssistantMessage {
+									tool_calls: Some(vec![tool_call]),
+									..Default::default()
+								},
+							));
+						}
 					},
 					Item::FunctionCallOutput(output) => {
 						let output_text = match output.output {
@@ -280,20 +295,25 @@ pub mod from_responses {
 					},
 					Item::CustomToolCall(call) => {
 						let arguments = serde_json::to_string(&call.input).unwrap_or_else(|_| "{}".to_string());
-						messages.push(completions::RequestMessage::Assistant(
-							completions::RequestAssistantMessage {
-								tool_calls: Some(vec![completions::MessageToolCalls::Function(
-									completions::MessageToolCall {
-										id: call.id.clone(),
-										function: completions::FunctionCall {
-											name: call.name.clone(),
-											arguments,
-										},
-									},
-								)]),
-								..Default::default()
+						let tool_call = completions::MessageToolCalls::Function(completions::MessageToolCall {
+							id: call.id.clone(),
+							function: completions::FunctionCall {
+								name: call.name.clone(),
+								arguments,
 							},
-						));
+						});
+						if let Some(completions::RequestMessage::Assistant(message)) = messages.last_mut()
+							&& let Some(tool_calls) = &mut message.tool_calls
+						{
+							tool_calls.push(tool_call);
+						} else {
+							messages.push(completions::RequestMessage::Assistant(
+								completions::RequestAssistantMessage {
+									tool_calls: Some(vec![tool_call]),
+									..Default::default()
+								},
+							));
+						}
 					},
 					Item::CustomToolCallOutput(output) => {
 						let text = match &output.output {
@@ -411,6 +431,7 @@ pub mod from_responses {
 			response_format,
 			stream: Some(stream),
 			model: req.model.clone(),
+			moderation: None,
 			temperature: req.temperature,
 			top_p: req.top_p,
 			max_completion_tokens: req.max_output_tokens,
@@ -462,12 +483,8 @@ pub mod to_responses {
 		let resp = serde_json::from_slice::<completions::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
 		let typed = translate_response_internal(resp, model);
-		let mut passthrough =
+		let passthrough =
 			json::convert::<_, types::responses::Response>(&typed).map_err(AIError::ResponseParsing)?;
-		passthrough.rest = serde_json::Value::Object(serde_json::Map::new());
-		if let Some(usage) = passthrough.usage.as_mut() {
-			usage.rest = serde_json::Value::Object(serde_json::Map::new());
-		}
 		Ok(Box::new(passthrough))
 	}
 

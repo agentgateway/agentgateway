@@ -5,10 +5,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use quick_cache::sync::{Cache, EntryAction, EntryResult};
 use secrecy::{ExposeSecret, SecretString};
-use sha2::{Digest, Sha256};
 
 use super::transport::TokenEndpointResponse;
 use super::{ExchangeRequest, decode_unverified_jwt_claims};
+use crate::crypto::digest::Sha256;
 
 pub(super) const DEFAULT_CACHE_CAPACITY: usize = 8192;
 pub(super) const DEFAULT_CACHE_TTL: Duration = Duration::from_secs(300);
@@ -134,7 +134,7 @@ impl CacheKeyDigest {
 	}
 
 	fn finish(self) -> TokenCacheKey {
-		TokenCacheKey(self.0.finalize().into())
+		TokenCacheKey(self.0.finalize())
 	}
 }
 

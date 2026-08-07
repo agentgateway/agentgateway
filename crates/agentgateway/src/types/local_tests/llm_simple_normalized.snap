@@ -420,6 +420,7 @@ backends:
                     /v1/images/generations: detect
                     /v1/images/variations: detect
                     /v1/messages: messages
+                    /v1/messages/count_tokens: anthropicTokenCount
                     /v1/rerank: rerank
                     /v1/responses: responses
                     /v1/responses/compact: detect
@@ -445,6 +446,7 @@ backends:
                     /v1/images/generations: detect
                     /v1/images/variations: detect
                     /v1/messages: messages
+                    /v1/messages/count_tokens: anthropicTokenCount
                     /v1/rerank: rerank
                     /v1/responses: responses
                     /v1/responses/compact: detect
@@ -473,6 +475,7 @@ backends:
                     /v1/images/generations: detect
                     /v1/images/variations: detect
                     /v1/messages: messages
+                    /v1/messages/count_tokens: anthropicTokenCount
                     /v1/rerank: rerank
                     /v1/responses: responses
                     /v1/responses/compact: detect
@@ -498,6 +501,7 @@ backends:
                     /v1/images/generations: detect
                     /v1/images/variations: detect
                     /v1/messages: messages
+                    /v1/messages/count_tokens: anthropicTokenCount
                     /v1/rerank: rerank
                     /v1/responses: responses
                     /v1/responses/compact: detect
@@ -523,6 +527,7 @@ backends:
                     /v1/images/generations: detect
                     /v1/images/variations: detect
                     /v1/messages: messages
+                    /v1/messages/count_tokens: anthropicTokenCount
                     /v1/rerank: rerank
                     /v1/responses: responses
                     /v1/responses/compact: detect
@@ -548,6 +553,7 @@ backends:
                     /v1/images/generations: detect
                     /v1/images/variations: detect
                     /v1/messages: messages
+                    /v1/messages/count_tokens: anthropicTokenCount
                     /v1/rerank: rerank
                     /v1/responses: responses
                     /v1/responses/compact: detect

@@ -47,12 +47,7 @@ info:
               "name": "get_weather",
               "arguments": "{\"location\":\"Columbus, OH\"}"
             }
-          }
-        ]
-      },
-      {
-        "role": "assistant",
-        "tool_calls": [
+          },
           {
             "type": "function",
             "id": "call_2",

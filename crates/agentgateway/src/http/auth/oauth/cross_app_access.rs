@@ -233,9 +233,10 @@ impl CrossAppAccessAuth {
 			None => None,
 		};
 		let config = CrossAppAccessAuthConfig {
-			identity_provider: CrossAppAccessEndpoint::from_proto(t.identity_provider)?,
+			identity_provider: CrossAppAccessEndpoint::from_proto(t.identity_provider, diagnostics)?,
 			resource_authorization_server: CrossAppAccessEndpoint::from_proto(
 				t.resource_authorization_server,
+				diagnostics,
 			)?,
 			audience: t.audience,
 			resources: t.resources,
@@ -265,7 +266,10 @@ pub(super) struct CrossAppAccessEndpoint {
 }
 
 impl CrossAppAccessEndpoint {
-	fn from_proto(t: Option<agent::cross_app_access_auth::Endpoint>) -> Result<Self, ProtoError> {
+	fn from_proto(
+		t: Option<agent::cross_app_access_auth::Endpoint>,
+		diagnostics: &mut Diagnostics,
+	) -> Result<Self, ProtoError> {
 		let t = t.ok_or(ProtoError::MissingRequiredField)?;
 		let token_endpoint = t
 			.token_endpoint
@@ -275,12 +279,12 @@ impl CrossAppAccessEndpoint {
 			.client_auth
 			.ok_or(ProtoError::MissingRequiredField)?
 			.try_into()?;
+		let policies =
+			crate::types::agent_xds::backend_policies_from_proto(&t.inline_policies, diagnostics)?;
 		Ok(Self {
 			target: SimpleBackendReferenceWithPolicies {
 				target: std::sync::Arc::new(resolve_simple_reference(Some(token_endpoint))),
-				// Inline connection policies are not supported from xDS;
-				// the backend resource carries its own policies there.
-				policies: Vec::new(),
+				policies,
 			},
 			path: t.token_endpoint_path.unwrap_or_default(),
 			client_auth,

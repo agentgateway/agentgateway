@@ -53,7 +53,7 @@ async fn tunnel_absolute_form() {
 }
 
 #[tokio::test]
-#[cfg(feature = "tls-aws-lc")]
+#[cfg(feature = "crypto-aws-lc")]
 async fn tunnel_connect() {
 	let (mock, _certs) = tls_mock().await;
 	let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -909,7 +909,7 @@ async fn connect_tunnel_obo_exchange_injects_token() {
 /// minting a trusted per-SNI cert, (3) `ConnectHeaders` surviving
 /// `maybe_terminate_tls` into the OBO body, and (4) the decrypted request flowing
 /// into the `dynamic: {}` backend path.
-#[cfg(feature = "tls-aws-lc")]
+#[cfg(feature = "crypto-aws-lc")]
 #[tokio::test]
 async fn connect_tunnel_dynamic_ca_obo_dynamic_backend() {
 	use std::collections::HashMap;
@@ -1351,6 +1351,7 @@ async fn incoming_connect_uses_backend_tunnel_proxy() {
 			proxy: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(
 				proxy_addr,
 			))),
+			policies: vec![],
 		})
 		.into(),
 	});

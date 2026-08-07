@@ -14,6 +14,8 @@ data: {"id":"msg_016wbjv5k86nxxd8CEZwSQnA","choices":[{"index":0,"delta":{"conte
 
 data: {"id":"msg_016wbjv5k86nxxd8CEZwSQnA","choices":[{"index":0,"delta":{"content":null},"finish_reason":"stop"}],"created":123,"model":"claude-haiku-4-5-20251001","service_tier":"standard","system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":15,"completion_tokens":21,"total_tokens":36,"prompt_tokens_details":{"cached_tokens":0,"cache_write_tokens":0},"cache_read_input_tokens":0,"cache_creation_input_tokens":0}}
 
+data: [DONE]
+
 
 
 {

@@ -44,8 +44,11 @@ info:
       },
       "output_tokens_details": {
         "reasoning_tokens": 0
-      }
-    }
+      },
+      "total_tokens": 64
+    },
+    "created_at": "[date]",
+    "object": "response"
   },
   "parsed": {
     "input_tokens": 18,

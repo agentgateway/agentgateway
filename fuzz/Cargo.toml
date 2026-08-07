@@ -1,0 +1,52 @@
+[package]
+name = "agentgateway-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+members = ["."]
+
+[features]
+agw = ["dep:agentgateway", "dep:tokio"]
+
+[patch.crates-io]
+schemars = { git = "https://github.com/howardjohn/schemars", rev = "f3e45a59786debf49e67d6bd6d8dcffc004d39ff" }
+http-serde = { git = "https://gitlab.com/howardjohn/http-serde", rev = "c2e482be0ddf029895ba72ef8749b9f94b388fc7" }
+wiremock = { git = "https://github.com/howardjohn/wiremock-rs", rev = "79e5f488d8bc3bce2f7b397b5791b5caef5129e6" }
+async-openai = { git = "https://github.com/howardjohn/async-openai", rev = "681e3c6e382fa8bf8abf511d45ada73c25c659b6" }
+
+[dependencies]
+agentgateway = { path = "../crates/agentgateway", default-features = false, features = ["crypto-aws-lc"], optional = true }
+agent-llm = { path = "../crates/llm" }
+agent-celx = { path = "../crates/celx" }
+cel = { path = "../crates/cel-fork/cel" }
+libfuzzer-sys = "0.4"
+once_cell = "1.21"
+serde_json = "1.0"
+tokio = { version = "1.50", features = ["io-util", "rt"], optional = true }
+
+[[bin]]
+name = "proxy_protocol"
+path = "fuzz_targets/proxy_protocol.rs"
+test = false
+doc = false
+bench = false
+required-features = ["agw"]
+
+[[bin]]
+name = "llm_request_conversions"
+path = "fuzz_targets/llm_request_conversions.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "cel_expression"
+path = "fuzz_targets/cel_expression.rs"
+test = false
+doc = false
+bench = false

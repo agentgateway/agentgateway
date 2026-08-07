@@ -54,9 +54,6 @@ info:
                 "content": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
               }
             }
-          },
-          {
-            "text": " "
           }
         ]
       }

@@ -219,7 +219,9 @@ fn selected_ai_provider(normalized: &NormalizedLocalConfig) -> Arc<NamedAIProvid
 	let Backend::AI(_, ai) = &backend.backend else {
 		panic!("expected generated AI backend");
 	};
-	let (provider, _handle) = ai.select_provider().expect("expected selected provider");
+	let (provider, _handle) = ai
+		.select_provider(None)
+		.expect("expected selected provider");
 	provider
 }
 
@@ -827,6 +829,54 @@ llm:
 }
 
 #[tokio::test]
+async fn test_llm_openai_inline_moderation_config() {
+	let normalized = normalize_test_yaml(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - ai:
+          name: openai
+          provider:
+            openAI:
+              model: gpt-5
+              moderation:
+                policy:
+                  input:
+                    mode: block
+                  output:
+                    mode: score
+"#,
+	)
+	.await
+	.expect("OpenAI inline moderation config should normalize");
+
+	let provider = selected_ai_provider(&normalized);
+	let AIProvider::OpenAI(openai_provider) = &provider.provider else {
+		panic!("expected OpenAI provider");
+	};
+	let moderation = openai_provider
+		.moderation
+		.as_ref()
+		.expect("expected inline moderation config");
+	assert_eq!(moderation.model.as_str(), "omni-moderation-latest");
+	let policy = moderation
+		.policy
+		.as_ref()
+		.expect("expected moderation policy");
+	assert_eq!(
+		policy.input.as_ref().map(|config| config.mode),
+		Some(crate::llm::openai::ModerationMode::Block)
+	);
+	assert_eq!(
+		policy.output.as_ref().map(|config| config.mode),
+		Some(crate::llm::openai::ModerationMode::Score)
+	);
+}
+
+#[tokio::test]
 async fn test_llm_synthetic_provider_defaults_do_not_override_host_override() {
 	let normalized = normalize_test_config(
 		r#"
@@ -1357,6 +1407,34 @@ binds:
 	normalize_test_config(input)
 		.await
 		.expect("service backends should allow inference routing");
+}
+
+#[tokio::test]
+async fn test_session_affinity_service_backend_config() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - service:
+          name: default/my-model
+          port: 8000
+        policies:
+          sessionAffinity:
+            source: request.headers["x-session-id"]
+"#;
+
+	let normalized = normalize_test_config(input)
+		.await
+		.expect("service backends should allow session affinity");
+	let policies = &normalized.listener_routes[0].1[0].backends[0].inline_policies;
+	assert!(
+		policies
+			.iter()
+			.any(|policy| matches!(policy, BackendTrafficPolicy::SessionAffinity(_))),
+		"expected a normalized session affinity policy"
+	);
 }
 
 #[tokio::test]
@@ -2167,9 +2245,7 @@ binds:
 fn test_de_backend_auth_accepts_each_shape() {
 	use serde::de::IntoDeserializer;
 
-	use crate::http::auth::BackendAuthKind;
-
-	let parse = |v: serde_json::Value| -> crate::http::auth::BackendAuth {
+	let parse = |v: serde_json::Value| -> super::LocalBackendAuth {
 		super::de_backend_auth::<serde_json::Value>(v.into_deserializer())
 			.unwrap()
 			.unwrap()
@@ -2178,19 +2254,22 @@ fn test_de_backend_auth_accepts_each_shape() {
 	let copilot_scalar = parse(serde_json::json!("copilot"));
 	assert!(matches!(
 		copilot_scalar.kind,
-		Some(BackendAuthKind::Copilot)
+		Some(super::LocalBackendAuthKind::Copilot)
 	));
 	assert!(copilot_scalar.credentials.is_empty());
 
 	let plain_key = parse(serde_json::json!({"key": "plain-secret"}));
 	assert!(matches!(
 		plain_key.kind,
-		Some(BackendAuthKind::Key { location: None, .. })
+		Some(super::LocalBackendAuthKind::Key { location: None, .. })
 	));
 	assert!(plain_key.credentials.is_empty());
 
 	let full_key = parse(serde_json::json!({"key": {"value": "explicit-secret"}}));
-	assert!(matches!(full_key.kind, Some(BackendAuthKind::Key { .. })));
+	assert!(matches!(
+		full_key.kind,
+		Some(super::LocalBackendAuthKind::Key { .. })
+	));
 	assert!(full_key.credentials.is_empty());
 
 	let full_with_credentials = parse(serde_json::json!({
@@ -2199,7 +2278,7 @@ fn test_de_backend_auth_accepts_each_shape() {
 	}));
 	assert!(matches!(
 		full_with_credentials.kind,
-		Some(BackendAuthKind::Key { .. })
+		Some(super::LocalBackendAuthKind::Key { .. })
 	));
 	assert_eq!(full_with_credentials.credentials.len(), 1);
 
