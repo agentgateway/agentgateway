@@ -1102,7 +1102,7 @@ function ModelPoliciesInline(props: {
         </CollapsiblePolicySection>
         <CollapsiblePolicySection
           icon={<SlidersHorizontal size={17} />}
-          title="Post-conversion transformation"
+          title="Final transformation"
           description={
             Object.keys(props.finalTransformation).length
               ? `${Object.keys(props.finalTransformation).length} fields configured`
@@ -1321,7 +1321,7 @@ function modelPolicySummary(model: Partial<LlmModel>) {
       : null,
     model.finalTransformation &&
     Object.keys(model.finalTransformation).length
-      ? "post-conversion transformation"
+      ? "final transformation"
       : null,
     model.requestHeaders ? "request headers" : null,
     model.responseHeaders ? "response headers" : null,

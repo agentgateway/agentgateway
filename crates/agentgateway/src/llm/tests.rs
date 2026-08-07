@@ -892,7 +892,7 @@ async fn messages_to_completions_final_transformation() {
 	let policy = Policy {
 		final_transformations: Some(
 			[
-				// Only true post-conversion: `system` became messages[0].
+				// Only true final-conversion: `system` became messages[0].
 				(
 					"converted_message_count".to_string(),
 					expr("llmRequest.messages.size()"),
