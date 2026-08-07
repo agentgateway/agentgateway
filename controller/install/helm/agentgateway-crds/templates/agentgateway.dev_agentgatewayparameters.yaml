@@ -946,6 +946,69 @@ spec:
                 - message: The 'min' value must be less than or equal to the 'max'
                     value.
                   rule: self.min <= self.max
+              spiffe:
+                description: |-
+                  SPIFFE integration settings. When set, the gateway sources its TLS identity (X.509-SVID)
+                  and trust bundle from the local SPIFFE Workload API, and the controller
+                  mounts the Workload API socket into the pod. Listeners and backends opt in to SPIFFE individually
+                  (via the `agentgateway.dev/tls-certificate-source: SPIFFE` listener option and the
+                  AgentgatewayPolicy `backend.tls.certificateSource: SPIFFE` field respectively).
+                properties:
+                  connectTimeout:
+                    description: |-
+                      How long to wait (in seconds) for the initial connection to the SPIFFE Workload API
+                      before failing startup. Rendered into the gateway config as `spiffeConnectTimeout`.
+                      Defaults to 10.
+                    format: int64
+                    minimum: 1
+                    type: integer
+                  enabled:
+                    description: |-
+                      Explicitly turns SPIFFE integration on or off for this gateway. When unset, the presence
+                      of the spiffe block opts in. Set to false on a Gateway-level AgentgatewayParameters to opt
+                      a gateway out of SPIFFE enabled at the GatewayClass level.
+                    type: boolean
+                  source:
+                    description: |-
+                      Volume source for the SPIFFE Workload API socket. When omitted (i.e. `spiffe: {}`),
+                      the socket is sourced from the SPIFFE CSI driver with default settings.
+                    properties:
+                      csi:
+                        description: Source the Workload API socket from the SPIFFE
+                          CSI driver (the default).
+                        properties:
+                          driver:
+                            description: CSI driver name. Defaults to `csi.spiffe.io`.
+                            type: string
+                        type: object
+                      hostPath:
+                        description: Source the Workload API socket from a host directory.
+                        properties:
+                          path:
+                            description: Host directory containing the SPIFFE Workload
+                              API socket, e.g. `/run/spire/agent-sockets`.
+                            minLength: 1
+                            type: string
+                        required:
+                        - path
+                        type: object
+                      mountPath:
+                        description: |-
+                          Mount path inside the container for the Workload API socket directory.
+                          Must be an absolute path. Defaults to `/spiffe-workload-api`.
+                        pattern: ^/
+                        type: string
+                      socketName:
+                        description: Socket filename within the mount directory. Defaults
+                          to `spire-agent.sock`.
+                        type: string
+                    type: object
+                    x-kubernetes-validations:
+                    - message: at most one of the fields in [csi hostPath] may be
+                        set
+                      rule: '[has(self.csi),has(self.hostPath)].filter(x,x==true).size()
+                        <= 1'
+                type: object
               workload:
                 description: |-
                   `workload` selects the Kubernetes workload kind for the managed Gateway

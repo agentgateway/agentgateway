@@ -97,6 +97,19 @@ func ResolveIstioIntegration(gtw *AgentgatewayHelmGateway, cols *agwplugins.AgwC
 	}
 }
 
+// ResolveSpiffeIntegration finalizes the gateway's SPIFFE block. It runs after AGWP params are
+// applied so per-gateway spec.spiffe values take precedence. When spec.spiffe.enabled is explicitly
+// false it clears the block, so the helm template (`hasKey $gateway "spiffe"`) renders no socket
+// mount or SPIFFE environment variables.
+func ResolveSpiffeIntegration(gtw *AgentgatewayHelmGateway) {
+	if gtw == nil || gtw.Spiffe == nil {
+		return
+	}
+	if gtw.Spiffe.Enabled != nil && !*gtw.Spiffe.Enabled {
+		gtw.Spiffe = nil
+	}
+}
+
 // ApplyToHelmValues applies the AgentgatewayParameters configs to the helm
 // values.  This is called before rendering the helm chart. (We render a helm
 // chart, but we do not use helm beyond that point.)
@@ -148,6 +161,7 @@ func (a *AgentgatewayParametersApplier) ApplyToHelmValues(vals *HelmConfig) {
 			res.Istio.AdditionalTrustDomains = configs.Istio.AdditionalTrustDomains
 		}
 	}
+	setIfNonNil(&res.Spiffe, configs.Spiffe)
 	setIfNonNil(&res.RawConfig, configs.RawConfig)
 
 	// Apply logging.level as RUST_LOG first, then merge explicit env vars on top.
@@ -282,6 +296,9 @@ func (g *agentgatewayParametersHelmValuesGenerator) GetValues(ctx context.Contex
 
 	// Resolve Istio enablement and defaults after gw params so spec.istio takes precedence.
 	ResolveIstioIntegration(vals.Agentgateway, g.inputs.AgwCollections)
+
+	// Resolve SPIFFE enablement after gw params so spec.spiffe.enabled takes precedence.
+	ResolveSpiffeIntegration(vals.Agentgateway)
 
 	applyManagedSessionKeyDefaults(vals.Agentgateway, gw.Name)
 

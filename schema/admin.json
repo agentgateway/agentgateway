@@ -239,7 +239,12 @@
       ]
     },
     "ServerTLSConfig": {
-      "type": "null"
+      "type": "object",
+      "properties": {
+        "certificateSource": {
+          "type": "string"
+        }
+      }
     },
     "DumpListener": {
       "type": "object",

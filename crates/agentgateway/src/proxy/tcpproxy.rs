@@ -933,6 +933,7 @@ mod tests {
 			admin: None,
 			upstream: client,
 			ca: None,
+			spiffe: None,
 			mcp_state: crate::mcp::App::new(stores, encoder),
 		})
 	}

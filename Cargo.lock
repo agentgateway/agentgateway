@@ -328,6 +328,7 @@ dependencies = [
  "serde_yaml",
  "shellexpand",
  "socket2",
+ "spiffe",
  "sqlx",
  "sse-stream",
  "stacker",
@@ -6668,6 +6669,36 @@ checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
  "windows-sys 0.60.2",
+]
+
+[[package]]
+name = "spiffe"
+version = "0.16.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "66b316e388514701f5c8aac295909a66f72f738b8ac632814d62692309877742"
+dependencies = [
+ "arc-swap",
+ "base64ct",
+ "fastrand",
+ "futures",
+ "hyper-util",
+ "log",
+ "pkcs8",
+ "prost",
+ "prost-types",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "time",
+ "tokio",
+ "tokio-util",
+ "tonic",
+ "tonic-prost",
+ "tower",
+ "tracing",
+ "url",
+ "x509-parser",
+ "zeroize",
 ]
 
 [[package]]

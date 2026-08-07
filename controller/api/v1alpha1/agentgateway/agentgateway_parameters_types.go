@@ -195,6 +195,15 @@ type AgentgatewayParametersConfigs struct {
 	// +optional
 	Istio *IstioSpec `json:"istio,omitempty"`
 
+	// SPIFFE integration settings. When set, the gateway sources its TLS identity (X.509-SVID)
+	// and trust bundle from the local SPIFFE Workload API, and the controller
+	// mounts the Workload API socket into the pod. Listeners and backends opt in to SPIFFE individually
+	// (via the `agentgateway.dev/tls-certificate-source: SPIFFE` listener option and the
+	// AgentgatewayPolicy `backend.tls.certificateSource: SPIFFE` field respectively).
+	//
+	// +optional
+	Spiffe *SpiffeSpec `json:"spiffe,omitempty"`
+
 	// Model cost catalog sources. Only effective when set on a Gateway-level
 	// AgentgatewayParameters (via Gateway.spec.infrastructure.parametersRef);
 	// ignored on GatewayClass-level parameters because ConfigMap references
@@ -256,6 +265,83 @@ type IstioSpec struct {
 	//
 	// +optional
 	Network string `json:"network,omitempty"`
+}
+
+// SpiffeSpec configures gateway-wide SPIFFE Workload API integration: where the Workload API
+// socket comes from (mounted into the pod by the controller) and how long to wait for
+// the initial connection.
+type SpiffeSpec struct {
+	// Explicitly turns SPIFFE integration on or off for this gateway. When unset, the presence
+	// of the spiffe block opts in. Set to false on a Gateway-level AgentgatewayParameters to opt
+	// a gateway out of SPIFFE enabled at the GatewayClass level.
+	//
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// Volume source for the SPIFFE Workload API socket. When omitted (i.e. `spiffe: {}`),
+	// the socket is sourced from the SPIFFE CSI driver with default settings.
+	//
+	// +optional
+	Source *SpiffeWorkloadAPISource `json:"source,omitempty"`
+
+	// How long to wait (in seconds) for the initial connection to the SPIFFE Workload API
+	// before failing startup. Rendered into the gateway config as `spiffeConnectTimeout`.
+	// Defaults to 10.
+	//
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	ConnectTimeout *int64 `json:"connectTimeout,omitempty"`
+}
+
+// SpiffeWorkloadAPISource describes how the SPIFFE Workload API socket is mounted into the
+// gateway pod. At most one of `csi` or `hostPath` may be set; when neither is set, the SPIFFE
+// CSI driver is used. `mountPath` and `socketName` describe the container-side location of the
+// socket and apply regardless of the source kind.
+//
+// +kubebuilder:validation:AtMostOneOf=csi;hostPath
+type SpiffeWorkloadAPISource struct {
+	// Source the Workload API socket from the SPIFFE CSI driver (the default).
+	//
+	// +optional
+	CSI *SpiffeCSISource `json:"csi,omitempty"`
+
+	// Source the Workload API socket from a host directory.
+	//
+	// +optional
+	HostPath *SpiffeHostPathSource `json:"hostPath,omitempty"`
+
+	// Mount path inside the container for the Workload API socket directory.
+	// Must be an absolute path. Defaults to `/spiffe-workload-api`.
+	//
+	// +optional
+	// +kubebuilder:validation:Pattern=`^/`
+	MountPath string `json:"mountPath,omitempty"`
+
+	// Socket filename within the mount directory. Defaults to `spire-agent.sock`.
+	//
+	// +optional
+	SocketName string `json:"socketName,omitempty"`
+}
+
+// SpiffeCSISource sources the SPIFFE Workload API socket from a CSI driver (the SPIFFE CSI driver).
+type SpiffeCSISource struct {
+	// CSI driver name. Defaults to `csi.spiffe.io`.
+	//
+	// +optional
+	Driver string `json:"driver,omitempty"`
+}
+
+// SpiffeHostPathSource sources the SPIFFE Workload API socket from a directory on the host node.
+//
+// Note: this mounts an arbitrary host directory (read-only) into the gateway pod, so anyone
+// who can set it can read that directory's contents. Prefer the CSI source, and consider
+// restricting hostPath to GatewayClass-level AgentgatewayParameters managed by cluster admins.
+type SpiffeHostPathSource struct {
+	// Host directory containing the SPIFFE Workload API socket, e.g. `/run/spire/agent-sockets`.
+	//
+	// +required
+	// +kubebuilder:validation:MinLength=1
+	Path string `json:"path"`
 }
 
 // +kubebuilder:validation:XValidation:rule="self.min <= self.max",message="The 'min' value must be less than or equal to the 'max' value."
