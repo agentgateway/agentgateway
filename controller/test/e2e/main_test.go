@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	istiolog "istio.io/istio/pkg/log"
 	"k8s.io/apimachinery/pkg/types"
 
 	e2e "github.com/agentgateway/agentgateway/controller/test/e2e"
@@ -25,6 +26,12 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	if testutils.ShouldVerboseE2E() {
+		if retryScope := istiolog.FindScope("retry"); retryScope != nil {
+			retryScope.SetOutputLevel(istiolog.DebugLevel)
+		}
+	}
+
 	code := m.Run()
 
 	if agwInstallation != nil {

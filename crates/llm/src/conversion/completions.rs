@@ -140,9 +140,15 @@ pub mod from_messages {
 
 	/// translate an Anthropic messages to an OpenAI completions request
 	pub fn translate(req: &types::messages::Request) -> Result<Vec<u8>, AIError> {
-		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
-		let xlated = translate_internal(typed);
+		let xlated = translate_request(req)?;
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+	}
+
+	pub fn translate_request(
+		req: &types::messages::Request,
+	) -> Result<types::completions::typed::Request, AIError> {
+		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
+		Ok(translate_internal(typed))
 	}
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
@@ -511,7 +517,7 @@ pub mod from_messages {
 					return events;
 				},
 				SseJsonEvent::Data(Err(e)) => {
-					tracing::warn!(
+					tracing::debug!(
 						"Failed to parse OpenAI stream response during translation: {}",
 						e
 					);
@@ -990,15 +996,26 @@ pub mod from_messages {
 		let tools: Vec<completions::Tool> = tools
 			.into_iter()
 			.flat_map(|tools| tools.into_iter())
-			.map(|tool| {
-				completions::Tool::Function(completions::FunctionTool {
-					function: completions::FunctionObject {
-						name: tool.name,
-						description: tool.description,
-						parameters: Some(tool.input_schema),
-						strict: None,
-					},
-				})
+			.filter_map(|tool| match tool {
+				messages::Tool::Custom(tool) => {
+					Some(completions::Tool::Function(completions::FunctionTool {
+						function: completions::FunctionObject {
+							name: tool.name,
+							description: tool.description,
+							parameters: Some(tool.input_schema),
+							strict: None,
+						},
+					}))
+				},
+				// OpenAI completions has no equivalent of an Anthropic server-executed tool
+				// (e.g. web_search_20250305); drop it rather than fail the whole request.
+				messages::Tool::Server(tool) => {
+					tracing::warn!(
+						"Unsupported server tool in completions conversion: {:?}",
+						tool
+					);
+					None
+				},
 			})
 			.collect_vec();
 
@@ -1060,6 +1077,7 @@ pub mod from_messages {
 
 		completions::Request {
 			model: Some(model),
+			moderation: None,
 			messages: msgs,
 			stream: Some(stream),
 			temperature,

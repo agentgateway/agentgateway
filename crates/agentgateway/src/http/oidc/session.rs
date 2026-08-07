@@ -3,7 +3,6 @@ use std::time::Duration;
 
 use base64::Engine;
 use cookie::{Cookie, SameSite};
-use rand::RngExt;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Serialize, Serializer};
 
@@ -221,9 +220,9 @@ pub enum CookieSecureMode {
 }
 
 pub(super) fn derive_cookie_names(policy_id: &PolicyId) -> (String, String) {
-	let digest = aws_lc_rs::digest::digest(&aws_lc_rs::digest::SHA256, policy_id.as_str().as_bytes());
+	let digest = crate::crypto::digest::sha256(policy_id.as_str().as_bytes());
 	let mut hex = String::with_capacity(32);
-	for byte in digest.as_ref().iter().take(8) {
+	for byte in digest.iter().take(8) {
 		let _ = write!(&mut hex, "{byte:02x}");
 	}
 	(
@@ -271,7 +270,7 @@ fn is_safe_local_redirect_target(target: &str) -> bool {
 
 fn random_token(bytes: usize) -> String {
 	let mut random = vec![0; bytes];
-	rand::rng().fill(random.as_mut_slice());
+	crate::crypto::rand::fill(&mut random).expect("secure RNG must not fail");
 	base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(random)
 }
 

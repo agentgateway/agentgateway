@@ -93,7 +93,7 @@ info:
       "total_tokens": 20
     },
     "object": "response",
-    "created_at": 1772657185,
+    "created_at": "[date]",
     "background": false,
     "billing": {
       "payer": "developer"

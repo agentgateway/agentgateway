@@ -3,7 +3,7 @@ source: crates/llm/src/golden_tests.rs
 description: src/tests/requests/policies/openai_with_inputs.json
 info:
   model: gpt-4o
-  max_tokens: 1024
+  max_output_tokens: 1024
   input:
     - type: message
       role: user
@@ -76,7 +76,7 @@ info:
       }
     ],
     "model": "gpt-4o",
-    "max_tokens": 1024
+    "max_output_tokens": 1024
   },
   "parsed": {
     "input_format": "Responses",
@@ -84,7 +84,9 @@ info:
     "request_model": "gpt-4o",
     "provider": "openai",
     "streaming": false,
-    "params": {},
+    "params": {
+      "max_tokens": 1024
+    },
     "prompt": [
       {
         "role": "system",

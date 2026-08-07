@@ -1,0 +1,21 @@
+# Isolated vSR configuration namespaces for each entitlement tier.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: semantic-router-basic
+  labels:
+    app.kubernetes.io/part-of: tiered-semantic-routing
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: semantic-router-standard
+  labels:
+    app.kubernetes.io/part-of: tiered-semantic-routing
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: semantic-router-pro
+  labels:
+    app.kubernetes.io/part-of: tiered-semantic-routing

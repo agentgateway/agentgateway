@@ -289,10 +289,12 @@ func TestResolve(t *testing.T) {
 							BackendSimple: agentgateway.BackendSimple{
 								TLS: &agentgateway.BackendTLS{},
 								Tunnel: &agentgateway.BackendTunnel{
-									BackendRef: gwv1.BackendObjectReference{
-										Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
-										Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
-										Name:  gwv1.ObjectName("corporate-proxy"),
+									PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
+										BackendRef: &gwv1.BackendObjectReference{
+											Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
+											Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
+											Name:  gwv1.ObjectName("corporate-proxy"),
+										},
 									},
 								},
 							},
@@ -316,6 +318,35 @@ func TestResolve(t *testing.T) {
 			wantTLSConfig: true,
 		},
 		{
+			name: "backend with inline tunnel proxy URL",
+			inputs: []any{
+				&agentgateway.AgentgatewayBackend{
+					ObjectMeta: metav1.ObjectMeta{Name: "idp-jwks", Namespace: "default"},
+					Spec: agentgateway.AgentgatewayBackendSpec{
+						Static: &agentgateway.StaticBackend{Host: "idp.example.com", Port: 443},
+						Policies: &agentgateway.BackendFull{
+							BackendSimple: agentgateway.BackendSimple{
+								TLS: &agentgateway.BackendTLS{},
+								Tunnel: &agentgateway.BackendTunnel{
+									PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
+										URL: new("https://proxy.internal.example.com:8443"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			backendRef: gwv1.BackendObjectReference{
+				Name:  gwv1.ObjectName("idp-jwks"),
+				Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
+				Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
+			},
+			wantURL:       "https://idp.example.com:443/",
+			wantProxyURL:  "https://proxy.internal.example.com:8443",
+			wantTLSConfig: true,
+		},
+		{
 			name: "backend with tunnel proxy resolves proxy TLS when proxy backend has TLS policy",
 			inputs: []any{
 				&agentgateway.AgentgatewayBackend{
@@ -326,10 +357,12 @@ func TestResolve(t *testing.T) {
 							BackendSimple: agentgateway.BackendSimple{
 								TLS: &agentgateway.BackendTLS{},
 								Tunnel: &agentgateway.BackendTunnel{
-									BackendRef: gwv1.BackendObjectReference{
-										Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
-										Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
-										Name:  gwv1.ObjectName("tls-proxy"),
+									PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
+										BackendRef: &gwv1.BackendObjectReference{
+											Group: new(gwv1.Group(wellknown.AgentgatewayBackendGVK.Group)),
+											Kind:  new(gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind)),
+											Name:  gwv1.ObjectName("tls-proxy"),
+										},
 									},
 								},
 							},
@@ -410,7 +443,7 @@ func TestResolve(t *testing.T) {
 			resolved, err := resolver.Resolve(ctx.Krt, remotehttp.ResolveInput{
 				ParentName:       "gw-policy",
 				DefaultNamespace: "default",
-				BackendRef:       tt.backendRef,
+				BackendRef:       &tt.backendRef,
 				Path:             "/",
 				DefaultPort:      tt.defaultPort,
 			})
@@ -462,7 +495,7 @@ func TestResolveWithAdditionalBackendResolver(t *testing.T) {
 	resolved, err := resolver.Resolve(ctx.Krt, remotehttp.ResolveInput{
 		ParentName:       "policy",
 		DefaultNamespace: "default",
-		BackendRef: gwv1.BackendObjectReference{
+		BackendRef: &gwv1.BackendObjectReference{
 			Group: group,
 			Kind:  kind,
 			Name:  "custom",
@@ -472,6 +505,37 @@ func TestResolveWithAdditionalBackendResolver(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, "http://custom.example.com:8443/oauth2/v3/certs", resolved.Target.URL)
+}
+
+func TestResolveURLValidation(t *testing.T) {
+	ctx := testutils.BuildMockPolicyContext(t, nil)
+	resolver := remotehttp.NewResolver(remotehttp.Inputs{})
+
+	for _, tt := range []struct {
+		name    string
+		url     string
+		wantErr string
+	}{
+		{name: "valid", url: "https://issuer.example/jwks"},
+		{name: "missing host", url: "https:///jwks", wantErr: "url must include a host"},
+		{name: "unsupported scheme", url: "ftp://issuer.example/jwks", wantErr: "unsupported URL scheme"},
+		{name: "invalid port", url: "https://issuer.example:70000/jwks", wantErr: "invalid URL port"},
+		{name: "userinfo", url: "https://user@issuer.example/jwks", wantErr: "url must not include userinfo"},
+		{name: "query", url: "https://issuer.example/jwks?tenant=one", wantErr: "url must not include a query"},
+		{name: "empty query", url: "https://issuer.example/jwks?", wantErr: "url must not include a query"},
+		{name: "fragment", url: "https://issuer.example/jwks#keys", wantErr: "url must not include a fragment"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			resolved, err := resolver.Resolve(ctx.Krt, remotehttp.ResolveInput{URL: &tt.url})
+			if tt.wantErr != "" {
+				require.ErrorContains(t, err, tt.wantErr)
+				require.Nil(t, resolved)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.url, resolved.Target.URL)
+		})
+	}
 }
 
 func testService(name, namespace string, ports []corev1.ServicePort) *corev1.Service {

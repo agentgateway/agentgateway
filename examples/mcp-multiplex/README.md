@@ -18,12 +18,19 @@ targets:
 - name: time
   stdio:
     cmd: uvx
-    args: ["mcp-server-time"]
+    args: ["--with", "mcp<2", "mcp-server-time"]
 - name: everything
   stdio:
     cmd: npx
     args: ["@modelcontextprotocol/server-everything"]
 ```
+
+The `--with mcp<2` constraint is needed because `mcp-server-time` requires
+`mcp>=1.23.0` with no upper bound, so `uvx` resolves the SDK to 2.x, which renamed
+`McpError` to `MCPError`. Without the constraint the `time` server fails to import,
+and because one failing target fails `initialize` for the whole multiplexed backend,
+the example does not start. Drop the constraint once `mcp-server-time` supports
+`mcp` 2.x.
 
 Now when we open the MCP inspector we can see the tools from both `time` and `everything`.
 Because we have multiple tools, each tool is prefixed with the `<name>_` to avoid collisions.

@@ -67,6 +67,8 @@ type AgentgatewayPolicyList struct {
 // +kubebuilder:validation:XValidation:rule="has(self.traffic) && has(self.targetSelectors) ? self.targetSelectors.all(t, t.kind in ['Gateway', 'HTTPRoute', 'GRPCRoute', 'ListenerSet', 'InferencePool']) : true",message="the 'traffic' field can only target a Gateway, ListenerSet, GRPCRoute, HTTPRoute, or InferencePool"
 // +kubebuilder:validation:XValidation:rule="has(self.targetRefs) && has(self.traffic) && has(self.traffic.phase) && self.traffic.phase == 'PreRouting' ? self.targetRefs.all(t, t.kind in ['Gateway', 'ListenerSet']) : true",message="the 'traffic.phase=PreRouting' field can only target a Gateway or ListenerSet"
 // +kubebuilder:validation:XValidation:rule="has(self.targetSelectors) && has(self.traffic) && has(self.traffic.phase) && self.traffic.phase == 'PreRouting' ? self.targetSelectors.all(t, t.kind in ['Gateway', 'ListenerSet']) : true",message="the 'traffic.phase=PreRouting' field can only target a Gateway or ListenerSet"
+// +kubebuilder:validation:XValidation:rule="!has(self.targetRefs) || self.targetRefs.all(t, t.kind != 'Service' || !has(t.sectionName) || (int(t.sectionName) >= 1 && int(t.sectionName) <= 65535))",message="Service sectionName must be a numeric port from 1 to 65535"
+// +kubebuilder:validation:XValidation:rule="!has(self.targetSelectors) || self.targetSelectors.all(t, t.kind != 'Service' || !has(t.sectionName) || (int(t.sectionName) >= 1 && int(t.sectionName) <= 65535))",message="Service sectionName must be a numeric port from 1 to 65535"
 type AgentgatewayPolicySpec struct {
 	// Target resources to attach the
 	// policy to.
@@ -127,7 +129,7 @@ type AgentgatewayPolicySpec struct {
 	// `sectionName` indicating the listener), `ListenerSet`, `Route`
 	// (optionally, with a `sectionName` indicating the route rule), or a
 	// `Service` or `Backend` (optionally, with a `sectionName` indicating the
-	// port for `Service`, or sub-backend for `Backend`).
+	// numeric port for `Service`, or sub-backend for `Backend`).
 	//
 	// Note that a backend policy applies when connecting to a specific destination backend. Targeting a higher level
 	// resource, like `Gateway`, is just a way to easily apply a policy to a
@@ -199,6 +201,23 @@ type BackendSimple struct {
 	// Settings for managing authentication to the backend
 	// +optional
 	Auth *BackendAuth `json:"auth,omitempty"`
+}
+
+// PolicyBackendEndpoint identifies a backend used by policy features.
+type PolicyBackendEndpoint struct {
+	// `backendRef` selects a backend for this policy.
+	// Mutually exclusive with `url`.
+	// +optional
+	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
+
+	// `url` directly specifies the HTTP(S) endpoint for this policy.
+	// When the scheme is `https`, backend TLS is enabled automatically.
+	// Mutually exclusive with `backendRef`.
+	// URLs are opaque; referencing a Kubernetes service hostname like `hello.ns.svc.cluster.local`
+	// will not apply Service policies or load balancing.
+	// +kubebuilder:validation:Pattern=`^https?://[^/?#@]+(/[^?#]*)?$`
+	// +optional
+	URL *LongString `json:"url,omitempty"`
 }
 
 // BackendConnectionPolicy configures common connection behavior for auxiliary backend calls.
@@ -391,6 +410,7 @@ type BackendFull struct {
 	// External authentication configuration for requests
 	// sent to this backend.
 	// +optional
+	// +kubebuilder:validation:XValidation:rule="[has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url must be set"
 	ExtAuth *ExtAuth `json:"extAuth,omitempty"`
 }
 
@@ -1179,13 +1199,14 @@ type JWKS struct {
 	Inline *string `json:"inline,omitempty"`
 }
 
+// +kubebuilder:validation:ExactlyOneOf=backendRef;url
+// +kubebuilder:validation:XValidation:rule="has(self.backendRef) ? has(self.jwksPath) : true",message="jwksPath is required when backendRef is set"
+// +kubebuilder:validation:XValidation:rule="has(self.url) ? !has(self.jwksPath) : true",message="jwksPath may not be set when url is set"
 type RemoteJWKS struct {
 	// Path to the IdP `jwks` endpoint, relative to the root, commonly
 	// `".well-known/jwks.json"`.
-	// +required
-	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:MaxLength=2000
-	JwksPath string `json:"jwksPath"`
+	// +optional
+	JwksPath *LongString `json:"jwksPath,omitempty"`
 	// +optional
 	// +kubebuilder:validation:Type=string
 	// +kubebuilder:validation:MaxLength=32
@@ -1194,12 +1215,7 @@ type RemoteJWKS struct {
 	// +kubebuilder:default="5m"
 	CacheDuration *metav1.Duration `json:"cacheDuration,omitempty"`
 	// Remote JWKS server to reach.
-	// Supported types are `Service` and static `Backend`. An
-	// `AgentgatewayPolicy` containing backend TLS config can then be attached
-	// to the `Service` or `Backend` in order to set TLS options for a
-	// connection to the remote `jwks` source.
-	// +required
-	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+	PolicyBackendEndpoint `json:",inline"`
 }
 
 // +k8s:enum
@@ -1673,10 +1689,12 @@ type CrossAppAccessSubjectToken struct {
 	Source *AuthorizationExtractionLocation `json:"source,omitempty"`
 }
 
+// +kubebuilder:validation:ExactlyOneOf=backendRef;url
+// +kubebuilder:validation:XValidation:rule="has(self.url) ? !has(self.path) : true",message="path may not be set when url is set"
 type CrossAppAccessEndpoint struct {
 	// Token endpoint backend.
-	// +required
-	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+	// +optional
+	PolicyBackendEndpoint `json:",inline"`
 
 	// Token endpoint path; defaults to "/". Must start with "/".
 	// +kubebuilder:validation:Pattern=`^/`
@@ -1692,10 +1710,12 @@ type CrossAppAccessEndpoint struct {
 // +kubebuilder:validation:XValidation:rule="!(has(self.actorToken) && has(self.grantType) && self.grantType == 'JwtBearer')",message="actorToken is only valid with TokenExchange grantType"
 // +kubebuilder:validation:XValidation:rule="!(has(self.requestedTokenType) && has(self.grantType) && self.grantType == 'JwtBearer')",message="requestedTokenType is only valid with TokenExchange grantType"
 // +kubebuilder:validation:XValidation:rule="!has(self.requestedTokenType) || self.requestedTokenType != 'IdJag'",message="requestedTokenType IdJag is only supported by crossAppAccess"
+// +kubebuilder:validation:ExactlyOneOf=backendRef;url
+// +kubebuilder:validation:XValidation:rule="has(self.url) ? !has(self.path) : true",message="path may not be set when url is set"
 type OAuthTokenExchange struct {
 	// RFC 8693 token endpoint backend.
-	// +required
-	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+	// +optional
+	PolicyBackendEndpoint `json:",inline"`
 
 	// Token endpoint path; defaults to "/". Must start with "/".
 	// +kubebuilder:validation:Pattern=`^/`
@@ -1869,7 +1889,7 @@ type OAuthPrivateKeyJWT struct {
 
 	// JWS signing algorithm. Defaults to RS256.
 	// +optional
-	Alg *OAuthPrivateKeyJWTSigningAlgorithm `json:"alg,omitempty"`
+	Alg *JwtSigningAlg `json:"alg,omitempty"`
 
 	// Optional JWS key ID header.
 	// +optional
@@ -1890,15 +1910,15 @@ const (
 )
 
 // +k8s:enum
-type OAuthPrivateKeyJWTSigningAlgorithm string
+type JwtSigningAlg string
 
 const (
-	OAuthPrivateKeyJWTSigningAlgorithmRS256 OAuthPrivateKeyJWTSigningAlgorithm = "RS256"
-	OAuthPrivateKeyJWTSigningAlgorithmRS384 OAuthPrivateKeyJWTSigningAlgorithm = "RS384"
-	OAuthPrivateKeyJWTSigningAlgorithmRS512 OAuthPrivateKeyJWTSigningAlgorithm = "RS512"
-	OAuthPrivateKeyJWTSigningAlgorithmPS256 OAuthPrivateKeyJWTSigningAlgorithm = "PS256"
-	OAuthPrivateKeyJWTSigningAlgorithmES256 OAuthPrivateKeyJWTSigningAlgorithm = "ES256"
-	OAuthPrivateKeyJWTSigningAlgorithmES384 OAuthPrivateKeyJWTSigningAlgorithm = "ES384"
+	JwtSigningAlgRS256 JwtSigningAlg = "RS256"
+	JwtSigningAlgRS384 JwtSigningAlg = "RS384"
+	JwtSigningAlgRS512 JwtSigningAlg = "RS512"
+	JwtSigningAlgPS256 JwtSigningAlg = "PS256"
+	JwtSigningAlgES256 JwtSigningAlg = "ES256"
+	JwtSigningAlgES384 JwtSigningAlg = "ES384"
 )
 
 // JwtSignAuth signs a short-lived JWT with a private key on each request and
@@ -1911,7 +1931,7 @@ type JwtSignAuth struct {
 
 	// JWS signing algorithm. Defaults to RS256.
 	// +optional
-	Alg *OAuthPrivateKeyJWTSigningAlgorithm `json:"alg,omitempty"`
+	Alg *JwtSigningAlg `json:"alg,omitempty"`
 
 	// Optional JWS key ID header.
 	// +optional
@@ -1920,12 +1940,9 @@ type JwtSignAuth struct {
 	// Static claims added to every token (e.g. iss, sub, aud). Values may be
 	// any JSON value (e.g. a string, number, bool, or array). iat, exp, and
 	// nbf are reserved for the signer and cannot be configured here; the
-	// controller rejects them at translation time. (CEL admission validation
-	// cannot inspect this map: JSON-valued fields are excluded from CEL type
-	// declarations.)
-	// +kubebuilder:validation:MinProperties=1
-	// +required
-	Claims map[string]apiextensionsv1.JSON `json:"claims"`
+	// controller rejects them at translation time.
+	// +optional
+	Claims map[string]apiextensionsv1.JSON `json:"claims,omitempty"`
 
 	// Token lifetime used for exp. Defaults to 300s.
 	// +kubebuilder:validation:Type=string
@@ -2288,11 +2305,13 @@ type MCPGuardrailsProcessor struct {
 	Methods map[string]MCPMethodPhase `json:"methods"`
 }
 
+// +kubebuilder:validation:ExactlyOneOf=backendRef;url
+// +kubebuilder:validation:XValidation:rule="!has(self.url) || self.url.matches('^https?://[^/?#]+$')",message="url must not include a path"
 type MCPGuardrailsRemote struct {
-	// `backendRef` references the remote guardrails policy server.
+	// References the remote guardrails policy server.
 	// Supported types: `Service` and `Backend`.
-	// +required
-	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+	// +optional
+	PolicyBackendEndpoint `json:",inline"`
 
 	// `failureMode` controls behavior when the policy server is unreachable
 	// or returns an error. `FailOpen` allows the request; `FailClosed`
@@ -2384,11 +2403,13 @@ const (
 	Entra     McpIDP = "Entra"
 )
 
+// +kubebuilder:validation:ExactlyOneOf=backendRef;url
 type BackendTunnel struct {
 	// Proxy server to reach.
 	// Supported types: `Service` and `Backend`.
-	// +required
-	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+	// +kubebuilder:validation:XValidation:rule="!has(self.url) || self.url.matches('^https?://[^/?#]+$')",message="url must not include a path for backend tunnel"
+	// +optional
+	PolicyBackendEndpoint `json:",inline"`
 }
 
 type BackendHTTP struct {
@@ -2576,10 +2597,12 @@ const (
 	// BodySendModeNone does not send the body to the external processor.
 	BodySendModeNone BodySendMode = "None"
 	// BodySendModeBuffered buffers the full body before sending it to the
-	// external processor. It returns an error if the body exceeds 8KB.
+	// external processor. Returns an error if the body exceeds the
+	// configured body buffer limit.
 	BodySendModeBuffered BodySendMode = "Buffered"
-	// BodySendModeBufferedPartial buffers up to 8KB. If the body exceeds that
-	// limit, it sends the buffered prefix instead of returning an error.
+	// BodySendModeBufferedPartial buffers up to the configured body buffer limit.
+	// If the body exceeds that limit, it sends the buffered prefix instead of
+	// returning an error.
 	BodySendModeBufferedPartial BodySendMode = "BufferedPartial"
 	// BodySendModeFullDuplexStreamed streams the body to the external processor.
 	BodySendModeFullDuplexStreamed BodySendMode = "FullDuplexStreamed"
@@ -2610,17 +2633,13 @@ const (
 // External processor request and response phase settings.
 type ProcessingOptions struct {
 	// How request bodies are sent to the external processor.
-	// `Buffered` buffers the full body and returns an error if it exceeds 8KB.
-	// `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
-	// body exceeds that limit. Defaults to `FullDuplexStreamed`.
+	// Defaults to `FullDuplexStreamed`.
 	// +optional
 	// +kubebuilder:default=FullDuplexStreamed
 	RequestBodyMode *BodySendMode `json:"requestBodyMode,omitempty"`
 
 	// How response bodies are sent to the external processor.
-	// `Buffered` buffers the full body and returns an error if it exceeds 8KB.
-	// `BufferedPartial` buffers up to 8KB and sends the buffered prefix if the
-	// body exceeds that limit. Defaults to `FullDuplexStreamed`.
+	// Defaults to `FullDuplexStreamed`.
 	// +optional
 	// +kubebuilder:default=FullDuplexStreamed
 	ResponseBodyMode *BodySendMode `json:"responseBodyMode,omitempty"`
@@ -2660,11 +2679,12 @@ type ProcessingOptions struct {
 // namespace, keyed by the metadata key within that namespace.
 type NamespacedMetadataContext map[string]CELExpression
 
+// +kubebuilder:validation:XValidation:rule="!has(self.url) || self.url.matches('^https?://[^/?#]+$')",message="url must not include a path"
 type ExtProc struct {
 	// External Processor server to reach.
 	// Supported types: `Service` and `Backend`.
 	// +optional
-	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
+	PolicyBackendEndpoint `json:",inline"`
 
 	// Behavior when the external processor is unavailable or returns an error.
 	// "FailOpen" allows the request to continue, as long as the request body has not
@@ -2707,11 +2727,11 @@ type ExtProcConditional struct {
 	Condition CELExpression `json:"condition,omitempty"`
 	// Policy to apply when the condition matches.
 	// +required
-	// +kubebuilder:validation:XValidation:rule="has(self.backendRef)",message="backendRef is required"
+	// +kubebuilder:validation:XValidation:rule="[has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url is required"
 	Policy ExtProc `json:"policy"`
 }
 
-// +kubebuilder:validation:ConditionalPolicy:fields=backendRef
+// +kubebuilder:validation:XValidation:rule="has(self.conditional) ? (!has(self.backendRef) && !has(self.url)) : [has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url must be set unless conditional is set"
 type ExtProcOrConditional struct {
 	// +optional
 	ExtProc `json:",inline"`
@@ -2758,12 +2778,12 @@ type ExtAuthConditional struct {
 	Condition CELExpression `json:"condition,omitempty"`
 	// Policy to apply when the condition matches.
 	// +required
-	// +kubebuilder:validation:XValidation:rule="has(self.backendRef)",message="backendRef is required"
+	// +kubebuilder:validation:XValidation:rule="[has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url is required"
 	// +kubebuilder:validation:XValidation:rule="[has(self.grpc),has(self.http)].filter(x,x==true).size() == 1",message="exactly one of the fields in [grpc http] must be set"
 	Policy ExtAuth `json:"policy"`
 }
 
-// +kubebuilder:validation:ConditionalPolicy:fields=backendRef
+// +kubebuilder:validation:XValidation:rule="has(self.conditional) ? (!has(self.backendRef) && !has(self.url)) : [has(self.backendRef),has(self.url)].filter(x,x==true).size() == 1",message="exactly one of backendRef or url must be set unless conditional is set"
 // +kubebuilder:validation:XValidation:rule="has(self.conditional) || [has(self.grpc),has(self.http)].filter(x,x==true).size() == 1",message="exactly one of the fields in [grpc http] must be set"
 type ExtAuthOrConditional struct {
 	// +optional
@@ -2802,12 +2822,16 @@ func mapseq[E any, O any](s []E, f func(E) O) iter.Seq[O] {
 }
 
 // +kubebuilder:validation:XValidation:rule="!(has(self.forwardBody) && has(self.http) && has(self.http.body))",message="forwardBody cannot be used with http.body"
+// +kubebuilder:validation:XValidation:rule="!has(self.url) || !self.url.matches('^https?://[^/?#]+/') || has(self.http)",message="url path is only valid with http"
+// +kubebuilder:validation:XValidation:rule="!has(self.url) || !self.url.matches('^https?://[^/?#]+/') || !has(self.http) || !has(self.http.path)",message="http.path may not be set when url includes a path"
 type ExtAuth struct {
 	// External Authorization server to reach.
 	//
 	// Supported types: `Service` and `Backend`.
+	// An HTTP `url` may include the authorization path. A gRPC `url` must be
+	// origin-only.
 	// +optional
-	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
+	PolicyBackendEndpoint `json:",inline"`
 
 	// Behavior when the external authorization service is
 	// unavailable or returns an error. "FailOpen" allows the request to continue.
@@ -3016,11 +3040,13 @@ func (r *RateLimitsOrConditional) ConditionalPolicy() (*RateLimits, iter.Seq[Con
 	return &RateLimits{Local: r.Local, Global: r.Global}, seq
 }
 
+// +kubebuilder:validation:ExactlyOneOf=backendRef;url
+// +kubebuilder:validation:XValidation:rule="!has(self.url) || self.url.matches('^https?://[^/?#]+$')",message="url must not include a path"
 type GlobalRateLimit struct {
 	// Rate limit server to reach.
 	// Supported types: `Service` and `Backend`.
-	// +required
-	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+	// +optional
+	PolicyBackendEndpoint `json:",inline"`
 
 	// Behavior when the remote rate limit service is
 	// unavailable or returns an error. `FailOpen` allows the request to continue.
@@ -3074,6 +3100,14 @@ type RateLimitDescriptor struct {
 	// See https://agentgateway.dev/docs/standalone/latest/reference/cel/ for more info.
 	// +optional
 	Cost *CELExpression `json:"cost,omitempty"`
+	// Common Expression Language (`CEL`) expression that returns a dynamic
+	// limit override for this descriptor. The expression must evaluate to an
+	// object containing `unit` and `requestsPerUnit`, for example
+	// `{"unit":"minute","requestsPerUnit":5}`.
+	//
+	// See https://agentgateway.dev/docs/standalone/latest/reference/cel/ for more info.
+	// +optional
+	LimitOverride *CELExpression `json:"limitOverride,omitempty"`
 }
 
 // Entry in a rate limit descriptor.
@@ -3228,13 +3262,15 @@ type AccessLog struct {
 
 // Ships access logs to an
 // OpenTelemetry-compatible backend via OTLP.
+// +kubebuilder:validation:ExactlyOneOf=backendRef;url
 // +kubebuilder:validation:XValidation:rule="!has(self.path) || !has(self.protocol) || self.protocol == 'HTTP'",message="path is only valid with protocol HTTP"
 // +kubebuilder:validation:XValidation:rule="!has(self.path) || self.path.startsWith('/')",message="path must start with /"
+// +kubebuilder:validation:XValidation:rule="!has(self.url) || !self.url.matches('^https?://[^/?#]+/') || (has(self.protocol) && self.protocol == 'HTTP')",message="url path is only valid with protocol HTTP"
 type OtlpAccessLog struct {
 	// OTLP server to send access logs to.
 	// Supported types: `Service` and `AgentgatewayBackend`.
-	// +required
-	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+	// +optional
+	PolicyBackendEndpoint `json:",inline"`
 
 	// CEL expression used to filter OTLP logs. A log
 	// will only be exported if the expression evaluates to `true`.
@@ -3317,13 +3353,15 @@ const (
 	OTLPProtocolGrpc OTLPProtocol = "GRPC"
 )
 
+// +kubebuilder:validation:ExactlyOneOf=backendRef;url
 // +kubebuilder:validation:XValidation:rule="!has(self.path) || !has(self.protocol) || self.protocol == 'HTTP'",message="path is only valid with protocol HTTP"
 // +kubebuilder:validation:XValidation:rule="!has(self.path) || self.path.startsWith('/')",message="path must start with /"
+// +kubebuilder:validation:XValidation:rule="!has(self.url) || !self.url.matches('^https?://[^/?#]+/') || (has(self.protocol) && self.protocol == 'HTTP')",message="url path is only valid with protocol HTTP"
 type Tracing struct {
 	// OTLP server to reach.
 	// Supported types: `Service` and `AgentgatewayBackend`.
-	// +required
-	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+	// +optional
+	PolicyBackendEndpoint `json:",inline"`
 	// OTLP protocol variant to use.
 	// +kubebuilder:default=GRPC
 	// +optional

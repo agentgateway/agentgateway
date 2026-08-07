@@ -1,3 +1,4 @@
+# Cost-based semantic-routing Agentgateway resources.
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend
 metadata:

@@ -99,11 +99,13 @@ fix-lint:
 # test
 .PHONY: test
 test:
-	cargo test --all-targets
+	# Unlike --all-targets, these selectors honor test = false on binaries while
+	# still covering library/integration tests, examples, and benchmarks.
+	cargo test --tests --benches --examples $(if $(TIMINGS),--timings)
 
 .PHONY: test-release
 test-release:
-	cargo test --profile quick-release --all-targets
+	cargo test --profile quick-release --tests --benches --examples $(if $(TIMINGS),--timings)
 
 .PHONY: check-default-members
 check-default-members:

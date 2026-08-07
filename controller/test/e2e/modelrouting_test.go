@@ -49,6 +49,9 @@ func TestAgentgatewayModelRouting(tt *testing.T) {
 	t.Run("FailoverVirtualModel", func(t base.Test) {
 		testAgentgatewayModelFailoverRouting(t, gw)
 	})
+	t.Run("FailoverVirtualModelAuthorization", func(t base.Test) {
+		testAgentgatewayModelFailoverAuthorization(t, gw)
+	})
 }
 
 func testAgentgatewayModelStatus(t base.Test) {
@@ -122,6 +125,23 @@ func testAgentgatewayModelFailoverRouting(t base.Test, gw base.Gateway) {
 		t,
 		modelRoutingExpectModel("agw-internal-fast"),
 		modelRoutingCompletion("resilient")...,
+	)
+}
+
+func testAgentgatewayModelFailoverAuthorization(t base.Test, gw base.Gateway) {
+	gw.Send(
+		t,
+		base.ExpectForbidden(gomega.ContainSubstring("authorization failed")),
+		modelRoutingCompletion("protected-resilient")...,
+	)
+
+	gw.Send(
+		t,
+		modelRoutingExpectModel("agw-protected-fallback"),
+		append(
+			modelRoutingCompletion("protected-resilient"),
+			curl.WithHeader("x-model-access", "allowed"),
+		)...,
 	)
 }
 

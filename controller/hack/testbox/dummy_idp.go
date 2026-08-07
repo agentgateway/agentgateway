@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
@@ -94,16 +95,30 @@ func startDummyIDP() (shutdownFunc, error) {
 	}
 
 	// nolint: gosec // Test code only
-	srv := &http.Server{
+	tlsSrv := &http.Server{
 		Addr:         "0.0.0.0:8443",
 		Handler:      muxWithCORS,
 		TLSConfig:    cfg,
 		TLSNextProto: make(map[string]func(*http.Server, *tls.Conn, http.Handler), 0),
 	}
 
-	return serveHTTP("dummy-idp", srv, func() error {
-		return srv.ListenAndServeTLS("", "")
-	}), nil
+	// nolint: gosec // Test code only
+	httpSrv := &http.Server{
+		Addr:    "0.0.0.0:8088",
+		Handler: muxWithCORS,
+	}
+
+	shutdownTLS := serveHTTP("dummy-idp-tls", tlsSrv, func() error {
+		return tlsSrv.ListenAndServeTLS("", "")
+	})
+	shutdownHTTP := serveHTTP("dummy-idp-http", httpSrv, httpSrv.ListenAndServe)
+
+	return func(ctx context.Context) error {
+		if err := shutdownHTTP(ctx); err != nil {
+			return err
+		}
+		return shutdownTLS(ctx)
+	}, nil
 }
 
 // OAuth2/OIDC constants

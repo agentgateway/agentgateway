@@ -49,8 +49,7 @@ up first.
 Every request gets a new token: `iat`/`exp` are set by the signer (`ttl`
 controls the lifetime, 300s by default) and cannot be configured as claims,
 nor can `nbf`. To tolerate clock skew between the gateway and the upstream,
-`iat` is backdated and `exp` extended by 10 seconds, mirroring Google's auth
-library.
+`iat` is backdated by 10 seconds; `exp` remains the signing time plus `ttl`.
 
 ### Notes
 

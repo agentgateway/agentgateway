@@ -86,7 +86,7 @@ const (
 	// E2ETrace emits timing traces for e2e setup/apply/wait steps.
 	E2ETrace = "AGW_E2E_TRACE"
 
-	// E2EVerbose is the older documented name for E2ETrace.
+	// E2EVerbose emits timing traces and verbose logs from e2e dependencies.
 	E2EVerbose = "E2E_VERBOSE"
 )
 
@@ -99,7 +99,8 @@ var (
 	flagSkipIstioInstall       = flag.Bool("agw.skip-istio-install", envutils.IsEnvTruthy(SkipIstioInstall), "Skip Istio install and teardown; env: "+SkipIstioInstall)
 	flagSkipBugReport          = flag.Bool("agw.skip-bug-report", envutils.IsEnvTruthy(SkipBugReport), "Skip automatic bug report generation on failure; env: "+SkipBugReport)
 	flagUsePortForward         = flag.Bool("agw.port-forward", envutils.IsEnvDefined(UsePortForward), "Use port-forwarding for Gateway traffic; env: "+UsePortForward)
-	flagE2ETrace               = flag.Bool("agw.trace", envutils.IsEnvTruthy(E2ETrace) || envutils.IsEnvTruthy(E2EVerbose), "Log e2e setup/apply/wait timings; env: "+E2ETrace+" or "+E2EVerbose)
+	flagE2ETrace               = flag.Bool("agw.trace", envutils.IsEnvTruthy(E2ETrace), "Log e2e setup/apply/wait timings; env: "+E2ETrace)
+	flagE2EVerbose             = flag.Bool("agw.verbose", envutils.IsEnvTruthy(E2EVerbose), "Log e2e timings and dependency debug logs; env: "+E2EVerbose)
 
 	flagInstallNamespace = flag.String("agw.install-namespace", envutils.GetOrDefault(InstallNamespace, "", true), "Namespace where agentgateway is installed; env: "+InstallNamespace)
 	flagClusterName      = flag.String("agw.cluster-name", os.Getenv(ClusterName), "Cluster name used for e2e tests; env: "+ClusterName)
@@ -107,10 +108,6 @@ var (
 	flagDefaultNamespace = flag.String("agw.default-namespace", envutils.GetOrDefault(DefaultNamespace, "default", false), "Default namespace for resources without an explicit namespace; env: "+DefaultNamespace)
 	flagVersion          = flag.String("agw.version", os.Getenv(Version), "Controller/proxy image tag override; env: "+Version)
 )
-
-func init() {
-	flag.BoolVar(flagE2ETrace, "agw.verbose", *flagE2ETrace, "Alias for -agw.trace")
-}
 
 // ShouldSkipInstallAndTeardown returns true if agentgateway installation and teardown should be skipped.
 func ShouldSkipInstallAndTeardown() bool {
@@ -157,7 +154,11 @@ func ShouldUsePortForward() bool {
 }
 
 func ShouldTraceE2E() bool {
-	return *flagE2ETrace
+	return *flagE2ETrace || *flagE2EVerbose
+}
+
+func ShouldVerboseE2E() bool {
+	return *flagE2EVerbose
 }
 
 func InstallNamespaceOrDefault(fallback string) (string, bool) {

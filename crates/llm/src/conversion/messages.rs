@@ -9,6 +9,31 @@ use crate::types::completions::typed as completions;
 use crate::types::messages::typed as messages;
 use crate::{AIError, StreamingUsageGuard, parse};
 
+const ANTHROPIC_MIN_THINKING_BUDGET_TOKENS: u64 = 1024;
+
+fn cap_thinking_budget_to_max_tokens(budget_tokens: u64, max_tokens: usize) -> Option<u64> {
+	let max_tokens = u64::try_from(max_tokens).unwrap_or(u64::MAX);
+	if budget_tokens < ANTHROPIC_MIN_THINKING_BUDGET_TOKENS
+		|| max_tokens <= ANTHROPIC_MIN_THINKING_BUDGET_TOKENS
+	{
+		return None;
+	}
+	Some(budget_tokens.min(max_tokens - 1))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn cap_thinking_budget_enforces_anthropic_bounds() {
+		assert_eq!(cap_thinking_budget_to_max_tokens(1, 4096), None);
+		assert_eq!(cap_thinking_budget_to_max_tokens(1024, 1024), None);
+		assert_eq!(cap_thinking_budget_to_max_tokens(1024, 1025), Some(1024));
+		assert_eq!(cap_thinking_budget_to_max_tokens(8192, 4096), Some(4095));
+	}
+}
+
 fn anthropic_error_type(status: ::http::StatusCode) -> &'static str {
 	match status {
 		::http::StatusCode::BAD_REQUEST => "invalid_request_error",
@@ -296,16 +321,18 @@ pub mod from_completions {
 			let mapped_tools: Vec<_> = tools
 				.iter()
 				.filter_map(|tool| match tool {
-					completions::Tool::Function(function_tool) => Some(messages::Tool {
-						name: function_tool.function.name.clone(),
-						description: function_tool.function.description.clone(),
-						input_schema: function_tool
-							.function
-							.parameters
-							.clone()
-							.unwrap_or_default(),
-						cache_control: None,
-					}),
+					completions::Tool::Function(function_tool) => {
+						Some(messages::Tool::Custom(messages::CustomTool {
+							name: function_tool.function.name.clone(),
+							description: function_tool.function.description.clone(),
+							input_schema: function_tool
+								.function
+								.parameters
+								.clone()
+								.unwrap_or_default(),
+							cache_control: None,
+						}))
+					},
 					_ => None,
 				})
 				.collect();
@@ -346,16 +373,17 @@ pub mod from_completions {
 			},
 			_ => None,
 		};
-		let explicit_thinking_budget = req.vendor_extensions.thinking_budget_tokens;
-		let thinking = if let Some(budget_tokens) = explicit_thinking_budget {
-			Some(messages::ThinkingInput::Enabled { budget_tokens })
-		} else {
-			req
-				.reasoning_effort
-				.as_ref()
-				.and_then(crate::types::thinking_budget_for_reasoning_effort)
-				.map(|budget_tokens| messages::ThinkingInput::Enabled { budget_tokens })
-		};
+		let thinking = req
+			.vendor_extensions
+			.thinking_budget_tokens
+			.or_else(|| {
+				req
+					.reasoning_effort
+					.as_ref()
+					.and_then(crate::types::thinking_budget_for_reasoning_effort)
+			})
+			.and_then(|budget_tokens| super::cap_thinking_budget_to_max_tokens(budget_tokens, max_tokens))
+			.map(|budget_tokens| messages::ThinkingInput::Enabled { budget_tokens });
 
 		let response_format = match req.response_format {
 			Some(completions::ResponseFormat::JsonSchema { json_schema }) => {
@@ -558,216 +586,215 @@ pub mod from_completions {
 		let mut tool_calls = super::StreamingToolCalls::new(log_content.tool_calls);
 
 		// https://docs.anthropic.com/en/docs/build-with-claude/streaming
-		parse::sse::json_transform::<messages::MessagesStreamEvent, completions::StreamResponse>(
-			b,
-			buffer_limit,
-			move |f| {
-				let mk = |choices: Vec<completions::ChatChoiceStream>,
-				          usage: Option<completions::Usage>| {
-					Some(completions::StreamResponse {
-						id: message_id.clone().unwrap_or_else(|| "unknown".to_string()),
-						model: model.clone(),
-						object: "chat.completion.chunk".to_string(),
-						system_fingerprint: None,
-						service_tier: service_tier.clone(),
-						created,
-						choices,
-						usage,
-					})
-				};
-				// ignore errors... what else can we do?
-				let f = f.ok()?;
+		let body = parse::sse::json_transform::<
+			messages::MessagesStreamEvent,
+			completions::StreamResponse,
+		>(b, buffer_limit, move |f| {
+			let mk = |choices: Vec<completions::ChatChoiceStream>, usage: Option<completions::Usage>| {
+				Some(completions::StreamResponse {
+					id: message_id.clone().unwrap_or_else(|| "unknown".to_string()),
+					model: model.clone(),
+					object: "chat.completion.chunk".to_string(),
+					system_fingerprint: None,
+					service_tier: service_tier.clone(),
+					created,
+					choices,
+					usage,
+				})
+			};
+			// ignore errors... what else can we do?
+			let f = f.ok()?;
 
-				// Extract info we need
-				match f {
-					messages::MessagesStreamEvent::MessageStart { message } => {
-						message_id = Some(message.id);
-						model = message.model.clone();
-						service_tier = message.usage.service_tier.clone();
-						log.update(|r| {
-							r.response.output_tokens = Some(message.usage.output_tokens as u64);
-							r.response.input_tokens = Some(message.usage.input_tokens as u64);
-							r.response.cached_input_tokens =
-								message.usage.cache_read_input_tokens.map(|i| i as u64);
-							r.response.cache_creation_input_tokens =
-								message.usage.cache_creation_input_tokens.map(|i| i as u64);
-							r.response.service_tier = message.usage.service_tier.as_deref().map(Into::into);
-							r.response.provider_model = Some(strng::new(&message.model))
-						});
-						// no need to respond with anything yet
-						None
-					},
+			// Extract info we need
+			match f {
+				messages::MessagesStreamEvent::MessageStart { message } => {
+					message_id = Some(message.id);
+					model = message.model.clone();
+					service_tier = message.usage.service_tier.clone();
+					log.update(|r| {
+						r.response.output_tokens = Some(message.usage.output_tokens as u64);
+						r.response.input_tokens = Some(message.usage.input_tokens as u64);
+						r.response.cached_input_tokens =
+							message.usage.cache_read_input_tokens.map(|i| i as u64);
+						r.response.cache_creation_input_tokens =
+							message.usage.cache_creation_input_tokens.map(|i| i as u64);
+						r.response.service_tier = message.usage.service_tier.as_deref().map(Into::into);
+						r.response.provider_model = Some(strng::new(&message.model))
+					});
+					// no need to respond with anything yet
+					None
+				},
 
-					messages::MessagesStreamEvent::ContentBlockStart {
-						index,
-						content_block,
-					} => match content_block {
-						messages::ContentBlock::ToolUse {
-							id, name, input, ..
-						}
-						| messages::ContentBlock::ServerToolUse {
-							id, name, input, ..
-						} => {
-							let tool_index = next_tool_index;
-							next_tool_index += 1;
-							tool_index_map.insert(index, tool_index);
-							tool_calls.start(index, id.as_str(), name.as_str(), &input);
+				messages::MessagesStreamEvent::ContentBlockStart {
+					index,
+					content_block,
+				} => match content_block {
+					messages::ContentBlock::ToolUse {
+						id, name, input, ..
+					}
+					| messages::ContentBlock::ServerToolUse {
+						id, name, input, ..
+					} => {
+						let tool_index = next_tool_index;
+						next_tool_index += 1;
+						tool_index_map.insert(index, tool_index);
+						tool_calls.start(index, id.as_str(), name.as_str(), &input);
 
-							let choice = completions::ChatChoiceStream {
-								index: 0,
-								logprobs: None,
-								delta: completions::StreamResponseDelta {
-									tool_calls: Some(vec![completions::ChatCompletionMessageToolCallChunk {
-										index: tool_index,
-										id: Some(id),
-										r#type: Some(completions::FunctionType::Function),
-										function: Some(completions::FunctionCallStream {
-											name: Some(name),
-											arguments: None,
-										}),
-									}]),
-									..Default::default()
-								},
-								finish_reason: None,
-							};
-							mk(vec![choice], None)
-						},
-						_ => None,
-					},
-					messages::MessagesStreamEvent::ContentBlockDelta { delta, index } => {
-						if !saw_token {
-							saw_token = true;
-							log.update(|r| {
-								r.response.first_token = Some(Instant::now());
-							});
-						}
-						let mut dr = completions::StreamResponseDelta::default();
-						let mut emit_chunk = true;
-						match delta {
-							messages::ContentBlockDelta::TextDelta { text } => {
-								if let Some(completion) = completion.as_mut() {
-									completion.push_str(&text);
-								}
-								dr.content = Some(text);
-							},
-							messages::ContentBlockDelta::ThinkingDelta { thinking } => {
-								dr.reasoning_content = Some(thinking)
-							},
-							messages::ContentBlockDelta::InputJsonDelta { partial_json } => {
-								tool_calls.append_arguments(index, &partial_json);
-								if let Some(&tool_index) = tool_index_map.get(&index) {
-									dr.tool_calls = Some(vec![completions::ChatCompletionMessageToolCallChunk {
-										index: tool_index,
-										id: None,
-										r#type: None,
-										function: Some(completions::FunctionCallStream {
-											name: None,
-											arguments: Some(partial_json),
-										}),
-									}]);
-								} else {
-									emit_chunk = false;
-								}
-							},
-							messages::ContentBlockDelta::SignatureDelta { .. }
-							| messages::ContentBlockDelta::CitationsDelta { .. } => {
-								emit_chunk = false;
-							},
-						};
-						if emit_chunk {
-							let choice = completions::ChatChoiceStream {
-								index: 0,
-								logprobs: None,
-								delta: dr,
-								finish_reason: None,
-							};
-							mk(vec![choice], None)
-						} else {
-							None
-						}
-					},
-					messages::MessagesStreamEvent::MessageDelta { usage, delta } => {
-						let finish_reason = delta.stop_reason.as_ref().map(super::translate_stop_reason);
-						let log_finish_reason = delta
-							.stop_reason
-							.as_ref()
-							.and_then(crate::types::serialize_str);
-						log.update(|r| {
-							if let Some(crt) = usage.cache_read_input_tokens {
-								r.response.cached_input_tokens = Some(crt as u64);
-							}
-							if let Some(cwt) = usage.cache_creation_input_tokens {
-								r.response.cache_creation_input_tokens = Some(cwt as u64);
-							}
-							if let Some(o) = usage.output_tokens {
-								r.response.output_tokens = Some(o as u64);
-							}
-							if let Some(inp) = r.response.input_tokens
-								&& let Some(o) = r.response.output_tokens
-							{
-								r.response.total_tokens = Some(inp + o)
-							}
-							if let Some(completion) = completion.take() {
-								r.response.completion = Some(vec![completion]);
-							}
-							r.response.output_messages =
-								tool_calls.take_output_messages(log_finish_reason.clone());
-						});
-						let choices = finish_reason.map_or_else(Vec::new, |finish_reason| {
-							vec![completions::ChatChoiceStream {
-								index: 0,
-								logprobs: None,
-								delta: completions::StreamResponseDelta::default(),
-								finish_reason: Some(finish_reason),
-							}]
-						});
-						mk(
-							choices,
-							Some(completions::Usage {
-								prompt_tokens: usage.input_tokens.unwrap_or_default() as u32,
-								completion_tokens: usage.output_tokens.unwrap_or_default() as u32,
-
-								total_tokens: (usage.input_tokens.unwrap_or_default()
-									+ usage.output_tokens.unwrap_or_default()) as u32,
-
-								cache_read_input_tokens: usage.cache_read_input_tokens.map(|i| i as u64),
-								prompt_tokens_details: match (
-									usage.cache_read_input_tokens,
-									usage.cache_creation_input_tokens,
-								) {
-									(None, None) => None,
-									(cached_tokens, cache_write_tokens) => Some(UsagePromptDetails {
-										cached_tokens: cached_tokens.map(|i| i as u64),
-										audio_tokens: None,
-										cache_write_tokens: cache_write_tokens.map(|i| i as u64),
-										rest: Default::default(),
+						let choice = completions::ChatChoiceStream {
+							index: 0,
+							logprobs: None,
+							delta: completions::StreamResponseDelta {
+								tool_calls: Some(vec![completions::ChatCompletionMessageToolCallChunk {
+									index: tool_index,
+									id: Some(id),
+									r#type: Some(completions::FunctionType::Function),
+									function: Some(completions::FunctionCallStream {
+										name: Some(name),
+										arguments: None,
 									}),
-								},
-								cache_creation_input_tokens: usage.cache_creation_input_tokens.map(|i| i as u64),
-
-								completion_tokens_details: None,
-							}),
-						)
+								}]),
+								..Default::default()
+							},
+							finish_reason: None,
+						};
+						mk(vec![choice], None)
 					},
-					messages::MessagesStreamEvent::ContentBlockStop { index } => {
-						tool_index_map.remove(&index);
-						None
-					},
-					messages::MessagesStreamEvent::MessageStop => {
+					_ => None,
+				},
+				messages::MessagesStreamEvent::ContentBlockDelta { delta, index } => {
+					if !saw_token {
+						saw_token = true;
 						log.update(|r| {
-							if let Some(completion) = completion.take() {
-								r.response.completion = Some(vec![completion]);
-							}
-							if r.response.output_messages.is_none() {
-								r.response.output_messages = tool_calls.take_output_messages(None);
-							}
+							r.response.first_token = Some(Instant::now());
 						});
+					}
+					let mut dr = completions::StreamResponseDelta::default();
+					let mut emit_chunk = true;
+					match delta {
+						messages::ContentBlockDelta::TextDelta { text } => {
+							if let Some(completion) = completion.as_mut() {
+								completion.push_str(&text);
+							}
+							dr.content = Some(text);
+						},
+						messages::ContentBlockDelta::ThinkingDelta { thinking } => {
+							dr.reasoning_content = Some(thinking)
+						},
+						messages::ContentBlockDelta::InputJsonDelta { partial_json } => {
+							tool_calls.append_arguments(index, &partial_json);
+							if let Some(&tool_index) = tool_index_map.get(&index) {
+								dr.tool_calls = Some(vec![completions::ChatCompletionMessageToolCallChunk {
+									index: tool_index,
+									id: None,
+									r#type: None,
+									function: Some(completions::FunctionCallStream {
+										name: None,
+										arguments: Some(partial_json),
+									}),
+								}]);
+							} else {
+								emit_chunk = false;
+							}
+						},
+						messages::ContentBlockDelta::SignatureDelta { .. }
+						| messages::ContentBlockDelta::CitationsDelta { .. } => {
+							emit_chunk = false;
+						},
+					};
+					if emit_chunk {
+						let choice = completions::ChatChoiceStream {
+							index: 0,
+							logprobs: None,
+							delta: dr,
+							finish_reason: None,
+						};
+						mk(vec![choice], None)
+					} else {
 						None
-					},
-					messages::MessagesStreamEvent::Ping => None,
-				}
-			},
-		)
+					}
+				},
+				messages::MessagesStreamEvent::MessageDelta { usage, delta } => {
+					let finish_reason = delta.stop_reason.as_ref().map(super::translate_stop_reason);
+					let log_finish_reason = delta
+						.stop_reason
+						.as_ref()
+						.and_then(crate::types::serialize_str);
+					log.update(|r| {
+						if let Some(crt) = usage.cache_read_input_tokens {
+							r.response.cached_input_tokens = Some(crt as u64);
+						}
+						if let Some(cwt) = usage.cache_creation_input_tokens {
+							r.response.cache_creation_input_tokens = Some(cwt as u64);
+						}
+						if let Some(o) = usage.output_tokens {
+							r.response.output_tokens = Some(o as u64);
+						}
+						if let Some(inp) = r.response.input_tokens
+							&& let Some(o) = r.response.output_tokens
+						{
+							r.response.total_tokens = Some(inp + o)
+						}
+						if let Some(completion) = completion.take() {
+							r.response.completion = Some(vec![completion]);
+						}
+						r.response.output_messages = tool_calls.take_output_messages(log_finish_reason.clone());
+					});
+					let choices = finish_reason.map_or_else(Vec::new, |finish_reason| {
+						vec![completions::ChatChoiceStream {
+							index: 0,
+							logprobs: None,
+							delta: completions::StreamResponseDelta::default(),
+							finish_reason: Some(finish_reason),
+						}]
+					});
+					mk(
+						choices,
+						Some(completions::Usage {
+							prompt_tokens: usage.input_tokens.unwrap_or_default() as u32,
+							completion_tokens: usage.output_tokens.unwrap_or_default() as u32,
+
+							total_tokens: (usage.input_tokens.unwrap_or_default()
+								+ usage.output_tokens.unwrap_or_default()) as u32,
+
+							cache_read_input_tokens: usage.cache_read_input_tokens.map(|i| i as u64),
+							prompt_tokens_details: match (
+								usage.cache_read_input_tokens,
+								usage.cache_creation_input_tokens,
+							) {
+								(None, None) => None,
+								(cached_tokens, cache_write_tokens) => Some(UsagePromptDetails {
+									cached_tokens: cached_tokens.map(|i| i as u64),
+									audio_tokens: None,
+									cache_write_tokens: cache_write_tokens.map(|i| i as u64),
+									rest: Default::default(),
+								}),
+							},
+							cache_creation_input_tokens: usage.cache_creation_input_tokens.map(|i| i as u64),
+
+							completion_tokens_details: None,
+						}),
+					)
+				},
+				messages::MessagesStreamEvent::ContentBlockStop { index } => {
+					tool_index_map.remove(&index);
+					None
+				},
+				messages::MessagesStreamEvent::MessageStop => {
+					log.update(|r| {
+						if let Some(completion) = completion.take() {
+							r.response.completion = Some(vec![completion]);
+						}
+						if r.response.output_messages.is_none() {
+							r.response.output_messages = tool_calls.take_output_messages(None);
+						}
+					});
+					None
+				},
+				messages::MessagesStreamEvent::Ping => None,
+			}
+		});
+
+		parse::sse::append_done_on_success(body)
 	}
 }
 

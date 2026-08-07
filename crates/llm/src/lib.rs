@@ -347,8 +347,6 @@ pub enum AIError {
 	MessageNotFound,
 	#[error("response was missing fields")]
 	IncompleteResponse,
-	#[error("unknown model")]
-	UnknownModel,
 	#[error("todo: streaming is not currently supported for this provider")]
 	StreamingUnsupported,
 	#[error("unsupported model")]

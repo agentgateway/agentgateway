@@ -696,7 +696,7 @@ async fn refresh_base_costs(State(app): State<App>) -> Result<Json<Value>, Error
 
 	let refreshed = crate::llm::cost::refresh::refresh_models_dev_base_catalog(
 		&base_costs_file,
-		app.model_catalog.as_ref(),
+		configured_file.map(|_| app.model_catalog.as_ref()),
 	)
 	.await?;
 

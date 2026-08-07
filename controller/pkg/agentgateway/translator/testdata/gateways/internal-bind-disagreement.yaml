@@ -44,6 +44,7 @@ output:
   resource:
     bind:
       key: 8080/default/example
+      mode: INTERNAL
       port: 8080
 - gateway:
     Name: example
@@ -58,22 +59,6 @@ output:
         gatewayNamespace: default
         listenerName: gw-8080
       protocol: HTTP
-- gateway:
-    Name: example
-    Namespace: default
-  resource:
-    listener:
-      bindKey: 8080/default/example
-      hostname: b.example.com
-      key: default/foo.ls-8080
-      name:
-        gatewayName: example
-        gatewayNamespace: default
-        listenerName: ls-8080
-        listenerSet:
-          name: foo
-          namespace: default
-      protocol: HTTP
 status:
 - apiVersion: gateway.networking.k8s.io/v1
   kind: ListenerSet
@@ -84,32 +69,35 @@ status:
   status:
     conditions:
     - lastTransitionTime: fake
-      message: Resource accepted
-      reason: Accepted
-      status: "True"
+      message: ""
+      reason: ListenersNotValid
+      status: "False"
       type: Accepted
     - lastTransitionTime: fake
-      message: Resource programmed
-      reason: Programmed
-      status: "True"
+      message: ""
+      reason: ListenersNotValid
+      status: "False"
       type: Programmed
     listeners:
     - attachedRoutes: 0
       conditions:
       - lastTransitionTime: fake
-        message: No errors found
-        reason: Accepted
-        status: "True"
+        message: Found conflicting bind modes on listeners; the higher-precedence
+          listener determines whether the shared port is internal
+        reason: BindModeConflict
+        status: "False"
         type: Accepted
       - lastTransitionTime: fake
-        message: No errors found
-        reason: NoConflicts
-        status: "False"
+        message: Found conflicting bind modes on listeners; the higher-precedence
+          listener determines whether the shared port is internal
+        reason: BindModeConflict
+        status: "True"
         type: Conflicted
       - lastTransitionTime: fake
-        message: No errors found
-        reason: Programmed
-        status: "True"
+        message: Found conflicting bind modes on listeners; the higher-precedence
+          listener determines whether the shared port is internal
+        reason: BindModeConflict
+        status: "False"
         type: Programmed
       - lastTransitionTime: fake
         message: No errors found
@@ -129,13 +117,12 @@ status:
     namespace: default
   spec: null
   status:
-    attachedListenerSets: 1
+    attachedListenerSets: 0
     conditions:
     - lastTransitionTime: fake
-      message: 'conflicting agentgateway.dev/internal-ports annotation: port(s) [8080]
-        are marked internal by some listeners but standard by others'
-      reason: Invalid
-      status: "False"
+      message: ""
+      reason: Accepted
+      status: "True"
       type: Accepted
     - lastTransitionTime: fake
       message: Successfully programmed Gateway

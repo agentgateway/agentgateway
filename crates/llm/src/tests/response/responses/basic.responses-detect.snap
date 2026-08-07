@@ -63,7 +63,7 @@ info:
   "response": {
     "id": "[id]",
     "object": "response",
-    "created_at": 1772657185,
+    "created_at": "[date]",
     "status": "completed",
     "background": false,
     "billing": {

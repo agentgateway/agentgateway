@@ -1191,6 +1191,7 @@ pub enum PathRedirect {
 pub enum RouteBackendTarget {
 	Service { name: NamespacedHostname, port: u16 },
 	Backend(BackendKey),
+	InlineBackend(Target),
 	RouteGroup(RouteGroupKey),
 	Invalid,
 }
@@ -1200,6 +1201,7 @@ impl From<BackendReference> for RouteBackendTarget {
 		match value {
 			BackendReference::Service { name, port } => Self::Service { name, port },
 			BackendReference::Backend(key) => Self::Backend(key),
+			BackendReference::InlineBackend(target) => Self::InlineBackend(target),
 			BackendReference::Invalid => Self::Invalid,
 		}
 	}
@@ -1213,6 +1215,7 @@ impl RouteBackendTarget {
 				port: *port,
 			}),
 			Self::Backend(key) => Some(BackendReference::Backend(key.clone())),
+			Self::InlineBackend(target) => Some(BackendReference::InlineBackend(target.clone())),
 			Self::Invalid => Some(BackendReference::Invalid),
 			Self::RouteGroup(_) => None,
 		}
@@ -1316,6 +1319,7 @@ pub fn serialize_backend_tuple<S: Serializer, T: serde::Serialize>(
 pub enum BackendReference {
 	Service { name: NamespacedHostname, port: u16 },
 	Backend(BackendKey),
+	InlineBackend(Target),
 	Invalid,
 }
 
@@ -2706,7 +2710,7 @@ pub enum BackendTrafficPolicy {
 	#[serde(rename = "ai")]
 	AI(Arc<llm::Policy>),
 	ExtAuthz(Arc<ext_authz::ExtAuthz>),
-	SessionPersistence(http::sessionpersistence::Policy),
+	SessionAffinity(http::sessionaffinity::Policy),
 	Transformation(Arc<crate::http::transformation_cel::Transformation>),
 	Health(health::Policy),
 

@@ -257,7 +257,7 @@ pub struct BackendPolicies {
 	pub request_mirror: Vec<filters::RequestMirror>,
 	pub transformation: BackendPolicy<http::transformation_cel::Transformation>,
 
-	pub session_persistence: Option<http::sessionpersistence::Policy>,
+	pub session_affinity: Option<http::sessionaffinity::Policy>,
 
 	pub health: Option<health::Policy>,
 
@@ -275,7 +275,10 @@ impl BackendPolicies {
 			backend_auth: other.backend_auth.or(self.backend_auth),
 			a2a: other.a2a.or(self.a2a),
 			llm_provider: other.llm_provider.or(self.llm_provider),
-			llm: other.llm.or(self.llm),
+			llm: match (self.llm, other.llm) {
+				(Some(base), Some(more)) => Some(LLMRequestPolicies::merge_llm_policies(&more, &base)),
+				(base, more) => more.or(base),
+			},
 			// Authorization composes to avoid erasing a broader deny
 			authorization: match (
 				self.authorization.into_arc(),
@@ -312,7 +315,7 @@ impl BackendPolicies {
 				other.request_mirror
 			},
 			transformation: other.transformation.or(self.transformation),
-			session_persistence: other.session_persistence.or(self.session_persistence),
+			session_affinity: other.session_affinity.or(self.session_affinity),
 			health: other.health.or(self.health),
 			override_dest: other.override_dest.or(self.override_dest),
 		}
@@ -347,6 +350,9 @@ impl BackendPolicies {
 		}
 		if let Some(health) = self.health.as_ref() {
 			health.register_expressions(ctx);
+		}
+		if let Some(session_affinity) = self.session_affinity.as_ref() {
+			session_affinity.register_expressions(ctx);
 		}
 	}
 }
@@ -438,11 +444,13 @@ impl RoutePolicies {
 			&self.direct_response as &dyn PolicyExpressions,
 			&self.llm as &dyn PolicyExpressions,
 			&self.request_header_modifier as &dyn PolicyExpressions,
+			&self.response_header_modifier as &dyn PolicyExpressions,
 			&self.retry as &dyn PolicyExpressions,
 			&self.delay as &dyn PolicyExpressions,
 			&self.request_redirect as &dyn PolicyExpressions,
 			&self.url_rewrite as &dyn PolicyExpressions,
 			&self.cors as &dyn PolicyExpressions,
+			&self.buffer as &dyn PolicyExpressions,
 		]
 		.into_iter()
 	}
@@ -742,6 +750,7 @@ impl Store {
 		let mut matches = [
 			"/v1/models",
 			"/models",
+			"/v1/messages/count_tokens",
 			"/v1/chat/completions",
 			"/v1/messages",
 			"/v1/responses",
@@ -844,7 +853,7 @@ impl Store {
 		Arc::make_mut(routes).insert(route);
 	}
 
-	fn upsert_bind(&mut self, key: BindKey, mut bind: Bind) {
+	fn upsert_bind(&mut self, key: BindKey, mut bind: Bind) -> anyhow::Result<()> {
 		debug!(bind=%bind.key, "insert bind");
 		let old_bind = self.binds.get(&key).cloned();
 
@@ -858,6 +867,10 @@ impl Store {
 			bind.listeners.insert(listener);
 		}
 
+		// Capture (rather than swallow) any OS bind failure so callers can decide whether it
+		// is fatal. The bind is still recorded below so routing lookups (find_bind, etc.)
+		// remain consistent regardless of the caller's error handling.
+		let mut bind_error = None;
 		let was_internal = old_bind
 			.as_deref()
 			.is_some_and(|old| old.mode == agent::BindMode::Internal);
@@ -898,7 +911,7 @@ impl Store {
 					Some(listeners)
 				},
 				Err(err) => {
-					warn!(bind=%key, address=%bind.address, error=%err, "failed to start bind listener");
+					bind_error = Some(err);
 					None
 				},
 			}
@@ -912,6 +925,10 @@ impl Store {
 		if let Some(listeners) = listeners {
 			let _ = self.tx.send(BindEvent::Add(bind, listeners));
 		}
+		if let Some(err) = bind_error {
+			return Err(err.context(format!("bind {key}")));
+		}
+		Ok(())
 	}
 
 	pub fn subscribe(&mut self) -> impl Stream<Item = BindEvent> + use<> {
@@ -920,13 +937,19 @@ impl Store {
 	}
 
 	pub fn route_policies(&self, path: &RoutePath<'_>) -> RoutePolicies {
-		let listener = &path.listener;
+		let listener_name = &path.listener;
 		let gateway = self
 			.policies_by_target
-			.get(&listener.as_gateway_target_ref());
+			.get(&listener_name.as_gateway_target_ref());
+		let listener_set = listener_name
+			.as_listenerset_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
+		let listener_set_section = listener_name
+			.as_listenerset_listener_target_ref()
+			.and_then(|r| self.policies_by_target.get(&r));
 		let listener = self
 			.policies_by_target
-			.get(&listener.as_listener_target_ref());
+			.get(&listener_name.as_listener_target_ref());
 		let service = path
 			.service
 			.and_then(|s| self.policies_by_target.get(&s.as_policy_target_ref()));
@@ -968,6 +991,8 @@ impl Store {
 			.iter()
 			.copied()
 			.flatten()
+			.chain(listener_set.iter().copied().flatten())
+			.chain(listener_set_section.iter().copied().flatten())
 			.chain(listener.iter().copied().flatten())
 			.chain(service.iter().copied().flatten())
 			.filter_map(|n| self.policies_by_key.get(n))
@@ -1335,8 +1360,8 @@ impl Store {
 				BackendTrafficPolicy::Transformation(p) => {
 					pol.transformation.set_if_unset(p);
 				},
-				BackendTrafficPolicy::SessionPersistence(p) => {
-					pol.session_persistence.get_or_insert_with(|| p.clone());
+				BackendTrafficPolicy::SessionAffinity(p) => {
+					pol.session_affinity.get_or_insert_with(|| p.clone());
 				},
 				BackendTrafficPolicy::Health(p) => {
 					pol.health.get_or_insert_with(|| p.clone());
@@ -1604,7 +1629,11 @@ impl Store {
 		};
 		let mut bind = Arc::unwrap_or_clone(bind);
 		bind.listeners.remove(&listener);
-		self.upsert_bind(bind_key, bind);
+		// Removing a listener never opens a new socket (the bind already exists), so this
+		// cannot fail on bind; log defensively rather than propagate.
+		if let Err(err) = self.upsert_bind(bind_key, bind) {
+			warn!(error=%err, "failed to update bind after listener removal");
+		}
 	}
 
 	pub fn remove_route_group(&mut self, rg: RouteGroupKey) {
@@ -1683,7 +1712,12 @@ impl Store {
     )]
 	pub fn insert_bind(&mut self, bind: Bind) {
 		let key = bind.key.clone();
-		self.upsert_bind(key, bind);
+		// XDS-delivered binds must not crash the proxy on a bind failure: a bad dynamic config
+		// should be rejected/logged, not fatal. Static local config uses `sync_local`, which
+		// surfaces the error so startup can exit(1) (see issue #87).
+		if let Err(err) = self.upsert_bind(key.clone(), bind) {
+			warn!(bind=%key, error=%err, "failed to start bind listener");
+		}
 	}
 
 	pub fn insert_backend(&mut self, key: BackendKey, b: BackendWithPolicies) {
@@ -1717,7 +1751,9 @@ impl Store {
 			let mut bind = Arc::unwrap_or_clone(b.clone());
 			bind.listeners.remove(&lis.key);
 			bind.listeners.insert(lis);
-			self.upsert_bind(bind_name, bind);
+			if let Err(err) = self.upsert_bind(bind_name.clone(), bind) {
+				warn!(bind=%bind_name, error=%err, "failed to start bind listener");
+			}
 		} else {
 			debug!("no bind found, keeping listener pending");
 			self
@@ -2060,8 +2096,9 @@ impl StoreUpdater {
 		backends: Vec<BackendWithPolicies>,
 		route_groups: Vec<(RouteGroupKey, Vec<Route>)>,
 		prev: PreviousState,
-	) -> PreviousState {
+	) -> anyhow::Result<PreviousState> {
 		let mut s = self.state.write().expect("mutex acquired");
+		let prev_bind_keys = prev.binds.clone();
 		let mut old_binds = prev.binds;
 		let mut old_routes = prev.routes;
 		let mut old_tcp_routes = prev.tcp_routes;
@@ -2076,10 +2113,22 @@ impl StoreUpdater {
 			backends: Default::default(),
 			route_groups: Default::default(),
 		};
+		// Unlike XDS (which must tolerate a bad dynamic config), a static local config that
+		// cannot open a newly added listener is a fatal misconfiguration. Only treat bind
+		// failures for binds introduced after the previous sync as errors: existing binds are
+		// not re-opened, and a reload that adds a new port after startup must not silently
+		// serve nothing on that bind (issue #87).
+		let mut bind_errors = Vec::new();
 		for b in binds {
+			let is_new_bind = !prev_bind_keys.contains(&b.key);
 			old_binds.remove(&b.key);
 			next_state.binds.insert(b.key.clone());
-			s.insert_bind(b);
+			let key = b.key.clone();
+			if let Err(err) = s.upsert_bind(key, b)
+				&& is_new_bind
+			{
+				bind_errors.push(format!("{err:#}"));
+			}
 		}
 		for b in backends {
 			// Here we use the 'name' as the key. This is appropriate for local case only
@@ -2131,7 +2180,13 @@ impl StoreUpdater {
 		for remaining_rg in old_route_groups {
 			s.remove_route_group(remaining_rg);
 		}
-		next_state
+		if !bind_errors.is_empty() {
+			anyhow::bail!(
+				"failed to start bind listener(s): {}",
+				bind_errors.join("; ")
+			);
+		}
+		Ok(next_state)
 	}
 }
 
@@ -2208,7 +2263,7 @@ mod tests {
 	use crate::telemetry::log::OrderedStringMap;
 	use crate::types::agent::{
 		BackendTarget, BindProtocol, ListenerProtocol, ListenerSet, ListenerSetTarget, PolicyType,
-		ResourceName, TunnelProtocol,
+		ResourceName, Target, TunnelProtocol,
 	};
 	use crate::types::frontend::LoggingPolicy;
 
@@ -2712,6 +2767,138 @@ mod tests {
 		);
 	}
 
+	fn standard_bind(address: std::net::SocketAddr) -> Bind {
+		Bind {
+			key: strng::literal!("bind"),
+			address,
+			protocol: BindProtocol::http,
+			tunnel_protocol: TunnelProtocol::Direct,
+			mode: agent::BindMode::Standard,
+			listeners: ListenerSet::from_list([Listener {
+				key: strng::literal!("listener"),
+				name: ListenerName {
+					gateway_name: strng::literal!("gw"),
+					gateway_namespace: strng::literal!("ns"),
+					listener_name: strng::literal!("listener"),
+					listener_set: None,
+				},
+				hostname: strng::literal!("example.com"),
+				protocol: ListenerProtocol::HTTP,
+			}]),
+		}
+	}
+
+	// Regression for issue #87: a static local config that cannot open its listener socket
+	// must fail loudly (so startup can exit(1)) rather than silently binding nothing.
+	#[test]
+	fn sync_local_bind_failure_is_fatal() {
+		// Hold an active listener so the same address cannot be bound again.
+		let occupied = std::net::TcpListener::bind("127.0.0.1:0").expect("probe bind");
+		let addr = occupied.local_addr().expect("probe addr");
+
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(false))));
+		let err = updater
+			.sync_local(
+				vec![standard_bind(addr)],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				Default::default(),
+			)
+			.expect_err("bind on an occupied port must fail");
+		assert!(
+			err.to_string().contains("failed to start bind listener"),
+			"unexpected error: {err:#}"
+		);
+	}
+
+	#[test]
+	fn sync_local_bind_success_returns_ok() {
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(false))));
+		updater
+			.sync_local(
+				vec![standard_bind("127.0.0.1:0".parse().unwrap())],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				Default::default(),
+			)
+			.expect("bind on an ephemeral port should succeed");
+	}
+
+	#[test]
+	fn sync_local_new_bind_on_reload_failure_is_fatal() {
+		let occupied = std::net::TcpListener::bind("127.0.0.1:0").expect("probe bind");
+		let occupied_addr = occupied.local_addr().expect("probe addr");
+
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(false))));
+		let prev = updater
+			.sync_local(
+				vec![standard_bind("127.0.0.1:0".parse().unwrap())],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				Default::default(),
+			)
+			.expect("initial bind should succeed");
+
+		let mut new_bind = standard_bind(occupied_addr);
+		new_bind.key = strng::literal!("bind2");
+		let err = updater
+			.sync_local(
+				vec![standard_bind("127.0.0.1:0".parse().unwrap()), new_bind],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				vec![],
+				prev,
+			)
+			.expect_err("adding a new bind on an occupied port after startup must fail");
+		assert!(
+			err.to_string().contains("failed to start bind listener"),
+			"unexpected error: {err:#}"
+		);
+	}
+
+	#[test]
+	fn sync_local_bind_failure_still_applies_config() {
+		let occupied = std::net::TcpListener::bind("127.0.0.1:0").expect("probe bind");
+		let addr = occupied.local_addr().expect("probe addr");
+
+		let updater = StoreUpdater::new(Arc::new(RwLock::new(Store::with_ipv6_enabled(false))));
+		let backend_key: BackendKey = strng::literal!("ns/backend");
+		let backend = BackendWithPolicies {
+			backend: Backend::Opaque(
+				ResourceName::new(strng::literal!("backend"), strng::literal!("ns")),
+				Target::Address("127.0.0.1:8080".parse().unwrap()),
+			),
+			inline_policies: vec![],
+		};
+		let _err = updater
+			.sync_local(
+				vec![standard_bind(addr)],
+				vec![],
+				vec![],
+				vec![],
+				vec![backend],
+				vec![],
+				Default::default(),
+			)
+			.expect_err("bind on an occupied port must fail");
+
+		assert!(
+			updater.read().backend(&backend_key).is_some(),
+			"bind failure must not prevent the rest of sync_local from applying"
+		);
+	}
+
 	#[test]
 	fn delegated_child_dispatches_to_group_and_inherits_service_policies() {
 		use crate::types::proto::agent::RouteName as XdsRouteName;
@@ -2973,6 +3160,69 @@ mod tests {
 				.cloned(),
 			Some(grpc_timeout)
 		);
+	}
+
+	#[test]
+	fn route_policies_include_listenerset_targets() {
+		let mut store = Store::default();
+		let listener_set = ResourceName::new(strng::new("my-ls"), strng::new("default"));
+		let listener_a = ListenerName {
+			listener_name: strng::new("listener-a"),
+			listener_set: Some(listener_set.clone()),
+			..listener()
+		};
+		let listener_b = ListenerName {
+			listener_name: strng::new("listener-b"),
+			listener_set: Some(listener_set),
+			..listener()
+		};
+		let set_timeout = timeout::Policy {
+			request_timeout: Some(Duration::from_secs(1)),
+			backend_request_timeout: None,
+		};
+		let section_timeout = timeout::Policy {
+			request_timeout: Some(Duration::from_secs(2)),
+			backend_request_timeout: None,
+		};
+		insert_traffic_policy(
+			&mut store,
+			"listenerset-timeout",
+			PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: None,
+			}),
+			PolicyInheritance::Default,
+			TrafficPolicy::Timeout(set_timeout.clone()),
+		);
+		insert_traffic_policy(
+			&mut store,
+			"listenerset-section-timeout",
+			PolicyTarget::ListenerSet(ListenerSetTarget {
+				name: strng::new("my-ls"),
+				namespace: strng::new("default"),
+				section: Some(strng::new("listener-a")),
+			}),
+			PolicyInheritance::Default,
+			TrafficPolicy::Timeout(section_timeout.clone()),
+		);
+
+		let selected_timeout = |listener| {
+			store
+				.route_policies(&RoutePath {
+					listener,
+					service: None,
+					routes: vec![],
+					route_inlines: vec![],
+				})
+				.timeout
+				.select("timeout", &request_for_policy_selection())
+				.as_deref()
+				.cloned()
+		};
+
+		assert_eq!(selected_timeout(&listener_a), Some(section_timeout));
+		assert_eq!(selected_timeout(&listener_b), Some(set_timeout));
 	}
 
 	#[test]
@@ -3522,6 +3772,73 @@ mod tests {
 		);
 		assert_eq!(policy.resolve_route("/v1/messages"), RouteType::Messages);
 		assert_eq!(policy.resolve_route("/v1/models"), RouteType::Passthrough);
+	}
+
+	#[test]
+	fn llm_config_merges() {
+		use crate::llm::policy::{
+			PromptEnrichment, PromptGuard, RegexRule, RegexRules, RequestGuard, RequestGuardKind,
+			SortedRoutes,
+		};
+		use crate::llm::{self, RouteType, SimpleChatCompletionMessage};
+
+		// attached policy (e.g. AgentgatewayPolicy.ai) with prompt guard and enrichment
+		let attached = BackendPolicies {
+			llm: Some(Arc::new(llm::Policy {
+				prompt_guard: Some(PromptGuard {
+					streaming: Default::default(),
+					request: vec![RequestGuard {
+						rejection: Default::default(),
+						kind: RequestGuardKind::Regex(RegexRules {
+							action: Default::default(),
+							rules: vec![RegexRule::Regex {
+								pattern: regex::Regex::new("blocked-word").unwrap(),
+							}],
+						}),
+					}],
+					response: vec![],
+				}),
+				prompts: Some(PromptEnrichment {
+					prepend: vec![SimpleChatCompletionMessage {
+						role: strng::new("system"),
+						content: strng::new("You are a helpful assistant."),
+					}],
+					append: vec![],
+				}),
+				..Default::default()
+			})),
+			..Default::default()
+		};
+
+		// provider level policy (e.g. AgentgatewayBackend.ai.groups.providers.policies)
+		let mut routes = SortedRoutes::default();
+		routes.insert(strng::new("/v1/messages"), RouteType::Messages);
+		let provider = BackendPolicies {
+			llm: Some(Arc::new(llm::Policy {
+				model_aliases: std::collections::HashMap::from([(
+					strng::new("fast"),
+					strng::new("gpt-4.1-nano"),
+				)]),
+				routes,
+				..Default::default()
+			})),
+			..Default::default()
+		};
+
+		let effective = attached.merge(provider).llm.expect("expected AI policy");
+		assert!(
+			effective.prompt_guard.is_some(),
+			"provider-level AI config must not disable the attached prompt guard"
+		);
+		assert!(
+			effective.prompts.is_some(),
+			"provider-level AI config must not disable the attached prompt enrichment"
+		);
+		assert_eq!(
+			effective.model_aliases.get(&strng::new("fast")),
+			Some(&strng::new("gpt-4.1-nano"))
+		);
+		assert_eq!(effective.resolve_route("/v1/messages"), RouteType::Messages);
 	}
 
 	#[test]

@@ -30,7 +30,7 @@ mod transport;
 
 use cache::{InMemoryTokenCache, TokenCacheResult};
 use client_auth::sign_client_assertion;
-pub use client_auth::{OAuthClientAuth, OAuthClientAuthMethod, PrivateKeyJwt, SigningAlg};
+pub use client_auth::{OAuthClientAuth, OAuthClientAuthMethod, PrivateKeyJwt};
 pub use cross_app_access::CrossAppAccessAuth;
 pub(super) use transport::FetchError;
 
@@ -249,6 +249,8 @@ impl OAuthTokenExchangeAuth {
 		use proto::o_auth_token_exchange::GrantType;
 
 		let target = resolve_simple_reference(t.token_endpoint.as_ref());
+		let policies =
+			crate::types::agent_xds::backend_policies_from_proto(&t.inline_policies, diagnostics)?;
 		let path = t.token_endpoint_path.unwrap_or_default();
 
 		let grant_type = match GrantType::try_from(t.grant_type) {
@@ -304,9 +306,7 @@ impl OAuthTokenExchangeAuth {
 		let auth = Self {
 			target: SimpleBackendReferenceWithPolicies {
 				target: Arc::new(target),
-				// Inline connection policies are not supported from xDS;
-				// the backend resource carries its own policies there.
-				policies: Vec::new(),
+				policies,
 			},
 			path,
 			grant_type,

@@ -1,0 +1,62 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/bedrock/max_tokens.json
+info:
+  output:
+    message:
+      role: assistant
+      content:
+        - text: Partial response
+  stopReason: max_tokens
+  usage:
+    inputTokens: 18
+    outputTokens: 46
+    totalTokens: 64
+---
+{
+  "response": {
+    "id": "[id]",
+    "status": "incomplete",
+    "output": [
+      {
+        "type": "message",
+        "content": [
+          {
+            "type": "output_text",
+            "annotations": [],
+            "logprobs": null,
+            "text": "Partial response"
+          }
+        ],
+        "id": "[id]",
+        "role": "assistant",
+        "status": "incomplete"
+      }
+    ],
+    "model": "input-model",
+    "usage": {
+      "input_tokens": 18,
+      "output_tokens": 46,
+      "input_tokens_details": {
+        "cached_tokens": 0
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 64
+    },
+    "created_at": "[date]",
+    "incomplete_details": {
+      "reason": "max_tokens"
+    },
+    "object": "response"
+  },
+  "parsed": {
+    "input_tokens": 18,
+    "output_tokens": 46,
+    "total_tokens": 64,
+    "reasoning_tokens": 0,
+    "cached_input_tokens": 0,
+    "provider_model": "input-model"
+  }
+}
