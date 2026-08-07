@@ -1,4 +1,4 @@
-package costs
+package catalog
 
 import (
 	"cmp"

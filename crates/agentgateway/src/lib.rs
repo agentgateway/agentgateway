@@ -668,7 +668,7 @@ pub enum ModelCatalogSource {
 	},
 	InlineCatalog {
 		/// Model cost catalog provided inline as structured data.
-		inline: llm::cost::Catalog,
+		inline: llm::catalog::Catalog,
 	},
 }
 
@@ -778,7 +778,7 @@ pub struct ProxyInputs {
 	pub upstream: client::Client,
 
 	pub metrics: Arc<metrics::Metrics>,
-	pub model_catalog: Arc<llm::cost::ModelCatalog>,
+	pub model_catalog: Arc<llm::catalog::ModelCatalog>,
 
 	pub admin: Option<management::admin::AdminService>,
 	pub mcp_state: mcp::App,
@@ -797,7 +797,7 @@ impl ProxyInputs {
 		upstream: client::Client,
 		metrics: Arc<metrics::Metrics>,
 		mcp_state: mcp::App,
-		model_catalog: Option<llm::cost::ModelCatalog>,
+		model_catalog: Option<llm::catalog::ModelCatalog>,
 		ca: Option<Arc<CaClient>>,
 	) -> Self {
 		Self {

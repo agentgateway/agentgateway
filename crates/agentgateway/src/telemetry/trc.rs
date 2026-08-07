@@ -757,7 +757,7 @@ mod tests {
 	use prometheus_client::registry::Registry;
 
 	use super::*;
-	use crate::llm::cost::ModelCatalog;
+	use crate::llm::catalog::ModelCatalog;
 	use crate::telemetry::log::{
 		CelLogging, CelLoggingExecutor, LoggingFields, MetricFields, RequestLog,
 	};

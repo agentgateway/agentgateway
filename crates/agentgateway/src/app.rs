@@ -92,7 +92,7 @@ pub async fn run(
 	} else {
 		config.model_catalog.sources.clone()
 	};
-	let model_catalog = crate::llm::cost::ModelCatalog::new(model_catalog_sources).await?;
+	let model_catalog = crate::llm::catalog::ModelCatalog::new(model_catalog_sources).await?;
 
 	let (xds_tx, xds_rx) = tokio::sync::watch::channel(());
 	let state_mgr = state_manager::StateManager::new(

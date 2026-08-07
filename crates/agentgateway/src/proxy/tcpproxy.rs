@@ -449,7 +449,7 @@ mod tests {
 
 	use agent_core::strng;
 
-	use crate::llm::cost::ModelCatalog;
+	use crate::llm::catalog::ModelCatalog;
 	use crate::store::{BackendPolicies, Stores};
 	use crate::types::agent::{ListenerProtocol, SimpleBackendReference};
 	use crate::types::discovery::gatewayaddress::Destination;

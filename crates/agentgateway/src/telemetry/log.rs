@@ -36,7 +36,7 @@ use value_bag::visit::Visit;
 use crate::cel::{ContextBuilder, Expression, LLMContext};
 use crate::http::{Request, health};
 use crate::llm::InputFormat;
-use crate::llm::cost::{CostLookupStatus, ModelCatalog};
+use crate::llm::catalog::{CostLookupStatus, ModelCatalog};
 use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{

@@ -6,7 +6,7 @@ use anyhow::{Context, bail};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
-use crate::llm::cost::{ModelCatalog, catalog};
+use crate::llm::catalog::{ModelCatalog, model};
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,7 +14,7 @@ pub struct RefreshBaseCatalogResponse {
 	pub providers: usize,
 	pub models: usize,
 	#[serde(skip_serializing)]
-	pub catalog: catalog::Catalog,
+	pub catalog: model::Catalog,
 }
 
 pub async fn refresh_models_dev_base_catalog(
@@ -49,7 +49,7 @@ pub async fn fetch_models_dev_base_catalog() -> anyhow::Result<RefreshBaseCatalo
 	})
 }
 
-async fn fetch_models_dev_catalog() -> anyhow::Result<crate::llm::cost::catalog::Catalog> {
+async fn fetch_models_dev_catalog() -> anyhow::Result<model::Catalog> {
 	let response = reqwest::get("https://models.dev/api.json")
 		.await
 		.context("fetch models.dev api.json")?
@@ -64,8 +64,8 @@ async fn fetch_models_dev_catalog() -> anyhow::Result<crate::llm::cost::catalog:
 
 fn models_dev_transform(
 	api: BTreeMap<String, ModelsDevProvider>,
-) -> anyhow::Result<crate::llm::cost::catalog::Catalog> {
-	let mut catalog = crate::llm::cost::catalog::Catalog::default();
+) -> anyhow::Result<model::Catalog> {
+	let mut catalog = model::Catalog::default();
 	for (source_id, gateway_id) in MODELS_DEV_PROVIDER_IDS {
 		let Some(source) = api.get(*source_id) else {
 			continue;
@@ -77,9 +77,10 @@ fn models_dev_transform(
 			let Some(cost) = &model.cost else {
 				continue;
 			};
-			let entry = catalog::Model {
+			let entry = model::Model {
 				rates: models_dev_rates(&cost.rates).with_context(|| format!("{gateway_id}/{model_id}"))?,
 				tiers: models_dev_tiers(&cost.tiers).with_context(|| format!("{gateway_id}/{model_id}"))?,
+				..Default::default()
 			};
 			if entry.rates.is_empty() && entry.tiers.is_empty() {
 				continue;
@@ -145,13 +146,13 @@ struct ModelsDevTierKind {
 	size: u64,
 }
 
-fn models_dev_tiers(tiers: &[ModelsDevTier]) -> anyhow::Result<Vec<catalog::Tier>> {
+fn models_dev_tiers(tiers: &[ModelsDevTier]) -> anyhow::Result<Vec<model::Tier>> {
 	let mut converted = Vec::new();
 	for tier in tiers {
 		if tier.tier.kind != "context" || tier.tier.size == 0 {
 			continue;
 		}
-		converted.push(catalog::Tier {
+		converted.push(model::Tier {
 			context_over: tier.tier.size,
 			rates: models_dev_rates(&tier.rates)?,
 		});
@@ -160,8 +161,8 @@ fn models_dev_tiers(tiers: &[ModelsDevTier]) -> anyhow::Result<Vec<catalog::Tier
 	Ok(converted)
 }
 
-fn models_dev_rates(rates: &ModelsDevRates) -> anyhow::Result<catalog::Rates> {
-	Ok(catalog::Rates {
+fn models_dev_rates(rates: &ModelsDevRates) -> anyhow::Result<model::Rates> {
+	Ok(model::Rates {
 		input: models_dev_money(&rates.input)?,
 		output: models_dev_money(&rates.output)?,
 		cache_read: models_dev_money(&rates.cache_read)?,
@@ -172,7 +173,7 @@ fn models_dev_rates(rates: &ModelsDevRates) -> anyhow::Result<catalog::Rates> {
 	})
 }
 
-fn models_dev_money(value: &Option<serde_json::Number>) -> anyhow::Result<Option<catalog::Money>> {
+fn models_dev_money(value: &Option<serde_json::Number>) -> anyhow::Result<Option<model::Money>> {
 	let Some(value) = value else {
 		return Ok(None);
 	};
@@ -182,7 +183,7 @@ fn models_dev_money(value: &Option<serde_json::Number>) -> anyhow::Result<Option
 	} else {
 		decimal
 	};
-	catalog::Money::parse(&rounded.to_string())
+	model::Money::parse(&rounded.to_string())
 		.map(Some)
 		.map_err(anyhow::Error::msg)
 }
