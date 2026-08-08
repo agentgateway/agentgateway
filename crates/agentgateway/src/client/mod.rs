@@ -44,6 +44,9 @@ pub struct TCPCall {
 	pub source: Socket,
 	pub target: Target,
 	pub transport: Transport,
+	pub network_ext_proc: Option<Arc<crate::http::network_ext_proc::NetworkExtProc>>,
+	pub network_ext_proc_context: crate::http::network_ext_proc::RequestContext,
+	pub policy_client: crate::proxy::httpproxy::PolicyClient,
 }
 
 #[derive(Default, Debug, Clone, Hash, PartialEq, Eq)]
@@ -540,6 +543,9 @@ impl Client {
 			source,
 			target,
 			transport,
+			network_ext_proc,
+			network_ext_proc_context,
+			policy_client,
 		} = call;
 
 		let dest = self
@@ -568,9 +574,27 @@ impl Client {
 			.await
 			.map_err(ProxyError::UpstreamTCPCallFailed)?;
 
-		agent_core::copy::copy_bidirectional(source, upstream, &agent_core::copy::ConnectionResult {})
+		if let Some(config) = network_ext_proc {
+			crate::http::network_ext_proc::proxy(
+				source,
+				upstream,
+				&config,
+				policy_client,
+				network_ext_proc_context,
+			)
+			.await
+			.map_err(|e| {
+				ProxyError::UpstreamTCPProxy(agent_core::copy::CopyError::Io(std::io::Error::other(e)))
+			})?;
+		} else {
+			agent_core::copy::copy_bidirectional(
+				source,
+				upstream,
+				&agent_core::copy::ConnectionResult {},
+			)
 			.await
 			.map_err(ProxyError::UpstreamTCPProxy)?;
+		}
 
 		let dur = format!("{}ms", start.elapsed().as_millis());
 		event!(

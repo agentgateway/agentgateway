@@ -11,7 +11,9 @@ use crate::store::{BackendPolicies, FrontendPolices, RoutePath};
 use crate::telemetry::log;
 use crate::telemetry::log::{DropOnLog, RequestLog};
 use crate::telemetry::metrics::TCPLabels;
-use crate::transport::stream::{Socket, TCPConnectionInfo, TLSConnectionInfo, WaypointTLSInfo};
+use crate::transport::stream::{
+	ConnectHeaders, Socket, TCPConnectionInfo, TLSConnectionInfo, WaypointTLSInfo,
+};
 use crate::types::agent::{
 	BackendTrafficPolicy, BindKey, Listener, ListenerProtocol, SimpleBackend, SimpleBackendReference,
 	SimpleBackendWithPolicies, TCPRoute, TCPRouteBackend, TCPRouteBackendReference, Target,
@@ -31,23 +33,31 @@ pub struct TCPProxy {
 }
 
 impl TCPProxy {
-	pub async fn proxy(&self, connection: Socket) {
+	pub async fn proxy(&self, mut connection: Socket) {
 		let start = agent_core::Timestamp::now();
 
 		let tcp = connection
 			.ext::<TCPConnectionInfo>()
-			.expect("tcp connection must be set");
-		let tls = connection.ext::<TLSConnectionInfo>();
+			.expect("tcp connection must be set")
+			.clone();
+		let tls_src_identity = connection
+			.ext::<TLSConnectionInfo>()
+			.and_then(|t| t.src_identity.clone());
 		let unverified_workload = crate::cel::WorkloadContext::from_stores(
 			&self.inputs.stores,
 			&self.inputs.cfg.network,
 			tcp.peer_addr.ip(),
 		);
-		let src = SourceContext::from_tcp_connection(
-			tcp,
-			tls.and_then(|t| t.src_identity.clone()),
-			unverified_workload,
-		);
+		let mut src = connection
+			.ext::<SourceContext>()
+			.cloned()
+			.unwrap_or_else(|| {
+				SourceContext::from_tcp_connection(&tcp, tls_src_identity, unverified_workload)
+			});
+		if let Some(ch) = connection.ext_mut().remove::<ConnectHeaders>() {
+			src.connect_headers = ch.0;
+		}
+		connection.ext_mut().insert(src.clone());
 		let mut log: DropOnLog = RequestLog::new(
 			log::CelLogging::new(
 				self.inputs.cfg.logging.clone(),
@@ -56,7 +66,7 @@ impl TCPProxy {
 			self.inputs.metrics.clone(),
 			self.inputs.model_catalog.clone(),
 			start,
-			tcp.clone(),
+			tcp,
 		)
 		.into();
 		// Set source context for TCP logging
@@ -204,12 +214,27 @@ impl TCPProxy {
 		let mut connection = connection;
 		connection.set_transport_metrics(self.inputs.metrics.clone(), tcp_labels);
 
+		let network_ext_proc = backend_call.backend_policies.network_ext_proc.clone();
+		let network_ext_proc_context = network_ext_proc
+			.as_ref()
+			.map(|config| {
+				let source = connection.ext::<SourceContext>();
+				let exec = source
+					.map(crate::cel::Executor::new_source)
+					.unwrap_or_else(crate::cel::Executor::new_empty);
+				config.evaluate_request_context(&exec)
+			})
+			.unwrap_or_default();
+
 		inputs
 			.upstream
 			.call_tcp(client::TCPCall {
 				source: connection,
 				target: backend_call.target,
 				transport,
+				network_ext_proc,
+				network_ext_proc_context,
+				policy_client: crate::proxy::httpproxy::PolicyClient::new(inputs.clone()),
 			})
 			.await?;
 		Ok(())

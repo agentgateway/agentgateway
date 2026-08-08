@@ -1871,6 +1871,17 @@
             }
           ]
         },
+        "networkExtProc": {
+          "description": "Process bytes inside a CONNECT tunnel with an Envoy NetworkExternalProcessor service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalExplicitOrConditional_NetworkExtProc"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "transformations": {
           "description": "Modify request and response headers, bodies, or metadata.",
           "anyOf": [
@@ -7104,6 +7115,229 @@
         }
       ]
     },
+    "LocalExplicitOrConditional_NetworkExtProc": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LocalConditionalPolicies_NetworkExtProc"
+        },
+        {
+          "$ref": "#/$defs/NetworkExtProc"
+        }
+      ]
+    },
+    "LocalConditionalPolicies_NetworkExtProc": {
+      "type": "object",
+      "properties": {
+        "conditional": {
+          "description": "conditional policy entries. An entry without a condition must be the final fallback.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalConditionalPolicy_NetworkExtProc"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "conditional"
+      ]
+    },
+    "LocalConditionalPolicy_NetworkExtProc": {
+      "type": "object",
+      "properties": {
+        "condition": {
+          "description": "condition must evaluate to true for this policy to execute. If unset, the policy is the fallback.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "target": {
+          "description": "Service implementing Envoy's NetworkExternalProcessor gRPC protocol.",
+          "$ref": "#/$defs/SimpleBackendReferenceWithPolicies"
+        },
+        "failureModeAllow": {
+          "description": "Continue proxying unprocessed bytes if the processor cannot be reached.",
+          "type": "boolean"
+        },
+        "processRead": {
+          "$ref": "#/$defs/DataSendMode"
+        },
+        "processWrite": {
+          "$ref": "#/$defs/DataSendMode"
+        },
+        "messageTimeoutMs": {
+          "description": "Maximum time to wait for each processor response. Defaults to Envoy's 200ms.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "default": 0
+        },
+        "metadataContext": {
+          "description": "CEL-generated metadata sent with every network processing request, grouped\nby the user-defined Envoy metadata namespace.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/$defs/Expression"
+            }
+          }
+        },
+        "connectionAttributes": {
+          "description": "CEL-generated connection attributes sent in ProcessingRequest.attributes.\n\nThis is wire-compatible with Envoy's network ext_proc connection_attributes\noutput. We intentionally evaluate user-provided CEL expressions directly\ninstead of trying to model Envoy filter state.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        }
+      },
+      "required": [
+        "target"
+      ]
+    },
+    "SimpleBackendReferenceWithPolicies": {
+      "type": "object",
+      "properties": {
+        "policies": {
+          "description": "Backend policies used when connecting to the service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "description": "Port on the target Service to route to.",
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ]
+    },
+    "DataSendMode": {
+      "type": "string",
+      "enum": [
+        "streamed",
+        "skip"
+      ]
+    },
+    "NetworkExtProc": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "description": "Service implementing Envoy's NetworkExternalProcessor gRPC protocol.",
+          "$ref": "#/$defs/SimpleBackendReferenceWithPolicies"
+        },
+        "failureModeAllow": {
+          "description": "Continue proxying unprocessed bytes if the processor cannot be reached.",
+          "type": "boolean"
+        },
+        "processRead": {
+          "$ref": "#/$defs/DataSendMode"
+        },
+        "processWrite": {
+          "$ref": "#/$defs/DataSendMode"
+        },
+        "messageTimeoutMs": {
+          "description": "Maximum time to wait for each processor response. Defaults to Envoy's 200ms.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0,
+          "default": 0
+        },
+        "metadataContext": {
+          "description": "CEL-generated metadata sent with every network processing request, grouped\nby the user-defined Envoy metadata namespace.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/$defs/Expression"
+            }
+          }
+        },
+        "connectionAttributes": {
+          "description": "CEL-generated connection attributes sent in ProcessingRequest.attributes.\n\nThis is wire-compatible with Envoy's network ext_proc connection_attributes\noutput. We intentionally evaluate user-provided CEL expressions directly\ninstead of trying to model Envoy filter state.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "target"
+      ]
+    },
     "LocalExplicitOrConditional_LocalTransformationConfig": {
       "anyOf": [
         {
@@ -8806,6 +9040,17 @@
           "anyOf": [
             {
               "$ref": "#/$defs/LocalBackendTLS"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "networkExtProc": {
+          "description": "Process the route's raw TCP stream with an Envoy NetworkExternalProcessor service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/NetworkExtProc"
             },
             {
               "type": "null"

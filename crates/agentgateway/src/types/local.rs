@@ -2833,6 +2833,11 @@ pub struct FilterOrPolicy {
 	/// Send request and response data to an external processing service.
 	#[serde(default)]
 	ext_proc: Option<LocalExtProcPolicy>,
+	/// Process bytes inside a CONNECT tunnel with an Envoy NetworkExternalProcessor service.
+	#[serde(default)]
+	#[serde(rename = "networkExtProc")]
+	network_ext_proc:
+		Option<LocalExplicitOrConditional<crate::http::network_ext_proc::NetworkExtProc>>,
 	/// Modify request and response headers, bodies, or metadata.
 	#[serde(default)]
 	#[cfg_attr(
@@ -2866,6 +2871,10 @@ struct TCPFilterOrPolicy {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	#[serde(rename = "backendTLS")]
 	backend_tls: Option<LocalBackendTLS>,
+	/// Process the route's raw TCP stream with an Envoy NetworkExternalProcessor service.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[serde(rename = "networkExtProc")]
+	network_ext_proc: Option<crate::http::network_ext_proc::NetworkExtProc>,
 }
 
 async fn convert(
@@ -5073,6 +5082,7 @@ pub(crate) async fn split_policies_for_target(
 		csrf,
 		ext_authz,
 		ext_proc,
+		network_ext_proc,
 		buffer,
 		timeout,
 		retry,
@@ -5243,6 +5253,9 @@ pub(crate) async fn split_policies_for_target(
 	if let Some(p) = ext_proc {
 		route_policies.push(TrafficPolicy::ExtProc(p.into_policy()?))
 	}
+	if let Some(p) = network_ext_proc {
+		route_policies.push(TrafficPolicy::NetworkExtProc(p.into_policy()?))
+	}
 	if let Some(p) = local_rate_limit
 		&& !p.is_empty()
 	{
@@ -5326,11 +5339,20 @@ async fn convert_tcp_route(
 	}
 
 	if let Some(pol) = policies {
-		let TCPFilterOrPolicy { backend_tls } = pol;
+		let TCPFilterOrPolicy {
+			backend_tls,
+			network_ext_proc,
+		} = pol;
 		if let Some(p) = backend_tls {
 			let backend_tls = BackendTrafficPolicy::BackendTLS(p.try_into(resources).await?);
 			for br in backend_refs.iter_mut() {
 				br.inline_policies.push(backend_tls.clone());
+			}
+		}
+		if let Some(p) = network_ext_proc {
+			let policy = BackendTrafficPolicy::NetworkExtProc(Arc::new(p));
+			for backend in &mut backend_refs {
+				backend.inline_policies.push(policy.clone());
 			}
 		}
 	}

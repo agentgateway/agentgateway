@@ -3736,6 +3736,7 @@ fn conditional_traffic_policy_to_policy(
 	match &policies[0].1.policy {
 		TrafficPolicy::ExtAuthz(_) => build!(ExtAuthz),
 		TrafficPolicy::ExtProc(_) => build!(ExtProc),
+		TrafficPolicy::NetworkExtProc(_) => build!(NetworkExtProc),
 		TrafficPolicy::LocalRateLimit(_) => build!(LocalRateLimit),
 		TrafficPolicy::RemoteRateLimit(_) => build!(RemoteRateLimit),
 		TrafficPolicy::JwtAuth(_) => build!(JwtAuth),
@@ -3769,6 +3770,7 @@ fn traffic_policy_kind_name(policy: &TrafficPolicy) -> &'static str {
 		TrafficPolicy::RemoteRateLimit(_) => "remoteRateLimit",
 		TrafficPolicy::ExtAuthz(_) => "extAuthz",
 		TrafficPolicy::ExtProc(_) => "extProc",
+		TrafficPolicy::NetworkExtProc(_) => "networkExtProc",
 		TrafficPolicy::JwtAuth(_) => "jwt",
 		TrafficPolicy::Oidc(_) => "oidc",
 		TrafficPolicy::BasicAuth(_) => "basicAuth",

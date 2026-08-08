@@ -242,6 +242,7 @@ pub struct BackendPolicies {
 	pub inference_routing: Option<InferenceRouting>,
 	pub authorization: BackendPolicy<HTTPAuthorizationSet>,
 	pub ext_authz: BackendPolicy<ext_authz::ExtAuthz>,
+	pub network_ext_proc: Option<Arc<crate::http::network_ext_proc::NetworkExtProc>>,
 
 	pub mcp_authorization: Option<McpAuthorizationSet>,
 	pub mcp_authentication: Option<McpAuthentication>,
@@ -298,6 +299,7 @@ impl BackendPolicies {
 			mcp_authentication: other.mcp_authentication.or(self.mcp_authentication),
 			mcp_guardrails: other.mcp_guardrails.or(self.mcp_guardrails),
 			inference_routing: other.inference_routing.or(self.inference_routing),
+			network_ext_proc: other.network_ext_proc.or(self.network_ext_proc),
 			ext_authz: other.ext_authz.or(self.ext_authz),
 			http: other.http.or(self.http),
 			tcp: other.tcp.or(self.tcp),
@@ -370,6 +372,7 @@ pub struct RoutePolicies {
 	pub api_key: RequestPolicy<http::apikey::APIKeyAuthentication>,
 	pub ext_authz: RequestPolicy<ext_authz::ExtAuthz>,
 	pub ext_proc: RequestPolicy<ext_proc::ExtProc>,
+	pub network_ext_proc: RequestPolicy<crate::http::network_ext_proc::NetworkExtProc>,
 	pub transformation: RequestPolicy<http::transformation_cel::Transformation>,
 	pub csrf: RequestPolicy<http::csrf::Csrf>,
 	pub direct_response: RequestPolicy<filters::DirectResponse>,
@@ -1021,6 +1024,9 @@ impl Store {
 				TrafficPolicy::ExtProc(p) => {
 					pol.ext_proc.merge_with_inheritance(p, lock_inheritance);
 				},
+				TrafficPolicy::NetworkExtProc(p) => pol
+					.network_ext_proc
+					.merge_with_inheritance(p, lock_inheritance),
 				TrafficPolicy::RemoteRateLimit(p) => {
 					pol
 						.remote_rate_limit
@@ -1330,6 +1336,9 @@ impl Store {
 				},
 				BackendTrafficPolicy::ExtAuthz(p) => {
 					pol.ext_authz.set_if_unset(p);
+				},
+				BackendTrafficPolicy::NetworkExtProc(p) => {
+					pol.network_ext_proc.get_or_insert_with(|| p.clone());
 				},
 				BackendTrafficPolicy::AI(p) => {
 					pol.llm = Some(match pol.llm.take() {

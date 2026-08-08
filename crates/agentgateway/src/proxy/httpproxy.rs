@@ -347,6 +347,7 @@ async fn apply_backend_policies(
 		override_dest: _,
 		// Applied elsewhere
 		health: _,
+		network_ext_proc: _,
 	} = &*backend_call.backend_policies;
 	rp.backend_response_header = response_header_modifier.as_response_policy();
 
@@ -932,6 +933,17 @@ impl HTTPProxy {
 		}
 
 		if req.method() == ::http::Method::CONNECT {
+			let network_ext_proc = route_policies
+				.network_ext_proc
+				.select("network ext proc", &req)
+				.as_deref()
+				.map(|config| {
+					let exec = cel::Executor::new_request(&req);
+					(
+						Arc::new(config.clone()),
+						config.evaluate_request_context(&exec),
+					)
+				});
 			let connect_upgrade = connect_upgrade
 				.ok_or_else(|| ProxyError::ProcessingString("CONNECT missing upgrade".to_string()))
 				.snapshot_on_err(log, &mut req)?;
@@ -945,6 +957,7 @@ impl HTTPProxy {
 					connect_upgrade,
 					&selected_backend,
 					backend_policies,
+					network_ext_proc,
 					response_policies,
 					&mut req,
 				)
@@ -1104,6 +1117,10 @@ impl HTTPProxy {
 		upgrade: OnUpgrade,
 		selected_backend: &RouteBackend,
 		backend_policies: Arc<BackendPolicies>,
+		network_ext_proc: Option<(
+			Arc<crate::http::network_ext_proc::NetworkExtProc>,
+			crate::http::network_ext_proc::RequestContext,
+		)>,
 		response_policies: &mut ResponsePolicies,
 		req: &mut Request,
 	) -> Result<Response, ProxyResponse> {
@@ -1159,6 +1176,8 @@ impl HTTPProxy {
 		resp.extensions_mut().insert(ConnectTunnel {
 			upgrade,
 			upstream: Arc::new(Mutex::new(Some(upstream))),
+			network_ext_proc,
+			policy_client: self.policy_client(),
 		});
 		Ok(resp)
 	}
@@ -1519,12 +1538,23 @@ fn handle_connect_tunnel(connect: ConnectTunnel, resp: Response, log: DropOnLog)
 			},
 		};
 		let mut downstream = TokioIo::new(downstream);
-		let _ = agent_core::copy::copy_bidirectional(
-			&mut downstream,
-			&mut upstream,
-			&agent_core::copy::ConnectionResult {},
-		)
-		.await;
+		if let Some((config, metadata)) = connect.network_ext_proc {
+			let _ = crate::http::network_ext_proc::proxy(
+				downstream,
+				upstream,
+				&config,
+				connect.policy_client,
+				metadata,
+			)
+			.await;
+		} else {
+			let _ = agent_core::copy::copy_bidirectional(
+				&mut downstream,
+				&mut upstream,
+				&agent_core::copy::ConnectionResult {},
+			)
+			.await;
+		}
 		drop(log);
 	});
 	resp
@@ -1535,6 +1565,15 @@ fn snapshot_connect_request(
 	req: &mut Request,
 ) -> Option<cel::RequestSnapshot> {
 	let mut snapshot = log.cel.cel_context.maybe_snapshot_request(req, false)?;
+	if snapshot.host.is_none()
+		&& let Some(host) = log
+			.host
+			.as_deref()
+			.or_else(|| crate::http::get_host(req).ok())
+		&& let Ok(authority) = Authority::try_from(host)
+	{
+		snapshot.host = Some(authority);
+	}
 	if snapshot.path.path().is_empty()
 		&& let Some(authority) = snapshot.host.clone()
 	{
@@ -3791,6 +3830,11 @@ struct RequestUpgrade {
 struct ConnectTunnel {
 	upgrade: OnUpgrade,
 	upstream: Arc<Mutex<Option<Socket>>>,
+	network_ext_proc: Option<(
+		Arc<crate::http::network_ext_proc::NetworkExtProc>,
+		crate::http::network_ext_proc::RequestContext,
+	)>,
+	policy_client: PolicyClient,
 }
 
 #[derive(Clone)]

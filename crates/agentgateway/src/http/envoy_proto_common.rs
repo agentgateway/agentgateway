@@ -1,5 +1,6 @@
 use ::http::HeaderMap;
-use prost_wkt_types::{Struct, Value as ProstValue};
+use prost_wkt_types::value::Kind as ProstKind;
+use prost_wkt_types::{ListValue, Struct, Value as ProstValue};
 use serde_json::Value as JsonValue;
 use tracing::warn;
 
@@ -140,8 +141,31 @@ pub fn json_to_struct(value: JsonValue) -> Result<Struct, ProxyError> {
 	serde_json::from_value(value).map_err(|e| ProxyError::Processing(e.into()))
 }
 
+// TODO: Codex claimed this was needed because the one-liner handled JSON scalars wrong.
+// I'm not totally convinced, but leaving it here for now. If we can remove it, we should.
 pub fn json_to_prost_value(value: JsonValue) -> Result<ProstValue, ProxyError> {
-	serde_json::from_value(value).map_err(|e| ProxyError::Processing(e.into()))
+	Ok(ProstValue {
+		kind: Some(match value {
+			JsonValue::Null => ProstKind::NullValue(0),
+			JsonValue::Bool(value) => ProstKind::BoolValue(value),
+			JsonValue::Number(value) => ProstKind::NumberValue(value.as_f64().ok_or_else(|| {
+				ProxyError::Processing(anyhow::anyhow!("JSON number cannot be represented as f64"))
+			})?),
+			JsonValue::String(value) => ProstKind::StringValue(value),
+			JsonValue::Array(values) => ProstKind::ListValue(ListValue {
+				values: values
+					.into_iter()
+					.map(json_to_prost_value)
+					.collect::<Result<Vec<_>, _>>()?,
+			}),
+			JsonValue::Object(fields) => ProstKind::StructValue(Struct {
+				fields: fields
+					.into_iter()
+					.map(|(key, value)| json_to_prost_value(value).map(|value| (key, value)))
+					.collect::<Result<_, _>>()?,
+			}),
+		}),
+	})
 }
 
 #[cfg(test)]

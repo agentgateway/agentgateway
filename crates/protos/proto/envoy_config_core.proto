@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package envoy.config.core.v3;
+
+import "google/protobuf/any.proto";
+import "google/protobuf/struct.proto";
+
+message Metadata {
+  map<string, google.protobuf.Struct> filter_metadata = 1;
+
+  map<string, google.protobuf.Any> typed_filter_metadata = 2;
+}

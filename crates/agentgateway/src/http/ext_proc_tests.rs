@@ -4086,6 +4086,184 @@ mod connect_authority_mutation {
 			 source.connectHeaders, not the re-entered request's own (unrelated) Host",
 		);
 	}
+
+	#[tokio::test]
+	async fn tunnel_mode_tcp_reentry_sends_connect_authority_to_network_ext_proc() {
+		use crate::http::network_ext_proc::{DataSendMode, NetworkExtProc};
+		use crate::test_helpers::networkextprocmock::NetworkExtProcMock;
+		use crate::types::agent::{
+			BindMode, Listener, ListenerProtocol, ListenerSet, SimpleBackendReferenceWithPolicies,
+			TunnelProtocol,
+		};
+
+		let tcp_backend = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let tcp_backend_addr = tcp_backend.local_addr().unwrap();
+		let tcp_backend_task = tokio::spawn(async move {
+			let (mut stream, _) = tcp_backend.accept().await.unwrap();
+			let mut buf = [0u8; 1024];
+			let n = stream.read(&mut buf).await.unwrap();
+			assert_eq!(&buf[..n], b"hello over tcp");
+			stream.write_all(b"tcp backend response").await.unwrap();
+		});
+
+		#[derive(Clone)]
+		struct MetadataCapture {
+			seen_authority: Arc<Mutex<Option<String>>>,
+			seen_attribute_authority: Arc<Mutex<Option<String>>>,
+			seen_read_data: Arc<Mutex<Option<Vec<u8>>>>,
+		}
+
+		#[async_trait::async_trait]
+		impl crate::test_helpers::networkextprocmock::Handler for MetadataCapture {
+			async fn process(
+				&mut self,
+				request: crate::http::network_ext_proc::proto::ProcessingRequest,
+			) -> Result<crate::http::network_ext_proc::proto::ProcessingResponse, tonic::Status> {
+				if let Some(read_data) = request.read_data.as_ref()
+					&& !read_data.data.is_empty()
+				{
+					*self.seen_read_data.lock().unwrap() = Some(read_data.data.to_vec());
+				}
+				if let Some(metadata) = request.metadata.as_ref()
+					&& let Some(ns) = metadata.filter_metadata.get("dev.substrate")
+					&& let Some(v) = ns.fields.get("authority")
+					&& let Some(prost_wkt_types::value::Kind::StringValue(authority)) = &v.kind
+				{
+					*self.seen_authority.lock().unwrap() = Some(authority.clone());
+				}
+				if let Some(ns) = request.attributes.get("envoy.filters.network.ext_proc")
+					&& let Some(v) = ns.fields.get("filter_state['dev.substrate.authority']")
+					&& let Some(prost_wkt_types::value::Kind::StringValue(authority)) = &v.kind
+				{
+					*self.seen_attribute_authority.lock().unwrap() = Some(authority.clone());
+				}
+				Ok(crate::http::network_ext_proc::proto::ProcessingResponse {
+					read_data: request.read_data,
+					write_data: request.write_data,
+					data_processing_status: crate::http::network_ext_proc::proto::processing_response::DataProcessedStatus::Unmodified as i32,
+					connection_status: crate::http::network_ext_proc::proto::processing_response::ConnectionStatus::Continue as i32,
+					..Default::default()
+				})
+			}
+		}
+
+		let seen_authority = Arc::new(Mutex::new(None));
+		let seen_attribute_authority = Arc::new(Mutex::new(None));
+		let seen_read_data = Arc::new(Mutex::new(None));
+		let network_ext_proc = NetworkExtProcMock::new({
+			let seen_authority = seen_authority.clone();
+			let seen_attribute_authority = seen_attribute_authority.clone();
+			let seen_read_data = seen_read_data.clone();
+			move || MetadataCapture {
+				seen_authority: seen_authority.clone(),
+				seen_attribute_authority: seen_attribute_authority.clone(),
+				seen_read_data: seen_read_data.clone(),
+			}
+		})
+		.spawn()
+		.await;
+
+		let mut outer = simple_bind();
+		outer.key = strng::literal!("outer");
+		outer.address = "127.0.0.1:15014".parse().unwrap();
+		outer.tunnel_protocol = TunnelProtocol::Connect;
+
+		let mut inner = simple_bind();
+		inner.key = strng::literal!("bind/wildcard");
+		inner.mode = BindMode::Internal;
+		inner.protocol = crate::types::agent::BindProtocol::tcp;
+		inner.listeners = ListenerSet::from_list([Listener {
+			key: LISTENER_KEY,
+			name: Default::default(),
+			hostname: Default::default(),
+			protocol: ListenerProtocol::TCP,
+		}]);
+
+		let mut tcp_route = basic_named_tcp_route(strng::format!("/{}", tcp_backend_addr));
+		tcp_route.backends[0]
+			.inline_policies
+			.push(BackendTrafficPolicy::NetworkExtProc(Arc::new(
+				NetworkExtProc {
+					target: SimpleBackendReferenceWithPolicies {
+						target: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(
+							network_ext_proc.address,
+						))),
+						policies: vec![],
+					},
+					failure_mode_allow: false,
+					process_read: DataSendMode::Streamed,
+					process_write: DataSendMode::Skip,
+					message_timeout_ms: 200,
+					metadata_context: Some(HashMap::from([(
+						"dev.substrate".to_string(),
+						HashMap::from([(
+							"authority".to_string(),
+							Arc::new(Expression::new_strict("source.connectHeaders[\"host\"]").unwrap()),
+						)]),
+					)])),
+					connection_attributes: Some(HashMap::from([(
+						"filter_state['dev.substrate.authority']".to_string(),
+						Arc::new(Expression::new_strict("source.connectHeaders[\"host\"]").unwrap()),
+					)])),
+				},
+			)));
+
+		let t = setup_proxy_test("{}")
+			.unwrap()
+			.with_backend(tcp_backend_addr)
+			.with_bind(outer)
+			.with_bind(inner)
+			.with_tcp_route(tcp_route);
+
+		let mut io = t.serve_tunnel(strng::literal!("outer"));
+		let connect_target = "test1.demo.actors.resources.substrate.ate.dev:9090";
+		io.write_all(
+			format!("CONNECT {connect_target} HTTP/1.1\r\nHost: {connect_target}\r\n\r\n").as_bytes(),
+		)
+		.await
+		.unwrap();
+
+		let mut response = Vec::new();
+		loop {
+			let mut chunk = [0; 1024];
+			let n = io.read(&mut chunk).await.unwrap();
+			assert!(n > 0, "CONNECT response unexpectedly closed");
+			response.extend_from_slice(&chunk[..n]);
+			if response.windows(4).any(|w| w == b"\r\n\r\n") {
+				break;
+			}
+		}
+		let response_text = String::from_utf8_lossy(&response).to_string();
+		assert!(
+			response_text.starts_with("HTTP/1.1 200 OK\r\n"),
+			"unexpected CONNECT response: {response_text}",
+		);
+
+		io.write_all(b"hello over tcp").await.unwrap();
+		let mut tunneled = [0u8; 1024];
+		let n = tokio::time::timeout(Duration::from_secs(5), io.read(&mut tunneled))
+			.await
+			.expect("timed out waiting for tunneled TCP response")
+			.unwrap();
+		assert_eq!(&tunneled[..n], b"tcp backend response");
+		tcp_backend_task.await.unwrap();
+
+		assert_eq!(
+			seen_read_data.lock().unwrap().as_deref(),
+			Some(&b"hello over tcp"[..]),
+			"network ext_proc should process the tunneled TCP payload",
+		);
+		assert_eq!(
+			seen_authority.lock().unwrap().as_deref(),
+			Some(connect_target),
+			"network ext_proc metadata should include the original CONNECT authority",
+		);
+		assert_eq!(
+			seen_attribute_authority.lock().unwrap().as_deref(),
+			Some(connect_target),
+			"network ext_proc connection attributes should include the original CONNECT authority",
+		);
+	}
 }
 
 #[derive(Clone)]
@@ -5285,7 +5463,7 @@ mod metadata_context_and_attributes {
 
 		let meta = HashMap::from([
 			(
-				super::super::EXTPROC_GRPC_INITIAL_METADATA_NAMESPACE.to_string(),
+				crate::http::metadata_context::EXTPROC_GRPC_INITIAL_METADATA_NAMESPACE.to_string(),
 				[(
 					"x-policy-ref".to_string(),
 					Arc::new(Expression::new_strict("'default/my-policy'").unwrap()),
@@ -5333,7 +5511,7 @@ mod metadata_context_and_attributes {
 		assert!(
 			!meta_ctx
 				.filter_metadata
-				.contains_key(super::super::EXTPROC_GRPC_INITIAL_METADATA_NAMESPACE)
+				.contains_key(crate::http::metadata_context::EXTPROC_GRPC_INITIAL_METADATA_NAMESPACE)
 		);
 		assert!(
 			meta_ctx
@@ -5349,7 +5527,7 @@ mod metadata_context_and_attributes {
 		let open_metadata = tracker.open_metadata.clone();
 
 		let meta = HashMap::from([(
-			super::super::EXTPROC_GRPC_INITIAL_METADATA_NAMESPACE.to_string(),
+			crate::http::metadata_context::EXTPROC_GRPC_INITIAL_METADATA_NAMESPACE.to_string(),
 			[
 				(
 					"x-policy-ref".to_string(),

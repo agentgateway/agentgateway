@@ -2,6 +2,7 @@ pub mod extauthmock;
 pub mod extmcpmock;
 pub mod extprocmock;
 mod hyper_tower;
+pub mod networkextprocmock;
 pub mod oteltracemock;
 #[cfg(any(test, feature = "internal_benches"))]
 mod policy;

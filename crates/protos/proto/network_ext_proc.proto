@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package envoy.service.network_ext_proc.v3;
+
+import "envoy_config_core.proto";
+import "google/protobuf/struct.proto";
+
+// The L4 external processing protocol used by Envoy's network ext_proc filter.
+service NetworkExternalProcessor {
+  rpc Process(stream ProcessingRequest) returns (stream ProcessingResponse);
+}
+
+message Data {
+  bytes data = 1;
+  bool end_of_stream = 2;
+}
+
+message ProcessingRequest {
+  Data read_data = 1;
+  Data write_data = 2;
+  envoy.config.core.v3.Metadata metadata = 3;
+  map<string, google.protobuf.Struct> attributes = 4;
+}
+
+message ProcessingResponse {
+  enum DataProcessedStatus { UNKNOWN = 0; UNMODIFIED = 1; MODIFIED = 2; }
+  enum ConnectionStatus { CONTINUE = 0; CLOSE = 1; CLOSE_RST = 2; }
+  Data read_data = 1;
+  Data write_data = 2;
+  DataProcessedStatus data_processing_status = 3;
+  ConnectionStatus connection_status = 4;
+  google.protobuf.Struct dynamic_metadata = 5;
+  bool close_stream_to_ext_proc_server = 6;
+}

@@ -3133,7 +3133,11 @@ fn access_log_payload_policy() -> crate::types::frontend::LoggingPolicy {
 }
 
 async fn setup_access_log_mcp_proxy(mock: &MockServer) -> (TestBind, SocketAddr) {
-	let (mut t, io) = setup_proxy(mock, true, false).await;
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_policies(mock.addr, true, false, vec![])
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
 	let listener_name = t
 		.pi
 		.stores
@@ -3161,6 +3165,7 @@ async fn setup_access_log_mcp_proxy(mock: &MockServer) -> (TestBind, SocketAddr)
 			.access_log
 			.is_some()
 	);
+	let io = t.serve_real_listener(BIND_KEY).await;
 	(t, io)
 }
 

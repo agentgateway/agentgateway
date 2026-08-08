@@ -2675,6 +2675,7 @@ pub enum TrafficPolicy {
 	RemoteRateLimit(RequestPolicy<remoteratelimit::RemoteRateLimit>),
 	ExtAuthz(RequestPolicy<ext_authz::ExtAuthz>),
 	ExtProc(RequestPolicy<ext_proc::ExtProc>),
+	NetworkExtProc(RequestPolicy<crate::http::network_ext_proc::NetworkExtProc>),
 	JwtAuth(RequestPolicy<JwtAuthentication>),
 	Oidc(RequestPolicy<crate::http::oidc::OidcPolicy>),
 	BasicAuth(RequestPolicy<crate::http::basicauth::BasicAuthentication>),
@@ -2714,6 +2715,7 @@ pub enum BackendTrafficPolicy {
 	#[serde(rename = "ai")]
 	AI(Arc<llm::Policy>),
 	ExtAuthz(Arc<ext_authz::ExtAuthz>),
+	NetworkExtProc(Arc<crate::http::network_ext_proc::NetworkExtProc>),
 	SessionAffinity(http::sessionaffinity::Policy),
 	Transformation(Arc<crate::http::transformation_cel::Transformation>),
 	Health(health::Policy),

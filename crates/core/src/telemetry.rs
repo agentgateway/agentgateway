@@ -854,6 +854,8 @@ pub mod testing {
 
 	pub fn setup_test_logging() {
 		Lazy::force(&TRACING);
+		crate::telemetry::set_level(false, "request=info")
+			.expect("request access logs should be enabled in tests");
 	}
 
 	fn setup_test_logging_internal() {
