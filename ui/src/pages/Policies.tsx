@@ -197,8 +197,8 @@ export function PolicyCatalogPage(props: {
   const selectedMeta = policyCatalog.find((policy) => policy.key === selected);
   const selectedFileOwned = Boolean(
     selected &&
-    filePolicies &&
-    Object.prototype.hasOwnProperty.call(filePolicies, selected),
+      filePolicies &&
+      Object.prototype.hasOwnProperty.call(filePolicies, selected),
   );
   const saving = upsertPolicy.isPending || deleteResource.isPending;
   const saveError =

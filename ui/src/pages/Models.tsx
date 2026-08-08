@@ -170,23 +170,23 @@ export function ModelsPage() {
       : null);
   const editingDatabaseModel = Boolean(
     hybrid &&
-    activeEditing &&
-    (!activeEditing.previousId ||
-      isDatabaseConfigResource(
-        resources,
-        "llm.model",
-        activeEditing.previousId,
-      )),
+      activeEditing &&
+      (!activeEditing.previousId ||
+        isDatabaseConfigResource(
+          resources,
+          "llm.model",
+          activeEditing.previousId,
+        )),
   );
   const editingDatabaseVirtualModel = Boolean(
     hybrid &&
-    activeVirtualEditing &&
-    (!activeVirtualEditing.previousName ||
-      isDatabaseConfigResource(
-        resources,
-        "llm.virtualModel",
-        activeVirtualEditing.previousName,
-      )),
+      activeVirtualEditing &&
+      (!activeVirtualEditing.previousName ||
+        isDatabaseConfigResource(
+          resources,
+          "llm.virtualModel",
+          activeVirtualEditing.previousName,
+        )),
   );
   const modelRows = useMemo(
     () => [

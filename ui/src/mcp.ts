@@ -73,7 +73,7 @@ export function nextRpcId() {
 function isMcpTool(value: unknown): value is McpTool {
   return Boolean(
     value &&
-    typeof value === "object" &&
-    typeof (value as { name?: unknown }).name === "string",
+      typeof value === "object" &&
+      typeof (value as { name?: unknown }).name === "string",
   );
 }

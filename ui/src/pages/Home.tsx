@@ -71,17 +71,17 @@ export function HomePage() {
   );
   const hasLlm = Boolean(
     config.data?.llm ||
-    models.length ||
-    virtualModels.length ||
-    providers.length,
+      models.length ||
+      virtualModels.length ||
+      providers.length,
   );
   const hasMcp = Boolean(mcpData.data?.mcp);
   const hasTraffic = Boolean(
     trafficData.data &&
-    (Boolean(trafficData.data.binds?.length) ||
-      "gateways" in trafficData.data ||
-      "routes" in trafficData.data ||
-      "tcpRoutes" in trafficData.data),
+      (Boolean(trafficData.data.binds?.length) ||
+        "gateways" in trafficData.data ||
+        "routes" in trafficData.data ||
+        "tcpRoutes" in trafficData.data),
   );
   const hasBinds = Boolean(config.data?.binds?.length);
   const mcpServers = mcpData.data?.mcp?.targets ?? [];

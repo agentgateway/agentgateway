@@ -91,8 +91,8 @@ async function writeTypes(schemaPath, outputPath) {
 function isImpossibleSchema(value) {
   return Boolean(
     value &&
-    typeof value === "object" &&
-    Array.isArray(value.enum) &&
-    value.enum.length === 0,
+      typeof value === "object" &&
+      Array.isArray(value.enum) &&
+      value.enum.length === 0,
   );
 }

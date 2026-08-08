@@ -499,8 +499,8 @@ function GatewayEditor(props: {
   const invalidDefaultName = !defaultGateway && name.trim() === "default";
   const duplicateName = Boolean(
     name.trim() &&
-    name.trim() !== props.initial.previousName &&
-    props.config?.gateways?.[name.trim()],
+      name.trim() !== props.initial.previousName &&
+      props.config?.gateways?.[name.trim()],
   );
   const preview: TrafficGateway = cleanGateway({
     ...(multipleListeners ? withoutGatewayPolicies(gateway) : gateway),
