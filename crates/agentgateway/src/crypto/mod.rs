@@ -10,11 +10,16 @@
 //! Such documented exceptions must be guarded with the appropriate
 //! `#[cfg(feature = ...)]` so the backend in use stays explicit.
 
-// A crypto backend must be selected at compile time. `crypto-aws-lc` is currently
-// the only backend; as additional providers are added this becomes an
-// exactly-one-of guard.
-#[cfg(not(feature = "crypto-aws-lc"))]
-compile_error!("no crypto backend selected: enable the `crypto-aws-lc` feature");
+// Exactly one crypto backend must be selected at compile time.
+#[cfg(not(any(feature = "crypto-aws-lc", feature = "crypto-symcrypt")))]
+compile_error!(
+	"no crypto backend selected: enable exactly one of `crypto-aws-lc` or `crypto-symcrypt`"
+);
+
+#[cfg(all(feature = "crypto-aws-lc", feature = "crypto-symcrypt"))]
+compile_error!(
+	"multiple crypto backends selected: enable exactly one of `crypto-aws-lc` or `crypto-symcrypt` (pass --no-default-features for a non-default backend)"
+);
 
 pub mod aead;
 pub mod digest;
@@ -36,3 +41,6 @@ pub fn init() {
 /// for startup logging and diagnostics.
 #[cfg(feature = "crypto-aws-lc")]
 pub const CRYPTO_BACKEND: &str = "aws-lc-rs";
+
+#[cfg(feature = "crypto-symcrypt")]
+pub const CRYPTO_BACKEND: &str = "symcrypt";
