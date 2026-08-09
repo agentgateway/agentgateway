@@ -146,7 +146,7 @@ pub(super) async fn handle_callback(
 	}
 
 	// TODO: Revisit whether browser sessions should persist access_token / refresh_token.
-	// The current stateless cookie only stores the validated id_token because that is what
+	// The default cookie store only persists the validated id_token because that is what
 	// the runtime uses today, and larger token payloads can exceed browser cookie limits.
 	let session = BrowserSession {
 		policy_id: policy.policy_id.clone(),
@@ -157,10 +157,10 @@ pub(super) async fn handle_callback(
 			&claims.inner,
 		)),
 	};
-	let encoded = policy.session.encode_browser_session(&session)?;
+	let session_value = policy.browser_session_store.save(&session).await?;
 	let session_cookie = policy.session.set_cookie(
 		&policy.session.cookie_name,
-		&encoded,
+		&session_value,
 		policy.redirect_uri.https,
 		policy.session.ttl,
 	);
