@@ -239,14 +239,14 @@ test("hybrid settings shows file diff without applying it", async ({
   ).toBeVisible();
   expect(gateway.postedConfigs).toHaveLength(0);
 
-  await page.keyboard.down("Control");
+  await page.keyboard.down("ControlOrMeta");
   await page.keyboard.down("Shift");
   await expect(
     page.getByRole("tooltip").getByText(/Override active/),
   ).toBeVisible();
   await save.click({ force: true });
   await page.keyboard.up("Shift");
-  await page.keyboard.up("Control");
+  await page.keyboard.up("ControlOrMeta");
   await expect.poll(() => gateway.postedConfigs.length).toBe(1);
   await expect(diff).not.toBeVisible();
 });

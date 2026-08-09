@@ -32,7 +32,7 @@ export function useHybridFileWriteOverrideKeys() {
   const [active, setActive] = useState(false);
   useEffect(() => {
     const update = (event: KeyboardEvent) =>
-      setActive(event.ctrlKey && event.shiftKey);
+      setActive((event.ctrlKey || event.metaKey) && event.shiftKey);
     const clear = () => setActive(false);
     window.addEventListener("keydown", update);
     window.addEventListener("keyup", update);
