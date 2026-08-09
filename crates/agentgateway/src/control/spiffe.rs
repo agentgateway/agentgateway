@@ -81,12 +81,17 @@ impl<K: Eq + std::hash::Hash, V> RotatingCache<K, V> {
 		}
 	}
 
-	fn insert(&mut self, seq: u64, key: K, value: Arc<V>) {
-		if self.seq != seq {
+	/// Stores `value` under `key` and returns the cached value, which is the one already
+	/// cached if another caller won the race.
+	fn insert(&mut self, seq: u64, key: K, value: Arc<V>) -> Arc<V> {
+		if seq < self.seq { // stale sequence number; return it without touching the cache
+			return value;
+		}
+		if self.seq != seq { // new sequence number; clear the cache of stale entries
 			self.entries.clear();
 			self.seq = seq;
 		}
-		self.entries.insert(key, value);
+		self.entries.entry(key).or_insert(value).clone()
 	}
 }
 
@@ -159,12 +164,7 @@ impl SpiffeClient {
 		}
 
 		let cfg = Arc::new(self.build_server_config(alpns)?);
-		self
-			.server_cache
-			.lock()
-			.unwrap()
-			.insert(seq, key, cfg.clone());
-		Ok(cfg)
+		Ok(self.server_cache.lock().unwrap().insert(seq, key, cfg))
 	}
 
 	fn build_server_config(&self, alpns: Vec<Vec<u8>>) -> Result<ServerConfig, Error> {
@@ -212,12 +212,7 @@ impl SpiffeClient {
 		}
 
 		let cfg = Arc::new(self.build_client_config(alpns, verify_sans)?);
-		self
-			.client_cache
-			.lock()
-			.unwrap()
-			.insert(seq, key, cfg.clone());
-		Ok(cfg)
+		Ok(self.client_cache.lock().unwrap().insert(seq, key, cfg))
 	}
 
 	fn build_client_config(
@@ -375,6 +370,37 @@ mod tests {
 		assert_eq!(cache.get(1, &"b").as_deref(), Some(&2));
 		// The old generation is gone regardless of sequence queried.
 		assert!(cache.get(0, &"a").is_none());
+	}
+
+	/// Two callers missing on the same key concurrently both build a value, but must end up sharing
+	/// the one that landed first — distinct `Arc`s for the same config would split the connection pool.
+	#[test]
+	fn rotating_cache_insert_returns_the_winning_value() {
+		let mut cache: RotatingCache<&str, u32> = RotatingCache::default();
+		let first = Arc::new(1);
+		let winner = cache.insert(0, "a", first.clone());
+		assert!(Arc::ptr_eq(&winner, &first));
+
+		// The loser's value is discarded and it receives the already-cached one instead.
+		let loser = cache.insert(0, "a", Arc::new(2));
+		assert!(Arc::ptr_eq(&loser, &first));
+		assert_eq!(cache.get(0, &"a").as_deref(), Some(&1));
+	}
+
+	/// A slow builder can finish after a rotation has already been cached. Its value is returned to
+	/// its own caller but must not clear or overwrite the newer generation.
+	#[test]
+	fn rotating_cache_insert_ignores_superseded_generation() {
+		let mut cache: RotatingCache<&str, u32> = RotatingCache::default();
+		cache.insert(1, "current", Arc::new(2));
+
+		let stale = Arc::new(1);
+		let returned = cache.insert(0, "stale", stale.clone());
+		assert!(Arc::ptr_eq(&returned, &stale));
+
+		// The newer generation survives intact and the stale value was not stored.
+		assert_eq!(cache.get(1, &"current").as_deref(), Some(&2));
+		assert!(cache.get(1, &"stale").is_none());
 	}
 
 	/// A throwaway CA for minting SPIFFE SVIDs in tests. Every SVID it issues chains to this CA, so
