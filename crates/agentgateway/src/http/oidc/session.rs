@@ -111,6 +111,34 @@ impl BrowserSession {
 	}
 }
 
+#[async_trait::async_trait]
+pub(super) trait BrowserSessionStore: std::fmt::Debug + Send + Sync {
+	async fn load(&self, value: &str) -> Result<BrowserSession, Error>;
+	async fn save(&self, session: &BrowserSession) -> Result<String, Error>;
+}
+
+#[async_trait::async_trait]
+impl BrowserSessionStore for sessionpersistence::Encoder {
+	async fn load(&self, value: &str) -> Result<BrowserSession, Error> {
+		let decoded = self.decrypt(value).map_err(|_| Error::InvalidSession)?;
+		let session: BrowserSession =
+			serde_json::from_slice(&decoded).map_err(|_| Error::InvalidSession)?;
+		if session.is_expired() {
+			return Err(Error::InvalidSession);
+		}
+		Ok(session)
+	}
+
+	async fn save(&self, session: &BrowserSession) -> Result<String, Error> {
+		let json = serde_json::to_string(session).map_err(anyhow::Error::from)?;
+		let encoded = self.encrypt(&json).map_err(|_| Error::InvalidSession)?;
+		if encoded.len() > MAX_BROWSER_COOKIE_VALUE_SIZE {
+			return Err(Error::SessionCookieTooLarge);
+		}
+		Ok(encoded)
+	}
+}
+
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionConfig {
@@ -145,31 +173,6 @@ impl SessionConfig {
 			.encoder
 			.encrypt(&json)
 			.map_err(|_| Error::InvalidTransaction)
-	}
-
-	pub fn decode_browser_session(&self, cookie: &str) -> Result<BrowserSession, Error> {
-		let decoded = self
-			.encoder
-			.decrypt(cookie)
-			.map_err(|_| Error::InvalidSession)?;
-		let session: BrowserSession =
-			serde_json::from_slice(&decoded).map_err(|_| Error::InvalidSession)?;
-		if session.is_expired() {
-			return Err(Error::InvalidSession);
-		}
-		Ok(session)
-	}
-
-	pub fn encode_browser_session(&self, session: &BrowserSession) -> Result<String, Error> {
-		let json = serde_json::to_string(session).map_err(anyhow::Error::from)?;
-		let encoded = self
-			.encoder
-			.encrypt(&json)
-			.map_err(|_| Error::InvalidSession)?;
-		if encoded.len() > MAX_BROWSER_COOKIE_VALUE_SIZE {
-			return Err(Error::SessionCookieTooLarge);
-		}
-		Ok(encoded)
 	}
 
 	pub fn set_cookie(&self, name: &str, value: &str, is_https: bool, ttl: Duration) -> String {
