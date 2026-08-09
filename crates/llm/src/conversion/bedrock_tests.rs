@@ -1193,6 +1193,119 @@ fn test_embeddings_cohere_with_passthrough_fields() {
 }
 
 #[test]
+fn test_embeddings_translation_nova() {
+	let provider = Provider {
+		model: Some(strng::new("amazon.nova-2-multimodal-embeddings-v1:0")),
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = types::embeddings::Request {
+		model: Some("text-embedding-3-small".to_string()),
+		input: json!("hello world"),
+		user: None,
+		encoding_format: None,
+		dimensions: Some(1024),
+		rest: json!({}),
+	};
+
+	let translated = from_embeddings::translate(&req, &provider).unwrap();
+	let bedrock_req: serde_json::Value = serde_json::from_slice(&translated).unwrap();
+
+	assert_eq!(bedrock_req["taskType"], "SINGLE_EMBEDDING");
+	let params = &bedrock_req["singleEmbeddingParams"];
+	assert_eq!(params["embeddingPurpose"], "GENERIC_INDEX");
+	assert_eq!(params["embeddingDimension"], 1024);
+	assert_eq!(params["text"]["truncationMode"], "END");
+	assert_eq!(params["text"]["value"], "hello world");
+}
+
+#[test]
+fn test_embeddings_nova_omits_dimension_when_unset() {
+	let provider = Provider {
+		model: Some(strng::new("amazon.nova-2-multimodal-embeddings-v1:0")),
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = types::embeddings::Request {
+		model: Some("text-embedding-3-small".to_string()),
+		input: json!("hello"),
+		user: None,
+		encoding_format: None,
+		dimensions: None,
+		rest: json!({}),
+	};
+
+	let translated = from_embeddings::translate(&req, &provider).unwrap();
+	let bedrock_req: serde_json::Value = serde_json::from_slice(&translated).unwrap();
+
+	assert!(
+		bedrock_req["singleEmbeddingParams"]
+			.get("embeddingDimension")
+			.is_none(),
+		"embeddingDimension should be omitted so the model default applies"
+	);
+}
+
+#[test]
+fn test_embeddings_nova_with_passthrough_fields() {
+	let provider = Provider {
+		model: Some(strng::new("amazon.nova-2-multimodal-embeddings-v1:0")),
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = types::embeddings::Request {
+		model: Some("text-embedding-3-small".to_string()),
+		input: json!("hello"),
+		user: None,
+		encoding_format: None,
+		dimensions: None,
+		rest: json!({"embedding_purpose": "GENERIC_RETRIEVAL", "truncation_mode": "NONE"}),
+	};
+
+	let translated = from_embeddings::translate(&req, &provider).unwrap();
+	let bedrock_req: bedrock::NovaEmbeddingRequest = serde_json::from_slice(&translated).unwrap();
+
+	assert_eq!(
+		bedrock_req.single_embedding_params.embedding_purpose,
+		"GENERIC_RETRIEVAL"
+	);
+	assert_eq!(
+		bedrock_req.single_embedding_params.text.truncation_mode,
+		"NONE"
+	);
+}
+
+#[test]
+fn test_embeddings_nova_rejects_array_input() {
+	let provider = Provider {
+		model: Some(strng::new("amazon.nova-2-multimodal-embeddings-v1:0")),
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	};
+
+	let req = types::embeddings::Request {
+		model: Some("text-embedding-3-small".to_string()),
+		input: json!(["hello", "world"]),
+		user: None,
+		encoding_format: None,
+		dimensions: None,
+		rest: json!({}),
+	};
+
+	assert!(
+		from_embeddings::translate(&req, &provider).is_err(),
+		"Nova should reject array input"
+	);
+}
+
+#[test]
 fn test_embeddings_rejects_invalid_input() {
 	let provider = Provider {
 		model: Some(strng::new("cohere.embed-english-v3")),
@@ -1275,6 +1388,33 @@ fn test_embeddings_response_translation_cohere() {
 
 	assert_eq!(openai_resp.object, "list");
 	assert_eq!(openai_resp.usage.unwrap().prompt_tokens, 10);
+}
+
+#[test]
+fn test_embeddings_response_translation_nova() {
+	let model = "amazon.nova-2-multimodal-embeddings-v1:0";
+	let bedrock_resp = json!({
+		"embeddings": [{"embedding": [0.25, 0.5, -0.75], "embeddingType": "TEXT"}]
+	});
+	let bytes = serde_json::to_vec(&bedrock_resp).unwrap();
+	let mut headers = HeaderMap::new();
+	headers.insert("x-amzn-bedrock-input-token-count", "7".parse().unwrap());
+
+	let translated = from_embeddings::translate_response(&bytes, &headers, model).unwrap();
+	let openai_resp: serde_json::Value = translated
+		.serialize()
+		.and_then(|b| serde_json::from_slice(&b))
+		.unwrap();
+
+	assert_eq!(openai_resp["object"], "list");
+	assert_eq!(openai_resp["data"][0]["object"], "embedding");
+	assert_eq!(openai_resp["data"][0]["index"], 0);
+	assert_eq!(
+		openai_resp["data"][0]["embedding"],
+		json!([0.25, 0.5, -0.75])
+	);
+	assert_eq!(openai_resp["usage"]["prompt_tokens"], 7);
+	assert_eq!(openai_resp["usage"]["total_tokens"], 7);
 }
 
 #[test]
