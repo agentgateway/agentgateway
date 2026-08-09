@@ -187,7 +187,7 @@ impl OidcPolicy {
 		let expires_at_unix = cap_session_expiry(now_unix(), self.session.ttl, &claims.inner);
 		browser_session.raw_id_token = SecretString::new(id_token.into_boxed_str());
 		browser_session.expires_at_unix = Some(expires_at_unix);
-		let encoded_session = self.session.encode_browser_session(&browser_session)?;
+		let encoded_session = self.browser_session_store.save(&browser_session).await?;
 		let session_cookie = self.session.set_cookie(
 			&self.session.cookie_name,
 			&encoded_session,
