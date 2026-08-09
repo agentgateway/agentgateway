@@ -3,13 +3,8 @@
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
-/// Well-known catalog tags: AWS Bedrock endpoint tags, plus format tags mirroring [`crate::ChatFormat::tag`].
+/// Well-known chat-format tags, mirroring [`crate::ChatFormat::tag`].
 pub mod tags {
-	/// AWS Bedrock model is served on the Runtime (Converse/Invoke) endpoint.
-	pub const RUNTIME: &str = "runtime";
-	/// AWS Bedrock model is served on the Mantle endpoint.
-	pub const MANTLE: &str = "mantle";
-
 	pub const OPENAI_COMPLETIONS: &str = "openai_completions";
 	pub const OPENAI_RESPONSES: &str = "openai_responses";
 	pub const ANTHROPIC_MESSAGES: &str = "anthropic_messages";

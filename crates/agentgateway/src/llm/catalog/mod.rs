@@ -817,21 +817,17 @@ mod tests {
 
 	#[test]
 	fn snapshot_reads_model_tags_from_the_catalog() {
-		let json = r#"{"providers":{"bedrock":{"models":{
-			"openai.gpt-oss-120b":{"tags":["mantle"]},
-			"anthropic.claude-3-5-sonnet-20241022-v2:0":{"rates":{"input":"3.00"}}
+		let json = r#"{"providers":{"openai":{"models":{
+			"gpt-oss-120b":{"tags":["preview"]},
+			"gpt-4o":{"rates":{"input":"3.00"}}
 		}}}}"#;
 		let snapshot = CatalogSnapshot::parse(json).unwrap();
 		let tags = snapshot
-			.get_model_tags("openai.gpt-oss-120b")
+			.get_model_tags("gpt-oss-120b")
 			.expect("tags present");
-		assert!(tags.contains("mantle"));
+		assert!(tags.contains("preview"));
 		// A model with rates but no tags has no entry.
-		assert!(
-			snapshot
-				.get_model_tags("anthropic.claude-3-5-sonnet-20241022-v2:0")
-				.is_none()
-		);
+		assert!(snapshot.get_model_tags("gpt-4o").is_none());
 		assert!(snapshot.get_model_tags("unknown.model").is_none());
 	}
 

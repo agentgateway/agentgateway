@@ -552,7 +552,7 @@
           }
         },
         "tags": {
-          "description": "Freeform capability/routing tags (e.g. `mantle`/`runtime` marking AWS Bedrock endpoints).",
+          "description": "Freeform capability/routing tags for this model.",
           "type": "array",
           "uniqueItems": true,
           "items": {

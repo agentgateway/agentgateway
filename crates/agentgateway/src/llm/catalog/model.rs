@@ -86,7 +86,7 @@ pub struct Model {
 	/// Context-length pricing tiers that override the base rates.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub tiers: Vec<Tier>,
-	/// Freeform capability/routing tags (e.g. `mantle`/`runtime` marking AWS Bedrock endpoints).
+	/// Freeform capability/routing tags for this model.
 	#[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
 	pub tags: BTreeSet<String>,
 }
@@ -375,16 +375,16 @@ mod tests {
 	fn override_with_deep_merges_and_keeps_costs() {
 		// A later overlay that only adds a tag must not wipe the base model's rates.
 		let base = from_json(
-			r#"{"providers":{"aws.bedrock":{"models":{"m":{"rates":{"input":"3","output":"6"}}}}}}"#,
+			r#"{"providers":{"openai":{"models":{"m":{"rates":{"input":"3","output":"6"}}}}}}"#,
 		)
 		.unwrap();
 		let overlay =
-			from_json(r#"{"providers":{"aws.bedrock":{"models":{"m":{"tags":["mantle"]}}}}}"#).unwrap();
+			from_json(r#"{"providers":{"openai":{"models":{"m":{"tags":["preview"]}}}}}"#).unwrap();
 		let merged = base.override_with(overlay);
-		let model = merged.resolve("aws.bedrock", "m").expect("model survives");
+		let model = merged.resolve("openai", "m").expect("model survives");
 		assert_eq!(model.rates.input, Some(m("3")), "base cost preserved");
 		assert_eq!(model.rates.output, Some(m("6")));
-		assert!(model.tags.contains("mantle"), "overlay tag applied");
+		assert!(model.tags.contains("preview"), "overlay tag applied");
 	}
 
 	#[test]

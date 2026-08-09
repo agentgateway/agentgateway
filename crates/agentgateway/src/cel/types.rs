@@ -1524,8 +1524,8 @@ pub struct LLMContext {
 
 impl LLMContext {
 	pub fn from_llm_info(value: LLMInfo, model_catalog: Option<&llm::catalog::ModelCatalog>) -> Self {
-		let projection = model_catalog.map(|catalog| catalog.project(&value));
 		let legacy_token_semantics = *LEGACY_LLM_USAGE_TOKEN_SEMANTICS;
+		let projection = model_catalog.map(|catalog| catalog.project(&value));
 		let normalized_input_tokens = value.normalized_input_tokens();
 		let cache_convention = value.request.cache_convention;
 
