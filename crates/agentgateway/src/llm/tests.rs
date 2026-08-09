@@ -966,7 +966,7 @@ async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
 		llm_request,
 		upstream_route_type,
 	} = provider
-		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None)
+		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None, None)
 		.await
 		.expect("Bedrock completions request should process")
 	else {
@@ -1026,7 +1026,7 @@ async fn bedrock_provider_model_overrides_client_model() {
 		llm_request,
 		upstream_route_type,
 	} = provider
-		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.process_completions_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("Bedrock completions request should process")
 	else {

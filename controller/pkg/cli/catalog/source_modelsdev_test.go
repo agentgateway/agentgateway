@@ -127,7 +127,7 @@ func TestTransformMatchesGoldenCatalog(t *testing.T) {
 		"agentgateway",
 		"src",
 		"llm",
-		"cost",
+		"catalog",
 		"testdata",
 		"model_catalog.golden.json",
 	))
