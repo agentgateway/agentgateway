@@ -23,8 +23,9 @@ RUN choco install visualstudio2022buildtools -y --package-parameters '--add Micr
 WORKDIR C:/app/ui
 COPY ui .
 COPY schema C:/schema
-RUN npm install
-RUN npm run build
+RUN corepack enable
+RUN pnpm install --frozen-lockfile
+RUN pnpm build
 
 # Prepare Rust build context
 WORKDIR C:/app

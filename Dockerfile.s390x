@@ -49,7 +49,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ARG NAPI_CLI_VERSION=3.7.1
 RUN npm install -g @napi-rs/cli@${NAPI_CLI_VERSION}
 
-# Keep in sync with the lightningcss version resolved in ui/package-lock.json.
+# Keep in sync with the lightningcss version resolved in ui/pnpm-lock.yaml.
 ARG LIGHTNINGCSS_VERSION=1.30.2
 RUN rustup target add s390x-unknown-linux-gnu
 RUN git clone --depth 1 --branch v${LIGHTNINGCSS_VERSION} \
@@ -82,7 +82,7 @@ ARG NAPI_CLI_VERSION=3.7.1
 ARG PNPM_VERSION=11.5.3
 RUN npm install -g @napi-rs/cli@${NAPI_CLI_VERSION} pnpm@${PNPM_VERSION}
 
-# Keep in sync with the @tailwindcss/oxide version resolved in ui/package-lock.json.
+# Keep in sync with the @tailwindcss/oxide version resolved in ui/pnpm-lock.yaml.
 ARG OXIDE_VERSION=4.1.18
 RUN rustup target add s390x-unknown-linux-gnu
 RUN git clone --depth 1 --branch v${OXIDE_VERSION} \
@@ -104,7 +104,7 @@ RUN ls -la /oxide-src/crates/node/*.node
 # upstream in rolldown/rolldown#10211 (napi-rs/json-escape-simd#88).
 #
 # IMPORTANT: the .node binding and the `rolldown` npm package are a matched
-# pair. Build the SAME version ui/package-lock.json resolves, otherwise the
+# pair. Build the SAME version ui/pnpm-lock.yaml resolves, otherwise the
 # binding rejects builtins the JS side sends (e.g. "builtin:vite-wasm-fallback").
 # ─────────────────────────────────────────────────────────────────────────────
 FROM docker.io/library/rust:1.97.0-bookworm AS rolldown-s390x
@@ -124,7 +124,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ARG NAPI_CLI_VERSION=3.7.1
 RUN npm install -g @napi-rs/cli@${NAPI_CLI_VERSION}
 
-# Keep in sync with the rolldown version resolved in ui/package-lock.json.
+# Keep in sync with the rolldown version resolved in ui/pnpm-lock.yaml.
 ARG ROLLDOWN_VERSION=1.0.3
 RUN git clone --depth 1 --branch v${ROLLDOWN_VERSION} \
     https://github.com/rolldown/rolldown.git /rolldown-src
@@ -160,8 +160,12 @@ COPY ui .
 # Dockerfile does.
 COPY schema /schema
 
-RUN --mount=type=cache,target=/app/npm/cache \
-    npm install --cache /app/npm/cache
+RUN corepack enable
+
+# Hoisted: the COPY steps below need real node_modules/<pkg>/ directories, which
+# pnpm's default layout does not create for transitive dependencies.
+RUN --mount=type=cache,id=agentgateway-ui-pnpm-s390x,target=/pnpm/store \
+    pnpm install --frozen-lockfile --store-dir=/pnpm/store --node-linker=hoisted
 
 COPY --from=lightningcss-s390x \
     /lightningcss-src/node/lightningcss.linux-s390x-gnu.node \
@@ -173,7 +177,7 @@ COPY --from=rolldown-s390x \
     /rolldown-src/packages/rolldown/src/rolldown-binding.linux-s390x-gnu.node \
     node_modules/@rolldown/binding-linux-s390x-gnu/rolldown-binding.linux-s390x-gnu.node
 
-RUN --mount=type=cache,target=/app/npm/cache npm run build
+RUN pnpm build
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage: build the agentgateway binary for s390x.

@@ -8,9 +8,12 @@ WORKDIR /app
 COPY ui .
 COPY schema /schema
 
-RUN --mount=type=cache,target=/app/npm/cache npm install
+RUN corepack enable
 
-RUN --mount=type=cache,target=/app/npm/cache npm run build
+RUN --mount=type=cache,id=agentgateway-ui-pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile --store-dir=/pnpm/store
+
+RUN pnpm build
 
 FROM docker.io/library/rust:1.97.0-trixie AS musl-builder
 
