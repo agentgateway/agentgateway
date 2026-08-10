@@ -83,16 +83,17 @@ const (
 )
 
 // Action to take if a regex pattern is matched in a request or response.
-// This setting applies only to request matches. `PromptguardResponse`
-// matches are always masked by default.
+// The action applies to request and response matches alike. Note that
+// `Mask` is not applied to streamed responses: matched content in a
+// streamed response is passed through unmodified.
 // +k8s:enum
 type Action string
 
 const (
-	// Mask the matched data in the request.
+	// Mask the matched data in the request or response.
 	MASK Action = "Mask"
 
-	// Reject the request if the regex matches content in the request.
+	// Reject the request or response that contains the matched content.
 	REJECT Action = "Reject"
 )
 
@@ -102,6 +103,8 @@ type PromptGuardStreamingMode string
 
 const (
 	// Enable prompt guards for streaming responses and realtime websocket messages.
+	// A guard can reject a streamed response, but `Mask` actions are not applied to
+	// streamed content.
 	PromptGuardStreamingModeEnabled PromptGuardStreamingMode = "Enabled"
 )
 
@@ -118,8 +121,9 @@ type Regex struct {
 	Builtins []BuiltIn `json:"builtins,omitempty"`
 
 	// The action to take if a regex pattern is matched in a request or response.
-	// This setting applies only to request matches. `PromptguardResponse`
-	// matches are always masked by default.
+	// The action applies to request and response matches alike. Note that
+	// `Mask` is not applied to streamed responses: matched content in a
+	// streamed response is passed through unmodified.
 	// Defaults to `Mask`.
 	// +kubebuilder:default=Mask
 	// +optional
