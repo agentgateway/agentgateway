@@ -3226,6 +3226,8 @@ spec:
                           - Completions
                           - Detect
                           - Embeddings
+                          - GeminiCountTokens
+                          - GeminiGenerateContent
                           - Messages
                           - Models
                           - Passthrough

@@ -2265,6 +2265,14 @@ const (
 
 	// RouteTypeRerank processes Cohere `/v2/rerank` format requests.
 	RouteTypeRerank RouteType = "Rerank"
+
+	// RouteTypeGeminiGenerateContent processes Gemini `models/{model}:generateContent`
+	// and `models/{model}:streamGenerateContent` format requests.
+	RouteTypeGeminiGenerateContent RouteType = "GeminiGenerateContent"
+
+	// RouteTypeGeminiCountTokens processes Gemini `models/{model}:countTokens`
+	// format requests.
+	RouteTypeGeminiCountTokens RouteType = "GeminiCountTokens"
 )
 
 // +kubebuilder:validation:AtLeastOneFieldSet
