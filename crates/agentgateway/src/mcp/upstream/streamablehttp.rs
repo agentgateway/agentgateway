@@ -4,10 +4,11 @@ use anyhow::anyhow;
 use futures::StreamExt;
 use headers::HeaderMapExt;
 use rmcp::model::{
-	ClientJsonRpcMessage, ClientNotification, ClientRequest, JsonRpcRequest, ServerJsonRpcMessage,
+	ClientJsonRpcMessage, ClientNotification, ClientRequest, GetMeta, JsonRpcRequest,
+	ServerJsonRpcMessage,
 };
 use rmcp::transport::common::http_header::{
-	EVENT_STREAM_MIME_TYPE, HEADER_SESSION_ID, JSON_MIME_TYPE,
+	EVENT_STREAM_MIME_TYPE, HEADER_MCP_PROTOCOL_VERSION, HEADER_SESSION_ID, JSON_MIME_TYPE,
 };
 use sse_stream::SseStream;
 
@@ -94,6 +95,13 @@ impl Client {
 
 		ctx.apply(&mut req).map_err(ClientError::new)?;
 		emit_standard_headers(req.headers_mut(), &message);
+		// Header mirrors the request's own _meta version, not the relayed client value.
+		if let ClientJsonRpcMessage::Request(r) = &message
+			&& let Some(version) = r.request.get_meta().protocol_version()
+			&& let Ok(value) = ::http::HeaderValue::from_str(version.as_str())
+		{
+			req.headers_mut().insert(HEADER_MCP_PROTOCOL_VERSION, value);
+		}
 
 		let resp = self.http_client.call(req).await?;
 

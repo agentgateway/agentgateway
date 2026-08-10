@@ -15,7 +15,7 @@ use rmcp::model::{
 	ClientNotification, ClientRequest, ExtensionCapabilities, GetMeta, JsonObject, JsonRpcRequest,
 };
 use rmcp::transport::TokioChildProcess;
-use rmcp::transport::common::http_header::HEADER_SESSION_ID;
+use rmcp::transport::common::http_header::{HEADER_MCP_PROTOCOL_VERSION, HEADER_SESSION_ID};
 use thiserror::Error;
 use tokio::process::Command;
 
@@ -88,6 +88,7 @@ impl IncomingRequestContext {
 			if k == http::header::CONTENT_ENCODING
 				|| k == http::header::CONTENT_LENGTH
 				|| k.as_str().eq_ignore_ascii_case(HEADER_SESSION_ID)
+				|| k.as_str().eq_ignore_ascii_case(HEADER_MCP_PROTOCOL_VERSION)
 			{
 				continue;
 			}
@@ -658,6 +659,14 @@ mod tests {
 			req.headers().get(HEADER_SESSION_ID).unwrap(),
 			"upstream-sid"
 		);
+	}
+
+	#[test]
+	fn apply_strips_inbound_mcp_protocol_version() {
+		let ctx = ctx_with_headers(&[(HEADER_MCP_PROTOCOL_VERSION, "2025-11-25")]);
+		let mut req = empty_upstream_req();
+		ctx.apply(&mut req).unwrap();
+		assert!(req.headers().get(HEADER_MCP_PROTOCOL_VERSION).is_none());
 	}
 
 	#[test]
