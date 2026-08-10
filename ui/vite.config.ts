@@ -8,6 +8,8 @@ export default defineConfig(({ command }) => ({
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
+      "monaco-editor/esm/vs/editor/editor.worker.js":
+        "monaco-editor/editor/editor.worker.js",
       "path-browserify": fileURLToPath(
         new URL("./src/pathBrowserifyEsm.ts", import.meta.url),
       ),

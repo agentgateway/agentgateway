@@ -6,7 +6,7 @@
   "engines": {
     "node": "24.17.0"
   },
-  "packageManager": "pnpm@11.19.0",
+  "packageManager": "pnpm@11.20.0",
   "scripts": {
     "dev": "VITE_AGENTGATEWAY_API=http://localhost:15000 vite --host 0.0.0.0 --port 19000",
     "build": "pnpm generate-schema && tsc -b && vite build",
@@ -20,32 +20,28 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@fontsource/fira-code": "=5.2.7",
-    "@fontsource/geist-sans": "=5.2.5",
+    "@fontsource/geist-sans": "=5.3.0",
     "@monaco-editor/react": "=4.7.0",
-    "@number-flow/react": "=0.6.0",
-    "@tanstack/react-query": "=5.101.0",
-    "@tanstack/react-router": "=1.170.15",
-    "js-yaml": "=4.3.1",
-    "lucide-react": "=0.562.0",
-    "monaco-editor": "=0.53.0",
+    "@tanstack/react-query": "=5.101.4",
+    "@tanstack/react-router": "=1.170.18",
+    "js-yaml": "=5.2.3",
+    "lucide-react": "=1.28.0",
+    "monaco-editor": "=0.56.0",
     "monaco-yaml": "=5.5.1",
-    "react": "=19.2.7",
-    "react-dom": "=19.2.7",
-    "recharts": "=3.8.1",
-    "zod": "=4.4.3"
+    "react": "=19.2.8",
+    "react-dom": "=19.2.8",
+    "recharts": "=3.10.1"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.6",
-    "@playwright/test": "=1.60.0",
-    "@types/js-yaml": "=4.0.9",
+    "@playwright/test": "=1.62.1",
     "@types/node": "=24.13.3",
-    "@types/react": "=19.2.17",
-    "@types/react-dom": "=19.2.3",
-    "@vitejs/plugin-react": "=5.2.0",
+    "@types/react": "=19.2.18",
+    "@types/react-dom": "=19.2.4",
+    "@vitejs/plugin-react": "=6.0.5",
     "ajv": "=8.20.0",
     "json-schema-to-typescript": "=15.0.4",
     "typescript": "=7.0.2",
-    "vite": "=8.0.16"
+    "vite": "=8.2.0"
   }
 }

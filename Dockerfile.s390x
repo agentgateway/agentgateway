@@ -8,16 +8,9 @@
 #     -t <repo>/agentgateway:<tag> .
 #
 # s390x-specific notes:
-#  * lightningcss / @tailwindcss/oxide ship no working s390x prebuilt natives, so
-#    we compile them from source and inject them into the UI build. Upstream PRs
-#    add s390x prebuilts: lightningcss parcel-bundler/lightningcss#1294 and oxide
-#    tailwindlabs/tailwindcss#20327 — drop each from-source stage once its PR
-#    ships in a release.
-#  * vite's rolldown bundler needs a working s390x binding too. The published
-#    @rolldown/binding-linux-s390x-gnu is built against a json-escape-simd
-#    release with a big-endian bug, so we rebuild the binding from source with
-#    the fixed dependency. Nothing outside this file changes, so other
-#    architectures are unaffected.
+#  * lightningcss ships no working s390x prebuilt native, so we compile it from
+#    source and inject it into the UI build. Drop the stage once
+#    parcel-bundler/lightningcss#1294 ships in a release.
 #  * .cargo/config.toml is unchanged from main. Its CFLAGS include the x86_64/
 #    AArch64-only `-mno-omit-leaf-frame-pointer`, which the s390x compiler
 #    rejects, so the builder stage exports a portable CFLAGS (see below).
@@ -50,7 +43,7 @@ ARG NAPI_CLI_VERSION=3.7.1
 RUN npm install -g @napi-rs/cli@${NAPI_CLI_VERSION}
 
 # Keep in sync with the lightningcss version resolved in ui/pnpm-lock.yaml.
-ARG LIGHTNINGCSS_VERSION=1.30.2
+ARG LIGHTNINGCSS_VERSION=1.33.0
 RUN rustup target add s390x-unknown-linux-gnu
 RUN git clone --depth 1 --branch v${LIGHTNINGCSS_VERSION} \
     https://github.com/parcel-bundler/lightningcss.git /lightningcss-src
@@ -62,95 +55,7 @@ RUN napi build --platform --release --target s390x-unknown-linux-gnu \
 RUN ls -la /lightningcss-src/node/*.node
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Stage: build the @tailwindcss/oxide native addon (.node) for s390x from source.
-# Temporary: drop once tailwindlabs/tailwindcss#20327 ships a s390x prebuilt.
-# ─────────────────────────────────────────────────────────────────────────────
-FROM docker.io/library/rust:1.97.0-bookworm AS oxide-s390x
-
-COPY --from=docker.io/library/node:24.17.0-bookworm /usr/local/bin/node /usr/local/bin/node
-COPY --from=docker.io/library/node:24.17.0-bookworm /usr/local/include/node /usr/local/include/node
-COPY --from=docker.io/library/node:24.17.0-bookworm /usr/local/lib/node_modules /usr/local/lib/node_modules
-RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
-    && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 make g++ git \
-    && rm -rf /var/lib/apt/lists/*
-
-# Pin the build tools for reproducibility.
-ARG NAPI_CLI_VERSION=3.7.1
-ARG PNPM_VERSION=11.5.3
-RUN npm install -g @napi-rs/cli@${NAPI_CLI_VERSION} pnpm@${PNPM_VERSION}
-
-# Keep in sync with the @tailwindcss/oxide version resolved in ui/pnpm-lock.yaml.
-ARG OXIDE_VERSION=4.1.18
-RUN rustup target add s390x-unknown-linux-gnu
-RUN git clone --depth 1 --branch v${OXIDE_VERSION} \
-    https://github.com/tailwindlabs/tailwindcss.git /oxide-src
-WORKDIR /oxide-src
-RUN pnpm install --filter @tailwindcss/node --ignore-scripts
-WORKDIR /oxide-src/crates/node
-RUN napi build --platform --release --target s390x-unknown-linux-gnu \
-    --output-dir /oxide-src/crates/node
-RUN ls -la /oxide-src/crates/node/*.node
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Stage: build the rolldown native binding (.node) for s390x from source.
-#
-# The published s390x binding is compiled against json-escape-simd 3.1.0/3.0.x,
-# which mis-computes the SIMD bitmask on big-endian and corrupts escaped JSON
-# strings (broken sourcemaps / import paths). We rebuild the binding with
-# json-escape-simd 3.1.1, which carries the fix — the same change rolldown made
-# upstream in rolldown/rolldown#10211 (napi-rs/json-escape-simd#88).
-#
-# IMPORTANT: the .node binding and the `rolldown` npm package are a matched
-# pair. Build the SAME version ui/pnpm-lock.yaml resolves, otherwise the
-# binding rejects builtins the JS side sends (e.g. "builtin:vite-wasm-fallback").
-# ─────────────────────────────────────────────────────────────────────────────
-FROM docker.io/library/rust:1.97.0-bookworm AS rolldown-s390x
-
-COPY --from=docker.io/library/node:24.17.0-bookworm /usr/local/bin/node /usr/local/bin/node
-COPY --from=docker.io/library/node:24.17.0-bookworm /usr/local/include/node /usr/local/include/node
-COPY --from=docker.io/library/node:24.17.0-bookworm /usr/local/lib/node_modules /usr/local/lib/node_modules
-RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
-    && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
-
-# cmake is required to build rolldown's mimalloc dependency (libmimalloc-sys2).
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 make g++ git cmake \
-    && rm -rf /var/lib/apt/lists/*
-
-# Pin the build tool for reproducibility.
-ARG NAPI_CLI_VERSION=3.7.1
-RUN npm install -g @napi-rs/cli@${NAPI_CLI_VERSION}
-
-# Keep in sync with the rolldown version resolved in ui/pnpm-lock.yaml.
-ARG ROLLDOWN_VERSION=1.0.3
-RUN git clone --depth 1 --branch v${ROLLDOWN_VERSION} \
-    https://github.com/rolldown/rolldown.git /rolldown-src
-
-# rolldown pins its own toolchain via rust-toolchain.toml; running rustup inside
-# the tree honors that pin, so the s390x target is added to the right one.
-WORKDIR /rolldown-src
-RUN rustup target add s390x-unknown-linux-gnu
-# The big-endian fix. rolldown requires json-escape-simd "3", so this is an
-# in-range bump of the locked version rather than a source patch.
-ARG JSON_ESCAPE_SIMD_VERSION=3.1.1
-RUN cargo update -p json-escape-simd --precise ${JSON_ESCAPE_SIMD_VERSION} \
-    && grep -A1 'name = "json-escape-simd"' Cargo.lock
-
-# Same napi invocation rolldown's own build-binding.ts uses.
-WORKDIR /rolldown-src/packages/rolldown
-RUN napi build --platform --release --target s390x-unknown-linux-gnu \
-    --manifest-path ../../crates/rolldown_binding/Cargo.toml \
-    --package rolldown_binding \
-    --output-dir ./src
-RUN ls -la ./src/*.node
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Stage: build the Next.js UI, injecting the s390x natives built above.
-# (npm ships no working s390x prebuilts for lightningcss / @tailwindcss/oxide /
-#  the rolldown binding)
+# Stage: build the UI, injecting the s390x lightningcss native built above.
 # ─────────────────────────────────────────────────────────────────────────────
 FROM docker.io/library/node:24.17.0-bookworm AS node
 WORKDIR /app
@@ -170,12 +75,6 @@ RUN --mount=type=cache,id=agentgateway-ui-pnpm-s390x,target=/pnpm/store \
 COPY --from=lightningcss-s390x \
     /lightningcss-src/node/lightningcss.linux-s390x-gnu.node \
     node_modules/lightningcss/lightningcss.linux-s390x-gnu.node
-COPY --from=oxide-s390x \
-    /oxide-src/crates/node/tailwindcss-oxide.linux-s390x-gnu.node \
-    node_modules/@tailwindcss/oxide/tailwindcss-oxide.linux-s390x-gnu.node
-COPY --from=rolldown-s390x \
-    /rolldown-src/packages/rolldown/src/rolldown-binding.linux-s390x-gnu.node \
-    node_modules/@rolldown/binding-linux-s390x-gnu/rolldown-binding.linux-s390x-gnu.node
 
 RUN pnpm build
 

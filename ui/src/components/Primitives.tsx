@@ -8,7 +8,7 @@ import {
   X,
   XCircle,
 } from "lucide-react";
-import yaml from "js-yaml";
+import { dump } from "js-yaml";
 import {
   useEffect,
   useId,
@@ -941,9 +941,10 @@ export function JsonBlock(props: { value: unknown }) {
 }
 
 export function YamlBlock(props: { value: unknown }) {
-  const text = yaml
-    .dump(props.value, { noRefs: true, lineWidth: 100 })
-    .replace(/\n$/, "");
+  const text = dump(props.value, { noRefs: true, lineWidth: 100 }).replace(
+    /\n$/,
+    "",
+  );
   return <YamlTextBlock value={text} />;
 }
 

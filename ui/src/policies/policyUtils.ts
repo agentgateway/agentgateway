@@ -1,4 +1,4 @@
-import yaml from "js-yaml";
+import { dump, load } from "js-yaml";
 import type { CorsPolicy, LlmPolicy } from "../types";
 import type { LocalRateLimitConfig, SchemaNode } from "./types";
 
@@ -158,7 +158,7 @@ export function toText(value: unknown) {
 }
 
 export function toYamlText(value: unknown) {
-  return yaml.dump(value, { noRefs: true, lineWidth: 100 });
+  return dump(value, { noRefs: true, lineWidth: 100 });
 }
 
 export function toYamlMappingText(value: unknown) {
@@ -167,7 +167,7 @@ export function toYamlMappingText(value: unknown) {
 }
 
 export function parseYamlText(value: string) {
-  return yaml.load(value) as unknown;
+  return load(value) as unknown;
 }
 
 export function appendUnique(values: string[], value: string) {

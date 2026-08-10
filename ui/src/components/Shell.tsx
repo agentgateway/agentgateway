@@ -12,7 +12,7 @@ import {
   Boxes,
   Coins,
   FileCode2,
-  Github,
+  GitFork,
   Globe,
   Home,
   KeyRound,
@@ -54,7 +54,7 @@ const projectLinks = [
   {
     label: "GitHub",
     href: "https://github.com/agentgateway/agentgateway",
-    icon: Github,
+    icon: GitFork,
   },
   {
     label: "Documentation",
