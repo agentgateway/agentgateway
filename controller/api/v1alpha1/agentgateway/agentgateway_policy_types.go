@@ -424,7 +424,6 @@ type LongString = string
 
 // Duration is a string value representing a duration in time. The format is a
 // strict subset of the syntax parsed by time.ParseDuration, as specified by GEP-2257.
-// +kubebuilder:validation:MinLength=1
 // +kubebuilder:validation:MaxLength=32
 // +kubebuilder:validation:Pattern=`^([0-9]{1,5}(h|m|s|ms)){1,4}$`
 type Duration = string
@@ -1961,6 +1960,7 @@ type OAuthInMemoryTokenCache struct {
 	MaxEntries *uint32 `json:"maxEntries,omitempty"`
 
 	// TTL used when the token endpoint omits expires_in. Default 300s.
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="defaultTtl must be at least 1 second"
 	// +optional
 	DefaultTTL *Duration `json:"defaultTtl,omitempty"`
 }
@@ -3188,7 +3188,7 @@ type Timeouts struct {
 	// Timeout for an individual request from the gateway to a backend. This covers the time from when
 	// the request first starts being sent from the gateway to when the full response has been received from the backend.
 	//
-	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('100ms')",message="request must be at least 1ms"
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1ms')",message="request must be at least 1ms"
 	// +optional
 	Request *Duration `json:"request,omitempty"`
 }

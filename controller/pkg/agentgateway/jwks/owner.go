@@ -138,8 +138,11 @@ func TTLForRemote(remote agentgateway.RemoteJWKS) time.Duration {
 	if remote.CacheDuration == nil {
 		return defaultTTL
 	}
+	// This SHOULD be impossible due to CEL validation
+	// In the unlikely event its not, we use the default TTL
 	ttl, err := time.ParseDuration(*remote.CacheDuration)
 	if err != nil {
+		logger.Warn("invalid jwks cacheDuration, using default", "error", err)
 		return defaultTTL
 	}
 	return ttl

@@ -990,7 +990,6 @@ spec:
                                                                 for receiving a response
                                                                 from the backend.
                                                               maxLength: 32
-                                                              minLength: 1
                                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                               type: string
                                                               x-kubernetes-validations:
@@ -1020,7 +1019,6 @@ spec:
                                                                 Deadline for establishing a connection to
                                                                 the destination.
                                                               maxLength: 32
-                                                              minLength: 1
                                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                               type: string
                                                               x-kubernetes-validations:
@@ -1039,7 +1037,6 @@ spec:
                                                                     Time between keepalive probes.
                                                                     If unset, this defaults to 180s.
                                                                   maxLength: 32
-                                                                  minLength: 1
                                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                                   type: string
                                                                   x-kubernetes-validations:
@@ -1061,7 +1058,6 @@ spec:
                                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                                     If unset, this defaults to 180s.
                                                                   maxLength: 32
-                                                                  minLength: 1
                                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                                   type: string
                                                                   x-kubernetes-validations:
@@ -1501,7 +1497,6 @@ spec:
                                                                 for receiving a response
                                                                 from the backend.
                                                               maxLength: 32
-                                                              minLength: 1
                                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                               type: string
                                                               x-kubernetes-validations:
@@ -1531,7 +1526,6 @@ spec:
                                                                 Deadline for establishing a connection to
                                                                 the destination.
                                                               maxLength: 32
-                                                              minLength: 1
                                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                               type: string
                                                               x-kubernetes-validations:
@@ -1550,7 +1544,6 @@ spec:
                                                                     Time between keepalive probes.
                                                                     If unset, this defaults to 180s.
                                                                   maxLength: 32
-                                                                  minLength: 1
                                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                                   type: string
                                                                   x-kubernetes-validations:
@@ -1572,7 +1565,6 @@ spec:
                                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                                     If unset, this defaults to 180s.
                                                                   maxLength: 32
-                                                                  minLength: 1
                                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                                   type: string
                                                                   x-kubernetes-validations:
@@ -2031,7 +2023,6 @@ spec:
                                                                 for receiving a response
                                                                 from the backend.
                                                               maxLength: 32
-                                                              minLength: 1
                                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                               type: string
                                                               x-kubernetes-validations:
@@ -2061,7 +2052,6 @@ spec:
                                                                 Deadline for establishing a connection to
                                                                 the destination.
                                                               maxLength: 32
-                                                              minLength: 1
                                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                               type: string
                                                               x-kubernetes-validations:
@@ -2080,7 +2070,6 @@ spec:
                                                                     Time between keepalive probes.
                                                                     If unset, this defaults to 180s.
                                                                   maxLength: 32
-                                                                  minLength: 1
                                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                                   type: string
                                                                   x-kubernetes-validations:
@@ -2102,7 +2091,6 @@ spec:
                                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                                     If unset, this defaults to 180s.
                                                                   maxLength: 32
-                                                                  minLength: 1
                                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                                   type: string
                                                                   x-kubernetes-validations:
@@ -2939,7 +2927,6 @@ spec:
                                                                 for receiving a response
                                                                 from the backend.
                                                               maxLength: 32
-                                                              minLength: 1
                                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                               type: string
                                                               x-kubernetes-validations:
@@ -2969,7 +2956,6 @@ spec:
                                                                 Deadline for establishing a connection to
                                                                 the destination.
                                                               maxLength: 32
-                                                              minLength: 1
                                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                               type: string
                                                               x-kubernetes-validations:
@@ -2988,7 +2974,6 @@ spec:
                                                                     Time between keepalive probes.
                                                                     If unset, this defaults to 180s.
                                                                   maxLength: 32
-                                                                  minLength: 1
                                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                                   type: string
                                                                   x-kubernetes-validations:
@@ -3010,7 +2995,6 @@ spec:
                                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                                     If unset, this defaults to 180s.
                                                                   maxLength: 32
-                                                                  minLength: 1
                                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                                   type: string
                                                                   x-kubernetes-validations:
@@ -3450,7 +3434,6 @@ spec:
                                                                 for receiving a response
                                                                 from the backend.
                                                               maxLength: 32
-                                                              minLength: 1
                                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                               type: string
                                                               x-kubernetes-validations:
@@ -3480,7 +3463,6 @@ spec:
                                                                 Deadline for establishing a connection to
                                                                 the destination.
                                                               maxLength: 32
-                                                              minLength: 1
                                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                               type: string
                                                               x-kubernetes-validations:
@@ -3499,7 +3481,6 @@ spec:
                                                                     Time between keepalive probes.
                                                                     If unset, this defaults to 180s.
                                                                   maxLength: 32
-                                                                  minLength: 1
                                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                                   type: string
                                                                   x-kubernetes-validations:
@@ -3521,7 +3502,6 @@ spec:
                                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                                     If unset, this defaults to 180s.
                                                                   maxLength: 32
-                                                                  minLength: 1
                                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                                   type: string
                                                                   x-kubernetes-validations:
@@ -4452,9 +4432,12 @@ spec:
                                                       token endpoint omits expires_in.
                                                       Default 300s.
                                                     maxLength: 32
-                                                    minLength: 1
                                                     pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                     type: string
+                                                    x-kubernetes-validations:
+                                                    - message: defaultTtl must be
+                                                        at least 1 second
+                                                      rule: duration(self) >= duration('1s')
                                                   maxEntries:
                                                     description: Default 8192; 0 disables
                                                       the cache.
@@ -5332,7 +5315,6 @@ spec:
                                             description: Token lifetime used for exp.
                                               Defaults to 300s.
                                             maxLength: 32
-                                            minLength: 1
                                             pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
                                             x-kubernetes-validations:
@@ -5566,9 +5548,12 @@ spec:
                                                       token endpoint omits expires_in.
                                                       Default 300s.
                                                     maxLength: 32
-                                                    minLength: 1
                                                     pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                     type: string
+                                                    x-kubernetes-validations:
+                                                    - message: defaultTtl must be
+                                                        at least 1 second
+                                                      rule: duration(self) >= duration('1s')
                                                   maxEntries:
                                                     description: Default 8192; 0 disables
                                                       the cache.
@@ -6059,7 +6044,6 @@ spec:
                                               rather than failing entirely.
                                               If unset, defaults to `3s`.
                                             maxLength: 32
-                                            minLength: 1
                                             pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
                                             x-kubernetes-validations:
@@ -6109,7 +6093,6 @@ spec:
                                         description: Deadline for receiving a response
                                           from the backend.
                                         maxLength: 32
-                                        minLength: 1
                                         pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                         type: string
                                         x-kubernetes-validations:
@@ -6136,7 +6119,6 @@ spec:
                                           Deadline for establishing a connection to
                                           the destination.
                                         maxLength: 32
-                                        minLength: 1
                                         pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                         type: string
                                         x-kubernetes-validations:
@@ -6153,7 +6135,6 @@ spec:
                                               Time between keepalive probes.
                                               If unset, this defaults to 180s.
                                             maxLength: 32
-                                            minLength: 1
                                             pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
                                             x-kubernetes-validations:
@@ -6173,7 +6154,6 @@ spec:
                                               Time a connection needs to be idle before keepalive probes start being sent.
                                               If unset, this defaults to 180s.
                                             maxLength: 32
-                                            minLength: 1
                                             pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
                                             x-kubernetes-validations:
@@ -7704,9 +7684,12 @@ spec:
                                                     endpoint omits expires_in. Default
                                                     300s.
                                                   maxLength: 32
-                                                  minLength: 1
                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
+                                                  x-kubernetes-validations:
+                                                  - message: defaultTtl must be at
+                                                      least 1 second
+                                                    rule: duration(self) >= duration('1s')
                                                 maxEntries:
                                                   description: Default 8192; 0 disables
                                                     the cache.
@@ -8563,7 +8546,6 @@ spec:
                                           description: Token lifetime used for exp.
                                             Defaults to 300s.
                                           maxLength: 32
-                                          minLength: 1
                                           pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                           type: string
                                           x-kubernetes-validations:
@@ -8793,9 +8775,12 @@ spec:
                                                     endpoint omits expires_in. Default
                                                     300s.
                                                   maxLength: 32
-                                                  minLength: 1
                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
+                                                  x-kubernetes-validations:
+                                                  - message: defaultTtl must be at
+                                                      least 1 second
+                                                    rule: duration(self) >= duration('1s')
                                                 maxEntries:
                                                   description: Default 8192; 0 disables
                                                     the cache.
@@ -9257,7 +9242,6 @@ spec:
                                       description: Deadline for receiving a response
                                         from the backend.
                                       maxLength: 32
-                                      minLength: 1
                                       pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                       type: string
                                       x-kubernetes-validations:
@@ -9283,7 +9267,6 @@ spec:
                                         Deadline for establishing a connection to
                                         the destination.
                                       maxLength: 32
-                                      minLength: 1
                                       pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                       type: string
                                       x-kubernetes-validations:
@@ -9299,7 +9282,6 @@ spec:
                                             Time between keepalive probes.
                                             If unset, this defaults to 180s.
                                           maxLength: 32
-                                          minLength: 1
                                           pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                           type: string
                                           x-kubernetes-validations:
@@ -9318,7 +9300,6 @@ spec:
                                             Time a connection needs to be idle before keepalive probes start being sent.
                                             If unset, this defaults to 180s.
                                           maxLength: 32
-                                          minLength: 1
                                           pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                           type: string
                                           x-kubernetes-validations:
@@ -10065,7 +10046,6 @@ spec:
                                               description: Deadline for receiving
                                                 a response from the backend.
                                               maxLength: 32
-                                              minLength: 1
                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
@@ -10092,7 +10072,6 @@ spec:
                                                 Deadline for establishing a connection to
                                                 the destination.
                                               maxLength: 32
-                                              minLength: 1
                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
@@ -10109,7 +10088,6 @@ spec:
                                                     Time between keepalive probes.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
-                                                  minLength: 1
                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
@@ -10129,7 +10107,6 @@ spec:
                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
-                                                  minLength: 1
                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
@@ -10502,7 +10479,6 @@ spec:
                                               description: Deadline for receiving
                                                 a response from the backend.
                                               maxLength: 32
-                                              minLength: 1
                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
@@ -10529,7 +10505,6 @@ spec:
                                                 Deadline for establishing a connection to
                                                 the destination.
                                               maxLength: 32
-                                              minLength: 1
                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
@@ -10546,7 +10521,6 @@ spec:
                                                     Time between keepalive probes.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
-                                                  minLength: 1
                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
@@ -10566,7 +10540,6 @@ spec:
                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
-                                                  minLength: 1
                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
@@ -10961,7 +10934,6 @@ spec:
                                               description: Deadline for receiving
                                                 a response from the backend.
                                               maxLength: 32
-                                              minLength: 1
                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
@@ -10988,7 +10960,6 @@ spec:
                                                 Deadline for establishing a connection to
                                                 the destination.
                                               maxLength: 32
-                                              minLength: 1
                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
@@ -11005,7 +10976,6 @@ spec:
                                                     Time between keepalive probes.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
-                                                  minLength: 1
                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
@@ -11025,7 +10995,6 @@ spec:
                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
-                                                  minLength: 1
                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
@@ -11751,7 +11720,6 @@ spec:
                                               description: Deadline for receiving
                                                 a response from the backend.
                                               maxLength: 32
-                                              minLength: 1
                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
@@ -11778,7 +11746,6 @@ spec:
                                                 Deadline for establishing a connection to
                                                 the destination.
                                               maxLength: 32
-                                              minLength: 1
                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
@@ -11795,7 +11762,6 @@ spec:
                                                     Time between keepalive probes.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
-                                                  minLength: 1
                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
@@ -11815,7 +11781,6 @@ spec:
                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
-                                                  minLength: 1
                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
@@ -12188,7 +12153,6 @@ spec:
                                               description: Deadline for receiving
                                                 a response from the backend.
                                               maxLength: 32
-                                              minLength: 1
                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
@@ -12215,7 +12179,6 @@ spec:
                                                 Deadline for establishing a connection to
                                                 the destination.
                                               maxLength: 32
-                                              minLength: 1
                                               pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
@@ -12232,7 +12195,6 @@ spec:
                                                     Time between keepalive probes.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
-                                                  minLength: 1
                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
@@ -12252,7 +12214,6 @@ spec:
                                                     Time a connection needs to be idle before keepalive probes start being sent.
                                                     If unset, this defaults to 180s.
                                                   maxLength: 32
-                                                  minLength: 1
                                                   pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                                   type: string
                                                   x-kubernetes-validations:
@@ -13095,9 +13056,11 @@ spec:
                                     description: TTL used when the token endpoint
                                       omits expires_in. Default 300s.
                                     maxLength: 32
-                                    minLength: 1
                                     pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                     type: string
+                                    x-kubernetes-validations:
+                                    - message: defaultTtl must be at least 1 second
+                                      rule: duration(self) >= duration('1s')
                                   maxEntries:
                                     description: Default 8192; 0 disables the cache.
                                     format: int32
@@ -13862,7 +13825,6 @@ spec:
                             description: Token lifetime used for exp. Defaults to
                               300s.
                             maxLength: 32
-                            minLength: 1
                             pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                             type: string
                             x-kubernetes-validations:
@@ -14076,9 +14038,11 @@ spec:
                                     description: TTL used when the token endpoint
                                       omits expires_in. Default 300s.
                                     maxLength: 32
-                                    minLength: 1
                                     pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                     type: string
+                                    x-kubernetes-validations:
+                                    - message: defaultTtl must be at least 1 second
+                                      rule: duration(self) >= duration('1s')
                                   maxEntries:
                                     description: Default 8192; 0 disables the cache.
                                     format: int32
@@ -14785,7 +14749,6 @@ spec:
                               rather than failing entirely.
                               If unset, defaults to `3s`.
                             maxLength: 32
-                            minLength: 1
                             pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                             type: string
                             x-kubernetes-validations:
@@ -14832,7 +14795,6 @@ spec:
                       requestTimeout:
                         description: Deadline for receiving a response from the backend.
                         maxLength: 32
-                        minLength: 1
                         pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                         type: string
                         x-kubernetes-validations:
@@ -14981,7 +14943,6 @@ spec:
                                   Duration is a string value representing a duration in time. The format is a
                                   strict subset of the syntax parsed by time.ParseDuration, as specified by GEP-2257.
                                 maxLength: 32
-                                minLength: 1
                                 pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                 type: string
                                 x-kubernetes-validations:
@@ -15298,7 +15259,6 @@ spec:
                           Deadline for establishing a connection to
                           the destination.
                         maxLength: 32
-                        minLength: 1
                         pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                         type: string
                         x-kubernetes-validations:
@@ -15314,7 +15274,6 @@ spec:
                               Time between keepalive probes.
                               If unset, this defaults to 180s.
                             maxLength: 32
-                            minLength: 1
                             pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                             type: string
                             x-kubernetes-validations:
@@ -15333,7 +15292,6 @@ spec:
                               Time a connection needs to be idle before keepalive probes start being sent.
                               If unset, this defaults to 180s.
                             maxLength: 32
-                            minLength: 1
                             pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                             type: string
                             x-kubernetes-validations:
