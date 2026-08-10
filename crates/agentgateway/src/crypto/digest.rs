@@ -9,88 +9,90 @@
 //! uses the RustCrypto crates directly, as they cannot depend on this crate.
 //! Consolidating those requires a shared crypto crate and is tracked separately.
 
-#[cfg(feature = "crypto-aws-lc")]
-use aws_lc_rs::digest::{self, Context, SHA256};
-
 /// Length in bytes of a SHA-256 digest.
 pub const SHA256_LEN: usize = 32;
 
-/// Computes the SHA-256 digest of `data` in one shot.
-#[cfg(feature = "crypto-aws-lc")]
-pub fn sha256(data: &[u8]) -> [u8; SHA256_LEN] {
-	to_array(digest::digest(&SHA256, data).as_ref())
-}
-
-/// Incremental SHA-256 hasher, for data supplied in multiple pieces.
-#[cfg(feature = "crypto-aws-lc")]
-pub struct Sha256(Context);
+pub use imp::{Sha256, sha256};
 
 #[cfg(feature = "crypto-aws-lc")]
-impl Sha256 {
-	/// Creates a new, empty SHA-256 hasher.
-	pub fn new() -> Self {
-		Self(Context::new(&SHA256))
+mod imp {
+	use aws_lc_rs::digest::{self, Context, SHA256};
+
+	use super::SHA256_LEN;
+
+	/// Computes the SHA-256 digest of `data` in one shot.
+	pub fn sha256(data: &[u8]) -> [u8; SHA256_LEN] {
+		to_array(digest::digest(&SHA256, data).as_ref())
 	}
 
-	/// Adds `data` to the running digest.
-	pub fn update(&mut self, data: impl AsRef<[u8]>) {
-		self.0.update(data.as_ref());
+	/// Incremental SHA-256 hasher, for data supplied in multiple pieces.
+	pub struct Sha256(Context);
+
+	impl Sha256 {
+		/// Creates a new, empty SHA-256 hasher.
+		pub fn new() -> Self {
+			Self(Context::new(&SHA256))
+		}
+
+		/// Adds `data` to the running digest.
+		pub fn update(&mut self, data: impl AsRef<[u8]>) {
+			self.0.update(data.as_ref());
+		}
+
+		/// Consumes the hasher and returns the final digest.
+		pub fn finalize(self) -> [u8; SHA256_LEN] {
+			to_array(self.0.finish().as_ref())
+		}
 	}
 
-	/// Consumes the hasher and returns the final digest.
-	pub fn finalize(self) -> [u8; SHA256_LEN] {
-		to_array(self.0.finish().as_ref())
-	}
-}
-
-#[cfg(feature = "crypto-aws-lc")]
-impl Default for Sha256 {
-	fn default() -> Self {
-		Self::new()
-	}
-}
-
-#[cfg(feature = "crypto-aws-lc")]
-fn to_array(bytes: &[u8]) -> [u8; SHA256_LEN] {
-	let mut out = [0u8; SHA256_LEN];
-	out.copy_from_slice(bytes);
-	out
-}
-
-/// Computes the SHA-256 digest of `data` in one shot (SymCrypt backend).
-#[cfg(feature = "crypto-symcrypt")]
-pub fn sha256(data: &[u8]) -> [u8; SHA256_LEN] {
-	symcrypt::hash::sha256(data)
-}
-
-/// Incremental SHA-256 hasher, for data supplied in multiple pieces.
-#[cfg(feature = "crypto-symcrypt")]
-pub struct Sha256(symcrypt::hash::Sha256State);
-
-#[cfg(feature = "crypto-symcrypt")]
-impl Sha256 {
-	/// Creates a new, empty SHA-256 hasher.
-	pub fn new() -> Self {
-		Self(symcrypt::hash::Sha256State::new())
+	impl Default for Sha256 {
+		fn default() -> Self {
+			Self::new()
+		}
 	}
 
-	/// Adds `data` to the running digest.
-	pub fn update(&mut self, data: impl AsRef<[u8]>) {
-		use symcrypt::hash::HashState;
-		self.0.append(data.as_ref());
-	}
-
-	/// Consumes the hasher and returns the final digest.
-	pub fn finalize(mut self) -> [u8; SHA256_LEN] {
-		use symcrypt::hash::HashState;
-		self.0.result()
+	fn to_array(bytes: &[u8]) -> [u8; SHA256_LEN] {
+		let mut out = [0u8; SHA256_LEN];
+		out.copy_from_slice(bytes);
+		out
 	}
 }
 
 #[cfg(feature = "crypto-symcrypt")]
-impl Default for Sha256 {
-	fn default() -> Self {
-		Self::new()
+mod imp {
+	use super::SHA256_LEN;
+
+	/// Computes the SHA-256 digest of `data` in one shot (SymCrypt backend).
+	pub fn sha256(data: &[u8]) -> [u8; SHA256_LEN] {
+		symcrypt::hash::sha256(data)
+	}
+
+	/// Incremental SHA-256 hasher, for data supplied in multiple pieces.
+	pub struct Sha256(symcrypt::hash::Sha256State);
+
+	impl Sha256 {
+		/// Creates a new, empty SHA-256 hasher.
+		pub fn new() -> Self {
+			Self(symcrypt::hash::Sha256State::new())
+		}
+
+		/// Adds `data` to the running digest.
+		pub fn update(&mut self, data: impl AsRef<[u8]>) {
+			use symcrypt::hash::HashState;
+			self.0.append(data.as_ref());
+		}
+
+		/// Consumes the hasher and returns the final digest.
+		pub fn finalize(mut self) -> [u8; SHA256_LEN] {
+			use symcrypt::hash::HashState;
+			self.0.result()
+		}
+	}
+
+	impl Default for Sha256 {
+		fn default() -> Self {
+			Self::new()
+		}
 	}
 }
 
