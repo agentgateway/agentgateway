@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": "24.17.0",
+    "npm": "11.13.0"
+  },
   "scripts": {
     "dev": "VITE_AGENTGATEWAY_API=http://localhost:15000 vite --host 0.0.0.0 --port 19000",
     "build": "npm run generate-schema && tsc -b && vite build",
@@ -33,7 +37,7 @@
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^20.19.25",
+    "@types/node": "^24.13.3",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",

@@ -25,6 +25,8 @@
 #    workspace Cargo.toml pins that, so no tokio patch is required.
 #  * The runtime image is debian:bookworm-slim — it has an s390x variant, whereas
 #    chainguard's glibc-dynamic (used by the main Dockerfile) does not.
+#  * The node version must match ui/.nvmrc, and caps it: docker-library/node
+#    dropped linux/s390x at 24.18.0, so 24.17.0 is the newest usable tag.
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Stage: build the lightningcss native addon (.node) for s390x from source.
@@ -33,9 +35,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
 FROM docker.io/library/rust:1.97.0-bookworm AS lightningcss-s390x
 
-COPY --from=docker.io/library/node:23.11.0-bookworm /usr/local/bin/node /usr/local/bin/node
-COPY --from=docker.io/library/node:23.11.0-bookworm /usr/local/include/node /usr/local/include/node
-COPY --from=docker.io/library/node:23.11.0-bookworm /usr/local/lib/node_modules /usr/local/lib/node_modules
+COPY --from=docker.io/library/node:24.17.0-bookworm /usr/local/bin/node /usr/local/bin/node
+COPY --from=docker.io/library/node:24.17.0-bookworm /usr/local/include/node /usr/local/include/node
+COPY --from=docker.io/library/node:24.17.0-bookworm /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
@@ -65,9 +67,9 @@ RUN ls -la /lightningcss-src/node/*.node
 # ─────────────────────────────────────────────────────────────────────────────
 FROM docker.io/library/rust:1.97.0-bookworm AS oxide-s390x
 
-COPY --from=docker.io/library/node:23.11.0-bookworm /usr/local/bin/node /usr/local/bin/node
-COPY --from=docker.io/library/node:23.11.0-bookworm /usr/local/include/node /usr/local/include/node
-COPY --from=docker.io/library/node:23.11.0-bookworm /usr/local/lib/node_modules /usr/local/lib/node_modules
+COPY --from=docker.io/library/node:24.17.0-bookworm /usr/local/bin/node /usr/local/bin/node
+COPY --from=docker.io/library/node:24.17.0-bookworm /usr/local/include/node /usr/local/include/node
+COPY --from=docker.io/library/node:24.17.0-bookworm /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
@@ -107,9 +109,9 @@ RUN ls -la /oxide-src/crates/node/*.node
 # ─────────────────────────────────────────────────────────────────────────────
 FROM docker.io/library/rust:1.97.0-bookworm AS rolldown-s390x
 
-COPY --from=docker.io/library/node:23.11.0-bookworm /usr/local/bin/node /usr/local/bin/node
-COPY --from=docker.io/library/node:23.11.0-bookworm /usr/local/include/node /usr/local/include/node
-COPY --from=docker.io/library/node:23.11.0-bookworm /usr/local/lib/node_modules /usr/local/lib/node_modules
+COPY --from=docker.io/library/node:24.17.0-bookworm /usr/local/bin/node /usr/local/bin/node
+COPY --from=docker.io/library/node:24.17.0-bookworm /usr/local/include/node /usr/local/include/node
+COPY --from=docker.io/library/node:24.17.0-bookworm /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -sf /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -sf /usr/local/lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
@@ -150,7 +152,7 @@ RUN ls -la ./src/*.node
 # (npm ships no working s390x prebuilts for lightningcss / @tailwindcss/oxide /
 #  the rolldown binding)
 # ─────────────────────────────────────────────────────────────────────────────
-FROM docker.io/library/node:23.11.0-bookworm AS node
+FROM docker.io/library/node:24.17.0-bookworm AS node
 WORKDIR /app
 COPY ui .
 # ui/scripts/generate-schema.mjs reads ../schema/*.json (i.e. /schema here), so

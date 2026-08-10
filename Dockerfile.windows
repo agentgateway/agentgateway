@@ -13,7 +13,8 @@ WORKDIR C:/app
 RUN Set-ExecutionPolicy Bypass -Scope Process -Force; \
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; \
     iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')); \
-    choco install -y rust-ms protoc make nodejs cmake nasm
+    choco install -y rust-ms protoc make cmake nasm; \
+    choco install -y nodejs --version=24.17.0
 
 
 # Install build tools

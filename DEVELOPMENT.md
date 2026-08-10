@@ -18,7 +18,8 @@ This page contains instructions on how to run everything locally.
 
 Requirements:
 - Rust 1.86+
-- npm 10+
+- Node 24.17.0 (see `ui/.nvmrc`)
+- npm 11.13.0
 
 Build the agentgateway UI:
 
