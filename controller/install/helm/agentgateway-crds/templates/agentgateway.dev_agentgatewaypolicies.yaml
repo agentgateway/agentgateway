@@ -1794,8 +1794,9 @@ spec:
                                       default: Mask
                                       description: |-
                                         The action to take if a regex pattern is matched in a request or response.
-                                        This setting applies only to request matches. `PromptguardResponse`
-                                        matches are always masked by default.
+                                        The action applies to request and response matches alike. Note that
+                                        `Mask` is not applied to streamed responses: matched content in a
+                                        streamed response is passed through unmodified.
                                         Defaults to `Mask`.
                                       enum:
                                       - Mask
@@ -3034,8 +3035,9 @@ spec:
                                       default: Mask
                                       description: |-
                                         The action to take if a regex pattern is matched in a request or response.
-                                        This setting applies only to request matches. `PromptguardResponse`
-                                        matches are always masked by default.
+                                        The action applies to request and response matches alike. Note that
+                                        `Mask` is not applied to streamed responses: matched content in a
+                                        streamed response is passed through unmodified.
                                         Defaults to `Mask`.
                                       enum:
                                       - Mask
