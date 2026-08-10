@@ -30,6 +30,63 @@ fn test_transformation() {
 	assert_eq!(req.headers().get("x-insert").unwrap(), "hello Bar");
 }
 
+#[test]
+fn test_transformation_set_cel_header() {
+	let mut req = ::http::Request::builder()
+		.method("GET")
+		.uri("https://www.rust-lang.org/")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	req.extensions_mut().insert(crate::http::apikey::Claims {
+		key: crate::http::apikey::APIKey::new("test-api-key"),
+		metadata: serde_json::json!({"user": "test-user"}),
+	});
+	let c = super::LocalTransformationConfig {
+		request: Some(super::LocalTransform {
+			set: vec![("x-analytics-user".into(), "apiKey.user".into())],
+			..Default::default()
+		}),
+		response: None,
+	};
+	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+	xfm.apply_request(&mut req);
+	assert_eq!(req.headers().get("x-analytics-user").unwrap(), "test-user");
+}
+
+#[test]
+fn test_transformation_set_multiple_cel_headers() {
+	let mut req = ::http::Request::builder()
+		.method("GET")
+		.uri("https://www.rust-lang.org/")
+		.body(crate::http::Body::empty())
+		.unwrap();
+	req.extensions_mut().insert(crate::http::apikey::Claims {
+		key: crate::http::apikey::APIKey::new("test-api-key"),
+		metadata: serde_json::json!({
+			"user": "test-user",
+			"group": "test-group",
+		}),
+	});
+	let c = super::LocalTransformationConfig {
+		request: Some(super::LocalTransform {
+			set: vec![
+				("x-analytics-user".into(), "apiKey.user".into()),
+				("x-analytics-group".into(), "apiKey.group".into()),
+			],
+			..Default::default()
+		}),
+		response: None,
+	};
+	let xfm = Transformation::try_from_local_config(c, true).unwrap();
+	xfm.apply_request(&mut req);
+
+	assert_eq!(req.headers().get("x-analytics-user").unwrap(), "test-user");
+	assert_eq!(
+		req.headers().get("x-analytics-group").unwrap(),
+		"test-group"
+	);
+}
+
 #[tokio::test]
 async fn test_transformation_body() {
 	let mut req = ::http::Request::builder()

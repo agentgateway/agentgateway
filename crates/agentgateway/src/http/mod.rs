@@ -335,11 +335,11 @@ impl HeaderOrPseudoValue {
 	}
 
 	pub fn from_cel_result(k: &HeaderOrPseudo, res: Option<Value>) -> Option<HeaderOrPseudoValue> {
-		match (res?.always_materialize_owned(), k) {
+		match (res?, k) {
 			(v, HeaderOrPseudo::Header(_)) => v
-				.as_bytes_pre_materialized()
+				.as_bytes_owned()
 				.ok()
-				.and_then(|b| HeaderValue::from_bytes(b).ok())
+				.and_then(|b| HeaderValue::from_bytes(&b).ok())
 				.map(HeaderOrPseudoValue::Header),
 			(v, HeaderOrPseudo::Status) => v
 				.as_unsigned()
@@ -348,24 +348,24 @@ impl HeaderOrPseudoValue {
 				.and_then(|v| StatusCode::from_u16(v).ok())
 				.map(HeaderOrPseudoValue::Status),
 			(v, HeaderOrPseudo::Method) => v
-				.as_bytes_pre_materialized()
+				.as_bytes_owned()
 				.ok()
-				.and_then(|b| ::http::Method::from_bytes(b).ok())
+				.and_then(|b| ::http::Method::from_bytes(&b).ok())
 				.map(HeaderOrPseudoValue::Method),
 			(v, HeaderOrPseudo::Scheme) => v
-				.as_bytes_pre_materialized()
+				.as_bytes_owned()
 				.ok()
-				.and_then(|b| ::http::uri::Scheme::try_from(b).ok())
+				.and_then(|b| ::http::uri::Scheme::try_from(&b).ok())
 				.map(HeaderOrPseudoValue::Scheme),
 			(v, HeaderOrPseudo::Authority) => v
-				.as_bytes_pre_materialized()
+				.as_bytes_owned()
 				.ok()
-				.and_then(|b| ::http::uri::Authority::try_from(b).ok())
+				.and_then(|b| ::http::uri::Authority::try_from(&b).ok())
 				.map(HeaderOrPseudoValue::Authority),
 			(v, HeaderOrPseudo::Path) => v
-				.as_bytes_pre_materialized()
+				.as_bytes_owned()
 				.ok()
-				.and_then(|b| ::http::uri::PathAndQuery::try_from(b).ok())
+				.and_then(|b| ::http::uri::PathAndQuery::try_from(&b).ok())
 				.map(HeaderOrPseudoValue::Path),
 		}
 	}
