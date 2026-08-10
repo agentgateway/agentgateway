@@ -223,6 +223,8 @@ impl ProviderFormat {
 			RouteType::Realtime => Self::Realtime,
 			RouteType::Rerank => Self::Rerank,
 			RouteType::Models | RouteType::Passthrough | RouteType::Detect => return None,
+			// TODO: custom providers have no way to advertise the native Gemini format yet
+			RouteType::GeminiGenerateContent | RouteType::GeminiCountTokens => return None,
 		})
 	}
 

@@ -271,6 +271,28 @@ impl GuardedSseBody {
 			{
 				return Some(text.to_string());
 			}
+			// Native Gemini: candidates[].content.parts[].text. `candidateCount` is client
+			// controlled, so reading only candidates[0] would let the client hide text from the
+			// guard in a second candidate. Concatenating every candidate is the conservative
+			// choice: the guard evaluates one text stream, and a window that contains all
+			// candidates can only match more than one that contains a subset — every substring of
+			// a single candidate is still contiguous in the concatenation. Thought parts are
+			// excluded, as they are on the non-streaming path (types::gemini::candidate_text).
+			if let Some(candidates) = v.get("candidates").and_then(|c| c.as_array()) {
+				return Some(
+					candidates
+						.iter()
+						.filter_map(|c| {
+							c.get("content")
+								.and_then(|c| c.get("parts"))
+								.and_then(|p| p.as_array())
+						})
+						.flatten()
+						.filter(|p| p.get("thought").and_then(serde_json::Value::as_bool) != Some(true))
+						.filter_map(|p| p.get("text").and_then(|t| t.as_str()))
+						.collect(),
+				);
+			}
 		}
 		None
 	}
@@ -571,6 +593,129 @@ mod tests {
 		let bytes = guarded.collect().await.unwrap().to_bytes();
 		assert!(contains(&bytes, b"guardrail_blocked"));
 		assert!(!contains(&bytes, b"SSN"));
+	}
+
+	fn gemini_delta_bytes(text: &str, thought: &str) -> Bytes {
+		sse_bytes(&format!(
+			"{{\"candidates\":[{{\"content\":{{\"role\":\"model\",\"parts\":[{{\"text\":\"{}\",\"thought\":true}},{{\"text\":\"{}\"}}]}}}}]}}",
+			thought, text
+		))
+	}
+
+	#[tokio::test]
+	async fn test_gemini_sse_text_is_evaluated() {
+		let chunk1 = gemini_delta_bytes("my SSN", "planning the answer");
+		let chunk2 = gemini_delta_bytes(" is 123-45-6789", "still planning");
+		let body = make_body(vec![chunk1, chunk2]);
+
+		let guarded = GuardedSseBody::new(
+			body,
+			vec![Box::new(pattern_evaluator("SSN is"))],
+			1024 * 1024,
+			None,
+		);
+
+		let bytes = guarded.collect().await.unwrap().to_bytes();
+		assert!(contains(&bytes, b"guardrail_blocked"));
+		assert!(!contains(&bytes, b"123-45-6789"));
+	}
+
+	fn gemini_candidates_bytes(candidates: serde_json::Value) -> Bytes {
+		sse_bytes(&serde_json::json!({ "candidates": candidates }).to_string())
+	}
+
+	#[tokio::test]
+	async fn test_gemini_sse_evaluates_every_candidate() {
+		// candidateCount is client-controlled: the guard-relevant text sits in candidates[1]
+		// behind a candidates[0] that only carries a thought part.
+		let chunk = gemini_candidates_bytes(serde_json::json!([
+			{ "content": { "role": "model", "parts": [{ "text": "planning", "thought": true }] } },
+			{ "content": { "role": "model", "parts": [{ "text": "my SSN is 123-45-6789" }] } }
+		]));
+		let body = make_body(vec![chunk]);
+
+		let guarded = GuardedSseBody::new(
+			body,
+			vec![Box::new(pattern_evaluator("SSN"))],
+			1024 * 1024,
+			None,
+		);
+
+		let bytes = guarded.collect().await.unwrap().to_bytes();
+		assert!(contains(&bytes, b"guardrail_blocked"));
+		assert!(!contains(&bytes, b"123-45-6789"));
+	}
+
+	#[tokio::test]
+	async fn test_gemini_sse_scans_past_a_candidate_without_content() {
+		// A candidate can carry only a finishReason; that must not end the scan.
+		let chunk = gemini_candidates_bytes(serde_json::json!([
+			{ "finishReason": "STOP" },
+			{ "content": { "role": "model", "parts": [{ "text": "forbidden words" }] } }
+		]));
+		let body = make_body(vec![chunk]);
+
+		let guarded = GuardedSseBody::new(
+			body,
+			vec![Box::new(pattern_evaluator("forbidden"))],
+			1024 * 1024,
+			None,
+		);
+
+		let bytes = guarded.collect().await.unwrap().to_bytes();
+		assert!(contains(&bytes, b"guardrail_blocked"));
+		assert!(!contains(&bytes, b"forbidden"));
+	}
+
+	fn text_delta(chunk: serde_json::Value) -> Option<String> {
+		GuardedSseBody::extract_text_delta(SseFrame::Event(Event {
+			id: None,
+			name: "message".into(),
+			data: Bytes::from(chunk.to_string()),
+		}))
+	}
+
+	#[test]
+	fn test_extract_text_delta_matches_one_arm_per_chunk_shape() {
+		assert_eq!(
+			text_delta(serde_json::json!({ "type": "response.output_text.delta", "delta": "a" })),
+			Some("a".to_string())
+		);
+		assert_eq!(
+			text_delta(serde_json::json!({ "choices": [{ "delta": { "content": "b" } }] })),
+			Some("b".to_string())
+		);
+		assert_eq!(
+			text_delta(serde_json::json!({ "type": "content_block_delta", "delta": { "text": "c" } })),
+			Some("c".to_string())
+		);
+		assert_eq!(
+			text_delta(serde_json::json!({
+				"candidates": [
+					{ "content": { "parts": [{ "text": "d" }] } },
+					{ "content": { "parts": [{ "text": "e" }, { "text": "skip", "thought": true }] } }
+				]
+			})),
+			Some("de".to_string())
+		);
+		assert_eq!(text_delta(serde_json::json!({ "usageMetadata": {} })), None);
+	}
+
+	#[tokio::test]
+	async fn test_gemini_sse_ignores_thought_parts() {
+		let chunk = gemini_delta_bytes("all good", "forbidden");
+		let body = make_body(vec![chunk.clone()]);
+
+		let guarded = GuardedSseBody::new(
+			body,
+			vec![Box::new(pattern_evaluator("forbidden"))],
+			1024 * 1024,
+			None,
+		);
+
+		let bytes = guarded.collect().await.unwrap().to_bytes();
+		assert!(bytes.starts_with(&chunk));
+		assert!(!contains(&bytes, b"guardrail_blocked"));
 	}
 
 	#[tokio::test]

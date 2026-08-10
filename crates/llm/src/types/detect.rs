@@ -141,14 +141,22 @@ pub fn amend_request_info(llm_info: &mut LLMRequest, path: &str) {
 }
 
 pub fn extract_model_from_path(path: &str) -> Option<Strng> {
-	let model = if path.ends_with(":streamRawPredict")
-		|| path.ends_with(":rawPredict")
-		|| path.ends_with(":streamGenerateContent")
-		|| path.ends_with(":generateContent")
-	{
+	let model = if path.ends_with(":streamRawPredict") || path.ends_with(":rawPredict") {
 		path
 			.split_once("/publishers/")
 			.and_then(|(_, rest)| rest.split_once("/models/"))
+			.and_then(|(_, rest)| rest.split_once(':').map(|(model, _)| model))
+	} else if path.ends_with(":streamGenerateContent")
+		|| path.ends_with(":generateContent")
+		|| path.ends_with(":countTokens")
+	{
+		// Vertex nests models under publishers/{publisher}/models/; the Gemini API uses a
+		// bare /v1beta/models/{model}:suffix with no publisher segment.
+		let scoped = path
+			.split_once("/publishers/")
+			.map_or(path, |(_, rest)| rest);
+		scoped
+			.split_once("/models/")
 			.and_then(|(_, rest)| rest.split_once(':').map(|(model, _)| model))
 	} else if path.ends_with("/invoke-with-response-stream")
 		|| path.ends_with("/invoke")
@@ -161,7 +169,12 @@ pub fn extract_model_from_path(path: &str) -> Option<Strng> {
 	} else {
 		None
 	};
-	model.map(|model| strng::new(percent_decode_str(model).decode_utf8_lossy()))
+	// Every shape above spans `/`, and the result is interpolated into upstream paths. Percent
+	// decoding is what makes this load-bearing: `models/a%2F..%2F..:generateContent` matches an
+	// `[^/]+` route regex, so the traversal only appears after this decode.
+	model
+		.map(|model| strng::new(percent_decode_str(model).decode_utf8_lossy()))
+		.filter(|model| crate::model_path::is_safe_resource_name(model))
 }
 
 fn strip_bedrock_model_suffix(rest: &str) -> Option<&str> {
@@ -293,6 +306,72 @@ mod tests {
 
 		assert_eq!(llm_info.request_model, "gemini-2.5-flash");
 		assert!(llm_info.streaming);
+	}
+
+	#[test]
+	fn extract_model_from_path_handles_bare_gemini_api_paths() {
+		assert_eq!(
+			extract_model_from_path("/v1beta/models/gemini-2.5-flash:generateContent").as_deref(),
+			Some("gemini-2.5-flash")
+		);
+		assert_eq!(
+			extract_model_from_path("/v1beta/models/gemini-2.5-flash:streamGenerateContent").as_deref(),
+			Some("gemini-2.5-flash")
+		);
+		assert_eq!(
+			extract_model_from_path("/v1beta/models/gemini-2.5-flash:countTokens").as_deref(),
+			Some("gemini-2.5-flash")
+		);
+	}
+
+	#[test]
+	fn extract_model_from_path_handles_vertex_count_tokens() {
+		assert_eq!(
+			extract_model_from_path(
+				"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:countTokens"
+			)
+			.as_deref(),
+			Some("gemini-2.5-flash")
+		);
+	}
+
+	#[rstest::rstest]
+	#[case::vertex_publisher(
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash/../../../../locations/global/endpoints/openapi/chat/completions:generateContent"
+	)]
+	#[case::vertex_publisher_encoded(
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash%2F..%2F..%2Fendpoints%2Fopenapi%2Fchat%2Fcompletions:generateContent"
+	)]
+	#[case::vertex_raw_predict(
+		"/v1/projects/p/locations/us-east5/publishers/anthropic/models/claude-sonnet-4-5%2F..%2F..%2Fendpoints%2Fopenapi%2Fchat%2Fcompletions:rawPredict"
+	)]
+	#[case::bare_gemini("/v1beta/models/gemini-2.5-flash/../../foo:generateContent")]
+	#[case::bare_gemini_encoded(
+		"/v1beta/models/gemini-2.5-flash%2F..%2F..%2Ffoo:streamGenerateContent"
+	)]
+	#[case::double_encoded("/v1beta/models/gemini-2.5-flash%252F..%252F..:countTokens")]
+	#[case::backslash("/v1beta/models/gemini-2.5-flash%5C..%5C..:generateContent")]
+	#[case::empty("/v1beta/models/:generateContent")]
+	#[case::whitespace_only("/v1beta/models/%20%20:generateContent")]
+	#[case::dot_dot_segment("/v1beta/models/..:generateContent")]
+	fn extract_model_from_path_rejects_unsafe_model_segments(#[case] path: &str) {
+		// A `/` here reaches the upstream path builders, which interpolate into a single-segment
+		// slot; `%2F` is the interesting case because it still matches an `[^/]+` route regex.
+		assert_eq!(extract_model_from_path(path), None, "{path}");
+	}
+
+	#[test]
+	fn extract_model_from_path_keeps_resource_style_names() {
+		// The model router percent-encodes `/` in a virtual-model target so it stays one segment
+		// (`rewrite_path_model`); decoding it back must not look like traversal.
+		assert_eq!(
+			extract_model_from_path("/v1beta/models/tunedModels%2Fabc:generateContent").as_deref(),
+			Some("tunedModels/abc")
+		);
+		assert_eq!(
+			extract_model_from_path("/v1beta/models/models%2Fgemini-2.5-flash:countTokens").as_deref(),
+			Some("models/gemini-2.5-flash")
+		);
 	}
 
 	#[test]

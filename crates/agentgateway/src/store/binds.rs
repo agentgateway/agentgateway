@@ -783,8 +783,19 @@ impl Store {
 		.collect::<Vec<_>>();
 		matches.push(RouteMatch {
 			path: agent::PathMatch::Regex(
-				regex::Regex::new(r"^/v(?:[0-9]+|[0-9]+beta[0-9]+)/projects/[^/]+/locations/[^/]+/publishers/[^/]+/models/[^/]+:(?:rawPredict|streamRawPredict)$")
+				regex::Regex::new(r"^/v(?:[0-9]+|[0-9]+beta[0-9]+)/projects/[^/]+/locations/[^/]+/publishers/[^/]+/models/[^/]+:(?:rawPredict|streamRawPredict|generateContent|streamGenerateContent|countTokens)$")
 					.expect("valid Vertex model route regex"),
+			),
+			method: None,
+			headers: vec![],
+			query: vec![],
+		});
+		matches.push(RouteMatch {
+			path: agent::PathMatch::Regex(
+				// Gemini API shape has no publisher segment and uses versions like v1beta;
+				// v1alpha is what the SDKs emit for preview features.
+				regex::Regex::new(r"^/v[0-9]+(?:(?:alpha|beta)[0-9]*)?/models/[^/]+:(?:generateContent|streamGenerateContent|countTokens)$")
+					.expect("valid Gemini model route regex"),
 			),
 			method: None,
 			headers: vec![],
@@ -2531,17 +2542,39 @@ mod tests {
 				.iter()
 				.all(|route_match| { !matches!(route_match.path, agent::PathMatch::PathPrefix(_)) })
 		);
-		let vertex = matches
+		let regexes = matches
 			.iter()
-			.find_map(|route_match| match &route_match.path {
+			.filter_map(|route_match| match &route_match.path {
 				agent::PathMatch::Regex(regex) => Some(regex),
 				_ => None,
 			})
-			.expect("Vertex raw-predict route match");
-		assert!(vertex.is_match(
+			.collect::<Vec<_>>();
+		let matches_any = |path: &str| regexes.iter().any(|regex| regex.is_match(path));
+		assert!(matches_any(
 			"/v1/projects/project/locations/us-central1/publishers/google/models/gemini:rawPredict"
 		));
-		assert!(!vertex.is_match("/arbitrary/v1/chat/completions"));
+		assert!(matches_any(
+			"/v1/projects/project/locations/global/publishers/google/models/gemini-2.5-flash:generateContent"
+		));
+		assert!(matches_any(
+			"/v1/projects/project/locations/global/publishers/google/models/gemini-2.5-flash:streamGenerateContent"
+		));
+		assert!(matches_any(
+			"/v1/projects/project/locations/global/publishers/google/models/gemini-2.5-flash:countTokens"
+		));
+		assert!(matches_any(
+			"/v1beta/models/gemini-2.5-flash:generateContent"
+		));
+		assert!(matches_any(
+			"/v1beta/models/gemini-2.5-flash:streamGenerateContent"
+		));
+		assert!(matches_any("/v1beta/models/gemini-2.5-flash:countTokens"));
+		assert!(matches_any(
+			"/v1alpha/models/gemini-2.5-flash:generateContent"
+		));
+		assert!(matches_any("/v1/models/gemini-2.5-flash:generateContent"));
+		assert!(!matches_any("/v1beta/models/gemini-2.5-flash:rawPredict"));
+		assert!(!matches_any("/arbitrary/v1/chat/completions"));
 	}
 
 	#[test]

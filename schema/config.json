@@ -5464,6 +5464,16 @@
           "const": "anthropicTokenCount"
         },
         {
+          "description": "Gemini models/{model}:generateContent and models/{model}:streamGenerateContent",
+          "type": "string",
+          "const": "geminiGenerateContent"
+        },
+        {
+          "description": "Gemini models/{model}:countTokens",
+          "type": "string",
+          "const": "geminiCountTokens"
+        },
+        {
           "description": "Cohere /v2/rerank (document reranking)",
           "type": "string",
           "const": "rerank"

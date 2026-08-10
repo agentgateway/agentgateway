@@ -3,6 +3,7 @@ pub mod completions;
 pub mod count_tokens;
 pub mod detect;
 pub mod embeddings;
+pub mod gemini;
 pub mod messages;
 pub mod rerank;
 pub mod responses;
@@ -19,6 +20,9 @@ pub enum ChatRequest {
 	Completions(completions::Request),
 	Messages(messages::Request),
 	Responses(responses::Request),
+	/// Native Gemini generateContent/streamGenerateContent body (boxed: it is
+	/// much larger than the other variants)
+	Gemini(Box<vertex_gemini::GenerateContentRequest>),
 }
 
 pub(crate) fn thinking_budget_for_reasoning_effort(

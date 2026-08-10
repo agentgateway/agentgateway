@@ -31,6 +31,75 @@ fn join_tool_call_id(base: String, signature: Option<&str>) -> String {
 	}
 }
 
+/// Passthrough for native Gemini inbound: forward the `:streamGenerateContent?alt=sse` SSE
+/// bytes untouched while extracting usage for telemetry. Gemini attaches cumulative
+/// `usageMetadata` to chunks with the full totals on the final event, so updating on every
+/// chunk leaves the last event's counts in the log even on early client disconnect.
+pub fn passthrough_stream(
+	b: axum_core::body::Body,
+	buffer_limit: usize,
+	log: crate::StreamingUsageGuard,
+	log_content: crate::LogContentFields,
+) -> axum_core::body::Body {
+	use std::time::Instant;
+	let mut saw_token = false;
+	crate::parse::sse::json_passthrough::<vg::GenerateContentResponse>(b, buffer_limit, move |f| {
+		// Gemini never sends a [DONE] sentinel, so f(None) does not fire; all bookkeeping
+		// happens per-chunk and the guard flushes on drop.
+		let Some(Ok(chunk)) = f else {
+			return;
+		};
+		if !saw_token {
+			saw_token = true;
+			log.update(|r| r.response.first_token = Some(Instant::now()));
+		}
+		if let Some(m) = &chunk.model_version {
+			log.update(|r| {
+				if r.response.provider_model.is_none() {
+					r.response.provider_model = Some(strng::new(m));
+				}
+			});
+		}
+		if let Some(um) = &chunk.usage_metadata {
+			let (prompt, completion, total) = um.counts();
+			log.update(|r| {
+				r.response.input_tokens = Some(prompt);
+				r.response.output_tokens = Some(completion);
+				r.response.total_tokens = Some(total);
+				r.response.cached_input_tokens = um.cached_content_token_count;
+				r.response.reasoning_tokens = um.thoughts_token_count;
+			});
+		}
+		if log_content.completion {
+			let text: String = chunk
+				.candidates
+				.first()
+				.and_then(|c| c.content.as_ref())
+				.map(|c| {
+					c.parts
+						.iter()
+						.filter_map(|p| match p {
+							vg::Part::Text(t) if t.thought != Some(true) => Some(t.text.as_str()),
+							_ => None,
+						})
+						.collect()
+				})
+				.unwrap_or_default();
+			if !text.is_empty() {
+				log.update(|r| {
+					let completion = r
+						.response
+						.completion
+						.get_or_insert_with(|| vec![String::new()]);
+					if let Some(first) = completion.first_mut() {
+						first.push_str(&text);
+					}
+				});
+			}
+		}
+	})
+}
+
 pub mod from_completions {
 	use serde::Deserialize;
 	use serde_json::{Value, json};
@@ -170,6 +239,7 @@ pub mod from_completions {
 			safety_settings,
 			cached_content,
 			labels,
+			rest: Default::default(),
 		})
 	}
 
@@ -477,6 +547,7 @@ pub mod from_completions {
 					.and_then(Value::as_str)
 					.map(str::to_string),
 				parameters: f.get("parameters").map(normalize_gemini_schema),
+				rest: Default::default(),
 			})
 			.collect();
 		if decls.is_empty() {
@@ -484,6 +555,7 @@ pub mod from_completions {
 		} else {
 			vec![vg::Tool {
 				function_declarations: decls,
+				rest: Default::default(),
 			}]
 		}
 	}
@@ -513,12 +585,14 @@ pub mod from_completions {
 				vg::FunctionCallingConfig {
 					mode: Some("ANY".into()),
 					allowed_function_names: name.map(|n| vec![n.to_string()]).unwrap_or_default(),
+					rest: Default::default(),
 				}
 			},
 			_ => return None,
 		};
 		Some(vg::ToolConfig {
 			function_calling_config: Some(cfg),
+			rest: Default::default(),
 		})
 	}
 
@@ -556,6 +630,7 @@ pub mod from_completions {
 			response_mime_type,
 			response_schema,
 			thinking_config,
+			rest: Default::default(),
 		};
 
 		if cfg == vg::GenerationConfig::default() {
@@ -925,6 +1000,7 @@ pub mod from_completions {
 				thinking_level: Some(level.into()),
 				thinking_budget: None,
 				include_thoughts: Some(true),
+				rest: Default::default(),
 			})
 		} else {
 			// Gemini 2.5 takes the shared conservative budget scale. Some models cap the
@@ -935,6 +1011,7 @@ pub mod from_completions {
 				thinking_level: None,
 				thinking_budget: Some(budget),
 				include_thoughts: Some(true),
+				rest: Default::default(),
 			})
 		}
 	}
@@ -1345,7 +1422,7 @@ pub mod to_completions {
 				});
 			}
 			if let Some(um) = &chunk.usage_metadata {
-				let (prompt, completion, total) = usage_counts(um);
+				let (prompt, completion, total) = um.counts();
 				log.update(|r| {
 					r.response.input_tokens = Some(prompt);
 					r.response.output_tokens = Some(completion);
@@ -1419,17 +1496,8 @@ pub mod to_completions {
 		parse::sse::append_done_on_success(body)
 	}
 
-	/// Prompt, completion, and total token counts from Gemini usage metadata
-	/// (total falls back to prompt + completion when absent).
-	fn usage_counts(um: &vg::UsageMetadata) -> (u64, u64, u64) {
-		let prompt = um.prompt_token_count.unwrap_or(0);
-		let completion = um.candidates_token_count.unwrap_or(0);
-		let total = um.total_token_count.unwrap_or(prompt + completion);
-		(prompt, completion, total)
-	}
-
 	fn build_usage(um: &vg::UsageMetadata) -> completions::Usage {
-		let (prompt, completion, total) = usage_counts(um);
+		let (prompt, completion, total) = um.counts();
 		completions::Usage {
 			prompt_tokens: prompt as u32,
 			completion_tokens: completion as u32,

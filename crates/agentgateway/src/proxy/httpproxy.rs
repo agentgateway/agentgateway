@@ -2332,6 +2332,8 @@ async fn make_backend_call(
 				| RouteType::Messages
 				| RouteType::Responses
 				| RouteType::AnthropicTokenCount
+				| RouteType::GeminiGenerateContent
+				| RouteType::GeminiCountTokens
 				| RouteType::Embeddings
 				| RouteType::Rerank
 				| RouteType::Detect => {
@@ -2393,6 +2395,25 @@ async fn make_backend_call(
 						))
 						.await
 						.map_err(ProxyError::AIRequest)?,
+						RouteType::GeminiGenerateContent => Box::pin(llm.provider.process_gemini_request(
+							&backend_info,
+							llm_request_policies.llm.as_deref(),
+							req,
+							llm.tokenize,
+							&mut log,
+						))
+						.await
+						.map_err(ProxyError::AIRequest)?,
+						RouteType::GeminiCountTokens => {
+							Box::pin(llm.provider.process_gemini_count_tokens_request(
+								&backend_info,
+								llm_request_policies.llm.as_deref(),
+								req,
+								&mut log,
+							))
+							.await
+							.map_err(ProxyError::AIRequest)?
+						},
 						RouteType::Detect => Box::pin(llm.provider.process_detect_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2451,7 +2472,10 @@ async fn make_backend_call(
 
 					// Apply all policies (rate limits, prompt guards, enrichment)
 					// count_tokens skips policies (no tokens generated, no prompts to manipulate)
-					let response_policies = if route_type == RouteType::AnthropicTokenCount {
+					let response_policies = if matches!(
+						route_type,
+						RouteType::AnthropicTokenCount | RouteType::GeminiCountTokens
+					) {
 						LLMResponsePolicies::default()
 					} else {
 						Box::pin(
