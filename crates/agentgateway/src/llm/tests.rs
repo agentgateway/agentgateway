@@ -47,6 +47,187 @@ fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
 }
 
 #[test]
+fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
+	let vertex = AIProvider::Vertex(vertex::Provider {
+		project_id: strng::new("test-project"),
+		model: None,
+		region: None,
+	});
+	assert_eq!(
+		vertex
+			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"))
+			.unwrap()
+			.output,
+		ChatFormat::VertexGemini
+	);
+	// Vertex with a non-Gemini model has no Gemini-input translation.
+	assert!(
+		vertex
+			.chat_translation(InputFormat::Gemini, Some("claude-sonnet-4-5"))
+			.is_err()
+	);
+
+	let gemini = AIProvider::Gemini(gemini::Provider { model: None });
+	assert_eq!(
+		gemini
+			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"))
+			.unwrap()
+			.output,
+		ChatFormat::VertexGemini
+	);
+	// Completions inbound on the Gemini API provider keeps the OpenAI-compat shim.
+	assert_eq!(
+		gemini
+			.chat_translation(InputFormat::Completions, Some("gemini-2.5-flash"))
+			.unwrap()
+			.output,
+		ChatFormat::OpenAICompletions
+	);
+}
+
+#[test]
+fn gemini_inbound_to_non_gemini_upstream_is_unsupported() {
+	let anthropic = AIProvider::Anthropic(anthropic::Provider { model: None });
+	let Err(err) = anthropic.chat_translation(InputFormat::Gemini, Some("claude-opus-4")) else {
+		panic!("expected unsupported conversion");
+	};
+	assert!(matches!(err, AIError::UnsupportedConversion(_)));
+	let msg = err.to_string();
+	assert!(msg.contains("Gemini") && msg.contains("anthropic"), "{msg}");
+
+	let vertex = AIProvider::Vertex(vertex::Provider {
+		project_id: strng::new("test-project"),
+		model: None,
+		region: None,
+	});
+	let Err(err) = vertex.chat_translation(InputFormat::Gemini, Some("claude-sonnet-4-5")) else {
+		panic!("expected unsupported conversion");
+	};
+	let msg = err.to_string();
+	assert!(msg.contains("Gemini") && msg.contains("vertex"), "{msg}");
+}
+
+#[test]
+fn gemini_render_is_passthrough_with_unknown_fields() {
+	let provider = AIProvider::Vertex(vertex::Provider {
+		project_id: strng::new("test-project"),
+		model: None,
+		region: None,
+	});
+	let translation = provider
+		.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"))
+		.unwrap();
+
+	let raw = json!({
+		"contents": [{
+			"role": "user",
+			"parts": [
+				{ "text": "describe this", "someNewPartField": 1 },
+				{ "inlineData": { "mimeType": "image/png", "data": "AAAA" } }
+			],
+			"someNewContentField": true
+		}],
+		"systemInstruction": { "parts": [{ "text": "be brief" }] },
+		"tools": [
+			{ "functionDeclarations": [{
+				"name": "get_weather",
+				"parameters": { "type": "object" },
+				"behavior": "BLOCKING"
+			}] },
+			{ "googleSearch": {} }
+		],
+		"toolConfig": { "functionCallingConfig": { "mode": "AUTO", "someNewKnob": 1 } },
+		"generationConfig": {
+			"temperature": 0.5,
+			"thinkingConfig": { "thinkingLevel": "high", "someNewField": true },
+			"responseModalities": ["TEXT"]
+		},
+		"safetySettings": [{
+			"category": "HARM_CATEGORY_HATE_SPEECH",
+			"threshold": "BLOCK_NONE",
+			"someNewField": 1
+		}],
+		"modelArmorConfig": { "promptTemplateName": "projects/p/locations/l/templates/t" }
+	});
+	let inner: types::vertex_gemini::GenerateContentRequest =
+		serde_json::from_value(raw.clone()).expect("valid request");
+	let rendered = translation
+		.render_request(
+			types::ChatRequest::Gemini(Box::new(inner)),
+			&ChatRequestContext {
+				provider: &provider,
+				headers: &HeaderMap::new(),
+				prompt_caching: None,
+			},
+		)
+		.expect("render");
+	assert!(matches!(
+		rendered.provider_state,
+		Some(ProviderState::VertexGemini)
+	));
+	let out: Value = serde_json::from_slice(&rendered.body).expect("valid body");
+	assert_eq!(
+		out, raw,
+		"render must pass unknown fields through untouched"
+	);
+}
+
+#[test]
+fn gemini_error_passes_google_shape_through() {
+	let provider = AIProvider::Vertex(vertex::Provider {
+		project_id: strng::new("test-project"),
+		model: None,
+		region: None,
+	});
+	let translation = provider
+		.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"))
+		.unwrap();
+	assert!(matches!(
+		provider.chat_error_format(translation, Some("gemini-2.5-flash")),
+		ChatErrorFormat::Google
+	));
+
+	let body = bytes::Bytes::from_static(
+		br#"{"error":{"code":400,"message":"bad request","status":"INVALID_ARGUMENT"}}"#,
+	);
+	let out = translation
+		.error(
+			&body,
+			::http::StatusCode::BAD_REQUEST,
+			ChatErrorFormat::Google,
+		)
+		.expect("error translation");
+	assert_eq!(out, body);
+}
+
+#[test]
+fn strip_alt_query_removes_only_alt() {
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1beta/models/m:streamGenerateContent?alt=sse&key=abc",
+		http::Method::POST,
+		&[],
+	);
+	strip_alt_query(&mut req);
+	assert_eq!(req.uri().query(), Some("key=abc"));
+
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1beta/models/m:streamGenerateContent?alt=sse",
+		http::Method::POST,
+		&[],
+	);
+	strip_alt_query(&mut req);
+	assert_eq!(req.uri().query(), None);
+
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1beta/models/m:generateContent?key=abc",
+		http::Method::POST,
+		&[],
+	);
+	strip_alt_query(&mut req);
+	assert_eq!(req.uri().query(), Some("key=abc"));
+}
+
+#[test]
 fn streaming_amend_on_drop_updates_local_rate_limit() {
 	let rate_limit =
 		crate::http::localratelimit::RateLimit::try_from(crate::http::localratelimit::RateLimitSpec {
@@ -788,6 +969,281 @@ async fn count_tokens_uses_native_endpoint_after_model_alias() {
 	assert_eq!(upstream_route_type, RouteType::AnthropicTokenCount);
 	assert_eq!(forwarded_json["model"], json!("claude-3-5-sonnet"));
 	assert_eq!(llm_request.request_model, "claude-3-5-sonnet");
+}
+
+fn gemini_generate_content_request(uri: &str) -> ::http::Request<Body> {
+	::http::Request::builder()
+		.uri(uri)
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"contents": [{"role": "user", "parts": [{"text": "hello"}]}],
+				"someNewTopLevelField": {"a": true}
+			}"#
+				.to_vec(),
+		))
+		.unwrap()
+}
+
+fn vertex_backend_info() -> crate::http::auth::BackendInfo {
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+	crate::http::auth::BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("aiplatform.googleapis.com", 443)),
+		inputs: setup_proxy_test("{}").unwrap().pi,
+	}
+}
+
+#[tokio::test]
+async fn gemini_generate_content_forwards_unknown_top_level_fields() {
+	let provider = AIProvider::Vertex(vertex::Provider {
+		model: None,
+		region: None,
+		project_id: strng::new("test-project"),
+	});
+	let req = gemini_generate_content_request(
+		"https://example.com/v1beta/models/gemini-2.5-flash:generateContent",
+	);
+
+	let RequestResult::Success {
+		request: forwarded,
+		llm_request,
+		..
+	} = provider
+		.process_gemini_request(&vertex_backend_info(), None, req, false, &mut None)
+		.await
+		.expect("generateContent request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+	assert_eq!(llm_request.request_model, "gemini-2.5-flash");
+	assert!(!llm_request.streaming);
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+	assert_eq!(forwarded_json["someNewTopLevelField"], json!({"a": true}));
+	assert_eq!(forwarded_json["contents"][0]["parts"][0]["text"], "hello");
+	assert!(
+		forwarded_json.get("model").is_none(),
+		"the model rides the path, not the body: {forwarded_json}"
+	);
+}
+
+#[tokio::test]
+async fn gemini_stream_without_alt_sse_is_rejected_with_google_shaped_400() {
+	let provider = AIProvider::Vertex(vertex::Provider {
+		model: None,
+		region: None,
+		project_id: strng::new("test-project"),
+	});
+	for uri in [
+		"https://example.com/v1beta/models/gemini-2.5-flash:streamGenerateContent",
+		"https://example.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=json",
+	] {
+		let RequestResult::Rejected(resp) = provider
+			.process_gemini_request(
+				&vertex_backend_info(),
+				None,
+				gemini_generate_content_request(uri),
+				false,
+				&mut None,
+			)
+			.await
+			.expect("the non-SSE streaming variant is a client error, not a gateway failure")
+		else {
+			panic!("expected a direct response for {uri}");
+		};
+
+		assert_eq!(resp.status(), ::http::StatusCode::BAD_REQUEST);
+		let body = resp.into_body().collect().await.unwrap().to_bytes();
+		let body: Value = serde_json::from_slice(&body).expect("error body should be JSON");
+		assert_eq!(body["error"]["code"], json!(400));
+		assert_eq!(body["error"]["status"], json!("INVALID_ARGUMENT"));
+		assert!(
+			body["error"]["message"]
+				.as_str()
+				.is_some_and(|m| m.contains("alt=sse")),
+			"{body}"
+		);
+	}
+}
+
+fn gemini_count_tokens_request(uri: &str) -> ::http::Request<Body> {
+	::http::Request::builder()
+		.uri(uri)
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"contents": [{"role": "user", "parts": [{"text": "hello"}]}],
+				"someNewField": {"a": true}
+			}"#
+				.to_vec(),
+		))
+		.unwrap()
+}
+
+#[tokio::test]
+async fn gemini_count_tokens_passes_body_through_on_vertex() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::Vertex(vertex::Provider {
+		model: None,
+		region: None,
+		project_id: strng::new("test-project"),
+	});
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("aiplatform.googleapis.com", 443)),
+		inputs,
+	};
+	let req =
+		gemini_count_tokens_request("https://example.com/v1beta/models/gemini-2.5-flash:countTokens");
+
+	let RequestResult::Success {
+		request: forwarded,
+		llm_request,
+		upstream_route_type,
+		..
+	} = provider
+		.process_gemini_count_tokens_request(&backend_info, None, req, &mut None)
+		.await
+		.expect("countTokens request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	assert_eq!(upstream_route_type, RouteType::GeminiCountTokens);
+	assert_eq!(llm_request.input_format, InputFormat::GeminiCountTokens);
+	assert_eq!(llm_request.request_model, "gemini-2.5-flash");
+	assert!(!llm_request.streaming);
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+	assert_eq!(forwarded_json["someNewField"], json!({"a": true}));
+	assert_eq!(forwarded_json["contents"][0]["parts"][0]["text"], "hello");
+	assert!(
+		forwarded_json.get("model").is_none(),
+		"the model rides the path, not the body: {forwarded_json}"
+	);
+}
+
+#[tokio::test]
+async fn gemini_count_tokens_applies_model_alias_and_rewrites_upstream_path() {
+	use crate::http::auth::BackendInfo;
+	use crate::llm::policy::Policy;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::Gemini(gemini::Provider { model: None });
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from((gemini::DEFAULT_HOST_STR, 443)),
+		inputs,
+	};
+	let policy = Policy {
+		model_aliases: std::collections::HashMap::from([(
+			strng::new("fast"),
+			strng::new("gemini-2.5-flash"),
+		)]),
+		..Default::default()
+	};
+	let req = gemini_count_tokens_request("https://example.com/v1beta/models/fast:countTokens");
+
+	let RequestResult::Success {
+		request: mut forwarded,
+		llm_request,
+		upstream_route_type,
+		..
+	} = provider
+		.process_gemini_count_tokens_request(&backend_info, Some(&policy), req, &mut None)
+		.await
+		.expect("countTokens request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+	assert_eq!(llm_request.request_model, "gemini-2.5-flash");
+
+	provider
+		.setup_request(
+			&mut forwarded,
+			upstream_route_type,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+		)
+		.expect("setup_request should succeed");
+	assert_eq!(
+		forwarded.uri().path(),
+		"/v1beta/models/gemini-2.5-flash:countTokens"
+	);
+	assert_eq!(forwarded.uri().query(), None);
+	assert_eq!(
+		forwarded.uri().authority().map(|a| a.as_str()),
+		Some(gemini::DEFAULT_HOST_STR)
+	);
+}
+
+#[tokio::test]
+async fn gemini_count_tokens_on_non_gemini_upstream_is_unsupported() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("api.anthropic.com", 443)),
+		inputs,
+	};
+	let req =
+		gemini_count_tokens_request("https://example.com/v1beta/models/claude-opus-4:countTokens");
+
+	let err = provider
+		.process_gemini_count_tokens_request(&backend_info, None, req, &mut None)
+		.await
+		.expect_err("countTokens against a non-Gemini upstream must be rejected");
+	assert!(matches!(err, AIError::UnsupportedConversion(_)), "{err}");
+}
+
+#[test]
+fn gemini_count_tokens_response_reports_total_tokens() {
+	let provider = AIProvider::Gemini(gemini::Provider { model: None });
+	let req = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::GeminiCountTokens,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "gemini-2.5-flash".into(),
+		provider: "gcp.gemini".into(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: None,
+	};
+	let body = br#"{"totalTokens":31,"promptTokensDetails":[{"modality":"TEXT","tokenCount":31}]}"#;
+	let buffered = BufferedResponse {
+		parts: ::http::Response::new(()).into_parts().0,
+		bytes: bytes::Bytes::from_static(body),
+		encoding: None,
+	};
+
+	let log = AsyncLog::<llm::LLMInfo>::default();
+	let resp = provider
+		.process_gemini_count_tokens_response(req, buffered, None, &log)
+		.expect("countTokens response should process");
+	assert_eq!(
+		log.take().expect("llm info").response.count_tokens,
+		Some(31)
+	);
+	assert!(resp.headers().get(header::CONTENT_LENGTH).is_none());
 }
 
 #[tokio::test]
@@ -1993,6 +2449,147 @@ fn assert_prefixed_host_override_path(
 	assert_eq!(req.uri().query(), expected_query);
 }
 
+fn native_gemini_llm_request(request_model: &str, streaming: bool) -> LLMRequest {
+	LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Gemini,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: request_model.into(),
+		provider: Default::default(),
+		streaming,
+		params: Default::default(),
+		prompt: None,
+		provider_state: Some(ProviderState::VertexGemini),
+	}
+}
+
+#[test]
+fn setup_request_gemini_native_builds_generate_content_path() {
+	let provider = AIProvider::Gemini(gemini::Provider { model: None });
+	let llm_request = native_gemini_llm_request("gemini-2.5-flash", false);
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1beta/models/gemini-2.5-flash:generateContent",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Completions,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(
+		req.uri().authority().map(|a| a.as_str()),
+		Some("generativelanguage.googleapis.com")
+	);
+	assert_eq!(
+		req.uri().path(),
+		"/v1beta/models/gemini-2.5-flash:generateContent"
+	);
+	assert_eq!(req.uri().query(), None);
+}
+
+#[test]
+fn setup_request_gemini_native_streaming_adds_alt_sse_and_keeps_client_query() {
+	let provider = AIProvider::Gemini(gemini::Provider { model: None });
+	// The client's own alt=sse is dropped in favour of the path-provided one, while any other
+	// parameter such as key survives.
+	let llm_request = native_gemini_llm_request("models/gemini-2.5-flash", true);
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=abc",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Completions,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(
+		req.uri().path(),
+		"/v1beta/models/gemini-2.5-flash:streamGenerateContent"
+	);
+	assert_eq!(req.uri().query(), Some("alt=sse&key=abc"));
+}
+
+#[test]
+fn setup_request_gemini_native_streaming_keeps_client_alt_with_host_override() {
+	// hostOverride without pathPrefix forwards the client's URI verbatim, so alt=sse must
+	// still be there: the upstream would otherwise answer with the JSON-array variant.
+	for provider in [
+		AIProvider::Gemini(gemini::Provider { model: None }),
+		AIProvider::Vertex(vertex::Provider {
+			model: None,
+			region: None,
+			project_id: strng::new("test-project"),
+		}),
+	] {
+		let llm_request = native_gemini_llm_request("gemini-2.5-flash", true);
+		let mut req = crate::http::tests_common::request(
+			"https://proxy.example.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse",
+			http::Method::POST,
+			&[],
+		);
+
+		provider
+			.setup_request(
+				&mut req,
+				RouteType::Completions,
+				Some(&llm_request),
+				None,
+				None,
+				true,
+			)
+			.expect("setup_request should succeed");
+
+		assert_eq!(
+			req.uri().path(),
+			"/v1beta/models/gemini-2.5-flash:streamGenerateContent"
+		);
+		assert_eq!(req.uri().query(), Some("alt=sse"));
+	}
+}
+
+#[test]
+fn setup_request_gemini_without_native_state_keeps_compat_path() {
+	let provider = AIProvider::Gemini(gemini::Provider { model: None });
+	let llm_request = LLMRequest {
+		provider_state: None,
+		..native_gemini_llm_request("gemini-2.5-flash", false)
+	};
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1/chat/completions",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::Completions,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(req.uri().path(), "/v1beta/openai/chat/completions");
+}
+
 #[test]
 fn setup_request_gemini_applies_path_prefix_with_host_override() {
 	assert_prefixed_host_override_path(
@@ -2706,4 +3303,24 @@ fn fixed_providers_classify_by_family() {
 		),
 		CacheTokenConvention::InputIncludesCache,
 	);
+}
+
+#[test]
+fn query_requests_sse_matches_alt_query_parameter() {
+	let uri = |s: &str| s.parse::<::http::Uri>().expect("valid uri");
+	assert!(query_requests_sse(&uri(
+		"/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse"
+	)));
+	assert!(query_requests_sse(&uri(
+		"/v1beta/models/gemini-2.5-flash:streamGenerateContent?key=abc&alt=sse"
+	)));
+	assert!(!query_requests_sse(&uri(
+		"/v1beta/models/gemini-2.5-flash:streamGenerateContent"
+	)));
+	assert!(!query_requests_sse(&uri(
+		"/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=json"
+	)));
+	assert!(!query_requests_sse(&uri(
+		"/v1beta/models/gemini-2.5-flash:streamGenerateContent?halt=sse"
+	)));
 }

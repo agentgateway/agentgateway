@@ -1,0 +1,12 @@
+{
+  "systemInstruction": { "parts": [{ "text": "system prompt" }] },
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        { "text": "Hello, world" },
+        { "inlineData": { "mimeType": "image/png", "data": "AAAA" } }
+      ]
+    }
+  ]
+}
