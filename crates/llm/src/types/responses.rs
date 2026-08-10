@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 
 use self::typed::{
 	EasyInputContent, EasyInputMessage, InputContent, InputItem, InputMessage, InputRole,
@@ -341,6 +343,55 @@ impl From<SimpleChatCompletionMessage> for InputItem {
 }
 
 impl Request {
+	/// Canonicalize tool-call *item* IDs before sending a Responses request
+	/// to an upstream provider.
+	///
+	/// Responses-compatible providers do not all emit the same item-ID prefix
+	/// for tool calls. The OpenAI/Codex wire convention requires `function_call`
+	/// item IDs beginning with `fc` and `custom_tool_call` item IDs beginning
+	/// with `ctc`; some compatible upstreams emit regular `call_…` IDs for both.
+	/// A later virtual-model failover can then replay that history to a strict
+	/// provider, which rejects the otherwise valid request. Generate a
+	/// deterministic, bounded identifier instead of preserving the original as
+	/// a suffix: strict providers also cap item IDs at 64 characters, while
+	/// compatible providers can emit longer IDs.
+	///
+	/// `call_id` deliberately remains unchanged: it is the stable linkage
+	/// between a tool call and its corresponding output, while `id` identifies
+	/// the Responses item itself.
+	pub fn canonicalize_tool_call_item_ids(&mut self) -> usize {
+		let RequestInput::Items(items) = &mut self.input else {
+			return 0;
+		};
+
+		let mut normalized = 0;
+		for RawInputItem(item) in items {
+			let Some(item) = item.as_object_mut() else {
+				continue;
+			};
+			let expected_prefix = match item.get("type").and_then(Value::as_str) {
+				Some("function_call") => "fc_",
+				Some("custom_tool_call") => "ctc_",
+				_ => continue,
+			};
+			let Some(id) = item.get("id").and_then(Value::as_str) else {
+				continue;
+			};
+			if id.starts_with(expected_prefix) && id.len() <= 64 {
+				continue;
+			}
+
+			// A SHA-256 digest encoded as unpadded base64url is 43 characters.
+			// With either expected prefix the generated identifier remains safely
+			// below the 64-character Responses API limit.
+			let digest = Sha256::digest(id.as_bytes());
+			let canonical_id = format!("{expected_prefix}{}", URL_SAFE_NO_PAD.encode(digest));
+			item.insert("id".to_string(), Value::String(canonical_id));
+			normalized += 1;
+		}
+		normalized
+	}
+
 	fn take_input_as_items(&mut self) -> Vec<RawInputItem> {
 		match std::mem::replace(&mut self.input, RequestInput::Items(Vec::new())) {
 			RequestInput::Text(text) => vec![RawInputItem::from_user_text(text)],
@@ -647,6 +698,106 @@ impl ResponseType for Response {
 				}
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use serde_json::json;
+
+	use super::Request;
+
+	#[test]
+	fn canonicalizes_tool_call_item_ids_without_touching_call_links() {
+		let mut request: Request = serde_json::from_value(json!({
+			"model": "virtual-model",
+			"input": [
+				{
+					"type": "custom_tool_call",
+					"id": "call_t2_from_permissive_provider",
+					"call_id": "call_t2_correlation",
+					"name": "exec",
+					"input": "echo hello"
+				},
+				{
+					"type": "custom_tool_call_output",
+					"id": "ctco_123",
+					"call_id": "call_t2_correlation",
+					"output": "hello"
+				},
+				{
+					"type": "function_call",
+					"id": "call_function_unchanged",
+					"call_id": "call_function_unchanged",
+					"name": "weather",
+					"arguments": "{}"
+				}
+			]
+		}))
+		.expect("valid Responses request");
+
+		assert_eq!(request.canonicalize_tool_call_item_ids(), 2);
+		assert_eq!(request.canonicalize_tool_call_item_ids(), 0, "must be idempotent");
+
+		let body = serde_json::to_value(request).expect("request serializes");
+		let id = body["input"][0]["id"].as_str().expect("custom-tool item ID");
+		assert!(id.starts_with("ctc_"));
+		assert!(id.len() <= 64);
+		assert_eq!(body["input"][0]["call_id"], "call_t2_correlation");
+		assert_eq!(body["input"][1]["call_id"], "call_t2_correlation");
+		let id = body["input"][2]["id"].as_str().expect("function-call item ID");
+		assert!(id.starts_with("fc_"));
+		assert!(id.len() <= 64);
+		assert_eq!(body["input"][2]["call_id"], "call_function_unchanged");
+	}
+
+	#[test]
+	fn leaves_canonical_tool_call_ids_unchanged() {
+		let mut request: Request = serde_json::from_value(json!({
+			"input": [
+				{
+					"type": "custom_tool_call",
+					"id": "ctc_123",
+					"call_id": "call_123",
+					"name": "exec",
+					"input": "echo hello"
+				},
+				{
+					"type": "function_call",
+					"id": "fc_123",
+					"call_id": "call_456",
+					"name": "weather",
+					"arguments": "{}"
+				}
+			]
+		}))
+		.expect("valid Responses request");
+
+		assert_eq!(request.canonicalize_tool_call_item_ids(), 0);
+		let body = serde_json::to_value(request).expect("request serializes");
+		assert_eq!(body["input"][0]["id"], "ctc_123");
+		assert_eq!(body["input"][1]["id"], "fc_123");
+	}
+
+	#[test]
+	fn replaces_oversized_canonical_custom_tool_ids() {
+		let original_id = format!("ctc_{}", "a".repeat(61));
+		let mut request: Request = serde_json::from_value(json!({
+			"input": [{
+				"type": "custom_tool_call",
+				"id": original_id,
+				"call_id": "call_123",
+				"name": "exec",
+				"input": "echo hello"
+			}]
+		}))
+		.expect("valid Responses request");
+
+		assert_eq!(request.canonicalize_tool_call_item_ids(), 1);
+		let body = serde_json::to_value(request).expect("request serializes");
+		let id = body["input"][0]["id"].as_str().expect("custom-tool item ID");
+		assert!(id.starts_with("ctc_"));
+		assert!(id.len() <= 64);
 	}
 }
 

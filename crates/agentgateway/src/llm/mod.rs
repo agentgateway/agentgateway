@@ -1515,6 +1515,18 @@ impl AIProvider {
 			.await?;
 		self.apply_model_alias(policies, &mut req);
 
+		// Responses virtual models can fail over between distinct upstream
+		// implementations. Canonicalize provider-specific tool-call item IDs
+		// before selecting the native Responses passthrough path, while preserving
+		// `call_id` links to their corresponding tool outputs.
+		let normalized_tool_call_ids = req.canonicalize_tool_call_item_ids();
+		if normalized_tool_call_ids > 0 {
+			tracing::debug!(
+				normalized_tool_call_ids,
+				"canonicalized Responses tool-call item IDs"
+			);
+		}
+
 		// Strip client-specific headers that cause AWS signature mismatches for Bedrock
 		if matches!(self, AIProvider::Bedrock(_)) {
 			parts.headers.remove("conversation_id");

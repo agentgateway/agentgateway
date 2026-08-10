@@ -42,6 +42,7 @@ serde.workspace = true
 serde_json.workspace = true
 serde_regex.workspace = true
 serde_with.workspace = true
+sha2.workspace = true
 thiserror.workspace = true
 tiktoken-rs.workspace = true
 tokio.workspace = true
