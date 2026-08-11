@@ -951,8 +951,10 @@ test('hybrid LLM and UI policies are stored as individual resources', async ({ p
 			const kind = String(resource.kind);
 			if (!kind.endsWith('.policy')) continue;
 			const sectionName = kind.split('.')[0];
-			const section = (effective[sectionName] ??= {}) as Record<string, unknown>;
-			const policies = (section.policies ??= {}) as Record<string, unknown>;
+			effective[sectionName] ??= {};
+			const section = effective[sectionName] as Record<string, unknown>;
+			section.policies ??= {};
+			const policies = section.policies as Record<string, unknown>;
 			policies[String(resource.id)] = resource.value;
 		}
 		return route.fulfill({
