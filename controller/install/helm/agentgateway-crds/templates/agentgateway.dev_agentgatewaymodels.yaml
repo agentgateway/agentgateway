@@ -130,6 +130,16 @@ spec:
                     - identifier
                     - version
                     type: object
+                  providerPreference:
+                    description: |-
+                      ProviderPreference selects which Bedrock API surface to prefer.
+                      `RuntimePreferred` (the default) uses Runtime and routes to Mantle only for
+                      allow-listed models; `MantleOnly` and `RuntimeOnly` force one endpoint.
+                    enum:
+                    - MantleOnly
+                    - RuntimeOnly
+                    - RuntimePreferred
+                    type: string
                   region:
                     default: us-east-1
                     description: |-

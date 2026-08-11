@@ -563,7 +563,29 @@ type BedrockSettings struct {
 	// If not specified, the AWS Guardrail policy will not be used.
 	// +optional
 	Guardrail *AWSGuardrailConfig `json:"guardrail,omitempty"`
+
+	// ProviderPreference selects which Bedrock API surface to prefer.
+	// `RuntimePreferred` (the default) uses Runtime and routes to Mantle only for
+	// allow-listed models; `MantleOnly` and `RuntimeOnly` force one endpoint.
+	// +optional
+	ProviderPreference BedrockProviderPreference `json:"providerPreference,omitempty"`
 }
+
+// BedrockProviderPreference selects the Bedrock API provider preference.
+// +k8s:enum
+type BedrockProviderPreference string
+
+const (
+	// BedrockProviderPreferenceRuntimePreferred uses Runtime by default and routes
+	// to Mantle only for models on the Mantle allow-list. This is the default.
+	BedrockProviderPreferenceRuntimePreferred BedrockProviderPreference = "RuntimePreferred"
+	// BedrockProviderPreferenceMantleOnly always uses the Mantle endpoint,
+	// regardless of the allow-list.
+	BedrockProviderPreferenceMantleOnly BedrockProviderPreference = "MantleOnly"
+	// BedrockProviderPreferenceRuntimeOnly always uses the Runtime endpoint,
+	// regardless of the allow-list.
+	BedrockProviderPreferenceRuntimeOnly BedrockProviderPreference = "RuntimeOnly"
+)
 
 type BedrockConfig struct {
 	BedrockSettings `json:",inline"`

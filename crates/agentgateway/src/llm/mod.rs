@@ -1042,19 +1042,24 @@ impl AIProvider {
 	/// providers serve routes from different hosts (Bedrock rerank uses `bedrock-agent-runtime` and
 	/// Vertex rerank uses `discoveryengine`, distinct from the chat/embeddings host). Returns `None`
 	/// for custom providers, which require an explicit host override or provider backend.
-	pub fn default_connector_target(&self, route_type: RouteType) -> Option<Target> {
+	pub fn default_connector_target(
+		&self,
+		route_type: RouteType,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
+	) -> Option<Target> {
 		Some(match self {
 			AIProvider::OpenAI(_) => Target::Hostname(openai::DEFAULT_HOST, 443),
 			AIProvider::Copilot(_) => Target::Hostname(copilot::DEFAULT_HOST, 443),
 			AIProvider::Gemini(_) => Target::Hostname(gemini::DEFAULT_HOST, 443),
 			AIProvider::Anthropic(_) => Target::Hostname(anthropic::DEFAULT_HOST, 443),
 			AIProvider::Vertex(p) => Target::Hostname(p.get_host(route_type), 443),
-			AIProvider::Bedrock(p) => Target::Hostname(p.get_host(route_type), 443),
+			AIProvider::Bedrock(p) => Target::Hostname(p.get_host(route_type, None, catalog), 443),
 			AIProvider::Azure(p) => Target::Hostname(p.get_host(), 443),
 			AIProvider::Custom(_) => return None,
 		})
 	}
 
+	#[allow(clippy::too_many_arguments)]
 	pub fn setup_request(
 		&self,
 		req: &mut Request,
@@ -1063,6 +1068,8 @@ impl AIProvider {
 		path_override: Option<&str>,
 		path_prefix: Option<&str>,
 		has_host_override: bool,
+		connection_target: Option<&mut Target>,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> anyhow::Result<()> {
 		if let Some(path_override) = path_override {
 			http::modify_req_uri(req, |uri| {
@@ -1070,12 +1077,20 @@ impl AIProvider {
 				Ok(())
 			})?;
 		} else {
-			self.set_default_path(req, route_type, llm_request, path_prefix, has_host_override)?;
+			self.set_default_path(
+				req,
+				route_type,
+				llm_request,
+				path_prefix,
+				has_host_override,
+				catalog,
+			)?;
 		}
 		if !has_host_override {
-			self.set_default_authority(req, route_type)?;
+			let model_id = llm_request.map(|l| l.request_model.as_str());
+			self.set_default_authority(req, route_type, model_id, connection_target, catalog)?;
 		}
-		self.set_required_fields(req, route_type, llm_request)?;
+		self.set_required_fields(req, route_type, llm_request, catalog)?;
 		Ok(())
 	}
 
@@ -1107,6 +1122,7 @@ impl AIProvider {
 		llm_request: Option<&LLMRequest>,
 		path_prefix: Option<&str>,
 		has_host_override: bool,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> anyhow::Result<()> {
 		if matches!(route_type, RouteType::Passthrough | RouteType::Detect) {
 			if let Some(prefix) = path_prefix {
@@ -1214,8 +1230,12 @@ impl AIProvider {
 			AIProvider::Bedrock(provider) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
 					if let Some(l) = llm_request {
-						let path =
-							provider.get_path_for_route(route_type, l.streaming, l.request_model.as_str());
+						let path = provider.get_path_for_route(
+							route_type,
+							l.streaming,
+							l.request_model.as_str(),
+							catalog,
+						);
 						let path = Self::with_path_prefix(&path, path_prefix);
 						Self::set_path_and_query(uri, &path)?;
 					}
@@ -1268,6 +1288,9 @@ impl AIProvider {
 		&self,
 		req: &mut Request,
 		route_type: RouteType,
+		model_id: Option<&str>,
+		connection_target: Option<&mut Target>,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> anyhow::Result<()> {
 		let authority = match self {
 			AIProvider::OpenAI(_) => Authority::from_static(openai::DEFAULT_HOST_STR),
@@ -1278,15 +1301,28 @@ impl AIProvider {
 			AIProvider::Azure(provider) => Authority::from_str(&provider.get_host())?,
 			AIProvider::Custom(_) => return Ok(()),
 			AIProvider::Bedrock(provider) => {
-				// Store the region in request extensions so AWS signing can use it.
+				// Resolve host + signing name for the model; stash region/signing in extensions for late signing.
+				let host = provider.get_host(route_type, model_id, catalog);
+				let signing_service = provider.signing_service_name(route_type, model_id, catalog);
+				// Bedrock's Mantle-vs-Runtime host is model-dependent, so align the connection target with it.
+				if let Some(Target::Hostname(target_host, _)) = connection_target {
+					*target_host = host.clone();
+				}
 				return http::modify_req(req, |req| {
 					http::modify_uri(req, |uri| {
-						uri.authority = Some(Authority::from_str(&provider.get_host(route_type))?);
+						uri.authority = Some(Authority::from_str(&host)?);
 						Ok(())
 					})?;
 					req.extensions.insert(bedrock::AwsRegion {
 						region: provider.region.as_str().to_string(),
 					});
+					if let Some(service) = signing_service {
+						req
+							.extensions
+							.insert(crate::http::auth::aws::DefaultAwsServiceName(
+								service.to_string(),
+							));
+					}
 					Ok(())
 				});
 			},
@@ -1305,6 +1341,7 @@ impl AIProvider {
 		req: &mut Request,
 		route_type: RouteType,
 		llm_request: Option<&LLMRequest>,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> anyhow::Result<()> {
 		match self {
 			AIProvider::Anthropic(_) => {
@@ -1356,6 +1393,24 @@ impl AIProvider {
 				} else {
 					Ok(())
 				}
+			},
+			AIProvider::Bedrock(p)
+				if matches!(route_type, RouteType::Messages)
+					&& matches!(
+						p.resolve_endpoint(
+							route_type,
+							llm_request.map(|r| r.request_model.as_str()),
+							catalog
+						),
+						bedrock::BedrockEndpoint::Mantle
+					) =>
+			{
+				http::modify_req(req, |req| {
+					req
+						.headers
+						.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+					Ok(())
+				})
 			},
 			_ => Ok(()),
 		}

@@ -10,6 +10,7 @@ fn bedrock_provider(model: &str, region: &str) -> crate::bedrock::Provider {
 		region: agent_core::strng::new(region),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 	}
 }
 
@@ -31,17 +32,26 @@ fn test_bedrock_rerank_request_passes_through_full_arn() {
 fn test_bedrock_rerank_uses_agent_runtime_host_and_rerank_path() {
 	let provider = bedrock_provider("cohere.rerank-v3-5:0", "us-west-2");
 	assert_eq!(
-		provider.get_host(crate::RouteType::Rerank).as_str(),
+		provider
+			.get_host(crate::RouteType::Rerank, None, None)
+			.as_str(),
 		"bedrock-agent-runtime.us-west-2.amazonaws.com"
 	);
 	assert_eq!(
 		provider
-			.get_path_for_route(crate::RouteType::Rerank, false, "cohere.rerank-v3-5:0")
+			.get_path_for_route(
+				crate::RouteType::Rerank,
+				false,
+				"cohere.rerank-v3-5:0",
+				None
+			)
 			.as_str(),
 		"/rerank"
 	);
 	assert_eq!(
-		provider.get_host(crate::RouteType::Embeddings).as_str(),
+		provider
+			.get_host(crate::RouteType::Embeddings, None, None)
+			.as_str(),
 		"bedrock-runtime.us-west-2.amazonaws.com"
 	);
 }
@@ -55,15 +65,19 @@ fn test_bedrock_connection_target_is_route_aware() {
 	let provider = bedrock_provider("cohere.rerank-v3-5:0", "us-west-2");
 
 	assert_eq!(
-		provider.get_host(RouteType::Rerank).as_str(),
+		provider.get_host(RouteType::Rerank, None, None).as_str(),
 		"bedrock-agent-runtime.us-west-2.amazonaws.com"
 	);
 	assert_eq!(
-		provider.get_host(RouteType::Embeddings).as_str(),
+		provider
+			.get_host(RouteType::Embeddings, None, None)
+			.as_str(),
 		"bedrock-runtime.us-west-2.amazonaws.com"
 	);
 	assert_eq!(
-		provider.get_host(RouteType::Completions).as_str(),
+		provider
+			.get_host(RouteType::Completions, None, None)
+			.as_str(),
 		"bedrock-runtime.us-west-2.amazonaws.com"
 	);
 }

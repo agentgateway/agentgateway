@@ -1114,6 +1114,7 @@ async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
@@ -1173,6 +1174,8 @@ async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
 			None,
 			None,
 			false,
+			None,
+			None,
 		)
 		.expect("Bedrock upstream request should be finalized");
 	assert_eq!(
@@ -1193,6 +1196,7 @@ async fn bedrock_provider_model_overrides_client_model() {
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
@@ -1233,6 +1237,8 @@ async fn bedrock_provider_model_overrides_client_model() {
 			None,
 			None,
 			false,
+			None,
+			None,
 		)
 		.expect("Bedrock upstream request should be finalized");
 	assert_eq!(
@@ -1354,6 +1360,8 @@ async fn copilot_anthropic_model_uses_messages_route() {
 			None,
 			None,
 			false,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 	assert_eq!(setup_req.uri().path(), "/v1/messages");
@@ -1658,6 +1666,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 	});
 
 	let error_json = r#"{"message":"Expected toolResult blocks at messages.2.content for the following Ids: tooluse_abc123"}"#;
@@ -1796,6 +1805,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
+		provider_preference: Default::default(),
 	});
 
 	let body = Body::from(
@@ -1874,6 +1884,8 @@ fn setup_request_openai_applies_prefixed_path_without_host_override() {
 			None,
 			Some("/v1/custom"),
 			false,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -1905,6 +1917,8 @@ fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
 			None,
 			Some("/v1/custom/"),
 			false,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -1947,6 +1961,8 @@ fn setup_request_custom_path_override_wins_over_format_path() {
 			Some("/override/messages"),
 			None,
 			true,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -1989,6 +2005,8 @@ fn assert_prefixed_host_override_path(
 			None,
 			Some("/proxy/"),
 			true,
+			None,
+			None,
 		)
 		.expect("setup_request should succeed");
 
@@ -2028,6 +2046,7 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 			region: strng::new("us-east-1"),
 			guardrail_identifier: None,
 			guardrail_version: None,
+			provider_preference: Default::default(),
 		}),
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
 		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
