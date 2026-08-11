@@ -134,16 +134,8 @@ func backendMCPAuthenticationOwner(namespace, name string, remote agentgateway.R
 }
 
 func TTLForRemote(remote agentgateway.RemoteJWKS) time.Duration {
-	defaultTTL := 5 * time.Minute
 	if remote.CacheDuration == nil {
-		return defaultTTL
+		return 5 * time.Minute
 	}
-	// This SHOULD be impossible due to CEL validation
-	// In the unlikely event its not, we use the default TTL
-	ttl, err := time.ParseDuration(*remote.CacheDuration)
-	if err != nil {
-		logger.Warn("invalid jwks cacheDuration, using default", "error", err)
-		return defaultTTL
-	}
-	return ttl
+	return remote.CacheDuration.Duration
 }

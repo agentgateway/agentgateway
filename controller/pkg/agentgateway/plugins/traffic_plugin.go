@@ -553,7 +553,7 @@ func translateTrafficPolicyToAgw(
 	}
 
 	if traffic.Timeouts != nil {
-		appendPolicy("timeouts")(processTimeoutPolicy(traffic.Timeouts, basePolicyName, policyName))
+		appendPolicy("timeouts")(processTimeoutPolicy(traffic.Timeouts, basePolicyName, policyName), nil)
 	}
 
 	if traffic.Retry != nil {
@@ -1021,14 +1021,11 @@ func processAPIKeyAuthenticationPolicy(
 	return apiKeyPolicy, errors.Join(errs...)
 }
 
-func processTimeoutPolicy(timeout *agentgateway.Timeouts, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
+func processTimeoutPolicy(timeout *agentgateway.Timeouts, basePolicyName string, policy types.NamespacedName) *api.Policy {
 	if timeout.Request == nil {
-		return nil, nil
+		return nil
 	}
-	request, err := durationToProto("traffic.timeouts.request", *timeout.Request)
-	if err != nil {
-		return nil, err
-	}
+	request := durationToProto(timeout.Request)
 	timeoutPolicy := &api.Policy{
 		Key:  basePolicyName + timeoutPolicySuffix,
 		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
@@ -1043,7 +1040,7 @@ func processTimeoutPolicy(timeout *agentgateway.Timeouts, basePolicyName string,
 		"policy", basePolicyName,
 		"agentgateway_policy", timeoutPolicy.Name)
 
-	return timeoutPolicy, nil
+	return timeoutPolicy
 }
 
 func processDelayPolicy(delay *agentgateway.Delay, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
@@ -1549,12 +1546,11 @@ func castCEL(item agentgateway.CELExpression, invalid func(agentgateway.CELExpre
 	return string(item)
 }
 
-func durationToProto(field string, value agentgateway.Duration) (*durationpb.Duration, error) {
-	duration, err := time.ParseDuration(value)
-	if err != nil {
-		return nil, fmt.Errorf("parse %s: %w", field, err)
+func durationToProto(value *agentgateway.Duration) *durationpb.Duration {
+	if value == nil {
+		return nil
 	}
-	return durationpb.New(duration), nil
+	return durationpb.New(value.Duration)
 }
 
 // processAuthorizationPolicy processes Authorization configuration and creates corresponding Agw policies

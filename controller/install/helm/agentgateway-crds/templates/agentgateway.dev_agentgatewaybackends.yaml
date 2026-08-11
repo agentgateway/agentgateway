@@ -14939,9 +14939,8 @@ spec:
                                     ? has(self.port) : true'
                               cacheDuration:
                                 default: 5m
-                                description: |-
-                                  Duration is a string value representing a duration in time. The format is a
-                                  strict subset of the syntax parsed by time.ParseDuration, as specified by GEP-2257.
+                                description: How long a fetched `jwks` document is
+                                  used before it is re-fetched from the IdP.
                                 maxLength: 32
                                 pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                 type: string

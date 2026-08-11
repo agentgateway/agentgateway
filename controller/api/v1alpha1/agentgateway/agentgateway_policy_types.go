@@ -1,9 +1,11 @@
 package agentgateway
 
 import (
+	"encoding/json"
 	"iter"
 	"log/slog"
 	"math"
+	"time"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -391,7 +393,6 @@ type BackendFull struct {
 
 	// Settings for MCP workloads. This is only applicable when
 	// connecting to a `Backend` of type `mcp`.
-	//
 	// +optional
 	MCP *BackendMCP `json:"mcp,omitempty"`
 
@@ -424,9 +425,29 @@ type LongString = string
 
 // Duration is a string value representing a duration in time. The format is a
 // strict subset of the syntax parsed by time.ParseDuration, as specified by GEP-2257.
+// +kubebuilder:validation:Type=string
 // +kubebuilder:validation:MaxLength=32
 // +kubebuilder:validation:Pattern=`^([0-9]{1,5}(h|m|s|ms)){1,4}$`
-type Duration = string
+type Duration struct {
+	time.Duration `json:"-"`
+}
+
+func (d *Duration) UnmarshalJSON(b []byte) error {
+	var str string
+	if err := json.Unmarshal(b, &str); err != nil {
+		return err
+	}
+	pd, err := time.ParseDuration(str)
+	if err != nil {
+		return err
+	}
+	d.Duration = pd
+	return nil
+}
+
+func (d Duration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.Duration.String())
+}
 
 // +kubebuilder:validation:MinLength=1
 // +kubebuilder:validation:MaxLength=253
@@ -738,9 +759,13 @@ type FrontendHTTP struct {
 	// If unset, this defaults to `16Ki`.
 	// +optional
 	HTTP2MaxHeaderSize *ByteSize `json:"http2MaxHeaderSize,omitempty"`
+	// Interval between `HTTP/2` keepalive pings.
+	// If unset, keepalive pings are not sent.
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http2KeepaliveInterval must be at least 1 second"
 	// +optional
 	HTTP2KeepaliveInterval *Duration `json:"http2KeepaliveInterval,omitempty"`
+	// Time to wait for a response to an `HTTP/2` keepalive ping before the connection is closed.
+	// Only applies when `http2KeepaliveInterval` is set.
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http2KeepaliveTimeout must be at least 1 second"
 	// +optional
 	HTTP2KeepaliveTimeout *Duration `json:"http2KeepaliveTimeout,omitempty"`
@@ -1204,6 +1229,7 @@ type RemoteJWKS struct {
 	// `".well-known/jwks.json"`.
 	// +optional
 	JwksPath *LongString `json:"jwksPath,omitempty"`
+	// How long a fetched `jwks` document is used before it is re-fetched from the IdP.
 	// +optional
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('5m')",message="cacheDuration must be at least 5m."
 	// +kubebuilder:default="5m"
