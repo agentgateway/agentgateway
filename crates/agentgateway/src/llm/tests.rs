@@ -929,7 +929,7 @@ async fn messages_to_completions_final_transformation() {
 			upstream_route_type,
 			..
 		} = provider
-			.process_messages_request(&backend_info, policy, req, false, &mut None)
+			.process_messages_request(&backend_info, policy, req, false, &mut None, None)
 			.await
 			.expect("Anthropic messages request should translate to OpenAI completions")
 		else {
