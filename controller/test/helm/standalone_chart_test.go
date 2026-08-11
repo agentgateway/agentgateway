@@ -110,7 +110,8 @@ func TestStandaloneChartGoldenTemplate(t *testing.T) {
 		},
 		{
 			name: "workload-overrides",
-			valuesYAML: `resources:
+			valuesYAML: `revisionHistoryLimit: 3
+resources:
   requests:
     cpu: 250m
     memory: 256Mi
@@ -119,6 +120,10 @@ func TestStandaloneChartGoldenTemplate(t *testing.T) {
     memory: 1Gi
 nodeSelector:
   kubernetes.io/os: linux
+dnsConfig:
+  options:
+  - name: ndots
+    value: "3"
 tolerations:
 - key: dedicated
   operator: Equal

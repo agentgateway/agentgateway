@@ -12,6 +12,9 @@ namespaceOverride: ""
 # Number of agentgateway pods. Both supported modes allow multiple replicas.
 replicaCount: 1
 
+# Old ReplicaSets retained for rollback. Unset uses the Kubernetes default of 10; 0 keeps no history.
+revisionHistoryLimit:
+
 # Configuration persistence mode:
 # - readonly: serve the static config below from a read-only ConfigMap.
 # - database: use the static config as a baseline and store UI-managed changes in Postgres.
@@ -63,6 +66,10 @@ resources:
 nodeSelector: {}
 tolerations: []
 affinity: {}
+
+# Pod DNS configuration, merged with what the kubelet derives from the pod's dnsPolicy.
+# E.g. options: [{name: ndots, value: "3"}]
+dnsConfig: {}
 
 # Service exposure for the unified gateway listener.
 gateway:
