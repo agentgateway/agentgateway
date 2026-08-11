@@ -1,0 +1,5 @@
+{
+  "model": "gemini-embedding-2",
+  "input": "hello world",
+  "dimensions": 512
+}

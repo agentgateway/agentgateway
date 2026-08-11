@@ -115,12 +115,18 @@ impl Provider {
 				)
 			},
 			(RouteType::Embeddings, _, _) => {
-				let model = self.configured_model(request_model).unwrap_or_default();
+				let model = self.embeddings_model(request_model);
+				let method = if self.uses_embed_content(request_model) {
+					"embedContent"
+				} else {
+					"predict"
+				};
 				strng::format!(
-					"/v1/projects/{}/locations/{}/publishers/google/models/{}:predict",
+					"/v1/projects/{}/locations/{}/publishers/google/models/{}:{}",
 					self.project_id,
 					location,
-					model
+					model,
+					method
 				)
 			},
 			(_, Some(model), _) => {
@@ -192,15 +198,24 @@ impl Provider {
 		}
 	}
 
+	fn embeddings_model<'a>(&'a self, request_model: Option<&'a str>) -> &'a str {
+		self
+			.configured_model(request_model)
+			.map(strip_google_model_prefix)
+			.unwrap_or_default()
+	}
+
+	/// `gemini-embedding-2` and later are served only by `:embedContent`; `:predict`
+	/// returns FAILED_PRECONDITION for them. `-001` stays on `:predict`, that supports
+	/// batch prediction and avoids regression
+	pub fn uses_embed_content(&self, request_model: Option<&str>) -> bool {
+		let model = self.embeddings_model(request_model);
+		model.starts_with("gemini-embedding-") && !model.starts_with("gemini-embedding-001")
+	}
+
 	fn gemini_model<'a>(&'a self, request_model: Option<&'a str>) -> Option<Strng> {
 		let model = self.configured_model(request_model)?;
-
-		let stripped: &str = model
-			.split_once("publishers/google/models/")
-			.map(|(_, m)| m)
-			.or_else(|| model.strip_prefix("models/"))
-			.or_else(|| model.strip_prefix("google/"))
-			.unwrap_or(model);
+		let stripped = strip_google_model_prefix(model);
 
 		// The publisher path supplies its own `.../models/` prefix, so what is left has to be a
 		// single segment; a `/` still in it would be choosing the upstream path, not a model.
@@ -255,6 +270,17 @@ impl Provider {
 			Some(strng::new(model))
 		}
 	}
+}
+
+/// Reduce a Google publisher model to its bare id, so callers can match on the model
+/// family regardless of how fully qualified the configured value is.
+fn strip_google_model_prefix(model: &str) -> &str {
+	model
+		.split_once("publishers/google/models/")
+		.map(|(_, m)| m)
+		.or_else(|| model.strip_prefix("models/"))
+		.or_else(|| model.strip_prefix("google/"))
+		.unwrap_or(model)
 }
 
 fn remove_unsupported_vertex_fields(body: &mut Map<String, Value>) {
@@ -593,6 +619,37 @@ mod tests {
 			!path.as_str().contains(":generateContent"),
 			"embedding route must not produce :generateContent, got {path}"
 		);
+	}
+
+	#[rstest::rstest]
+	#[case::gemini_embedding_2(
+		"gemini-embedding-2",
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-embedding-2:embedContent"
+	)]
+	#[case::gemini_embedding_1_keeps_predict(
+		"gemini-embedding-001",
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-embedding-001:predict"
+	)]
+	#[case::text_embedding_keeps_predict(
+		"text-embedding-005",
+		"/v1/projects/p/locations/global/publishers/google/models/text-embedding-005:predict"
+	)]
+	#[case::publishers_prefix_normalized(
+		"publishers/google/models/gemini-embedding-2",
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-embedding-2:embedContent"
+	)]
+	#[case::models_prefix_normalized(
+		"models/text-embedding-005",
+		"/v1/projects/p/locations/global/publishers/google/models/text-embedding-005:predict"
+	)]
+	fn test_get_path_for_embeddings(#[case] req_model: &str, #[case] expected: &str) {
+		let p = Provider {
+			project_id: strng::new("p"),
+			model: None,
+			region: None,
+		};
+		let got = p.get_path_for_model(RouteType::Embeddings, Some(req_model), false, false);
+		assert_eq!(got.as_str(), expected);
 	}
 
 	#[rstest::rstest]
