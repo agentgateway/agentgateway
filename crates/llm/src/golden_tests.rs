@@ -40,6 +40,7 @@ const BEDROCK_COHERE: &str = "bedrock-cohere";
 const BEDROCK_NOVA: &str = "bedrock-nova";
 const COHERE: &str = "cohere";
 const VERTEX_GEMINI: &str = "vertex-gemini";
+const VERTEX_EMBED_CONTENT: &str = "vertex-embed-content";
 
 mod requests {
 	use super::*;
@@ -182,6 +183,7 @@ mod requests {
 		("cohere-v4", &[BEDROCK_COHERE]),
 		("array", &[OPENAI, BEDROCK_COHERE, VERTEX]),
 		("full", &[VERTEX]),
+		("embed-content", &[VERTEX]),
 	];
 	const RERANK_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[COHERE, BEDROCK, VERTEX]),
@@ -302,6 +304,11 @@ mod requests {
 			guardrail_identifier: None,
 			guardrail_version: None,
 		};
+		let vertex = vertex::Provider {
+			model: None,
+			region: Some(strng::new("global")),
+			project_id: strng::new("test-project-123"),
+		};
 		for (name, providers) in EMBEDDINGS_REQUESTS {
 			let path = format!("requests/embeddings/{name}.json");
 			for provider in *providers {
@@ -324,7 +331,7 @@ mod requests {
 						conversion::bedrock::from_embeddings::translate(i, &nova)
 					}),
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::embeddings::Request| {
-						conversion::vertex::from_embeddings::translate(i)
+						conversion::vertex::from_embeddings::translate(i, &vertex)
 					}),
 					other => panic!("unsupported provider in EMBEDDINGS_REQUESTS: {other}"),
 				}
@@ -677,6 +684,7 @@ mod responses {
 		("response/bedrock-cohere/embeddings.json", BEDROCK_COHERE),
 		("response/bedrock-nova/embeddings.json", BEDROCK_NOVA),
 		("response/vertex/embeddings.json", VERTEX),
+		("response/vertex/embed-content.json", VERTEX_EMBED_CONTENT),
 		("response/openai/embeddings.json", OPENAI),
 		("response/openai/gemini-embeddings.json", OPENAI),
 	];
@@ -826,6 +834,11 @@ mod responses {
 	}
 	#[test]
 	fn embeddings() {
+		let vertex = vertex::Provider {
+			model: None,
+			region: Some(strng::new("global")),
+			project_id: strng::new("test-project-123"),
+		};
 		for (path, provider) in EMBEDDING_RESPONSES {
 			match *provider {
 				BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_NOVA => {
@@ -843,7 +856,10 @@ mod responses {
 					});
 				},
 				VERTEX => test_response(provider, path, |i| {
-					conversion::vertex::from_embeddings::translate_response(&i, "text-embedding-004")
+					conversion::vertex::from_embeddings::translate_response(&i, &vertex, "text-embedding-004")
+				}),
+				VERTEX_EMBED_CONTENT => test_response(provider, path, |i| {
+					conversion::vertex::from_embeddings::translate_response(&i, &vertex, "gemini-embedding-2")
 				}),
 				OPENAI => test_response(provider, path, |i| {
 					serde_json::from_slice::<types::embeddings::Response>(&i)

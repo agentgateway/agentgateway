@@ -1,0 +1,32 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/embeddings/embed-content.json
+info:
+  model: gemini-embedding-2
+  input: hello world
+  dimensions: 512
+---
+{
+  "request": {
+    "content": {
+      "parts": [
+        {
+          "text": "hello world"
+        }
+      ]
+    },
+    "embedContentConfig": {
+      "outputDimensionality": 512
+    }
+  },
+  "parsed": {
+    "input_format": "Embeddings",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gemini-embedding-2",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {
+      "dimensions": 512
+    }
+  }
+}
