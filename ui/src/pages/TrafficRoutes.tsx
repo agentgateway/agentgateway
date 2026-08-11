@@ -516,11 +516,11 @@ function GatewayRoutesEditorPage() {
   function databaseRoute(kind: RouteKind, resourceId: string | undefined) {
     return Boolean(
       resourceId &&
-      isDatabaseConfigResource(
-        traffic.resources,
-        kind === "http" ? "traffic.route" : "traffic.tcpRoute",
-        resourceId,
-      ),
+        isDatabaseConfigResource(
+          traffic.resources,
+          kind === "http" ? "traffic.route" : "traffic.tcpRoute",
+          resourceId,
+        ),
     );
   }
 
@@ -2021,9 +2021,9 @@ function backendIsConfigured(backend: TrafficBackend) {
 function isHostBackend(backend: TrafficBackend): backend is HostBackend {
   return Boolean(
     backend &&
-    typeof backend === "object" &&
-    "host" in backend &&
-    typeof backend.host === "string",
+      typeof backend === "object" &&
+      "host" in backend &&
+      typeof backend.host === "string",
   );
 }
 
@@ -2032,9 +2032,9 @@ function isBackendReference(
 ): backend is BackendReference {
   return Boolean(
     backend &&
-    typeof backend === "object" &&
-    "backend" in backend &&
-    typeof backend.backend === "string",
+      typeof backend === "object" &&
+      "backend" in backend &&
+      typeof backend.backend === "string",
   );
 }
 
@@ -2043,9 +2043,9 @@ function isRouteGroupBackend(
 ): backend is RouteGroupBackend {
   return Boolean(
     backend &&
-    typeof backend === "object" &&
-    "routeGroup" in backend &&
-    typeof backend.routeGroup === "string",
+      typeof backend === "object" &&
+      "routeGroup" in backend &&
+      typeof backend.routeGroup === "string",
   );
 }
 

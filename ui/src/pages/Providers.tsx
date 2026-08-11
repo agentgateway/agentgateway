@@ -66,13 +66,13 @@ export function ProvidersPage() {
         : null);
   const editingDatabaseProvider = Boolean(
     hybrid &&
-    activeEditing &&
-    (!activeEditing.previousName ||
-      isDatabaseConfigResource(
-        resources,
-        "llm.provider",
-        activeEditing.previousName,
-      )),
+      activeEditing &&
+      (!activeEditing.previousName ||
+        isDatabaseConfigResource(
+          resources,
+          "llm.provider",
+          activeEditing.previousName,
+        )),
   );
 
   function openNewProvider() {

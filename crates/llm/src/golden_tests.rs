@@ -37,6 +37,7 @@ const GEMINI: &str = "gemini";
 const COMPLETIONS: &str = "completions";
 const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
+const BEDROCK_NOVA: &str = "bedrock-nova";
 const COHERE: &str = "cohere";
 const VERTEX_GEMINI: &str = "vertex-gemini";
 
@@ -60,7 +61,7 @@ mod requests {
 			.to_llm_request(
 				strng::new(match provider {
 					COMPLETIONS => OPENAI,
-					BEDROCK_TITAN | BEDROCK_COHERE => BEDROCK,
+					BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_NOVA => BEDROCK,
 					VERTEX_GEMINI => VERTEX,
 					provider => provider,
 				}),
@@ -174,7 +175,10 @@ mod requests {
 		("with_system", &[ANTHROPIC, BEDROCK, VERTEX]),
 	];
 	const EMBEDDINGS_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[OPENAI, BEDROCK_TITAN, BEDROCK_COHERE, VERTEX]),
+		(
+			"basic",
+			&[OPENAI, BEDROCK_TITAN, BEDROCK_COHERE, BEDROCK_NOVA, VERTEX],
+		),
 		("cohere-v4", &[BEDROCK_COHERE]),
 		("array", &[OPENAI, BEDROCK_COHERE, VERTEX]),
 		("full", &[VERTEX]),
@@ -292,6 +296,12 @@ mod requests {
 			guardrail_identifier: None,
 			guardrail_version: None,
 		};
+		let nova = bedrock::Provider {
+			model: Some(strng::new("amazon.nova-2-multimodal-embeddings-v1:0")),
+			region: strng::new("us-east-1"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+		};
 		for (name, providers) in EMBEDDINGS_REQUESTS {
 			let path = format!("requests/embeddings/{name}.json");
 			for provider in *providers {
@@ -309,6 +319,9 @@ mod requests {
 							&cohere
 						};
 						conversion::bedrock::from_embeddings::translate(i, provider)
+					}),
+					BEDROCK_NOVA => test_request(BEDROCK_NOVA, &path, |i| {
+						conversion::bedrock::from_embeddings::translate(i, &nova)
 					}),
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::embeddings::Request| {
 						conversion::vertex::from_embeddings::translate(i)
@@ -662,6 +675,7 @@ mod responses {
 	const EMBEDDING_RESPONSES: &[(&str, &str)] = &[
 		("response/bedrock-titan/embeddings.json", BEDROCK_TITAN),
 		("response/bedrock-cohere/embeddings.json", BEDROCK_COHERE),
+		("response/bedrock-nova/embeddings.json", BEDROCK_NOVA),
 		("response/vertex/embeddings.json", VERTEX),
 		("response/openai/embeddings.json", OPENAI),
 		("response/openai/gemini-embeddings.json", OPENAI),
@@ -814,11 +828,11 @@ mod responses {
 	fn embeddings() {
 		for (path, provider) in EMBEDDING_RESPONSES {
 			match *provider {
-				BEDROCK_TITAN | BEDROCK_COHERE => {
-					let model = if *provider == BEDROCK_TITAN {
-						"amazon.titan-embed-text-v2:0"
-					} else {
-						"cohere.embed-english-v3"
+				BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_NOVA => {
+					let model = match *provider {
+						BEDROCK_TITAN => "amazon.titan-embed-text-v2:0",
+						BEDROCK_COHERE => "cohere.embed-english-v3",
+						_ => "amazon.nova-2-multimodal-embeddings-v1:0",
 					};
 					test_response(provider, path, |i| {
 						conversion::bedrock::from_embeddings::translate_response(

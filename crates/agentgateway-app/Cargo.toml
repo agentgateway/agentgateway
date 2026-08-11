@@ -23,6 +23,7 @@ mimalloc = ["dep:mimalloc", "agentgateway/mimalloc"]
 # Builds that pass `--no-default-features` (e.g. arm64 musl, which drops jemalloc) MUST re-add one
 # of these, otherwise the agentgateway crypto code will fail to compile.
 crypto-aws-lc = ["agentgateway/crypto-aws-lc"]
+crypto-symcrypt = ["agentgateway/crypto-symcrypt"]
 schema = ["agentgateway/schema"]
 
 [dependencies]

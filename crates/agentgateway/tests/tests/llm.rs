@@ -916,6 +916,76 @@ async fn llm_openai_messages_translation_with_host_override_path_behavior(
 	);
 }
 
+#[tokio::test]
+async fn llm_final_transformation_applies_after_messages_translation() {
+	let mock = body_mock(include_bytes!(
+		"../../../llm/src/tests/response/completions/basic.json"
+	))
+	.await;
+	let (mock, mut bind, io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		}),
+		false,
+		"{}",
+	);
+	bind
+		.attach_route_policy(json!({
+			"ai": {
+				"routes": { "/v1/messages": "messages" },
+				"finalTransformations": {
+					// Drop a field the converter added.
+					"reasoning_effort": r#"fail("remove")"#,
+					// Observe the converted message list.
+					"converted_message_count": "llmRequest.messages.size()"
+				}
+			}
+		}))
+		.await;
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/messages",
+		br#"{
+			"model": "gpt-4o",
+			"max_tokens": 64,
+			"system": "be brief",
+			"messages": [{"role": "user", "content": "hello"}],
+			"tools": [{
+				"name": "get_weather",
+				"description": "Look up the weather",
+				"input_schema": {
+					"type": "object",
+					"properties": {"city": {"type": "string"}},
+					"required": ["city"]
+				}
+			}]
+		}"#,
+	)
+	.await;
+
+	assert_eq!(res.status(), 200);
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request JSON");
+
+	// The request really was converted to completions format.
+	assert_eq!(upstream_body["messages"][0]["role"], json!("system"));
+	// Indexing yields Null for a missing key, so assert on key presence.
+	assert!(
+		upstream_body.get("reasoning_effort").is_none(),
+		"reasoning_effort should be removed, got: {upstream_body}"
+	);
+	assert_eq!(upstream_body["converted_message_count"], json!(2));
+}
+
 #[rstest::rstest]
 #[case::preserves_path(None, "/v1/models", "/v1/models")]
 #[case::path_prefix(Some("/openai/v1"), "/v1/models", "/openai/v1/models")]

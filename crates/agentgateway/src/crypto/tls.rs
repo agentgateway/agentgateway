@@ -59,3 +59,38 @@ pub fn provider_with_cipher_suites(cipher_suites: &[CipherSuite]) -> Arc<CryptoP
 fn default_crypto_provider() -> CryptoProvider {
 	rustls::crypto::aws_lc_rs::default_provider()
 }
+
+#[cfg(feature = "crypto-symcrypt")]
+fn default_crypto_provider() -> CryptoProvider {
+	rustls_symcrypt::default_symcrypt_provider()
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::transport::tls::{CipherSuite, KeyExchangeGroup};
+
+	// Exercises the compiled-in backend's provider construction and the
+	// cipher-suite / kx-group mappings (aws-lc-rs or SymCrypt).
+	#[test]
+	fn provider_has_default_suites_and_kx() {
+		let p = super::provider();
+		assert!(
+			!p.cipher_suites.is_empty(),
+			"default cipher suites must not be empty"
+		);
+		assert!(
+			!p.kx_groups.is_empty(),
+			"default kx groups must not be empty"
+		);
+	}
+
+	#[test]
+	fn provider_with_options_applies_selection() {
+		let p = super::provider_with_options(
+			&[CipherSuite::TLS_AES_256_GCM_SHA384],
+			&[KeyExchangeGroup::P256],
+		);
+		assert_eq!(p.cipher_suites.len(), 1);
+		assert_eq!(p.kx_groups.len(), 1);
+	}
+}

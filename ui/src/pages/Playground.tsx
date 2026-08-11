@@ -246,10 +246,10 @@ export function PlaygroundPage() {
   );
   const fileMcpCorsOwned = Boolean(
     mcpData.rawConfig.data?.mcp?.policies &&
-    Object.prototype.hasOwnProperty.call(
-      mcpData.rawConfig.data.mcp.policies,
-      "cors",
-    ),
+      Object.prototype.hasOwnProperty.call(
+        mcpData.rawConfig.data.mcp.policies,
+        "cors",
+      ),
   );
   const needsCors =
     !configDataLoading &&
@@ -1139,8 +1139,8 @@ function extractToolCalls(response: unknown): ToolCall[] {
   return calls.filter((call): call is ToolCall =>
     Boolean(
       call &&
-      typeof call === "object" &&
-      typeof (call as { id?: unknown }).id === "string",
+        typeof call === "object" &&
+        typeof (call as { id?: unknown }).id === "string",
     ),
   );
 }

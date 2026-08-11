@@ -30,7 +30,6 @@ use crate::transport::BufferLimit;
 use crate::transport::stream::{
 	ConnectHeaders, Extension, LoggingMode, Socket, TCPConnectionInfo, TLSConnectionInfo,
 };
-use crate::transport::tls::TlsInfo;
 use crate::types::agent::{
 	BindKey, BindProtocol, Listener, ListenerProtocol, TransportProtocol, TunnelProtocol,
 };
@@ -1175,24 +1174,6 @@ impl Gateway {
 				raw_peer_addr: Some(raw_peer_addr),
 			});
 		}
-
-		// Insert TLSConnectionInfo with identity from TLV 0xD0
-		// Even though there's no TLS on this connection, we use this struct
-		// to carry the peer identity that ztunnel extracted from mTLS
-		if let Some(identity) = pp_info.peer_identity {
-			raw_stream.ext_mut().insert(TLSConnectionInfo {
-				src_identity: Some(TlsInfo {
-					identity: Some(identity),
-					subject_alt_names: vec![],
-					issuer: crate::strng::EMPTY,
-					subject: crate::strng::EMPTY,
-					subject_cn: None,
-					certificate: None,
-				}),
-				server_name: None,
-				negotiated_alpn: None,
-			});
-		}
 	}
 
 	/// Handle incoming connection with a PROXY protocol header.
@@ -1232,8 +1213,7 @@ impl Gateway {
 			},
 		};
 
-		// Continue with normal protocol handling. Any PROXY-derived identity is now in the socket
-		// extensions and will flow through to CEL authorization via with_source().
+		// Continue with normal protocol handling.
 		Self::proxy_bind(bind_name, bind_protocol, raw_stream, inp, drain).await;
 		Ok(())
 	}

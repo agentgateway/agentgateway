@@ -62,7 +62,7 @@ const surfaceConfig: Record<
     enabled: (config) =>
       Boolean(
         config &&
-        ("gateways" in config || "routes" in config || "binds" in config),
+          ("gateways" in config || "routes" in config || "binds" in config),
       ),
     destination: "/traffic/gateways",
     destinationLabel: "Continue to gateways",

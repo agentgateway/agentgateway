@@ -164,8 +164,8 @@ const policyMetadataKeys = new Set(["phase", "inheritance"]);
 function isTargetedPolicy(value: unknown): value is TargetedPolicy {
   return Boolean(
     value &&
-    typeof value === "object" &&
-    typeof (value as { key?: unknown }).key === "string",
+      typeof value === "object" &&
+      typeof (value as { key?: unknown }).key === "string",
   );
 }
 

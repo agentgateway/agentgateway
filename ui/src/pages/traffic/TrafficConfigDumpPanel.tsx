@@ -461,8 +461,8 @@ export function buildTrafficInventory(dump: AdminConfigDump) {
 function isTargetedPolicy(value: unknown): value is TargetedPolicy {
   return Boolean(
     value &&
-    typeof value === "object" &&
-    typeof (value as { key?: unknown }).key === "string",
+      typeof value === "object" &&
+      typeof (value as { key?: unknown }).key === "string",
   );
 }
 
@@ -473,8 +473,8 @@ function isBackendWithPolicies(value: unknown): value is BackendWithPolicies {
 function isService(value: unknown): value is Service {
   return Boolean(
     value &&
-    typeof value === "object" &&
-    typeof (value as { hostname?: unknown }).hostname === "string",
+      typeof value === "object" &&
+      typeof (value as { hostname?: unknown }).hostname === "string",
   );
 }
 

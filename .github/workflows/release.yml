@@ -431,7 +431,7 @@ jobs:
         persist-credentials: false
     - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
       with:
-        node-version: 24
+        node-version-file: ui/.nvmrc
     - name: Install Rust
       uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
       with:
@@ -441,8 +441,9 @@ jobs:
     - name: Build UI
       run: |
         cd ui
-        npm install
-        npm run build
+        corepack enable
+        pnpm install --frozen-lockfile
+        pnpm build
     - name: Prepare Linux target
       if: ${{ matrix.target == 'x86_64-unknown-linux-musl' || matrix.target == 'aarch64-unknown-linux-musl' }}
       run: |

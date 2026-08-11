@@ -204,10 +204,10 @@ export function GuardrailsPage() {
   const guardrails = (policies.guardrails ?? null) as LlmGuardrail | null;
   const fileOwned = Boolean(
     rawConfig.data?.llm?.policies &&
-    Object.prototype.hasOwnProperty.call(
-      rawConfig.data.llm.policies,
-      "guardrails",
-    ),
+      Object.prototype.hasOwnProperty.call(
+        rawConfig.data.llm.policies,
+        "guardrails",
+      ),
   );
   const saving = upsertPolicy.isPending || deleteResource.isPending;
   const saveError =
