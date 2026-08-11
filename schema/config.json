@@ -8251,23 +8251,11 @@
       ]
     },
     "BedrockProviderPreference": {
-      "description": "Which Bedrock endpoint to prefer when a model is not explicitly known to be Runtime.",
-      "oneOf": [
-        {
-          "description": "Prefer Runtime; fall through to Mantle only for chat models on the allow-list.",
-          "type": "string",
-          "const": "runtimePreferred"
-        },
-        {
-          "description": "Always use Mantle for chat routes.",
-          "type": "string",
-          "const": "mantleOnly"
-        },
-        {
-          "description": "Always use Runtime for chat routes.",
-          "type": "string",
-          "const": "runtimeOnly"
-        }
+      "type": "string",
+      "enum": [
+        "runtimePreferred",
+        "mantleOnly",
+        "runtimeOnly"
       ]
     },
     "AzureProvider": {

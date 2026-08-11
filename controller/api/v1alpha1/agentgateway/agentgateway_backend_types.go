@@ -566,7 +566,9 @@ type BedrockSettings struct {
 
 	// ProviderPreference selects which Bedrock API surface to prefer.
 	// `RuntimePreferred` (the default) uses Runtime and routes to Mantle only for
-	// allow-listed models; `MantleOnly` and `RuntimeOnly` force one endpoint.
+	// models the catalog tags `mantle` but not `runtime`; `MantleOnly` and
+	// `RuntimeOnly` force one endpoint.
+	// +kubebuilder:default=RuntimePreferred
 	// +optional
 	ProviderPreference BedrockProviderPreference `json:"providerPreference,omitempty"`
 }
@@ -576,14 +578,12 @@ type BedrockSettings struct {
 type BedrockProviderPreference string
 
 const (
-	// BedrockProviderPreferenceRuntimePreferred uses Runtime by default and routes
-	// to Mantle only for models on the Mantle allow-list. This is the default.
+	// BedrockProviderPreferenceRuntimePreferred uses Runtime by default and routes to
+	// Mantle only for models the catalog tags `mantle` but not `runtime`. This is the default.
 	BedrockProviderPreferenceRuntimePreferred BedrockProviderPreference = "RuntimePreferred"
-	// BedrockProviderPreferenceMantleOnly always uses the Mantle endpoint,
-	// regardless of the allow-list.
+	// BedrockProviderPreferenceMantleOnly always uses the Mantle endpoint, regardless of catalog tags.
 	BedrockProviderPreferenceMantleOnly BedrockProviderPreference = "MantleOnly"
-	// BedrockProviderPreferenceRuntimeOnly always uses the Runtime endpoint,
-	// regardless of the allow-list.
+	// BedrockProviderPreferenceRuntimeOnly always uses the Runtime endpoint, regardless of catalog tags.
 	BedrockProviderPreferenceRuntimeOnly BedrockProviderPreference = "RuntimeOnly"
 )
 
