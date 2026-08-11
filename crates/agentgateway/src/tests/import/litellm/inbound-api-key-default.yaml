@@ -1,0 +1,6 @@
+model_list:
+- model_name: chat
+  litellm_params:
+    model: openai/gpt-4o
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

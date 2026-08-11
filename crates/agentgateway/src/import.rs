@@ -23,7 +23,15 @@ pub struct ImportPlan {
 	pub providers: Vec<ImportedProvider>,
 	pub models: Vec<ImportedModel>,
 	pub routes: IndexMap<String, ImportedRoute>,
+	pub inbound_api_key: Option<ImportedInboundAPIKey>,
 	pub findings: Vec<ImportFinding>,
+}
+
+#[derive(Debug)]
+pub struct ImportedInboundAPIKey {
+	pub key: Value,
+	pub header_name: String,
+	pub prefix: Option<String>,
 }
 
 #[derive(Debug)]
@@ -141,6 +149,7 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 		providers,
 		models,
 		routes,
+		inbound_api_key,
 		findings,
 	} = plan;
 	let model_by_name: HashMap<_, _> = models
@@ -256,6 +265,22 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 	}
 	if !virtual_models.is_empty() {
 		llm.insert("virtualModels".to_string(), Value::Array(virtual_models));
+	}
+	if let Some(api_key) = inbound_api_key {
+		let mut header = Map::from_iter([("name".to_string(), json!(api_key.header_name))]);
+		if let Some(prefix) = api_key.prefix {
+			header.insert("prefix".to_string(), json!(prefix));
+		}
+		llm.insert(
+			"policies".to_string(),
+			json!({
+				"apiKey": {
+					"keys": [{"key": api_key.key}],
+					"mode": "strict",
+					"location": {"header": header},
+				}
+			}),
+		);
 	}
 	config
 		.as_object_mut()
@@ -384,6 +409,7 @@ impl ConfigImporter for LiteLlmImporter {
 		if let Some((source_path, fallbacks)) = fallbacks {
 			apply_fallbacks(fallbacks, source_path, &mut plan);
 		}
+		import_litellm_inbound_api_key(&config.general_settings, &mut plan);
 
 		if let Some(strategy) = config.router_settings.get("routing_strategy") {
 			let (status, message) = match strategy.as_str() {
@@ -424,6 +450,11 @@ impl ConfigImporter for LiteLlmImporter {
 			("environment_variables", &config.environment_variables),
 		] {
 			for setting in values.keys() {
+				if section == "general_settings"
+					&& matches!(setting.as_str(), "master_key" | "litellm_key_header_name")
+				{
+					continue;
+				}
 				if setting == "database_url"
 					|| (section == "environment_variables" && setting == "DATABASE_URL")
 				{
@@ -459,6 +490,153 @@ impl ConfigImporter for LiteLlmImporter {
 			"Unrecognized LiteLLM top-level field was not emitted",
 		);
 		Ok(plan)
+	}
+}
+
+fn import_litellm_inbound_api_key(settings: &Map<String, Value>, plan: &mut ImportPlan) {
+	let Some(master_key) = settings.get("master_key") else {
+		if settings.contains_key("litellm_key_header_name") {
+			plan.findings.push(ImportFinding {
+				source_path: "general_settings.litellm_key_header_name".to_string(),
+				status: ImportStatus::Manual,
+				message:
+					"LiteLLM custom API-key header has no master_key to authenticate and was not emitted"
+						.to_string(),
+			});
+		}
+		return;
+	};
+
+	let Value::String(master_key) = master_key else {
+		plan.findings.push(ImportFinding {
+			source_path: "general_settings.master_key".to_string(),
+			status: ImportStatus::Manual,
+			message: "LiteLLM master_key must be an environment-backed string and was not emitted"
+				.to_string(),
+		});
+		report_unmapped_inbound_header(
+			settings,
+			plan,
+			ImportStatus::Manual,
+			"LiteLLM custom API-key header was not emitted because master_key is invalid",
+		);
+		return;
+	};
+	let Some(environment) = master_key.strip_prefix("os.environ/") else {
+		plan.findings.push(ImportFinding {
+			source_path: "general_settings.master_key".to_string(),
+			status: ImportStatus::Manual,
+			message: "Literal LiteLLM master_key was not emitted to avoid materializing an inbound secret; use os.environ/<NAME>"
+				.to_string(),
+		});
+		report_unmapped_inbound_header(
+			settings,
+			plan,
+			ImportStatus::Manual,
+			"LiteLLM custom API-key header was not emitted because master_key is not environment-backed",
+		);
+		return;
+	};
+	if environment.is_empty() {
+		plan.findings.push(ImportFinding {
+			source_path: "general_settings.master_key".to_string(),
+			status: ImportStatus::Manual,
+			message: "LiteLLM master_key environment reference must name a variable and was not emitted"
+				.to_string(),
+		});
+		report_unmapped_inbound_header(
+			settings,
+			plan,
+			ImportStatus::Manual,
+			"LiteLLM custom API-key header was not emitted because master_key has an empty environment reference",
+		);
+		return;
+	}
+
+	let (header_name, prefix, status, message) = match settings.get("litellm_key_header_name") {
+		None => (
+			"authorization".to_string(),
+			Some("Bearer ".to_string()),
+			ImportStatus::Approximate,
+			"Mapped the environment-backed master_key to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers"
+				.to_string(),
+		),
+		Some(Value::String(name)) => {
+			let Ok(name) = ::http::HeaderName::from_bytes(name.as_bytes()) else {
+				plan.findings.push(ImportFinding {
+					source_path: "general_settings.master_key".to_string(),
+					status: ImportStatus::Manual,
+					message: "Environment-backed master_key was not emitted because LiteLLM custom API-key header name is invalid"
+						.to_string(),
+				});
+				plan.findings.push(ImportFinding {
+					source_path: "general_settings.litellm_key_header_name".to_string(),
+					status: ImportStatus::Unsupported,
+					message: "LiteLLM custom API-key header name is invalid and the inbound policy was not emitted"
+						.to_string(),
+				});
+				return;
+			};
+			(
+				name.as_str().to_string(),
+				Some("Bearer ".to_string()),
+				ImportStatus::Exact,
+				"Mapped the environment-backed master_key and LiteLLM custom API-key header to strict inbound API-key authentication"
+					.to_string(),
+			)
+		},
+		Some(_) => {
+			plan.findings.push(ImportFinding {
+				source_path: "general_settings.master_key".to_string(),
+				status: ImportStatus::Manual,
+				message: "Environment-backed master_key was not emitted because LiteLLM custom API-key header name is not a string"
+					.to_string(),
+			});
+			plan.findings.push(ImportFinding {
+				source_path: "general_settings.litellm_key_header_name".to_string(),
+				status: ImportStatus::Unsupported,
+				message: "LiteLLM custom API-key header name must be a string and the inbound policy was not emitted"
+					.to_string(),
+			});
+			return;
+		},
+	};
+
+	plan.inbound_api_key = Some(ImportedInboundAPIKey {
+		key: json!(format!("${environment}")),
+		header_name,
+		prefix,
+	});
+	plan.findings.push(ImportFinding {
+		source_path: "general_settings.master_key".to_string(),
+		status,
+		message,
+	});
+	if matches!(
+		settings.get("litellm_key_header_name"),
+		Some(Value::String(_))
+	) {
+		plan.findings.push(ImportFinding {
+			source_path: "general_settings.litellm_key_header_name".to_string(),
+			status: ImportStatus::Exact,
+			message: "Mapped LiteLLM's custom API-key header name to the inbound API-key policy"
+				.to_string(),
+		});
+	}
+}
+
+fn report_unmapped_inbound_header(
+	settings: &Map<String, Value>,
+	plan: &mut ImportPlan,
+	status: ImportStatus,
+	message: &str,
+) {
+	if settings.contains_key("litellm_key_header_name") {
+		plan.findings.push(ImportFinding {
+			source_path: "general_settings.litellm_key_header_name".to_string(),
+			status,
+			message: message.to_string(),
+		});
 	}
 }
 
@@ -1206,6 +1384,26 @@ mod tests {
 	#[test]
 	fn imports_reusable_litellm_credentials() {
 		assert_litellm_golden("centralized-credentials");
+	}
+
+	#[test]
+	fn imports_litellm_inbound_api_key_policy() {
+		assert_litellm_golden("inbound-api-key");
+	}
+
+	#[test]
+	fn approximates_litellm_default_api_key_location() {
+		assert_litellm_golden("inbound-api-key-default");
+	}
+
+	#[test]
+	fn does_not_materialize_literal_litellm_master_key() {
+		assert_litellm_golden("inbound-api-key-unsafe");
+	}
+
+	#[test]
+	fn reports_invalid_litellm_api_key_header_without_emitting_policy() {
+		assert_litellm_golden("inbound-api-key-invalid-header");
 	}
 
 	#[test]

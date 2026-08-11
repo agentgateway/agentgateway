@@ -1,0 +1,31 @@
+---
+source: crates/agentgateway/src/import.rs
+description: src/tests/import/litellm/inbound-api-key-invalid-header.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: chat
+        provider: openAI
+        params:
+          model: gpt-4o
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for chat
+  - sourcePath: general_settings.master_key
+    status: manual
+    message: Environment-backed master_key was not emitted because LiteLLM custom API-key header name is invalid
+  - sourcePath: general_settings.litellm_key_header_name
+    status: unsupported
+    message: LiteLLM custom API-key header name is invalid and the inbound policy was not emitted
