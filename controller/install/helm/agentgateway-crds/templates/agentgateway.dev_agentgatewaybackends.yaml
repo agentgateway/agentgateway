@@ -6047,8 +6047,8 @@ spec:
                                             pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                             type: string
                                             x-kubernetes-validations:
-                                            - message: evictionDuration must be at
-                                                least 1 second
+                                            - message: duration must be at least 1
+                                                second
                                               rule: duration(self) >= duration('1s')
                                           healthThreshold:
                                             description: |-
@@ -14752,7 +14752,7 @@ spec:
                             pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                             type: string
                             x-kubernetes-validations:
-                            - message: evictionDuration must be at least 1 second
+                            - message: duration must be at least 1 second
                               rule: duration(self) >= duration('1s')
                           healthThreshold:
                             description: |-

@@ -328,7 +328,7 @@ type BackendEviction struct {
 	// If all endpoints are evicted, the load balancer falls back to returning evicted endpoints
 	// rather than failing entirely.
 	// If unset, defaults to `3s`.
-	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="evictionDuration must be at least 1 second"
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="duration must be at least 1 second"
 	// +kubebuilder:default="3s"
 	// +optional
 	Duration *Duration `json:"duration,omitempty"`
