@@ -2004,7 +2004,7 @@ fn restore_client_response_id(
 			e.id = Some(original_id);
 			ClientJsonRpcMessage::Error(e)
 		},
-		_ => unreachable!("send_client_response validates message type before calling"),
+		other => other,
 	}
 }
 
