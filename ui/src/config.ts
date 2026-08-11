@@ -267,9 +267,7 @@ export function fileOwnedMcpSettingFields(
 ): ReadonlySet<string> {
 	if (!hybrid) return new Set();
 	const mcp = config?.mcp;
-	return new Set(
-		mcpSettingsFields.filter(field => Object.prototype.hasOwnProperty.call(mcp ?? {}, field))
-	);
+	return new Set(mcpSettingsFields.filter(field => Object.hasOwn(mcp ?? {}, field)));
 }
 
 type LlmPolicyWithGuardrails = NonNullable<LlmConfig['policies']> & {
