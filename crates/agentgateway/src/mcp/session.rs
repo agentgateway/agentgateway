@@ -793,9 +793,9 @@ impl Session {
 			ClientJsonRpcMessage::Response(_) | ClientJsonRpcMessage::Error(_) => {
 				let ctx = IncomingRequestContext::new(&parts);
 				let (_span, log, _cel) = mcp::handler::setup_request_log(parts, "response");
-				let session_id = self.id.to_string();
+				let session_id = (!self.synthetic).then(|| self.id.to_string());
 				log.non_atomic_mutate(|l| {
-					l.session_id = Some(session_id);
+					l.session_id = session_id;
 				});
 				Box::pin(self.relay.send_client_response(message, ctx)).await
 			},

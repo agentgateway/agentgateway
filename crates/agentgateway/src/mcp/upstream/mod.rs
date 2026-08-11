@@ -299,12 +299,8 @@ impl Upstream {
 			Upstream::McpStdio(c) => c.send_client_message(message, ctx).await,
 			Upstream::McpSSE(c) => c.send_client_message(message, ctx).await,
 			Upstream::McpStreamable(c) => {
-				let res = c.send_client_message(message, ctx).await?;
-				match res {
-					StreamableHttpPostResponse::Accepted
-					| StreamableHttpPostResponse::Json(_, _)
-					| StreamableHttpPostResponse::Sse(_, _) => Ok(()),
-				}
+				c.send_client_message(message, ctx).await?;
+				Ok(())
 			},
 			Upstream::OpenAPI(_) => Err(UpstreamError::InvalidRequest(
 				"openapi upstream does not support server-to-client routing".into(),
