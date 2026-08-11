@@ -761,8 +761,9 @@ mod tests {
 		}
 	}
 
-	/// A loopback connect takes tens of microseconds, so millisecond granularity truncates it to 0.
-	/// One-sided by design: `elapsed()` is always positive, so this cannot fail spuriously.
+	/// Millisecond truncation put every observation on an exact multiple of 1ms, and a loopback
+	/// connect on 0. Asserting the recorded value is finer than a millisecond catches that however
+	/// long the connect actually takes.
 	#[tokio::test]
 	async fn upstream_connect_duration_records_sub_millisecond_connects() {
 		use frozen_collections::FzHashSet;
@@ -770,9 +771,7 @@ mod tests {
 
 		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
 		let addr = listener.local_addr().unwrap();
-		tokio::spawn(async move {
-			let _accepted = listener.accept().await;
-		});
+		tokio::spawn(async move { while listener.accept().await.is_ok() {} });
 
 		let mut registry = Registry::default();
 		let metrics = Arc::new(crate::metrics::Metrics::new(
@@ -807,9 +806,10 @@ mod tests {
 			.unwrap_or_else(|| panic!("no connect duration sum in:\n{encoded}"))
 			.parse::<f64>()
 			.unwrap();
+		let ms = sum * 1000.0;
 		assert!(
-			sum > 0.0,
-			"sub-millisecond connect was recorded as {sum}s, expected the real duration"
+			(ms - ms.round()).abs() > 1e-9,
+			"connect duration {ms}ms is quantized to whole milliseconds"
 		);
 	}
 }
