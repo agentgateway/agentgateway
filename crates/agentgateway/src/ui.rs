@@ -64,7 +64,7 @@ impl App {
 }
 
 #[cfg(feature = "ui")]
-static ASSETS_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/../../ui/out");
+static ASSETS_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/../../ui/dist");
 
 #[cfg(not(feature = "ui"))]
 static ASSETS_DIR: Dir<'static> = Dir::new("", &[]);

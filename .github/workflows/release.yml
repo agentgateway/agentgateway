@@ -437,13 +437,6 @@ jobs:
       with:
         toolchain: "${{ env.RUST_VERSION }}"
         targets: ${{ matrix.target }}
-    # TODO: build this in a separate job and just copy it over
-    - name: Build UI
-      run: |
-        cd ui
-        corepack enable
-        pnpm install --frozen-lockfile
-        pnpm build
     - name: Prepare Linux target
       if: ${{ matrix.target == 'x86_64-unknown-linux-musl' || matrix.target == 'aarch64-unknown-linux-musl' }}
       run: |

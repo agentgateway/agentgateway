@@ -14,14 +14,17 @@ export default defineConfig(({ command }) => ({
     },
   },
   build: {
-    outDir: "out",
     emptyOutDir: true,
     reportCompressedSize: false,
     sourcemap: false,
     chunkSizeWarningLimit: 5000,
   },
   server: {
+    host: "0.0.0.0",
     port: 19000,
-    strictPort: false,
+  },
+  preview: {
+    host: "0.0.0.0",
+    port: 19100,
   },
 }));

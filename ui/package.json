@@ -8,15 +8,15 @@
   },
   "packageManager": "pnpm@11.19.0",
   "scripts": {
-    "dev": "VITE_AGENTGATEWAY_API=http://localhost:15000 vite --host 0.0.0.0 --port 19000",
+    "dev": "pnpm build && VITE_AGENTGATEWAY_API=http://localhost:15000 vite",
     "build": "pnpm generate-schema && tsc -b && vite build",
     "lint": "pnpm typecheck && pnpm format:check",
     "format": "biome format --write .",
     "format:check": "biome format .",
     "typecheck": "pnpm generate-schema && tsc -b",
-    "preview": "vite preview --host 0.0.0.0 --port 19001",
+    "preview": "pnpm build && vite preview",
     "generate-schema": "node scripts/generate-schema.mjs",
-    "preview:e2e": "VITE_BASE_PATH=/ VITE_E2E=true vite build && vite preview --host 127.0.0.1 --port 19100",
+    "preview:e2e": "VITE_BASE_PATH=/ VITE_E2E=true pnpm build && vite preview",
     "test:e2e": "playwright test"
   },
   "dependencies": {

@@ -195,7 +195,7 @@ COPY Makefile Cargo.toml Cargo.lock ./
 COPY .cargo ./.cargo
 COPY crates ./crates
 COPY tools ./tools
-COPY --from=node /app/out ./ui/out
+COPY --from=node /app/dist ./ui/dist
 
 RUN rustup target add s390x-unknown-linux-gnu
 RUN --mount=type=cache,id=cargo-s390x,target=/usr/local/cargo/registry \

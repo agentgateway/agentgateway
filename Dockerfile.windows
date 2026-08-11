@@ -19,13 +19,10 @@ RUN Set-ExecutionPolicy Bypass -Scope Process -Force; \
 
 # Install build tools
 RUN choco install visualstudio2022buildtools -y --package-parameters '--add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.Windows11SDK.22621'
-# Build UI
+# Prepare UI build context
 WORKDIR C:/app/ui
 COPY ui .
-COPY schema C:/schema
-RUN corepack enable
-RUN pnpm install --frozen-lockfile
-RUN pnpm build
+COPY schema C:/app/schema
 
 # Prepare Rust build context
 WORKDIR C:/app
