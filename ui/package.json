@@ -16,7 +16,7 @@
     "typecheck": "pnpm generate-schema && tsc -b",
     "preview": "pnpm build && vite preview",
     "generate-schema": "node scripts/generate-schema.mjs",
-    "preview:e2e": "VITE_BASE_PATH=/ VITE_E2E=true pnpm build && vite preview",
+    "preview:e2e": "pnpm build --mode e2e && vite preview --mode e2e",
     "test:e2e": "playwright test"
   },
   "dependencies": {

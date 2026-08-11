@@ -55,7 +55,7 @@ export function RawConfigEditor({
   ) {
     editorRef.current = editor;
     monacoRef.current = monaco;
-    if (import.meta.env.DEV || import.meta.env.VITE_E2E === "true") {
+    if (import.meta.env.DEV || import.meta.env.MODE === "e2e") {
       window.__rawConfigEditor = editor;
       window.__rawConfigMonaco = monaco;
     }
