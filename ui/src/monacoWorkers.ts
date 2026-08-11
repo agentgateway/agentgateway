@@ -27,7 +27,6 @@ configureConfigMonacoWorkers();
 
 declare global {
   // Monaco reads this global directly when resolving web workers.
-  // eslint-disable-next-line no-var
   var MonacoEnvironment:
     | {
         getWorker(moduleId: string, label: string): Worker;

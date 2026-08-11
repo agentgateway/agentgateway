@@ -778,6 +778,7 @@ func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtuti
 		defaultConfig := ambient.MeshConfig{MeshConfig: mesh.DefaultMeshConfig()}
 		meshConfig = krt.NewStatic(&defaultConfig, true, krtopts.ToOptions("addresses/DefaultMeshConfig")...)
 	}
+	serviceEntryVisibility := model.ServiceEntryVisibilityCollection(meshConfig.AsCollection(), opts)
 
 	waypoints := builder.WaypointsCollection(clusterId, cols.Gateways, cols.GatewayClasses, cols.Pods, opts)
 	services := builder.ServicesCollection(
@@ -787,6 +788,7 @@ func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtuti
 		waypoints,
 		cols.Namespaces,
 		meshConfig,
+		serviceEntryVisibility,
 		opts,
 		true,
 	)

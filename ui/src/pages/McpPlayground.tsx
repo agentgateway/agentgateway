@@ -79,10 +79,10 @@ export function McpPlaygroundPage() {
       : false;
   const fileCorsOwned = Boolean(
     mcpData.rawConfig.data?.mcp?.policies &&
-    Object.prototype.hasOwnProperty.call(
-      mcpData.rawConfig.data.mcp.policies,
-      "cors",
-    ),
+      Object.prototype.hasOwnProperty.call(
+        mcpData.rawConfig.data.mcp.policies,
+        "cors",
+      ),
   );
 
   useEffect(() => {
@@ -526,10 +526,10 @@ function submitOnModEnter(
 function schemaHasSimpleProperties(schema: unknown): schema is JsonSchema {
   return Boolean(
     schema &&
-    typeof schema === "object" &&
-    !Array.isArray(schema) &&
-    (schema as JsonSchema).properties &&
-    typeof (schema as JsonSchema).properties === "object",
+      typeof schema === "object" &&
+      !Array.isArray(schema) &&
+      (schema as JsonSchema).properties &&
+      typeof (schema as JsonSchema).properties === "object",
   );
 }
 

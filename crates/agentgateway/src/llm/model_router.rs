@@ -13,10 +13,9 @@ use crate::http::{self, Request, Response};
 use crate::types::agent::{
 	Authorization, BackendTrafficPolicy, HeaderMatch, RouteBackendReference,
 };
-use crate::{apply, cel, llm, schema_enum};
+use crate::{apply, cel, llm, schema_enum, schema_ser_schema};
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct ModelRoute {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub id: Option<String>,
@@ -25,12 +24,13 @@ pub struct ModelRoute {
 	pub visibility: ModelVisibility,
 	pub header_matches: Vec<Vec<HeaderMatch>>,
 	pub backend: RouteBackendReference,
+	#[cfg_attr(feature = "schema", schemars(with = "serde_json::Value"))]
 	pub policies: ModelRoutePolicies,
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
 	pub backend_policies: Vec<BackendTrafficPolicy>,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct ModelRoutePolicies {
 	pub llm: Arc<llm::Policy>,
 	pub authorization: Option<Authorization>,
@@ -82,32 +82,29 @@ pub fn default_route_types() -> Arc<llm::Policy> {
 	})
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct VirtualModelRoute {
 	pub name: String,
 	pub created: u64,
+	#[cfg_attr(feature = "schema", schemars(with = "serde_json::Value"))]
 	pub llm_policy: Arc<llm::Policy>,
 	pub routing: VirtualModelRouting,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub enum VirtualModelRouting {
 	Weighted(Vec<WeightedTarget>),
 	Failover { backend: RouteBackendReference },
 	Conditional(Vec<ConditionalTarget>),
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct WeightedTarget {
 	pub model: String,
 	pub weight: usize,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct ConditionalTarget {
 	pub model: String,
 	pub when: Option<Arc<cel::Expression>>,

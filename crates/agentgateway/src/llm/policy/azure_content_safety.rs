@@ -242,7 +242,7 @@ async fn send_content_safety_request<Req: Serialize, Resp: serde::de::Deserializ
 			strng::literal!("_azure-content-safety"),
 			strng::literal!(""),
 		),
-		(),
+		None,
 	);
 
 	let resp = client

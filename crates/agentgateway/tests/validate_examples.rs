@@ -1,9 +1,9 @@
 /// Integration tests that validate all `examples/*/config.yaml` files using the same
 /// logic as the `--validate-only` CLI flag, without requiring a full recompile/run cycle.
 ///
-/// Tests that require an external Keycloak instance are skipped unless the
+/// Tests that require Keycloak-compatible discovery and JWKS endpoints are skipped unless the
 /// `KEYCLOAK_AVAILABLE` environment variable is set to `1` or `true`.
-/// To run those tests locally, first start the dependencies with
+/// To run those tests locally, first start the lightweight validation server with
 /// `tools/manage-validation-deps.sh start` and then:
 ///
 ///   KEYCLOAK_AVAILABLE=1 cargo test --test validate_examples
@@ -101,8 +101,8 @@ async fn validate_example(path: &str) -> Result<(), String> {
 	.map_err(|e| format!("validation failed for {path}: {e}"))
 }
 
-/// Returns true when the external Keycloak instance (and the companion auth_server.py)
-/// have been started via `tools/manage-validation-deps.sh start`.
+/// Returns true when the validation identity-provider endpoints have been started via
+/// `tools/manage-validation-deps.sh start`.
 fn keycloak_available() -> bool {
 	std::env::var("KEYCLOAK_AVAILABLE")
 		.map(|v| matches!(v.as_str(), "1" | "true"))

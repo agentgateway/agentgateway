@@ -55,6 +55,7 @@ pub trait RequestType: Send + Sync {
 	fn supports_model(&self) -> bool {
 		true
 	}
+	fn body_is_json(&self) -> bool;
 	fn model(&mut self) -> &mut Option<String>;
 	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>);
 	fn append_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>);

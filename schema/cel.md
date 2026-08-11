@@ -51,7 +51,8 @@
 |`llm.requestModel`|string|The model requested for the LLM request. This may differ from the actual model used.|
 |`llm.responseModel`|string|The model that actually served the LLM response.|
 |`llm.provider`|string|The provider of the LLM.|
-|`llm.inputTokens`|integer|The number of tokens in the input/prompt.|
+|`llm.inputTokens`|integer|The total number of tokens in the input/prompt, including tokens read from or written to<br>cache. This has consistent semantics across providers.|
+|`llm.providerInputTokens`|integer|The provider-reported number of tokens in the input/prompt. This is inconsistent across<br>providers: some include cached tokens while others exclude them.|
 |`llm.inputImageTokens`|integer|The number of image tokens in the input/prompt.|
 |`llm.inputTextTokens`|integer|The number of text tokens in the input/prompt.<br>Note: this field is only set in multi-modal calls where the total token count is split out by<br>text/image/audio; for standard all-text calls, this is unset.|
 |`llm.inputAudioTokens`|integer|The number of audio tokens in the input/prompt.|
@@ -62,7 +63,8 @@
 |`llm.outputTextTokens`|integer|The number of text tokens in the output/completion.|
 |`llm.outputAudioTokens`|integer|The number of audio tokens in the output/completion.<br>Note: this field is only set in multi-modal calls where the total token count is split out by<br>text/image/audio; for standard all-text calls, this is unset.|
 |`llm.reasoningTokens`|integer|The number of reasoning tokens in the output/completion.|
-|`llm.totalTokens`|integer|The total number of tokens for the request.|
+|`llm.totalTokens`|integer|The total number of input and output tokens for the request. Input tokens include tokens read<br>from or written to cache, giving this field consistent semantics across providers.|
+|`llm.providerTotalTokens`|integer|The provider-reported total number of tokens for the request. This is inconsistent across<br>providers because some include cached input tokens while others exclude them.|
 |`llm.serviceTier`|string|The service tier the provider served the request under.|
 |`llm.timeToFirstToken`|string|Time from request start until the first response token is received.|
 |`llm.timePerOutputToken`|string|Average time from first response token to response completion per output token.|

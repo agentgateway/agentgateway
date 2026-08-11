@@ -224,7 +224,7 @@ async fn send_guardrail_request(
 
 	let mock_be = Backend::Dynamic(
 		ResourceName::new(strng::literal!("_bedrock-guardrails"), strng::literal!("")),
-		(),
+		None,
 	);
 
 	let resp = client

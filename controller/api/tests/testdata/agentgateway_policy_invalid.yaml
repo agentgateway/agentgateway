@@ -1664,3 +1664,20 @@ spec:
     tracing:
       url: https://user:password@otel.example.com/v1/traces
       protocol: HTTP
+---
+_err: 'kind: Unsupported value'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backend-tls-invalid-ca-kind
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: dummy
+  backend:
+    tls:
+      caCertificateRefs:
+        - name: ca-bundle
+          kind: Invalid
+---

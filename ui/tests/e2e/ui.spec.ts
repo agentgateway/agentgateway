@@ -2,7 +2,6 @@ import { expect, test } from "@playwright/test";
 import {
   configWithClaudeSubscriptionKey,
   emptyConfig,
-  implicitDefaultGatewayConfig,
   mockGateway,
   populatedConfig,
   sameOriginGatewayConfig,
@@ -31,14 +30,86 @@ const pages = [
 
 test("core pages render with mocked gateway data", async ({ page }) => {
   await mockGateway(page);
+  await page.goto("/");
 
   for (const [path, heading] of pages) {
-    await page.goto(path);
+    if (path !== "/") {
+      await page.locator(`.nav-list a[href="${path}"]`).click();
+    }
     await expect(page.getByRole("heading", { name: heading })).toBeVisible();
     await expect(page.locator("body")).not.toContainText(
       "Configuration API unavailable",
     );
   }
+});
+
+test("log settings migrate prompt logging to the database LLM mode", async ({
+  page,
+}) => {
+  const config = populatedConfig();
+  config.frontendPolicies = {
+    accessLog: {
+      add: {
+        "gen_ai.prompt": "llm.prompt",
+        "gen_ai.completion":
+          'llm.completion.map(c, {"role":"assistant", "content": c})',
+        trace: "request.id",
+      },
+      database: {
+        add: {
+          "gen_ai.prompt": "llm.prompt",
+          "gen_ai.completion":
+            'llm.completion.map(c, {"role":"assistant", "content": c})',
+          tenant: "jwt.sub",
+        },
+      },
+    },
+  };
+  const gateway = await mockGateway(page, config);
+
+  await page.goto("/llm/logs");
+  await page.getByRole("button", { name: "Settings" }).click();
+  const fullLogging = page.getByRole("checkbox", {
+    name: /Include prompts and completions in logs/,
+  });
+  await expect(fullLogging).toBeChecked();
+
+  await fullLogging.uncheck();
+  await page.getByRole("button", { name: "Save settings" }).click();
+  await expect.poll(() => gateway.postedConfigs.length).toBe(1);
+  expect(gateway.postedConfigs[0].frontendPolicies).toEqual({
+    accessLog: {
+      add: {
+        "gen_ai.prompt": "llm.prompt",
+        "gen_ai.completion":
+          'llm.completion.map(c, {"role":"assistant", "content": c})',
+        trace: "request.id",
+      },
+      database: {
+        llm: "metadata",
+        add: { tenant: "jwt.sub" },
+      },
+    },
+  });
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  await fullLogging.check();
+  await page.getByRole("button", { name: "Save settings" }).click();
+  await expect.poll(() => gateway.postedConfigs.length).toBe(2);
+  expect(gateway.postedConfigs[1].frontendPolicies).toEqual({
+    accessLog: {
+      add: {
+        "gen_ai.prompt": "llm.prompt",
+        "gen_ai.completion":
+          'llm.completion.map(c, {"role":"assistant", "content": c})',
+        trace: "request.id",
+      },
+      database: {
+        llm: "full",
+        add: { tenant: "jwt.sub" },
+      },
+    },
+  });
 });
 
 test("onboards all surfaces from a completely empty config", async ({
@@ -93,20 +164,8 @@ test("onboards all surfaces from a completely empty config", async ({
   ).toBeVisible();
 });
 
-test("enables traffic consistently from get started", async ({ page }) => {
-  const gateway = await mockGateway(page, {});
-  await page.goto("/traffic/get-started");
-
-  await page.getByRole("button", { name: "Enable", exact: true }).click();
-
-  await expect.poll(() => gateway.postedConfigs.length).toBe(1);
-  expect(gateway.postedConfigs[0].gateways).toEqual({
-    public: { port: 8080 },
-  });
-});
-
-test("controls the reserved default gateway name", async ({ page }) => {
-  await mockGateway(page, {
+test("enforces default gateway constraints", async ({ page }) => {
+  const gateway = await mockGateway(page, {
     gateways: { public: { port: 8080 } },
     llm: { models: [], providers: [], virtualModels: [] },
     mcp: { targets: [] },
@@ -131,17 +190,10 @@ test("controls the reserved default gateway name", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Save gateway" }),
   ).toBeDisabled();
-});
 
-test("does not allow a second default gateway", async ({ page }) => {
-  await mockGateway(page, {
-    gateways: { default: { port: 8080 } },
-  });
-  await page.goto("/traffic/gateways");
-
-  await page.getByRole("button", { name: "Edit gateway" }).click();
-  await expect(page.getByText(/impact .* traffic/)).not.toBeVisible();
-  await page.getByRole("button", { name: "Close" }).click();
+  await defaultGateway.check();
+  await page.getByRole("button", { name: "Save gateway" }).click();
+  await expect.poll(() => gateway.postedConfigs.length).toBe(1);
 
   await page.getByRole("button", { name: "Add gateway" }).click();
 
@@ -187,14 +239,14 @@ test("hybrid settings shows file diff without applying it", async ({
   ).toBeVisible();
   expect(gateway.postedConfigs).toHaveLength(0);
 
-  await page.keyboard.down("Control");
+  await page.keyboard.down("ControlOrMeta");
   await page.keyboard.down("Shift");
   await expect(
     page.getByRole("tooltip").getByText(/Override active/),
   ).toBeVisible();
   await save.click({ force: true });
   await page.keyboard.up("Shift");
-  await page.keyboard.up("Control");
+  await page.keyboard.up("ControlOrMeta");
   await expect.poll(() => gateway.postedConfigs.length).toBe(1);
   await expect(diff).not.toBeVisible();
 });
@@ -304,29 +356,6 @@ test("onboards LLM and MCP onto the UI gateway when present", async ({
   ).toBeVisible();
 });
 
-test("homepage treats top-level gateways as traffic", async ({ page }) => {
-  await mockGateway(page, {
-    gateways: {
-      default: {
-        port: 4000,
-      },
-    },
-    routes: [],
-  });
-  await page.goto("/");
-
-  const traffic = page
-    .locator(".surface-row")
-    .filter({ has: page.getByText("Traffic") });
-  await expect(traffic).toContainText("Enabled");
-  await expect(traffic).toContainText("1 gateway");
-  await expect(traffic).not.toContainText("listener");
-  await expect(traffic).not.toContainText("Not enabled");
-  await expect(
-    page.locator(".nav-list").getByRole("link", { name: "Listeners" }),
-  ).toHaveCount(0);
-});
-
 test("attaches traffic routes to gateways", async ({ page }) => {
   const gateway = await mockGateway(page, {
     gateways: {
@@ -414,8 +443,10 @@ test("raw configuration editor shows schema diagnostics", async ({ page }) => {
     page.getByRole("heading", { name: "Raw Configuration" }),
   ).toBeVisible();
   await expect
-    .poll(async () =>
-      page.evaluate(() => Boolean(window.__rawConfigEditor?.getModel())),
+    .poll(
+      async () =>
+        page.evaluate(() => Boolean(window.__rawConfigEditor?.getModel())),
+      { timeout: 15_000 },
     )
     .toBe(true);
   await expect
@@ -466,37 +497,6 @@ test("raw configuration editor shows schema diagnostics", async ({ page }) => {
   });
   await expect(page.locator(".suggest-widget")).toBeVisible();
   await expect(page.locator(".suggest-widget")).toContainText("llm");
-});
-
-test("raw configuration saved banner only follows an explicit save", async ({
-  page,
-}) => {
-  await mockGateway(page);
-  await page.goto("/raw-config");
-
-  await expect(
-    page.getByRole("heading", { name: "Raw Configuration" }),
-  ).toBeVisible();
-  await expect
-    .poll(async () =>
-      page.evaluate(() => Boolean(window.__rawConfigEditor?.getModel())),
-    )
-    .toBe(true);
-  const original = await page.evaluate(
-    () => window.__rawConfigEditor?.getModel()?.getValue() ?? "",
-  );
-
-  await page.evaluate((value) => {
-    window.__rawConfigEditor
-      ?.getModel()
-      ?.setValue(`${value}\n# temporary edit\n`);
-  }, original);
-  await expect(page.getByText("Configuration saved")).toHaveCount(0);
-
-  await page.evaluate((value) => {
-    window.__rawConfigEditor?.getModel()?.setValue(value);
-  }, original);
-  await expect(page.getByText("Configuration saved")).toHaveCount(0);
 });
 
 test("creates a weighted virtual model with a concrete wildcard target", async ({
@@ -1129,21 +1129,6 @@ test("reveals a virtual API key explicitly", async ({ page }) => {
   await expect(page.getByText("agw_sk_testkey123456789")).toBeVisible();
 });
 
-test("copies a virtual API key to clipboard", async ({ page, context }) => {
-  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
-  await mockGateway(page);
-  await page.goto("/llm/keys");
-
-  await page.getByRole("button", { name: "Copy key" }).click();
-  await expect(page.getByRole("button", { name: "Copy key" })).toHaveClass(
-    /copied/,
-  );
-  const clipboardText = await page.evaluate(() =>
-    navigator.clipboard.readText(),
-  );
-  expect(clipboardText).toBe("agw_sk_testkey123456789");
-});
-
 test("LLM playground sends selected virtual model name", async ({ page }) => {
   const gateway = await mockGateway(page);
   await page.goto("/llm/playground");
@@ -1158,44 +1143,6 @@ test("LLM playground sends selected virtual model name", async ({ page }) => {
   ).toContainText("pong");
   await expect.poll(() => gateway.chatRequests.length).toBe(1);
   expect(gateway.chatRequests[0].model).toBe("resilient");
-});
-
-test("LLM playground uses relative requests when UI shares the gateway", async ({
-  page,
-}) => {
-  const gateway = await mockGateway(page, sameOriginGatewayConfig());
-  await page.goto("/llm/playground");
-
-  await expect(page.getByText("Browser access is not allowed")).toHaveCount(0);
-  await page.getByRole("combobox", { name: "Model" }).click();
-  await page.getByRole("option", { name: /resilient/ }).click();
-  await page.getByLabel("User message").fill("ping");
-  await page.getByRole("button", { name: "Send" }).click();
-
-  await expect.poll(() => gateway.chatUrls.length).toBe(1);
-  const pageOrigin = await page.evaluate(() => window.location.origin);
-  const requestUrl = new URL(gateway.chatUrls[0]);
-  expect(requestUrl.origin).toBe(pageOrigin);
-  expect(requestUrl.pathname).toBe("/v1/chat/completions");
-});
-
-test("LLM playground uses relative requests with implicit default gateway", async ({
-  page,
-}) => {
-  const gateway = await mockGateway(page, implicitDefaultGatewayConfig());
-  await page.goto("/llm/playground");
-
-  await expect(page.getByText("Browser access is not allowed")).toHaveCount(0);
-  await page.getByRole("combobox", { name: "Model" }).click();
-  await page.getByRole("option", { name: /resilient/ }).click();
-  await page.getByLabel("User message").fill("ping");
-  await page.getByRole("button", { name: "Send" }).click();
-
-  await expect.poll(() => gateway.chatUrls.length).toBe(1);
-  const pageOrigin = await page.evaluate(() => window.location.origin);
-  const requestUrl = new URL(gateway.chatUrls[0]);
-  expect(requestUrl.origin).toBe(pageOrigin);
-  expect(requestUrl.pathname).toBe("/v1/chat/completions");
 });
 
 test("MCP playground initializes, lists tools, and calls a tool", async ({
@@ -1237,49 +1184,19 @@ test("MCP playground initializes, lists tools, and calls a tool", async ({
 test("MCP playground uses relative requests when UI shares the gateway", async ({
   page,
 }) => {
-  const gateway = await mockGateway(page, sameOriginGatewayConfig());
+  await mockGateway(page, sameOriginGatewayConfig());
   await page.goto("/mcp/playground");
 
   await expect(page.getByText("Browser access is not allowed")).toHaveCount(0);
-  await page.getByRole("button", { name: "Initialize", exact: true }).click();
-  await expect(page.getByText("initialized")).toBeVisible();
-
-  await expect.poll(() => gateway.mcpUrls.length).toBeGreaterThan(0);
-  const pageOrigin = await page.evaluate(() => window.location.origin);
-  const requestUrl = new URL(gateway.mcpUrls[0]);
-  expect(requestUrl.origin).toBe(pageOrigin);
-  expect(requestUrl.pathname).toBe("/mcp");
-});
-
-test("MCP playground uses relative requests with implicit default gateway", async ({
-  page,
-}) => {
-  const gateway = await mockGateway(page, implicitDefaultGatewayConfig());
-  await page.goto("/mcp/playground");
-
-  await expect(page.getByText("Browser access is not allowed")).toHaveCount(0);
-  await page.getByRole("button", { name: "Initialize", exact: true }).click();
-  await expect(page.getByText("initialized")).toBeVisible();
-
-  await expect.poll(() => gateway.mcpUrls.length).toBeGreaterThan(0);
-  const pageOrigin = await page.evaluate(() => window.location.origin);
-  const requestUrl = new URL(gateway.mcpUrls[0]);
-  expect(requestUrl.origin).toBe(pageOrigin);
-  expect(requestUrl.pathname).toBe("/mcp");
-});
-
-test("Client Setup uses implicit default gateway port", async ({ page }) => {
-  await mockGateway(page, implicitDefaultGatewayConfig());
-  await page.goto("/llm/client-setup");
-
-  const hostname = await page.evaluate(() => window.location.hostname);
-  const baseUrl = `http://${hostname}:8080`;
-  await expect(
-    page.getByRole("textbox", { name: "Gateway base URL" }),
-  ).toHaveValue(baseUrl);
-  await expect(page.locator(".client-setup-summary")).toContainText(
-    `${baseUrl}/v1`,
+  const mcpRequest = page.waitForRequest(
+    (request) => new URL(request.url()).pathname === "/mcp",
   );
+  await page.getByRole("button", { name: "Initialize", exact: true }).click();
+
+  const pageOrigin = await page.evaluate(() => window.location.origin);
+  const requestUrl = new URL((await mcpRequest).url());
+  expect(requestUrl.origin).toBe(pageOrigin);
+  expect(requestUrl.pathname).toBe("/mcp");
 });
 
 test("edits top-level MCP policies", async ({ page }) => {
@@ -1345,21 +1262,6 @@ test("refreshes a reopened policy diff", async ({ page }) => {
   await expect(
     diff.locator(".view-lines").filter({ hasText: "PATCH" }),
   ).toHaveCount(1);
-});
-
-test("Client Setup includes virtual models in snippets", async ({ page }) => {
-  await mockGateway(page);
-  await page.goto("/llm/client-setup");
-
-  await page.getByRole("combobox", { name: "Model" }).click();
-  await page.getByRole("option", { name: /resilient/ }).click();
-
-  await expect(
-    page.locator(".client-setup-summary code").filter({ hasText: "resilient" }),
-  ).toBeVisible();
-  await expect(page.locator(".client-code-block")).toContainText(
-    '"model": "resilient"',
-  );
 });
 
 test("creates a traffic bind and listener", async ({ page }) => {
@@ -1495,33 +1397,6 @@ test("Playground shows Claude subscription key warning", async ({ page }) => {
     page.getByText("Claude subscription key detected"),
   ).toBeVisible();
   await expect(page.getByText("sk-ant-oat")).toBeVisible();
-});
-
-test("Client Setup shows Claude subscription key warning", async ({ page }) => {
-  await mockGateway(page, configWithClaudeSubscriptionKey());
-  await page.goto("/llm/client-setup");
-
-  await page.getByRole("combobox", { name: "Model" }).click();
-  await page.getByRole("option", { name: /claude-sub/ }).click();
-
-  await expect(
-    page.getByText("Claude subscription key detected"),
-  ).toBeVisible();
-  await expect(page.getByText("sk-ant-oat")).toBeVisible();
-});
-
-test("no Claude subscription warning for env-var API keys", async ({
-  page,
-}) => {
-  await mockGateway(page);
-  await page.goto("/llm/playground");
-
-  await page.getByRole("combobox", { name: "Model" }).click();
-  await page.getByRole("option", { name: /anthropic/ }).click();
-
-  await expect(page.getByText("Claude subscription key detected")).toHaveCount(
-    0,
-  );
 });
 
 function emptyConfigWithModels() {

@@ -964,10 +964,18 @@ message TrafficPolicySpec {
       REQUEST = 0;
       TOKEN = 1;
     }
+    message Rule {
+      uint64 max_tokens = 1;
+      uint64 tokens_per_fill = 2;
+      google.protobuf.Duration fill_interval = 3;
+      Type type = 4;
+    }
+    // The singular fields contain the first rule for compatibility with older data planes.
     uint64 max_tokens = 1;
     uint64 tokens_per_fill = 2;
     google.protobuf.Duration fill_interval = 3;
     Type type = 4;
+    repeated Rule rules = 5;
   }
   message ExternalAuth {
     enum FailureMode {
@@ -1410,6 +1418,10 @@ message BackendPolicySpec {
     // CEL transformation expressions to evaluate and set in the LLM request.
     // Expressions are evaluated against the current request body and behave like overrides.
     map<string, string> transformations = 8;
+    // CEL transformation expressions to evaluate and set in the LLM request.
+    // Expressions are evaluated against the current request body and behave like overrides.
+    // This happens after conversion (converting an api interface to another like messages->chat completions)
+    map<string, string> final_transformations = 9;
     PromptEnrichment prompts = 4;
     // Model aliases - map from alias name to actual model name
     map<string, string> model_aliases = 5;

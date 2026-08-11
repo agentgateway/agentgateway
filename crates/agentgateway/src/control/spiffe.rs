@@ -84,10 +84,12 @@ impl<K: Eq + std::hash::Hash, V> RotatingCache<K, V> {
 	/// Stores `value` under `key` and returns the cached value, which is the one already
 	/// cached if another caller won the race.
 	fn insert(&mut self, seq: u64, key: K, value: Arc<V>) -> Arc<V> {
-		if seq < self.seq { // stale sequence number; return it without touching the cache
+		if seq < self.seq {
+			// stale sequence number; return it without touching the cache
 			return value;
 		}
-		if self.seq != seq { // new sequence number; clear the cache of stale entries
+		if self.seq != seq {
+			// new sequence number; clear the cache of stale entries
 			self.entries.clear();
 			self.seq = seq;
 		}

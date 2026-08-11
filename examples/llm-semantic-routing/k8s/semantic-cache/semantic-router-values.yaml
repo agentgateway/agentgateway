@@ -1,0 +1,177 @@
+# Helm deployment settings for the Redis-backed semantic-cache example.
+router:
+  skipProcessing:
+    enabled: true
+
+# The chart model runtime is configured below.
+env: []
+
+args:
+- --secure=false
+
+persistence:
+  enabled: true
+  storageClassName: standard
+  size: 5Gi
+
+resources:
+  requests:
+    cpu: "1"
+    memory: 2Gi
+  limits:
+    cpu: "2"
+    memory: 4Gi
+
+config:
+  version: v0.3
+
+  providers:
+    defaults:
+      default_model: homehub-support
+    models:
+    - name: homehub-support
+      provider_model_id: homehub-support
+      api_format: openai
+      backend_refs:
+      - name: agentgateway-support-backend
+        base_url: http://support-backend.homehub.svc.cluster.local:8080/v1
+        provider: openai
+        weight: 100
+
+  routing:
+    modelCards:
+    - name: homehub-support
+      description: Deterministic HomeHub product-support backend.
+      capabilities: [chat]
+
+    signals:
+      # Suppress the chart's sample classifiers and authorization bindings.
+      domains: []
+      jailbreak: []
+      pii: []
+      role_bindings: []
+      keywords:
+      - name: homehub_support
+        operator: OR
+        keywords:
+        - HomeHub
+        case_sensitive: false
+      - name: reset_question
+        operator: OR
+        keywords:
+        - factory reset
+        - factory-reset
+        - reset procedure
+        - factory settings
+        - restore
+        case_sensitive: false
+
+    projections: {}
+
+    decisions:
+    - name: cached_homehub_support
+      description: Cache semantically equivalent HomeHub support questions.
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+        - type: keyword
+          name: homehub_support
+        - type: keyword
+          name: reset_question
+      modelRefs:
+      - model: homehub-support
+        use_reasoning: false
+      plugins:
+      - type: semantic-cache
+        configuration:
+          enabled: true
+          similarity_threshold: 0.70
+          ttl_seconds: 86400
+    - name: uncached_homehub_support
+      description: Forward other HomeHub support intents without response reuse.
+      priority: 50
+      rules:
+        operator: AND
+        conditions:
+        - type: keyword
+          name: homehub_support
+      modelRefs:
+      - model: homehub-support
+        use_reasoning: false
+
+  global:
+    router:
+      config_source: file
+      auto_model_name: auto
+      strategy: priority
+      model_selection:
+        enabled: false
+      streamed_body:
+        enabled: true
+        max_bytes: 1048576
+        timeout_sec: 30
+      skip_processing:
+        enabled: true
+    services:
+      response_api:
+        enabled: false
+        store_backend: memory
+      router_replay:
+        store_backend: memory
+      observability:
+        metrics:
+          enabled: true
+        tracing:
+          enabled: false
+      ratelimit:
+        providers: []
+    model_catalog:
+      embeddings:
+        semantic:
+          mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
+          use_cpu: true
+          embedding_config:
+            backend: candle
+            model_type: mmbert
+            preload_embeddings: true
+            target_dimension: 768
+            target_layer: 22
+    integrations:
+      tools:
+        enabled: false
+    stores:
+      memory: null
+      semantic_cache:
+        enabled: true
+        backend_type: redis
+        similarity_threshold: 0.70
+        ttl_seconds: 86400
+        embedding_model: mmbert
+        redis:
+          connection:
+            host: redis-semantic-cache.agentgateway-system.svc.cluster.local
+            port: 6379
+            database: 0
+            password: ""
+            timeout: 30
+            tls:
+              enabled: false
+          index:
+            name: semantic_cache_idx
+            prefix: "semantic-cache:"
+            vector_field:
+              name: embedding
+              dimension: 768
+              metric_type: COSINE
+            index_type: HNSW
+            params:
+              M: 16
+              efConstruction: 64
+          search:
+            topk: 5
+          development:
+            drop_index_on_startup: false
+            auto_create_index: true
+            verbose_errors: true
+      vector_store: null

@@ -21,6 +21,7 @@ use serde_json::Value;
 use tokio::io::DuplexStream;
 use tokio_rustls::TlsConnector;
 use tracing::{info, trace};
+#[cfg(feature = "crypto-aws-lc")]
 use wiremock::tls_certs::MockTlsCertificates;
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -32,6 +33,7 @@ use crate::proxy::Gateway;
 use crate::proxy::request_builder::RequestBuilder;
 use crate::store::Stores;
 use crate::transport::stream::{Socket, TCPConnectionInfo};
+#[cfg(feature = "crypto-aws-lc")]
 use crate::transport::tls;
 use crate::types::agent::{
 	Backend, BackendReference, BackendTarget, BackendTrafficPolicy, BackendWithPolicies, Bind,

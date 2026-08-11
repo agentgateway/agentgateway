@@ -1,0 +1,93 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-semantic-cache
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/name: redis-semantic-cache
+    app.kubernetes.io/part-of: semantic-cache
+spec:
+  selector:
+    app.kubernetes.io/name: redis-semantic-cache
+  ports:
+  - name: redis
+    port: 6379
+    targetPort: redis
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-semantic-cache
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/name: redis-semantic-cache
+    app.kubernetes.io/part-of: semantic-cache
+spec:
+  serviceName: redis-semantic-cache
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis-semantic-cache
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis-semantic-cache
+        app.kubernetes.io/part-of: semantic-cache
+    spec:
+      securityContext:
+        fsGroup: 999
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+      - name: redis
+        # Redis 8 includes Redis Search and its vector-search commands.
+        image: redis:8.10.0-alpine
+        imagePullPolicy: IfNotPresent
+        args:
+        - redis-server
+        - --appendonly
+        - "yes"
+        - --appendfsync
+        - everysec
+        - --save
+        - "60"
+        - "1"
+        - --dir
+        - /data
+        ports:
+        - name: redis
+          containerPort: 6379
+        readinessProbe:
+          exec:
+            command: [redis-cli, ping]
+          initialDelaySeconds: 2
+          periodSeconds: 3
+        livenessProbe:
+          exec:
+            command: [redis-cli, ping]
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: "1"
+            memory: 1Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+        volumeMounts:
+        - name: data
+          mountPath: /data
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        app.kubernetes.io/part-of: semantic-cache
+    spec:
+      accessModes: [ReadWriteOnce]
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 256Mi

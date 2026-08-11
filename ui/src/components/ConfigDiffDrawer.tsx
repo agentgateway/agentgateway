@@ -37,7 +37,7 @@ export function ConfigSaveButton(props: {
       aria-disabled={fileWriteDisabled}
       onClick={(event) => {
         if (fileWriteDisabled) {
-          if (!event.ctrlKey || !event.shiftKey) return;
+          if ((!event.ctrlKey && !event.metaKey) || !event.shiftKey) return;
           allowNextHybridFileWrite();
         }
         props.onClick();

@@ -9,11 +9,10 @@
 ///
 /// Call once at startup, before any JWT signing or verification. Idempotent.
 pub fn init() {
-	#[cfg(feature = "crypto-aws-lc")]
+	// JWT always uses aws-lc-rs: SymCrypt has no jsonwebtoken provider, so
+	// `crypto-symcrypt` falls back to aws-lc-rs here.
+	#[cfg(any(feature = "crypto-aws-lc", feature = "crypto-symcrypt"))]
 	{
-		// aws-lc-rs is already jsonwebtoken's default; installing explicitly keeps
-		// the choice in this seam. A backend with no built-in provider (e.g.
-		// SymCrypt) would install a custom one here instead.
 		let _ = jsonwebtoken::crypto::aws_lc::DEFAULT_PROVIDER.install_default();
 	}
 }

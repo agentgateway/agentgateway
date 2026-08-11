@@ -351,7 +351,7 @@
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -684,7 +684,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -955,7 +955,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -1226,7 +1226,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -1495,7 +1495,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -1800,7 +1800,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -2071,7 +2071,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -2340,7 +2340,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -2482,6 +2482,7 @@
 |`binds[].listeners[].routes[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`binds[].listeners[].routes[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`binds[].listeners[].routes[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`binds[].listeners[].routes[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`binds[].listeners[].routes[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`binds[].listeners[].routes[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`binds[].listeners[].routes[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -2657,7 +2658,7 @@
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -2935,7 +2936,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -3302,7 +3303,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -3583,7 +3584,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -3936,7 +3937,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -4230,7 +4231,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -4527,7 +4528,7 @@
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -4811,7 +4812,7 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -5007,6 +5008,7 @@
 |`binds[].listeners[].routes[].backends[].host`|string|Hostname or IP address of the upstream to route to.|
 |`binds[].listeners[].routes[].backends[].internal`|string|Route to the in-process admin service instead of a network upstream.<br>Selects how an internal backend maps proxy requests to the admin API.|
 |`binds[].listeners[].routes[].backends[].dynamic`|object||
+|`binds[].listeners[].routes[].backends[].dynamic.target`|string|CEL expression evaluated against the request to compute the dial<br>target (e.g. `extproc.workerPodIp + ":" + string(extproc.workerPodPort)`<br>to read dynamic metadata an extProc policy already set). Must<br>evaluate to a `host:port` string. The expression and any policy that<br>supplies its dynamic metadata are trusted to select the dial target.<br>If unset, the target is read from the request's own :authority/URI, as<br>today.|
 |`binds[].listeners[].routes[].backends[].mcp`|object||
 |`binds[].listeners[].routes[].backends[].mcp.targets`|[]object|MCP server targets to multiplex together.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].sse`|object|Connect to a remote MCP server over HTTP with Server-Sent Events (SSE) streaming.|
@@ -5181,7 +5183,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -5543,7 +5545,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -5907,7 +5909,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -6194,7 +6196,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -6500,7 +6502,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -6810,7 +6812,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -7081,7 +7083,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -7352,7 +7354,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -7621,7 +7623,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -7926,7 +7928,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -8197,7 +8199,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -8466,7 +8468,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -8608,6 +8610,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -8858,7 +8861,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -9222,7 +9225,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -9509,7 +9512,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -9815,7 +9818,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -10125,7 +10128,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -10396,7 +10399,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -10667,7 +10670,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -10936,7 +10939,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -11241,7 +11244,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -11512,7 +11515,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -11781,7 +11784,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -11923,6 +11926,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -12136,7 +12140,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -12500,7 +12504,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -12787,7 +12791,7 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -13093,7 +13097,7 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -13403,7 +13407,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -13674,7 +13678,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -13945,7 +13949,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -14214,7 +14218,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -14519,7 +14523,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -14790,7 +14794,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -15059,7 +15063,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -15201,6 +15205,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`binds[].listeners[].routes[].backends[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`binds[].listeners[].routes[].backends[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`binds[].listeners[].routes[].backends[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`binds[].listeners[].routes[].backends[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`binds[].listeners[].routes[].backends[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -15401,7 +15406,7 @@
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -15716,7 +15721,7 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -16010,7 +16015,7 @@
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -16307,7 +16312,7 @@
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -16591,7 +16596,7 @@
 |`binds[].listeners[].policies.extProc.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`binds[].listeners[].policies.extProc.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`binds[].listeners[].policies.extProc.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`binds[].listeners[].policies.extProc.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -16988,7 +16993,7 @@
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`frontendPolicies.accessLog.otlp.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`frontendPolicies.accessLog.otlp.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`frontendPolicies.accessLog.otlp.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -17120,6 +17125,7 @@
 |`frontendPolicies.accessLog.otlp.protocol`|enum|OTLP protocol used to export logs.<br>Possible values: `grpc`, `http`.|
 |`frontendPolicies.accessLog.otlp.path`|string|OTLP HTTP path used to export logs.|
 |`frontendPolicies.accessLog.database`|object|Database-specific access log settings.|
+|`frontendPolicies.accessLog.database.llm`|enum|LLM detail stored in the database. `metadata` stores request metadata, usage, timing, and<br>cost without prompt or completion content in the dedicated payload table. `full`<br>additionally captures and stores prompt and completion content there. When omitted, legacy<br>behavior is preserved: content captured by CEL expressions is also stored in the payload.<br>Possible values: `metadata`, `full`.|
 |`frontendPolicies.accessLog.database.add`|object|Database-only fields to add, computed from CEL expressions.|
 |`frontendPolicies.logging`|object|Settings for request access logs.|
 |`frontendPolicies.logging.filter`|string|CEL expression that decides whether a request is logged.|
@@ -17273,7 +17279,7 @@
 |`frontendPolicies.logging.otlp.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`frontendPolicies.logging.otlp.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`frontendPolicies.logging.otlp.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`frontendPolicies.logging.otlp.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -17405,6 +17411,7 @@
 |`frontendPolicies.logging.otlp.protocol`|enum|OTLP protocol used to export logs.<br>Possible values: `grpc`, `http`.|
 |`frontendPolicies.logging.otlp.path`|string|OTLP HTTP path used to export logs.|
 |`frontendPolicies.logging.database`|object|Database-specific access log settings.|
+|`frontendPolicies.logging.database.llm`|enum|LLM detail stored in the database. `metadata` stores request metadata, usage, timing, and<br>cost without prompt or completion content in the dedicated payload table. `full`<br>additionally captures and stores prompt and completion content there. When omitted, legacy<br>behavior is preserved: content captured by CEL expressions is also stored in the payload.<br>Possible values: `metadata`, `full`.|
 |`frontendPolicies.logging.database.add`|object|Database-only fields to add, computed from CEL expressions.|
 |`frontendPolicies.tracing`|object|Settings for exporting request traces.|
 |`frontendPolicies.tracing.service`|object|Service reference. Service must be defined in the top level services list.|
@@ -17554,7 +17561,7 @@
 |`frontendPolicies.tracing.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`frontendPolicies.tracing.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`frontendPolicies.tracing.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`frontendPolicies.tracing.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`frontendPolicies.tracing.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`frontendPolicies.tracing.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`frontendPolicies.tracing.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`frontendPolicies.tracing.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -17923,7 +17930,7 @@
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -18256,7 +18263,7 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -18527,7 +18534,7 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -18798,7 +18805,7 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -19067,7 +19074,7 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -19372,7 +19379,7 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -19643,7 +19650,7 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -19912,7 +19919,7 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -20054,6 +20061,7 @@
 |`policies[].policy.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`policies[].policy.ai.overrides`|object|Request body values that replace client-provided values.|
 |`policies[].policy.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`policies[].policy.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`policies[].policy.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`policies[].policy.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`policies[].policy.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -20229,7 +20237,7 @@
 |`policies[].policy.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`policies[].policy.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`policies[].policy.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`policies[].policy.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`policies[].policy.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`policies[].policy.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`policies[].policy.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -20507,7 +20515,7 @@
 |`policies[].policy.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`policies[].policy.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`policies[].policy.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`policies[].policy.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`policies[].policy.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`policies[].policy.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`policies[].policy.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -20874,7 +20882,7 @@
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -21155,7 +21163,7 @@
 |`policies[].policy.remoteRateLimit.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`policies[].policy.remoteRateLimit.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`policies[].policy.remoteRateLimit.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.remoteRateLimit.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -21508,7 +21516,7 @@
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`policies[].policy.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`policies[].policy.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -21802,7 +21810,7 @@
 |`policies[].policy.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`policies[].policy.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`policies[].policy.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`policies[].policy.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`policies[].policy.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`policies[].policy.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`policies[].policy.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -22099,7 +22107,7 @@
 |`policies[].policy.extProc.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`policies[].policy.extProc.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`policies[].policy.extProc.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -22383,7 +22391,7 @@
 |`policies[].policy.extProc.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`policies[].policy.extProc.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`policies[].policy.extProc.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`policies[].policy.extProc.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`policies[].policy.extProc.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`policies[].policy.extProc.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`policies[].policy.extProc.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`policies[].policy.extProc.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -22750,7 +22758,7 @@
 |`backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -23112,7 +23120,7 @@
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -23476,7 +23484,7 @@
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -23763,7 +23771,7 @@
 |`backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -24069,7 +24077,7 @@
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -24379,7 +24387,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -24650,7 +24658,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -24921,7 +24929,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -25190,7 +25198,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -25495,7 +25503,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -25766,7 +25774,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -26035,7 +26043,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -26177,6 +26185,7 @@
 |`backends[].ai.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`backends[].ai.policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`backends[].ai.policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`backends[].ai.policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`backends[].ai.policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`backends[].ai.policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`backends[].ai.policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -26427,7 +26436,7 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -26791,7 +26800,7 @@
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -27078,7 +27087,7 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -27384,7 +27393,7 @@
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -27694,7 +27703,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -27965,7 +27974,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -28236,7 +28245,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -28505,7 +28514,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -28810,7 +28819,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -29081,7 +29090,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -29350,7 +29359,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -29492,6 +29501,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`backends[].ai.groups[].providers[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`backends[].ai.groups[].providers[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`backends[].ai.groups[].providers[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`backends[].ai.groups[].providers[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`backends[].ai.groups[].providers[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`backends[].ai.groups[].providers[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -29703,7 +29713,7 @@
 |`backends[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -30067,7 +30077,7 @@
 |`backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -30354,7 +30364,7 @@
 |`backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -30660,7 +30670,7 @@
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -30970,7 +30980,7 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -31241,7 +31251,7 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -31512,7 +31522,7 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -31781,7 +31791,7 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -32086,7 +32096,7 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -32357,7 +32367,7 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -32626,7 +32636,7 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -32768,6 +32778,7 @@
 |`backends[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`backends[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`backends[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`backends[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`backends[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`backends[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`backends[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -33013,7 +33024,7 @@
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -33346,7 +33357,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -33617,7 +33628,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -33888,7 +33899,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -34157,7 +34168,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -34462,7 +34473,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -34733,7 +34744,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -35002,7 +35013,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -35144,6 +35155,7 @@
 |`routeGroups[].routes[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routeGroups[].routes[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`routeGroups[].routes[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`routeGroups[].routes[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routeGroups[].routes[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`routeGroups[].routes[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`routeGroups[].routes[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -35319,7 +35331,7 @@
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -35597,7 +35609,7 @@
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -35964,7 +35976,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -36245,7 +36257,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -36598,7 +36610,7 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -36892,7 +36904,7 @@
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -37189,7 +37201,7 @@
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -37473,7 +37485,7 @@
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -37669,6 +37681,7 @@
 |`routeGroups[].routes[].backends[].host`|string|Hostname or IP address of the upstream to route to.|
 |`routeGroups[].routes[].backends[].internal`|string|Route to the in-process admin service instead of a network upstream.<br>Selects how an internal backend maps proxy requests to the admin API.|
 |`routeGroups[].routes[].backends[].dynamic`|object||
+|`routeGroups[].routes[].backends[].dynamic.target`|string|CEL expression evaluated against the request to compute the dial<br>target (e.g. `extproc.workerPodIp + ":" + string(extproc.workerPodPort)`<br>to read dynamic metadata an extProc policy already set). Must<br>evaluate to a `host:port` string. The expression and any policy that<br>supplies its dynamic metadata are trusted to select the dial target.<br>If unset, the target is read from the request's own :authority/URI, as<br>today.|
 |`routeGroups[].routes[].backends[].mcp`|object||
 |`routeGroups[].routes[].backends[].mcp.targets`|[]object|MCP server targets to multiplex together.|
 |`routeGroups[].routes[].backends[].mcp.targets[].sse`|object|Connect to a remote MCP server over HTTP with Server-Sent Events (SSE) streaming.|
@@ -37843,7 +37856,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -38205,7 +38218,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -38569,7 +38582,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -38856,7 +38869,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -39162,7 +39175,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -39472,7 +39485,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -39743,7 +39756,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -40014,7 +40027,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -40283,7 +40296,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -40588,7 +40601,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -40859,7 +40872,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -41128,7 +41141,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -41270,6 +41283,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -41520,7 +41534,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -41884,7 +41898,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -42171,7 +42185,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -42477,7 +42491,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -42787,7 +42801,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -43058,7 +43072,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -43329,7 +43343,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -43598,7 +43612,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -43903,7 +43917,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -44174,7 +44188,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -44443,7 +44457,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -44585,6 +44599,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -44798,7 +44813,7 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -45162,7 +45177,7 @@
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -45449,7 +45464,7 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -45755,7 +45770,7 @@
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -46065,7 +46080,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -46336,7 +46351,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -46607,7 +46622,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -46876,7 +46891,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -47181,7 +47196,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -47452,7 +47467,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -47721,7 +47736,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -47863,6 +47878,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routeGroups[].routes[].backends[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`routeGroups[].routes[].backends[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`routeGroups[].routes[].backends[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routeGroups[].routes[].backends[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`routeGroups[].routes[].backends[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`routeGroups[].routes[].backends[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -48093,7 +48109,7 @@
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -48387,7 +48403,7 @@
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`gateways.*.listeners[].extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`gateways.*.listeners[].extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`gateways.*.listeners[].extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -48684,7 +48700,7 @@
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -48968,7 +48984,7 @@
 |`gateways.*.listeners[].extProc.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`gateways.*.listeners[].extProc.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`gateways.*.listeners[].extProc.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`gateways.*.listeners[].extProc.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`gateways.*.listeners[].extProc.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`gateways.*.listeners[].extProc.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`gateways.*.listeners[].extProc.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`gateways.*.listeners[].extProc.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -49380,7 +49396,7 @@
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`gateways.*.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`gateways.*.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`gateways.*.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -49674,7 +49690,7 @@
 |`gateways.*.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`gateways.*.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`gateways.*.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`gateways.*.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`gateways.*.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`gateways.*.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`gateways.*.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`gateways.*.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -49971,7 +49987,7 @@
 |`gateways.*.extProc.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`gateways.*.extProc.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`gateways.*.extProc.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`gateways.*.extProc.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`gateways.*.extProc.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`gateways.*.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`gateways.*.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`gateways.*.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -50255,7 +50271,7 @@
 |`gateways.*.extProc.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`gateways.*.extProc.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`gateways.*.extProc.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`gateways.*.extProc.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`gateways.*.extProc.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`gateways.*.extProc.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`gateways.*.extProc.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`gateways.*.extProc.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -50688,7 +50704,7 @@
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -51021,7 +51037,7 @@
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -51292,7 +51308,7 @@
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -51563,7 +51579,7 @@
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -51832,7 +51848,7 @@
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -52137,7 +52153,7 @@
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -52408,7 +52424,7 @@
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -52677,7 +52693,7 @@
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -52819,6 +52835,7 @@
 |`routes[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routes[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`routes[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`routes[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routes[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`routes[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`routes[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -52994,7 +53011,7 @@
 |`routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -53272,7 +53289,7 @@
 |`routes[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -53639,7 +53656,7 @@
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -53920,7 +53937,7 @@
 |`routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -54273,7 +54290,7 @@
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -54567,7 +54584,7 @@
 |`routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -54864,7 +54881,7 @@
 |`routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -55148,7 +55165,7 @@
 |`routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].policies.extProc.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -55344,6 +55361,7 @@
 |`routes[].backends[].host`|string|Hostname or IP address of the upstream to route to.|
 |`routes[].backends[].internal`|string|Route to the in-process admin service instead of a network upstream.<br>Selects how an internal backend maps proxy requests to the admin API.|
 |`routes[].backends[].dynamic`|object||
+|`routes[].backends[].dynamic.target`|string|CEL expression evaluated against the request to compute the dial<br>target (e.g. `extproc.workerPodIp + ":" + string(extproc.workerPodPort)`<br>to read dynamic metadata an extProc policy already set). Must<br>evaluate to a `host:port` string. The expression and any policy that<br>supplies its dynamic metadata are trusted to select the dial target.<br>If unset, the target is read from the request's own :authority/URI, as<br>today.|
 |`routes[].backends[].mcp`|object||
 |`routes[].backends[].mcp.targets`|[]object|MCP server targets to multiplex together.|
 |`routes[].backends[].mcp.targets[].sse`|object|Connect to a remote MCP server over HTTP with Server-Sent Events (SSE) streaming.|
@@ -55518,7 +55536,7 @@
 |`routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].mcp.targets[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -55880,7 +55898,7 @@
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -56244,7 +56262,7 @@
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -56531,7 +56549,7 @@
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -56837,7 +56855,7 @@
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -57147,7 +57165,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -57418,7 +57436,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -57689,7 +57707,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -57958,7 +57976,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -58263,7 +58281,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -58534,7 +58552,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -58803,7 +58821,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -58945,6 +58963,7 @@
 |`routes[].backends[].ai.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routes[].backends[].ai.policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`routes[].backends[].ai.policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`routes[].backends[].ai.policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routes[].backends[].ai.policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`routes[].backends[].ai.policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`routes[].backends[].ai.policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -59195,7 +59214,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -59559,7 +59578,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -59846,7 +59865,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -60152,7 +60171,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -60462,7 +60481,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -60733,7 +60752,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -61004,7 +61023,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -61273,7 +61292,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -61578,7 +61597,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -61849,7 +61868,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -62118,7 +62137,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -62260,6 +62279,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -62473,7 +62493,7 @@
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -62837,7 +62857,7 @@
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -63124,7 +63144,7 @@
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -63430,7 +63450,7 @@
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -63740,7 +63760,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -64011,7 +64031,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -64282,7 +64302,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -64551,7 +64571,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -64856,7 +64876,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -65127,7 +65147,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -65396,7 +65416,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -65538,6 +65558,7 @@
 |`routes[].backends[].policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`routes[].backends[].policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`routes[].backends[].policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`routes[].backends[].policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`routes[].backends[].policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`routes[].backends[].policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`routes[].backends[].policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -65739,7 +65760,7 @@
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -66092,7 +66113,7 @@
 |`llm.providers[].defaults.auth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.providers[].defaults.auth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.providers[].defaults.auth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -66453,7 +66474,7 @@
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.providers[].defaults.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.providers[].defaults.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.providers[].defaults.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -66614,6 +66635,7 @@
 |`llm.models[].defaults`|object|defaults allows setting default values for the request. If these are not present in the request body, they will be set.<br>To override even when set, use `overrides`.|
 |`llm.models[].overrides`|object|overrides allows setting values for the request, overriding any existing values|
 |`llm.models[].transformation`|object|transformation allows setting values from CEL expressions for the request, overriding any existing values.|
+|`llm.models[].finalTransformation`|object|final_transformation allows setting values from CEL expressions for the request, overriding any existing values.<br>Occurs after conversion of the request to the provider format, allowing for provider-specific transformations.|
 |`llm.models[].requestHeaders`|object|requestHeaders modifies headers in requests to the LLM provider.|
 |`llm.models[].requestHeaders.add`|object|Headers to append without replacing existing values.|
 |`llm.models[].requestHeaders.set`|object|Headers to set, replacing any existing values.|
@@ -66804,7 +66826,7 @@
 |`llm.models[].auth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.models[].auth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.models[].auth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.models[].auth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.models[].auth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.models[].auth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.models[].auth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].auth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -67165,7 +67187,7 @@
 |`llm.models[].backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.models[].backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.models[].backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.models[].backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.models[].backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.models[].backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.models[].backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -67449,7 +67471,7 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -67720,7 +67742,7 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -67991,7 +68013,7 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -68260,7 +68282,7 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -68565,7 +68587,7 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -68836,7 +68858,7 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -69105,7 +69127,7 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -69468,7 +69490,7 @@
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -69762,7 +69784,7 @@
 |`llm.policies.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.policies.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.policies.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -70059,7 +70081,7 @@
 |`llm.policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -70343,7 +70365,7 @@
 |`llm.policies.extProc.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.policies.extProc.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.policies.extProc.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.policies.extProc.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.policies.extProc.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.policies.extProc.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.policies.extProc.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.extProc.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -70713,7 +70735,7 @@
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -70984,7 +71006,7 @@
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -71255,7 +71277,7 @@
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -71524,7 +71546,7 @@
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -71829,7 +71851,7 @@
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -72100,7 +72122,7 @@
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -72369,7 +72391,7 @@
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -72662,7 +72684,7 @@
 |`llm.policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`llm.policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`llm.policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`llm.policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -72971,7 +72993,7 @@
 |`mcp.targets[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`mcp.targets[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`mcp.targets[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`mcp.targets[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`mcp.targets[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`mcp.targets[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`mcp.targets[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.targets[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -73306,7 +73328,7 @@
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -73639,7 +73661,7 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -73910,7 +73932,7 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -74181,7 +74203,7 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -74450,7 +74472,7 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -74755,7 +74777,7 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -75026,7 +75048,7 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -75295,7 +75317,7 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -75437,6 +75459,7 @@
 |`mcp.policies.ai.defaults`|object|Default request body values added only when the client did not provide them.|
 |`mcp.policies.ai.overrides`|object|Request body values that replace client-provided values.|
 |`mcp.policies.ai.transformations`|object|Request body values computed from CEL expressions.|
+|`mcp.policies.ai.finalTransformations`|object|Request body values computed from CEL expressions.<br>These are applied after conversion to the provider's request format.|
 |`mcp.policies.ai.prompts`|object|Messages to add before or after the client prompt.|
 |`mcp.policies.ai.prompts.append`|[]object|Messages appended to the end of each chat request.|
 |`mcp.policies.ai.prompts.append[].role`|string|Message role, such as "system", "user", or "assistant".|
@@ -75612,7 +75635,7 @@
 |`mcp.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`mcp.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`mcp.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`mcp.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`mcp.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`mcp.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`mcp.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.backendTunnel.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -75890,7 +75913,7 @@
 |`mcp.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`mcp.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`mcp.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`mcp.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`mcp.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`mcp.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`mcp.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -76257,7 +76280,7 @@
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -76538,7 +76561,7 @@
 |`mcp.policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`mcp.policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`mcp.policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.remoteRateLimit.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -76891,7 +76914,7 @@
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`mcp.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`mcp.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -77185,7 +77208,7 @@
 |`mcp.policies.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`mcp.policies.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`mcp.policies.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`mcp.policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`mcp.policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`mcp.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`mcp.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -77482,7 +77505,7 @@
 |`mcp.policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`mcp.policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`mcp.policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.extProc.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -77766,7 +77789,7 @@
 |`mcp.policies.extProc.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`mcp.policies.extProc.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`mcp.policies.extProc.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`mcp.policies.extProc.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`mcp.policies.extProc.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`mcp.policies.extProc.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`mcp.policies.extProc.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`mcp.policies.extProc.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -78160,7 +78183,7 @@
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`ui.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`ui.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`ui.policies.extAuthz.conditional[].policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||
@@ -78454,7 +78477,7 @@
 |`ui.policies.extAuthz.policies.backendAuth.oauthTokenExchange.audiences`|[]string|`audience` parameters naming the target services at the authorization server.|
 |`ui.policies.extAuthz.policies.backendAuth.oauthTokenExchange.scopes`|[]string|`scope` values for the requested token, sent space-delimited.|
 |`ui.policies.extAuthz.policies.backendAuth.oauthTokenExchange.resources`|[]string|`resource` parameters with the target service URIs.|
-|`ui.policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. Under token exchange, unset defaults to<br>access_token because this policy forwards bearer access tokens.|
+|`ui.policies.extAuthz.policies.backendAuth.oauthTokenExchange.requestedTokenType`|string|`requested_token_type` parameter. When unset it is omitted from the request<br>(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)<br>reject an explicit access_token value paired with a custom `subject_token_type`.|
 |`ui.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth`|object|Client authentication used when calling the token endpoint.<br>When unset, no client authentication fields are sent.|
 |`ui.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientId`|string|`client_id` parameter identifying the gateway at the authorization server.|
 |`ui.policies.extAuthz.policies.backendAuth.oauthTokenExchange.clientAuth.clientSecret`|object||

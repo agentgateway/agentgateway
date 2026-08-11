@@ -14,8 +14,32 @@ config:
     gateways: default
   llm:
     gateways: default
-    models: []
+    models:
+      - name: "*"
+        provider: openAI
+        params: {}
+      - name: gpt-*
+        provider: openAI
+        params: {}
+      - name: "*-preview"
+        provider: openAI
+        params: {}
 findings:
-  - sourcePath: "model_list[0].model_name"
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for *
+  - sourcePath: "model_list[1]"
+    status: exact
+    message: Imported model deployment for gpt-*
+  - sourcePath: "model_list[2]"
+    status: exact
+    message: Imported model deployment for *-preview
+  - sourcePath: "model_list[3].model_name"
     status: unsupported
-    message: LiteLLM wildcard models are not yet supported and were not emitted
+    message: "LiteLLM model wildcard pattern \"team*chat\" must contain at most one wildcard, at the beginning or end; the model was not emitted"
+  - sourcePath: "model_list[4].litellm_params.model"
+    status: unsupported
+    message: "LiteLLM model wildcard pattern \"openai/gpt-*-*\" must contain at most one wildcard, at the beginning or end; the model was not emitted"
+  - sourcePath: "model_list[5].litellm_params.model"
+    status: unsupported
+    message: "LiteLLM upstream wildcard rewrite from public model pattern \"alias-*\" to upstream model pattern \"openai/model-*\" cannot be represented safely and the model was not emitted"

@@ -1357,6 +1357,36 @@ spec:
                     required:
                     - policy
                     type: object
+                  finalTransformations:
+                    description: |-
+                      CEL transformations applied to fields in the provider request body.
+                      After conversion from one provider format to another, these transformations are applied to the converted request body.
+                    items:
+                      description: |-
+                        Maps a request JSON field to a CEL expression.
+                        The expression is evaluated against the current request body and its result
+                        is assigned to the configured field.
+                      properties:
+                        expression:
+                          description: CEL expression used to compute the field value.
+                          maxLength: 16384
+                          minLength: 1
+                          type: string
+                        field:
+                          description: Name of the field to set.
+                          maxLength: 256
+                          minLength: 1
+                          type: string
+                      required:
+                      - expression
+                      - field
+                      type: object
+                    maxItems: 64
+                    minItems: 1
+                    type: array
+                    x-kubernetes-list-map-keys:
+                    - field
+                    x-kubernetes-list-type: map
                   headers:
                     description: Request and response header changes applied to provider
                       traffic.
@@ -2026,18 +2056,31 @@ spec:
                                           type: array
                                         caCertificateRefs:
                                           description: |-
-                                            CA certificate `ConfigMap` to use to
-                                            verify the server certificate.
-                                            If unset, the system's trusted certificates are used.
+                                            CA certificate source to use to verify the server certificate. Omitted kind
+                                            and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
+                                            key is required. If unset, the system's trusted certificates are used.
                                           items:
                                             description: |-
-                                              LocalObjectReference contains enough information to let you locate the
-                                              referenced object inside the same namespace.
+                                              LocalCACertificateRef references a same-namespace CA certificate source.
+                                              An omitted kind defaults to ConfigMap.
                                             properties:
-                                              name:
-                                                default: ""
-                                                description: Name of the referent
+                                              kind:
+                                                default: ConfigMap
+                                                description: Kind of the referenced
+                                                  CA certificate source. Omitted defaults
+                                                  to ConfigMap.
+                                                enum:
+                                                - ConfigMap
+                                                - Secret
                                                 type: string
+                                              name:
+                                                description: Name of the referenced
+                                                  CA certificate source.
+                                                maxLength: 253
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                            - name
                                             type: object
                                             x-kubernetes-map-type: atomic
                                           maxItems: 1
@@ -2458,18 +2501,31 @@ spec:
                                           type: array
                                         caCertificateRefs:
                                           description: |-
-                                            CA certificate `ConfigMap` to use to
-                                            verify the server certificate.
-                                            If unset, the system's trusted certificates are used.
+                                            CA certificate source to use to verify the server certificate. Omitted kind
+                                            and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
+                                            key is required. If unset, the system's trusted certificates are used.
                                           items:
                                             description: |-
-                                              LocalObjectReference contains enough information to let you locate the
-                                              referenced object inside the same namespace.
+                                              LocalCACertificateRef references a same-namespace CA certificate source.
+                                              An omitted kind defaults to ConfigMap.
                                             properties:
-                                              name:
-                                                default: ""
-                                                description: Name of the referent
+                                              kind:
+                                                default: ConfigMap
+                                                description: Kind of the referenced
+                                                  CA certificate source. Omitted defaults
+                                                  to ConfigMap.
+                                                enum:
+                                                - ConfigMap
+                                                - Secret
                                                 type: string
+                                              name:
+                                                description: Name of the referenced
+                                                  CA certificate source.
+                                                maxLength: 253
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                            - name
                                             type: object
                                             x-kubernetes-map-type: atomic
                                           maxItems: 1
@@ -2909,18 +2965,31 @@ spec:
                                           type: array
                                         caCertificateRefs:
                                           description: |-
-                                            CA certificate `ConfigMap` to use to
-                                            verify the server certificate.
-                                            If unset, the system's trusted certificates are used.
+                                            CA certificate source to use to verify the server certificate. Omitted kind
+                                            and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
+                                            key is required. If unset, the system's trusted certificates are used.
                                           items:
                                             description: |-
-                                              LocalObjectReference contains enough information to let you locate the
-                                              referenced object inside the same namespace.
+                                              LocalCACertificateRef references a same-namespace CA certificate source.
+                                              An omitted kind defaults to ConfigMap.
                                             properties:
-                                              name:
-                                                default: ""
-                                                description: Name of the referent
+                                              kind:
+                                                default: ConfigMap
+                                                description: Kind of the referenced
+                                                  CA certificate source. Omitted defaults
+                                                  to ConfigMap.
+                                                enum:
+                                                - ConfigMap
+                                                - Secret
                                                 type: string
+                                              name:
+                                                description: Name of the referenced
+                                                  CA certificate source.
+                                                maxLength: 253
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                            - name
                                             type: object
                                             x-kubernetes-map-type: atomic
                                           maxItems: 1
@@ -3135,8 +3204,9 @@ spec:
                                   default: Mask
                                   description: |-
                                     The action to take if a regex pattern is matched in a request or response.
-                                    This setting applies only to request matches. `PromptguardResponse`
-                                    matches are always masked by default.
+                                    The action applies to request and response matches alike. Note that
+                                    `Mask` is not applied to streamed responses: matched content in a
+                                    streamed response is passed through unmodified.
                                     Defaults to `Mask`.
                                   enum:
                                   - Mask
@@ -3687,18 +3757,31 @@ spec:
                                           type: array
                                         caCertificateRefs:
                                           description: |-
-                                            CA certificate `ConfigMap` to use to
-                                            verify the server certificate.
-                                            If unset, the system's trusted certificates are used.
+                                            CA certificate source to use to verify the server certificate. Omitted kind
+                                            and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
+                                            key is required. If unset, the system's trusted certificates are used.
                                           items:
                                             description: |-
-                                              LocalObjectReference contains enough information to let you locate the
-                                              referenced object inside the same namespace.
+                                              LocalCACertificateRef references a same-namespace CA certificate source.
+                                              An omitted kind defaults to ConfigMap.
                                             properties:
-                                              name:
-                                                default: ""
-                                                description: Name of the referent
+                                              kind:
+                                                default: ConfigMap
+                                                description: Kind of the referenced
+                                                  CA certificate source. Omitted defaults
+                                                  to ConfigMap.
+                                                enum:
+                                                - ConfigMap
+                                                - Secret
                                                 type: string
+                                              name:
+                                                description: Name of the referenced
+                                                  CA certificate source.
+                                                maxLength: 253
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                            - name
                                             type: object
                                             x-kubernetes-map-type: atomic
                                           maxItems: 1
@@ -4119,18 +4202,31 @@ spec:
                                           type: array
                                         caCertificateRefs:
                                           description: |-
-                                            CA certificate `ConfigMap` to use to
-                                            verify the server certificate.
-                                            If unset, the system's trusted certificates are used.
+                                            CA certificate source to use to verify the server certificate. Omitted kind
+                                            and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
+                                            key is required. If unset, the system's trusted certificates are used.
                                           items:
                                             description: |-
-                                              LocalObjectReference contains enough information to let you locate the
-                                              referenced object inside the same namespace.
+                                              LocalCACertificateRef references a same-namespace CA certificate source.
+                                              An omitted kind defaults to ConfigMap.
                                             properties:
-                                              name:
-                                                default: ""
-                                                description: Name of the referent
+                                              kind:
+                                                default: ConfigMap
+                                                description: Kind of the referenced
+                                                  CA certificate source. Omitted defaults
+                                                  to ConfigMap.
+                                                enum:
+                                                - ConfigMap
+                                                - Secret
                                                 type: string
+                                              name:
+                                                description: Name of the referenced
+                                                  CA certificate source.
+                                                maxLength: 253
+                                                minLength: 1
+                                                type: string
+                                            required:
+                                            - name
                                             type: object
                                             x-kubernetes-map-type: atomic
                                           maxItems: 1
@@ -4358,8 +4454,9 @@ spec:
                                   default: Mask
                                   description: |-
                                     The action to take if a regex pattern is matched in a request or response.
-                                    This setting applies only to request matches. `PromptguardResponse`
-                                    matches are always masked by default.
+                                    The action applies to request and response matches alike. Note that
+                                    `Mask` is not applied to streamed responses: matched content in a
+                                    streamed response is passed through unmodified.
                                     Defaults to `Mask`.
                                   enum:
                                   - Mask
@@ -4574,18 +4671,29 @@ spec:
                         type: array
                       caCertificateRefs:
                         description: |-
-                          CA certificate `ConfigMap` to use to
-                          verify the server certificate.
-                          If unset, the system's trusted certificates are used.
+                          CA certificate source to use to verify the server certificate. Omitted kind
+                          and `ConfigMap` select a ConfigMap; `Secret` selects a Secret. The `ca.crt`
+                          key is required. If unset, the system's trusted certificates are used.
                         items:
                           description: |-
-                            LocalObjectReference contains enough information to let you locate the
-                            referenced object inside the same namespace.
+                            LocalCACertificateRef references a same-namespace CA certificate source.
+                            An omitted kind defaults to ConfigMap.
                           properties:
-                            name:
-                              default: ""
-                              description: Name of the referent
+                            kind:
+                              default: ConfigMap
+                              description: Kind of the referenced CA certificate source.
+                                Omitted defaults to ConfigMap.
+                              enum:
+                              - ConfigMap
+                              - Secret
                               type: string
+                            name:
+                              description: Name of the referenced CA certificate source.
+                              maxLength: 253
+                              minLength: 1
+                              type: string
+                          required:
+                          - name
                           type: object
                           x-kubernetes-map-type: atomic
                         maxItems: 1
@@ -4802,9 +4910,10 @@ spec:
                       rule: '!has(self.url) || self.url.matches(''^https?://[^/?#]+$'')'
                 type: object
                 x-kubernetes-validations:
-                - message: at least one of the fields in [auth authorization headers
-                    health promptGuard tls transformations tunnel] must be set
-                  rule: '[has(self.auth),has(self.authorization),has(self.headers),has(self.health),has(self.promptGuard),has(self.tls),has(self.transformations),has(self.tunnel)].filter(x,x==true).size()
+                - message: at least one of the fields in [auth authorization finalTransformations
+                    headers health promptGuard tls transformations tunnel] must be
+                    set
+                  rule: '[has(self.auth),has(self.authorization),has(self.finalTransformations),has(self.headers),has(self.health),has(self.promptGuard),has(self.tls),has(self.transformations),has(self.tunnel)].filter(x,x==true).size()
                     >= 1'
               provider:
                 description: |-

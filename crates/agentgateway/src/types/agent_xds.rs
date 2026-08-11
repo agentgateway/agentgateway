@@ -1089,6 +1089,23 @@ fn convert_backend_ai_policy(
 					.collect::<Result<_, _>>()?,
 			)
 		},
+		final_transformations: if ai.final_transformations.is_empty() {
+			None
+		} else {
+			Some(
+				ai.final_transformations
+					.iter()
+					.map(|(k, v)| {
+						let ve = permissive_cel_expression_arc(
+							diagnostics,
+							format!("backend.ai.final_transformations.{k}"),
+							v,
+						);
+						Ok::<_, ProtoError>((k.to_owned(), ve))
+					})
+					.collect::<Result<_, _>>()?,
+			)
+		},
 		prompts: ai.prompts.as_ref().map(convert_prompt_enrichment),
 		model_aliases: ai
 			.model_aliases
@@ -1781,7 +1798,8 @@ pub(crate) fn backend_with_policies_from_proto(
 			};
 			Backend::Opaque(name.into(), target)
 		},
-		Some(backend::Kind::Dynamic(_)) => Backend::Dynamic(name.into(), ()),
+		// xDS-driven dynamic backends don't support a CEL target expression yet.
+		Some(backend::Kind::Dynamic(_)) => Backend::Dynamic(name.into(), None),
 		Some(backend::Kind::Aws(a)) => {
 			let aws_config = match &a.service {
 				Some(proto::agent::aws_backend::Service::AgentCore(ac)) => {
@@ -2464,28 +2482,47 @@ fn traffic_policy_from_proto(
 			duration: permissive_cel_expression_arc(diagnostics, "delay.duration", &d.duration),
 		}),
 		Some(tps::Kind::LocalRateLimit(lrl)) => {
-			let t = tps::local_rate_limit::Type::try_from(lrl.r#type)?;
-			let spec = http::localratelimit::RateLimitSpec {
-				max_tokens: lrl.max_tokens,
-				tokens_per_fill: lrl.tokens_per_fill,
-				fill_interval: lrl
-					.fill_interval
-					.ok_or(ProtoError::MissingRequiredField)?
-					.try_into()?,
-				limit_type: match t {
-					tps::local_rate_limit::Type::Request => http::localratelimit::RateLimitType::Requests,
-					tps::local_rate_limit::Type::Token => http::localratelimit::RateLimitType::Tokens,
-				},
+			let convert = |max_tokens: u64,
+			               tokens_per_fill: u64,
+			               fill_interval: Option<prost_types::Duration>,
+			               limit_type: i32| {
+				let t = tps::local_rate_limit::Type::try_from(limit_type)?;
+				http::localratelimit::RateLimitSpec {
+					max_tokens,
+					tokens_per_fill,
+					fill_interval: fill_interval
+						.ok_or(ProtoError::MissingRequiredField)?
+						.try_into()?,
+					limit_type: match t {
+						tps::local_rate_limit::Type::Request => http::localratelimit::RateLimitType::Requests,
+						tps::local_rate_limit::Type::Token => http::localratelimit::RateLimitType::Tokens,
+					},
+				}
+				.try_into()
+				.map_err(|e| ProtoError::Generic(format!("invalid rate limit: {e}")))
 			};
-			// Yes, its single with a vec, because we originally supported multiple rate limit policies before
-			// we added the generic multiple support.
-			// If we end up adding "Multiple and execute all" to RequestPolicy, we could translate to that;
-			// until this, this is a single policy with multiple rules.
-			TrafficPolicy::LocalRateLimit(RequestPolicy::single(vec![
-				spec
-					.try_into()
-					.map_err(|e| ProtoError::Generic(format!("invalid rate limit: {e}")))?,
-			]))
+			let rules = if lrl.rules.is_empty() {
+				vec![convert(
+					lrl.max_tokens,
+					lrl.tokens_per_fill,
+					lrl.fill_interval,
+					lrl.r#type,
+				)?]
+			} else {
+				lrl
+					.rules
+					.iter()
+					.map(|rule| {
+						convert(
+							rule.max_tokens,
+							rule.tokens_per_fill,
+							rule.fill_interval,
+							rule.r#type,
+						)
+					})
+					.collect::<Result<_, _>>()?
+			};
+			TrafficPolicy::LocalRateLimit(RequestPolicy::single(rules))
 		},
 		Some(tps::Kind::ExtAuthz(ea)) => TrafficPolicy::ExtAuthz(RequestPolicy::single(
 			external_auth_from_proto(ea, diagnostics)?,
@@ -4366,6 +4403,26 @@ mod tests {
 						nanos: 0,
 					}),
 					r#type: proto::agent::traffic_policy_spec::local_rate_limit::Type::Token as i32,
+					rules: vec![
+						proto::agent::traffic_policy_spec::local_rate_limit::Rule {
+							max_tokens: 10,
+							tokens_per_fill: 10,
+							fill_interval: Some(prost_types::Duration {
+								seconds: 1,
+								nanos: 0,
+							}),
+							r#type: proto::agent::traffic_policy_spec::local_rate_limit::Type::Token as i32,
+						},
+						proto::agent::traffic_policy_spec::local_rate_limit::Rule {
+							max_tokens: 5,
+							tokens_per_fill: 5,
+							fill_interval: Some(prost_types::Duration {
+								seconds: 60,
+								nanos: 0,
+							}),
+							r#type: proto::agent::traffic_policy_spec::local_rate_limit::Type::Request as i32,
+						},
+					],
 				},
 			)
 		};
@@ -4393,6 +4450,7 @@ mod tests {
 			panic!("expected conditional local rate limit policy");
 		};
 		assert_eq!(policies.iter().count(), 2);
+		assert!(policies.iter().all(|policy| policy.pol.len() == 2));
 		Ok(())
 	}
 
@@ -4672,6 +4730,9 @@ mod tests {
 				)]
 				.into_iter()
 				.collect(),
+				final_transformations: vec![("max_tokens".to_string(), "80".to_string())]
+					.into_iter()
+					.collect(),
 				prompt_guard: None,
 				prompts: None,
 				model_aliases: Default::default(),
@@ -4702,6 +4763,11 @@ mod tests {
 				.as_ref()
 				.expect("transformation_policy should be set");
 
+			let post_transformation_policy = ai_policy
+				.final_transformations
+				.as_ref()
+				.expect("final_transformations should be set");
+
 			// Verify defaults have correct types and values
 			let temp_val = defaults.get("temperature").unwrap();
 			assert!(temp_val.is_f64(), "temperature should be f64");
@@ -4728,6 +4794,7 @@ mod tests {
 			assert!(array_val.is_array(), "array_value should be an array");
 			assert_eq!(array_val, &json!([1, 2, 3]));
 			assert!(transformation_policy.get("system").is_some());
+			assert!(post_transformation_policy.get("max_tokens").is_some());
 
 			// Verify routes conversion
 			assert_eq!(ai_policy.routes.len(), 3);

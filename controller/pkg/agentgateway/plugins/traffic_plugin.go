@@ -1687,34 +1687,42 @@ func processConcreteRateLimitPolicy(ctx PolicyCtx, rl *agentgateway.RateLimits, 
 
 // processLocalRateLimitPolicy processes local rate limiting configuration
 func processLocalRateLimitTraffic(_ PolicyCtx, limits *[]agentgateway.LocalRateLimit, _ types.NamespacedName) (*api.Policy_Traffic, error) {
-	// TODO: support multiple
-	limit := (*limits)[0]
-
-	rule := &api.TrafficPolicySpec_LocalRateLimit{
-		Type: api.TrafficPolicySpec_LocalRateLimit_REQUEST,
+	rules := make([]*api.TrafficPolicySpec_LocalRateLimit_Rule, 0, len(*limits))
+	for _, limit := range *limits {
+		rule := &api.TrafficPolicySpec_LocalRateLimit_Rule{
+			Type: api.TrafficPolicySpec_LocalRateLimit_REQUEST,
+		}
+		var capacity uint64
+		if limit.Requests != nil {
+			capacity = uint64(*limit.Requests) //nolint:gosec // G115: kubebuilder validation ensures non-negative, safe for uint64
+			rule.Type = api.TrafficPolicySpec_LocalRateLimit_REQUEST
+		} else {
+			capacity = uint64(*limit.Tokens) //nolint:gosec // G115: kubebuilder validation ensures non-negative, safe for uint64
+			rule.Type = api.TrafficPolicySpec_LocalRateLimit_TOKEN
+		}
+		rule.MaxTokens = capacity + uint64(ptr.OrEmpty(limit.Burst)) //nolint:gosec // G115: Burst is non-negative, safe for uint64
+		rule.TokensPerFill = capacity
+		switch limit.Unit {
+		case agentgateway.LocalRateLimitUnitSeconds:
+			rule.FillInterval = durationpb.New(time.Second)
+		case agentgateway.LocalRateLimitUnitMinutes:
+			rule.FillInterval = durationpb.New(time.Minute)
+		case agentgateway.LocalRateLimitUnitHours:
+			rule.FillInterval = durationpb.New(time.Hour)
+		}
+		rules = append(rules, rule)
 	}
-	var capacity uint64
-	if limit.Requests != nil {
-		capacity = uint64(*limit.Requests) //nolint:gosec // G115: kubebuilder validation ensures non-negative, safe for uint64
-		rule.Type = api.TrafficPolicySpec_LocalRateLimit_REQUEST
-	} else {
-		capacity = uint64(*limit.Tokens) //nolint:gosec // G115: kubebuilder validation ensures non-negative, safe for uint64
-		rule.Type = api.TrafficPolicySpec_LocalRateLimit_TOKEN
-	}
-	rule.MaxTokens = capacity + uint64(ptr.OrEmpty(limit.Burst)) //nolint:gosec // G115: Burst is non-negative, safe for uint64
-	rule.TokensPerFill = capacity
-	switch limit.Unit {
-	case agentgateway.LocalRateLimitUnitSeconds:
-		rule.FillInterval = durationpb.New(time.Second)
-	case agentgateway.LocalRateLimitUnitMinutes:
-		rule.FillInterval = durationpb.New(time.Minute)
-	case agentgateway.LocalRateLimitUnitHours:
-		rule.FillInterval = durationpb.New(time.Hour)
+	localRateLimit := &api.TrafficPolicySpec_LocalRateLimit{Rules: rules}
+	if len(rules) > 0 {
+		localRateLimit.MaxTokens = rules[0].MaxTokens
+		localRateLimit.TokensPerFill = rules[0].TokensPerFill
+		localRateLimit.FillInterval = rules[0].FillInterval
+		localRateLimit.Type = rules[0].Type
 	}
 
 	return &api.Policy_Traffic{Traffic: &api.TrafficPolicySpec{
 		Kind: &api.TrafficPolicySpec_LocalRateLimit_{
-			LocalRateLimit: rule,
+			LocalRateLimit: localRateLimit,
 		},
 	}}, nil
 }

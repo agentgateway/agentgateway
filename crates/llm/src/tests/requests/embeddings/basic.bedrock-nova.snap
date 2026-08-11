@@ -1,0 +1,31 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/embeddings/basic.json
+info:
+  model: text-embedding-3-small
+  input: hello world
+  dimensions: 1024
+---
+{
+  "request": {
+    "taskType": "SINGLE_EMBEDDING",
+    "singleEmbeddingParams": {
+      "embeddingPurpose": "GENERIC_INDEX",
+      "embeddingDimension": 1024,
+      "text": {
+        "truncationMode": "END",
+        "value": "hello world"
+      }
+    }
+  },
+  "parsed": {
+    "input_format": "Embeddings",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "text-embedding-3-small",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {
+      "dimensions": 1024
+    }
+  }
+}

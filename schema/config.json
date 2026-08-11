@@ -3719,7 +3719,7 @@
           }
         },
         "requestedTokenType": {
-          "description": "`requested_token_type` parameter. Under token exchange, unset defaults to\naccess_token because this policy forwards bearer access tokens.",
+          "description": "`requested_token_type` parameter. When unset it is omitted from the request\n(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)\nreject an explicit access_token value paired with a custom `subject_token_type`.",
           "type": [
             "string",
             "null"
@@ -4758,6 +4758,16 @@
         },
         "transformations": {
           "description": "Request body values computed from CEL expressions.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "finalTransformations": {
+          "description": "Request body values computed from CEL expressions.\nThese are applied after conversion to the provider's request format.",
           "type": [
             "object",
             "null"
@@ -7478,6 +7488,19 @@
           "properties": {
             "dynamic": {
               "type": "object",
+              "properties": {
+                "target": {
+                  "description": "CEL expression evaluated against the request to compute the dial\ntarget (e.g. `extproc.workerPodIp + \":\" + string(extproc.workerPodPort)`\nto read dynamic metadata an extProc policy already set). Must\nevaluate to a `host:port` string. The expression and any policy that\nsupplies its dynamic metadata are trusted to select the dial target.\nIf unset, the target is read from the request's own :authority/URI, as\ntoday.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Expression"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
               "additionalProperties": false
             }
           },
@@ -9712,6 +9735,17 @@
     "DatabaseLoggingConfig": {
       "type": "object",
       "properties": {
+        "llm": {
+          "description": "LLM detail stored in the database. `metadata` stores request metadata, usage, timing, and\ncost without prompt or completion content in the dedicated payload table. `full`\nadditionally captures and stores prompt and completion content there. When omitted, legacy\nbehavior is preserved: content captured by CEL expressions is also stored in the payload.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DatabaseLlmMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "add": {
           "description": "Database-only fields to add, computed from CEL expressions.",
           "type": "object",
@@ -9721,6 +9755,20 @@
         }
       },
       "additionalProperties": false
+    },
+    "DatabaseLlmMode": {
+      "oneOf": [
+        {
+          "description": "Store LLM metadata without prompt or completion content.",
+          "type": "string",
+          "const": "metadata"
+        },
+        {
+          "description": "Store LLM metadata and prompt/completion content.",
+          "type": "string",
+          "const": "full"
+        }
+      ]
     },
     "TracingConfig": {
       "description": "Configuration for dynamic tracing policy",
@@ -11176,6 +11224,16 @@
         },
         "transformation": {
           "description": "transformation allows setting values from CEL expressions for the request, overriding any existing values.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "finalTransformation": {
+          "description": "final_transformation allows setting values from CEL expressions for the request, overriding any existing values.\nOccurs after conversion of the request to the provider format, allowing for provider-specific transformations.",
           "type": [
             "object",
             "null"

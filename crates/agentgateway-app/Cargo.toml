@@ -9,6 +9,9 @@ publish = { workspace = true }
 name = "agentgateway"
 path = "src/main.rs"
 bench = false
+# main.rs only delegates to the library and has no tests of its own. Avoid
+# linking a second copy of the application as an empty test harness.
+test = false
 
 [features]
 # Jemalloc has been found to have the highest throughput and best ability to return memory to the system
@@ -20,6 +23,7 @@ mimalloc = ["dep:mimalloc", "agentgateway/mimalloc"]
 # Builds that pass `--no-default-features` (e.g. arm64 musl, which drops jemalloc) MUST re-add one
 # of these, otherwise the agentgateway crypto code will fail to compile.
 crypto-aws-lc = ["agentgateway/crypto-aws-lc"]
+crypto-symcrypt = ["agentgateway/crypto-symcrypt"]
 schema = ["agentgateway/schema"]
 
 [dependencies]

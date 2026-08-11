@@ -97,8 +97,8 @@ export function OidcPolicyEditor(props: {
 }) {
   const hasExplicitProvider = Boolean(
     props.oidc?.authorizationEndpoint ||
-    props.oidc?.tokenEndpoint ||
-    props.oidc?.jwks,
+      props.oidc?.tokenEndpoint ||
+      props.oidc?.jwks,
   );
   const [providerMode, setProviderMode] = useState<ProviderMode>(
     hasExplicitProvider ? "explicit" : "discovery",
