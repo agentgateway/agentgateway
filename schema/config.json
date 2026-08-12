@@ -273,6 +273,13 @@
             "null"
           ]
         },
+        "uiReadOnly": {
+          "description": "When true, disables all UI/API actions that write configuration (config file, config\nresources, cost catalog refresh). Can also be set via the `UI_READ_ONLY` environment variable.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "standardAttributes": {
           "description": "Standard request log attributes populated for database-backed local runtime features.",
           "anyOf": [

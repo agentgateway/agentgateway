@@ -11,6 +11,7 @@ export interface RuntimeInfo {
   ui: {
     gatewayMode: "standalone" | "xds";
     configStoreMode: "file" | "hybrid";
+    readOnly: boolean;
   };
 }
 

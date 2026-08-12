@@ -192,6 +192,9 @@ pub struct RawConfig {
 
 	/// Admin UI address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
 	admin_addr: Option<String>,
+	/// When true, disables all UI/API actions that write configuration (config file, config
+	/// resources, cost catalog refresh). Can also be set via the `UI_READ_ONLY` environment variable.
+	ui_read_only: Option<bool>,
 	/// Standard request log attributes populated for database-backed local runtime features.
 	standard_attributes: Option<RawStandardAttributes>,
 	/// Stats/metrics server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"
@@ -624,6 +627,7 @@ pub struct Config {
 	pub logging: crate::telemetry::log::Config,
 	pub database: Option<telemetry::log_store::Config>,
 	pub storage: StorageConfig,
+	pub ui_read_only: bool,
 
 	pub dns: client::Config,
 	pub proxy_metadata: ProxyMetadata,

@@ -372,6 +372,9 @@ pub fn parse_config(
 	let storage = StorageConfig {
 		mode: raw.storage.clone().unwrap_or_default().mode,
 	};
+	let ui_read_only = parse::<bool>("UI_READ_ONLY")?
+		.or(raw.ui_read_only)
+		.unwrap_or(false);
 	if storage.mode == ConfigStoreMode::Hybrid && database.is_none() {
 		anyhow::bail!("config.storage.mode=hybrid requires config.database.url");
 	}
@@ -572,6 +575,7 @@ pub fn parse_config(
 		},
 		database,
 		storage,
+		ui_read_only,
 		session_encoder,
 		oidc_cookie_encoder,
 			hbone: Arc::new(agent_hbone::Config {
@@ -1257,6 +1261,47 @@ config:
 
 		assert_eq!(config.storage.mode, ConfigStoreMode::File);
 		assert!(config.database.is_none());
+	}
+
+	#[test]
+	fn ui_read_only_defaults_to_false() {
+		let _env_lock = lock_env();
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+
+		assert!(!config.ui_read_only);
+	}
+
+	#[test]
+	fn ui_read_only_from_config_file() {
+		let _env_lock = lock_env();
+		let config = parse_config(
+			r#"
+config:
+  uiReadOnly: true
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config should parse");
+
+		assert!(config.ui_read_only);
+	}
+
+	#[test]
+	fn ui_read_only_env_var_overrides_config_file() {
+		let _env_lock = lock_env();
+		let _env = TempEnvVar::set("UI_READ_ONLY", "true");
+		let config = parse_config(
+			r#"
+config:
+  uiReadOnly: false
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config should parse");
+
+		assert!(config.ui_read_only);
 	}
 
 	#[test]
