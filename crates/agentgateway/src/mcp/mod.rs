@@ -349,6 +349,8 @@ pub struct MCPInfo {
 	pub resource: Option<ResourceId>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub task: Option<MCPTask>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub original_resource: Option<ResourceId>,
 	// Terminal errors arrive while the response body is drained. Keep them out of CEL so policy
 	// evaluation cannot depend on asynchronous stream timing; they are emitted as access-log fields.
 	#[dynamic(skip)]
@@ -365,6 +367,7 @@ impl MCPInfo {
 			&& self.prompt.is_none()
 			&& self.resource.is_none()
 			&& self.task.is_none()
+			&& self.original_resource.is_none()
 			&& self.error.is_none()
 	}
 
@@ -411,6 +414,15 @@ impl MCPInfo {
 			.map(|tool| tool.name.as_str())
 			.or_else(|| self.prompt.as_ref().map(ResourceId::name))
 			.or_else(|| self.resource.as_ref().map(ResourceId::name))
+	}
+
+	pub fn set_resource_type(&mut self, res: &ResourceType) {
+		match res {
+			ResourceType::Tool(t) => self.set_tool(t.target().to_string(), t.name().to_string()),
+			ResourceType::Prompt(p) => self.set_prompt(p.target().to_string(), p.name().to_string()),
+			ResourceType::Resource(r) => self.set_resource(r.target().to_string(), r.name().to_string()),
+			ResourceType::Task(t) => self.set_task(t.target().to_string(), t.name().to_string()),
+		}
 	}
 
 	pub fn set_tool(&mut self, target: String, name: String) {

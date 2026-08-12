@@ -241,61 +241,45 @@ impl Session {
 		Ok(())
 	}
 
-	// task_id here is the resolved upstream id, not the client-visible `target+id` form.
-	fn authorize_task_request(
-		&self,
-		service_name: &str,
-		task_id: &str,
-		method: &str,
-		span: &mut SpanWriteOnDrop,
-		log: &AsyncLog<mcp::MCPInfo>,
-		cel: &rbac::CelExecWrapper,
-	) -> Result<(), UpstreamError> {
-		span.rename_span(format!("{method} {service_name}"));
-		log.non_atomic_mutate(|l| {
-			l.set_task(service_name.to_string(), task_id.to_string());
-		});
-		if !self.relay.policies.validate(
-			&rbac::ResourceType::Task(rbac::ResourceId::new(
-				service_name.to_string(),
-				task_id.to_string(),
-			)),
-			cel,
-		) {
-			return Err(UpstreamError::Authorization {
-				resource_type: "task".to_string(),
-				resource_name: task_id.to_string(),
-			});
-		}
-		Ok(())
-	}
-
-	#[allow(clippy::too_many_arguments)]
 	async fn authorize_with_ctx<P>(
 		&self,
 		backend: &str,
 		method: &str,
 		params: &mut P,
 		ctx: &mut IncomingRequestContext,
-		res: rbac::ResourceType,
-		resource_type: &str,
-		resource_name: &str,
+		log: &AsyncLog<mcp::MCPInfo>,
+		client_resource_name: &str,
 	) -> Result<(), UpstreamError>
 	where
-		P: serde::Serialize + serde::de::DeserializeOwned,
+		P: serde::Serialize + serde::de::DeserializeOwned + rbac::ResourceIdentity,
 	{
+		let original_res = params.to_resource_type(backend);
+
 		// run guardrails before other policies, as it may add context to CEL
+		// or mutate the resource (e.g. retargeting to another tool name)
 		self
 			.relay
 			.maybe_run_guardrails_call_request(backend, method, params, ctx)
 			.await?;
+		let res = params.to_resource_type(backend);
+
+		// logs should see the resource we're actually forwarding upstream
+		// but we should store the original resource for auditing purposes
+		if res != original_res {
+			log.non_atomic_mutate(|l| {
+				params.record(l, backend);
+				l.original_resource = Some(original_res.id());
+			});
+		}
 		let cel = rbac::CelExecWrapper::new(ctx.as_request().map(|_| ()));
 		if self.relay.policies.validate(&res, &cel) {
 			Ok(())
 		} else {
+			// errors should be in terms of the client-facing reosurce ID,
+			// not our multiplexed or guardrail-mutated one.
 			Err(UpstreamError::Authorization {
-				resource_type: resource_type.to_string(),
-				resource_name: resource_name.to_string(),
+				resource_type: P::KIND.to_string(),
+				resource_name: client_resource_name.to_string(),
 			})
 		}
 	}
@@ -573,32 +557,27 @@ impl Session {
 						.await
 					},
 					ClientRequest::CallToolRequest(ctr) => {
-						let name = ctr.params.name.clone();
-						let (service_name, tool) = Box::pin(self.relay.resolve_resource_name(
+						let client_name = ctr.params.name.clone();
+						let (service_name, upstream_tool) = Box::pin(self.relay.resolve_resource_name(
 							ResolveKind::Tool,
-							&name,
+							&client_name,
 							&ctx,
 						))
 						.await?;
 						span.rename_span(format!("{method} {service_name}"));
 						let call_arguments = ctr.params.arguments.clone();
 						log.non_atomic_mutate(|l| {
-							l.set_tool(service_name.to_string(), tool.to_string());
+							l.set_tool(service_name.to_string(), upstream_tool.to_string());
 							l.capture_call_arguments(call_arguments);
 						});
-						let tn = tool.to_string();
-						ctr.params.name = tn.into();
+						ctr.params.name = upstream_tool.to_string().into();
 						Box::pin(self.authorize_with_ctx(
 							&service_name,
 							mcp::guardrails::methods::TOOLS_CALL,
 							&mut ctr.params,
 							&mut ctx,
-							rbac::ResourceType::Tool(rbac::ResourceId::new(
-								service_name.to_string(),
-								tool.to_string(),
-							)),
-							"tool",
-							&name,
+							&log,
+							&client_name,
 						))
 						.await?;
 						Box::pin(
@@ -609,125 +588,145 @@ impl Session {
 						.await
 					},
 					ClientRequest::GetPromptRequest(gpr) => {
-						let name = gpr.params.name.clone();
-						let (service_name, prompt) = Box::pin(self.relay.resolve_resource_name(
+						let client_name = gpr.params.name.clone();
+						let (service_name, upstream_prompt) = Box::pin(self.relay.resolve_resource_name(
 							ResolveKind::Prompt,
-							&name,
+							&client_name,
 							&ctx,
 						))
 						.await?;
 						span.rename_span(format!("{method} {service_name}"));
 						log.non_atomic_mutate(|l| {
-							l.set_prompt(service_name.to_string(), prompt.to_string());
+							l.set_prompt(service_name.to_string(), upstream_prompt.to_string());
 						});
-						gpr.params.name = prompt.to_string();
+						gpr.params.name = upstream_prompt.to_string();
 						Box::pin(self.authorize_with_ctx(
 							&service_name,
 							mcp::guardrails::methods::PROMPTS_GET,
 							&mut gpr.params,
 							&mut ctx,
-							rbac::ResourceType::Prompt(rbac::ResourceId::new(
-								service_name.to_string(),
-								prompt.to_string(),
-							)),
-							"prompt",
-							&name,
+							&log,
+							&client_name,
 						))
 						.await?;
 						Box::pin(self.relay.send_single(r, ctx, &service_name, None)).await
 					},
 					ClientRequest::ReadResourceRequest(rrr) => {
-						let uri = rrr.params.uri.clone();
-						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
+						let client_uri = rrr.params.uri.clone();
+						let (service_name, upstream_uri) = self.relay.parse_resource_uri(&client_uri)?;
 						span.rename_span(format!("{method} {service_name}"));
 						log.non_atomic_mutate(|l| {
-							l.set_resource(service_name.to_string(), original_uri.to_string());
+							l.set_resource(service_name.to_string(), upstream_uri.clone());
 						});
-						rrr.params.uri = original_uri.clone();
+						rrr.params.uri = upstream_uri;
 						Box::pin(self.authorize_with_ctx(
 							service_name,
 							mcp::guardrails::methods::RESOURCES_READ,
 							&mut rrr.params,
 							&mut ctx,
-							rbac::ResourceType::Resource(rbac::ResourceId::new(
-								service_name.to_string(),
-								original_uri,
-							)),
-							"resource",
-							&uri,
+							&log,
+							&client_uri,
 						))
 						.await?;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::SubscribeRequest(sr) => {
-						let uri = sr.params.uri.clone();
-						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
-						self.authorize_resource_request(
+						let client_uri = sr.params.uri.clone();
+						let (service_name, upstream_uri) = self.relay.parse_resource_uri(&client_uri)?;
+						span.rename_span(format!("{method} {service_name}"));
+						log.non_atomic_mutate(|l| {
+							l.set_resource(service_name.to_string(), upstream_uri.clone());
+						});
+						sr.params.uri = upstream_uri;
+						Box::pin(self.authorize_with_ctx(
 							service_name,
-							&original_uri,
-							&method,
-							&mut span,
+							mcp::guardrails::methods::RESOURCES_SUBSCRIBE,
+							&mut sr.params,
+							&mut ctx,
 							&log,
-							&cel,
-						)?;
-						sr.params.uri = original_uri;
+							&client_uri,
+						))
+						.await?;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::UnsubscribeRequest(ur) => {
-						let uri = ur.params.uri.clone();
-						let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
-						self.authorize_resource_request(
+						let client_uri = ur.params.uri.clone();
+						let (service_name, upstream_uri) = self.relay.parse_resource_uri(&client_uri)?;
+						span.rename_span(format!("{method} {service_name}"));
+						log.non_atomic_mutate(|l| {
+							l.set_resource(service_name.to_string(), upstream_uri.clone());
+						});
+						ur.params.uri = upstream_uri;
+						Box::pin(self.authorize_with_ctx(
 							service_name,
-							&original_uri,
-							&method,
-							&mut span,
+							mcp::guardrails::methods::RESOURCES_UNSUBSCRIBE,
+							&mut ur.params,
+							&mut ctx,
 							&log,
-							&cel,
-						)?;
-						ur.params.uri = original_uri;
+							&client_uri,
+						))
+						.await?;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 
 					ClientRequest::GetTaskRequest(gtr) => {
-						let (service_name, original_id) =
-							mcp::handler::parse_task_id(&self.relay.upstreams, &gtr.params.task_id)?;
-						self.authorize_task_request(
+						let client_task_id = gtr.params.task_id.clone();
+						let (service_name, upstream_task_id) =
+							mcp::handler::parse_task_id(&self.relay.upstreams, &client_task_id)?;
+						span.rename_span(format!("{method} {service_name}"));
+						log.non_atomic_mutate(|l| {
+							l.set_task(service_name.to_string(), upstream_task_id.clone());
+						});
+						gtr.params.task_id = upstream_task_id;
+						Box::pin(self.authorize_with_ctx(
 							service_name,
-							&original_id,
-							&method,
-							&mut span,
+							mcp::guardrails::methods::TASKS_GET,
+							&mut gtr.params,
+							&mut ctx,
 							&log,
-							&cel,
-						)?;
-						gtr.params.task_id = original_id;
+							&client_task_id,
+						))
+						.await?;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::UpdateTaskRequest(utr) => {
-						let (service_name, original_id) =
-							mcp::handler::parse_task_id(&self.relay.upstreams, &utr.params.task_id)?;
-						self.authorize_task_request(
+						let client_task_id = utr.params.task_id.clone();
+						let (service_name, upstream_task_id) =
+							mcp::handler::parse_task_id(&self.relay.upstreams, &client_task_id)?;
+						span.rename_span(format!("{method} {service_name}"));
+						log.non_atomic_mutate(|l| {
+							l.set_task(service_name.to_string(), upstream_task_id.clone());
+						});
+						utr.params.task_id = upstream_task_id;
+						Box::pin(self.authorize_with_ctx(
 							service_name,
-							&original_id,
-							&method,
-							&mut span,
+							mcp::guardrails::methods::TASKS_UPDATE,
+							&mut utr.params,
+							&mut ctx,
 							&log,
-							&cel,
-						)?;
-						utr.params.task_id = original_id;
+							&client_task_id,
+						))
+						.await?;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::CancelTaskRequest(ctr) => {
-						let (service_name, original_id) =
-							mcp::handler::parse_task_id(&self.relay.upstreams, &ctr.params.task_id)?;
-						self.authorize_task_request(
+						let client_task_id = ctr.params.task_id.clone();
+						let (service_name, upstream_task_id) =
+							mcp::handler::parse_task_id(&self.relay.upstreams, &client_task_id)?;
+						span.rename_span(format!("{method} {service_name}"));
+						log.non_atomic_mutate(|l| {
+							l.set_task(service_name.to_string(), upstream_task_id.clone());
+						});
+						ctr.params.task_id = upstream_task_id;
+						Box::pin(self.authorize_with_ctx(
 							service_name,
-							&original_id,
-							&method,
-							&mut span,
+							mcp::guardrails::methods::TASKS_CANCEL,
+							&mut ctr.params,
+							&mut ctx,
 							&log,
-							&cel,
-						)?;
-						ctr.params.task_id = original_id;
+							&client_task_id,
+						))
+						.await?;
 						Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 					},
 					ClientRequest::CustomRequest(_) => {
@@ -742,26 +741,31 @@ impl Session {
 					},
 					ClientRequest::CompleteRequest(cr) => match &cr.params.r#ref {
 						Reference::Prompt(prompt) => {
-							let name = prompt.name.clone();
-							let (service_name, prompt_name) = Box::pin(
-								self.authorize_prompt_request(&name, &method, &mut span, &log, &cel, &ctx),
-							)
+							let client_name = prompt.name.clone();
+							let (service_name, upstream_prompt) = Box::pin(self.authorize_prompt_request(
+								&client_name,
+								&method,
+								&mut span,
+								&log,
+								&cel,
+								&ctx,
+							))
 							.await?;
-							cr.params.r#ref = Reference::for_prompt(prompt_name.to_string());
+							cr.params.r#ref = Reference::for_prompt(upstream_prompt.to_string());
 							Box::pin(self.relay.send_single(r, ctx, &service_name, None)).await
 						},
 						Reference::Resource(resource) => {
-							let uri = resource.uri.clone();
-							let (service_name, original_uri) = self.relay.parse_resource_uri(&uri)?;
+							let client_uri = resource.uri.clone();
+							let (service_name, upstream_uri) = self.relay.parse_resource_uri(&client_uri)?;
 							self.authorize_resource_request(
 								service_name,
-								&original_uri,
+								&upstream_uri,
 								&method,
 								&mut span,
 								&log,
 								&cel,
 							)?;
-							cr.params.r#ref = Reference::for_resource(original_uri);
+							cr.params.r#ref = Reference::for_resource(upstream_uri);
 							Box::pin(self.relay.send_single(r, ctx, service_name, None)).await
 						},
 						_ => Err(UpstreamError::InvalidMethod(method)),
