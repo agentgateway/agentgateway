@@ -711,7 +711,7 @@ async fn llm_custom_provider_messages_to_responses_for_responses_only_backend() 
 }
 
 #[tokio::test]
-async fn llm_custom_provider_messages_to_responses_rejects_unsupported_before_upstream_call() {
+async fn llm_custom_provider_messages_to_responses_accepts_cache_control() {
 	let mock = body_mock(include_bytes!(
 		"../../../llm/src/tests/response/responses/basic.json"
 	))
@@ -723,22 +723,37 @@ async fn llm_custom_provider_messages_to_responses_rejects_unsupported_before_up
 		io,
 		Method::POST,
 		"http://lo/v1/messages",
-		include_bytes!("../../../llm/src/tests/requests/messages/cache_control.json"),
+		include_bytes!("../../../llm/src/tests/requests/messages/cache_control_responses.json"),
 	)
 	.await;
-	assert_eq!(res.status(), 503);
+	let status = res.status();
 	let body = read_body_raw(res.into_body()).await;
-	assert!(
-		String::from_utf8_lossy(&body).contains("unsupported conversion"),
+	assert_eq!(
+		status,
+		200,
 		"unexpected response body: {}",
 		String::from_utf8_lossy(&body)
 	);
+	let response_body: Value = serde_json::from_slice(&body).expect("response is JSON");
+	assert_eq!(response_body["type"], "message");
 
 	let requests = mock
 		.received_requests()
 		.await
 		.expect("request recording should be enabled");
-	assert_eq!(requests.len(), 0);
+	assert_eq!(requests.len(), 1);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
+	assert_eq!(
+		upstream_body["input"]
+			.as_array()
+			.expect("Responses input should be an array")
+			.iter()
+			.filter_map(|item| item.get("content"))
+			.flat_map(|content| content.as_array().into_iter().flatten())
+			.any(|part| part.get("prompt_cache_breakpoint").is_some()),
+		true
+	);
 }
 
 #[tokio::test]

@@ -179,14 +179,11 @@ pub mod from_messages {
 			output_config,
 		} = req;
 
-		if !stop_sequences.is_empty() {
-			return unsupported("messages stop_sequences cannot be represented by responses");
-		}
-		if top_k.is_some() {
-			return unsupported("messages top_k cannot be represented by responses");
-		}
+		// Responses has no direct stop_sequences/top_k equivalent; these are
+		// accepted and dropped rather than failing the conversion (see #2662).
+		let _ = (stop_sequences, top_k);
 
-		let instructions = translate_system_prompt(system)?;
+		let (instructions, mut input) = translate_system_prompt(system)?;
 		let mut rest = Map::new();
 		if let Some(instructions) = instructions.filter(|s| !s.is_empty()) {
 			rest.insert("instructions".to_string(), Value::String(instructions));
@@ -194,7 +191,10 @@ pub mod from_messages {
 
 		let output_config = output_config.unwrap_or_default();
 		if let Some(reasoning) = translate_reasoning(thinking, output_config.effort)? {
-			rest.insert("reasoning".to_string(), reasoning);
+			rest.insert(
+				"reasoning".to_string(),
+				serde_json::to_value(reasoning).map_err(AIError::RequestMarshal)?,
+			);
 		}
 		if let Some(text) = translate_output_format(output_config.format) {
 			rest.insert("text".to_string(), text);
@@ -222,7 +222,6 @@ pub mod from_messages {
 			}
 		}
 
-		let mut input = Vec::new();
 		for msg in messages {
 			translate_message(msg, &mut input)?;
 		}
@@ -249,51 +248,73 @@ pub mod from_messages {
 
 	fn translate_system_prompt(
 		system: Option<messages::SystemPrompt>,
-	) -> Result<Option<String>, AIError> {
+	) -> Result<(Option<String>, Vec<types::responses::RawInputItem>), AIError> {
 		let Some(system) = system else {
-			return Ok(None);
+			return Ok((None, Vec::new()));
 		};
 		match system {
-			messages::SystemPrompt::Text(text) => Ok(Some(text)),
+			messages::SystemPrompt::Text(text) => Ok((Some(text), Vec::new())),
 			messages::SystemPrompt::Blocks(blocks) => {
+				let has_cache_control = blocks.iter().any(|block| match block {
+					messages::SystemContentBlock::Text { cache_control, .. } => cache_control.is_some(),
+				});
+				if has_cache_control {
+					let mut parts = Vec::new();
+					for block in blocks {
+						match block {
+							messages::SystemContentBlock::Text {
+								text,
+								cache_control,
+							} => {
+								let mut part = json!({
+									"type": "input_text",
+									"text": text,
+								});
+								add_prompt_cache_breakpoint(&mut part, cache_control);
+								parts.push(part);
+							},
+						}
+					}
+					let mut input = Vec::new();
+					flush_input_message("system", &mut parts, &mut input);
+					return Ok((None, input));
+				}
+
 				let mut out = Vec::with_capacity(blocks.len());
 				for block in blocks {
 					match block {
-						messages::SystemContentBlock::Text {
-							text,
-							cache_control,
-						} => {
-							reject_option(
-								&cache_control,
-								"messages system cache_control cannot be represented by responses",
-							)?;
-							out.push(text);
-						},
+						messages::SystemContentBlock::Text { text, .. } => out.push(text),
 					}
 				}
-				Ok(Some(out.join("\n")))
+				Ok((Some(out.join("\n")), Vec::new()))
 			},
+		}
+	}
+
+	fn add_prompt_cache_breakpoint(
+		value: &mut Value,
+		cache_control: Option<messages::CacheControlEphemeral>,
+	) {
+		if cache_control.is_some()
+			&& let Some(object) = value.as_object_mut()
+		{
+			object
+				.entry("prompt_cache_breakpoint")
+				.or_insert_with(|| json!({"mode": "explicit"}));
 		}
 	}
 
 	fn translate_reasoning(
 		thinking: Option<messages::ThinkingInput>,
 		effort: Option<messages::ThinkingEffort>,
-	) -> Result<Option<Value>, AIError> {
+	) -> Result<Option<responses::Reasoning>, AIError> {
 		match thinking {
-			Some(messages::ThinkingInput::Adaptive {}) => {
-				let effort = match effort {
-					Some(messages::ThinkingEffort::Low) => "low",
-					Some(messages::ThinkingEffort::Medium) => "medium",
-					Some(messages::ThinkingEffort::High) => "high",
-					Some(messages::ThinkingEffort::Xhigh) => "xhigh",
-					Some(messages::ThinkingEffort::Max) => "max",
-					None => "high",
-				};
-				Ok(Some(json!({
-					"effort": effort,
-				})))
-			},
+			Some(messages::ThinkingInput::Adaptive {}) => Ok(Some(responses::Reasoning {
+				context: None,
+				effort: translate_effort(effort),
+				mode: None,
+				summary: None,
+			})),
 			Some(messages::ThinkingInput::Disabled {}) => {
 				if effort.is_some() {
 					unsupported("messages output_config.effort requires adaptive thinking")
@@ -301,9 +322,12 @@ pub mod from_messages {
 					Ok(None)
 				}
 			},
-			Some(messages::ThinkingInput::Enabled { .. }) => {
-				unsupported("messages thinking budget_tokens cannot be represented by responses")
-			},
+			Some(messages::ThinkingInput::Enabled { .. }) => Ok(Some(responses::Reasoning {
+				context: None,
+				effort: translate_effort(effort),
+				mode: None,
+				summary: None,
+			})),
 			None => {
 				if effort.is_some() {
 					unsupported("messages output_config.effort requires adaptive thinking")
@@ -312,6 +336,19 @@ pub mod from_messages {
 				}
 			},
 		}
+	}
+
+	fn translate_effort(
+		effort: Option<messages::ThinkingEffort>,
+	) -> Option<responses::ReasoningEffort> {
+		Some(match effort {
+			Some(messages::ThinkingEffort::Low) => responses::ReasoningEffort::Low,
+			Some(messages::ThinkingEffort::Medium) => responses::ReasoningEffort::Medium,
+			Some(messages::ThinkingEffort::High) => responses::ReasoningEffort::High,
+			Some(messages::ThinkingEffort::Xhigh) => responses::ReasoningEffort::Xhigh,
+			Some(messages::ThinkingEffort::Max) => responses::ReasoningEffort::Max,
+			None => responses::ReasoningEffort::High,
+		})
 	}
 
 	fn translate_output_format(format: Option<messages::OutputFormat>) -> Option<Value> {
@@ -331,10 +368,6 @@ pub mod from_messages {
 		for tool in tools.into_iter().flatten() {
 			match tool {
 				messages::Tool::Custom(tool) => {
-					reject_option(
-						&tool.cache_control,
-						"messages tool cache_control cannot be represented by responses",
-					)?;
 					let mut value = Map::new();
 					value.insert("type".to_string(), Value::String("function".to_string()));
 					value.insert("name".to_string(), Value::String(tool.name));
@@ -355,7 +388,7 @@ pub mod from_messages {
 			}
 		}
 		Ok(out)
-	}
+		}
 
 	fn translate_tool_choice(
 		choice: Option<messages::ToolChoice>,
@@ -412,17 +445,17 @@ pub mod from_messages {
 			match block {
 				messages::ContentBlock::Text(text) => {
 					validate_text_block(&text)?;
-					parts.push(json!({
+					let mut part = json!({
 						"type": "input_text",
 						"text": text.text,
-					}));
+					});
+					add_prompt_cache_breakpoint(&mut part, text.cache_control);
+					parts.push(part);
 				},
 				messages::ContentBlock::Image(image) => {
-					reject_option(
-						&image.cache_control,
-						"messages image cache_control cannot be represented by responses",
-					)?;
-					parts.push(translate_image_source(&image.source)?);
+					let mut part = translate_image_source(&image.source)?;
+					add_prompt_cache_breakpoint(&mut part, image.cache_control);
+					parts.push(part);
 				},
 				messages::ContentBlock::ToolResult {
 					tool_use_id,
@@ -431,19 +464,17 @@ pub mod from_messages {
 					is_error,
 				} => {
 					flush_input_message("user", &mut parts, out);
-					reject_option(
-						&cache_control,
-						"messages tool_result cache_control cannot be represented by responses",
-					)?;
-					if is_error.unwrap_or_default() {
-						return unsupported("messages tool_result is_error cannot be represented by responses");
-					}
-					let output = translate_tool_result_content(content)?;
+					let status = if is_error.unwrap_or_default() {
+						"incomplete"
+					} else {
+						"completed"
+					};
+					let output = translate_tool_result_content(content, cache_control)?;
 					out.push(types::responses::RawInputItem::from_value(json!({
 						"type": "function_call_output",
 						"call_id": tool_use_id,
 						"output": output,
-						"status": "completed",
+						"status": status,
 					})));
 				},
 				messages::ContentBlock::Document(_)
@@ -481,13 +512,9 @@ pub mod from_messages {
 					id,
 					name,
 					input,
-					cache_control,
+					cache_control: _,
 				} => {
 					flush_output_message(&mut text_parts, out);
-					reject_option(
-						&cache_control,
-						"messages tool_use cache_control cannot be represented by responses",
-					)?;
 					let arguments = serde_json::to_string(&input).map_err(AIError::RequestMarshal)?;
 					out.push(types::responses::RawInputItem::from_value(json!({
 						"type": "function_call",
@@ -522,10 +549,12 @@ pub mod from_messages {
 			match block {
 				messages::ContentBlock::Text(text) => {
 					validate_text_block(&text)?;
-					parts.push(json!({
+					let mut part = json!({
 						"type": "input_text",
 						"text": text.text,
-					}));
+					});
+					add_prompt_cache_breakpoint(&mut part, text.cache_control);
+					parts.push(part);
 				},
 				_ => {
 					return unsupported("messages system content block cannot be represented by responses");
@@ -565,10 +594,6 @@ pub mod from_messages {
 	}
 
 	fn validate_text_block(text: &messages::ContentTextBlock) -> Result<(), AIError> {
-		reject_option(
-			&text.cache_control,
-			"messages text cache_control cannot be represented by responses",
-		)?;
 		reject_option(
 			&text.citations,
 			"messages text citations cannot be represented by responses",
@@ -631,11 +656,25 @@ pub mod from_messages {
 
 	fn translate_tool_result_content(
 		content: messages::ToolResultContent,
-	) -> Result<String, AIError> {
+		cache_control: Option<messages::CacheControlEphemeral>,
+	) -> Result<Value, AIError> {
 		match content {
-			messages::ToolResultContent::Text(text) => Ok(text),
+			messages::ToolResultContent::Text(text) => {
+				if cache_control.is_some() {
+					let mut part = json!({
+						"type": "input_text",
+						"text": text,
+					});
+					add_prompt_cache_breakpoint(&mut part, cache_control);
+					Ok(json!([part]))
+				} else {
+					Ok(Value::String(text))
+				}
+			},
 			messages::ToolResultContent::Array(parts) => {
-				let mut out = Vec::new();
+				let mut text_parts = Vec::new();
+				let mut text_values = Vec::new();
+				let has_cache_control = cache_control.is_some();
 				for part in parts {
 					match part {
 						messages::ToolResultContentPart::Text {
@@ -644,14 +683,16 @@ pub mod from_messages {
 							cache_control,
 						} => {
 							reject_option(
-								&cache_control,
-								"messages tool_result text cache_control cannot be represented by responses",
-							)?;
-							reject_option(
 								&citations,
 								"messages tool_result citations cannot be represented by responses",
 							)?;
-							out.push(text);
+							let mut value = json!({
+								"type": "input_text",
+								"text": &text,
+							});
+							add_prompt_cache_breakpoint(&mut value, cache_control);
+							text_parts.push(text);
+							text_values.push(value);
 						},
 						messages::ToolResultContentPart::Image { .. }
 						| messages::ToolResultContentPart::Document { .. }
@@ -662,7 +703,26 @@ pub mod from_messages {
 						},
 					}
 				}
-				Ok(out.join("\n"))
+				if let Some(cache_control) = cache_control {
+					if let Some(last) = text_values.last_mut() {
+						add_prompt_cache_breakpoint(last, Some(cache_control));
+					} else {
+						text_values.push(json!({
+							"type": "input_text",
+							"text": "",
+							"prompt_cache_breakpoint": {"mode": "explicit"},
+						}));
+					}
+				}
+				if has_cache_control
+					|| text_values
+						.iter()
+						.any(|part| part.get("prompt_cache_breakpoint").is_some())
+				{
+					Ok(Value::Array(text_values))
+				} else {
+					Ok(Value::String(text_parts.join("\n")))
+				}
 			},
 		}
 	}
@@ -752,6 +812,11 @@ pub mod from_messages {
 						input,
 						cache_control: None,
 					});
+				},
+				responses::OutputItem::Reasoning(_) => {
+					tracing::warn!(
+						"Skipping unsupported Responses reasoning output during messages translation"
+					);
 				},
 				_ => {
 					return unsupported("responses output item cannot be represented by messages");
@@ -1388,6 +1453,10 @@ pub mod from_messages {
 							error.message
 						);
 					},
+					// Intermediate progress event; no block state change needed.
+					responses::ResponseStreamEvent::ResponseInProgress(_) => {},
+					// Text finalization is handled by ResponseContentPartDone.
+					responses::ResponseStreamEvent::ResponseOutputTextDone(_) => {},
 				},
 			}
 			events
@@ -1495,75 +1564,35 @@ pub mod from_messages {
 	}
 
 	fn validate_raw_request(req: &types::messages::Request) -> Result<(), AIError> {
-		validate_allowed_keys(
-			&req.rest,
-			&[
-				"stop_sequences",
-				"top_k",
-				"tools",
-				"tool_choice",
-				"metadata",
-				"thinking",
-				"output_config",
-			],
-			"messages request field",
-		)?;
+		// Validate only the fields we actually translate. Unknown request-level
+		// fields are accepted and dropped rather than failing the conversion
+		// (see #2662: "tune down validation very very very heavily").
+		let _ = &req.rest;
 		if let Some(system) = &req.system {
 			match system {
 				types::messages::TextBlock::Text(_) => {},
 				types::messages::TextBlock::Array(parts) => {
 					for part in parts {
 						match part {
-							types::messages::TextPart::Text { rest, .. } => {
-								validate_allowed_keys(rest, &["cache_control"], "messages system text field")?
-							},
-							types::messages::TextPart::Unknown(_) => {
-								return unsupported(
-									"messages unknown system block cannot be represented by responses",
-								);
-							},
+							types::messages::TextPart::Text { .. } => {},
+							types::messages::TextPart::Unknown(_) => {},
 						}
 					}
 				},
 			}
 		}
 		for message in &req.messages {
-			validate_allowed_keys(&message.rest, &[], "messages message field")?;
+			let _ = &message.rest;
 			if let Some(types::messages::ContentBlock::Array(parts)) = &message.content {
 				for part in parts {
 					match part {
-						types::messages::ContentPart::Text { rest, .. } => {
-							validate_allowed_keys(rest, &["cache_control", "citations"], "messages text field")?
-						},
+						types::messages::ContentPart::Text { .. } => {},
 						types::messages::ContentPart::Unknown(_) => {},
 					}
 				}
 			}
 		}
 		Ok(())
-	}
-
-	fn validate_allowed_keys(
-		value: &Value,
-		allowed: &[&str],
-		context: &'static str,
-	) -> Result<(), AIError> {
-		match value {
-			Value::Null => Ok(()),
-			Value::Object(map) => {
-				for key in map.keys() {
-					if !allowed.contains(&key.as_str()) {
-						return Err(AIError::UnsupportedConversion(strng::format!(
-							"{context} {key:?} cannot be represented by responses"
-						)));
-					}
-				}
-				Ok(())
-			},
-			_ => Err(AIError::UnsupportedConversion(strng::format!(
-				"{context} rest must be an object"
-			))),
-		}
 	}
 
 	fn reject_option<T>(value: &Option<T>, reason: &'static str) -> Result<(), AIError> {

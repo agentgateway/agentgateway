@@ -1338,14 +1338,13 @@ data: {"type":"message_stop"}
 	}
 }
 
-#[tokio::test]
-async fn responses_to_messages_stream_translates_text_tool_and_usage() {
-	use http_body_util::BodyExt;
+async fn test_stream(provider: &str, relative_path: &str) {
+	let input_path = fixture_path(relative_path);
+	let provider_bytes = fs::read(&input_path).expect("failed to read stream input file");
+	let input_str = String::from_utf8_lossy(&provider_bytes).to_string();
 
-	let input = fs::read_to_string(fixture_path("response/responses/stream.json"))
-		.expect("failed to read input fixture");
 	let output = conversion::responses::from_messages::translate_stream(
-		axum_core::body::Body::from(input),
+		axum_core::body::Body::from(provider_bytes),
 		1024 * 1024,
 		StreamingUsageGuard::default(),
 		crate::LogContentFields {
@@ -1357,60 +1356,136 @@ async fn responses_to_messages_stream_translates_text_tool_and_usage() {
 	.await
 	.unwrap()
 	.to_bytes();
+	let output_str = String::from_utf8_lossy(&output).to_string();
+	let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
 
-	let events = String::from_utf8(output.to_vec())
-		.unwrap()
-		.lines()
-		.filter_map(|line| line.strip_prefix("data: "))
-		.filter(|data| *data != "[DONE]")
-		.filter_map(|data| serde_json::from_str::<Value>(data).ok())
-		.collect::<Vec<_>>();
+	insta::with_settings!({
+		info => &input_str,
+		description => input_path.to_string_lossy().to_string(),
+		omit_expression => true,
+		prepend_module_to_snapshot => false,
+		snapshot_path => snapshot_path,
+	}, {
+		insta::assert_snapshot!(snapshot_name, output_str);
+	});
+}
 
-	assert!(
-		events.iter().any(|event| event["type"] == "message_start"),
-		"missing message_start: {events:#?}"
-	);
-	assert!(events.iter().any(|event| {
-		event["type"] == "content_block_delta"
-			&& event["delta"]["type"] == "text_delta"
-			&& event["delta"]["text"] == "Hello"
-	}));
-	assert!(events.iter().any(|event| {
-		event["type"] == "content_block_delta"
-			&& event["delta"]["type"] == "input_json_delta"
-			&& event["delta"]["partial_json"] == "{\"loc"
-	}));
-	let delta = events
-		.iter()
-		.find(|event| event["type"] == "message_delta")
-		.expect("missing message_delta");
-	assert_eq!(delta["delta"]["stop_reason"], "tool_use");
-	assert_eq!(
-		delta["usage"],
-		json!({
-			"input_tokens": 12,
-			"output_tokens": 8,
-		})
-	);
-	assert!(
-		events.iter().any(|event| event["type"] == "message_stop"),
-		"missing message_stop: {events:#?}"
-	);
+#[tokio::test]
+async fn responses_to_messages_stream_translates_text_tool_and_usage() {
+	test_stream(
+		"responses-messages-streaming",
+		"response/responses/stream.json",
+	)
+	.await;
+}
+
+#[tokio::test]
+async fn responses_to_messages_stream_translates_image() {
+	test_stream(
+		"responses-messages-streaming",
+		"response/responses/stream-image.json",
+	)
+	.await;
 }
 
 #[test]
 fn messages_to_responses_rejects_unsupported_features() {
-	for path in [
-		"requests/messages/cache_control.json",
-		"requests/messages/reasoning_replay.json",
-	] {
-		let input_str = fs::read_to_string(fixture_path(path)).expect("failed to read fixture");
-		let input: types::messages::Request =
-			serde_json::from_str(&input_str).expect("failed to parse fixture");
-		let err = conversion::responses::from_messages::translate(&input).unwrap_err();
-		assert!(
-			matches!(err, AIError::UnsupportedConversion(_)),
-			"expected UnsupportedConversion for {path}, got {err:?}"
-		);
-	}
+	let path = "requests/messages/reasoning_replay.json";
+	let input_str = fs::read_to_string(fixture_path(path)).expect("failed to read fixture");
+	let input: types::messages::Request =
+		serde_json::from_str(&input_str).expect("failed to parse fixture");
+	let err = conversion::responses::from_messages::translate(&input).unwrap_err();
+	assert!(
+		matches!(err, AIError::UnsupportedConversion(_)),
+		"expected UnsupportedConversion for {path}, got {err:?}"
+	);
+}
+
+#[test]
+fn messages_to_responses_accepts_and_drops_unrepresentable_fields() {
+	let input: types::messages::Request = serde_json::from_value(json!({
+		"model": "claude-sonnet-4-20250514",
+		"max_tokens": 1024,
+		"stop_sequences": ["</end>", "\n\nHuman:"],
+		"top_k": 40,
+		"messages": [{
+			"role": "user",
+			"content": [{"type": "text", "text": "hello"}]
+		}]
+	}))
+	.expect("failed to parse request");
+	let body = conversion::responses::from_messages::translate(&input)
+		.expect("stop_sequences/top_k should be accepted and dropped");
+	let body: Value = serde_json::from_slice(&body).expect("translated request should be JSON");
+	assert!(body.get("stop").is_none());
+	assert!(body.get("top_k").is_none());
+	assert_eq!(body["input"][0]["content"][0]["text"], "hello");
+}
+
+#[test]
+fn messages_to_responses_maps_tool_result_is_error_to_incomplete() {
+	let input_str = fs::read_to_string(fixture_path("requests/messages/tool_result_error.json"))
+		.expect("failed to read fixture");
+	let input: types::messages::Request =
+		serde_json::from_str(&input_str).expect("failed to parse fixture");
+	let body = conversion::responses::from_messages::translate(&input)
+		.expect("tool_result is_error should be mapped, not rejected");
+	let body: Value = serde_json::from_slice(&body).expect("translated request should be JSON");
+	let call_outputs = body["input"]
+		.as_array()
+		.expect("input should be an array")
+		.iter()
+		.filter(|item| item["type"] == "function_call_output")
+		.collect::<Vec<_>>();
+	assert_eq!(
+		call_outputs.len(),
+		1,
+		"expected one function_call_output: {body}"
+	);
+	assert_eq!(call_outputs[0]["call_id"], "toolu_01");
+	assert_eq!(call_outputs[0]["status"], "incomplete");
+}
+
+#[test]
+fn messages_to_responses_maps_anthropic_runtime_features() {
+	let input: types::messages::Request = serde_json::from_value(json!({
+		"model": "claude-sonnet-4-20250514",
+		"max_tokens": 1024,
+		"context_management": {
+			"edits": [{"type": "clear_thinking_20251015", "keep": "all"}]
+		},
+		"thinking": {"type": "enabled", "budget_tokens": 2048},
+		"system": [
+			{"type": "text", "text": "stable instructions"},
+			{
+				"type": "text",
+				"text": "cached instructions",
+				"cache_control": {"type": "ephemeral"}
+			}
+		],
+		"messages": [{
+			"role": "user",
+			"content": [{
+				"type": "text",
+				"text": "hello",
+				"cache_control": {"type": "ephemeral"}
+			}]
+		}]
+	}))
+	.expect("failed to parse request");
+	let body = conversion::responses::from_messages::translate(&input)
+		.expect("runtime features should translate");
+	let body: Value = serde_json::from_slice(&body).expect("translated request should be JSON");
+
+	assert!(body.get("context_management").is_none());
+	assert_eq!(body["reasoning"]["effort"], "high");
+	assert_eq!(body["input"][0]["role"], "system");
+	assert_eq!(
+		body["input"][0]["content"][1]["prompt_cache_breakpoint"]["mode"],
+		"explicit"
+	);
+	assert_eq!(
+		body["input"][1]["content"][0]["prompt_cache_breakpoint"]["mode"],
+		"explicit"
+	);
 }
