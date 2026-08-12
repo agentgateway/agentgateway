@@ -317,16 +317,18 @@ export function PlaygroundPage() {
     if (mcpServerCount === 0 && mcpEnabled) setMcpEnabled(false);
   }, [mcpEnabled, mcpServerCount]);
 
-  async function loadMcpTools() {
+  async function loadMcpTools(bearerToken: string) {
     let sessionId = await initializeMcpSession(
       derivedMcpBaseUrl,
       "agentgateway-ui-llm-playground",
       mcpSessionId,
+      bearerToken,
     );
     setMcpSessionId(sessionId);
     const response = await sendMcpJsonRpc({
       baseUrl: derivedMcpBaseUrl,
       sessionId,
+      bearerToken,
       body: {
         jsonrpc: "2.0",
         id: nextRpcId(),
@@ -380,7 +382,7 @@ export function PlaygroundPage() {
           { label: "Sending chat completion", state: "pending" },
           { label: "Waiting for model response", state: "pending" },
         ]);
-        const loaded = await loadMcpTools();
+        const loaded = await loadMcpTools(selectedKeyValue);
         availableMcpTools = loaded.tools;
         activeMcpSessionId = loaded.sessionId;
         if (availableMcpTools.length === 0) {
@@ -452,6 +454,7 @@ export function PlaygroundPage() {
           availableMcpTools,
           derivedMcpBaseUrl,
           activeMcpSessionId,
+          selectedKeyValue,
           setMcpSessionId,
         );
         const toolMessages: ChatMessage[] = executions.map((execution) => ({
@@ -1192,6 +1195,7 @@ async function executeToolCalls(
   tools: PlaygroundTool[],
   baseUrl: string,
   sessionId: string,
+  bearerToken: string,
   setSessionId: (value: string) => void,
 ) {
   const executions: ToolExecution[] = [];
@@ -1201,6 +1205,7 @@ async function executeToolCalls(
       baseUrl,
       "agentgateway-ui-llm-playground",
       sessionId,
+      bearerToken,
     ));
   setSessionId(activeSessionId);
   for (const call of calls) {
@@ -1214,6 +1219,7 @@ async function executeToolCalls(
     const response = await sendMcpJsonRpc({
       baseUrl,
       sessionId: activeSessionId,
+      bearerToken,
       body: {
         jsonrpc: "2.0",
         id: nextRpcId(),
