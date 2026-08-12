@@ -75,14 +75,26 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 			.output,
 		ChatFormat::VertexGemini
 	);
-	// Completions inbound on the Gemini API provider keeps the OpenAI-compat shim.
+	// Completions inbound on the Gemini API provider prefers our native conversion over the
+	// OpenAI-compat shim, matching Vertex with a Gemini model.
 	assert_eq!(
 		gemini
 			.chat_translation(InputFormat::Completions, Some("gemini-2.5-flash"))
 			.unwrap()
 			.output,
-		ChatFormat::OpenAICompletions
+		ChatFormat::VertexGemini
 	);
+	// Messages and Responses clients still ride the compat shim: there is no conversion from
+	// those formats to native Gemini.
+	for input in [InputFormat::Messages, InputFormat::Responses] {
+		assert_eq!(
+			gemini
+				.chat_translation(input, Some("gemini-2.5-flash"))
+				.unwrap()
+				.output,
+			ChatFormat::OpenAICompletions
+		);
+	}
 }
 
 #[test]

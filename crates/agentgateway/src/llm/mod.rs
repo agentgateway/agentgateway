@@ -315,9 +315,10 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 		// Direct passthrough
 		chat(InputFormat::Responses, ChatFormat::OpenAIResponses),
 		chat(InputFormat::Gemini, ChatFormat::VertexGemini),
-		// Quirk: normally we prefer direct passthrough. However, for Gemini, we can do a better job of
-		// the conversion than Google's OpenAI compatible endpoint, so we put this first. This will
-		// only actually be used for Vertex + Gemini models.
+		// Quirk: normally we prefer direct passthrough. However, our conversion does a better job
+		// than Google's OpenAI compatible endpoint, so any provider that speaks native Gemini
+		// (Vertex or the Gemini API with a Gemini model, custom providers advertising
+		// generateContent) takes it in preference to the compat shim.
 		chat(InputFormat::Completions, ChatFormat::VertexGemini),
 		chat(InputFormat::Completions, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Messages, ChatFormat::AnthropicMessages),
@@ -907,11 +908,7 @@ impl AIProvider {
 		}
 	}
 
-	fn supported_chat_formats(
-		&self,
-		input_format: InputFormat,
-		request_model: Option<&str>,
-	) -> Vec<ChatFormat> {
+	fn supported_chat_formats(&self, request_model: Option<&str>) -> Vec<ChatFormat> {
 		match self {
 			AIProvider::OpenAI(_) => {
 				vec![ChatFormat::OpenAIResponses, ChatFormat::OpenAICompletions]
@@ -929,12 +926,7 @@ impl AIProvider {
 			},
 			AIProvider::Azure(_) => vec![ChatFormat::OpenAIResponses, ChatFormat::OpenAICompletions],
 
-			// The Gemini API serves the native generateContent format too, but only native Gemini
-			// inbound selects it: the Completions --> VertexGemini conversion is Vertex-specific.
-			AIProvider::Gemini(_) if input_format == InputFormat::Gemini => {
-				vec![ChatFormat::VertexGemini]
-			},
-			AIProvider::Gemini(_) => vec![ChatFormat::OpenAICompletions],
+			AIProvider::Gemini(_) => vec![ChatFormat::VertexGemini, ChatFormat::OpenAICompletions],
 			AIProvider::Anthropic(_) => vec![ChatFormat::AnthropicMessages],
 			AIProvider::Bedrock(_) => vec![ChatFormat::BedrockConverse],
 
@@ -984,7 +976,7 @@ impl AIProvider {
 		input_format: InputFormat,
 		request_model: Option<&str>,
 	) -> Result<&'static ChatTranslation, AIError> {
-		let supported = self.supported_chat_formats(input_format, request_model);
+		let supported = self.supported_chat_formats(request_model);
 		CHAT_TRANSLATIONS
 			.iter()
 			.find(|translation| {

@@ -433,6 +433,68 @@ async fn generate_content_keeps_its_route_type_upstream() {
 	}
 }
 
+#[tokio::test]
+async fn completions_inbound_to_the_gemini_provider_renders_native() {
+	// The Gemini provider advertises the native chat format unconditionally, so
+	// OpenAI-compat clients get the gateway's own Completions -> Gemini conversion
+	// instead of Google's compat shim, matching Vertex with a Gemini model.
+	let provider = gemini_provider(None);
+	let req = gemini_request(
+		"https://example.com/v1/chat/completions",
+		r#"{"model":"gemini-2.5-flash","messages":[{"role":"user","content":"hello"}]}"#,
+	);
+
+	let RequestResult::Success {
+		request: mut forwarded,
+		llm_request,
+		upstream_route_type,
+	} = provider
+		.process_completions_request(
+			&backend_info(gemini::DEFAULT_HOST_STR),
+			None,
+			req,
+			false,
+			&mut None,
+		)
+		.await
+		.expect("completions request should process")
+	else {
+		panic!("expected a forwarded request");
+	};
+
+	assert_eq!(upstream_route_type, RouteType::GenerateContent);
+	assert!(matches!(
+		llm_request.provider_state,
+		Some(ProviderState::VertexGemini)
+	));
+
+	provider
+		.setup_request(
+			&mut forwarded,
+			upstream_route_type,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+		)
+		.expect("setup_request should succeed");
+	assert_eq!(
+		forwarded.uri().path(),
+		"/v1beta/models/gemini-2.5-flash:generateContent"
+	);
+
+	let body = forwarded.into_body().collect().await.unwrap().to_bytes();
+	let json: Value = serde_json::from_slice(&body).expect("forwarded body should be JSON");
+	assert!(
+		json.get("contents").is_some(),
+		"native body carries contents: {json}"
+	);
+	assert!(
+		json.get("messages").is_none(),
+		"OpenAI messages field must not survive the conversion: {json}"
+	);
+}
+
 #[test]
 fn gemini_input_formats_gate_the_policy_stack() {
 	assert!(InputFormat::Gemini.is_chat());
