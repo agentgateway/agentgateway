@@ -71,7 +71,11 @@ pub struct TextPart {
 	pub text: String,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub thought: Option<bool>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		alias = "thought_signature"
+	)]
 	pub thought_signature: Option<String>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
@@ -80,10 +84,15 @@ pub struct TextPart {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FunctionCallPart {
+	#[serde(alias = "function_call")]
 	pub function_call: FunctionCall,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub thought: Option<bool>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		alias = "thought_signature"
+	)]
 	pub thought_signature: Option<String>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
@@ -92,6 +101,7 @@ pub struct FunctionCallPart {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FunctionResponsePart {
+	#[serde(alias = "function_response")]
 	pub function_response: FunctionResponse,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
@@ -100,6 +110,7 @@ pub struct FunctionResponsePart {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InlineDataPart {
+	#[serde(alias = "inline_data")]
 	pub inline_data: Blob,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
@@ -108,6 +119,7 @@ pub struct InlineDataPart {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileDataPart {
+	#[serde(alias = "file_data")]
 	pub file_data: FileData,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
@@ -116,6 +128,7 @@ pub struct FileDataPart {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutableCodePart {
+	#[serde(alias = "executable_code")]
 	pub executable_code: serde_json::Value,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
@@ -124,6 +137,7 @@ pub struct ExecutableCodePart {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodeExecutionResultPart {
+	#[serde(alias = "code_execution_result")]
 	pub code_execution_result: serde_json::Value,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
@@ -157,6 +171,7 @@ pub struct FunctionResponse {
 #[serde(rename_all = "camelCase")]
 pub struct Blob {
 	// Field order matters: Vertex returns 400 if `mimeType` comes after `data`.
+	#[serde(alias = "mime_type")]
 	pub mime_type: String,
 	pub data: String,
 	#[serde(flatten, default)]
@@ -168,8 +183,9 @@ pub struct Blob {
 pub struct FileData {
 	// Field order matters: `mimeType` must precede `fileUri` in serialised JSON.
 	// `mime_type` is optional; Vertex resolves it server-side for Files API URLs.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[serde(default, skip_serializing_if = "Option::is_none", alias = "mime_type")]
 	pub mime_type: Option<String>,
+	#[serde(alias = "file_uri")]
 	pub file_uri: String,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
