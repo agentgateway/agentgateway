@@ -611,6 +611,7 @@ pub mod to_responses {
 		};
 
 		let mut saw_token = false;
+		let mut last_token_at: Option<Instant> = None;
 		let mut sent_created = false;
 		let mut sent_content_part = false;
 		let mut flushed = false;
@@ -724,11 +725,18 @@ pub mod to_responses {
 									));
 								}
 
-								if !saw_token {
-									saw_token = true;
-									log.update(|r| {
-										r.response.first_token = Some(Instant::now());
-									});
+								{
+									let now = Instant::now();
+									if !saw_token {
+										saw_token = true;
+										last_token_at = Some(now);
+										log.update(|r| {
+											r.response.first_token = Some(now);
+										});
+									} else if let Some(prev) = last_token_at.replace(now) {
+										let gap = now.duration_since(prev);
+										log.update(|r| r.response.inter_token_latencies.push(gap));
+									}
 								}
 
 								sequence_number += 1;
@@ -782,11 +790,16 @@ pub mod to_responses {
 									}
 
 									if is_new {
+										let now = Instant::now();
 										if !saw_token {
 											saw_token = true;
+											last_token_at = Some(now);
 											log.update(|r| {
-												r.response.first_token = Some(Instant::now());
+												r.response.first_token = Some(now);
 											});
+										} else if let Some(prev) = last_token_at.replace(now) {
+											let gap = now.duration_since(prev);
+											log.update(|r| r.response.inter_token_latencies.push(gap));
 										}
 
 										sequence_number += 1;

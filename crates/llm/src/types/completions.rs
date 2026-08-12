@@ -220,6 +220,8 @@ impl ResponseType for Response {
 			},
 			output_messages,
 			first_token: Default::default(),
+			last_token_at: Default::default(),
+			inter_token_latencies: Default::default(),
 		}
 	}
 

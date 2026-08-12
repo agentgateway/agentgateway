@@ -863,6 +863,13 @@ impl DropOnLog {
 					.get_or_create(&gen_ai_labels)
 					.observe(time_per_output_token.as_secs_f64());
 			}
+			for gap in &llm_response.inter_token_latencies {
+				log
+					.metrics
+					.gen_ai_inter_token_latency
+					.get_or_create(&gen_ai_labels)
+					.observe(gap.as_secs_f64());
+			}
 		}
 	}
 }

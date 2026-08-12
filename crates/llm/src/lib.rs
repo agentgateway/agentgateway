@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use agent_core::prelude::Strng;
 pub use agent_core::serdes;
@@ -306,6 +306,13 @@ pub struct LLMResponse {
 	pub output_messages: Option<Vec<types::OutputMessage>>,
 	#[serde(skip)]
 	pub first_token: Option<Instant>,
+	/// Timestamp of the most recently observed output token, used to compute
+	/// inter_token_latencies. Not the same as first_token once more than one token has arrived.
+	#[serde(skip)]
+	pub last_token_at: Option<Instant>,
+	/// Gap between each pair of consecutive output tokens, in arrival order.
+	#[serde(skip)]
+	pub inter_token_latencies: Vec<Duration>,
 }
 
 /// LogContentFields controls which response content is captured for observability.
