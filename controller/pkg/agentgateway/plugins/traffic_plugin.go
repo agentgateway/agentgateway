@@ -204,7 +204,7 @@ func TranslateAgentgatewayPolicy(
 	baseConds := PolicyConditionMap(baseErr, len(baseTranslatedPolicies) > 0)
 	controller := gwv1.GatewayController(agw.ControllerName)
 
-	processTarget := func(name gwv1.ObjectName, targetNamespace string, gk schema.GroupKind, policyTargets []*api.PolicyTarget, targetExists bool) {
+	processTarget := func(name gwv1.ObjectName, targetNamespace string, gk schema.GroupKind, policyTargets []*api.PolicyTarget, targetErr error) {
 		if len(policyTargets) == 0 {
 			logger.Warn("unsupported target kind", "kind", gk.Kind, "policy", policy.Name)
 			return
@@ -216,12 +216,12 @@ func TranslateAgentgatewayPolicy(
 		}
 
 		for _, policyTarget := range policyTargets {
-			// For backend-like targets, skip gateway resolution when the target doesn't exist.
+			// For backend-like targets, skip gateway resolution when the target doesn't resolve.
 			// A missing backend could still resolve via PolicyAttachments if another backend
 			// chain happens to reference the same name, which would push config for a phantom target.
 			// Gateway/route targets use direct lookup (no PolicyAttachments), so they're safe.
 			var gatewayTargets []types.NamespacedName
-			if !IsBackendLikeTarget(policyTarget) || targetExists {
+			if !IsBackendLikeTarget(policyTarget) || targetErr == nil {
 				gatewayTargets = references.LookupGatewaysForPolicyTarget(ctx, targetObject, policyTarget).UnsortedList()
 				translatedPolicies := ClonePoliciesForTarget(baseTranslatedPolicies, policyTarget)
 				for _, translatedPolicy := range translatedPolicies {
@@ -234,7 +234,7 @@ func TranslateAgentgatewayPolicy(
 				}
 			}
 
-			ancestorRefs, attachmentErr := resolvePolicyAncestorRefs(targetNamespace, targetObject, gatewayTargets, targetExists)
+			ancestorRefs, attachmentErr := resolvePolicyAncestorRefs(targetNamespace, targetObject, gatewayTargets, targetErr)
 			if attachmentErr != "" {
 				attachmentErrors = append(attachmentErrors, attachmentErr)
 			}
@@ -275,8 +275,8 @@ func TranslateAgentgatewayPolicy(
 			return
 		}
 		seen[key] = struct{}{}
-		policyTargets, targetExists := references.PolicyTarget(ctx, targetNamespace, name, gk, sectionName, port)
-		processTarget(name, targetNamespace, gk, policyTargets, targetExists)
+		policyTargets, targetErr := references.PolicyTarget(ctx, targetNamespace, name, gk, sectionName, port)
+		processTarget(name, targetNamespace, gk, policyTargets, targetErr)
 	}
 
 	for _, target := range policy.Spec.TargetRefs {
@@ -290,7 +290,7 @@ func TranslateAgentgatewayPolicy(
 			attachmentErrors = append(attachmentErrors, fmt.Sprintf("Policy is not attached: no %s matching selector found in namespace %s", gk.Kind, policy.Namespace))
 		}
 		for _, target := range targets {
-			processTarget(target.Name, target.Namespace, gk, target.PolicyTargets, true)
+			processTarget(target.Name, target.Namespace, gk, target.PolicyTargets, target.TargetErr)
 		}
 	}
 
@@ -371,10 +371,10 @@ func resolvePolicyAncestorRefs(
 	policyNamespace string,
 	targetObject utils.TypedNamespacedName,
 	gatewayTargets []types.NamespacedName,
-	targetExists bool,
+	targetErr error,
 ) ([]gwv1.ParentReference, string) {
-	if !targetExists {
-		return nil, fmt.Sprintf("Policy is not attached: %s %s/%s not found", targetObject.Kind, policyNamespace, targetObject.Name)
+	if targetErr != nil {
+		return nil, fmt.Sprintf("Policy is not attached: %v", targetErr)
 	}
 
 	if len(gatewayTargets) == 0 {
@@ -2203,8 +2203,8 @@ func BackendReferencesFromPolicyForSource(
 	}
 	for _, tgt := range s.TargetRefs {
 		gk := schema.GroupKind{Group: string(tgt.Group), Kind: string(tgt.Kind)}
-		policyTarget, targetExists := references.PolicyTarget(ctx, policy.Namespace, tgt.Name, gk, tgt.SectionName, tgt.Port)
-		if policyTarget == nil || !targetExists {
+		policyTarget, targetErr := references.PolicyTarget(ctx, policy.Namespace, tgt.Name, gk, tgt.SectionName, tgt.Port)
+		if policyTarget == nil || targetErr != nil {
 			continue
 		}
 		addTarget(utils.TypedNamespacedName{
@@ -2214,7 +2214,7 @@ func BackendReferencesFromPolicyForSource(
 	}
 	for _, selector := range s.TargetSelectors {
 		for _, target := range references.PolicyTargetsBySelector(ctx, policy.Namespace, selector) {
-			if len(target.PolicyTargets) == 0 {
+			if len(target.PolicyTargets) == 0 || target.TargetErr != nil {
 				continue
 			}
 			addTarget(utils.TypedNamespacedName{
