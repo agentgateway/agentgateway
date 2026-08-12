@@ -1160,19 +1160,20 @@ fn usage_maps_cached_and_reasoning_tokens() {
 
 #[test]
 fn cel_usage_fields_match_usage_metadata() {
-	// The CEL/log token fields (via to_llm_response) must equal Gemini's usageMetadata exactly,
-	// so rate limiting and telemetry see native counts rather than shim numbers.
+	// The CEL/log token fields (via to_llm_response) come from Gemini's usageMetadata, with
+	// output normalized to the cross-provider convention: candidates + thoughts (Gemini
+	// reports them disjointly, other providers include reasoning in output).
 	let r = llm_resp(json!({
 		"candidates": [{ "content": { "role": "model", "parts": [{ "text": "x" }] },
 			"finishReason": "STOP" }],
 		"usageMetadata": {
-			"promptTokenCount": 100, "candidatesTokenCount": 50, "totalTokenCount": 150,
+			"promptTokenCount": 100, "candidatesTokenCount": 50, "totalTokenCount": 170,
 			"cachedContentTokenCount": 30, "thoughtsTokenCount": 20
 		}
 	}));
 	assert_eq!(r.input_tokens, Some(100));
-	assert_eq!(r.output_tokens, Some(50));
-	assert_eq!(r.total_tokens, Some(150));
+	assert_eq!(r.output_tokens, Some(70));
+	assert_eq!(r.total_tokens, Some(170));
 	assert_eq!(r.cached_input_tokens, Some(30));
 	assert_eq!(r.reasoning_tokens, Some(20));
 }
@@ -1291,7 +1292,8 @@ fn streaming_trailing_usage_chunk_has_empty_choices() {
 	.unwrap();
 	assert!(c["choices"].as_array().unwrap().is_empty());
 	assert_eq!(c["usage"]["prompt_tokens"], 5);
-	assert_eq!(c["usage"]["completion_tokens"], 2);
+	// completion_tokens includes thoughts (OpenAI semantics); the breakdown stays in details.
+	assert_eq!(c["usage"]["completion_tokens"], 3);
 	assert_eq!(c["usage"]["total_tokens"], 7);
 	assert_eq!(
 		c["usage"]["completion_tokens_details"]["reasoning_tokens"],
@@ -1405,7 +1407,11 @@ mod passthrough {
 		);
 		let info = captured.lock().unwrap();
 		assert_eq!(info.response.input_tokens, Some(7));
-		assert_eq!(info.response.output_tokens, Some(4), "last event wins");
+		assert_eq!(
+			info.response.output_tokens,
+			Some(6),
+			"last event wins; candidates + thoughts"
+		);
 		assert_eq!(info.response.total_tokens, Some(13));
 		assert_eq!(info.response.reasoning_tokens, Some(2));
 		assert_eq!(

@@ -968,6 +968,28 @@ mod tests {
 	}
 
 	#[test]
+	fn gemini_normalized_output_splits_reasoning_back_out() {
+		// Gemini reports thoughts disjointly from candidates; UsageMetadata::counts()
+		// normalizes output_tokens to candidates + thoughts (the convention the split
+		// below assumes), so the split recovers the original buckets and thinking
+		// tokens are billed at the output rate rather than vanishing from `output`.
+		// Figures from a live gemini-2.5-flash response:
+		// promptTokenCount 14, candidatesTokenCount 293, thoughtsTokenCount 203.
+		let resp = LLMResponse {
+			input_tokens: Some(14),
+			output_tokens: Some(496),
+			reasoning_tokens: Some(203),
+			total_tokens: Some(510),
+			..Default::default()
+		};
+		let u = usage_for(CacheTokenConvention::InputIncludesCache, &resp, true, true);
+		assert_eq!(u.input, 14);
+		assert_eq!(u.output, 293, "visible output = candidates");
+		assert_eq!(u.reasoning, 203);
+		assert_eq!(u.output + u.reasoning, 496);
+	}
+
+	#[test]
 	fn prices_a_known_model() {
 		let snap = CatalogSnapshot::parse(&test_catalog("1")).unwrap();
 		let resp = LLMResponse {

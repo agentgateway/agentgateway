@@ -985,7 +985,8 @@ mod tests {
 			tool_calls: true,
 		});
 		assert_eq!(llm.input_tokens, Some(10));
-		assert_eq!(llm.output_tokens, Some(5));
+		// Output is normalized to candidates + thoughts (5 + 2), matching other providers.
+		assert_eq!(llm.output_tokens, Some(7));
 		assert_eq!(llm.total_tokens, Some(17));
 		assert_eq!(llm.reasoning_tokens, Some(2));
 		assert_eq!(llm.cached_input_tokens, Some(3));

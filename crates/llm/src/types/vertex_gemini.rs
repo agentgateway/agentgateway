@@ -354,9 +354,16 @@ pub struct UsageMetadata {
 impl UsageMetadata {
 	/// Prompt, completion, and total token counts (total falls back to prompt + completion
 	/// when absent).
+	///
+	/// Gemini reports thinking tokens in `thoughtsTokenCount`, disjoint from
+	/// `candidatesTokenCount` (`total = prompt + candidates + thoughts`), while every other
+	/// provider includes reasoning in its output count — and Google bills thoughts at the
+	/// output rate. Normalize to the common convention: completion includes thoughts, with
+	/// `thoughtsTokenCount` still reported separately as the reasoning breakdown.
 	pub fn counts(&self) -> (u64, u64, u64) {
 		let prompt = self.prompt_token_count.unwrap_or(0);
-		let completion = self.candidates_token_count.unwrap_or(0);
+		let completion =
+			self.candidates_token_count.unwrap_or(0) + self.thoughts_token_count.unwrap_or(0);
 		let total = self.total_token_count.unwrap_or(prompt + completion);
 		(prompt, completion, total)
 	}
