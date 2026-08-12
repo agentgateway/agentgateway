@@ -169,6 +169,7 @@ mod requests {
 		("structured-output", &[BEDROCK]),
 		("input-media", &[BEDROCK]),
 		("cache_control", &[GEMINI]),
+		("messages-rich", &["messages"]),
 	];
 	const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[ANTHROPIC, BEDROCK, VERTEX]),
@@ -269,6 +270,9 @@ mod requests {
 					}),
 					GEMINI => test_request(GEMINI, &path, |i| {
 						conversion::openai_compat::from_responses::translate(i)
+					}),
+					"messages" => test_request("messages", &path, |i| {
+						conversion::messages::from_responses::translate(i).map(|(body, _)| body)
 					}),
 					other => panic!("unsupported provider in RESPONSES_REQUESTS: {other}"),
 				}
@@ -494,10 +498,13 @@ mod responses {
 		if let Value::String(raw) = &mut resp_val {
 			*raw = raw.replace("\r\n", "\n");
 		}
-		let report = json!({
+		let mut report = json!({
 			"response": resp_val,
 			"parsed": llm_response,
 		});
+		if provider == MESSAGES_TO_RESPONSES {
+			report["response"]["created_at"] = Value::String("[date]".to_string());
+		}
 		let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
 
 		insta::with_settings!({
@@ -609,6 +616,7 @@ mod responses {
 	const COMPLETIONS_TO_DETECT: &str = "completions-detect";
 	const MESSAGES_TO_MESSAGES: &str = "messages-messages";
 	const MESSAGES_TO_COMPLETIONS: &str = "messages-completions";
+	const MESSAGES_TO_RESPONSES: &str = "messages-responses";
 	const MESSAGES_TO_DETECT: &str = "messages-detect";
 	const BEDROCK_TO_COMPLETIONS: &str = "bedrock-completions";
 	const BEDROCK_TO_MESSAGES: &str = "bedrock-messages";
@@ -770,6 +778,31 @@ mod responses {
 				}
 			}
 		}
+
+		test_response(
+			MESSAGES_TO_RESPONSES,
+			"response/anthropic/responses-complete.json",
+			|i| {
+				let request: types::responses::Request = serde_json::from_value(json!({
+					"model": "claude-sonnet-4-5",
+					"input": "check inventory",
+					"store": false,
+					"tools": [{
+						"type": "function",
+						"name": "weather",
+						"parameters": {"type": "object"}
+					}]
+				}))
+				.map_err(AIError::RequestParsing)?;
+				let (_, state) = conversion::messages::from_responses::translate(&request)?;
+				conversion::messages::from_responses::translate_response(
+					&i,
+					"claude-sonnet-4-5",
+					&state,
+					1024 * 1024,
+				)
+			},
+		);
 
 		for (name, providers) in COMPLETIONS_RESPONSES {
 			let path = format!("response/completions/{name}.json");

@@ -2522,6 +2522,12 @@ mod tests {
 				agent::PathMatch::Exact(ref path) if path == "/v1/chat/completions"
 			)
 		}));
+		assert!(matches.iter().any(|route_match| {
+			matches!(
+				route_match.path,
+				agent::PathMatch::Exact(ref path) if path == "/v1/messages/count_tokens"
+			)
+		}));
 		assert!(
 			matches
 				.iter()

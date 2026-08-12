@@ -4,7 +4,7 @@ use serde_json::Value;
 use self::typed::{
 	EasyInputContent, EasyInputMessage, InputContent, InputItem, InputMessage, InputRole,
 	InputTextContent, OutputItem, OutputMessageContent as Content, OutputTextContent as OutputText,
-	Role,
+	RefusalContent, Role,
 };
 use super::*;
 use crate::{
@@ -63,6 +63,7 @@ impl RawInputItem {
 						let part_type = part.get("type")?.as_str()?;
 						match part_type {
 							"input_text" | "output_text" => part.get("text")?.as_str(),
+							"refusal" => part.get("refusal")?.as_str(),
 							_ => None,
 						}
 					})
@@ -81,23 +82,36 @@ impl RawInputItem {
 			match self.0.get_mut("content") {
 				Some(Value::String(text)) => f(text),
 				Some(Value::Array(parts)) => {
+					let refusal_carrier = parts
+						.iter()
+						.find(|part| part.get("type").and_then(|t| t.as_str()) == Some("refusal"))
+						.cloned();
 					crate::types::scan_text_runs(
 						parts,
 						"\n",
 						|part| {
-							if !matches!(
-								part.get("type").and_then(|t| t.as_str()),
-								Some("input_text" | "output_text")
-							) {
-								return None;
-							}
-							match part.get_mut("text") {
+							let field = match part.get("type").and_then(|t| t.as_str()) {
+								Some("input_text" | "output_text") => "text",
+								Some("refusal") => "refusal",
+								_ => return None,
+							};
+							match part.get_mut(field) {
 								Some(Value::String(text)) => Some(text),
 								_ => None,
 							}
 						},
 						f,
 					);
+					if let (Some(mut refusal), [part]) = (refusal_carrier, parts.as_mut_slice())
+						&& part.get("type").and_then(|t| t.as_str()) != Some("refusal")
+						&& let Some(text) = part.get("text").and_then(|t| t.as_str()).map(str::to_owned)
+					{
+						refusal
+							.as_object_mut()
+							.expect("refusal content part is an object")
+							.insert("refusal".to_owned(), Value::String(text));
+						*part = refusal;
+					}
 				},
 				_ => {},
 			}
@@ -485,7 +499,7 @@ fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {
 }
 
 pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMessagePart> {
-	let (id, name, arguments) = match item {
+	let (id, name, arguments): (&str, &str, serde_json::Value) = match item {
 		OutputItem::FunctionCall(call) => {
 			let arguments = match serde_json::from_str(&call.arguments) {
 				Ok(arguments) => arguments,
@@ -502,6 +516,21 @@ pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMess
 			};
 			(&call.call_id, &call.name, arguments)
 		},
+		OutputItem::LocalShellCall(call) => (
+			&call.call_id,
+			"local_shell",
+			serde_json::to_value(&call.action).ok()?,
+		),
+		OutputItem::ShellCall(call) => (
+			&call.call_id,
+			"shell",
+			serde_json::to_value(&call.action).ok()?,
+		),
+		OutputItem::ApplyPatchCall(call) => (
+			&call.call_id,
+			"apply_patch",
+			serde_json::to_value(&call.operation).ok()?,
+		),
 		_ => return None,
 	};
 	Some(OutputMessagePart::ToolCall {
@@ -563,9 +592,9 @@ impl ResponseType for Response {
 							_ => None,
 						})
 						.flat_map(|msg| {
-							msg.content.iter().filter_map(|c| match c {
-								Content::OutputText(t) => Some(t.text.clone()),
-								_ => None,
+							msg.content.iter().map(|c| match c {
+								Content::OutputText(t) => t.text.clone(),
+								Content::Refusal(r) => r.refusal.clone(),
 							})
 						})
 						.collect(),
@@ -584,13 +613,15 @@ impl ResponseType for Response {
 			.iter()
 			.filter_map(|o| match o {
 				OutputItem::Message(msg) => {
-					// Extract text from message content
+					// Extract text from message content, whether ordinary output or a refusal --
+					// both are model-generated text a response guard must be able to scan and
+					// mask (a refusal can still restate or reference sensitive request content).
 					let content = msg
 						.content
 						.iter()
-						.filter_map(|c| match c {
-							Content::OutputText(t) => Some(t.text.clone()),
-							_ => None,
+						.map(|c| match c {
+							Content::OutputText(t) => t.text.as_str(),
+							Content::Refusal(r) => r.refusal.as_str(),
 						})
 						.collect::<Vec<_>>()
 						.join("\n");
@@ -626,12 +657,21 @@ impl ResponseType for Response {
 		}
 
 		for (msg, wh) in message_outputs.into_iter().zip(choices) {
-			// Replace message content with webhook's modified content
-			msg.content = vec![Content::OutputText(OutputText {
-				annotations: vec![],
-				logprobs: None,
-				text: wh.message.content.to_string(),
-			})];
+			// A message's content is uniformly typed -- response_output (from_responses.rs)
+			// applies the refusal classification to the whole response, never mixing Refusal
+			// and OutputText parts in one message -- so preserve that type rather than always
+			// writing back OutputText, or a masked refusal would silently stop reading as one.
+			let is_refusal = msg.content.iter().any(|c| matches!(c, Content::Refusal(_)));
+			let text = wh.message.content.to_string();
+			msg.content = vec![if is_refusal {
+				Content::Refusal(RefusalContent { refusal: text })
+			} else {
+				Content::OutputText(OutputText {
+					annotations: vec![],
+					logprobs: None,
+					text,
+				})
+			}];
 		}
 		Ok(())
 	}
@@ -643,10 +683,22 @@ impl ResponseType for Response {
 	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
 		for o in &mut self.output {
 			if let OutputItem::Message(msg) = o {
-				for c in &mut msg.content {
-					if let Content::OutputText(t) = c {
-						f(&mut t.text);
-					}
+				let had_refusal = msg.content.iter().any(|c| matches!(c, Content::Refusal(_)));
+				crate::types::scan_text_runs(
+					&mut msg.content,
+					"\n",
+					|content| match content {
+						Content::OutputText(text) => Some(&mut text.text),
+						Content::Refusal(refusal) => Some(&mut refusal.refusal),
+					},
+					f,
+				);
+				let collapsed_text = match msg.content.as_mut_slice() {
+					[Content::OutputText(text)] if had_refusal => Some(std::mem::take(&mut text.text)),
+					_ => None,
+				};
+				if let Some(refusal) = collapsed_text {
+					msg.content[0] = Content::Refusal(RefusalContent { refusal });
 				}
 			}
 		}
@@ -657,16 +709,19 @@ pub mod typed {
 	use async_openai::types::responses as openai_responses;
 	// Re-export async-openai Responses API types for cleaner usage
 	pub use async_openai::types::responses::{
-		AssistantRole, CreateResponse, CustomToolCallOutput, CustomToolCallOutputOutput,
-		EasyInputContent, EasyInputMessage, ErrorObject, FunctionCallOutput, FunctionToolCall,
-		IncompleteDetails, InputContent, InputItem, InputMessage, InputParam, InputRole,
-		InputTextContent, InputTokenDetails, Item, MessageItem, OutputContent, OutputItem,
-		OutputMessage, OutputMessageContent, OutputStatus, OutputTextContent, OutputTokenDetails,
-		ReasoningEffort, Response, ResponseCompletedEvent, ResponseContentPartAddedEvent,
-		ResponseContentPartDoneEvent, ResponseCreatedEvent, ResponseErrorEvent, ResponseFailedEvent,
+		ApplyPatchCallStatus, AssistantRole, CreateResponse, CustomToolCallOutput,
+		CustomToolCallOutputOutput, EasyInputContent, EasyInputMessage, ErrorObject,
+		FunctionCallOutput, FunctionShellCallStatus, FunctionToolCall, IncompleteDetails, InputContent,
+		InputItem, InputMessage, InputParam, InputRole, InputTextContent, InputTokenDetails, Item,
+		MessageItem, MessagePhase, OutputContent, OutputItem, OutputMessage, OutputMessageContent,
+		OutputStatus, OutputTextContent, OutputTokenDetails, ReasoningEffort, RefusalContent, Response,
+		ResponseCompletedEvent, ResponseContentPartAddedEvent, ResponseContentPartDoneEvent,
+		ResponseCreatedEvent, ResponseCustomToolCallInputDeltaEvent,
+		ResponseCustomToolCallInputDoneEvent, ResponseErrorEvent, ResponseFailedEvent,
 		ResponseFunctionCallArgumentsDeltaEvent, ResponseFunctionCallArgumentsDoneEvent,
-		ResponseIncompleteEvent, ResponseOutputItemAddedEvent, ResponseOutputItemDoneEvent,
-		ResponseTextDeltaEvent, ResponseTextParam, ResponseUsage, Role, Status,
+		ResponseInProgressEvent, ResponseIncompleteEvent, ResponseOutputItemAddedEvent,
+		ResponseOutputItemDoneEvent, ResponseRefusalDoneEvent, ResponseTextDeltaEvent,
+		ResponseTextDoneEvent, ResponseTextParam, ResponseUsage, Role, ServiceTier, Status,
 		TextResponseFormatConfiguration, Tool, ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam,
 	};
 	use serde::{Deserialize, Serialize};
@@ -679,6 +734,9 @@ pub mod typed {
 		/// An event that is emitted when a response is created.
 		#[serde(rename = "response.created")]
 		ResponseCreated(openai_responses::ResponseCreatedEvent),
+		/// An event that is emitted while a response is in progress.
+		#[serde(rename = "response.in_progress")]
+		ResponseInProgress(openai_responses::ResponseInProgressEvent),
 		/// Emitted when a new output item is added.
 		#[serde(rename = "response.output_item.added")]
 		ResponseOutputItemAdded(openai_responses::ResponseOutputItemAddedEvent),
@@ -688,12 +746,24 @@ pub mod typed {
 		/// Emitted when there is an additional text delta.
 		#[serde(rename = "response.output_text.delta")]
 		ResponseOutputTextDelta(openai_responses::ResponseTextDeltaEvent),
+		/// Emitted when output text is finalized.
+		#[serde(rename = "response.output_text.done")]
+		ResponseOutputTextDone(openai_responses::ResponseTextDoneEvent),
+		/// Emitted when a refusal is finalized.
+		#[serde(rename = "response.refusal.done")]
+		ResponseRefusalDone(openai_responses::ResponseRefusalDoneEvent),
 		/// Emitted when there is a partial function-call arguments delta.
 		#[serde(rename = "response.function_call_arguments.delta")]
 		ResponseFunctionCallArgumentsDelta(openai_responses::ResponseFunctionCallArgumentsDeltaEvent),
 		/// Emitted when function-call arguments are finalized.
 		#[serde(rename = "response.function_call_arguments.done")]
 		ResponseFunctionCallArgumentsDone(openai_responses::ResponseFunctionCallArgumentsDoneEvent),
+		/// Emitted when custom tool input is streamed.
+		#[serde(rename = "response.custom_tool_call_input.delta")]
+		ResponseCustomToolCallInputDelta(openai_responses::ResponseCustomToolCallInputDeltaEvent),
+		/// Emitted when custom tool input is finalized.
+		#[serde(rename = "response.custom_tool_call_input.done")]
+		ResponseCustomToolCallInputDone(openai_responses::ResponseCustomToolCallInputDoneEvent),
 		/// Emitted when a content part is done.
 		#[serde(rename = "response.content_part.done")]
 		ResponseContentPartDone(openai_responses::ResponseContentPartDoneEvent),
@@ -771,9 +841,9 @@ mod tests {
 		let response = response_with_output(vec![OutputItem::FunctionCall(FunctionToolCall {
 			arguments: r#"{"location":"San Francisco"}"#.to_string(),
 			call_id: "call_123".to_string(),
+			caller: None,
 			namespace: None,
 			name: "get_weather".to_string(),
-			caller: None,
 			id: Some("fc_123".to_string()),
 			status: Some(OutputStatus::Completed),
 		})]);
@@ -797,13 +867,265 @@ mod tests {
 	}
 
 	#[test]
+	fn test_response_wrapped_tool_calls_populated_when_flag_true() {
+		let output = [
+			serde_json::json!({
+				"type": "custom_tool_call",
+				"id": "ctc_1",
+				"call_id": "call_custom",
+				"name": "python",
+				"input": "print(1)"
+			}),
+			serde_json::json!({
+				"type": "local_shell_call",
+				"id": "lsc_1",
+				"call_id": "call_local_shell",
+				"action": {"command":["pwd"],"env":{},"timeout_ms":1000,"user":null,"working_directory":"/tmp"},
+				"status": "completed"
+			}),
+			serde_json::json!({
+				"type": "shell_call",
+				"id": "shc_1",
+				"call_id": "call_shell",
+				"action": {"commands":["true"],"timeout_ms":1000,"max_output_length":1024},
+				"status": "completed",
+				"environment": {"type":"local"}
+			}),
+			serde_json::json!({
+				"type": "apply_patch_call",
+				"id": "apc_1",
+				"call_id": "call_apply_patch",
+				"operation": {"type":"create_file","path":"verified.txt","diff":"ok"},
+				"status": "completed"
+			}),
+		]
+		.into_iter()
+		.map(|item| serde_json::from_value(item).expect("valid wrapped tool call"))
+		.collect();
+		let response = response_with_output(output);
+
+		let llm_response = response.to_llm_response(crate::LogContentFields {
+			completion: false,
+			tool_calls: true,
+		});
+		let tool_calls = llm_response
+			.output_messages
+			.expect("output_messages should be present")[0]
+			.tool_calls();
+
+		assert_eq!(tool_calls.len(), 4);
+		assert_eq!(tool_calls[0].id.as_str(), "call_custom");
+		assert_eq!(tool_calls[0].name.as_str(), "python");
+		assert_eq!(tool_calls[0].arguments, serde_json::json!("print(1)"));
+		assert_eq!(tool_calls[1].name.as_str(), "local_shell");
+		assert_eq!(
+			tool_calls[1].arguments,
+			serde_json::json!({"command":["pwd"],"env":{},"timeout_ms":1000,"user":null,"working_directory":"/tmp"})
+		);
+		assert_eq!(tool_calls[2].name.as_str(), "shell");
+		assert_eq!(
+			tool_calls[2].arguments,
+			serde_json::json!({"commands":["true"],"timeout_ms":1000,"max_output_length":1024})
+		);
+		assert_eq!(tool_calls[3].name.as_str(), "apply_patch");
+		assert_eq!(
+			tool_calls[3].arguments,
+			serde_json::json!({"type":"create_file","path":"verified.txt","diff":"ok"})
+		);
+	}
+
+	fn refusal_response() -> Response {
+		serde_json::from_value(serde_json::json!({
+			"id": "resp_1",
+			"status": "completed",
+			"model": "claude-sonnet-4-5",
+			"output": [{
+				"type": "message",
+				"id": "msg_1",
+				"role": "assistant",
+				"status": "completed",
+				"content": [{"type": "refusal", "refusal": "I can't help with that."}]
+			}]
+		}))
+		.expect("valid Response with a refusal message")
+	}
+
+	#[test]
+	fn request_visitor_visits_refusal_text() {
+		let mut request: Request = serde_json::from_value(serde_json::json!({
+			"input": [{
+				"type": "message",
+				"role": "assistant",
+				"content": [
+					{"type": "refusal", "refusal": "sensitive"},
+					{"type": "refusal", "refusal": "details"}
+				]
+			}]
+		}))
+		.expect("valid request with refusal history");
+
+		request.visit_text_mut(&mut |text| {
+			assert_eq!(text, "sensitive\ndetails");
+			*text = "[redacted]".to_owned();
+		});
+
+		let value = request.to_value().expect("request should serialize");
+		assert_eq!(value["input"][0]["content"].as_array().unwrap().len(), 1);
+		assert_eq!(value["input"][0]["content"][0]["refusal"], "[redacted]");
+	}
+
+	#[test]
+	fn request_visitor_merges_mixed_text_and_refusal() {
+		let mut request: Request = serde_json::from_value(serde_json::json!({
+			"input": [{
+				"type": "message",
+				"role": "assistant",
+				"content": [
+					{"type": "output_text", "text": "sensitive"},
+					{"type": "refusal", "refusal": "details"}
+				]
+			}]
+		}))
+		.expect("valid request with mixed assistant history");
+
+		request.visit_text_mut(&mut |text| {
+			assert_eq!(text, "sensitive\ndetails");
+			*text = "[redacted]".to_owned();
+		});
+
+		let value = request.to_value().expect("request should serialize");
+		assert_eq!(value["input"][0]["content"].as_array().unwrap().len(), 1);
+		assert_eq!(value["input"][0]["content"][0]["refusal"], "[redacted]");
+	}
+
+	#[test]
+	fn request_visitor_preserves_refusal_type_when_refusal_precedes_text() {
+		let mut request: Request = serde_json::from_value(serde_json::json!({
+			"input": [{
+				"type": "message",
+				"role": "assistant",
+				"content": [
+					{"type": "refusal", "refusal": "sensitive"},
+					{"type": "output_text", "text": "details"}
+				]
+			}]
+		}))
+		.expect("valid request with reverse mixed assistant history");
+
+		request.visit_text_mut(&mut |text| {
+			assert_eq!(text, "sensitive\ndetails");
+			*text = "[redacted]".to_owned();
+		});
+
+		let value = request.to_value().expect("request should serialize");
+		assert_eq!(value["input"][0]["content"].as_array().unwrap().len(), 1);
+		assert_eq!(value["input"][0]["content"][0]["type"], "refusal");
+		assert_eq!(value["input"][0]["content"][0]["refusal"], "[redacted]");
+	}
+
+	#[test]
+	fn response_visitor_visits_refusal_text() {
+		let mut response = refusal_response();
+
+		response.visit_text_mut(&mut |text| *text = "[redacted]".to_owned());
+
+		let OutputItem::Message(message) = &response.output[0] else {
+			panic!("expected message output");
+		};
+		let Content::Refusal(refusal) = &message.content[0] else {
+			panic!("expected refusal content");
+		};
+		assert_eq!(refusal.refusal, "[redacted]");
+	}
+
+	#[test]
+	fn response_visitor_merges_adjacent_text_parts() {
+		let mut response: Response = serde_json::from_value(serde_json::json!({
+			"id": "resp_1",
+			"status": "completed",
+			"model": "claude-sonnet-4-5",
+			"output": [{
+				"type": "message",
+				"id": "msg_1",
+				"role": "assistant",
+				"status": "completed",
+				"content": [
+					{
+						"type": "output_text",
+						"annotations": [],
+						"logprobs": null,
+						"text": "sensitive"
+					},
+					{"type": "refusal", "refusal": "details"}
+				]
+			}]
+		}))
+		.expect("valid response with adjacent text parts");
+
+		response.visit_text_mut(&mut |text| {
+			assert_eq!(text, "sensitive\ndetails");
+			*text = "[redacted]".to_owned();
+		});
+
+		let OutputItem::Message(message) = &response.output[0] else {
+			panic!("expected message output");
+		};
+		assert_eq!(message.content.len(), 1);
+		let Content::Refusal(refusal) = &message.content[0] else {
+			panic!("expected refusal content");
+		};
+		assert_eq!(refusal.refusal, "[redacted]");
+	}
+
+	#[test]
+	fn response_visitor_preserves_refusal_type_when_refusal_precedes_text() {
+		let mut response = refusal_response();
+		let OutputItem::Message(message) = &mut response.output[0] else {
+			panic!("expected message output");
+		};
+		message.content.push(Content::OutputText(OutputText {
+			annotations: vec![],
+			logprobs: None,
+			text: "sensitive details".to_owned(),
+		}));
+
+		response.visit_text_mut(&mut |text| {
+			assert_eq!(text, "I can't help with that.\nsensitive details");
+			*text = "[redacted]".to_owned();
+		});
+
+		let OutputItem::Message(message) = &response.output[0] else {
+			panic!("expected message output");
+		};
+		assert_eq!(message.content.len(), 1);
+		let Content::Refusal(refusal) = &message.content[0] else {
+			panic!("masked refusal must stay typed as a refusal");
+		};
+		assert_eq!(refusal.refusal, "[redacted]");
+	}
+
+	#[test]
+	fn to_webhook_choices_exposes_refusal_text_for_guard_scanning() {
+		// A refusal is still model-generated text that can restate or reference sensitive
+		// request content -- response guards (regex/PII/webhook) must see it, not an empty
+		// string, or it silently bypasses every configured guard and completion log.
+		let response = refusal_response();
+		let choices = response.to_webhook_choices();
+		assert_eq!(choices.len(), 1);
+		assert_eq!(
+			choices[0].message.content.to_string(),
+			"I can't help with that."
+		);
+	}
+
+	#[test]
 	fn test_response_output_messages_omitted_when_flag_false() {
 		let response = response_with_output(vec![OutputItem::FunctionCall(FunctionToolCall {
 			arguments: "{}".to_string(),
 			call_id: "call_123".to_string(),
+			caller: None,
 			namespace: None,
 			name: "get_weather".to_string(),
-			caller: None,
 			id: Some("fc_123".to_string()),
 			status: Some(OutputStatus::Completed),
 		})]);
@@ -811,5 +1133,59 @@ mod tests {
 		let llm_response = response.to_llm_response(crate::LogContentFields::default());
 
 		assert!(llm_response.output_messages.is_none());
+	}
+
+	#[test]
+	fn set_webhook_choices_preserves_refusal_type_after_masking() {
+		// A guard that masks a refusal's text must not silently turn it into ordinary
+		// output_text -- downstream Responses-API consumers rely on the type to know this was
+		// a safety refusal, not regular content.
+		let mut response = refusal_response();
+		response
+			.set_webhook_choices(vec![crate::webhook::ResponseChoice {
+				message: crate::webhook::Message {
+					role: "assistant".into(),
+					content: "[redacted]".into(),
+				},
+			}])
+			.expect("message count matches");
+		let OutputItem::Message(msg) = &response.output[0] else {
+			panic!("expected a message output item");
+		};
+		assert_eq!(msg.content.len(), 1);
+		match &msg.content[0] {
+			Content::Refusal(r) => assert_eq!(r.refusal, "[redacted]"),
+			Content::OutputText(_) => panic!("masked refusal must stay typed as a refusal"),
+		}
+	}
+
+	#[test]
+	fn to_llm_response_completion_log_includes_refusal_text() {
+		// Completion telemetry must capture refusal text too, or an operator auditing logs for
+		// what the model actually said would see nothing for every refused request.
+		let response = refusal_response();
+		let llm_response = response.to_llm_response(crate::LogContentFields {
+			completion: true,
+			tool_calls: false,
+		});
+		assert_eq!(
+			llm_response.completion,
+			Some(vec!["I can't help with that.".to_string()])
+		);
+	}
+
+	#[test]
+	fn get_messages_exposes_refusal_text_in_replayed_history() {
+		let request: Request = serde_json::from_value(serde_json::json!({
+			"input": [{
+				"role": "assistant",
+				"content": [{"type": "refusal", "refusal": "I can't help with that."}]
+			}]
+		}))
+		.expect("valid Request with replayed refusal history");
+		let messages = request.get_messages();
+		assert_eq!(messages.len(), 1);
+		assert_eq!(messages[0].role.as_str(), "assistant");
+		assert_eq!(messages[0].content.as_str(), "I can't help with that.");
 	}
 }

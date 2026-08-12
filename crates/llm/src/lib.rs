@@ -171,6 +171,9 @@ pub enum ProviderState {
 		tool_names: Arc<conversion::bedrock::BedrockToolNameMap>,
 	},
 	VertexGemini,
+	ResponsesToMessages {
+		state: Arc<conversion::messages::from_responses::State>,
+	},
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
