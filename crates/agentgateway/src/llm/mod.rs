@@ -2840,25 +2840,8 @@ fn google_invalid_argument(message: &str) -> ::http::Response<Body> {
 
 /// Remove `alt` from the request query, keeping any other parameters (e.g. `key`).
 fn strip_alt_query(req: &mut Request) {
-	let Some(query) = req.uri().query() else {
-		return;
-	};
-	if !url::form_urlencoded::parse(query.as_bytes()).any(|(k, _)| k == "alt") {
-		return;
-	}
-	let remaining = url::form_urlencoded::Serializer::new(String::new())
-		.extend_pairs(url::form_urlencoded::parse(query.as_bytes()).filter(|(k, _)| k != "alt"))
-		.finish();
-	let pq = if remaining.is_empty() {
-		req.uri().path().to_string()
-	} else {
-		format!("{}?{}", req.uri().path(), remaining)
-	};
-	// The rebuilt path-and-query is a subset of an already-valid URI; failure is unreachable.
-	let _ = http::modify_req_uri(req, |uri| {
-		uri.path_and_query = Some(PathAndQuery::from_str(&pq)?);
-		Ok(())
-	});
+	// Removing a parameter from an already-valid URI cannot fail.
+	let _ = http::modify_query_parameters(req.uri_mut(), std::iter::empty::<(&str, &str)>(), ["alt"]);
 }
 
 fn bedrock_tool_name_map(req: &LLMRequest) -> Option<&conversion::bedrock::BedrockToolNameMap> {
