@@ -97,7 +97,7 @@ async fn test_classify_request_uses_original_url_for_agent_card() {
 	let ty = classify_request(&mut req).await;
 
 	match ty {
-		RequestType::AgentCard(uri) => assert_eq!(uri, original),
+		RequestType::AgentCard(uri, _) => assert_eq!(uri, original),
 		other => panic!("expected agent card request, got {other:?}"),
 	}
 }
@@ -119,7 +119,7 @@ async fn test_classify_request_uses_original_url_for_agent_card_with_subpath() {
 	let ty = classify_request(&mut req).await;
 
 	match ty {
-		RequestType::AgentCard(uri) => assert_eq!(uri, original),
+		RequestType::AgentCard(uri, _) => assert_eq!(uri, original),
 		other => panic!("expected agent card request, got {other:?}"),
 	}
 }
@@ -142,7 +142,7 @@ async fn test_classify_request_uses_x_forwarded_proto_for_agent_card() {
 	let ty = classify_request(&mut req).await;
 
 	match ty {
-		RequestType::AgentCard(uri) => {
+		RequestType::AgentCard(uri, _) => {
 			assert_eq!(
 				uri,
 				"https://example.com/api/.well-known/agent-card.json"
@@ -190,6 +190,7 @@ async fn test_apply_to_response_rewrites_agent_card_url() {
 			"https://example.com/api/.well-known/agent-card.json"
 				.parse()
 				.unwrap(),
+			"/.well-known/agent-card.json".to_string(),
 		),
 		&mut resp,
 	)
@@ -223,6 +224,7 @@ async fn test_apply_to_response_rewrites_v1_agent_card_single_interface() {
 			"https://example.com/api/.well-known/agent-card.json"
 				.parse()
 				.unwrap(),
+			"/.well-known/agent-card.json".to_string(),
 		),
 		&mut resp,
 	)
@@ -260,6 +262,7 @@ async fn test_apply_to_response_rewrites_v1_agent_card_multiple_interfaces() {
 			"https://example.com/api/.well-known/agent-card.json"
 				.parse()
 				.unwrap(),
+			"/.well-known/agent-card.json".to_string(),
 		),
 		&mut resp,
 	)
@@ -300,6 +303,7 @@ async fn test_apply_to_response_rewrites_v1_agent_card_root_path() {
 			"https://example.com/.well-known/agent-card.json"
 				.parse()
 				.unwrap(),
+			"/.well-known/agent-card.json".to_string(),
 		),
 		&mut resp,
 	)
@@ -337,6 +341,7 @@ async fn test_apply_to_response_skips_interface_without_url() {
 			"https://example.com/api/.well-known/agent-card.json"
 				.parse()
 				.unwrap(),
+			"/.well-known/agent-card.json".to_string(),
 		),
 		&mut resp,
 	)
@@ -368,6 +373,7 @@ async fn test_apply_to_response_errors_when_neither_url_field_present() {
 			"https://example.com/.well-known/agent-card.json"
 				.parse()
 				.unwrap(),
+			"/.well-known/agent-card.json".to_string(),
 		),
 		&mut resp,
 	)
@@ -574,5 +580,90 @@ async fn test_apply_to_response_skips_partial_call_telemetry() {
 			.await
 			.unwrap(),
 		raw
+	);
+}
+
+#[tokio::test]
+async fn test_apply_to_response_rewrites_url_with_path_rewrite() {
+	// Regression test for issue #2981: when a URL rewrite changes the gateway
+	// path prefix (e.g., /a2a/tick -> /a2a/tock), the interface URL should be
+	// anchored at the *gateway* path, not naively appended with the backend path.
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(
+			serde_json::to_vec(&json!({
+				"name": "TOCK Scheduler Agent",
+				"supportedInterfaces": [
+					{ "protocolBinding": "JSONRPC", "url": "http://localhost:8080/a2a/tock/", "protocolVersion": "1.0" }
+				],
+			}))
+			.unwrap(),
+		))
+		.unwrap();
+
+	let info = apply_to_response(
+		Some(&A2aPolicy {}),
+		RequestType::AgentCard(
+			// Original (gateway) URL where the client requested the agent card.
+			"http://localhost:4001/a2a/tick/.well-known/agent-card.json"
+				.parse()
+				.unwrap(),
+			// Backend (rewritten) request path — the URL rewrite policy translated
+			// /a2a/tick -> /a2a/tock before sending to the backend.
+			"/a2a/tock/.well-known/agent-card.json".to_string(),
+		),
+		&mut resp,
+	)
+	.await
+	.unwrap();
+	assert!(info.is_none());
+
+	let body = http::read_resp_body(resp).await.unwrap();
+	let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+	// The interface URL should be anchored at the gateway path (/a2a/tick),
+	// NOT have the backend path (/a2a/tock) appended.
+	assert_eq!(
+		json["supportedInterfaces"][0]["url"],
+		"http://localhost:4001/a2a/tick/"
+	);
+}
+
+#[tokio::test]
+async fn test_apply_to_response_preserves_subpath_with_path_rewrite() {
+	// When the backend interface URL has a sub-path beyond the agent card
+	// location, that sub-path should be preserved after rewriting.
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(
+			serde_json::to_vec(&json!({
+				"name": "example",
+				"supportedInterfaces": [
+					{ "protocolBinding": "JSONRPC", "url": "http://localhost:8080/a2a/tock/jsonrpc/" }
+				],
+			}))
+			.unwrap(),
+		))
+		.unwrap();
+
+	let info = apply_to_response(
+		Some(&A2aPolicy {}),
+		RequestType::AgentCard(
+			"http://localhost:4001/a2a/tick/.well-known/agent-card.json"
+				.parse()
+				.unwrap(),
+			"/a2a/tock/.well-known/agent-card.json".to_string(),
+		),
+		&mut resp,
+	)
+	.await
+	.unwrap();
+	assert!(info.is_none());
+
+	let body = http::read_resp_body(resp).await.unwrap();
+	let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+	// The /jsonrpc/ sub-path should be preserved, anchored at the gateway path.
+	assert_eq!(
+		json["supportedInterfaces"][0]["url"],
+		"http://localhost:4001/a2a/tick/jsonrpc/"
 	);
 }
