@@ -2103,9 +2103,13 @@ async fn make_backend_call(
 			if let Some(provider_backend) = &provider.provider_backend {
 				let provider_backend =
 					super::resolve_simple_backend_with_policies(provider_backend, inputs.as_ref())?;
-				let provider_backend_policies = inputs.stores.read_binds().sub_backend_policies(
+				// Use backend_policies (not sub_backend_policies) so policies indexed without a
+				// port -- like the InferenceRouting policy the controller attaches to an
+				// InferencePool's synthesized service -- are found for the provider backend.
+				let provider_backend_policies = inputs.stores.read_binds().backend_policies(
 					provider_backend.backend.target(),
-					Some(&provider_backend.inline_policies),
+					&[&provider_backend.inline_policies],
+					None,
 				);
 				let effective_policies = provider_defaults
 					.merge(policies.as_ref().clone())
