@@ -91,7 +91,7 @@ fn set_required_fields_leaves_oauth_bearer_tokens_untouched() {
 		vertex_provider(Some("us-central1"), None),
 	] {
 		for route_type in [
-			RouteType::GeminiGenerateContent,
+			RouteType::GenerateContent,
 			RouteType::GeminiCountTokens,
 			RouteType::Completions,
 		] {
@@ -127,7 +127,7 @@ fn set_required_fields_moves_api_keys_to_x_goog_api_key_on_native_routes() {
 	let provider = gemini_provider(None);
 	for (route_type, llm_request) in [
 		(
-			RouteType::GeminiGenerateContent,
+			RouteType::GenerateContent,
 			native_chat_request("gemini-2.5-flash", false),
 		),
 		(
@@ -193,7 +193,7 @@ fn set_required_fields_keeps_api_keys_on_the_compat_shim_and_explicit_locations(
 	provider
 		.set_required_fields(
 			&mut req,
-			RouteType::GeminiGenerateContent,
+			RouteType::GenerateContent,
 			Some(&native_chat_request("gemini-2.5-flash", false)),
 		)
 		.unwrap();
@@ -401,7 +401,7 @@ async fn process_and_setup(
 
 #[tokio::test]
 async fn generate_content_travels_upstream_as_a_completions_route() {
-	// The client-facing RouteType is GeminiGenerateContent, but the native render's provider
+	// The client-facing RouteType is GenerateContent, but the native render's provider
 	// format is Completions, and that is what drives upstream path building.
 	for (provider, host) in [
 		(vertex_provider(None, None), "aiplatform.googleapis.com"),

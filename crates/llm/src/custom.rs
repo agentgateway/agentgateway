@@ -227,7 +227,7 @@ impl ProviderFormat {
 			RouteType::Models | RouteType::Passthrough | RouteType::Detect => return None,
 			// TODO: custom providers have no way to advertise the native Gemini chat format yet
 			// (it is a ChatFormat, not a ProviderFormat)
-			RouteType::GeminiGenerateContent => return None,
+			RouteType::GenerateContent => return None,
 		})
 	}
 

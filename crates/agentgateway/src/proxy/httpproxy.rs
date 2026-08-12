@@ -2332,7 +2332,7 @@ async fn make_backend_call(
 				| RouteType::Messages
 				| RouteType::Responses
 				| RouteType::AnthropicTokenCount
-				| RouteType::GeminiGenerateContent
+				| RouteType::GenerateContent
 				| RouteType::GeminiCountTokens
 				| RouteType::Embeddings
 				| RouteType::Rerank
@@ -2395,7 +2395,7 @@ async fn make_backend_call(
 						))
 						.await
 						.map_err(ProxyError::AIRequest)?,
-						RouteType::GeminiGenerateContent => Box::pin(llm.provider.process_gemini_request(
+						RouteType::GenerateContent => Box::pin(llm.provider.process_gemini_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
 							req,

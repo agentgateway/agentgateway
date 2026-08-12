@@ -1419,7 +1419,7 @@ impl AIProvider {
 			AIProvider::Gemini(_)
 				if matches!(
 					route_type,
-					RouteType::GeminiGenerateContent | RouteType::GeminiCountTokens
+					RouteType::GenerateContent | RouteType::GeminiCountTokens
 				) || llm_request
 					.is_some_and(|l| matches!(l.provider_state, Some(ProviderState::VertexGemini))) =>
 			{

@@ -4082,7 +4082,7 @@ spec:
                                           - Detect
                                           - Embeddings
                                           - GeminiCountTokens
-                                          - GeminiGenerateContent
+                                          - GenerateContent
                                           - Messages
                                           - Models
                                           - Passthrough
@@ -12784,7 +12784,7 @@ spec:
                           - Detect
                           - Embeddings
                           - GeminiCountTokens
-                          - GeminiGenerateContent
+                          - GenerateContent
                           - Messages
                           - Models
                           - Passthrough

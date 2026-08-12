@@ -688,7 +688,7 @@ fn convert_route_type(proto_rt: i32, diagnostics: &mut Diagnostics) -> llm::Rout
 		Ok(ProtoRT::Embeddings) => llm::RouteType::Embeddings,
 		Ok(ProtoRT::Realtime) => llm::RouteType::Realtime,
 		Ok(ProtoRT::Rerank) => llm::RouteType::Rerank,
-		Ok(ProtoRT::GeminiGenerateContent) => llm::RouteType::GeminiGenerateContent,
+		Ok(ProtoRT::GenerateContent) => llm::RouteType::GenerateContent,
 		Ok(ProtoRT::GeminiCountTokens) => llm::RouteType::GeminiCountTokens,
 		Err(_) => {
 			diagnostics.add_warning(format!(
@@ -4741,7 +4741,7 @@ mod tests {
 					("/v1/detect".to_string(), RouteType::Detect as i32),
 					(
 						"/v1beta/models".to_string(),
-						RouteType::GeminiGenerateContent as i32,
+						RouteType::GenerateContent as i32,
 					),
 					(
 						"/v1beta/models:countTokens".to_string(),
@@ -4815,7 +4815,7 @@ mod tests {
 			);
 			assert_eq!(
 				ai_policy.routes.get("/v1beta/models"),
-				Some(&llm::RouteType::GeminiGenerateContent)
+				Some(&llm::RouteType::GenerateContent)
 			);
 			assert_eq!(
 				ai_policy.routes.get("/v1beta/models:countTokens"),

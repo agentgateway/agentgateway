@@ -150,11 +150,9 @@ impl Provider {
 
 			// `?alt=sse` is required on the streaming endpoint; without it Vertex returns a
 			// JSON array rather than an SSE stream. Native Gemini inbound arrives here as
-			// RouteType::Completions (its upstream provider format); GeminiGenerateContent is
+			// RouteType::Completions (its upstream provider format); GenerateContent is
 			// matched for completeness.
-			(RouteType::Completions | RouteType::GeminiGenerateContent, None, Some(model))
-				if native_gemini =>
-			{
+			(RouteType::Completions | RouteType::GenerateContent, None, Some(model)) if native_gemini => {
 				let method = if streaming {
 					"streamGenerateContent?alt=sse"
 				} else {
@@ -487,7 +485,7 @@ mod tests {
 		let got = p.get_path_for_model(RouteType::Completions, req_model, streaming, true);
 		assert_eq!(got.as_str(), expected);
 		// The native arm also matches the client-facing route type.
-		let got = p.get_path_for_model(RouteType::GeminiGenerateContent, req_model, streaming, true);
+		let got = p.get_path_for_model(RouteType::GenerateContent, req_model, streaming, true);
 		assert_eq!(got.as_str(), expected);
 	}
 

@@ -5466,7 +5466,7 @@
         {
           "description": "Gemini models/{model}:generateContent and models/{model}:streamGenerateContent",
           "type": "string",
-          "const": "geminiGenerateContent"
+          "const": "generateContent"
         },
         {
           "description": "Gemini models/{model}:countTokens",

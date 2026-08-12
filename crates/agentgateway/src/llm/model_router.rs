@@ -68,11 +68,11 @@ pub fn default_route_types() -> Arc<llm::Policy> {
 			(strng::new(":streamRawPredict"), llm::RouteType::Messages),
 			(
 				strng::new(":generateContent"),
-				llm::RouteType::GeminiGenerateContent,
+				llm::RouteType::GenerateContent,
 			),
 			(
 				strng::new(":streamGenerateContent"),
-				llm::RouteType::GeminiGenerateContent,
+				llm::RouteType::GenerateContent,
 			),
 			(
 				strng::new(":countTokens"),
@@ -1096,11 +1096,11 @@ mod tests {
 		let policy = default_route_types();
 		assert_eq!(
 			policy.resolve_route("/v1beta/models/gemini-2.5-flash:generateContent"),
-			llm::RouteType::GeminiGenerateContent
+			llm::RouteType::GenerateContent
 		);
 		assert_eq!(
 			policy.resolve_route("/v1beta/models/gemini-2.5-flash:streamGenerateContent"),
-			llm::RouteType::GeminiGenerateContent
+			llm::RouteType::GenerateContent
 		);
 		assert_eq!(
 			policy.resolve_route("/v1beta/models/gemini-2.5-flash:countTokens"),
@@ -1110,7 +1110,7 @@ mod tests {
 			policy.resolve_route(
 				"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-pro:generateContent"
 			),
-			llm::RouteType::GeminiGenerateContent
+			llm::RouteType::GenerateContent
 		);
 	}
 
@@ -1123,7 +1123,7 @@ mod tests {
 			.expect("valid uri");
 		assert_eq!(
 			default_route_types().resolve_route(uri.path()),
-			llm::RouteType::GeminiGenerateContent
+			llm::RouteType::GenerateContent
 		);
 	}
 
@@ -1137,7 +1137,7 @@ mod tests {
 				(strng::new(":generateContent"), llm::RouteType::Passthrough),
 				(
 					strng::new(":streamGenerateContent"),
-					llm::RouteType::GeminiGenerateContent,
+					llm::RouteType::GenerateContent,
 				),
 			]
 			.into_iter()
@@ -1146,7 +1146,7 @@ mod tests {
 		};
 		assert_eq!(
 			policy.resolve_route("/v1beta/models/gemini-2.5-flash:streamGenerateContent"),
-			llm::RouteType::GeminiGenerateContent
+			llm::RouteType::GenerateContent
 		);
 		assert_eq!(
 			policy.resolve_route("/v1beta/models/gemini-2.5-flash:generateContent"),

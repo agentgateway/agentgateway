@@ -80,7 +80,7 @@ mod tests {
 		#[case] request_model: &str,
 		#[case] expected: &str,
 	) {
-		let path = native_gemini_path(RouteType::GeminiGenerateContent, request_model, false);
+		let path = native_gemini_path(RouteType::GenerateContent, request_model, false);
 		assert_eq!(path.as_str(), expected);
 	}
 
@@ -91,7 +91,7 @@ mod tests {
 			"/v1beta/tunedModels/abc:countTokens"
 		);
 		assert_eq!(
-			native_gemini_path(RouteType::GeminiGenerateContent, "tunedModels/abc", true).as_str(),
+			native_gemini_path(RouteType::GenerateContent, "tunedModels/abc", true).as_str(),
 			"/v1beta/tunedModels/abc:streamGenerateContent?alt=sse"
 		);
 	}

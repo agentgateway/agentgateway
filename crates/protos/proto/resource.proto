@@ -1458,7 +1458,7 @@ message BackendPolicySpec {
       // Processes Cohere /v2/rerank format requests
       RERANK = 10;
       // Processes Gemini models/{model}:generateContent and :streamGenerateContent format requests
-      GEMINI_GENERATE_CONTENT = 11;
+      GENERATE_CONTENT = 11;
       // Processes Gemini models/{model}:countTokens format requests
       GEMINI_COUNT_TOKENS = 12;
     }

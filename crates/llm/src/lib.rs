@@ -169,7 +169,7 @@ pub enum RouteType {
 	/// Anthropic /v1/messages/count_tokens
 	AnthropicTokenCount,
 	/// Gemini models/{model}:generateContent and models/{model}:streamGenerateContent
-	GeminiGenerateContent,
+	GenerateContent,
 	/// Gemini models/{model}:countTokens
 	GeminiCountTokens,
 	/// Cohere /v2/rerank (document reranking)

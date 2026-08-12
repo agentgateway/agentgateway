@@ -140,9 +140,9 @@ backends:
                     /v1/responses/compact: detect
                     /v2/rerank: rerank
                     ":countTokens": geminiCountTokens
-                    ":generateContent": geminiGenerateContent
+                    ":generateContent": generateContent
                     ":rawPredict": messages
-                    ":streamGenerateContent": geminiGenerateContent
+                    ":streamGenerateContent": generateContent
                     ":streamRawPredict": messages
                 authorization: ~
               backendPolicies: []
@@ -169,9 +169,9 @@ backends:
                     /v1/responses/compact: detect
                     /v2/rerank: rerank
                     ":countTokens": geminiCountTokens
-                    ":generateContent": geminiGenerateContent
+                    ":generateContent": generateContent
                     ":rawPredict": messages
-                    ":streamGenerateContent": geminiGenerateContent
+                    ":streamGenerateContent": generateContent
                     ":streamRawPredict": messages
                 authorization: ~
               backendPolicies: []
