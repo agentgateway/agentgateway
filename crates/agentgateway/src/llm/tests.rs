@@ -108,6 +108,114 @@ fn gemini_inbound_to_non_gemini_upstream_is_unsupported() {
 }
 
 #[test]
+fn custom_provider_generate_content_advertises_the_native_chat_format() {
+	let provider = custom_provider(custom::ProviderFormat::GenerateContent);
+
+	// Native Gemini input takes the direct passthrough.
+	assert_eq!(
+		provider
+			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"))
+			.unwrap()
+			.output,
+		ChatFormat::VertexGemini
+	);
+	// Completions input prefers our native conversion over the compat shim, exactly like
+	// Vertex with a Gemini model (the CHAT_TRANSLATIONS quirk).
+	assert_eq!(
+		provider
+			.chat_translation(InputFormat::Completions, Some("gemini-2.5-flash"))
+			.unwrap()
+			.output,
+		ChatFormat::VertexGemini
+	);
+
+	// A custom provider that does not declare the format has no Gemini-input translation.
+	let undeclared = custom_provider(custom::ProviderFormat::Completions);
+	assert!(
+		undeclared
+			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"))
+			.is_err()
+	);
+}
+
+#[tokio::test]
+async fn custom_provider_completions_inbound_renders_native_gemini() {
+	// With generateContent declared, the CHAT_TRANSLATIONS quirk applies to custom providers
+	// too: OpenAI-compat input converts to the native request, and the conversion must not
+	// assume a Vertex provider.
+	let provider = custom_provider(custom::ProviderFormat::GenerateContent);
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{"model": "gemini-2.5-flash", "messages": [{"role": "user", "content": "hello"}]}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: mut forwarded,
+		llm_request,
+		upstream_route_type,
+	} = provider
+		.process_completions_request(&openai_test_backend_info(), None, req, false, &mut None)
+		.await
+		.expect("completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	assert_eq!(upstream_route_type, RouteType::GenerateContent);
+	assert!(matches!(
+		llm_request.provider_state,
+		Some(ProviderState::VertexGemini)
+	));
+
+	provider
+		.setup_request(
+			&mut forwarded,
+			upstream_route_type,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+		)
+		.expect("setup_request should succeed");
+	assert_eq!(
+		forwarded.uri().path(),
+		"/v1beta/models/gemini-2.5-flash:generateContent"
+	);
+
+	let body = forwarded.into_body().collect().await.unwrap().to_bytes();
+	let json: Value = serde_json::from_slice(&body).expect("forwarded body should be JSON");
+	assert!(json.get("contents").is_some(), "{json}");
+	assert!(json.get("messages").is_none(), "{json}");
+}
+
+#[test]
+fn custom_provider_declaring_gemini_count_tokens_renders_passthrough() {
+	// countTokens has no cross-provider conversion, so the render gate must accept exactly
+	// the providers that speak it natively, including a custom provider declaring it.
+	let req: types::gemini::CountTokensRequest =
+		serde_json::from_value(json!({"contents": [{"role": "user", "parts": [{"text": "hi"}]}]}))
+			.unwrap();
+
+	let provider = custom_provider(custom::ProviderFormat::GeminiCountTokens);
+	let body = provider
+		.render_gemini_count_tokens_request(&req, "gemini-2.5-flash")
+		.expect("declared format renders passthrough");
+	let json: Value = serde_json::from_slice(&body).unwrap();
+	assert!(json.get("contents").is_some(), "{json}");
+
+	let undeclared = custom_provider(custom::ProviderFormat::Completions);
+	assert!(
+		undeclared
+			.render_gemini_count_tokens_request(&req, "gemini-2.5-flash")
+			.is_err()
+	);
+}
+
+#[test]
 fn gemini_render_is_passthrough_with_unknown_fields() {
 	let provider = AIProvider::Vertex(vertex::Provider {
 		project_id: strng::new("test-project"),
@@ -2404,6 +2512,96 @@ fn setup_request_custom_path_override_wins_over_format_path() {
 		.expect("setup_request should succeed");
 
 	assert_eq!(req.uri().path(), "/override/messages");
+	assert_eq!(req.uri().query(), None);
+}
+
+#[test]
+fn setup_request_custom_generate_content_defaults_to_the_native_path() {
+	// A static configured path cannot carry the model or the streaming method, so the
+	// default for the native Gemini chat format is the canonical Gemini API shape.
+	let provider = custom_provider(custom::ProviderFormat::GenerateContent);
+	for (streaming, expected_path, expected_query) in [
+		(
+			false,
+			"/v1beta/models/gemini-2.5-flash:generateContent",
+			None,
+		),
+		(
+			true,
+			"/v1beta/models/gemini-2.5-flash:streamGenerateContent",
+			Some("alt=sse"),
+		),
+	] {
+		let llm_request = LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Gemini,
+			cache_convention: CacheTokenConvention::pending(),
+			request_model: "gemini-2.5-flash".into(),
+			provider: Default::default(),
+			streaming,
+			params: Default::default(),
+			prompt: None,
+			provider_state: Some(ProviderState::VertexGemini),
+		};
+		let mut req = crate::http::tests_common::request(
+			"https://gemini.example.com/v1beta/models/gemini-2.5-flash:generateContent",
+			http::Method::POST,
+			&[],
+		);
+
+		provider
+			.setup_request(
+				&mut req,
+				RouteType::GenerateContent,
+				Some(&llm_request),
+				None,
+				None,
+				false,
+			)
+			.expect("setup_request should succeed");
+
+		assert_eq!(req.uri().path(), expected_path, "streaming={streaming}");
+		assert_eq!(req.uri().query(), expected_query, "streaming={streaming}");
+	}
+}
+
+#[test]
+fn setup_request_custom_count_tokens_defaults_to_the_native_path() {
+	// Regression: with no configured path, countTokens used to fall through to the
+	// OpenAI default and land on /v1/chat/completions.
+	let provider = custom_provider(custom::ProviderFormat::GeminiCountTokens);
+	let llm_request = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::GeminiCountTokens,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "gemini-2.5-flash".into(),
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: None,
+	};
+	let mut req = crate::http::tests_common::request(
+		"https://gemini.example.com/v1beta/models/gemini-2.5-flash:countTokens",
+		http::Method::POST,
+		&[],
+	);
+
+	provider
+		.setup_request(
+			&mut req,
+			RouteType::GeminiCountTokens,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+		)
+		.expect("setup_request should succeed");
+
+	assert_eq!(
+		req.uri().path(),
+		"/v1beta/models/gemini-2.5-flash:countTokens"
+	);
 	assert_eq!(req.uri().query(), None);
 }
 

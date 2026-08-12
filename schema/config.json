@@ -8387,6 +8387,7 @@
         "responses",
         "embeddings",
         "anthropicTokenCount",
+        "generateContent",
         "geminiCountTokens",
         "realtime",
         "rerank"

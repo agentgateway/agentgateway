@@ -29,8 +29,8 @@ fn gemini_provider(model: Option<&str>) -> AIProvider {
 }
 
 /// What `process_gemini_request` hands to `setup_request` for a chat route: the upstream route
-/// type is `Completions` (the provider format the native translation renders into) and the native
-/// render is signalled by `ProviderState::VertexGemini`.
+/// type is `GenerateContent` (the provider format the native translation renders into) and the
+/// native render is signalled by `ProviderState::VertexGemini`.
 fn native_chat_request(model: &str, streaming: bool) -> LLMRequest {
 	LLMRequest {
 		input_tokens: None,
@@ -264,7 +264,7 @@ fn vertex_builds_the_native_publisher_path(
 	let req = setup(
 		&provider,
 		client_path,
-		RouteType::Completions,
+		RouteType::GenerateContent,
 		&native_chat_request("gemini-2.5-flash", streaming),
 	);
 
@@ -310,7 +310,7 @@ fn vertex_native_path_normalizes_resource_style_model_names() {
 		let req = setup(
 			&provider,
 			"https://example.com/v1beta/models/gemini-2.5-flash:generateContent",
-			RouteType::Completions,
+			RouteType::GenerateContent,
 			&native_chat_request(model, false),
 		);
 		assert_eq!(
@@ -326,13 +326,13 @@ fn gemini_api_native_paths_cover_all_three_methods() {
 	let provider = gemini_provider(None);
 	let cases = [
 		(
-			RouteType::Completions,
+			RouteType::GenerateContent,
 			native_chat_request("gemini-2.5-flash", false),
 			"/v1beta/models/gemini-2.5-flash:generateContent",
 			None,
 		),
 		(
-			RouteType::Completions,
+			RouteType::GenerateContent,
 			native_chat_request("gemini-2.5-flash", true),
 			"/v1beta/models/gemini-2.5-flash:streamGenerateContent",
 			Some("alt=sse"),
@@ -400,9 +400,9 @@ async fn process_and_setup(
 }
 
 #[tokio::test]
-async fn generate_content_travels_upstream_as_a_completions_route() {
-	// The client-facing RouteType is GenerateContent, but the native render's provider
-	// format is Completions, and that is what drives upstream path building.
+async fn generate_content_keeps_its_route_type_upstream() {
+	// The native render's provider format is GenerateContent, so the client-facing
+	// route type survives all the way to upstream path building.
 	for (provider, host) in [
 		(vertex_provider(None, None), "aiplatform.googleapis.com"),
 		(gemini_provider(None), gemini::DEFAULT_HOST_STR),
@@ -424,7 +424,7 @@ async fn generate_content_travels_upstream_as_a_completions_route() {
 		else {
 			panic!("expected a forwarded request");
 		};
-		assert_eq!(upstream_route_type, RouteType::Completions);
+		assert_eq!(upstream_route_type, RouteType::GenerateContent);
 		assert_eq!(llm_request.input_format, InputFormat::Gemini);
 		assert!(matches!(
 			llm_request.provider_state,
@@ -574,7 +574,7 @@ async fn a_configured_traversal_model_is_escaped_rather_than_interpolated() {
 	let req = setup(
 		&vertex_provider(None, None),
 		"https://example.com/v1beta/models/gemini-2.5-flash:generateContent",
-		RouteType::Completions,
+		RouteType::GenerateContent,
 		&native_chat_request(TRAVERSAL_MODELS[0], false),
 	);
 	assert_eq!(

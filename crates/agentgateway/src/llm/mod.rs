@@ -415,12 +415,10 @@ fn render_vertex_gemini(
 		// not depend on Vertex specifics; the Gemini API provider renders through here too.
 		types::ChatRequest::Gemini(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
 		types::ChatRequest::Completions(req) => {
-			let AIProvider::Vertex(provider) = ctx.provider else {
-				return Err(AIError::UnsupportedConversion(strng::literal!(
-					"expected vertex provider"
-				)));
-			};
-			conversion::vertex_gemini::from_completions::translate(&req, provider.model.as_deref())
+			// The conversion only needs the backend-pinned model, which every Gemini-speaking
+			// provider (Vertex, the Gemini API, custom) exposes the same way.
+			let override_model = ctx.provider.override_model();
+			conversion::vertex_gemini::from_completions::translate(&req, override_model.as_deref())
 		},
 		_ => Err(AIError::UnsupportedConversion(strng::literal!(
 			"vertex gemini only supports completions or native gemini input"
@@ -485,7 +483,7 @@ impl ChatTranslation {
 				InputFormat::Responses => custom::ProviderFormat::Responses,
 				_ => unreachable!("chat translation selected for non-chat input"),
 			},
-			ChatFormat::VertexGemini => custom::ProviderFormat::Completions,
+			ChatFormat::VertexGemini => custom::ProviderFormat::GenerateContent,
 		}
 	}
 
@@ -955,6 +953,7 @@ impl AIProvider {
 					custom::ProviderFormat::Completions => Some(ChatFormat::OpenAICompletions),
 					custom::ProviderFormat::Messages => Some(ChatFormat::AnthropicMessages),
 					custom::ProviderFormat::Responses => Some(ChatFormat::OpenAIResponses),
+					custom::ProviderFormat::GenerateContent => Some(ChatFormat::VertexGemini),
 					_ => None,
 				})
 				.collect(),
@@ -1293,33 +1292,52 @@ impl AIProvider {
 				})?;
 				Ok(())
 			}),
-			AIProvider::Custom(provider) => http::modify_req(req, |req| {
-				http::modify_uri(req, |uri| {
-					if let Some(path) = provider.path_for_route(route_type) {
-						Self::set_path_and_query(uri, path)?;
-						return Ok(());
-					}
-					let path = match route_type {
-						RouteType::Messages | RouteType::AnthropicTokenCount => format!(
-							"{}{}",
-							path_prefix.map_or(anthropic::DEFAULT_BASE_PATH, |prefix| {
-								prefix.trim_end_matches('/')
-							}),
-							anthropic::path_suffix(route_type)
-						),
-						_ => format!(
-							"{}{}",
-							path_prefix.map_or(openai::DEFAULT_BASE_PATH, |prefix| {
-								prefix.trim_end_matches('/')
-							}),
-							openai::path_suffix(route_type)
-						),
-					};
-					Self::set_path_and_query(uri, &path)?;
+			AIProvider::Custom(provider) => {
+				// The native Gemini formats embed the model in the path and pick the method by
+				// streaming, which a static configured path cannot express, so their default is
+				// the canonical Gemini API shape. A configured path still wins verbatim below,
+				// which only suits single-model unary shims.
+				let native = llm_request
+					.filter(|_| {
+						matches!(
+							route_type,
+							RouteType::GenerateContent | RouteType::GeminiCountTokens
+						)
+					})
+					.map(|l| gemini::native_gemini_path(route_type, l.request_model.as_str(), l.streaming));
+				http::modify_req(req, |req| {
+					http::modify_uri(req, |uri| {
+						if let Some(path) = provider.path_for_route(route_type) {
+							Self::set_path_and_query(uri, path)?;
+							return Ok(());
+						}
+						if let Some(native) = native.as_deref() {
+							let path = Self::with_path_prefix(native, path_prefix);
+							Self::set_path_and_query(uri, &path)?;
+							return Ok(());
+						}
+						let path = match route_type {
+							RouteType::Messages | RouteType::AnthropicTokenCount => format!(
+								"{}{}",
+								path_prefix.map_or(anthropic::DEFAULT_BASE_PATH, |prefix| {
+									prefix.trim_end_matches('/')
+								}),
+								anthropic::path_suffix(route_type)
+							),
+							_ => format!(
+								"{}{}",
+								path_prefix.map_or(openai::DEFAULT_BASE_PATH, |prefix| {
+									prefix.trim_end_matches('/')
+								}),
+								openai::path_suffix(route_type)
+							),
+						};
+						Self::set_path_and_query(uri, &path)?;
+						Ok(())
+					})?;
 					Ok(())
-				})?;
-				Ok(())
-			}),
+				})
+			},
 		}
 	}
 
@@ -1844,6 +1862,9 @@ impl AIProvider {
 		match self {
 			AIProvider::Gemini(_) => serde_json::to_vec(req).map_err(AIError::RequestMarshal),
 			AIProvider::Vertex(p) if p.is_gemini_model(Some(request_model)) => {
+				serde_json::to_vec(req).map_err(AIError::RequestMarshal)
+			},
+			AIProvider::Custom(p) if p.supports(custom::ProviderFormat::GeminiCountTokens) => {
 				serde_json::to_vec(req).map_err(AIError::RequestMarshal)
 			},
 			_ => Err(AIError::UnsupportedConversion(strng::format!(

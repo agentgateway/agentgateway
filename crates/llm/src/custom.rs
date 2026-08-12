@@ -208,6 +208,7 @@ pub enum ProviderFormat {
 	Responses,
 	Embeddings,
 	AnthropicTokenCount,
+	GenerateContent,
 	GeminiCountTokens,
 	Realtime,
 	Rerank,
@@ -221,13 +222,11 @@ impl ProviderFormat {
 			RouteType::Responses => Self::Responses,
 			RouteType::Embeddings => Self::Embeddings,
 			RouteType::AnthropicTokenCount => Self::AnthropicTokenCount,
+			RouteType::GenerateContent => Self::GenerateContent,
 			RouteType::GeminiCountTokens => Self::GeminiCountTokens,
 			RouteType::Realtime => Self::Realtime,
 			RouteType::Rerank => Self::Rerank,
 			RouteType::Models | RouteType::Passthrough | RouteType::Detect => return None,
-			// TODO: custom providers have no way to advertise the native Gemini chat format yet
-			// (it is a ChatFormat, not a ProviderFormat)
-			RouteType::GenerateContent => return None,
 		})
 	}
 
@@ -238,6 +237,7 @@ impl ProviderFormat {
 			Self::Responses => InputFormat::Responses,
 			Self::Embeddings => InputFormat::Embeddings,
 			Self::AnthropicTokenCount => InputFormat::CountTokens,
+			Self::GenerateContent => InputFormat::Gemini,
 			Self::GeminiCountTokens => InputFormat::GeminiCountTokens,
 			Self::Realtime => InputFormat::Realtime,
 			Self::Rerank => InputFormat::Rerank,
@@ -251,6 +251,7 @@ impl ProviderFormat {
 			Self::Responses => RouteType::Responses,
 			Self::Embeddings => RouteType::Embeddings,
 			Self::AnthropicTokenCount => RouteType::AnthropicTokenCount,
+			Self::GenerateContent => RouteType::GenerateContent,
 			Self::GeminiCountTokens => RouteType::GeminiCountTokens,
 			Self::Realtime => RouteType::Realtime,
 			Self::Rerank => RouteType::Rerank,
