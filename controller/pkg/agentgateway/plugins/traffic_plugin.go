@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-jose/go-jose/v4"
 	"github.com/google/cel-go/cel"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -767,6 +768,13 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 			Audiences: pp.Audiences,
 		}
 		if i := pp.JWKS.Inline; i != nil {
+
+			var ks jose.JSONWebKeySet
+			if err := json.Unmarshal([]byte(*i), &ks); err != nil {
+				errs = append(errs, fmt.Errorf("provider %d (issuer %q): invalid inline JWKS: %w", idx, pp.Issuer, err))
+				continue
+			}
+
 			jp.JwksSource = &api.TrafficPolicySpec_JWTProvider_Inline{Inline: *i}
 			p.Providers = append(p.Providers, jp)
 			continue
