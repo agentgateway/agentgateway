@@ -20,9 +20,8 @@ pub enum ChatRequest {
 	Completions(completions::Request),
 	Messages(messages::Request),
 	Responses(responses::Request),
-	/// Native Gemini generateContent/streamGenerateContent body (boxed: it is
-	/// much larger than the other variants)
-	Gemini(Box<vertex_gemini::GenerateContentRequest>),
+	/// Native Gemini generateContent/streamGenerateContent body
+	Gemini(gemini::GenerateContentRequest),
 }
 
 pub(crate) fn thinking_budget_for_reasoning_effort(

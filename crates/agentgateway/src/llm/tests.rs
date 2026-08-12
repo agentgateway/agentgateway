@@ -149,11 +149,11 @@ fn gemini_render_is_passthrough_with_unknown_fields() {
 		}],
 		"modelArmorConfig": { "promptTemplateName": "projects/p/locations/l/templates/t" }
 	});
-	let inner: types::vertex_gemini::GenerateContentRequest =
+	let inner: types::gemini::GenerateContentRequest =
 		serde_json::from_value(raw.clone()).expect("valid request");
 	let rendered = translation
 		.render_request(
-			types::ChatRequest::Gemini(Box::new(inner)),
+			types::ChatRequest::Gemini(inner),
 			&ChatRequestContext {
 				provider: &provider,
 				headers: &HeaderMap::new(),

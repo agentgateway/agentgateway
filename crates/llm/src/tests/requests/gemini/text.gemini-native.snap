@@ -69,13 +69,13 @@ info:
     "generationConfig": {
       "temperature": 0.7,
       "topP": 0.95,
-      "topK": 40,
+      "seed": 42,
       "maxOutputTokens": 1024,
+      "topK": 40,
       "stopSequences": [
         "END"
       ],
-      "candidateCount": 1,
-      "seed": 42
+      "candidateCount": 1
     },
     "safetySettings": [
       {

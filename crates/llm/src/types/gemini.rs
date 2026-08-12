@@ -5,10 +5,16 @@
 //! - <https://ai.google.dev/api/tokens>
 //! - <https://docs.cloud.google.com/vertex-ai/generative-ai/docs/model-reference/inference>
 //!
-//! The wire DTOs live in `types::vertex_gemini`; this wraps them with the request
-//! metadata the gateway needs (model and streaming), which Gemini carries in the
-//! URI (`models/{model}:generateContent` vs `:streamGenerateContent`) rather than
-//! the body.
+//! Inbound requests are passthrough, so the request types here are deliberately minimal:
+//! only the fields the gateway reads are typed (prompt guard walks `contents` and
+//! `systemInstruction`; telemetry reads the `generationConfig` sampling params), and
+//! everything else rides a `rest` flatten untouched. A field shape we got slightly wrong
+//! can then never reject a request Google would accept. The complete typed request in
+//! `types::vertex_gemini` is reserved for conversions, which construct it themselves.
+//! The content tree (`Content`/`Part`) is shared with `types::vertex_gemini`.
+//!
+//! Request metadata the gateway needs (model and streaming) is carried in the URI
+//! (`models/{model}:generateContent` vs `:streamGenerateContent`) rather than the body.
 
 use agent_core::prelude::Strng;
 use agent_core::strng;
@@ -22,13 +28,69 @@ use crate::{
 	SimpleChatCompletionMessage, logged_response_parsing, webhook,
 };
 
+/// Minimal inbound `generateContent` body; see the module docs for why only read fields
+/// are typed. proto3 JSON accepts snake_case alongside camelCase field names, so the
+/// multi-word fields carry `alias`es; re-serialization normalizes them to camelCase.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerateContentRequest {
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub contents: Vec<vg::Content>,
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		alias = "system_instruction"
+	)]
+	pub system_instruction: Option<vg::Content>,
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		alias = "generation_config"
+	)]
+	pub generation_config: Option<GenerationConfig>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+/// The `generationConfig` sampling parameters the gateway logs; everything else rides `rest`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerationConfig {
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub temperature: Option<f32>,
+	#[serde(default, skip_serializing_if = "Option::is_none", alias = "top_p")]
+	pub top_p: Option<f32>,
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		alias = "frequency_penalty"
+	)]
+	pub frequency_penalty: Option<f32>,
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		alias = "presence_penalty"
+	)]
+	pub presence_penalty: Option<f32>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub seed: Option<i64>,
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		alias = "max_output_tokens"
+	)]
+	pub max_output_tokens: Option<u32>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Request {
 	/// Filled from the URI by the caller; never serialized into the wire body.
 	pub model: Option<String>,
 	/// Filled from the URI by the caller (`:streamGenerateContent`); there is no body flag.
 	pub streaming: bool,
-	pub inner: vg::GenerateContentRequest,
+	pub inner: GenerateContentRequest,
 }
 
 impl<'de> Deserialize<'de> for Request {
@@ -43,7 +105,7 @@ impl<'de> Deserialize<'de> for Request {
 			Some(serde_json::Value::String(model)) => Some(model),
 			_ => None,
 		};
-		let inner = vg::GenerateContentRequest::deserialize(body).map_err(serde::de::Error::custom)?;
+		let inner = GenerateContentRequest::deserialize(body).map_err(serde::de::Error::custom)?;
 		Ok(Request {
 			model,
 			streaming: false,
@@ -164,7 +226,11 @@ pub struct CountTokensRequest {
 	pub model: Option<String>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub contents: Vec<vg::Content>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		alias = "system_instruction"
+	)]
 	pub system_instruction: Option<vg::Content>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
@@ -574,6 +640,53 @@ mod tests {
 
 		let bare = request(json!({ "contents": [] }));
 		assert_eq!(bare.model, None);
+	}
+
+	#[test]
+	fn snake_case_field_names_parse_like_camel_case() {
+		// proto3 JSON accepts the original snake_case proto field names alongside camelCase;
+		// both spellings must reach the typed fields (prompt guard, params) rather than
+		// silently riding `rest`.
+		let req = request(json!({
+			"system_instruction": { "parts": [{ "text": "be brief" }] },
+			"contents": [{ "role": "user", "parts": [
+				{ "function_call": { "name": "f", "args": {} } },
+				{ "inline_data": { "mime_type": "image/png", "data": "aGk=" } }
+			] }],
+			"generation_config": { "top_p": 0.5, "max_output_tokens": 100 }
+		}));
+		assert!(req.inner.system_instruction.is_some());
+		assert!(matches!(
+			req.inner.contents[0].parts[0],
+			vg::Part::FunctionCall(_)
+		));
+		assert!(matches!(
+			req.inner.contents[0].parts[1],
+			vg::Part::InlineData(_)
+		));
+		let gc = req.inner.generation_config.as_ref().unwrap();
+		assert_eq!(gc.top_p, Some(0.5));
+		assert_eq!(gc.max_output_tokens, Some(100));
+		// Nothing leaked into the catch-alls.
+		assert_eq!(req.inner.rest, json!({}));
+		assert_eq!(gc.rest, json!({}));
+	}
+
+	#[test]
+	fn unread_fields_pass_through_regardless_of_shape() {
+		// Only the fields the gateway reads are typed; a field we do not read must never be
+		// able to fail parsing, even with a shape the current API docs would not predict.
+		let raw = json!({
+			"contents": [{ "role": "user", "parts": [{ "text": "hi" }] }],
+			"labels": ["not", "a", "map"],
+			"cachedContent": { "name": "cachedContents/abc" },
+			"tools": "surprising-string"
+		});
+		let req = request(raw.clone());
+		let out = serde_json::to_value(&req.inner).expect("serialize");
+		assert_eq!(out["labels"], raw["labels"]);
+		assert_eq!(out["cachedContent"], raw["cachedContent"]);
+		assert_eq!(out["tools"], raw["tools"]);
 	}
 
 	#[test]

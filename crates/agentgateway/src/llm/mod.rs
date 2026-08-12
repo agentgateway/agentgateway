@@ -1577,7 +1577,7 @@ impl AIProvider {
 				parts,
 				tokenize,
 				log,
-				|req| types::ChatRequest::Gemini(Box::new(req.inner)),
+				|req| types::ChatRequest::Gemini(req.inner),
 			)
 			.await
 	}

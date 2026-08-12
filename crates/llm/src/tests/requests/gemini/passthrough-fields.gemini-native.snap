@@ -85,6 +85,16 @@ info:
       ],
       "someNewSystemField": "x"
     },
+    "generationConfig": {
+      "thinkingConfig": {
+        "thinkingBudget": 1024,
+        "someNewThinkingField": "z"
+      },
+      "someNewGenerationField": [
+        "a",
+        "b"
+      ]
+    },
     "tools": [
       {
         "functionDeclarations": [
@@ -102,16 +112,6 @@ info:
         "someNewKnob": 1
       },
       "someNewToolConfigField": 2
-    },
-    "generationConfig": {
-      "thinkingConfig": {
-        "thinkingBudget": 1024,
-        "someNewThinkingField": "z"
-      },
-      "someNewGenerationField": [
-        "a",
-        "b"
-      ]
     },
     "safetySettings": [
       {
