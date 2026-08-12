@@ -1330,7 +1330,9 @@ pub mod to_completions {
 					tracing::debug!("failed to parse gemini stream chunk: {e}");
 					return vec![];
 				},
-				parse::sse::SseJsonEvent::Done => return vec![],
+				parse::sse::SseJsonEvent::Done
+				| parse::sse::SseJsonEvent::Eof
+				| parse::sse::SseJsonEvent::Error => return vec![],
 			};
 
 			if !saw_token {
