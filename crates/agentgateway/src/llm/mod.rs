@@ -1413,6 +1413,35 @@ impl AIProvider {
 					Ok(())
 				}
 			},
+			AIProvider::Gemini(_)
+				if matches!(
+					route_type,
+					RouteType::GeminiGenerateContent | RouteType::GeminiCountTokens
+				) || llm_request
+					.is_some_and(|l| matches!(l.provider_state, Some(ProviderState::VertexGemini))) =>
+			{
+				http::modify_req(req, |req| {
+					if let Some(authz) = req.headers.typed_get::<headers::Authorization<Bearer>>() {
+						let explicit_authorization = req
+							.extensions
+							.get::<AppliedBackendAuthLocation>()
+							.is_some_and(|auth| auth.explicit);
+
+						// The native endpoints authenticate API keys via x-goog-api-key;
+						// `Authorization: Bearer` is reserved for OAuth access tokens there.
+						// Google API keys are uniformly "AIza"-prefixed, so relocate exactly
+						// those, keeping OAuth tokens (ya29., JWTs, ...) and explicitly
+						// configured Authorization intact.
+						if !explicit_authorization && authz.token().starts_with(gemini::API_KEY_PREFIX) {
+							req.headers.remove(http::header::AUTHORIZATION);
+							let mut api_key = HeaderValue::from_str(authz.token())?;
+							api_key.set_sensitive(true);
+							req.headers.insert("x-goog-api-key", api_key);
+						}
+					}
+					Ok(())
+				})
+			},
 			_ => Ok(()),
 		}
 	}

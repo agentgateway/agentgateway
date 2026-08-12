@@ -83,9 +83,9 @@ fn generate_content_body(uri: &str) -> crate::http::Request {
 // ── set_required_fields ─────────────────────────────────────────────────────
 
 #[test]
-fn set_required_fields_leaves_gemini_routes_untouched() {
-	// Google auth is applied by the backend-auth policy, so the provider must not rewrite the
-	// client's headers the way the Anthropic provider does.
+fn set_required_fields_leaves_oauth_bearer_tokens_untouched() {
+	// OAuth access tokens (GCP backend-auth, workload identity, ...) stay in
+	// `Authorization: Bearer`; only API keys are relocated (see the test below).
 	for provider in [
 		gemini_provider(None),
 		vertex_provider(Some("us-central1"), None),
@@ -117,6 +117,91 @@ fn set_required_fields_leaves_gemini_routes_untouched() {
 			assert!(!req.headers().contains_key("anthropic-version"));
 		}
 	}
+}
+
+#[test]
+fn set_required_fields_moves_api_keys_to_x_goog_api_key_on_native_routes() {
+	// The native endpoints authenticate API keys via `x-goog-api-key`; a key left in
+	// `Authorization: Bearer` (the backend-auth default location) would be rejected as an
+	// invalid OAuth token.
+	let provider = gemini_provider(None);
+	for (route_type, llm_request) in [
+		(
+			RouteType::GeminiGenerateContent,
+			native_chat_request("gemini-2.5-flash", false),
+		),
+		(
+			RouteType::GeminiCountTokens,
+			count_tokens_request("gemini-2.5-flash"),
+		),
+	] {
+		let mut req = crate::http::tests_common::request(
+			"https://example.com/v1beta/models/gemini-2.5-flash:generateContent",
+			::http::Method::POST,
+			&[("authorization", "Bearer AIzaTestKey123")],
+		);
+
+		provider
+			.set_required_fields(&mut req, route_type, Some(&llm_request))
+			.unwrap();
+
+		assert!(
+			!req.headers().contains_key(::http::header::AUTHORIZATION),
+			"{route_type:?}: the API key must not stay in Authorization"
+		);
+		assert_eq!(
+			req.headers().get("x-goog-api-key").unwrap(),
+			"AIzaTestKey123",
+			"{route_type:?}"
+		);
+	}
+}
+
+#[test]
+fn set_required_fields_keeps_api_keys_on_the_compat_shim_and_explicit_locations() {
+	// The OpenAI-compat shim accepts `Authorization: Bearer <api key>`, so a non-native
+	// route keeps the client's header.
+	let provider = gemini_provider(None);
+	let shim_request = LLMRequest {
+		input_format: InputFormat::Completions,
+		provider_state: None,
+		..native_chat_request("gemini-2.5-flash", false)
+	};
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1/chat/completions",
+		::http::Method::POST,
+		&[("authorization", "Bearer AIzaTestKey123")],
+	);
+	provider
+		.set_required_fields(&mut req, RouteType::Completions, Some(&shim_request))
+		.unwrap();
+	assert_eq!(
+		req.headers().get(::http::header::AUTHORIZATION).unwrap(),
+		"Bearer AIzaTestKey123"
+	);
+	assert!(!req.headers().contains_key("x-goog-api-key"));
+
+	// An explicitly configured Authorization location must never be rewritten.
+	let mut req = crate::http::tests_common::request(
+		"https://example.com/v1beta/models/gemini-2.5-flash:generateContent",
+		::http::Method::POST,
+		&[("authorization", "Bearer AIzaTestKey123")],
+	);
+	req
+		.extensions_mut()
+		.insert(crate::http::auth::AppliedBackendAuthLocation { explicit: true });
+	provider
+		.set_required_fields(
+			&mut req,
+			RouteType::GeminiGenerateContent,
+			Some(&native_chat_request("gemini-2.5-flash", false)),
+		)
+		.unwrap();
+	assert_eq!(
+		req.headers().get(::http::header::AUTHORIZATION).unwrap(),
+		"Bearer AIzaTestKey123"
+	);
+	assert!(!req.headers().contains_key("x-goog-api-key"));
 }
 
 // ── upstream path building ──────────────────────────────────────────────────
