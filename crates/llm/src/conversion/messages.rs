@@ -651,6 +651,7 @@ pub mod from_completions {
 		let created = chrono::Utc::now().timestamp() as u32;
 		// let mut finish_reason = None;
 		let mut saw_token = false;
+		let mut last_token_at: Option<Instant> = None;
 		let mut next_tool_index = 0u32;
 		let mut ongoing_tool_calls: HashMap<usize, OngoingToolCall> = HashMap::new();
 		let mut completion = log_content.completion.then(String::new);
@@ -749,11 +750,16 @@ pub mod from_completions {
 					_ => None,
 				},
 				messages::MessagesStreamEvent::ContentBlockDelta { delta, index } => {
+					let now = Instant::now();
 					if !saw_token {
 						saw_token = true;
+						last_token_at = Some(now);
 						log.update(|r| {
-							r.response.first_token = Some(Instant::now());
+							r.response.first_token = Some(now);
 						});
+					} else if let Some(prev) = last_token_at.replace(now) {
+						let gap = now.duration_since(prev);
+						log.update(|r| r.response.inter_token_latencies.push(gap));
 					}
 					let mut dr = completions::StreamResponseDelta::default();
 					let mut emit_chunk = true;
@@ -1019,6 +1025,7 @@ pub fn passthrough_stream(
 	log_content: crate::LogContentFields,
 ) -> Body {
 	let mut saw_token = false;
+	let mut last_token_at: Option<Instant> = None;
 	let mut completion = log_content.completion.then(String::new);
 	let mut tool_calls = StreamingToolCalls::new(log_content.tool_calls);
 	// https://platform.claude.com/docs/en/build-with-claude/streaming
@@ -1065,11 +1072,16 @@ pub fn passthrough_stream(
 				_ => {},
 			},
 			messages::MessagesStreamEvent::ContentBlockDelta { index, delta } => {
+				let now = Instant::now();
 				if !saw_token {
 					saw_token = true;
+					last_token_at = Some(now);
 					log.update(|r| {
-						r.response.first_token = Some(Instant::now());
+						r.response.first_token = Some(now);
 					});
+				} else if let Some(prev) = last_token_at.replace(now) {
+					let gap = now.duration_since(prev);
+					log.update(|r| r.response.inter_token_latencies.push(gap));
 				}
 				if let Some(c) = completion.as_mut()
 					&& let messages::ContentBlockDelta::TextDelta { text } = &delta

@@ -1549,6 +1549,10 @@ pub struct LLMContext {
 	#[serde(skip)]
 	#[dynamic(skip)]
 	pub first_token: Option<Instant>,
+	// Not exposed to CEL; only used to piggy-back the per-token gaps for metrics.
+	#[serde(skip)]
+	#[dynamic(skip)]
+	pub inter_token_latencies: Vec<Duration>,
 	/// Time from request start until the first response token is received.
 	#[dynamic(rename = "timeToFirstToken")]
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -1608,6 +1612,7 @@ impl LLMContext {
 			total_tokens: None,
 			provider_total_tokens: resp.total_tokens,
 			first_token: resp.first_token,
+			inter_token_latencies: resp.inter_token_latencies,
 			time_to_first_token: None,
 			time_per_output_token: None,
 			reasoning_tokens: resp.reasoning_tokens,
@@ -1700,6 +1705,7 @@ impl From<llm::LLMRequest> for LLMContext {
 			prompt,
 
 			first_token: None,
+			inter_token_latencies: Vec::new(),
 			time_to_first_token: None,
 			time_per_output_token: None,
 			count_tokens: None,
@@ -2424,6 +2430,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 			provider_total_tokens: Some(150),
 			service_tier: Some("default".into()),
 			first_token: None,
+			inter_token_latencies: Vec::new(),
 			time_to_first_token: Some(chrono::Duration::milliseconds(123).into()),
 			time_per_output_token: Some(chrono::Duration::milliseconds(7).into()),
 			count_tokens: Some(10),
