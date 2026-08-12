@@ -884,7 +884,7 @@ impl AIProvider {
 				}
 				formats
 			},
-			AIProvider::Gemini(_) => vec![Completions, Embeddings],
+			AIProvider::Gemini(_) => vec![Completions, Embeddings, GeminiCountTokens],
 			AIProvider::Anthropic(_) => vec![Messages, AnthropicTokenCount],
 			AIProvider::Bedrock(p) => {
 				let mut formats = vec![Completions, Messages, Responses, Embeddings, Rerank];
@@ -899,6 +899,9 @@ impl AIProvider {
 				} else {
 					vec![Completions]
 				};
+				if p.is_gemini_model(request_model) {
+					formats.push(GeminiCountTokens);
+				}
 				formats.extend([Embeddings, Rerank]);
 				formats
 			},
@@ -1014,13 +1017,13 @@ impl AIProvider {
 			InputFormat::Embeddings => Embeddings,
 			InputFormat::Realtime => Realtime,
 			InputFormat::CountTokens => AnthropicTokenCount,
+			InputFormat::GeminiCountTokens => GeminiCountTokens,
 			InputFormat::Rerank => Rerank,
 			InputFormat::Detect
 			| InputFormat::Completions
 			| InputFormat::Messages
 			| InputFormat::Responses
-			| InputFormat::Gemini
-			| InputFormat::GeminiCountTokens => return None,
+			| InputFormat::Gemini => return None,
 		};
 		self
 			.supports_format(format, request_model)
@@ -2032,11 +2035,9 @@ impl AIProvider {
 		} else {
 			None
 		};
-		// Detect is raw passthrough and native Gemini countTokens has no upstream provider format
-		// to translate through (its provider support is checked by the render closure); both keep
-		// their client-facing route type upstream.
+		// Detect is raw passthrough and keeps its client-facing route type upstream.
 		let provider_format = match original_format {
-			InputFormat::Detect | InputFormat::GeminiCountTokens => None,
+			InputFormat::Detect => None,
 			_ => Some(
 				self
 					.non_chat_provider_format_for(original_format, request_model.as_deref())
@@ -2090,7 +2091,6 @@ impl AIProvider {
 			llm_request: llm_info,
 			upstream_route_type: match provider_format {
 				Some(format) => format.route_type(),
-				None if original_format == InputFormat::GeminiCountTokens => RouteType::GeminiCountTokens,
 				None => RouteType::Detect,
 			},
 		})
