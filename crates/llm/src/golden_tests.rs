@@ -1097,6 +1097,64 @@ data: [DONE]
 		);
 	}
 
+	#[tokio::test]
+	async fn anthropic_message_delta_usage_overrides_message_start() {
+		let input = r#"event:message_start
+data:{"type":"message_start","message":{"id":"msg","type":"message","role":"assistant","content":[],"model":"glm-5.2","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":34824,"output_tokens":0}}}
+
+event:message_delta
+data:{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"input_tokens":3883,"output_tokens":49,"cache_creation_input_tokens":0,"cache_read_input_tokens":30464,"prompt_tokens_details":{"cached_tokens":30464}}}
+
+event:message_stop
+data:{"type":"message_stop"}
+
+"#;
+
+		for translate_to_completions in [false, true] {
+			let info = Arc::new(Mutex::new(LLMInfo::new(
+				LLMRequest {
+					input_tokens: None,
+					input_format: InputFormat::Messages,
+					cache_convention: CacheTokenConvention::InputExcludesCache,
+					request_model: strng::literal!("glm-5.2"),
+					provider: strng::literal!("anthropic"),
+					streaming: true,
+					params: Default::default(),
+					prompt: None,
+					provider_state: None,
+				},
+				LLMResponse::default(),
+			)));
+			let reporter =
+				StreamingUsageGuard::new(Box::new(TestStreamingReporter { info: info.clone() }));
+			let body = axum_core::body::Body::from(input);
+			let body = if translate_to_completions {
+				conversion::messages::from_completions::translate_stream(
+					body,
+					1024 * 1024,
+					reporter,
+					crate::LogContentFields::default(),
+				)
+			} else {
+				conversion::messages::passthrough_stream(
+					body,
+					1024 * 1024,
+					reporter,
+					crate::LogContentFields::default(),
+				)
+			};
+			body.collect().await.unwrap();
+
+			let info = info.lock().unwrap();
+			assert_eq!(info.response.input_tokens, Some(3883));
+			assert_eq!(info.response.cached_input_tokens, Some(30464));
+			assert_eq!(info.response.cache_creation_input_tokens, Some(0));
+			assert_eq!(info.response.output_tokens, Some(49));
+			assert_eq!(info.response.total_tokens, Some(3932));
+			assert_eq!(info.normalized_input_tokens(), Some(34347));
+		}
+	}
+
 	#[test]
 	fn responses_usage_allows_missing_cache_write_tokens() {
 		let event = serde_json::from_value::<types::responses::typed::ResponseStreamEvent>(json!({

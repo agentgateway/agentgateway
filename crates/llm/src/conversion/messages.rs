@@ -720,6 +720,9 @@ pub mod from_completions {
 						.as_ref()
 						.and_then(crate::types::serialize_str);
 					log.update(|r| {
+						if let Some(inp) = usage.input_tokens {
+							r.response.input_tokens = Some(inp as u64);
+						}
 						if let Some(crt) = usage.cache_read_input_tokens {
 							r.response.cached_input_tokens = Some(crt as u64);
 						}
@@ -963,6 +966,9 @@ pub fn passthrough_stream(
 					.as_ref()
 					.and_then(crate::types::serialize_str);
 				log.update(|r| {
+					if let Some(inp) = usage.input_tokens {
+						r.response.input_tokens = Some(inp as u64);
+					}
 					if let Some(o) = usage.output_tokens {
 						r.response.output_tokens = Some(o as u64);
 					}
