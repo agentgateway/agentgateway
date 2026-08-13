@@ -29,7 +29,7 @@ impl Provider {
 		};
 		let normalized_model = m.to_ascii_lowercase();
 		// TODO: also support endpoint parsing from copilot models and add a tool to grab specific setups in agctl
-		if let Some(tags) = catalog.and_then(|c| c.get_model_tags(m)) {
+		if let Some(tags) = catalog.and_then(|c| c.get_model_tags(&normalized_model)) {
 			let formats: Vec<ChatFormat> = [
 				ChatFormat::OpenAICompletions,
 				ChatFormat::OpenAIResponses,
@@ -41,7 +41,7 @@ impl Provider {
 			.filter(|f| tags.contains(f.tag()))
 			.collect();
 			if !formats.is_empty() {
-				tracing::info!(model = %m, ?formats, "copilot formats from modelcatalog tags");
+				tracing::debug!(model = %m, ?formats, "copilot formats from modelcatalog tags");
 				return formats;
 			}
 		}
@@ -99,6 +99,16 @@ mod tests {
 		let catalog: Catalog = Some(&cat);
 		assert_eq!(
 			Provider::supported_formats_for_model(Some("grok-2"), catalog),
+			vec![ChatFormat::OpenAICompletions]
+		);
+	}
+
+	#[test]
+	fn catalog_format_tags_are_case_insensitive() {
+		let cat = TestCatalog::new([("grok-2", &[tags::OPENAI_COMPLETIONS][..])]);
+		let catalog: Catalog = Some(&cat);
+		assert_eq!(
+			Provider::supported_formats_for_model(Some("Grok-2"), catalog),
 			vec![ChatFormat::OpenAICompletions]
 		);
 	}
