@@ -75,6 +75,38 @@ pub enum TextPart {
 	Unknown(serde_json::Value),
 }
 
+impl TextPart {
+	fn text(&self) -> Option<&str> {
+		match self {
+			TextPart::Text { text, .. } => Some(text),
+			TextPart::Unknown(_) => None,
+		}
+	}
+
+	fn text_mut(&mut self) -> Option<&mut String> {
+		match self {
+			TextPart::Text { text, .. } => Some(text),
+			TextPart::Unknown(_) => None,
+		}
+	}
+}
+
+impl ContentPart {
+	fn text(&self) -> Option<&str> {
+		match self {
+			ContentPart::Text { text, .. } => Some(text),
+			ContentPart::Unknown(_) => None,
+		}
+	}
+
+	fn text_mut(&mut self) -> Option<&mut String> {
+		match self {
+			ContentPart::Text { text, .. } => Some(text),
+			ContentPart::Unknown(_) => None,
+		}
+	}
+}
+
 #[derive(Debug, Deserialize, Clone, Serialize)]
 pub struct Response {
 	pub id: String,
@@ -124,20 +156,7 @@ pub fn get_messages_helper(
 		let content = match system {
 			TextBlock::Text(t) => strng::new(t),
 			TextBlock::Array(parts) => {
-				let text = parts
-					.iter()
-					.filter_map(|part| match part {
-						TextPart::Text { text, .. } => Some(text.as_str()),
-						_ => None,
-					})
-					.fold(String::new(), |mut acc, s| {
-						if !acc.is_empty() {
-							acc.push('\n');
-						}
-						acc.push_str(s);
-						acc
-					});
-				strng::new(&text)
+				crate::types::join_text(parts.iter().filter_map(TextPart::text), '\n')
 			},
 		};
 		if !content.is_empty() {
@@ -152,25 +171,11 @@ pub fn get_messages_helper(
 		let content = m
 			.content
 			.as_ref()
-			.and_then(|c| match c {
-				ContentBlock::Text(t) => Some(strng::new(t)),
-				ContentBlock::Array(parts) if !parts.is_empty() => {
-					let text = parts
-						.iter()
-						.filter_map(|part| match part {
-							ContentPart::Text { text, .. } => Some(text.as_str()),
-							_ => None,
-						})
-						.fold(String::new(), |mut acc, s| {
-							if !acc.is_empty() {
-								acc.push(' ');
-							}
-							acc.push_str(s);
-							acc
-						});
-					Some(strng::new(&text))
+			.map(|c| match c {
+				ContentBlock::Text(t) => strng::new(t),
+				ContentBlock::Array(parts) => {
+					crate::types::join_text(parts.iter().filter_map(ContentPart::text), ' ')
 				},
-				_ => None,
 			})
 			.unwrap_or_default();
 		SimpleChatCompletionMessage {

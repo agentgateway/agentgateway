@@ -382,22 +382,11 @@ impl super::RequestType for Request {
 				let content = m
 					.content
 					.as_ref()
-					.and_then(|c| match c {
-						Content::Text(t) => Some(strng::new(t)),
-						Content::Array(parts) if !parts.is_empty() => {
-							let text = parts.iter().filter_map(|part| part.text.as_deref()).fold(
-								String::new(),
-								|mut acc, s| {
-									if !acc.is_empty() {
-										acc.push(' ');
-									}
-									acc.push_str(s);
-									acc
-								},
-							);
-							Some(strng::new(&text))
+					.map(|c| match c {
+						Content::Text(t) => strng::new(t),
+						Content::Array(parts) => {
+							super::join_text(parts.iter().filter_map(|part| part.text.as_deref()), ' ')
 						},
-						_ => None,
 					})
 					.unwrap_or_default();
 				SimpleChatCompletionMessage {

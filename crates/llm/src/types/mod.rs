@@ -120,6 +120,18 @@ pub(crate) fn scan_text_runs<T>(
 	}
 }
 
+/// Join text parts with `sep`, ignoring empty parts.
+pub(crate) fn join_text<'a>(parts: impl IntoIterator<Item = &'a str>, sep: char) -> Strng {
+	let s = parts.into_iter().fold(String::new(), |mut acc, s| {
+		if !acc.is_empty() {
+			acc.push(sep);
+		}
+		acc.push_str(s);
+		acc
+	});
+	strng::new(&s)
+}
+
 /// SimpleChatCompletionMessage is a simplified chat message
 #[apply(schema!)]
 #[derive(Eq, PartialEq, cel::DynamicType)]
