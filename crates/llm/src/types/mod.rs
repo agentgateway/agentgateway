@@ -52,6 +52,52 @@ pub trait ResponseType: Send + Sync {
 	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String));
 }
 
+/// A category of request content that a prompt guard can inspect.
+#[apply(schema_enum!)]
+pub enum ContentScope {
+	/// The system/developer prompt.
+	SystemPrompt,
+	/// Regular user/assistant message text.
+	Messages,
+	/// Tool call results.
+	ToolOutput,
+	/// Tool call arguments.
+	ToolInput,
+}
+
+/// Recursively visit every string value in a JSON tree (tool inputs are arbitrary JSON).
+pub(crate) fn visit_json_strings(value: &mut serde_json::Value, f: &mut dyn FnMut(&mut String)) {
+	match value {
+		serde_json::Value::String(text) => f(text),
+		serde_json::Value::Array(items) => {
+			for item in items {
+				visit_json_strings(item, f);
+			}
+		},
+		serde_json::Value::Object(map) => {
+			for (_, item) in map.iter_mut() {
+				visit_json_strings(item, f);
+			}
+		},
+		// TODO scan numbers and bools?
+		_ => {},
+	}
+}
+
+/// Recursively every string value in the JSON tree at `path`; a bare string is visited as one
+/// opaque value.
+/// TODO Numbers and bools are not scanned.
+pub(crate) fn visit_json_at(
+	value: &mut serde_json::Value,
+	path: &[&str],
+	scope: ContentScope,
+	f: &mut dyn FnMut(ContentScope, &mut String),
+) {
+	if let Some(target) = path.iter().try_fold(value, |v, k| v.get_mut(*k)) {
+		visit_json_strings(target, &mut |text| f(scope, text));
+	}
+}
+
 /// RequestType is an abstraction over provider/endpoint specific request formats that enables
 /// uniform policy enforcement and observability
 pub trait RequestType: Send + Sync {
@@ -66,7 +112,7 @@ pub trait RequestType: Send + Sync {
 	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage>;
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>);
 	fn to_value(&self) -> serde_json::Result<serde_json::Value>;
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String));
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String));
 }
 
 /// Scan runs of consecutive text parts as one `sep`-joined string: `[t1, t2, img, t3]` scans

@@ -152,6 +152,9 @@ backends:
                 rejection:
                   body: The request was rejected due to inappropriate content
                   status: 400
+                scope:
+                  - systemPrompt
+                  - messages
   - backend:
       ai:
         name: "llm:model:fireworks-llama:1"
@@ -203,6 +206,9 @@ backends:
                 rejection:
                   body: The request was rejected due to inappropriate content
                   status: 400
+                scope:
+                  - systemPrompt
+                  - messages
   - backend:
       ai:
         name: "llm:model:claude-3-haiku:2"
@@ -254,6 +260,9 @@ backends:
                 rejection:
                   body: The request was rejected due to inappropriate content
                   status: 400
+                scope:
+                  - systemPrompt
+                  - messages
               - regex:
                   action: reject
                   rules:
@@ -261,6 +270,9 @@ backends:
                 rejection:
                   body: The request was rejected due to inappropriate content
                   status: 403
+                scope:
+                  - systemPrompt
+                  - messages
             response:
               - regex:
                   action: mask
@@ -312,6 +324,9 @@ backends:
                 rejection:
                   body: The request was rejected due to inappropriate content
                   status: 400
+                scope:
+                  - systemPrompt
+                  - messages
   - backend:
       ai:
         name: "llm:model:gpt-7-max:4"
@@ -353,6 +368,9 @@ backends:
                 rejection:
                   body: The request was rejected due to inappropriate content
                   status: 400
+                scope:
+                  - systemPrompt
+                  - messages
   - backend:
       ai:
         name: "llm:model:*:5"
@@ -397,6 +415,9 @@ backends:
                 rejection:
                   body: The request was rejected due to inappropriate content
                   status: 400
+                scope:
+                  - systemPrompt
+                  - messages
   - backend:
       llmRouter:
         name: "llm:router"

@@ -255,6 +255,7 @@ type PromptguardRequest struct {
 	// `SystemPrompt` and `Messages`. Tool call inputs and outputs are not
 	// inspected unless `ToolInput`/`ToolOutput` are listed explicitly.
 	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=4
 	// +listType=set
 	// +optional
 	Scope []ContentScope `json:"scope,omitempty"`

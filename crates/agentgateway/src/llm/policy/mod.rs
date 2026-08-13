@@ -9,7 +9,7 @@ use crate::http::filters::{BackendRequestTimeout, HeaderModifier};
 use crate::http::jwt::Claims;
 use crate::http::{HeaderOrPseudo, Response, StatusCode, auth};
 use crate::llm::policy::webhook::{MaskActionBody, RequestAction, ResponseAction};
-use crate::llm::{AIError, RequestType, ResponseType};
+use crate::llm::{AIError, ContentScope, RequestType, ResponseType};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::log::RequestLog;
 use crate::telemetry::metrics::{GuardrailAction, GuardrailPhase};
@@ -253,11 +253,27 @@ pub struct PromptGuard {
 	#[serde(default, skip_serializing_if = "PromptGuardStreamingMode::is_disabled")]
 	pub streaming: PromptGuardStreamingMode,
 	/// Guards applied to client requests before they reach the LLM.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde(
+		default,
+		deserialize_with = "de_request_guards",
+		skip_serializing_if = "Vec::is_empty"
+	)]
 	pub request: Vec<RequestGuard>,
 	/// Guards applied to LLM responses before they reach the client.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub response: Vec<ResponseGuard>,
+}
+
+/// TODO not all guard types properly scan all scopes
+/// avoids silently ignoring configured scopes
+fn de_request_guards<'de, D: serde::Deserializer<'de>>(
+	deserializer: D,
+) -> Result<Vec<RequestGuard>, D::Error> {
+	let guards = <Vec<RequestGuard> as serde::Deserialize>::deserialize(deserializer)?;
+	for guard in &guards {
+		guard.validate_scope().map_err(serde::de::Error::custom)?;
+	}
+	Ok(guards)
 }
 
 #[apply(schema!)]
@@ -464,8 +480,8 @@ impl crate::llm::RequestType for TextRequest {
 		}
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
-		f(&mut self.content);
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
+		f(ContentScope::Messages, &mut self.content);
 	}
 }
 
@@ -823,7 +839,7 @@ impl Policy {
 		Self::apply_guardrail_outcome(outcome, |mutation| {
 			match mutation {
 				RequestGuardMutation::Texts(replacements) => {
-					replacements.apply(|visitor| req.visit_text_mut(visitor));
+					replacements.apply(|visitor| req.visit_text_mut(&mut |_, text| visitor(text)));
 				},
 				RequestGuardMutation::Messages(messages) => req.set_messages(messages),
 			}
@@ -897,7 +913,12 @@ impl Policy {
 		original: Option<&cel::RequestSnapshot>,
 	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
 		match &guard.kind {
-			RequestGuardKind::Regex(rg) => Ok(Self::evaluate_regex_request(req, rg, &guard.rejection)),
+			RequestGuardKind::Regex(rg) => Ok(Self::evaluate_regex_request(
+				req,
+				rg,
+				&guard.rejection,
+				&guard.scope,
+			)),
 			RequestGuardKind::Webhook(wh) => {
 				Self::evaluate_webhook_request(req, http_headers, client, wh, original).await
 			},
@@ -1144,8 +1165,9 @@ impl Policy {
 		req: &mut dyn RequestType,
 		rgx: &RegexRules,
 		rej: &RequestRejection,
+		guard_scope: &[ContentScope],
 	) -> anyhow::Result<GuardrailAction> {
-		let outcome = Self::evaluate_regex_request(req, rgx, rej);
+		let outcome = Self::evaluate_regex_request(req, rgx, rej, guard_scope);
 		let (action, _) = Self::apply_request_guard_outcome(outcome, req)?;
 		Ok(action)
 	}
@@ -1154,11 +1176,17 @@ impl Policy {
 		req: &mut dyn RequestType,
 		rgx: &RegexRules,
 		rejection: &RequestRejection,
+		guard_scope: &[ContentScope],
 	) -> GuardrailOutcome<RequestGuardMutation> {
 		let mut replacements = Vec::new();
 		let mut rejected = false;
-		req.visit_text_mut(&mut |text| {
+		req.visit_text_mut(&mut |content_scope, text| {
 			if rejected {
+				return;
+			}
+			// out-of-scope texts still occupy a slot so the mask replay stays aligned
+			if !guard_scope.contains(&content_scope) {
+				replacements.push(None);
 				return;
 			}
 			match Self::apply_prompt_guard_regex(text, rgx) {
@@ -1543,12 +1571,54 @@ pub struct RequestGuard {
 	/// Response returned when the request is rejected.
 	#[serde(default)]
 	pub rejection: RequestRejection,
+	/// Which parts of the request this guard inspects.
+	#[serde(
+		default = "default_content_scope",
+		deserialize_with = "de_content_scope"
+	)]
+	#[cfg_attr(feature = "schema", schemars(length(min = 1)))]
+	pub scope: Vec<ContentScope>,
 	/// Guardrail provider or rule set to apply.
 	#[serde(flatten)]
 	pub kind: RequestGuardKind,
 }
 
+pub fn default_content_scope() -> Vec<ContentScope> {
+	vec![ContentScope::SystemPrompt, ContentScope::Messages]
+}
+
+// disallow explicitly empty scope (effectively disables the guard)
+fn de_content_scope<'de, D: serde::Deserializer<'de>>(
+	deserializer: D,
+) -> Result<Vec<ContentScope>, D::Error> {
+	let scope = <Vec<ContentScope> as serde::Deserialize>::deserialize(deserializer)?;
+	if scope.is_empty() {
+		return Err(serde::de::Error::custom(
+			"scope must not be empty; omit it to use the default (systemPrompt + messages)",
+		));
+	}
+	Ok(scope)
+}
+
 impl RequestGuard {
+	/// TODO not all guard types properly scan all scopes
+	/// avoids silently ignoring configured scopes
+	pub(crate) fn validate_scope(&self) -> Result<(), String> {
+		if matches!(self.kind, RequestGuardKind::Regex(_)) {
+			return Ok(());
+		}
+		let default = default_content_scope();
+		let is_default =
+			self.scope.len() == default.len() && default.iter().all(|s| self.scope.contains(s));
+		if is_default {
+			return Ok(());
+		}
+		Err(format!(
+			"scope: only regex guards support a non-default scope; {} guards always inspect the default (systemPrompt + messages)",
+			self.kind.name(),
+		))
+	}
+
 	/// Returns the configured failure mode for this guard, defaulting to `FailOpen` for
 	/// guard types that do not have an explicit `failure_mode` field.
 	fn failure_mode(&self) -> FailureMode {

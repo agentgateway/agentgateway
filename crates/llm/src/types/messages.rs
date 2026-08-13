@@ -4,7 +4,8 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::types::{
-	OutputMessage, OutputMessagePart, RequestType, ResponseType, SimpleChatCompletionMessage,
+	ContentScope, OutputMessage, OutputMessagePart, RequestType, ResponseType,
+	SimpleChatCompletionMessage, visit_json_at,
 };
 use crate::webhook::{Message, ResponseChoice};
 use crate::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse};
@@ -265,40 +266,88 @@ impl RequestType for Request {
 		self.messages = message_prompts.into_iter().map(Into::into).collect();
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
 		match &mut self.system {
-			Some(TextBlock::Text(text)) => f(text),
+			Some(TextBlock::Text(text)) => f(ContentScope::SystemPrompt, text),
 			Some(TextBlock::Array(parts)) => {
-				crate::types::scan_text_runs(
-					parts,
-					"\n",
-					|p| match p {
-						TextPart::Text { text, .. } => Some(text),
-						TextPart::Unknown(_) => None,
-					},
-					f,
-				);
+				crate::types::scan_text_runs(parts, "\n", TextPart::text_mut, &mut |text| {
+					f(ContentScope::SystemPrompt, text)
+				});
 			},
 			None => {},
 		}
 		for msg in &mut self.messages {
 			match &mut msg.content {
-				Some(ContentBlock::Text(text)) => f(text),
+				Some(ContentBlock::Text(text)) => f(ContentScope::Messages, text),
 				Some(ContentBlock::Array(parts)) => {
-					crate::types::scan_text_runs(
-						parts,
-						" ",
-						|p| match p {
-							ContentPart::Text { text, .. } => Some(text),
-							// TODO opt-in setting to apply guards to tool results
-							ContentPart::Unknown(_) => None,
-						},
-						f,
-					);
+					for part in parts.iter_mut() {
+						if let ContentPart::Unknown(value) = part {
+							visit_tool_part_text(value, f);
+						}
+					}
+					crate::types::scan_text_runs(parts, " ", ContentPart::text_mut, &mut |text| {
+						f(ContentScope::Messages, text)
+					});
 				},
 				None => {},
 			}
 		}
+	}
+}
+
+// visit every documented part type
+// known-ignored items should be listed
+// unknown items should be logged for future review
+// https://github.com/anthropics/anthropic-sdk-typescript/blob/main/.stats.yml
+// may give us a way to keep an eye on changes
+fn visit_tool_part_text(
+	value: &mut serde_json::Value,
+	f: &mut dyn FnMut(ContentScope, &mut String),
+) {
+	match value.get("type").and_then(|t| t.as_str()) {
+		Some(
+			"tool_result"
+			| "mcp_tool_result"
+			| "code_execution_tool_result"
+			| "bash_code_execution_tool_result"
+			| "text_editor_code_execution_tool_result"
+			| "tool_search_tool_result"
+			| "web_fetch_tool_result"
+			| "advisor_tool_result",
+		) => {
+			visit_json_at(value, &["content"], ContentScope::ToolOutput, f);
+		},
+		Some("tool_use" | "server_tool_use" | "mcp_tool_use") => {
+			visit_json_at(value, &["input"], ContentScope::ToolInput, f);
+		},
+		// User-provided context blocks: message content, not tool traffic.
+		Some("document") => {
+			visit_json_at(value, &["source"], ContentScope::Messages, f);
+			visit_json_at(value, &["title"], ContentScope::Messages, f);
+			visit_json_at(value, &["context"], ContentScope::Messages, f);
+		},
+		Some("search_result") => {
+			visit_json_at(value, &["title"], ContentScope::Messages, f);
+			visit_json_at(value, &["content"], ContentScope::Messages, f);
+		},
+		// Replayed conversation summary.
+		Some("compaction") => {
+			visit_json_at(value, &["content"], ContentScope::Messages, f);
+		},
+		// Mid-conversation system instructions: text blocks under `content`.
+		Some("mid_conv_system") => {
+			visit_json_at(value, &["content"], ContentScope::SystemPrompt, f);
+		},
+		// No readable text: base64 payloads and file/tool references.
+		Some("image" | "container_upload" | "tool_addition" | "tool_removal" | "fallback") => {},
+		// Signature/encrypted content the API integrity-checks on replay; a mask would 400.
+		Some("thinking" | "redacted_thinking" | "web_search_tool_result") => {},
+		other => {
+			tracing::debug!(
+				block_type = other.unwrap_or("<none>"),
+				"unrecognized content block; not scanned by prompt guards"
+			);
+		},
 	}
 }
 

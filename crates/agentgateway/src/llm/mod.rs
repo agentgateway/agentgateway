@@ -8,10 +8,10 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 pub use agent_llm::tokenizer::{num_tokens_from_messages, preload_tokenizers};
 pub use agent_llm::{
-	AIError, CacheTokenConvention, ChatFormat, InputFormat, LLMInfo, LLMRequest, LLMRequestParams,
-	LLMResponse, LogContentFields, PromptCachingConfig, Provider, ProviderState, RequestType,
-	ResponseType, RouteType, SimpleChatCompletionMessage, anthropic, conversion, copilot, custom,
-	gemini, logged_response_parsing, openai, types,
+	AIError, CacheTokenConvention, ChatFormat, ContentScope, InputFormat, LLMInfo, LLMRequest,
+	LLMRequestParams, LLMResponse, LogContentFields, PromptCachingConfig, Provider, ProviderState,
+	RequestType, ResponseType, RouteType, SimpleChatCompletionMessage, anthropic, conversion,
+	copilot, custom, gemini, logged_response_parsing, openai, types,
 };
 use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};

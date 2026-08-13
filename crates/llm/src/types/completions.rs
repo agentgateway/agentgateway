@@ -3,7 +3,9 @@ use agent_core::strng::Strng;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::types::{OutputMessage, OutputMessagePart, ResponseType, SimpleChatCompletionMessage};
+use crate::types::{
+	ContentScope, OutputMessage, OutputMessagePart, ResponseType, SimpleChatCompletionMessage,
+};
 use crate::webhook::{Message, ResponseChoice};
 use crate::{AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, json};
 
@@ -401,19 +403,33 @@ impl super::RequestType for Request {
 		self.messages = messages.into_iter().map(convert_message).collect();
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
 		for msg in &mut self.messages {
-			// TODO opt-in setting to apply guards to tool results
-			if msg.role == "tool" {
-				continue;
-			}
+			let scope = match msg.role.as_str() {
+				"tool" | "function" => ContentScope::ToolOutput,
+				"system" | "developer" => ContentScope::SystemPrompt,
+				_ => ContentScope::Messages,
+			};
 			match &mut msg.content {
-				Some(Content::Text(text)) => f(text),
+				Some(Content::Text(text)) => f(scope, text),
 				Some(Content::Array(parts)) => {
-					super::scan_text_runs(parts, " ", |p| p.text.as_mut(), f);
+					super::scan_text_runs(parts, " ", |p| p.text.as_mut(), &mut |text| f(scope, text));
 				},
 				None => {},
 			}
+
+			// in completions API, tool call args are json-in-json
+			// avoiding parsing means a mask can potentially break the json
+			for call in msg.tool_calls.iter_mut().flatten() {
+				super::visit_json_at(call, &["function", "arguments"], ContentScope::ToolInput, f);
+				super::visit_json_at(call, &["custom", "input"], ContentScope::ToolInput, f);
+			}
+			super::visit_json_at(
+				&mut msg.rest,
+				&["function_call", "arguments"],
+				ContentScope::ToolInput,
+				f,
+			);
 		}
 	}
 }

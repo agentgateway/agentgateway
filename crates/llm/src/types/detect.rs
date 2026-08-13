@@ -8,8 +8,8 @@ use tracing::debug;
 
 use crate::webhook::ResponseChoice;
 use crate::{
-	AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, RequestType, ResponseType,
-	SimpleChatCompletionMessage, StreamingUsageGuard, json, parse,
+	AIError, ContentScope, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, RequestType,
+	ResponseType, SimpleChatCompletionMessage, StreamingUsageGuard, json, parse,
 };
 
 fn lookup<'a, T, const C: usize>(
@@ -122,7 +122,7 @@ impl RequestType for Request {
 		unimplemented!("set_messages is used for prompt guard; prompt guard is disabled for detect.")
 	}
 
-	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(ContentScope, &mut String)) {
 		unimplemented!("visit_text_mut is used for prompt guard; prompt guard is disabled for detect.")
 	}
 }
