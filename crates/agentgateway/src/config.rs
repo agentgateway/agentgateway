@@ -369,12 +369,12 @@ pub fn parse_config(
 		anyhow::bail!("config.logging.database.maxConnections must be greater than zero");
 	}
 	let logging_database = explicit_logging_database.or_else(|| database.clone());
-	let storage = StorageConfig {
-		mode: raw.storage.clone().unwrap_or_default().mode,
+
+	let mut storage_mode = raw.storage.clone().unwrap_or_default().mode;
+	if parse::<bool>("UI_READ_ONLY")?.unwrap_or(false) {
+		storage_mode = ConfigStoreMode::ReadOnly;
 	};
-	let ui_read_only = parse::<bool>("UI_READ_ONLY")?
-		.or(raw.ui_read_only)
-		.unwrap_or(false);
+	let storage = StorageConfig { mode: storage_mode };
 	if storage.mode == ConfigStoreMode::Hybrid && database.is_none() {
 		anyhow::bail!("config.storage.mode=hybrid requires config.database.url");
 	}
@@ -575,7 +575,6 @@ pub fn parse_config(
 		},
 		database,
 		storage,
-		ui_read_only,
 		session_encoder,
 		oidc_cookie_encoder,
 			hbone: Arc::new(agent_hbone::Config {
@@ -1268,7 +1267,7 @@ config:
 		let _env_lock = lock_env();
 		let config = parse_config("{}".to_string(), None).expect("config should parse");
 
-		assert!(!config.ui_read_only);
+		assert!(!config.storage.mode == ConfigStoreMode::ReadOnly);
 	}
 
 	#[test]
@@ -1277,14 +1276,15 @@ config:
 		let config = parse_config(
 			r#"
 config:
-  uiReadOnly: true
+  storage:
+    mode: read_only
 "#
 			.to_string(),
 			None,
 		)
 		.expect("config should parse");
 
-		assert!(config.ui_read_only);
+		assert!(config.storage.mode == ConfigStoreMode::ReadOnly);
 	}
 
 	#[test]
@@ -1294,14 +1294,15 @@ config:
 		let config = parse_config(
 			r#"
 config:
-  uiReadOnly: false
+  storage:
+    mode: file
 "#
 			.to_string(),
 			None,
 		)
 		.expect("config should parse");
 
-		assert!(config.ui_read_only);
+		assert!(config.storage.mode == ConfigStoreMode::ReadOnly);
 	}
 
 	#[test]

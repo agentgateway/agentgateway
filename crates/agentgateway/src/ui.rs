@@ -50,7 +50,7 @@ impl App {
 	}
 
 	fn ensure_writable(&self) -> Result<(), ErrorResponse> {
-		if self.state.ui_read_only {
+		if self.state.storage.mode == ConfigStoreMode::ReadOnly {
 			return Err(ErrorResponse::Status(
 				StatusCode::FORBIDDEN,
 				"UI is configured as read-only".to_string(),
@@ -141,7 +141,6 @@ struct RuntimeBuildInfo {
 struct RuntimeUiInfo {
 	gateway_mode: GatewayRuntimeMode,
 	config_store_mode: ConfigStoreMode,
-	read_only: bool,
 }
 
 #[derive(Serialize)]
@@ -226,7 +225,6 @@ async fn get_runtime(State(app): State<App>) -> Json<RuntimeInfo> {
 				GatewayRuntimeMode::Standalone
 			},
 			config_store_mode: app.state.storage.mode,
-			read_only: app.state.ui_read_only,
 		},
 	})
 }
