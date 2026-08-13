@@ -9,7 +9,7 @@
   "packageManager": "pnpm@11.20.0",
   "scripts": {
     "dev": "pnpm build && VITE_AGENTGATEWAY_API=http://localhost:15000 vite",
-    "build": "pnpm generate-schema && tsc -b && vite build",
+    "build": "node scripts/generate-schema.mjs && tsc -b && vite build",
     "lint": "pnpm typecheck && pnpm format:check",
     "format": "biome format --write .",
     "format:check": "biome format .",
