@@ -283,10 +283,17 @@ pub struct SourceContext {
 	/// The original TCP peer port of the downstream connection.
 	/// This can differ from the `port` when using tunneling protocols like PROXY.
 	pub raw_port: u16,
-	/// The (Istio SPIFFE) identity of the downstream connection, if available.
+	/// TLS metadata for the current downstream TLS layer, if available. Its
+	/// verified SPIFFE identity is exposed as `source.identity`. For a stream
+	/// inside CONNECT, outer transport identity is exposed separately under
+	/// `source.tunnel` and never replaces this value.
 	#[serde(flatten, default, deserialize_with = "none_if_empty")]
 	#[dynamic(flatten)]
 	pub tls: Option<crate::transport::tls::TlsInfo>,
+	/// The cryptographically verified identity of the outer CONNECT tunnel, if
+	/// this connection originated from a tunnel.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub tunnel: Option<TunnelContext>,
 	/// The workload context of the downstream connection, resolved from the
 	/// workload discovery store by source IP. Available when the source pod is
 	/// known to the controller's workload discovery store.
@@ -315,6 +322,16 @@ pub struct SourceContext {
 	)]
 	#[dynamic(rename = "connectHeaders", with_value = "connect_headers_to_value")]
 	pub connect_headers: http::HeaderMap,
+}
+
+#[apply(schema!)]
+#[derive(cel::DynamicType)]
+pub struct TunnelContext {
+	/// TLS metadata from the outer CONNECT transport. Flattened so its verified
+	/// identity is exposed as `source.tunnel.identity`.
+	#[serde(flatten)]
+	#[dynamic(flatten)]
+	pub tls: crate::transport::tls::TlsInfo,
 }
 
 #[apply(schema!)]
@@ -357,6 +374,7 @@ impl SourceContext {
 			raw_address: raw_peer_addr.ip(),
 			raw_port: raw_peer_addr.port(),
 			tls,
+			tunnel: None,
 			unverified_workload,
 			connect_headers: http::HeaderMap::new(),
 		}
@@ -2294,6 +2312,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 				subject_cn: Some("cn".into()),
 				certificate: Default::default(),
 			}),
+			tunnel: None,
 			unverified_workload: Some(WorkloadContext {
 				name: "pod-1".into(),
 				namespace: "ns-1".into(),

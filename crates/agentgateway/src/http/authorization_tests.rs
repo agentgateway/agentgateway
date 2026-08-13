@@ -189,6 +189,7 @@ fn test_network_authorization_allows_source_cidr() {
 		raw_address: IpAddr::V4(Ipv4Addr::new(10, 1, 2, 3)),
 		raw_port: 15000,
 		tls: None,
+		tunnel: None,
 		unverified_workload: None,
 		connect_headers: http::HeaderMap::new(),
 	};
@@ -211,6 +212,7 @@ fn test_network_authorization_deny_takes_precedence() {
 		raw_address: IpAddr::V4(Ipv4Addr::new(10, 1, 2, 3)),
 		raw_port: 15000,
 		tls: None,
+		tunnel: None,
 		unverified_workload: None,
 		connect_headers: http::HeaderMap::new(),
 	};

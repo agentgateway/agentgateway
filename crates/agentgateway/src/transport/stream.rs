@@ -55,9 +55,17 @@ impl From<&[u8]> for Alpn {
 
 #[derive(Default, Debug, Clone)]
 pub struct TLSConnectionInfo {
+	/// Peer identity verified by the TLS handshake represented by this object.
+	/// Identity from an outer CONNECT transport is stored separately.
 	pub src_identity: Option<super::tls::TlsInfo>,
 	pub server_name: Option<String>,
 	pub negotiated_alpn: Option<Alpn>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TunnelConnectionInfo {
+	/// Peer TLS identity verified before accepting the outer CONNECT request.
+	pub tls: super::tls::TlsInfo,
 }
 
 #[derive(Debug, Clone)]

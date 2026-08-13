@@ -3633,6 +3633,7 @@ mod tests {
 					raw_address: "10.1.2.3".parse().unwrap(),
 					raw_port: 12345,
 					tls: None,
+					tunnel: None,
 					unverified_workload: None,
 					connect_headers: http::HeaderMap::new(),
 				})
@@ -3646,6 +3647,7 @@ mod tests {
 					raw_address: "192.168.1.2".parse().unwrap(),
 					raw_port: 12345,
 					tls: None,
+					tunnel: None,
 					unverified_workload: None,
 					connect_headers: http::HeaderMap::new(),
 				})
@@ -3659,6 +3661,7 @@ mod tests {
 					raw_address: "172.16.0.1".parse().unwrap(),
 					raw_port: 12345,
 					tls: None,
+					tunnel: None,
 					unverified_workload: None,
 					connect_headers: http::HeaderMap::new(),
 				})

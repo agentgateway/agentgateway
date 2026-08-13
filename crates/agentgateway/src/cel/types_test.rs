@@ -33,6 +33,7 @@ fn build_test_request() -> crate::http::Request {
 		raw_address: "127.0.0.1".parse().unwrap(),
 		raw_port: 54321,
 		tls: None,
+		tunnel: None,
 		unverified_workload: None,
 		connect_headers: http::HeaderMap::new(),
 	};
@@ -574,6 +575,7 @@ fn test_extension_or_direct_serialization() {
 		raw_address: "192.168.1.1".parse().unwrap(),
 		raw_port: 8080,
 		tls: None,
+		tunnel: None,
 		unverified_workload: None,
 		connect_headers: http::HeaderMap::new(),
 	};
@@ -613,6 +615,7 @@ fn test_source_connect_headers() {
 		raw_address: "10.0.0.1".parse().unwrap(),
 		raw_port: 12345,
 		tls: None,
+		tunnel: None,
 		unverified_workload: None,
 		connect_headers: headers,
 	};
@@ -634,6 +637,7 @@ fn test_source_connect_headers() {
 		raw_address: "10.0.0.1".parse().unwrap(),
 		raw_port: 12345,
 		tls: None,
+		tunnel: None,
 		unverified_workload: None,
 		connect_headers: http::HeaderMap::new(),
 	};
@@ -669,6 +673,7 @@ fn test_source_connect_headers_sensitive_redacted_in_debug() {
 		raw_address: "10.0.0.1".parse().unwrap(),
 		raw_port: 12345,
 		tls: None,
+		tunnel: None,
 		unverified_workload: None,
 		connect_headers: headers,
 	};
@@ -681,4 +686,48 @@ fn test_source_connect_headers_sensitive_redacted_in_debug() {
 		debug.contains("custom-value"),
 		"non-sensitive header should still be visible in Debug: {debug}"
 	);
+}
+
+#[test]
+fn source_tls_and_tunnel_identities_have_distinct_semantics() {
+	let tls_identity = crate::transport::tls::IstioIdentity::new(
+		"inner.test".into(),
+		"inner-ns".into(),
+		"inner-sa".into(),
+	);
+	let tunnel_identity = crate::transport::tls::IstioIdentity::new(
+		"outer.test".into(),
+		"outer-ns".into(),
+		"outer-sa".into(),
+	);
+	let source = SourceContext {
+		address: "10.0.0.1".parse().unwrap(),
+		port: 12345,
+		raw_address: "10.0.0.1".parse().unwrap(),
+		raw_port: 12345,
+		tls: Some(crate::transport::tls::TlsInfo {
+			identity: Some(tls_identity),
+			..Default::default()
+		}),
+		tunnel: Some(TunnelContext {
+			tls: crate::transport::tls::TlsInfo {
+				identity: Some(tunnel_identity),
+				..Default::default()
+			},
+		}),
+		unverified_workload: None,
+		connect_headers: http::HeaderMap::new(),
+	};
+	let executor_context = ExecutorSerde {
+		source: Some(source),
+		..Default::default()
+	};
+	let executor = executor_context.as_executor();
+	let expression = Expression::new_strict(
+		"source.identity.trustDomain == 'inner.test' && \
+		 source.tunnel.identity.trustDomain == 'outer.test'",
+	)
+	.expect("failed to compile");
+
+	assert!(executor.eval_bool(&expression));
 }

@@ -29,6 +29,7 @@ use crate::telemetry::metrics::TCPLabels;
 use crate::transport::BufferLimit;
 use crate::transport::stream::{
 	ConnectHeaders, Extension, LoggingMode, Socket, TCPConnectionInfo, TLSConnectionInfo,
+	TunnelConnectionInfo,
 };
 use crate::types::agent::{
 	BindKey, BindProtocol, Listener, ListenerProtocol, TransportProtocol, TunnelProtocol,
@@ -799,6 +800,14 @@ impl Gateway {
 							},
 						};
 						let mut downstream = Socket::from_upgraded(connection, target_address, downstream);
+						if let Some(src_identity) = downstream
+							.ext::<TLSConnectionInfo>()
+							.and_then(|tls| tls.src_identity.clone())
+						{
+							downstream
+								.ext_mut()
+								.insert(TunnelConnectionInfo { tls: src_identity });
+						}
 						downstream.ext_mut().insert(ConnectHeaders(connect_headers));
 						downstream.ext_mut().insert(BufferLimit::new(buffer));
 						Self::proxy_bind(bind.key.clone(), bind.protocol, downstream, inputs, drain).await;
@@ -869,6 +878,11 @@ impl Gateway {
 			tls.and_then(|t| t.src_identity.clone()),
 			unverified_workload,
 		);
+		src.tunnel = stream
+			.ext::<TunnelConnectionInfo>()
+			.map(|tunnel| crate::cel::TunnelContext {
+				tls: tunnel.tls.clone(),
+			});
 		let dst = crate::cel::DestinationContext::from_tcp_connection(tcp);
 		// Surface CONNECT tunnel headers (captured in `terminate_connect_tunnel`) on
 		// the source context so request policies can reference `source.connectHeaders`.
