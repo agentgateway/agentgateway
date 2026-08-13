@@ -164,9 +164,23 @@ pub async fn apply_to_response(
 						// Strip the backend agent base from the interface path so the
 						// result is relative to the agent card location. Then anchor
 						// that relative path at the gateway base.
-						let relative = iface_path
-							.strip_prefix(backend_agent_path)
-							.unwrap_or(iface_path);
+						// Only match complete path segments to avoid partial matches
+						// (e.g., /internal/weather should not match /internal/weather-v2).
+						let relative = if iface_path == backend_agent_path {
+							// Exact match - the interface is at the agent card location
+							""
+						} else if let Some(stripped) = iface_path.strip_prefix(backend_agent_path) {
+							// Check that we matched a complete path segment
+							if stripped.starts_with('/') {
+								stripped
+							} else {
+								// Partial segment match (e.g., /weather vs /weather-v2) - don't strip
+								iface_path
+							}
+						} else {
+							// No prefix match at all
+							iface_path
+						};
 						*url_val = Value::String(format!("{gateway_base}{relative}"));
 					}
 				}

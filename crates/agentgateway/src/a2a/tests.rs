@@ -667,3 +667,54 @@ async fn test_apply_to_response_preserves_subpath_with_path_rewrite() {
 		"http://localhost:4001/a2a/tick/jsonrpc/"
 	);
 }
+
+#[tokio::test]
+async fn test_apply_to_response_avoids_partial_path_segment_match() {
+	// Regression test for edge case: when backend has multiple interfaces with
+	// similar path prefixes (e.g., /weather and /weather-v2), we should only
+	// strip complete path segments, not partial matches.
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(
+			serde_json::to_vec(&json!({
+				"name": "Weather Agent",
+				"supportedInterfaces": [
+					{ "protocolBinding": "JSONRPC", "url": "http://backend/internal/weather/jsonrpc" },
+					{ "protocolBinding": "JSONRPC", "url": "http://backend/internal/weather-v2/jsonrpc" }
+				],
+			}))
+			.unwrap(),
+		))
+		.unwrap();
+
+	let info = apply_to_response(
+		Some(&A2aPolicy {}),
+		RequestType::AgentCard(
+			"http://gateway/public/weather/.well-known/agent-card.json"
+				.parse()
+				.unwrap(),
+			"/internal/weather/.well-known/agent-card.json".to_string(),
+		),
+		&mut resp,
+	)
+	.await
+	.unwrap();
+	assert!(info.is_none());
+
+	let body = http::read_resp_body(resp).await.unwrap();
+	let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+	// First interface: /internal/weather/jsonrpc -> /public/weather/jsonrpc
+	// (correct: complete path segment match)
+	assert_eq!(
+		json["supportedInterfaces"][0]["url"],
+		"http://gateway/public/weather/jsonrpc"
+	);
+	// Second interface: /internal/weather-v2/jsonrpc should NOT be stripped to
+	// -v2/jsonrpc because /internal/weather is not a complete path segment prefix
+	// of /internal/weather-v2. The gateway_base is /public/weather, so the result
+	// should be /public/weather/internal/weather-v2/jsonrpc (no stripping occurred).
+	assert_eq!(
+		json["supportedInterfaces"][1]["url"],
+		"http://gateway/public/weather/internal/weather-v2/jsonrpc"
+	);
+}
