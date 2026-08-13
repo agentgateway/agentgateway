@@ -207,7 +207,7 @@ pub struct Metrics {
 	pub gen_ai_request_duration: Histogram<GenAILabels>,
 	pub gen_ai_time_per_output_token: Histogram<GenAILabels>,
 	pub gen_ai_time_to_first_token: Histogram<GenAILabels>,
-	pub gen_ai_inter_token_latency: Histogram<GenAILabels>,
+	pub gen_ai_inter_chunk_latency: Histogram<GenAILabels>,
 
 	pub tls_handshake_duration: Histogram<TCPLabels>,
 
@@ -350,13 +350,13 @@ impl Metrics {
 			gen_ai_time_to_first_token.clone(),
 		);
 
-		let gen_ai_inter_token_latency = Family::<GenAILabels, _>::new_with_constructor(move || {
+		let gen_ai_inter_chunk_latency = Family::<GenAILabels, _>::new_with_constructor(move || {
 			PromHistogram::new(OUTPUT_TOKEN_BUCKET)
 		});
 		registry.register(
-			"gen_ai_server_inter_token_latency",
-			"Time between consecutive output tokens for a given request",
-			gen_ai_inter_token_latency.clone(),
+			"gen_ai_server_inter_chunk_latency",
+			"Time between consecutive output chunks for a given request",
+			gen_ai_inter_chunk_latency.clone(),
 		);
 
 		Metrics {
@@ -400,7 +400,7 @@ impl Metrics {
 			gen_ai_request_duration,
 			gen_ai_time_per_output_token,
 			gen_ai_time_to_first_token,
-			gen_ai_inter_token_latency,
+			gen_ai_inter_chunk_latency,
 
 			response_bytes: {
 				let m = Family::<HTTPLabels, _>::default();

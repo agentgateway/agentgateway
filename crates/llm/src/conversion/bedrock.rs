@@ -1137,7 +1137,7 @@ pub mod from_completions {
 						});
 					} else if let Some(prev) = last_token_at.replace(now) {
 						let gap = now.duration_since(prev);
-						log.update(|r| r.response.inter_token_latencies.push(gap));
+						log.update(|r| r.response.inter_chunk_latencies.record(gap));
 					}
 
 					let delta = d.delta.map(|delta| {
@@ -1968,7 +1968,7 @@ pub mod from_messages {
 							});
 						} else if let Some(prev) = last_token_at.replace(now) {
 							let gap = now.duration_since(prev);
-							log.update(|r| r.response.inter_token_latencies.push(gap));
+							log.update(|r| r.response.inter_chunk_latencies.record(gap));
 						}
 
 						let anthropic_delta = match d {
@@ -3009,7 +3009,7 @@ pub mod from_responses {
 						});
 					} else if let Some(prev) = last_token_at.replace(now) {
 						let gap = now.duration_since(prev);
-						log.update(|r| r.response.inter_token_latencies.push(gap));
+						log.update(|r| r.response.inter_chunk_latencies.record(gap));
 					}
 
 					if let Some(d) = delta.delta {
