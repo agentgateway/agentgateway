@@ -3,9 +3,16 @@
 package e2e_test
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
+	"istio.io/istio/pkg/test/util/retry"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
 )
@@ -40,6 +47,46 @@ func TestJwtAuth(tt *testing.T) {
 	t.Run("GatewayPolicyWithRBAC", func(t base.Test) {
 		testJwtAuthGatewayPolicyWithRbac(t)
 	})
+	t.Run("InvalidInlineJwks", func(t base.Test) {
+		testJwtAuthInvalidInlineJwks(t)
+	})
+}
+
+func testJwtAuthInvalidInlineJwks(t base.Test) {
+	t.Apply(
+		manifest("jwtauth", "invalid-inline.yaml"),
+	)
+
+	t.HTTPRouteAccepted("route-invalid-jwks", base.Namespace)
+
+	retry.UntilSuccessOrFail(t, func() error {
+		policy := &agentgateway.AgentgatewayPolicy{}
+		if err := t.TestInstallation.ClusterContext.ControllerClient.Get(
+			t.Ctx,
+			types.NamespacedName{Name: "route-invalid-inline-jwks-policy", Namespace: base.Namespace},
+			policy,
+		); err != nil {
+			return err
+		}
+		for _, ancestor := range policy.Status.Ancestors {
+			for _, condition := range ancestor.Conditions {
+				if condition.Type == string(agentgateway.PolicyConditionAccepted) &&
+					condition.Status == metav1.ConditionTrue &&
+					condition.Reason == string(agentgateway.PolicyReasonPartiallyValid) &&
+					strings.Contains(condition.Message, "invalid inline") {
+					return nil
+				}
+			}
+		}
+		return fmt.Errorf("policy status does not report the invalid inline JWKS as PartiallyValid: %+v", policy.Status)
+	})
+	assertJwtResponse(t, "invalidjwksroute.com", "", http.StatusUnauthorized)
+
+	assertJwtResponse(t, "secureroute.com", jwt1, http.StatusNotFound)
+
+	t.Apply(manifest("jwtauth", "secured-route.yaml"))
+	t.HTTPRouteAccepted("route-secure", base.Namespace)
+	assertJwtResponse(t, "secureroute.com", jwt1, http.StatusOK)
 }
 
 func testJwtAuthRoutePolicy(t base.Test) {
