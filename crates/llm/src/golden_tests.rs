@@ -1447,6 +1447,38 @@ fn messages_to_responses_maps_tool_result_is_error_to_incomplete() {
 }
 
 #[test]
+fn messages_to_responses_rejects_malformed_image_source() {
+	let error_sources = [
+		// base64 missing media_type
+		json!({"type": "base64", "data": "aGVsbG8="}),
+		// base64 missing data
+		json!({"type": "base64", "media_type": "image/png"}),
+		// url missing url
+		json!({"type": "url"}),
+		// file missing file_id
+		json!({"type": "file"}),
+		// unknown source type
+		json!({"type": "unknown_source"}),
+	];
+	for (i, source) in error_sources.iter().enumerate() {
+		let input: types::messages::Request = serde_json::from_value(json!({
+			"model": "claude-sonnet-4-20250514",
+			"max_tokens": 1024,
+			"messages": [{
+				"role": "user",
+				"content": [{"type": "image", "source": source}]
+			}]
+		}))
+		.expect("failed to parse request");
+		let err = conversion::responses::from_messages::translate(&input).unwrap_err();
+		assert!(
+			matches!(err, AIError::UnsupportedConversion(_)),
+			"expected UnsupportedConversion for error source #{i} ({source}), got {err:?}"
+		);
+	}
+}
+
+#[test]
 fn messages_to_responses_maps_anthropic_runtime_features() {
 	let input: types::messages::Request = serde_json::from_value(json!({
 		"model": "claude-sonnet-4-20250514",
