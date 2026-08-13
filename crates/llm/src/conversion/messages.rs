@@ -576,6 +576,9 @@ pub mod from_completions {
 	) -> Body {
 		let mut message_id = None;
 		let mut model = String::new();
+		// Anthropic states the role once in `message_start`, but the OpenAI chunk has no top-level
+		// role field — it belongs on `choices[].delta`, so hold it until there is a chunk for it.
+		let mut pending_role = None;
 		let mut service_tier = None;
 		let created = chrono::Utc::now().timestamp() as u32;
 		// let mut finish_reason = None;
@@ -590,7 +593,11 @@ pub mod from_completions {
 			messages::MessagesStreamEvent,
 			completions::StreamResponse,
 		>(b, buffer_limit, move |f| {
-			let mk = |choices: Vec<completions::ChatChoiceStream>, usage: Option<completions::Usage>| {
+			let mut mk = |mut choices: Vec<completions::ChatChoiceStream>,
+			              usage: Option<completions::Usage>| {
+				if let Some(first) = choices.first_mut() {
+					first.delta.role = pending_role.take();
+				}
 				Some(completions::StreamResponse {
 					id: message_id.clone().unwrap_or_else(|| "unknown".to_string()),
 					model: model.clone(),
@@ -609,6 +616,11 @@ pub mod from_completions {
 			match f {
 				messages::MessagesStreamEvent::MessageStart { message } => {
 					message_id = Some(message.id);
+					pending_role = Some(match message.role {
+						messages::Role::Assistant => completions::Role::Assistant,
+						messages::Role::User => completions::Role::User,
+						messages::Role::System => completions::Role::System,
+					});
 					model = message.model.clone();
 					service_tier = message.usage.service_tier.clone();
 					log.update(|r| {
