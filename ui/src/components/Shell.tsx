@@ -238,7 +238,7 @@ export function Shell() {
           </div>
         </header>
         <main className="content">
-          {runtime.data?.ui.configStoreMode == "read_only" && (
+          {runtime.data?.ui.configStoreMode == "readOnly" && (
             <StatusBanner state="info" title="Read-only mode">
               The UI is configured as read-only. Editing is disabled.
             </StatusBanner>
