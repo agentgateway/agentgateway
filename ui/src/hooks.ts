@@ -203,7 +203,7 @@ async function requireWritableRuntime(
     queryClient.getQueryData<Awaited<ReturnType<typeof getRuntimeInfo>>>([
       "runtime",
     ]) ?? (await getRuntimeInfo());
-  if (runtime.ui.storageMode == "readOnly") {
+  if (runtime.ui.configStoreMode == "readOnly") {
     throw new Error("The UI is configured as read-only.");
   }
   return runtime;
