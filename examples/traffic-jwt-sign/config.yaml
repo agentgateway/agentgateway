@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+binds:
+- port: 3000
+  listeners:
+  - protocol: HTTP
+    routes:
+    - name: jwt-sign
+      policies:
+        backendAuth:
+          jwtSign:
+            # Demo key only; generate your own and prefer a file reference:
+            #   openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 > signing-key.pem
+            #   signingKey:
+            #     file: ./signing-key.pem
+            signingKey: |
+              -----BEGIN PRIVATE KEY-----
+              MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgLzzSCp9GwtSu9U6R
+              3OIveZe93Vs7jy2IpOT2/Ieu+jWhRANCAASqHIGiZTO9Qgwnm2jKlomX/cRAthGw
+              Zr+wQ4bp3GVScNiij/+XFnsEzZb2kTx00l5t5H9uEFlVwD6/vZ14TEQu
+              -----END PRIVATE KEY-----
+            alg: ES256
+            kid: demo-key-1
+            claims:
+              iss: MYACCOUNT.MYUSER.SHA256:public-key-fingerprint
+              sub: MYACCOUNT.MYUSER
+              aud: http://127.0.0.1:8080
+            ttl: 300s
+        # Companion static headers some upstreams require alongside the JWT
+        # (e.g. Snowflake's X-Snowflake-Authorization-Token-Type) are regular
+        # request header modifications:
+        requestHeaderModifier:
+          set:
+            x-demo-authorization-token-type: KEYPAIR_JWT
+      backends:
+      - host: 127.0.0.1:8080

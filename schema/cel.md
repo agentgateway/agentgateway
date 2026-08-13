@@ -11,14 +11,16 @@
 |`request.pathAndQuery`|string|The path and query of the request URI. For example, `/path?foo=bar`.|
 |`request.version`|string|The version of the request. For example, `HTTP/1.1`.|
 |`request.headers`|object|The headers of the request.|
-|`request.body`|string|The body of the request. Warning: accessing the body will cause the body to be buffered.|
+|`request.body`|string|The request's body, buffered up to `maxBufferSize`. If the body exceeds the max buffer size,<br>this field is not available and will fail to evaluate.<br>Including this attribute in an expression will trigger the body to be buffered.|
+|`request.bodyPrefix`|string|The request body buffered up to `maxBufferSize`. If the complete body exceeds the limit,<br>this contains the first `maxBufferSize` bytes.|
 |`request.startTime`|string|The time the request started|
 |`request.endTime`|string|The time the request completed|
 |`response`|object|`response` contains attributes about the HTTP response|
 |`response.code`|integer|The HTTP status code of the response.|
 |`response.grpcStatus`|integer|The gRPC status code of the response, when present.|
 |`response.headers`|object|The headers of the response.|
-|`response.body`|string|The body of the response. Warning: accessing the body will cause the body to be buffered.|
+|`response.body`|string|The response's body, buffered up to `maxBufferSize`. If the body exceeds the max buffer size,<br>this field is not available and will fail to evaluate.<br>Including this attribute in an expression will trigger the body to be buffered.|
+|`response.bodyPrefix`|string|The response body buffered up to `maxBufferSize`. If the complete body exceeds the limit,<br>this contains the first `maxBufferSize` bytes.|
 |`proxy`|object|`proxy` contains proxy timing information for the request.|
 |`proxy.bind`|string|The bind that accepted the request.|
 |`proxy.gateway`|object|The selected Gateway.|
@@ -49,18 +51,20 @@
 |`llm.requestModel`|string|The model requested for the LLM request. This may differ from the actual model used.|
 |`llm.responseModel`|string|The model that actually served the LLM response.|
 |`llm.provider`|string|The provider of the LLM.|
-|`llm.inputTokens`|integer|The number of tokens in the input/prompt.|
+|`llm.inputTokens`|integer|The total number of tokens in the input/prompt, including tokens read from or written to<br>cache. This has consistent semantics across providers.|
+|`llm.providerInputTokens`|integer|The provider-reported number of tokens in the input/prompt. This is inconsistent across<br>providers: some include cached tokens while others exclude them.|
 |`llm.inputImageTokens`|integer|The number of image tokens in the input/prompt.|
 |`llm.inputTextTokens`|integer|The number of text tokens in the input/prompt.<br>Note: this field is only set in multi-modal calls where the total token count is split out by<br>text/image/audio; for standard all-text calls, this is unset.|
 |`llm.inputAudioTokens`|integer|The number of audio tokens in the input/prompt.|
 |`llm.cachedInputTokens`|integer|The number of tokens in the input/prompt read from cache (savings)|
-|`llm.cacheCreationInputTokens`|integer|Tokens written to cache (costs)<br>Not present with OpenAI|
+|`llm.cacheCreationInputTokens`|integer|Tokens written to cache (costs)|
 |`llm.outputTokens`|integer|The number of tokens in the output/completion.|
 |`llm.outputImageTokens`|integer|The number of image tokens in the output/completion.|
 |`llm.outputTextTokens`|integer|The number of text tokens in the output/completion.|
 |`llm.outputAudioTokens`|integer|The number of audio tokens in the output/completion.<br>Note: this field is only set in multi-modal calls where the total token count is split out by<br>text/image/audio; for standard all-text calls, this is unset.|
 |`llm.reasoningTokens`|integer|The number of reasoning tokens in the output/completion.|
-|`llm.totalTokens`|integer|The total number of tokens for the request.|
+|`llm.totalTokens`|integer|The total number of input and output tokens for the request. Input tokens include tokens read<br>from or written to cache, giving this field consistent semantics across providers.|
+|`llm.providerTotalTokens`|integer|The provider-reported total number of tokens for the request. This is inconsistent across<br>providers because some include cached input tokens while others exclude them.|
 |`llm.serviceTier`|string|The service tier the provider served the request under.|
 |`llm.timeToFirstToken`|string|Time from request start until the first response token is received.|
 |`llm.timePerOutputToken`|string|Average time from first response token to response completion per output token.|
@@ -69,6 +73,10 @@
 |`llm.prompt[].role`|string|Message role, such as "system", "user", or "assistant".|
 |`llm.prompt[].content`|string|Message text content.|
 |`llm.completion`|[]string|The completion from the LLM. Warning: accessing this has some performance impacts for large responses.|
+|`llm.toolCalls`|[]object|The tool calls from the LLM. Warning: accessing this has some performance impacts for large responses.|
+|`llm.toolCalls[].id`|string||
+|`llm.toolCalls[].name`|string||
+|`llm.toolCalls[].arguments`|any||
 |`llm.params`|object|The parameters for the LLM request.|
 |`llm.params.temperature`|number||
 |`llm.params.top_p`|number||
@@ -133,6 +141,9 @@
 |`mcp.resource`|object||
 |`mcp.resource.target`|string|The target of the resource|
 |`mcp.resource.name`|string|The name of the resource|
+|`mcp.task`|object||
+|`mcp.task.target`|string|The target handling the task.|
+|`mcp.task.name`|string|The task ID.|
 |`backend`|object|`backend` contains information about the backend being used.|
 |`backend.name`|string|The name of the backend being used. For example, `my-service` or `service/my-namespace/my-service:8080`.|
 |`backend.type`|enum|The type of backend.<br>Possible values: `ai`, `mcp`, `static`, `dynamic`, `service`, `unknown`.|

@@ -18,6 +18,7 @@ export function GatewayBindingEditor(props: {
   gatewayLabel?: string;
   portTooltip?: string;
   portPlaceholder?: string;
+  disabled?: boolean;
   onChange: (value: GatewayBindingValue) => void;
 }) {
   const options = gatewayOptions(props.config);
@@ -40,6 +41,7 @@ export function GatewayBindingEditor(props: {
         tooltip={props.portTooltip}
         value={props.value.port}
         placeholder={props.portPlaceholder ?? String(props.defaultPort)}
+        disabled={props.disabled}
         onChange={(port) => props.onChange({ port, gateways: null })}
       />
     );
@@ -63,6 +65,7 @@ export function GatewayBindingEditor(props: {
                 ]
               : options
           }
+          disabled={props.disabled}
           onChange={(value) => {
             if (value === dedicatedPort) {
               props.onChange({
@@ -81,6 +84,7 @@ export function GatewayBindingEditor(props: {
           tooltip={props.portTooltip}
           value={props.value.port}
           placeholder={props.portPlaceholder ?? String(props.defaultPort)}
+          disabled={props.disabled}
           onChange={(port) => props.onChange({ port, gateways: null })}
         />
       ) : null}
@@ -93,12 +97,14 @@ function PortField(props: {
   tooltip?: string;
   value?: number | null;
   placeholder: string;
+  disabled?: boolean;
   onChange: (port: number | null) => void;
 }) {
   return (
     <Field label={props.label} tooltip={props.tooltip}>
       <input
         value={props.value?.toString() ?? ""}
+        disabled={props.disabled}
         onChange={(event) => {
           const parsed = Number(event.target.value);
           props.onChange(

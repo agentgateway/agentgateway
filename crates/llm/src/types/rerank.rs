@@ -95,8 +95,15 @@ pub struct BilledUnits {
 }
 
 impl RequestType for Request {
+	fn body_is_json(&self) -> bool {
+		true
+	}
 	fn model(&mut self) -> &mut Option<String> {
 		&mut self.model
+	}
+
+	fn to_value(&self) -> serde_json::Result<serde_json::Value> {
+		serde_json::to_value(self)
 	}
 
 	fn prepend_prompts(&mut self, _prompts: Vec<SimpleChatCompletionMessage>) {}
@@ -125,10 +132,14 @@ impl RequestType for Request {
 	fn set_messages(&mut self, _messages: Vec<SimpleChatCompletionMessage>) {
 		unimplemented!("set_messages is used for prompt guard; prompt guard is disabled for rerank.")
 	}
+
+	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(&mut String)) {
+		unimplemented!("visit_text_mut is used for prompt guard; prompt guard is disabled for rerank.")
+	}
 }
 
 impl crate::types::ResponseType for Response {
-	fn to_llm_response(&self, _include_completion_in_log: bool) -> crate::LLMResponse {
+	fn to_llm_response(&self, _log_content: crate::LogContentFields) -> crate::LLMResponse {
 		// Cohere reports counts in `meta.tokens`; fall back to `billed_units.total_tokens`
 		// (e.g. Voyage's usage normalized into meta).
 		let input_tokens = self.meta.as_ref().and_then(|m| {
@@ -164,6 +175,8 @@ impl crate::types::ResponseType for Response {
 	fn serialize(&self) -> serde_json::Result<Vec<u8>> {
 		serde_json::to_vec(self)
 	}
+
+	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(&mut String)) {}
 }
 
 /// Parse a rerank response, accepting either Cohere's `results` or Voyage's `data` key.
@@ -241,7 +254,12 @@ mod tests {
 		use crate::types::ResponseType;
 		let raw = r#"{"results":[{"index":0,"relevance_score":0.9}],"meta":{"billed_units":{"search_units":1},"tokens":{"input_tokens":214.0,"output_tokens":2.0}}}"#;
 		let resp: Response = serde_json::from_str(raw).unwrap();
-		assert_eq!(resp.to_llm_response(false).input_tokens, Some(214));
+		assert_eq!(
+			resp
+				.to_llm_response(crate::LogContentFields::default())
+				.input_tokens,
+			Some(214)
+		);
 		// Round-trip keeps the meta shape.
 		let back = serde_json::to_string(&resp).unwrap();
 		assert!(back.contains("\"input_tokens\":214"));

@@ -17,7 +17,7 @@ use crate::*;
 const TEST_OIDC_JWKS: &str = r#"{"keys":[{"use":"sig","kty":"EC","kid":"kid-1","crv":"P-256","alg":"ES256","x":"WM7udBHga09KxC5kxq6GhrZ9M3Y8S9ZThq_XxsOcDhk","y":"xc7T4afkXmwjEbJMzQXCdQcU3PZKiLFlHl23GE1z4ug"}]}"#;
 
 struct ClearTracingEnv {
-	_guard: std::sync::MutexGuard<'static, ()>,
+	_guard: tokio::sync::MutexGuard<'static, ()>,
 	values: Vec<(&'static str, Option<std::ffi::OsString>)>,
 }
 
@@ -219,7 +219,9 @@ fn selected_ai_provider(normalized: &NormalizedLocalConfig) -> Arc<NamedAIProvid
 	let Backend::AI(_, ai) = &backend.backend else {
 		panic!("expected generated AI backend");
 	};
-	let (provider, _handle) = ai.select_provider().expect("expected selected provider");
+	let (provider, _handle) = ai
+		.select_provider(None)
+		.expect("expected selected provider");
 	provider
 }
 
@@ -261,7 +263,7 @@ binds:
 		.backends
 		.iter()
 		.find_map(|backend| match &backend.backend {
-			Backend::Dynamic(name, ()) => Some(name),
+			Backend::Dynamic(name, _) => Some(name),
 			_ => None,
 		})
 		.expect("normalized dynamic backend");
@@ -269,6 +271,34 @@ binds:
 		backend.to_string(),
 		"/ns/name/bind/1080/listener0/default/route0/backend0"
 	);
+}
+
+#[tokio::test]
+async fn test_local_dynamic_backend_target_expression_normalizes() {
+	let normalized = normalize_test_yaml(
+		r#"
+binds:
+- port: 1080
+  listeners:
+  - routes:
+    - backends:
+      - dynamic:
+          target: extproc.workerTarget
+"#,
+	)
+	.await
+	.expect("dynamic backend with a target expression should normalize");
+
+	let expr = normalized
+		.backends
+		.iter()
+		.find_map(|backend| match &backend.backend {
+			Backend::Dynamic(_, expr) => Some(expr.clone()),
+			_ => None,
+		})
+		.expect("normalized dynamic backend")
+		.expect("target expression should be set");
+	assert_eq!(expr.original_expression, "extproc.workerTarget");
 }
 
 #[test]
@@ -454,6 +484,45 @@ async fn test_llm_virtual_model_conditional_config() {
 	test_config_parsing("llm_virtual_model_conditional").await;
 }
 
+#[test]
+fn test_llm_route_types_reuse_defaults_and_override_passthrough() {
+	let default_routes = super::llm_route_types(None);
+	assert!(
+		default_routes
+			.iter()
+			.any(|(path, route_type)| path.as_str() == "/v1/messages"
+				&& *route_type == crate::llm::RouteType::Messages),
+		"default route table should include explicit message endpoint"
+	);
+	assert!(
+		default_routes
+			.iter()
+			.any(|(path, route_type)| path.as_str() == "*"
+				&& *route_type == crate::llm::RouteType::Passthrough),
+		"default route table should include passthrough wildcard"
+	);
+
+	let detect_passthrough = super::llm_route_types(Some(&super::LocalLLMPassthrough::Detect));
+	assert!(
+		detect_passthrough
+			.iter()
+			.any(|(path, route_type)| path.as_str() == "/v1/messages"
+				&& *route_type == crate::llm::RouteType::Messages),
+		"passthrough override should preserve explicit route defaults"
+	);
+	assert!(
+		detect_passthrough.iter().any(
+			|(path, route_type)| path.as_str() == "*" && *route_type == crate::llm::RouteType::Detect
+		),
+		"passthrough override should replace wildcard fallback"
+	);
+}
+
+#[tokio::test]
+async fn test_backend_auth_credentials_config() {
+	test_config_parsing("backend_auth_credentials").await;
+}
+
 #[tokio::test]
 async fn test_llm_conditional_virtual_model_requires_fallback_last() {
 	let err = normalize_test_config(
@@ -577,6 +646,66 @@ llm:
 		err
 			.to_string()
 			.contains("model name wildcard must be either at the beginning or the end: 'foo*bar'"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_llm_model_accepts_stable_id() {
+	normalize_test_config(
+		r#"
+llm:
+  models:
+  - id: 4f8572ff-20c4-49c1-b7c3-d1519ad1e860
+    name: ollama/*
+    provider: ollama
+"#,
+	)
+	.await
+	.expect("model id should be accepted");
+}
+
+#[tokio::test]
+async fn test_llm_model_rejects_duplicate_id() {
+	let err = normalize_test_config(
+		r#"
+llm:
+  models:
+  - id: shared
+    name: ollama/*
+    provider: ollama
+  - id: shared
+    name: openai/*
+    provider: openAI
+"#,
+	)
+	.await
+	.expect_err("duplicate model id should fail");
+	assert!(
+		err
+			.to_string()
+			.contains("llm.models contains duplicate model id: shared"),
+		"{err:?}"
+	);
+}
+
+#[tokio::test]
+async fn test_llm_model_rejects_empty_id() {
+	let err = normalize_test_config(
+		r#"
+llm:
+  models:
+  - id: ""
+    name: ollama/*
+    provider: ollama
+"#,
+	)
+	.await
+	.expect_err("empty model id should fail");
+	assert!(
+		err
+			.to_string()
+			.contains("llm.models model id cannot be empty"),
 		"{err:?}"
 	);
 }
@@ -728,6 +857,54 @@ llm:
 }
 
 #[tokio::test]
+async fn test_llm_openai_inline_moderation_config() {
+	let normalized = normalize_test_yaml(
+		r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - ai:
+          name: openai
+          provider:
+            openAI:
+              model: gpt-5
+              moderation:
+                policy:
+                  input:
+                    mode: block
+                  output:
+                    mode: score
+"#,
+	)
+	.await
+	.expect("OpenAI inline moderation config should normalize");
+
+	let provider = selected_ai_provider(&normalized);
+	let AIProvider::OpenAI(openai_provider) = &provider.provider else {
+		panic!("expected OpenAI provider");
+	};
+	let moderation = openai_provider
+		.moderation
+		.as_ref()
+		.expect("expected inline moderation config");
+	assert_eq!(moderation.model.as_str(), "omni-moderation-latest");
+	let policy = moderation
+		.policy
+		.as_ref()
+		.expect("expected moderation policy");
+	assert_eq!(
+		policy.input.as_ref().map(|config| config.mode),
+		Some(crate::llm::openai::ModerationMode::Block)
+	);
+	assert_eq!(
+		policy.output.as_ref().map(|config| config.mode),
+		Some(crate::llm::openai::ModerationMode::Score)
+	);
+}
+
+#[tokio::test]
 async fn test_llm_synthetic_provider_defaults_do_not_override_host_override() {
 	let normalized = normalize_test_config(
 		r#"
@@ -820,72 +997,16 @@ async fn test_mcp_simple_config() {
 }
 
 #[tokio::test]
-async fn test_llm_mcp_same_port_share_listener_routes() {
-	let normalized = normalize_test_yaml(
-		r#"
-llm:
-  port: 3000
-  models:
-  - name: gpt-4
-    provider: openAI
-mcp:
-  targets:
-  - name: time
-    stdio:
-      cmd: uvx
-"#,
-	)
-	.await
-	.expect("same-port LLM and MCP should normalize");
-
-	assert_eq!(normalized.binds.len(), 1);
-	assert_eq!(normalized.binds[0].address.port(), 3000);
-	assert_eq!(
-		normalized.binds[0]
-			.listeners
-			.iter()
-			.map(|listener| listener.key.as_str())
-			.collect::<Vec<_>>(),
-		vec!["llm"],
-	);
-	assert_eq!(normalized.listener_routes.len(), 1);
-	assert_eq!(normalized.listener_routes[0].0.as_str(), "llm");
-	let routes = &normalized.listener_routes[0].1;
-	assert!(
-		routes
-			.iter()
-			.any(|route| route.key.as_str() == "llm:request")
-	);
-	let mcp_route = routes
-		.iter()
-		.find(|route| route.key.as_str() == "mcp:default")
-		.expect("expected MCP route on shared listener");
-	assert_eq!(
-		mcp_route
-			.matches
-			.iter()
-			.map(|route_match| match &route_match.path {
-				PathMatch::PathPrefix(path) => path.as_str(),
-				other => panic!("expected path prefix match, got {other:?}"),
-			})
-			.collect::<Vec<_>>(),
-		vec!["/mcp", "/sse", "/.well-known"],
-	);
-}
-
-#[tokio::test]
-async fn test_llm_mcp_same_port_rejects_llm_tls() {
+async fn test_llm_mcp_same_port_is_rejected() {
 	let err = normalize_test_yaml(
 		r#"
 llm:
   port: 3000
-  tls:
-    cert: inline
-    key: inline
   models:
   - name: gpt-4
     provider: openAI
 mcp:
+  port: 3000
   targets:
   - name: time
     stdio:
@@ -893,11 +1014,11 @@ mcp:
 "#,
 	)
 	.await
-	.expect_err("same-port LLM and MCP should reject llm.tls");
+	.expect_err("same-port LLM and MCP should be rejected");
 	assert!(
 		err
 			.to_string()
-			.contains("top-level llm and mcp cannot share a port when llm.tls is configured"),
+			.contains("top-level llm and mcp cannot use the same port 3000"),
 		"{err:?}"
 	);
 }
@@ -1317,6 +1438,34 @@ binds:
 }
 
 #[tokio::test]
+async fn test_session_affinity_service_backend_config() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - backends:
+      - service:
+          name: default/my-model
+          port: 8000
+        policies:
+          sessionAffinity:
+            source: request.headers["x-session-id"]
+"#;
+
+	let normalized = normalize_test_config(input)
+		.await
+		.expect("service backends should allow session affinity");
+	let policies = &normalized.listener_routes[0].1[0].backends[0].inline_policies;
+	assert!(
+		policies
+			.iter()
+			.any(|policy| matches!(policy, BackendTrafficPolicy::SessionAffinity(_))),
+		"expected a normalized session affinity policy"
+	);
+}
+
+#[tokio::test]
 async fn test_local_ext_authz_conditional_policy() {
 	let input = r#"
 binds:
@@ -1562,6 +1711,51 @@ binds:
 		.expect("expected buffer policy");
 	assert_eq!(buffer.request.as_ref().unwrap().max_bytes, Some(10));
 	assert_eq!(buffer.response.as_ref().unwrap().max_bytes, Some(20));
+}
+
+#[tokio::test]
+async fn test_delay_policy() {
+	let input = r#"
+binds:
+- port: 3000
+  listeners:
+  - routes:
+    - policies:
+        delay:
+          duration: 2s
+      backends:
+      - host: 127.0.0.1:8000
+    - policies:
+        delay:
+          duration: 'request.headers["x-chaos"] == "1" ? 500 : 0'
+      backends:
+      - host: 127.0.0.1:8000
+"#;
+
+	let normalized = normalize_test_yaml(input).await.unwrap();
+	let routes = &normalized.listener_routes[0].1;
+
+	let delay_of = |i: usize| {
+		routes[i]
+			.inline_policies
+			.iter()
+			.find_map(|p| match p {
+				TrafficPolicy::Delay(p) => Some(p),
+				_ => None,
+			})
+			.expect("expected delay policy")
+	};
+
+	// A bare duration literal is wrapped into a CEL `duration(...)` call.
+	assert_eq!(
+		delay_of(0).duration.original_expression,
+		r#"duration("2s")"#
+	);
+	// A CEL expression is preserved as-is.
+	assert_eq!(
+		delay_of(1).duration.original_expression,
+		r#"request.headers["x-chaos"] == "1" ? 500 : 0"#
+	);
 }
 
 #[tokio::test]
@@ -2073,4 +2267,52 @@ binds:
 		err.to_string().contains("client_secret"),
 		"returned unexpected error: {err}"
 	);
+}
+
+#[test]
+fn test_de_backend_auth_accepts_each_shape() {
+	use serde::de::IntoDeserializer;
+
+	let parse = |v: serde_json::Value| -> super::LocalBackendAuth {
+		super::de_backend_auth::<serde_json::Value>(v.into_deserializer())
+			.unwrap()
+			.unwrap()
+	};
+
+	let copilot_scalar = parse(serde_json::json!("copilot"));
+	assert!(matches!(
+		copilot_scalar.kind,
+		Some(super::LocalBackendAuthKind::Copilot)
+	));
+	assert!(copilot_scalar.credentials.is_empty());
+
+	let plain_key = parse(serde_json::json!({"key": "plain-secret"}));
+	assert!(matches!(
+		plain_key.kind,
+		Some(super::LocalBackendAuthKind::Key { location: None, .. })
+	));
+	assert!(plain_key.credentials.is_empty());
+
+	let full_key = parse(serde_json::json!({"key": {"value": "explicit-secret"}}));
+	assert!(matches!(
+		full_key.kind,
+		Some(super::LocalBackendAuthKind::Key { .. })
+	));
+	assert!(full_key.credentials.is_empty());
+
+	let full_with_credentials = parse(serde_json::json!({
+		"key": {"value": "explicit-secret"},
+		"credentials": [{"location": {"header": {"name": "x-token"}}, "key": "tok"}],
+	}));
+	assert!(matches!(
+		full_with_credentials.kind,
+		Some(super::LocalBackendAuthKind::Key { .. })
+	));
+	assert_eq!(full_with_credentials.credentials.len(), 1);
+
+	let credentials_only = parse(serde_json::json!({
+		"credentials": [{"location": {"header": {"name": "x-token"}}, "key": "tok"}],
+	}));
+	assert!(credentials_only.kind.is_none());
+	assert_eq!(credentials_only.credentials.len(), 1);
 }

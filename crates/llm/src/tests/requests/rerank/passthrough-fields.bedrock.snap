@@ -11,36 +11,46 @@ info:
   truncation: END
 ---
 {
-  "queries": [
-    {
-      "type": "TEXT",
-      "textQuery": {
-        "text": "q"
-      }
-    }
-  ],
-  "sources": [
-    {
-      "type": "INLINE",
-      "inlineDocumentSource": {
+  "request": {
+    "queries": [
+      {
         "type": "TEXT",
-        "textDocument": {
-          "text": "a"
+        "textQuery": {
+          "text": "q"
         }
       }
-    }
-  ],
-  "rerankingConfiguration": {
-    "type": "BEDROCK_RERANKING_MODEL",
-    "bedrockRerankingConfiguration": {
-      "modelConfiguration": {
-        "modelArn": "arn:aws:bedrock:us-west-2::foundation-model/cohere.rerank-v3-5:0",
-        "additionalModelRequestFields": {
-          "truncation": "END",
-          "max_tokens_per_doc": 512
+    ],
+    "sources": [
+      {
+        "type": "INLINE",
+        "inlineDocumentSource": {
+          "type": "TEXT",
+          "textDocument": {
+            "text": "a"
+          }
         }
-      },
-      "numberOfResults": 1
+      }
+    ],
+    "rerankingConfiguration": {
+      "type": "BEDROCK_RERANKING_MODEL",
+      "bedrockRerankingConfiguration": {
+        "modelConfiguration": {
+          "modelArn": "arn:aws:bedrock:us-west-2::foundation-model/cohere.rerank-v3-5:0",
+          "additionalModelRequestFields": {
+            "truncation": "END",
+            "max_tokens_per_doc": 512
+          }
+        },
+        "numberOfResults": 1
+      }
     }
+  },
+  "parsed": {
+    "input_format": "Rerank",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "rerank-v3.5",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {}
   }
 }

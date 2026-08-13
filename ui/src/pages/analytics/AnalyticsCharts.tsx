@@ -807,9 +807,9 @@ function formatAxisCost(value: number) {
 }
 
 function measureLabel(measure: AnalyticsMeasure) {
-  if (measure === "requests") return "Requests";
-  if (measure === "cost") return "Cost";
-  return "Tokens";
+  if (measure === "requests") return tr("copy.requests");
+  if (measure === "cost") return tr("copy.cost");
+  return tr("copy.tokens");
 }
 
 function formatMeasureValue(value: number, measure: AnalyticsMeasure) {

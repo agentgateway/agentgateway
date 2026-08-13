@@ -203,20 +203,17 @@ func agwPluginFactory(agwCollections *plugins.AgwCollections, resolver remotehtt
 func BuildMockPolicyContext(t test.Failer, inputs []any) plugins.PolicyCtx {
 	collections := BuildMockCollection(t, inputs)
 	resolver := BuildRemoteHTTPResolver(collections)
-	referenceTypes := plugins.DefaultReferenceTypes(collections)
-	grants := translator.BuildReferenceGrants(translator.ReferenceGrantsCollection(
-		collections.ReferenceGrants,
-		referenceTypes.KnownFromReferences,
-		referenceTypes.KnownToReferences,
-		collections.KrtOpts,
-	))
+	grants := BuildReferenceGrants(collections)
 	return plugins.PolicyCtx{
 		Krt:         krt.TestingDummyContext{},
 		Collections: collections,
 		Grants:      grants,
 		References:  plugins.BuildReferenceIndex(nil, nil, plugins.DefaultReferenceTypes(collections)),
 		Resolver:    resolver,
-		JWKSLookup:  jwks.NewLookup(jwks.NewPersistedEntriesFromCollection(collections.ConfigMaps, jwks.DefaultJwksStorePrefix, collections.SystemNamespace, collections.KrtOpts.ToOptions("jwks/PersistedEntries")...), jwks.NewResolver(resolver)),
+		JWKSLookup: jwks.NewLookup(
+			jwks.NewPersistedEntriesFromCollection(collections.ConfigMaps, jwks.DefaultJwksStorePrefix, collections.SystemNamespace, collections.KrtOpts.ToOptions("jwks/PersistedEntries")...),
+			jwks.NewResolver(resolver, grants, collections.Settings.BackendRefGrantMode),
+		),
 
 		CredentialResolver: plugins.DefaultCredentialResolverFactory(collections),
 	}
@@ -247,6 +244,7 @@ func BuildMockCollection(t test.Failer, inputs []any) *plugins.AgwCollections {
 		ListenerSets:         krttest.GetMockCollection[*gwv1.ListenerSet](mock),
 		InferencePools:       krttest.GetMockCollection[*inf.InferencePool](mock),
 		Backends:             krttest.GetMockCollection[*agwv1alpha1.AgentgatewayBackend](mock),
+		Models:               krttest.GetMockCollection[*agwv1alpha1.AgentgatewayModel](mock),
 		AgentgatewayPolicies: krttest.GetMockCollection[*agwv1alpha1.AgentgatewayPolicy](mock),
 		ControllerName:       wellknown.DefaultAgwControllerName,
 		SystemNamespace:      "agentgateway-system",
@@ -258,9 +256,24 @@ func BuildMockCollection(t test.Failer, inputs []any) *plugins.AgwCollections {
 	return col
 }
 
+func BuildReferenceGrants(collections *plugins.AgwCollections) translator.ReferenceGrants {
+	referenceTypes := plugins.DefaultReferenceTypes(collections)
+	grants := translator.ReferenceGrantsCollection(
+		collections.ReferenceGrants,
+		referenceTypes.KnownFromReferences,
+		referenceTypes.KnownToReferences,
+		collections.KrtOpts,
+	)
+	// Tests fetch through krt.TestingDummyContext, which does not block on sync,
+	// so wait here or the first lookup sees an empty collection.
+	grants.WaitUntilSynced(collections.KrtOpts.Stop)
+	return translator.BuildReferenceGrants(grants)
+}
+
 func BuildRemoteHTTPResolver(collections *plugins.AgwCollections) remotehttp.Resolver {
 	return remotehttp.NewResolver(remotehttp.Inputs{
 		ConfigMaps:     collections.ConfigMaps,
+		Secrets:        collections.Secrets,
 		Services:       collections.Services,
 		Backends:       collections.Backends,
 		PolicySelector: policyselection.NewSelector(collections.AgentgatewayPolicies, collections.BackendTLSPolicies),
@@ -269,5 +282,12 @@ func BuildRemoteHTTPResolver(collections *plugins.AgwCollections) remotehttp.Res
 
 func BuildJWKSLookup(collections *plugins.AgwCollections) jwks.Lookup {
 	persistedJWKS := jwks.NewPersistedEntriesFromCollection(collections.ConfigMaps, jwks.DefaultJwksStorePrefix, collections.SystemNamespace)
-	return jwks.NewLookup(persistedJWKS, jwks.NewResolver(BuildRemoteHTTPResolver(collections)))
+	return jwks.NewLookup(
+		persistedJWKS,
+		jwks.NewResolver(
+			BuildRemoteHTTPResolver(collections),
+			BuildReferenceGrants(collections),
+			collections.Settings.BackendRefGrantMode,
+		),
+	)
 }

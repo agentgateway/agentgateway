@@ -22,6 +22,17 @@ func TestBasicAuth(tt *testing.T) {
 	})
 }
 
+func TestBasicAuthListenerSetPolicy(tt *testing.T) {
+	t := New(tt, base.WithMinGwApiVersion(base.GwApiRequireListenerSet))
+	t.Apply(manifest("basicauth", "secured-listenerset-policy.yaml"))
+
+	t.HTTPRouteAccepted("route-secure-listenerset", base.Namespace)
+
+	assertBasicAuthListenerSetResponse(t, basicAuth("alice", "alicepassword"), http.StatusOK)
+	assertBasicAuthListenerSetResponse(t, basicAuth("alice", "boom"), http.StatusUnauthorized)
+	assertBasicAuthListenerSetResponse(t, "", http.StatusUnauthorized)
+}
+
 func testBasicAuthRoutePolicy(t base.Test) {
 	t.Apply(
 		manifest("basicauth", "insecure-route.yaml"),
@@ -61,6 +72,16 @@ func assertBasicAuthResponse(t base.Test, host, auth string, status int) {
 		opts = append(opts, curl.WithHeader("Authorization", "Basic "+auth))
 	}
 	t.Send(host, base.Expect(status), opts...)
+}
+
+func assertBasicAuthListenerSetResponse(t base.Test, auth string, status int) {
+	opts := []curl.Option{
+		curl.WithPort(base.BaseGateway.PortForRemote(8080)),
+	}
+	if auth != "" {
+		opts = append(opts, curl.WithHeader("Authorization", "Basic "+auth))
+	}
+	t.Send("securelistenerset.com", base.Expect(status), opts...)
 }
 
 func basicAuth(username, password string) string {

@@ -29,13 +29,13 @@ func (r *defaultResolver) resolveTLS(
 	backendPolicies *agentgateway.BackendFull,
 ) (*resolvedTLS, error) {
 	if backendPolicies != nil && backendPolicies.TLS != nil {
-		return resolvedTLSFromBackendTLS(krtctx, r.cfgmaps, namespace, backendPolicies.TLS)
+		return resolvedTLSFromBackendTLS(krtctx, r.cfgmaps, r.secrets, namespace, backendPolicies.TLS)
 	}
 	if r.policySelector == nil {
 		return nil, nil
 	}
 	if agwPolicy := r.policySelector.BestMatchingAgentgatewayPolicy(krtctx, namespace, group, kind, name, agwSections); agwPolicy != nil && agwPolicy.Spec.Backend != nil && agwPolicy.Spec.Backend.TLS != nil {
-		return resolvedTLSFromBackendTLS(krtctx, r.cfgmaps, namespace, agwPolicy.Spec.Backend.TLS)
+		return resolvedTLSFromBackendTLS(krtctx, r.cfgmaps, r.secrets, namespace, agwPolicy.Spec.Backend.TLS)
 	}
 	if backendTLSPolicy := r.policySelector.BestMatchingBackendTLSPolicy(krtctx, namespace, group, kind, name, backendTLSSections); backendTLSPolicy != nil {
 		return resolvedTLSFromBackendTLSPolicy(krtctx, r.cfgmaps, namespace, backendTLSPolicy)
@@ -76,6 +76,7 @@ func resolvedTLSFromBackendTLSPolicy(
 func resolvedTLSFromBackendTLS(
 	krtctx krt.HandlerContext,
 	cfgmaps krt.Collection[*corev1.ConfigMap],
+	secrets krt.Collection[*corev1.Secret],
 	namespace string,
 	btls *agentgateway.BackendTLS,
 ) (*resolvedTLS, error) {
@@ -95,7 +96,7 @@ func resolvedTLSFromBackendTLS(
 	}
 
 	if len(btls.CACertificateRefs) > 0 {
-		rootCAs, caBundleHash, err := caBundleFromConfigMaps(krtctx, cfgmaps, namespace, btls.CACertificateRefs)
+		rootCAs, caBundleHash, err := caBundleFromBackendTLSRefs(krtctx, cfgmaps, secrets, namespace, btls.CACertificateRefs)
 		if err != nil {
 			return nil, err
 		}

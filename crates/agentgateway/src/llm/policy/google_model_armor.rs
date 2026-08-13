@@ -9,7 +9,7 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
-use crate::http::auth::{BackendAuth, GcpAuth};
+use crate::http::auth::{BackendAuthKind, GcpAuth};
 use crate::http::jwt::Claims;
 use crate::json;
 use crate::llm::RequestType;
@@ -327,7 +327,7 @@ impl GoogleModelArmor {
 		pols.push(BackendTrafficPolicy::BackendTLS(
 			crate::http::backendtls::SYSTEM_TRUST.clone(),
 		));
-		pols.push(BackendTrafficPolicy::BackendAuth(BackendAuth::Gcp(
+		pols.push(BackendTrafficPolicy::backend_auth(BackendAuthKind::Gcp(
 			GcpAuth::default(),
 		)));
 		pols
@@ -371,7 +371,7 @@ async fn send_model_armor_request<T: Serialize>(
 
 	let mock_be = Backend::Dynamic(
 		ResourceName::new(strng::literal!("_google-model-armor"), strng::literal!("")),
-		(),
+		None,
 	);
 
 	let resp = client

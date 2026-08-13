@@ -1,0 +1,43 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/embeddings/full.json
+info:
+  model: text-embedding-004
+  input:
+    - hello
+    - world
+  dimensions: 512
+  task_type: RETRIEVAL_DOCUMENT
+  title: My Document
+  auto_truncate: true
+---
+{
+  "request": {
+    "instances": [
+      {
+        "content": "hello",
+        "task_type": "RETRIEVAL_DOCUMENT",
+        "title": "My Document"
+      },
+      {
+        "content": "world",
+        "task_type": "RETRIEVAL_DOCUMENT",
+        "title": "My Document"
+      }
+    ],
+    "parameters": {
+      "autoTruncate": true,
+      "outputDimensionality": 512
+    }
+  },
+  "parsed": {
+    "input_format": "Embeddings",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "text-embedding-004",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {
+      "dimensions": 512
+    }
+  }
+}

@@ -494,6 +494,13 @@ impl TraceReceiver {
 	pub async fn recv(&mut self) -> Option<Message> {
 		self.receiver.recv().await
 	}
+
+	#[cfg(test)]
+	pub(crate) fn closed_for_test() -> Self {
+		let (sender, receiver) = tokio::sync::mpsc::channel(1);
+		drop(sender);
+		Self { id: 0, receiver }
+	}
 }
 
 impl tokio_stream::Stream for TraceReceiver {

@@ -8,7 +8,7 @@ import {
   X,
   XCircle,
 } from "lucide-react";
-import yaml from "js-yaml";
+import { dump } from "js-yaml";
 import { useTranslation } from "react-i18next";
 import {
   useEffect,
@@ -581,7 +581,9 @@ function clamp(value: number, min: number, max: number) {
 export function Drawer(props: {
   title: string;
   children: ReactNode;
-  footer?: ReactNode | ((requestClose: () => void) => ReactNode);
+  footer?:
+    | ReactNode
+    | ((requestClose: () => void, dirty: boolean) => ReactNode);
   headerActions?: ReactNode;
   onClose: () => void;
   variant?: "default" | "nested";
@@ -647,7 +649,7 @@ export function Drawer(props: {
     const target = event.target as HTMLElement;
     if (
       target.closest(
-        '[role="option"], [role="radio"], .segmented-control button',
+        '[role="option"], [role="radio"], .segmented-control button, .choice-pill',
       )
     )
       setFormChanged(true);
@@ -734,7 +736,7 @@ export function Drawer(props: {
           {props.footer ? (
             <div className="drawer-footer">
               {typeof props.footer === "function"
-                ? props.footer(requestClose)
+                ? props.footer(requestClose, dirty)
                 : props.footer}
             </div>
           ) : null}
@@ -955,9 +957,10 @@ export function JsonBlock(props: { value: unknown }) {
 }
 
 export function YamlBlock(props: { value: unknown }) {
-  const text = yaml
-    .dump(props.value, { noRefs: true, lineWidth: 100 })
-    .replace(/\n$/, "");
+  const text = dump(props.value, { noRefs: true, lineWidth: 100 }).replace(
+    /\n$/,
+    "",
+  );
   return <YamlTextBlock value={text} />;
 }
 

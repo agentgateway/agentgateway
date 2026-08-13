@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"google.golang.org/protobuf/types/known/durationpb"
 	"istio.io/istio/pkg/ptr"
 
 	"github.com/agentgateway/agentgateway/api"
@@ -91,9 +90,9 @@ func translateFrontendPolicyToAgw(
 func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
 	tracing := policy.Spec.Frontend.Tracing
 	var errs []error
-	provider, err := BuildBackendRef(ctx, tracing.BackendRef, policy.Namespace)
+	provider, inlinePolicies, parsedURL, err := buildPolicyBackendEndpoint(ctx, tracing.PolicyBackendEndpoint, policy.Namespace)
 	if err != nil {
-		errs = append(errs, fmt.Errorf("failed to translate tracing backend ref: %v", err))
+		errs = append(errs, fmt.Errorf("failed to translate tracing backend: %v", err))
 	}
 
 	var addAttributes []*api.FrontendPolicySpec_TracingAttribute
@@ -150,6 +149,9 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 	var path *string
 	if tracing.Path != nil {
 		path = new(*tracing.Path)
+	} else if parsedURL != nil && parsedURL.EscapedPath() != "" {
+		v := parsedURL.EscapedPath()
+		path = &v
 	}
 
 	var protocol api.FrontendPolicySpec_Tracing_Protocol
@@ -162,6 +164,9 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 		// default to HTTP
 		protocol = api.FrontendPolicySpec_Tracing_GRPC
 	}
+	if parsedURL != nil && parsedURL.EscapedPath() != "" && protocol != api.FrontendPolicySpec_Tracing_HTTP {
+		errs = append(errs, fmt.Errorf("frontend tracing url path is only valid with protocol HTTP"))
+	}
 
 	tracingPolicy := &api.Policy{
 		Key:  name + frontendTracingPolicySuffix,
@@ -170,6 +175,7 @@ func translateFrontendTracing(ctx PolicyCtx, policy *agentgateway.AgentgatewayPo
 			Frontend: &api.FrontendPolicySpec{
 				Kind: &api.FrontendPolicySpec_Tracing_{Tracing: &api.FrontendPolicySpec_Tracing{
 					ProviderBackend: provider,
+					InlinePolicies:  inlinePolicies,
 					Attributes:      addAttributes,
 					Remove:          rmAttributes,
 					Resources:       addResources,
@@ -217,9 +223,9 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 		spec.Fields = f
 	}
 	if otlp := logging.Otlp; otlp != nil {
-		provider, err := BuildBackendRef(ctx, otlp.BackendRef, policy.Namespace)
+		provider, inlinePolicies, parsedURL, err := buildPolicyBackendEndpoint(ctx, otlp.PolicyBackendEndpoint, policy.Namespace)
 		if err != nil {
-			errs = append(errs, fmt.Errorf("failed to translate access log OTLP backend ref: %v", err))
+			errs = append(errs, fmt.Errorf("failed to translate access log OTLP backend: %v", err))
 		}
 
 		var protocol api.FrontendPolicySpec_Logging_OtlpAccessLog_Protocol
@@ -231,10 +237,16 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 		default:
 			protocol = api.FrontendPolicySpec_Logging_OtlpAccessLog_GRPC
 		}
+		if parsedURL != nil && parsedURL.EscapedPath() != "" && protocol != api.FrontendPolicySpec_Logging_OtlpAccessLog_HTTP {
+			errs = append(errs, fmt.Errorf("frontend accessLog OTLP url path is only valid with protocol HTTP"))
+		}
 
 		var path *string
 		if otlp.Path != nil {
 			path = new(*otlp.Path)
+		} else if parsedURL != nil && parsedURL.EscapedPath() != "" {
+			v := parsedURL.EscapedPath()
+			path = &v
 		}
 
 		var filter *string
@@ -264,6 +276,7 @@ func translateFrontendAccessLog(ctx PolicyCtx, policy *agentgateway.Agentgateway
 
 		spec.OtlpAccessLog = &api.FrontendPolicySpec_Logging_OtlpAccessLog{
 			ProviderBackend: provider,
+			InlinePolicies:  inlinePolicies,
 			Protocol:        protocol,
 			Path:            path,
 			Filter:          filter,
@@ -294,12 +307,9 @@ func translateFrontendTCP(policy *agentgateway.AgentgatewayPolicy, name string) 
 	tcp := policy.Spec.Frontend.TCP
 	spec := &api.FrontendPolicySpec_TCP{}
 	if ka := tcp.KeepAlive; ka != nil {
-		spec.Keepalives = &api.KeepaliveConfig{}
-		if ka.Time != nil {
-			spec.Keepalives.Time = durationpb.New(ka.Time.Duration)
-		}
-		if ka.Interval != nil {
-			spec.Keepalives.Interval = durationpb.New(ka.Interval.Duration)
+		spec.Keepalives = &api.KeepaliveConfig{
+			Time:     durationToProto(ka.Time),
+			Interval: durationToProto(ka.Interval),
 		}
 		if ka.Retries != nil {
 			spec.Keepalives.Retries = castUint32(ka.Retries) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
@@ -446,9 +456,8 @@ func quantityUint32(ka *agentgateway.ByteSize) *uint32 {
 
 func translateFrontendTLS(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
 	tls := policy.Spec.Frontend.TLS
-	spec := &api.FrontendPolicySpec_TLS{}
-	if ka := tls.HandshakeTimeout; ka != nil {
-		spec.HandshakeTimeout = durationpb.New(ka.Duration)
+	spec := &api.FrontendPolicySpec_TLS{
+		HandshakeTimeout: durationToProto(tls.HandshakeTimeout),
 	}
 
 	if tls.AlpnProtocols != nil {
@@ -558,9 +567,7 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 	if v := http.HTTP1MaxHeaders; v != nil {
 		spec.Http1MaxHeaders = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
 	}
-	if v := http.HTTP1IdleTimeout; v != nil {
-		spec.Http1IdleTimeout = durationpb.New(v.Duration)
-	}
+	spec.Http1IdleTimeout = durationToProto(http.HTTP1IdleTimeout)
 	if v := http.HTTP1HeaderCase; v != nil {
 		switch *v {
 		case agentgateway.HTTPHeaderCasePreserve:
@@ -581,15 +588,9 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 	if v := http.HTTP2MaxHeaderSize; v != nil {
 		spec.Http2MaxHeaderSize = quantityUint32(v)
 	}
-	if v := http.HTTP2KeepaliveInterval; v != nil {
-		spec.Http2KeepaliveInterval = durationpb.New(v.Duration)
-	}
-	if v := http.HTTP2KeepaliveTimeout; v != nil {
-		spec.Http2KeepaliveTimeout = durationpb.New(v.Duration)
-	}
-	if v := http.MaxConnectionDuration; v != nil {
-		spec.MaxConnectionDuration = durationpb.New(v.Duration)
-	}
+	spec.Http2KeepaliveInterval = durationToProto(http.HTTP2KeepaliveInterval)
+	spec.Http2KeepaliveTimeout = durationToProto(http.HTTP2KeepaliveTimeout)
+	spec.MaxConnectionDuration = durationToProto(http.MaxConnectionDuration)
 
 	httpPolicy := &api.Policy{
 		Key:  name + frontendHttpPolicySuffix,

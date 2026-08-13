@@ -11,7 +11,7 @@ pub(in crate::tests) fn setup_dfp_bind() -> TestBind {
 
 pub(in crate::tests) fn setup_dfp_bind_with_config(config: &str) -> TestBind {
 	let backend_name = ResourceName::new("dynamic".into(), "".into());
-	let dynamic_backend = Backend::Dynamic(backend_name, ());
+	let dynamic_backend = Backend::Dynamic(backend_name, None);
 
 	let route = basic_named_route("/dynamic".into());
 
@@ -33,7 +33,7 @@ fn setup_dfp() -> (TestBind, MemoryClient) {
 /// Helper to set up a DFP test behind an HTTPS listener.
 fn setup_dfp_https() -> (TestBind, MemoryClient) {
 	let backend_name = ResourceName::new("dynamic".into(), "".into());
-	let dynamic_backend = Backend::Dynamic(backend_name, ());
+	let dynamic_backend = Backend::Dynamic(backend_name, None);
 
 	let route = basic_named_route("/dynamic".into());
 
@@ -69,7 +69,7 @@ fn setup_dfp_https() -> (TestBind, MemoryClient) {
 async fn dfp_rejects_inference_routing() {
 	let backend_name = ResourceName::new("dynamic".into(), "".into());
 	let dynamic_backend = BackendWithPolicies {
-		backend: Backend::Dynamic(backend_name, ()),
+		backend: Backend::Dynamic(backend_name, None),
 		inline_policies: vec![BackendTrafficPolicy::InferenceRouting(
 			ext_proc::InferenceRouting {
 				target: Arc::new(

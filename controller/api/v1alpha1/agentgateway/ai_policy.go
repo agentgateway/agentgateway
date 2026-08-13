@@ -83,16 +83,17 @@ const (
 )
 
 // Action to take if a regex pattern is matched in a request or response.
-// This setting applies only to request matches. `PromptguardResponse`
-// matches are always masked by default.
+// The action applies to request and response matches alike. Note that
+// `Mask` is not applied to streamed responses: matched content in a
+// streamed response is passed through unmodified.
 // +k8s:enum
 type Action string
 
 const (
-	// Mask the matched data in the request.
+	// Mask the matched data in the request or response.
 	MASK Action = "Mask"
 
-	// Reject the request if the regex matches content in the request.
+	// Reject the request or response that contains the matched content.
 	REJECT Action = "Reject"
 )
 
@@ -102,6 +103,8 @@ type PromptGuardStreamingMode string
 
 const (
 	// Enable prompt guards for streaming responses and realtime websocket messages.
+	// A guard can reject a streamed response, but `Mask` actions are not applied to
+	// streamed content.
 	PromptGuardStreamingModeEnabled PromptGuardStreamingMode = "Enabled"
 )
 
@@ -118,8 +121,9 @@ type Regex struct {
 	Builtins []BuiltIn `json:"builtins,omitempty"`
 
 	// The action to take if a regex pattern is matched in a request or response.
-	// This setting applies only to request matches. `PromptguardResponse`
-	// matches are always masked by default.
+	// The action applies to request and response matches alike. Note that
+	// `Mask` is not applied to streamed responses: matched content in a
+	// streamed response is passed through unmodified.
 	// Defaults to `Mask`.
 	// +kubebuilder:default=Mask
 	// +optional
@@ -133,6 +137,11 @@ type Webhook struct {
 	// Supported types: Service and Backend.
 	// +required
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+
+	// CEL-computed headers to include in webhook requests.
+	// +kubebuilder:validation:MaxProperties=64
+	// +optional
+	Headers map[string]CELExpression `json:"headers,omitempty"`
 
 	// HTTP header matches used to select the headers to forward to the webhook.
 	// Request headers are used when forwarding requests and response headers
@@ -172,9 +181,8 @@ type OpenAIModeration struct {
 	// +optional
 	Model *string `json:"model,omitempty"`
 	// Policies for communicating with OpenAI.
-	// +kubebuilder:validation:AtLeastOneFieldSet
 	// +optional
-	Policies *BackendSimple `json:"policies,omitempty"`
+	Policies *OpenAIModerationPolicy `json:"policies,omitempty"`
 }
 
 type BedrockGuardrails struct {
@@ -192,9 +200,8 @@ type BedrockGuardrails struct {
 	Region ShortString `json:"region"`
 
 	// Policies for communicating with AWS Bedrock Guardrails.
-	// +kubebuilder:validation:AtLeastOneFieldSet
 	// +optional
-	Policies *BackendSimple `json:"policies,omitempty"`
+	Policies *BedrockGuardrailsPolicy `json:"policies,omitempty"`
 }
 
 type GoogleModelArmor struct {
@@ -213,9 +220,8 @@ type GoogleModelArmor struct {
 	Location *ShortString `json:"location,omitempty"`
 
 	// Policies for communicating with Google Model Armor.
-	// +kubebuilder:validation:AtLeastOneFieldSet
 	// +optional
-	Policies *BackendSimple `json:"policies,omitempty"`
+	Policies *GoogleModelArmorPolicy `json:"policies,omitempty"`
 }
 
 // Prompt guards to apply to requests sent by the client.

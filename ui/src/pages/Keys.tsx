@@ -1,5 +1,5 @@
+import { useRef, useState } from "react";
 import { tr } from "../i18n";
-import { useMemo, useRef, useState } from "react";
 import {
   Check,
   Copy,
@@ -12,17 +12,18 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import {
-  disableApiKeyPolicy,
-  getApiKeyPolicy,
-  removeVirtualKey,
-  upsertVirtualKey,
-} from "../config";
+import { getApiKeyPolicy, upsertVirtualKey } from "../config";
 import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
 import { EnumSelector } from "../components/EnumSelector";
 import { hasKeyValue, keyValue, maskKey } from "../credentialDisplay";
 import { useStickyQueryParam } from "../drawerRouteState";
-import { useGatewayConfig, useUpdateConfig } from "../hooks";
+import {
+  useDeleteConfigResource,
+  useLlmConfigData,
+  useUpsertConfigResource,
+  useUpsertPolicyResource,
+} from "../hooks";
+import { isDatabaseConfigResource } from "../config";
 import {
   ConfirmDialog,
   Drawer,
@@ -35,25 +36,44 @@ import {
   StatusBanner,
   Tooltip,
 } from "../components/Primitives";
-import { headerLocationFrom } from "../policies/HeaderLocationOverride";
 import {
-  AdvancedSettingPanel,
-  AdvancedSettingRow,
-} from "../policies/PolicyLayout";
+  authorizationLocationFrom,
+  authorizationLocationToValue,
+  CredentialLocationSetting,
+} from "../policies/AuthorizationLocation";
+import { AdvancedSettingRow } from "../policies/PolicyLayout";
 import { KeyValueEditor } from "../policies/PolicyFormControls";
+import { randomUuid } from "../randomUuid";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import type { GatewayConfig, LlmApiKeyPolicy, VirtualApiKey } from "../types";
-import type { AuthorizationLocation } from "../gateway-config";
+
+const fileOwnedPolicyMessage = () =>
+  tr("copy.thisApiKeyPolicyIsFileOwnedAndCannotBeModifiedInHybridMode");
 
 export function KeysPage() {
-  const config = useGatewayConfig();
-  const update = useUpdateConfig();
+  const {
+    config,
+    rawConfig,
+    hybrid,
+    resources,
+    policies,
+    apiKeys: keys,
+    isLoading,
+    error,
+  } = useLlmConfigData();
+  const upsertResource = useUpsertConfigResource();
+  const upsertPolicy = useUpsertPolicyResource();
+  const deleteResource = useDeleteConfigResource();
   const help = useSchemaHelp();
-  const policy = useMemo(
-    () => config.data?.llm?.policies?.apiKey,
-    [config.data],
+  const policy = (policies.apiKey ?? null) as LlmApiKeyPolicy | null;
+  const filePolicyOwned = Boolean(
+    rawConfig.data?.llm?.policies &&
+      Object.prototype.hasOwnProperty.call(
+        rawConfig.data.llm.policies,
+        "apiKey",
+      ),
   );
-  const keys = policy?.keys ?? [];
+  const policyReadOnly = hybrid && filePolicyOwned;
   const [editing, setEditing] = useState<{
     previousKey?: string;
     key: VirtualApiKey;
@@ -64,12 +84,59 @@ export function KeysPage() {
   const linkedKey = linkedVirtualKey(keyDrawer, keys);
   const activeEditing =
     editing ??
-    (keyDrawer === "new"
+    (keyDrawer === "new" && policy
       ? { key: newVirtualKey() }
       : linkedKey
         ? { previousKey: keyValue(linkedKey), key: structuredClone(linkedKey) }
         : null);
   const advancedOpen = keyDrawer === "settings";
+  const saving =
+    upsertResource.isPending ||
+    upsertPolicy.isPending ||
+    deleteResource.isPending;
+  const saveError =
+    upsertResource.error?.message ??
+    upsertPolicy.error?.message ??
+    deleteResource.error?.message ??
+    null;
+  const unavailable = isLoading || Boolean(error);
+
+  function databaseKeyId(key: VirtualApiKey) {
+    const id = keyId(key);
+    return hybrid && id && isDatabaseConfigResource(resources, "llm.apiKey", id)
+      ? id
+      : undefined;
+  }
+
+  function saveKey(key: VirtualApiKey, previousKey?: string) {
+    const previous = previousKey
+      ? keys.find((item) => keyValue(item) === previousKey)
+      : undefined;
+    const previousIndex = previous ? keys.indexOf(previous) : -1;
+    const previousId = previous
+      ? keyId(previous) || `@index:${previousIndex}`
+      : undefined;
+    const value = structuredClone(key);
+    if (value.metadata && typeof value.metadata === "object") {
+      delete value.metadata.id;
+    }
+    upsertResource.mutate(
+      { kind: "llm.apiKey", value, previousId },
+      { onSuccess: closeKeyDrawer },
+    );
+  }
+
+  function removeKey(key: VirtualApiKey) {
+    const index = keys.indexOf(key);
+    const id = keyId(key) || (index >= 0 ? `@index:${index}` : "");
+    if (!id) return;
+    deleteResource.mutate(
+      { kind: "llm.apiKey", id },
+      {
+        onSuccess: () => setDeleteKey(null),
+      },
+    );
+  }
 
   function openNewKey() {
     setEditing(null);
@@ -87,9 +154,12 @@ export function KeysPage() {
   }
 
   function disablePolicy() {
-    update.mutate((next) => disableApiKeyPolicy(next), {
-      onSuccess: closeKeyDrawer,
-    });
+    if (policyReadOnly) return;
+    const onSuccess = () => {
+      setDisablePolicyOpen(false);
+      closeKeyDrawer();
+    };
+    deleteResource.mutate({ kind: "llm.policy", id: "apiKey" }, { onSuccess });
   }
 
   return (
@@ -101,29 +171,45 @@ export function KeysPage() {
         )}
         actions={
           <div className="button-row">
-            <button
-              className="button"
-              type="button"
-              onClick={() => setKeyDrawer("settings")}
-            >
-              <SlidersHorizontal size={16} />
-              {tr("copy.settings")}
-            </button>
-            <button
-              className="button primary"
-              type="button"
-              onClick={openNewKey}
-            >
-              <Plus size={16} />
-              {tr("copy.newKey")}
-            </button>
+            {policy ? (
+              <>
+                <button
+                  className="button"
+                  type="button"
+                  disabled={unavailable || saving}
+                  onClick={() => setKeyDrawer("settings")}
+                >
+                  <SlidersHorizontal size={16} />
+                  {tr("copy.settings")}
+                </button>
+                <button
+                  className="button primary"
+                  type="button"
+                  disabled={unavailable || saving}
+                  onClick={openNewKey}
+                >
+                  <Plus size={16} />
+                  {tr("copy.newKey")}
+                </button>
+              </>
+            ) : (
+              <button
+                className="button primary"
+                type="button"
+                disabled={unavailable || saving}
+                onClick={() => setKeyDrawer("settings")}
+              >
+                <KeyRound size={16} />
+                {tr("copy.enableApiKeyAuth")}
+              </button>
+            )}
           </div>
         }
       />
 
-      {update.isError ? (
+      {saveError ? (
         <StatusBanner state="bad" title={tr("copy.saveFailed")}>
-          {update.error.message}
+          {saveError}
         </StatusBanner>
       ) : null}
       {policy?.mode && policy.mode !== "strict" ? (
@@ -133,15 +219,33 @@ export function KeysPage() {
       ) : null}
 
       <Panel>
-        {config.isLoading ? (
+        {isLoading ? (
           <StatusBanner state="loading" title={tr("copy.loadingKeys")} />
-        ) : config.isError ? (
+        ) : error ? (
           <StatusBanner
             state="bad"
             title={tr("copy.configurationApiUnavailable")}
           >
-            {config.error.message}
+            {error.message}
           </StatusBanner>
+        ) : !policy ? (
+          <EmptyState
+            title={tr("copy.apiKeyAuthenticationIsDisabled")}
+            description={tr(
+              "copy.enableApiKeyAuthenticationBeforeProvisioningVirtualKeys",
+            )}
+            action={
+              <button
+                className="button primary"
+                type="button"
+                disabled={saving}
+                onClick={() => setKeyDrawer("settings")}
+              >
+                <KeyRound size={16} />
+                {tr("copy.enableApiKeyAuth")}
+              </button>
+            }
+          />
         ) : keys.length === 0 ? (
           <EmptyState
             title={tr("copy.noVirtualApiKeys")}
@@ -150,20 +254,27 @@ export function KeysPage() {
             )}
             action={
               <div className="button-row">
-                {policy ? (
+                <Tooltip
+                  content={
+                    policyReadOnly
+                      ? fileOwnedPolicyMessage()
+                      : tr("copy.disableApiKeyPolicy")
+                  }
+                >
                   <button
                     className="button danger"
                     type="button"
-                    disabled={update.isPending}
+                    disabled={saving || policyReadOnly}
                     onClick={() => setDisablePolicyOpen(true)}
                   >
                     <X size={16} />
                     {tr("copy.disableApiKeyPolicy_ckgvai")}
                   </button>
-                ) : null}
+                </Tooltip>
                 <button
                   className="button primary"
                   type="button"
+                  disabled={saving}
                   onClick={openNewKey}
                 >
                   <Plus size={16} />
@@ -187,7 +298,7 @@ export function KeysPage() {
                 {keys.map((item, index) => (
                   <tr key={keyValue(item)}>
                     <td className="strong key-name-cell">
-                      {keyName(item) || "Unnamed key"}
+                      {keyName(item) || tr("copy.unnamedKey")}
                     </td>
                     <td className="key-cell">
                       <VirtualKeyValue value={keyValue(item)} />
@@ -197,7 +308,7 @@ export function KeysPage() {
                     </td>
                     <td className="key-action-cell">
                       <div className="key-actions">
-                        <Tooltip content="Edit key">
+                        <Tooltip content={tr("copy.editKey")}>
                           <button
                             className="table-action"
                             type="button"
@@ -208,11 +319,20 @@ export function KeysPage() {
                             {tr("copy.edit")}
                           </button>
                         </Tooltip>
-                        <Tooltip content="Delete key">
+                        <Tooltip
+                          content={
+                            hybrid && !databaseKeyId(item)
+                              ? tr("copy.fileOwnedKeysCannotBeDeletedHere")
+                              : tr("copy.deleteKey")
+                          }
+                        >
                           <button
                             className="table-action danger"
                             type="button"
                             aria-label={tr("copy.deleteKey")}
+                            disabled={
+                              saving || (hybrid && !databaseKeyId(item))
+                            }
                             onClick={() => setDeleteKey(item)}
                           >
                             <Trash2 size={14} />
@@ -237,14 +357,15 @@ export function KeysPage() {
           previousKey={activeEditing.previousKey}
           help={help}
           existingKeys={keys}
-          saving={update.isPending}
-          saveError={update.isError ? update.error.message : null}
-          onCancel={closeKeyDrawer}
-          onSave={(key, previousKey) =>
-            update.mutate((next) => upsertVirtualKey(next, key, previousKey), {
-              onSuccess: closeKeyDrawer,
-            })
+          databaseBacked={
+            hybrid &&
+            (!activeEditing.previousKey ||
+              Boolean(databaseKeyId(activeEditing.key)))
           }
+          saving={saving}
+          saveError={saveError}
+          onCancel={closeKeyDrawer}
+          onSave={saveKey}
         />
       ) : null}
       {deleteKey ? (
@@ -252,13 +373,10 @@ export function KeysPage() {
           title={tr("copy.deleteVirtualApiKey")}
           destructive
           confirmLabel={tr("copy.deleteKey")}
-          confirmDisabled={update.isPending}
+          confirmDisabled={saving}
           onCancel={() => setDeleteKey(null)}
           onConfirm={() => {
-            const value = keyValue(deleteKey);
-            update.mutate((next) => removeVirtualKey(next, value), {
-              onSuccess: () => setDeleteKey(null),
-            });
+            removeKey(deleteKey);
           }}
         >
           <p>
@@ -272,17 +390,10 @@ export function KeysPage() {
         <ConfirmDialog
           title={tr("copy.disableApiKeyPolicy_9229n3")}
           destructive
-          confirmLabel={tr("copy.disableApiKeyPolicy_ckgvai")}
-          confirmDisabled={update.isPending}
+          confirmLabel={tr("copy.disableApiKeyPolicy")}
+          confirmDisabled={saving}
           onCancel={() => setDisablePolicyOpen(false)}
-          onConfirm={() => {
-            update.mutate((next) => disableApiKeyPolicy(next), {
-              onSuccess: () => {
-                setDisablePolicyOpen(false);
-                closeKeyDrawer();
-              },
-            });
-          }}
+          onConfirm={disablePolicy}
         >
           <p>
             {tr(
@@ -295,23 +406,25 @@ export function KeysPage() {
         <AdvancedSettingsDrawer
           config={config.data}
           policy={policy}
+          databaseBacked={hybrid && !filePolicyOwned}
+          readOnly={policyReadOnly}
           keyCount={keys.length}
           help={help}
-          saving={update.isPending}
-          saveError={update.isError ? update.error.message : null}
+          saving={saving}
+          saveError={saveError}
           onClose={closeKeyDrawer}
           onDisable={disablePolicy}
-          onSave={(nextPolicy) =>
-            update.mutate(
-              (next) => {
-                const apiKey = getApiKeyPolicy(next);
-                Object.assign(apiKey, nextPolicy);
-              },
+          onSave={(nextPolicy) => {
+            if (policyReadOnly) return;
+            upsertPolicy.mutate(
               {
-                onSuccess: closeKeyDrawer,
+                kind: "llm.policy",
+                id: "apiKey",
+                value: nextPolicy,
               },
-            )
-          }
+              { onSuccess: closeKeyDrawer },
+            );
+          }}
         />
       ) : null}
     </div>
@@ -321,6 +434,8 @@ export function KeysPage() {
 function AdvancedSettingsDrawer(props: {
   config?: GatewayConfig | null;
   policy?: LlmApiKeyPolicy | null;
+  databaseBacked?: boolean;
+  readOnly?: boolean;
   keyCount: number;
   help: SchemaHelp;
   saving: boolean;
@@ -330,9 +445,14 @@ function AdvancedSettingsDrawer(props: {
   onSave: (policy: Partial<LlmApiKeyPolicy>) => void;
 }) {
   return (
-    <Drawer title={tr("copy.settings")} onClose={props.onClose}>
+    <Drawer
+      title={props.policy ? tr("copy.settings") : tr("copy.enableApiKeyAuth")}
+      onClose={props.onClose}
+    >
       <PolicyControls
         policy={props.policy}
+        databaseBacked={props.databaseBacked}
+        readOnly={props.readOnly}
         config={props.config}
         keyCount={props.keyCount}
         help={props.help}
@@ -352,6 +472,8 @@ function AdvancedSettingsDrawer(props: {
 function PolicyControls(props: {
   config?: GatewayConfig | null;
   policy?: LlmApiKeyPolicy | null;
+  databaseBacked?: boolean;
+  readOnly?: boolean;
   keyCount: number;
   help: SchemaHelp;
   saving: boolean;
@@ -359,19 +481,12 @@ function PolicyControls(props: {
   onSave: (policy: Partial<LlmApiKeyPolicy>) => void;
 }) {
   const [mode, setMode] = useState(props.policy?.mode ?? "strict");
-  const header = headerLocationFrom(props.policy?.location);
-  const [customHeaderLocation, setCustomHeaderLocation] = useState(
-    Boolean(header),
+  const [location, setLocation] = useState(() =>
+    authorizationLocationFrom(props.policy?.location),
   );
-  const [headerName, setHeaderName] = useState(
-    header?.header.name ?? "authorization",
-  );
-  const [prefix, setPrefix] = useState(header?.header.prefix ?? "Bearer ");
   const patch: Partial<LlmApiKeyPolicy> = {
     mode,
-    location: customHeaderLocation
-      ? { header: { name: headerName, prefix } }
-      : undefined,
+    location: authorizationLocationToValue(location),
   };
   return (
     <div className="policy-controls api-key-policy-controls">
@@ -384,27 +499,35 @@ function PolicyControls(props: {
         )}
       >
         <EnumSelector
-          ariaLabel="Validation mode"
+          ariaLabel={tr("copy.validationMode")}
           value={mode}
-          schema={props.help.node(["$defs", "Mode3"])}
-          labels={{
-            strict: "Strict",
-            optional: "Optional",
-            permissive: "Permissive",
-          }}
+          options={[
+            { value: "strict", label: tr("copy.strict") },
+            { value: "optional", label: tr("copy.optional_1yfbac9") },
+            { value: "permissive", label: tr("copy.permissive") },
+          ]}
           onChange={(value) =>
             setMode(value as "strict" | "optional" | "permissive")
           }
         />
       </FieldGroup>
-      <ApiKeyLocationSetting
+      <CredentialLocationSetting
         help={props.help}
-        enabled={customHeaderLocation}
-        headerName={headerName}
-        headerPrefix={prefix}
-        onEnabledChange={setCustomHeaderLocation}
-        onHeaderNameChange={setHeaderName}
-        onHeaderPrefixChange={setPrefix}
+        value={location}
+        defaultDescription={
+          props.help.field<LlmApiKeyPolicy>(
+            "LocalAPIKeys",
+            "location",
+            "By default, callers send Authorization: Bearer key.",
+          ) ?? tr("copy.byDefaultCallersSendAuthorizationBearerKey")
+        }
+        description={
+          props.help.definition(
+            "AuthorizationLocation",
+            "Customize where virtual API keys are read from the request.",
+          ) ?? tr("copy.customizeWhereVirtualApiKeysAreReadFromTheRequest")
+        }
+        onChange={setLocation}
       />
       {props.policy && props.keyCount === 0 ? (
         <AdvancedSettingRow
@@ -415,22 +538,48 @@ function PolicyControls(props: {
             "copy.removeTheApiKeyPolicyEntirelyRequestsWillNotBeValidatedAgainstVirtualApiKeys",
           )}
           action={
-            <button
-              className="button danger compact-action"
-              type="button"
-              disabled={props.saving}
-              onClick={props.onDisable}
+            <Tooltip
+              content={
+                props.readOnly
+                  ? fileOwnedPolicyMessage()
+                  : tr("copy.disableApiKeyPolicy")
+              }
             >
-              {tr("copy.disable")}
-            </button>
+              <button
+                className="button danger compact-action"
+                type="button"
+                disabled={props.saving || props.readOnly}
+                onClick={props.onDisable}
+              >
+                {tr("copy.disable")}
+              </button>
+            </Tooltip>
           }
         />
       ) : null}
       <ConfigDiffSaveActions
         config={props.config}
-        diffTitle="API key policy config diff"
-        saveLabel={tr("copy.savePolicy")}
+        resourceDiff={
+          props.databaseBacked
+            ? () => ({
+                original: props.policy
+                  ? apiKeyPolicyResourceValue(props.policy)
+                  : {},
+                modified: patch,
+              })
+            : undefined
+        }
+        diffTitle={
+          props.policy
+            ? tr("copy.apiKeyPolicyConfigDiff")
+            : tr("copy.enableApiKeyAuthentication")
+        }
+        saveLabel={
+          props.policy ? tr("copy.savePolicy") : tr("copy.enableApiKeyAuth")
+        }
         saving={props.saving}
+        saveDisabled={props.readOnly}
+        hybridFileWriteMessage={fileOwnedPolicyMessage()}
         onSave={() => props.onSave(patch)}
         applyDiff={(next) => {
           Object.assign(getApiKeyPolicy(next), patch);
@@ -440,94 +589,10 @@ function PolicyControls(props: {
   );
 }
 
-function ApiKeyLocationSetting(props: {
-  help: SchemaHelp;
-  enabled: boolean;
-  headerName: string;
-  headerPrefix: string;
-  onEnabledChange: (enabled: boolean) => void;
-  onHeaderNameChange: (value: string) => void;
-  onHeaderPrefixChange: (value: string) => void;
-}) {
-  if (!props.enabled) {
-    return (
-      <AdvancedSettingRow
-        className="api-key-location-row"
-        icon={<KeyRound size={17} />}
-        title={tr("copy.credentialLocation")}
-        description={
-          props.help.field<LlmApiKeyPolicy>(
-            "LocalAPIKeys",
-            "location",
-            "By default, callers send Authorization: Bearer key.",
-          ) ?? "By default, callers send Authorization: Bearer key."
-        }
-        action={
-          <button
-            className="button compact-action"
-            type="button"
-            onClick={() => props.onEnabledChange(true)}
-          >
-            <SlidersHorizontal size={15} />
-            {tr("copy.customize")}
-          </button>
-        }
-      />
-    );
-  }
-
-  return (
-    <AdvancedSettingPanel
-      className="api-key-location-panel"
-      icon={<KeyRound size={17} />}
-      title={tr("copy.credentialLocation")}
-      description={
-        props.help.definition(
-          "AuthorizationLocation",
-          "Customize the request header used to read virtual API keys.",
-        ) ?? "Customize the request header used to read virtual API keys."
-      }
-      action={
-        <button
-          className="button"
-          type="button"
-          onClick={() => props.onEnabledChange(false)}
-        >
-          <X size={15} />
-          {tr("copy.useDefault")}
-        </button>
-      }
-    >
-      <div className="api-key-location-fields">
-        <Field
-          label={tr("copy.headerName_8vzq77")}
-          tooltip={props.help.field<AuthorizationLocation>(
-            "AuthorizationLocation",
-            "header.name",
-          )}
-        >
-          <input
-            value={props.headerName}
-            onChange={(event) => props.onHeaderNameChange(event.target.value)}
-            placeholder="authorization"
-          />
-        </Field>
-        <Field
-          label={tr("copy.headerPrefix")}
-          tooltip={props.help.field<AuthorizationLocation>(
-            "AuthorizationLocation",
-            "header.prefix",
-          )}
-        >
-          <input
-            value={props.headerPrefix}
-            onChange={(event) => props.onHeaderPrefixChange(event.target.value)}
-            placeholder="Bearer "
-          />
-        </Field>
-      </div>
-    </AdvancedSettingPanel>
-  );
+function apiKeyPolicyResourceValue(policy: LlmApiKeyPolicy) {
+  const value: Partial<LlmApiKeyPolicy> = { ...policy };
+  delete value.keys;
+  return value;
 }
 
 function KeyEditor(props: {
@@ -536,6 +601,7 @@ function KeyEditor(props: {
   previousKey?: string;
   help: SchemaHelp;
   existingKeys: VirtualApiKey[];
+  databaseBacked: boolean;
   saving: boolean;
   saveError?: string | null;
   onCancel: () => void;
@@ -569,9 +635,7 @@ function KeyEditor(props: {
     ? duplicateKeyName(name, props.existingKeys)
     : false;
 
-  function nextVirtualKey() {
-    setSubmitted(true);
-    if (nameRequired) return null;
+  function virtualKey() {
     const metadataId =
       typeof initialMetadata.id === "string" && initialMetadata.id.trim()
         ? initialMetadata.id.trim()
@@ -593,6 +657,11 @@ function KeyEditor(props: {
       : { ...props.initial, metadata };
   }
 
+  function nextVirtualKey() {
+    setSubmitted(true);
+    return nameRequired ? null : virtualKey();
+  }
+
   function save() {
     const virtualKey = nextVirtualKey();
     if (!virtualKey) return;
@@ -601,15 +670,33 @@ function KeyEditor(props: {
 
   return (
     <Drawer
-      title={props.previousKey ? "Edit virtual key" : "Create virtual key"}
+      title={
+        props.previousKey
+          ? tr("copy.editVirtualKey")
+          : tr("copy.createVirtualKey")
+      }
       onClose={props.onCancel}
       dirty={draft !== initialDraft}
       saving={props.saving}
       footer={(requestClose) => (
         <ConfigDiffSaveActions
           config={props.config}
-          diffTitle="Virtual API key config diff"
-          saveLabel="Save key"
+          resourceDiff={
+            props.databaseBacked
+              ? {
+                  original: props.previousKey
+                    ? keyResourceForDisplay(props.initial)
+                    : {},
+                  modified: keyResourceForDisplay(virtualKey()),
+                }
+              : undefined
+          }
+          diffTitle={
+            props.databaseBacked
+              ? tr("copy.virtualApiKeyResourceDiff")
+              : tr("copy.virtualApiKeyConfigDiff")
+          }
+          saveLabel={tr("copy.saveKey")}
           saving={props.saving}
           saveDisabled={keyMode === "custom" && !key.trim()}
           onCancel={requestClose}
@@ -649,7 +736,7 @@ function KeyEditor(props: {
           tooltip={props.help.field<VirtualApiKey>("LocalAPIKey", "key")}
         >
           <Dropdown
-            ariaLabel="Key value"
+            ariaLabel={tr("copy.keyValue")}
             value={keyMode}
             options={[
               { value: "auto", label: tr("copy.agwSkAutoGenerate") },
@@ -670,7 +757,7 @@ function KeyEditor(props: {
               type="button"
               onClick={() => setReplaceKey((current) => !current)}
             >
-              {replaceKey ? "Keep existing" : "Replace key"}
+              {replaceKey ? tr("copy.keepExisting") : tr("copy.replaceKey")}
             </button>
           </div>
         </FieldGroup>
@@ -755,6 +842,14 @@ function keyId(key: VirtualApiKey) {
   return typeof metadata.id === "string" && metadata.id.trim()
     ? metadata.id.trim()
     : "";
+}
+
+function keyResourceForDisplay(key: VirtualApiKey) {
+  const value = structuredClone(key);
+  if (value.metadata && typeof value.metadata === "object") {
+    delete value.metadata.id;
+  }
+  return value;
 }
 
 function virtualKeyUrlRef(key: VirtualApiKey, index: number) {
@@ -883,18 +978,5 @@ function stringMetadata(value: Record<string, unknown>) {
       key,
       typeof item === "string" ? item : String(item),
     ]),
-  );
-}
-
-function randomUuid() {
-  return (
-    crypto.randomUUID?.() ??
-    [
-      randomKey(8),
-      randomKey(4),
-      randomKey(4),
-      randomKey(4),
-      randomKey(12),
-    ].join("-")
   );
 }

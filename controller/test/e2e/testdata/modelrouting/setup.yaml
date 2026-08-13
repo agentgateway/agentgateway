@@ -1,0 +1,484 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-routing-primary
+  namespace: default
+spec:
+  selector:
+    app.kubernetes.io/name: testbox
+  ports:
+  - port: 9235
+    targetPort: 9235
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: model-routing
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - protocol: HTTP
+    port: 80
+    name: llm
+    allowedRoutes:
+      namespaces:
+        from: Same
+      kinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: model-routing-observe
+  namespace: default
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+  traffic:
+    transformation:
+      response:
+        add:
+        - name: x-agw-request-model
+          value: 'default(llm.requestModel, "not-set")'
+        - name: x-agw-response-model
+          value: 'default(llm.responseModel, "not-set")'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: public-direct
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  provider: OpenAI
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  policies:
+    transformations:
+    - field: model
+      expression: '"agw-public-direct"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: internal-fast
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  visibility: Internal
+  provider: OpenAI
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  policies:
+    transformations:
+    - field: model
+      expression: '"agw-internal-fast"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: internal-premium
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  visibility: Internal
+  provider: OpenAI
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  policies:
+    transformations:
+    - field: model
+      expression: '"agw-internal-premium"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: internal-wildcard
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  match:
+    model: internal/*
+  visibility: Internal
+  provider: OpenAI
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  policies:
+    transformations:
+    - field: model
+      expression: 'llmRequest.model.stripPrefix("internal/")'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: primary-down
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  visibility: Internal
+  provider: OpenAI
+  baseURL: http://model-routing-primary.default.svc.cluster.local:9235
+  policies:
+    health:
+      eviction:
+        consecutiveFailures: 1
+    transformations:
+    - field: model
+      expression: '"agw-primary-down"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: weighted-fast
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  virtualModel:
+    weighted:
+      targets:
+      - modelRef:
+          name: internal-fast
+        weight: 1
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: smart
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  virtualModel:
+    conditional:
+      targets:
+      - when: 'request.headers["x-model-tier"] == "premium"'
+        modelRef:
+          name: internal-premium
+      - modelRef:
+          name: internal-fast
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: wildcard-virtual
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  virtualModel:
+    weighted:
+      targets:
+      - modelRef:
+          name: internal-wildcard
+        model: internal/agw-wildcard-selected
+        weight: 1
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: resilient
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  virtualModel:
+    failover:
+      targets:
+      - modelRef:
+          name: primary-down
+        priority: 0
+      - modelRef:
+          name: internal-fast
+        priority: 1
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: protected-primary-down
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  visibility: Internal
+  provider: OpenAI
+  baseURL: http://model-routing-primary.default.svc.cluster.local:9235
+  policies:
+    authorization:
+      policy:
+        matchExpressions:
+        - request.headers["x-model-access"] == "allowed"
+    health:
+      eviction:
+        consecutiveFailures: 1
+    transformations:
+    - field: model
+      expression: '"agw-protected-primary-down"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: protected-fallback
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  visibility: Internal
+  provider: OpenAI
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  policies:
+    authorization:
+      policy:
+        matchExpressions:
+        - request.headers["x-model-access"] == "allowed"
+    transformations:
+    - field: model
+      expression: '"agw-protected-fallback"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: protected-resilient
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  virtualModel:
+    failover:
+      targets:
+      - modelRef:
+          name: protected-primary-down
+        priority: 0
+      - modelRef:
+          name: protected-fallback
+        priority: 1
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: invalid-target
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: model-routing
+    sectionName: llm
+  virtualModel:
+    weighted:
+      targets:
+      - modelRef:
+          name: does-not-exist
+        weight: 1
+---
+# A single path-scoped model route. The route owns the path and policy; the
+# model supplies the route's private model-router table.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: scoped-models
+  namespace: default
+spec:
+  parentRefs:
+  - name: model-routing
+    sectionName: llm
+  rules:
+  - name: models
+    matches:
+    - path:
+        type: PathPrefix
+        value: /scoped
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayModel
+      name: "*"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: scoped-model
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: scoped-models
+    sectionName: models
+  provider: OpenAI
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  policies:
+    transformations:
+    - field: model
+      expression: '"agw-scoped-model"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: scoped-models-auth
+  namespace: default
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: scoped-models
+    sectionName: models
+  traffic:
+    basicAuthentication:
+      mode: Strict
+      users:
+      - "scoped:$apr1$SrcRE04W$bio6ASdFjG8ANvVHWgfr80"
+---
+# Two tenant routes prove that model discovery, model routing, and policy are
+# independently scoped by path rather than by the shared Gateway listener.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: tenant-a-models
+  namespace: default
+spec:
+  parentRefs:
+  - name: model-routing
+    sectionName: llm
+  rules:
+  - name: models
+    matches:
+    - path:
+        type: PathPrefix
+        value: /tenant-a
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayModel
+      name: "*"
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: tenant-b-models
+  namespace: default
+spec:
+  parentRefs:
+  - name: model-routing
+    sectionName: llm
+  rules:
+  - name: models
+    matches:
+    - path:
+        type: PathPrefix
+        value: /tenant-b
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayModel
+      name: "*"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: tenant-a-model
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: tenant-a-models
+    sectionName: models
+  provider: OpenAI
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  policies:
+    transformations:
+    - field: model
+      expression: '"agw-tenant-a-model"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: tenant-b-model
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: tenant-b-models
+    sectionName: models
+  provider: OpenAI
+  baseURL: http://ai-testbox.default.svc.cluster.local:9234
+  policies:
+    transformations:
+    - field: model
+      expression: '"agw-tenant-b-model"'
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: tenant-a-models-auth
+  namespace: default
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: tenant-a-models
+    sectionName: models
+  traffic:
+    basicAuthentication:
+      mode: Strict
+      users:
+      - "tenant-a:$apr1$SrcRE04W$bio6ASdFjG8ANvVHWgfr80"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: tenant-b-models-auth
+  namespace: default
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: tenant-b-models
+    sectionName: models
+  traffic:
+    basicAuthentication:
+      mode: Strict
+      users:
+      - "tenant-b:$apr1$dNQyeFtD$xsHfBS/Bn5fbMLhjNlV1A/"

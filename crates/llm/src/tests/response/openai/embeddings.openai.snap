@@ -37,6 +37,7 @@ info:
   },
   "parsed": {
     "input_tokens": 8,
-    "total_tokens": 8
+    "total_tokens": 8,
+    "provider_model": "text-embedding-3-small"
   }
 }

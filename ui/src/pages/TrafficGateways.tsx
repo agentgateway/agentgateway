@@ -17,8 +17,15 @@ import {
   ConfigDiffSaveActions,
   configDiffText,
 } from "../components/ConfigDiffDrawer";
+import { isDatabaseConfigResource } from "../config";
 import { useStickyQueryParam } from "../drawerRouteState";
-import { useGatewayConfig, useUpdateConfig } from "../hooks";
+import {
+  useDeleteConfigResource,
+  useMcpConfigData,
+  useTrafficConfigData,
+  useUpdateConfig,
+  useUpsertConfigResource,
+} from "../hooks";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import type {
   GatewayConfig,
@@ -63,8 +70,21 @@ const gatewayProtocolOptions = [
 ];
 
 export function TrafficGatewaysPage() {
-  const config = useGatewayConfig();
+  const traffic = useTrafficConfigData();
+  const mcpData = useMcpConfigData();
+  const config = {
+    ...traffic.config,
+    data:
+      traffic.data && mcpData.data?.mcp
+        ? { ...traffic.data, mcp: mcpData.data.mcp }
+        : traffic.data,
+    isLoading: traffic.isLoading || mcpData.isLoading,
+    isError: Boolean(traffic.error ?? mcpData.error),
+    error: traffic.error ?? mcpData.error,
+  };
   const update = useUpdateConfig();
+  const upsertResource = useUpsertConfigResource();
+  const deleteResource = useDeleteConfigResource();
   const help = useSchemaHelp();
   const [drawer, setDrawer] = useStickyQueryParam("gateway");
   const [migrationOpen, setMigrationOpen] = useState(false);
@@ -94,6 +114,52 @@ export function TrafficGatewaysPage() {
     setDrawer(null, "replace");
   }
 
+  function saveGateway(draft: GatewayEditorState) {
+    upsertResource.mutate(
+      {
+        kind: "traffic.gateway",
+        value: { name: draft.name, ...cleanGateway(draft.gateway) },
+        previousId: draft.previousName,
+      },
+      { onSuccess: closeDrawer },
+    );
+  }
+
+  function deleteGateway(name: string) {
+    deleteResource.mutate({ kind: "traffic.gateway", id: name });
+  }
+
+  function databaseGateway(name: string) {
+    return isDatabaseConfigResource(traffic.resources, "traffic.gateway", name);
+  }
+
+  function saveGatewayListeners(
+    gatewayName: string,
+    updateListeners: (gateway: TrafficGateway) => void,
+  ) {
+    const gateway = structuredClone(config.data?.gateways?.[gatewayName]);
+    if (!gateway) return;
+    updateListeners(gateway);
+    upsertResource.mutate(
+      {
+        kind: "traffic.gateway",
+        value: { name: gatewayName, ...cleanGateway(gateway) },
+        previousId: gatewayName,
+      },
+      { onSuccess: closeDrawer },
+    );
+  }
+
+  const saving =
+    update.isPending || upsertResource.isPending || deleteResource.isPending;
+  const saveError =
+    update.error?.message ??
+    upsertResource.error?.message ??
+    deleteResource.error?.message ??
+    null;
+  const saved =
+    update.isSuccess || upsertResource.isSuccess || deleteResource.isSuccess;
+
   return (
     <div className="page-stack">
       <PageHeader
@@ -113,12 +179,12 @@ export function TrafficGatewaysPage() {
         }
       />
 
-      {update.isError ? (
+      {saveError ? (
         <StatusBanner state="bad" title={tr("copy.saveFailed")}>
-          {update.error.message}
+          {saveError}
         </StatusBanner>
       ) : null}
-      {update.isSuccess ? (
+      {saved ? (
         <StatusBanner state="ok" title={tr("copy.configurationSaved")} />
       ) : null}
       {showLegacyBindsWarning ? (
@@ -153,7 +219,7 @@ export function TrafficGatewaysPage() {
             state="bad"
             title={tr("copy.configurationApiUnavailable")}
           >
-            {config.error.message}
+            {config.error?.message}
           </StatusBanner>
         ) : gateways.length === 0 ? (
           <EmptyState
@@ -180,13 +246,13 @@ export function TrafficGatewaysPage() {
                   <div>
                     <h3>{name}</h3>
                     <p>
-                      {tr("copy.port")}
-                      {gatewayPortLabel(gateway)}
+                      {tr("copy.port")} {gatewayPortLabel(gateway)}
                       {gateway.listeners?.length
-                        ? `, ${gateway.listeners.length} named listeners`
+                        ? `, ${tr("copy.valueListeners", {
+                            count: gateway.listeners.length,
+                          })}`
                         : ""}
-                      , {gatewayPolicyCount(gateway)}
-                      {tr("copy.policies")}
+                      , {gatewayPolicyCount(gateway)} {tr("copy.policies")}
                     </p>
                   </div>
                   <div className="button-row">
@@ -196,44 +262,53 @@ export function TrafficGatewaysPage() {
                     <span
                       className={gatewayHasTls(gateway) ? "badge ok" : "badge"}
                     >
-                      {gatewayHasTls(gateway) ? "TLS" : "Plain"}
+                      {gatewayHasTls(gateway) ? "TLS" : tr("copy.none")}
                     </span>
                     {gateway.listeners?.length ? (
-                      <Tooltip content="Add listener">
+                      <Tooltip content={tr("copy.addListener")}>
                         <button
                           className="icon-button"
                           type="button"
                           aria-label={tr("copy.addListener")}
+                          disabled={traffic.hybrid && !databaseGateway(name)}
                           onClick={() => setDrawer(`listener:new:${name}`)}
                         >
                           <Plus size={16} />
                         </button>
                       </Tooltip>
                     ) : null}
-                    <Tooltip content="Edit gateway">
+                    <Tooltip
+                      content={
+                        traffic.hybrid && !databaseGateway(name)
+                          ? tr(
+                              "copy.fileOwnedGatewaysMustBeEditedInRawConfiguration",
+                            )
+                          : tr("copy.editGateway")
+                      }
+                    >
                       <button
                         className="icon-button"
                         type="button"
                         aria-label={tr("copy.editGateway")}
+                        disabled={traffic.hybrid && !databaseGateway(name)}
                         onClick={() => setDrawer(name)}
                       >
                         <Pencil size={16} />
                       </button>
                     </Tooltip>
-                    <Tooltip content="Delete gateway">
+                    <Tooltip
+                      content={
+                        traffic.hybrid && !databaseGateway(name)
+                          ? tr("copy.fileOwnedGatewaysCannotBeDeletedHere")
+                          : tr("copy.deleteGateway")
+                      }
+                    >
                       <button
                         className="icon-button danger"
                         type="button"
                         aria-label={tr("copy.deleteGateway")}
-                        onClick={() =>
-                          update.mutate((next) => {
-                            if (!next.gateways) return;
-                            delete next.gateways[name];
-                            if (Object.keys(next.gateways).length === 0) {
-                              delete next.gateways;
-                            }
-                          })
-                        }
+                        disabled={traffic.hybrid && !databaseGateway(name)}
+                        onClick={() => deleteGateway(name)}
                       >
                         <Trash2 size={16} />
                       </button>
@@ -265,16 +340,27 @@ export function TrafficGatewaysPage() {
                               <span
                                 className={listener.tls ? "badge ok" : "badge"}
                               >
-                                {listener.tls ? "TLS" : "Plain"}
+                                {listener.tls ? "TLS" : tr("copy.none")}
                               </span>
                             </td>
                             <td>{gatewayListenerPolicyCount(listener)}</td>
                             <td className="row-actions">
-                              <Tooltip content="Edit listener">
+                              <Tooltip
+                                content={
+                                  traffic.hybrid && !databaseGateway(name)
+                                    ? tr(
+                                        "copy.fileOwnedListenersMustBeEditedInRawConfiguration",
+                                      )
+                                    : tr("copy.editListener")
+                                }
+                              >
                                 <button
                                   className="icon-button"
                                   type="button"
                                   aria-label={tr("copy.editListener")}
+                                  disabled={
+                                    traffic.hybrid && !databaseGateway(name)
+                                  }
                                   onClick={() =>
                                     setDrawer(
                                       `listener:edit:${name}:${listenerIndex}`,
@@ -284,22 +370,31 @@ export function TrafficGatewaysPage() {
                                   <Pencil size={16} />
                                 </button>
                               </Tooltip>
-                              <Tooltip content="Delete listener">
+                              <Tooltip
+                                content={
+                                  traffic.hybrid && !databaseGateway(name)
+                                    ? tr(
+                                        "copy.fileOwnedListenersCannotBeDeletedHere",
+                                      )
+                                    : tr("copy.deleteListener")
+                                }
+                              >
                                 <button
                                   className="icon-button danger"
                                   type="button"
                                   aria-label={tr("copy.deleteListener")}
+                                  disabled={
+                                    traffic.hybrid && !databaseGateway(name)
+                                  }
                                   onClick={() =>
-                                    update.mutate((next) => {
-                                      const target = next.gateways?.[name];
-                                      if (!target?.listeners) return;
-                                      target.listeners =
-                                        target.listeners.filter(
+                                    saveGatewayListeners(name, (gateway) => {
+                                      if (!gateway.listeners) return;
+                                      gateway.listeners =
+                                        gateway.listeners.filter(
                                           (_, index) => index !== listenerIndex,
                                         );
-                                      if (target.listeners.length === 0) {
-                                        delete target.listeners;
-                                      }
+                                      if (gateway.listeners.length === 0)
+                                        delete gateway.listeners;
                                     })
                                   }
                                 >
@@ -325,20 +420,18 @@ export function TrafficGatewaysPage() {
           initial={activeGateway}
           config={config.data}
           help={help}
-          saving={update.isPending}
-          onCancel={closeDrawer}
-          onSave={(draft) =>
-            update.mutate(
-              (next) => {
-                next.gateways ??= {};
-                if (draft.previousName && draft.previousName !== draft.name) {
-                  delete next.gateways[draft.previousName];
-                }
-                next.gateways[draft.name] = cleanGateway(draft.gateway);
-              },
-              { onSuccess: closeDrawer },
-            )
+          saving={saving}
+          databaseBacked={
+            traffic.hybrid &&
+            (!activeGateway.previousName ||
+              isDatabaseConfigResource(
+                traffic.resources,
+                "traffic.gateway",
+                activeGateway.previousName,
+              ))
           }
+          onCancel={closeDrawer}
+          onSave={saveGateway}
         />
       ) : null}
 
@@ -348,22 +441,25 @@ export function TrafficGatewaysPage() {
           editing={activeListener}
           config={config.data}
           help={help}
-          saving={update.isPending}
+          saving={saving}
+          databaseBacked={
+            traffic.hybrid &&
+            isDatabaseConfigResource(
+              traffic.resources,
+              "traffic.gateway",
+              activeListener.gatewayName,
+            )
+          }
           onCancel={closeDrawer}
           onSave={(gatewayName, listener, listenerIndex) =>
-            update.mutate(
-              (next) => {
-                const gateway = next.gateways?.[gatewayName];
-                if (!gateway) return;
-                gateway.listeners ??= [];
-                if (typeof listenerIndex === "number") {
-                  gateway.listeners[listenerIndex] = listener;
-                } else {
-                  gateway.listeners.push(listener);
-                }
-              },
-              { onSuccess: closeDrawer },
-            )
+            saveGatewayListeners(gatewayName, (gateway) => {
+              gateway.listeners ??= [];
+              if (typeof listenerIndex === "number") {
+                gateway.listeners[listenerIndex] = listener;
+              } else {
+                gateway.listeners.push(listener);
+              }
+            })
           }
         />
       ) : null}
@@ -395,10 +491,14 @@ function GatewayEditor(props: {
   config?: GatewayConfig;
   help: SchemaHelp;
   saving: boolean;
+  databaseBacked?: boolean;
   onCancel: () => void;
   onSave: (draft: GatewayEditorState) => void;
 }) {
   const [name, setName] = useState(props.initial.name);
+  const [defaultGateway, setDefaultGateway] = useState(
+    props.initial.name === "default",
+  );
   const [gateway, setGateway] = useState<TrafficGateway>(
     structuredClone(props.initial.gateway),
   );
@@ -411,6 +511,16 @@ function GatewayEditor(props: {
   const protocol = effectiveGatewayProtocol(gateway);
   const hasTls = protocol === "HTTPS" || protocol === "TLS";
   const canEnableMultipleListeners = !hasTls && policyCount === 0;
+  const anotherDefaultGateway = Boolean(
+    props.config?.gateways?.default && props.initial.previousName !== "default",
+  );
+  const defaultTraffic = defaultGatewayTraffic(props.config);
+  const invalidDefaultName = !defaultGateway && name.trim() === "default";
+  const duplicateName = Boolean(
+    name.trim() &&
+      name.trim() !== props.initial.previousName &&
+      props.config?.gateways?.[name.trim()],
+  );
   const preview: TrafficGateway = cleanGateway({
     ...(multipleListeners ? withoutGatewayPolicies(gateway) : gateway),
     listeners: multipleListeners
@@ -428,15 +538,30 @@ function GatewayEditor(props: {
 
   return (
     <Drawer
-      title={props.initial.previousName ? "Edit gateway" : "Add gateway"}
+      title={
+        props.initial.previousName
+          ? tr("copy.editGateway")
+          : tr("copy.addGateway")
+      }
       onClose={props.onCancel}
       footer={
         <ConfigDiffSaveActions
           config={props.config}
-          diffTitle="Gateway config diff"
-          saveLabel="Save gateway"
+          resourceDiff={
+            props.databaseBacked
+              ? {
+                  original: {
+                    name: props.initial.name,
+                    ...props.initial.gateway,
+                  },
+                  modified: { name: name.trim(), ...preview },
+                }
+              : undefined
+          }
+          diffTitle={tr("copy.gatewayConfigDiff")}
+          saveLabel={tr("copy.saveGateway")}
           saving={props.saving}
-          saveDisabled={!name.trim()}
+          saveDisabled={!name.trim() || invalidDefaultName || duplicateName}
           onCancel={props.onCancel}
           onSave={() =>
             props.onSave({
@@ -458,13 +583,14 @@ function GatewayEditor(props: {
         />
       }
     >
-      <div className="form-grid">
+      <div className="form-grid gateway-identity-grid">
         <Field
           label={tr("copy.name")}
           tooltip={tr("copy.featuresAndRoutesReferenceThisGatewayByName")}
         >
           <input
             value={name}
+            disabled={defaultGateway}
             onChange={(event) => setName(event.target.value)}
             placeholder="public"
           />
@@ -484,7 +610,63 @@ function GatewayEditor(props: {
             placeholder="443"
           />
         </Field>
-        {!multipleListeners ? (
+      </div>
+
+      <div className="gateway-default-option">
+        <label className="config-option-row">
+          <input
+            type="checkbox"
+            checked={defaultGateway}
+            disabled={anotherDefaultGateway}
+            onChange={(event) => {
+              const checked = event.target.checked;
+              setDefaultGateway(checked);
+              setName(
+                checked
+                  ? "default"
+                  : availableGatewayName(
+                      props.config?.gateways,
+                      props.initial.previousName,
+                    ),
+              );
+            }}
+          />
+          <span>
+            <strong>{tr("copy.defaultGateway")}</strong>
+            <small>
+              {anotherDefaultGateway
+                ? tr("copy.anotherGatewayIsAlreadyTheDefaultGateway")
+                : tr(
+                    "copy.useThisGatewayForEnabledTrafficWithoutAnExplicitGatewaySelection",
+                  )}
+            </small>
+          </span>
+        </label>
+
+        {invalidDefaultName ? (
+          <StatusBanner state="bad" title={tr("copy.defaultNameIsReserved")}>
+            {tr("copy.selectDefaultGatewayToUseTheNameValue", "default")}
+          </StatusBanner>
+        ) : duplicateName ? (
+          <StatusBanner state="bad" title={tr("copy.gatewayNameAlreadyExists")}>
+            {tr("copy.chooseAUniqueGatewayName")}
+          </StatusBanner>
+        ) : null}
+
+        {defaultGateway && props.initial.previousName !== "default" ? (
+          <StatusBanner state="warn" title={tr("copy.defaultGateway")}>
+            {tr(
+              "copy.thisWillMakeTheGatewayTheDefaultGatewayAndImpactValueTraffic",
+              defaultTraffic.length
+                ? defaultTraffic.join(", ")
+                : tr("copy.noEnabledTraffic"),
+            )}
+          </StatusBanner>
+        ) : null}
+      </div>
+
+      {!multipleListeners ? (
+        <div className="form-grid">
           <Field
             label={tr("copy.protocol")}
             tooltip={props.help.field<TrafficGateway>(
@@ -493,7 +675,7 @@ function GatewayEditor(props: {
             )}
           >
             <Dropdown
-              ariaLabel="Protocol"
+              ariaLabel={tr("copy.protocol")}
               value={protocol}
               options={gatewayProtocolOptions}
               onChange={(value) => {
@@ -513,8 +695,8 @@ function GatewayEditor(props: {
               }}
             />
           </Field>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
       <div className="form-grid">
         <label className="config-option-row">
@@ -545,8 +727,8 @@ function GatewayEditor(props: {
             <strong>{tr("copy.multipleListeners")}</strong>
             <small>
               {!multipleListeners && !canEnableMultipleListeners
-                ? "Unavailable while gateway TLS or policies are configured."
-                : "Use named listeners for per-hostname TLS and policies."}
+                ? tr("copy.unavailableWhileGatewayTlsOrPoliciesAreConfigured")
+                : tr("copy.useNamedListenersForPerHostnameTlsAndPolicies")}
             </small>
           </span>
         </label>
@@ -581,6 +763,28 @@ function GatewayEditor(props: {
       </details>
     </Drawer>
   );
+}
+
+function defaultGatewayTraffic(config: GatewayConfig | undefined) {
+  const traffic: string[] = [];
+  if (config?.llm) traffic.push("LLM");
+  if (config && Object.prototype.hasOwnProperty.call(config, "ui")) {
+    traffic.push("UI");
+  }
+  if (config?.mcp) traffic.push("MCP");
+  return traffic;
+}
+
+function availableGatewayName(
+  gateways: Record<string, TrafficGateway> | undefined,
+  currentName: string | undefined,
+) {
+  const names = new Set(Object.keys(gateways ?? {}));
+  if (currentName) names.delete(currentName);
+  if (!names.has("public")) return "public";
+  let suffix = 2;
+  while (names.has(`public-${suffix}`)) suffix += 1;
+  return `public-${suffix}`;
 }
 
 function GatewayTLSFields(props: {
@@ -630,6 +834,7 @@ function GatewayListenerEditor(props: {
   config?: GatewayConfig;
   help: SchemaHelp;
   saving: boolean;
+  databaseBacked?: boolean;
   onCancel: () => void;
   onSave: (
     gatewayName: string,
@@ -651,20 +856,46 @@ function GatewayListenerEditor(props: {
         ? { ...(listener.tls ?? {}), cert: cert.trim(), key: key.trim() }
         : null,
   });
+  const originalGateway = props.config?.gateways?.[props.editing.gatewayName];
+  const modifiedGateway = originalGateway
+    ? structuredClone(originalGateway)
+    : undefined;
+  if (modifiedGateway) {
+    modifiedGateway.listeners ??= [];
+    if (typeof props.editing.listenerIndex === "number") {
+      modifiedGateway.listeners[props.editing.listenerIndex] = preview;
+    } else {
+      modifiedGateway.listeners.push(preview);
+    }
+  }
 
   return (
     <Drawer
       title={
         typeof props.editing.listenerIndex === "number"
-          ? "Edit listener"
-          : "Add listener"
+          ? tr("copy.editListener")
+          : tr("copy.addListener")
       }
       onClose={props.onCancel}
       footer={
         <ConfigDiffSaveActions
           config={props.config}
-          diffTitle="Gateway listener config diff"
-          saveLabel="Save listener"
+          resourceDiff={
+            props.databaseBacked && originalGateway && modifiedGateway
+              ? {
+                  original: {
+                    name: props.editing.gatewayName,
+                    ...originalGateway,
+                  },
+                  modified: {
+                    name: props.editing.gatewayName,
+                    ...modifiedGateway,
+                  },
+                }
+              : undefined
+          }
+          diffTitle={tr("copy.gatewayListenerConfigDiff")}
+          saveLabel={tr("copy.saveListener")}
           saving={props.saving}
           onCancel={props.onCancel}
           onSave={() =>
@@ -711,7 +942,7 @@ function GatewayListenerEditor(props: {
           )}
         >
           <Dropdown
-            ariaLabel="Protocol"
+            ariaLabel={tr("copy.protocol")}
             value={protocol}
             options={gatewayProtocolOptions}
             onChange={(value) => {
@@ -913,15 +1144,15 @@ function applyBindMigration(config: GatewayConfig) {
     const gatewayName = useDefaultGateway
       ? "default"
       : uniqueGatewayName(config.gateways, `port-${bind.port}`);
-    const gateway: TrafficGateway =
-      convertible.length === 1
-        ? migratedSingleListenerGateway(convertible[0], bind.port)
-        : {
-            port: bind.port,
-            listeners: convertible.map((listener, listenerIndex) =>
-              migratedGatewayListener(listener, listenerIndex),
-            ),
-          };
+    const listenerlessGateway = convertible.length === 1 && useDefaultGateway;
+    const gateway: TrafficGateway = listenerlessGateway
+      ? migratedSingleListenerGateway(convertible[0], bind.port)
+      : {
+          port: bind.port,
+          listeners: convertible.map((listener, listenerIndex) =>
+            migratedGatewayListener(listener, listenerIndex),
+          ),
+        };
     config.gateways[gatewayName] = cleanGateway(gateway);
 
     const migratedRoutes = convertible.flatMap((listener, listenerIndex) =>
@@ -932,7 +1163,7 @@ function applyBindMigration(config: GatewayConfig) {
             gatewayName,
             listener,
             listenerIndex,
-            convertible.length === 1,
+            listenerlessGateway,
             useDefaultGateway,
           ),
         ),
@@ -949,7 +1180,7 @@ function applyBindMigration(config: GatewayConfig) {
             gatewayName,
             listener,
             listenerIndex,
-            convertible.length === 1,
+            listenerlessGateway,
             useDefaultGateway,
           ),
         ),
@@ -1127,7 +1358,7 @@ function uniqueGatewayName(
 }
 
 function gatewayPortLabel(gateway: TrafficGateway) {
-  return gateway.port?.toString() ?? "Unset";
+  return gateway.port?.toString() ?? tr("copy.unset");
 }
 
 function gatewayHasTls(gateway: TrafficGateway) {

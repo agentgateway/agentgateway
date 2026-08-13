@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"istio.io/istio/pkg/kube/krt"
+	"istio.io/istio/pkg/ptr"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
@@ -27,6 +28,7 @@ func ResolveEndpoint(
 		ParentName:       policyName,
 		DefaultNamespace: defaultNS,
 		BackendRef:       remoteProvider.BackendRef,
-		Path:             remoteProvider.JwksPath,
+		URL:              remoteProvider.URL,
+		Path:             ptr.OrDefault(remoteProvider.JwksPath, ""),
 	})
 }

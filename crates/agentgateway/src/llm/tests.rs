@@ -23,6 +23,30 @@ fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 }
 
 #[test]
+fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
+	let provider = AIProvider::Vertex(vertex::Provider {
+		project_id: strng::new("test-project"),
+		model: None,
+		region: None,
+	});
+	let model = Some("google/gemini-2.5-flash-lite");
+
+	assert_eq!(
+		provider
+			.chat_translation(InputFormat::Completions, model)
+			.unwrap()
+			.output,
+		ChatFormat::VertexGemini
+	);
+	for input in [InputFormat::Messages, InputFormat::Responses] {
+		assert_eq!(
+			provider.chat_translation(input, model).unwrap().output,
+			ChatFormat::OpenAICompletions
+		);
+	}
+}
+
+#[test]
 fn streaming_amend_on_drop_updates_local_rate_limit() {
 	let rate_limit =
 		crate::http::localratelimit::RateLimit::try_from(crate::http::localratelimit::RateLimitSpec {
@@ -37,6 +61,53 @@ fn streaming_amend_on_drop_updates_local_rate_limit() {
 		request: llm_request_with_tokens(Some(2)),
 		response: LLMResponse {
 			input_tokens: Some(2),
+			output_tokens: Some(4),
+			..Default::default()
+		},
+	}));
+
+	let mut amend = AmendOnDrop::new(
+		log,
+		LLMResponsePolicies {
+			local_rate_limit: vec![rate_limit.clone()],
+			..Default::default()
+		},
+		None,
+		None,
+	);
+	amend.report_usage();
+
+	assert!(
+		rate_limit
+			.check_llm_request(&llm_request_with_tokens(Some(7)))
+			.is_err()
+	);
+	assert!(
+		rate_limit
+			.check_llm_request(&llm_request_with_tokens(Some(6)))
+			.is_ok()
+	);
+}
+
+#[test]
+fn streaming_amend_on_drop_uses_cache_inclusive_input_tokens() {
+	let rate_limit =
+		crate::http::localratelimit::RateLimit::try_from(crate::http::localratelimit::RateLimitSpec {
+			max_tokens: 10,
+			tokens_per_fill: 10,
+			fill_interval: std::time::Duration::from_secs(60),
+			limit_type: crate::http::localratelimit::RateLimitType::Tokens,
+		})
+		.unwrap();
+	let mut request = llm_request_with_tokens(Some(5));
+	request.cache_convention = CacheTokenConvention::InputExcludesCache;
+	let log = AsyncLog::default();
+	log.store(Some(LLMInfo {
+		request,
+		response: LLMResponse {
+			input_tokens: Some(2),
+			cached_input_tokens: Some(2),
+			cache_creation_input_tokens: Some(1),
 			output_tokens: Some(4),
 			..Default::default()
 		},
@@ -132,13 +203,331 @@ async fn test_passthrough() {
 	);
 }
 
+fn openai_inline_moderation_param() -> openai::ModerationParam {
+	openai::ModerationParam {
+		model: strng::new("omni-moderation-latest"),
+		policy: Some(openai::ModerationPolicyParam {
+			input: Some(openai::ModerationConfigParam {
+				mode: openai::ModerationMode::Block,
+			}),
+			output: Some(openai::ModerationConfigParam {
+				mode: openai::ModerationMode::Score,
+			}),
+		}),
+	}
+}
+
+fn openai_inline_moderation_value() -> Value {
+	json!({
+		"model": "omni-moderation-latest",
+		"policy": {
+			"input": { "mode": "block" },
+			"output": { "mode": "score" }
+		}
+	})
+}
+
+fn openai_test_backend_info() -> crate::http::auth::BackendInfo {
+	let inputs = crate::test_helpers::proxymock::setup_proxy_test("{}")
+		.unwrap()
+		.pi;
+	crate::http::auth::BackendInfo {
+		target: crate::types::agent::BackendTarget::Invalid,
+		call_target: Target::from(("api.openai.com", 443)),
+		inputs,
+	}
+}
+
+#[tokio::test]
+async fn openai_inline_moderation_injected_for_completions() {
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: Some(openai_inline_moderation_param()),
+	});
+	let backend_info = openai_test_backend_info();
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "gpt-5",
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		upstream_route_type,
+		..
+	} = provider
+		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("OpenAI completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(upstream_route_type, RouteType::Completions);
+	assert_eq!(
+		forwarded_json["moderation"],
+		openai_inline_moderation_value()
+	);
+}
+
+#[tokio::test]
+async fn openai_inline_moderation_overrides_client_value_for_completions() {
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: Some(openai_inline_moderation_param()),
+	});
+	let backend_info = openai_test_backend_info();
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "gpt-5",
+				"messages": [{"role": "user", "content": "hello"}],
+				"moderation": {
+					"model": "client-selected-model",
+					"policy": {
+						"input": { "mode": "score" },
+						"output": { "mode": "score" }
+					}
+				}
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded, ..
+	} = provider
+		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("OpenAI completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(
+		forwarded_json["moderation"],
+		openai_inline_moderation_value()
+	);
+}
+
+#[tokio::test]
+async fn openai_client_moderation_passthrough_without_config() {
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
+	let backend_info = openai_test_backend_info();
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+					"model": "gpt-5",
+					"messages": [{"role": "user", "content": "hello"}],
+					"moderation": {
+						"model": "client-selected-model",
+						"policy": {
+							"input": {
+								"mode": "future-mode",
+								"future_option": { "enabled": true }
+							},
+							"output": { "mode": "block" }
+						}
+					},
+					"future_top_level": { "enabled": true }
+				}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded, ..
+	} = provider
+		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("OpenAI completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(
+		forwarded_json["moderation"],
+		json!({
+			"model": "client-selected-model",
+			"policy": {
+				"input": {
+					"mode": "future-mode",
+					"future_option": { "enabled": true }
+				},
+				"output": { "mode": "block" }
+			}
+		})
+	);
+	assert_eq!(
+		forwarded_json["future_top_level"],
+		json!({ "enabled": true })
+	);
+}
+
+#[tokio::test]
+async fn openai_inline_moderation_injected_for_responses() {
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: Some(openai_inline_moderation_param()),
+	});
+	let backend_info = openai_test_backend_info();
+	let req = ::http::Request::builder()
+		.uri("/v1/responses")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "gpt-5",
+				"input": "hello"
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		upstream_route_type,
+		..
+	} = provider
+		.process_responses_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("OpenAI responses request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(upstream_route_type, RouteType::Responses);
+	assert_eq!(
+		forwarded_json["moderation"],
+		openai_inline_moderation_value()
+	);
+}
+
+#[tokio::test]
+async fn openai_inline_moderation_injected_after_messages_translation() {
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: Some(openai_inline_moderation_param()),
+	});
+	let backend_info = openai_test_backend_info();
+	let req = ::http::Request::builder()
+		.uri("/v1/messages")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "gpt-5",
+				"max_tokens": 64,
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		upstream_route_type,
+		..
+	} = provider
+		.process_messages_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("Anthropic messages request should translate to OpenAI completions")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(upstream_route_type, RouteType::Completions);
+	assert_eq!(
+		forwarded_json["moderation"],
+		openai_inline_moderation_value()
+	);
+}
+
+#[test]
+fn openai_response_passthrough_preserves_moderation_fields() {
+	let completion_response: types::completions::Response = serde_json::from_value(json!({
+		"model": "gpt-5",
+		"usage": null,
+		"choices": [],
+		"moderation": {
+			"input": { "flagged": false },
+			"output": { "flagged": true }
+		}
+	}))
+	.expect("completion response should deserialize");
+	let completion_roundtrip =
+		serde_json::to_value(completion_response).expect("completion response should serialize");
+	assert_eq!(
+		completion_roundtrip["moderation"],
+		json!({
+			"input": { "flagged": false },
+			"output": { "flagged": true }
+		})
+	);
+
+	let responses_response: types::responses::Response = serde_json::from_value(json!({
+		"id": "resp_123",
+		"status": "completed",
+		"output": [],
+		"model": "gpt-5",
+		"moderation": {
+			"input": { "flagged": false },
+			"output": { "flagged": true }
+		}
+	}))
+	.expect("responses response should deserialize");
+	let responses_roundtrip =
+		serde_json::to_value(responses_response).expect("responses response should serialize");
+	assert_eq!(
+		responses_roundtrip["moderation"],
+		json!({
+			"input": { "flagged": false },
+			"output": { "flagged": true }
+		})
+	);
+}
+
 #[tokio::test]
 async fn openai_provider_normalizes_max_tokens_before_forwarding() {
 	use crate::http::auth::BackendInfo;
 	use crate::test_helpers::proxymock::setup_proxy_test;
 	use crate::types::agent::BackendTarget;
 
-	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
 		target: BackendTarget::Invalid,
@@ -186,7 +575,10 @@ async fn openai_provider_normalizes_max_tokens_after_model_alias() {
 	use crate::test_helpers::proxymock::setup_proxy_test;
 	use crate::types::agent::BackendTarget;
 
-	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
 		target: BackendTarget::Invalid,
@@ -242,7 +634,10 @@ async fn openai_provider_preserves_max_tokens_for_non_gpt_models() {
 	use crate::test_helpers::proxymock::setup_proxy_test;
 	use crate::types::agent::BackendTarget;
 
-	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
 		target: BackendTarget::Invalid,
@@ -458,6 +853,7 @@ async fn provider_model_is_set_before_llm_transformations() {
 
 	let provider = AIProvider::OpenAI(openai::Provider {
 		model: Some("gcp/failover-model".into()),
+		moderation: None,
 	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
@@ -511,13 +907,348 @@ async fn provider_model_is_set_before_llm_transformations() {
 }
 
 #[tokio::test]
+async fn messages_to_completions_final_transformation() {
+	use crate::llm::policy::Policy;
+
+	async fn create_llm_request(vec_body: Vec<u8>, policy: Option<&Policy>) -> (Request, RouteType) {
+		let provider = AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		});
+		let backend_info = openai_test_backend_info();
+		let req = ::http::Request::builder()
+			.uri("/v1/messages")
+			.header(::http::header::CONTENT_TYPE, "application/json")
+			.body(Body::from(vec_body))
+			.unwrap();
+		let RequestResult::Success {
+			request: forwarded,
+			upstream_route_type,
+			..
+		} = provider
+			.process_messages_request(&backend_info, policy, req, false, &mut None)
+			.await
+			.expect("Anthropic messages request should translate to OpenAI completions")
+		else {
+			panic!("expected forwarded request");
+		};
+		(forwarded, upstream_route_type)
+	}
+	let expr = |e: &str| std::sync::Arc::new(crate::cel::Expression::new_strict(e).unwrap());
+
+	let policy = Policy {
+		final_transformations: Some(
+			[
+				// Only true final-conversion: `system` became messages[0].
+				(
+					"converted_message_count".to_string(),
+					expr("llmRequest.messages.size()"),
+				),
+				// Mutate a field carried through the conversion.
+				("max_tokens".to_string(), expr("32")),
+				("reasoning_effort".to_string(), expr("fail(\"remove\")")),
+			]
+			.into_iter()
+			.collect(),
+		),
+		..Default::default()
+	};
+
+	let vec_body = br#"{
+				"model": "gpt-4o",
+				"max_tokens": 64,
+				"system": "be brief",
+				"messages": [{"role": "user", "content": "hello"}],
+				"tools": [{
+					"name": "get_weather",
+					"description": "Look up the weather",
+					"input_schema": {
+						"type": "object",
+						"properties": {"city": {"type": "string"}},
+						"required": ["city"]
+					}
+				}]
+			}"#
+		.to_vec();
+
+	let (forwarded, upstream_route_type) = create_llm_request(vec_body.clone(), Some(&policy)).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(upstream_route_type, RouteType::Completions);
+	// The request really was converted to completions format.
+	assert_eq!(forwarded_json["messages"][0]["role"], json!("system"));
+	// 2 (system + user), not the 1 message the client sent.
+	assert_eq!(forwarded_json["converted_message_count"], json!(2));
+	assert_eq!(forwarded_json["max_tokens"], json!(32));
+	// Indexing returns Null for a missing key too, so assert on key presence.
+	let reasoning_effort = forwarded_json.get("reasoning_effort");
+	assert!(
+		reasoning_effort.is_none(),
+		"reasoning_effort should be removed, got: {reasoning_effort:?}"
+	);
+
+	let (forwarded, upstream_route_type) = create_llm_request(vec_body, None).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+	assert_eq!(upstream_route_type, RouteType::Completions);
+	// The request really was converted to completions format.
+	assert_eq!(forwarded_json["messages"][0]["role"], json!("system"));
+	// 2 (system + user), not the 1 message the client sent.
+	assert_eq!(forwarded_json["max_completion_tokens"], json!(64));
+	// Indexing returns Null for a missing key too, so assert on key presence.
+	let reasoning_effort = forwarded_json.get("reasoning_effort");
+	assert!(
+		reasoning_effort.is_some(),
+		"reasoning_effort should not be empty, got: {reasoning_effort:?}"
+	);
+}
+
+#[tokio::test]
+async fn detect_final_transformations_skip_opaque_bodies() {
+	use crate::llm::policy::Policy;
+
+	async fn create_detect_request(
+		content_type: &str,
+		body: &[u8],
+		policy: Option<&Policy>,
+	) -> (Request, RouteType) {
+		let provider = AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		});
+		let backend_info = openai_test_backend_info();
+		let req = ::http::Request::builder()
+			.uri("/v1/passthrough")
+			.header(::http::header::CONTENT_TYPE, content_type)
+			.body(Body::from(body.to_vec()))
+			.unwrap();
+		let RequestResult::Success {
+			request: forwarded,
+			upstream_route_type,
+			..
+		} = provider
+			.process_detect_request(&backend_info, policy, req, &mut None)
+			.await
+			.expect("detect request should process")
+		else {
+			panic!("expected forwarded request");
+		};
+		(forwarded, upstream_route_type)
+	}
+
+	let expr = |e: &str| std::sync::Arc::new(crate::cel::Expression::new_strict(e).unwrap());
+	let policy = Policy {
+		final_transformations: Some(
+			[("max_tokens".to_string(), expr("32"))]
+				.into_iter()
+				.collect(),
+		),
+		..Default::default()
+	};
+
+	// Inner spaces and key order survive only if the body is never round-tripped through serde.
+	let json_body = br#"{ "model": "gpt-4o", "max_tokens": 64 }"#;
+
+	// A non-JSON content type is passed through opaquely even when the body happens to parse as
+	// JSON, so final transformations must not rewrite (or re-serialize) it.
+	let (forwarded, route_type) = create_detect_request("text/plain", json_body, Some(&policy)).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	assert_eq!(route_type, RouteType::Detect);
+	assert_eq!(
+		forwarded_body.as_ref(),
+		json_body.as_slice(),
+		"passthrough body must be forwarded byte-for-byte"
+	);
+
+	// A body that fails to parse falls back to raw passthrough, which must not become an error.
+	let raw_body = b"\x00\x01not json at all";
+	let (forwarded, route_type) =
+		create_detect_request("application/octet-stream", raw_body, Some(&policy)).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	assert_eq!(route_type, RouteType::Detect);
+	assert_eq!(forwarded_body.as_ref(), raw_body.as_slice());
+
+	// Malformed JSON under a JSON content type takes the same raw fallback.
+	let bad_json = br#"{"model": "gpt-4o", "#;
+	let (forwarded, route_type) =
+		create_detect_request("application/json", bad_json, Some(&policy)).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	assert_eq!(route_type, RouteType::Detect);
+	assert_eq!(forwarded_body.as_ref(), bad_json.as_slice());
+
+	// A genuine JSON detect body is still transformed: this is the behavior the guard preserves.
+	let (forwarded, route_type) =
+		create_detect_request("application/json", json_body, Some(&policy)).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+	assert_eq!(route_type, RouteType::Detect);
+	assert_eq!(forwarded_json["max_tokens"], json!(32));
+	assert_eq!(forwarded_json["model"], json!("gpt-4o"));
+
+	// Without a policy the JSON body is unchanged apart from the parse/serialize round trip.
+	let (forwarded, _) = create_detect_request("application/json", json_body, None).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+	assert_eq!(forwarded_json["max_tokens"], json!(64));
+}
+
+#[tokio::test]
+async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
+	use crate::http::auth::BackendInfo;
+	use crate::llm::policy::Policy;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model: Some(strng::new(
+			"bedrock-runtime/us/anthropic.claude-3-5-sonnet-20241022-v2:0",
+		)),
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	});
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("bedrock-runtime.us-east-1.amazonaws.com", 443)),
+		inputs,
+	};
+	let policy = Policy {
+		transformations: Some(
+			[(
+				"model".to_string(),
+				std::sync::Arc::new(
+					crate::cel::Expression::new_strict(
+						r#"llmRequest.model.stripPrefix("bedrock-runtime/us/")"#,
+					)
+					.unwrap(),
+				),
+			)]
+			.into_iter()
+			.collect(),
+		),
+		..Default::default()
+	};
+	let expected_model = "anthropic.claude-3-5-sonnet-20241022-v2:0";
+
+	let req = ::http::Request::builder()
+		.uri("https://gateway.example.com/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			json!({
+				"model": "client-model",
+				"messages": [{"role": "user", "content": "hello"}],
+				"stream": true,
+			})
+			.to_string(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: mut forwarded,
+		llm_request,
+		upstream_route_type,
+	} = provider
+		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None)
+		.await
+		.expect("Bedrock completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	assert_eq!(llm_request.request_model, expected_model);
+	provider
+		.setup_request(
+			&mut forwarded,
+			upstream_route_type,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+		)
+		.expect("Bedrock upstream request should be finalized");
+	assert_eq!(
+		forwarded.uri().path(),
+		format!("/model/{expected_model}/converse-stream")
+	);
+}
+
+#[tokio::test]
+async fn bedrock_provider_model_overrides_client_model() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let configured_model = "anthropic.claude-3-5-sonnet-20241022-v2:0";
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model: Some(strng::new(configured_model)),
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	});
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("bedrock-runtime.us-east-1.amazonaws.com", 443)),
+		inputs,
+	};
+	let req = ::http::Request::builder()
+		.uri("https://gateway.example.com/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "client-model",
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: mut forwarded,
+		llm_request,
+		upstream_route_type,
+	} = provider
+		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("Bedrock completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	assert_eq!(llm_request.request_model, configured_model);
+	provider
+		.setup_request(
+			&mut forwarded,
+			upstream_route_type,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+		)
+		.expect("Bedrock upstream request should be finalized");
+	assert_eq!(
+		forwarded.uri().path(),
+		format!("/model/{configured_model}/converse")
+	);
+}
+
+#[tokio::test]
 async fn llm_transformations_can_set_missing_model() {
 	use crate::http::auth::BackendInfo;
 	use crate::llm::policy::Policy;
 	use crate::test_helpers::proxymock::setup_proxy_test;
 	use crate::types::agent::BackendTarget;
 
-	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
 		target: BackendTarget::Invalid,
@@ -629,6 +1360,129 @@ async fn copilot_anthropic_model_uses_messages_route() {
 		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
 	assert_eq!(forwarded_json["model"], json!("claude-sonnet-4"));
 	assert_eq!(forwarded_json["max_tokens"], json!(64));
+}
+
+#[test]
+fn copilot_embeddings_response_adds_missing_openai_fields() {
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let mut request = llm_request_with_tokens(None);
+	request.input_format = InputFormat::Embeddings;
+	request.request_model = "text-embedding-3-small".into();
+	let response = Bytes::from_static(
+		br#"{"data":[{"embedding":[0.5,-0.25],"index":0,"object":"embedding"}],"usage":{"prompt_tokens":2,"total_tokens":2}}"#,
+	);
+
+	let (llm_response, body) = provider
+		.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
+		.expect("Copilot embeddings response should normalize");
+	let body: Value = serde_json::from_slice(&body).expect("normalized response should be JSON");
+
+	assert_eq!(body["object"], json!("list"));
+	assert_eq!(body["model"], json!("text-embedding-3-small"));
+	assert_eq!(body["data"][0]["embedding"], json!([0.5, -0.25]));
+	assert_eq!(llm_response.input_tokens, Some(2));
+	assert_eq!(llm_response.total_tokens, Some(2));
+}
+
+#[test]
+fn copilot_embeddings_response_preserves_missing_usage() {
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let mut request = llm_request_with_tokens(None);
+	request.input_format = InputFormat::Embeddings;
+	request.request_model = "text-embedding-3-small".into();
+	let response =
+		Bytes::from_static(br#"{"data":[{"embedding":[0.5],"index":0,"object":"embedding"}]}"#);
+
+	let (_, body) = provider
+		.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
+		.expect("Copilot embeddings response should normalize");
+	let body: Value = serde_json::from_slice(&body).expect("normalized response should be JSON");
+
+	assert!(body.get("usage").is_none());
+}
+
+#[test]
+fn copilot_embeddings_response_preserves_explicit_openai_fields() {
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let mut request = llm_request_with_tokens(None);
+	request.input_format = InputFormat::Embeddings;
+	request.request_model = "requested-model".into();
+	let response = Bytes::from_static(
+		br#"{"object":"upstream-list","model":"upstream-model","data":[{"embedding":[0.5],"index":0,"object":"embedding"}],"usage":{"prompt_tokens":1,"total_tokens":1}}"#,
+	);
+
+	let (_, body) = provider
+		.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
+		.expect("Copilot embeddings response should preserve explicit fields");
+	let body: Value = serde_json::from_slice(&body).expect("normalized response should be JSON");
+
+	assert_eq!(body["object"], json!("upstream-list"));
+	assert_eq!(body["model"], json!("upstream-model"));
+}
+
+#[test]
+fn copilot_embeddings_parse_error_logs_normalized_response() {
+	#[derive(Clone)]
+	struct LogWriter(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+	impl std::io::Write for LogWriter {
+		fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+			self.0.lock().unwrap().extend_from_slice(buf);
+			Ok(buf.len())
+		}
+
+		fn flush(&mut self) -> std::io::Result<()> {
+			Ok(())
+		}
+	}
+
+	let logs = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+	let writer = LogWriter(logs.clone());
+	let subscriber = tracing_subscriber::fmt()
+		.with_ansi(false)
+		.without_time()
+		.with_writer(move || writer.clone())
+		.finish();
+
+	tracing::subscriber::with_default(subscriber, || {
+		let provider = AIProvider::Copilot(copilot::Provider { model: None });
+		let mut request = llm_request_with_tokens(None);
+		request.input_format = InputFormat::Embeddings;
+		request.request_model = "text-embedding-3-small".into();
+		let response = Bytes::from_static(br#"{"usage":"invalid"}"#);
+
+		assert!(
+			provider
+				.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
+				.is_err()
+		);
+	});
+
+	let logs = String::from_utf8(logs.lock().unwrap().clone()).unwrap();
+	assert!(logs.contains(r#""object":"list""#), "{logs}");
+	assert!(
+		logs.contains(r#""model":"text-embedding-3-small""#),
+		"{logs}"
+	);
+}
+
+#[test]
+fn non_copilot_embeddings_response_still_requires_openai_fields() {
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
+	let mut request = llm_request_with_tokens(None);
+	request.input_format = InputFormat::Embeddings;
+	let response = Bytes::from_static(
+		br#"{"data":[{"embedding":[0.5],"index":0,"object":"embedding"}],"usage":{"prompt_tokens":1,"total_tokens":1}}"#,
+	);
+
+	assert!(
+		provider
+			.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
+			.is_err()
+	);
 }
 
 #[test]
@@ -834,7 +1688,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 			LLMResponsePolicies::default(),
 			None,
 			AsyncLog::default(),
-			false,
+			llm::LogContentFields::default(),
 			None,
 			resp,
 		)
@@ -864,13 +1718,16 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 
 #[test]
 fn openai_completions_error_translates_to_messages_client() {
-	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
 	let mut req = llm_request_with_tokens(None);
 	req.input_format = InputFormat::Messages;
 	req.request_model = "gpt-4o".into();
 
 	let error = Bytes::from_static(
-		br#"{"error":{"message":"bad request","type":"invalid_request_error","param":null,"code":null}}"#,
+		br#"{"error":{"message":"bad request","type":"invalid_request_error","param":null,"code":400}}"#,
 	);
 	let translated = provider
 		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error)
@@ -970,7 +1827,7 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 			LLMResponsePolicies::default(),
 			None,
 			AsyncLog::default(),
-			false,
+			llm::LogContentFields::default(),
 			None,
 			resp,
 		)
@@ -996,7 +1853,10 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 
 #[test]
 fn setup_request_openai_applies_prefixed_path_without_host_override() {
-	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
 	let mut req = crate::http::tests_common::request(
 		"https://example.com/v1/messages?trace=repro",
 		http::Method::POST,
@@ -1024,7 +1884,10 @@ fn setup_request_openai_applies_prefixed_path_without_host_override() {
 
 #[test]
 fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
-	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
 	let mut req = crate::http::tests_common::request(
 		"https://example.com/v1/messages?trace=repro",
 		http::Method::POST,
@@ -1263,7 +2126,10 @@ async fn bedrock_from_messages_stream_captures_completion() {
 		logger,
 		"us.anthropic.claude-haiku-4-5-20251001-v1:0",
 		"msg_123",
-		true,
+		llm::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		},
 		None,
 	);
 	let _ = body.collect().await.unwrap();
@@ -1310,7 +2176,7 @@ async fn bedrock_from_messages_stream_skips_completion_when_disabled() {
 		logger,
 		"us.anthropic.claude-haiku-4-5-20251001-v1:0",
 		"msg_123",
-		false,
+		llm::LogContentFields::default(),
 		None,
 	);
 	let _ = body.collect().await.unwrap();
@@ -1319,7 +2185,70 @@ async fn bedrock_from_messages_stream_skips_completion_when_disabled() {
 		.expect("log should have LLMInfo after stream completes");
 	assert!(
 		info.response.completion.is_none(),
-		"completion should not be set when include_completion_in_log is false"
+		"completion should not be set when log_content.completion is false"
+	);
+	assert!(
+		info.response.output_messages.is_none(),
+		"output messages should not be set when log_content.tool_calls is false"
+	);
+}
+
+#[tokio::test]
+async fn bedrock_from_messages_stream_captures_tool_calls() {
+	let input_bytes =
+		fs::read(fixture_path("response/bedrock/tool.bin")).expect("Failed to read fixture");
+	let body = Body::from(input_bytes);
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	let llmresp = LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			cache_convention: CacheTokenConvention::pending(),
+			request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
+			provider: "bedrock".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+			provider_state: None,
+		},
+		response: LLMResponse::default(),
+	};
+	log.store(Some(llmresp));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
+	let body = conversion::bedrock::from_messages::translate_stream(
+		body,
+		1024 * 1024,
+		logger,
+		"us.anthropic.claude-haiku-4-5-20251001-v1:0",
+		"msg_123",
+		llm::LogContentFields {
+			completion: false,
+			tool_calls: true,
+		},
+		None,
+	);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	assert!(info.response.completion.is_none());
+	let output_messages = info
+		.response
+		.output_messages
+		.expect("output messages should be set for Bedrock tool calls");
+	assert_eq!(
+		output_messages[0].finish_reason.as_deref(),
+		Some("tool_use")
+	);
+	let tool_calls = output_messages[0].tool_calls();
+	assert_eq!(tool_calls.len(), 2);
+	assert_eq!(tool_calls[0].name.as_str(), "top_song");
+	assert_eq!(tool_calls[0].arguments, serde_json::json!({"sign": "WZPZ"}));
+	assert_eq!(tool_calls[1].name.as_str(), "hello");
+	assert_eq!(
+		tool_calls[1].arguments,
+		serde_json::json!({"sign": "world"})
 	);
 }
 
@@ -1347,7 +2276,15 @@ async fn messages_passthrough_stream_captures_completion() {
 	log.store(Some(llmresp));
 	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
 	let buffer_limit = 1024 * 1024;
-	let body = conversion::messages::passthrough_stream(body, buffer_limit, logger, true);
+	let body = conversion::messages::passthrough_stream(
+		body,
+		buffer_limit,
+		logger,
+		llm::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		},
+	);
 	// Consume the body to drive the stream to completion
 	let _ = body.collect().await.unwrap();
 	let info = log2
@@ -1387,19 +2324,83 @@ async fn messages_passthrough_stream_skips_completion_when_disabled() {
 	log.store(Some(llmresp));
 	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
 	let buffer_limit = 1024 * 1024;
-	let body = conversion::messages::passthrough_stream(body, buffer_limit, logger, false);
+	let body = conversion::messages::passthrough_stream(
+		body,
+		buffer_limit,
+		logger,
+		llm::LogContentFields::default(),
+	);
 	let _ = body.collect().await.unwrap();
 	let info = log2
 		.take()
 		.expect("log should have LLMInfo after stream completes");
 	assert!(
 		info.response.completion.is_none(),
-		"completion should not be set when include_completion_in_log is false"
+		"completion should not be set when log_content.completion is false"
+	);
+	assert!(
+		info.response.output_messages.is_none(),
+		"output messages should not be set when log_content.tool_calls is false"
 	);
 }
 
 #[tokio::test]
-async fn responses_passthrough_stream_captures_completion() {
+async fn messages_passthrough_stream_captures_tool_calls() {
+	let input_bytes =
+		fs::read(fixture_path("response/anthropic/stream_tool.json")).expect("Failed to read fixture");
+	let body = Body::from(input_bytes);
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	let llmresp = LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			cache_convention: CacheTokenConvention::pending(),
+			request_model: "claude-haiku-4-5-20251001".into(),
+			provider: "anthropic".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+			provider_state: None,
+		},
+		response: LLMResponse::default(),
+	};
+	log.store(Some(llmresp));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
+	let body = conversion::messages::passthrough_stream(
+		body,
+		1024 * 1024,
+		logger,
+		llm::LogContentFields {
+			completion: false,
+			tool_calls: true,
+		},
+	);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	assert!(info.response.completion.is_none());
+	let output_messages = info
+		.response
+		.output_messages
+		.expect("output messages should be set for Anthropic tool calls");
+	assert_eq!(
+		output_messages[0].finish_reason.as_deref(),
+		Some("tool_use")
+	);
+	let tool_calls = output_messages[0].tool_calls();
+	assert_eq!(tool_calls.len(), 1);
+	assert_eq!(tool_calls[0].id.as_str(), "toolu_01A");
+	assert_eq!(tool_calls[0].name.as_str(), "get_weather");
+	assert_eq!(
+		tool_calls[0].arguments,
+		serde_json::json!({"location": "San Francisco"})
+	);
+}
+
+#[tokio::test]
+async fn responses_passthrough_stream_captures_completion_and_tool_calls() {
 	let input_path = fixture_path("response/responses/stream.json");
 	let input_bytes = fs::read(&input_path).expect("Failed to read fixture");
 	let body = Body::from(input_bytes);
@@ -1422,7 +2423,15 @@ async fn responses_passthrough_stream_captures_completion() {
 	log.store(Some(llmresp));
 	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
 	let buffer_limit = 1024 * 1024;
-	let body = conversion::responses::passthrough_stream(body, buffer_limit, logger, true);
+	let body = conversion::responses::passthrough_stream(
+		body,
+		buffer_limit,
+		logger,
+		llm::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		},
+	);
 	let _ = body.collect().await.unwrap();
 	let info = log2
 		.take()
@@ -1432,6 +2441,62 @@ async fn responses_passthrough_stream_captures_completion() {
 		.completion
 		.expect("completion should be set for responses streaming");
 	assert_eq!(completion.join(""), "Hello");
+	let output_messages = info
+		.response
+		.output_messages
+		.expect("output messages should be set for responses streaming");
+	assert_eq!(
+		output_messages[0].finish_reason.as_deref(),
+		Some("completed")
+	);
+	let tool_calls = output_messages[0].tool_calls();
+	assert_eq!(tool_calls.len(), 1);
+	assert_eq!(tool_calls[0].id.as_str(), "call_xxx");
+	assert_eq!(tool_calls[0].name.as_str(), "get_weather");
+	assert_eq!(
+		tool_calls[0].arguments,
+		serde_json::json!({"location": "San Francisco"})
+	);
+}
+
+#[tokio::test]
+async fn responses_passthrough_stream_preserves_moderation_chunks() {
+	let input_bytes = br#"event: response.completed
+data: {"type":"response.completed","sequence_number":1,"response":{"created_at":123,"id":"resp_123","model":"gpt-5","object":"response","output":[],"status":"completed","moderation":{"input":{"flagged":false},"output":{"flagged":true}}}}
+
+data: [DONE]
+
+"#;
+	let body = Body::from(input_bytes.to_vec());
+	let log = AsyncLog::default();
+	let llmresp = LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Responses,
+			cache_convention: CacheTokenConvention::pending(),
+			request_model: "gpt-5".into(),
+			provider: "openai".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+			provider_state: None,
+		},
+		response: LLMResponse::default(),
+	};
+	log.store(Some(llmresp));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
+	let buffer_limit = 1024 * 1024;
+	let body = conversion::responses::passthrough_stream(
+		body,
+		buffer_limit,
+		logger,
+		llm::LogContentFields::default(),
+	);
+	let output = body.collect().await.unwrap().to_bytes();
+	let text = String::from_utf8(output.to_vec()).expect("stream should be valid UTF-8");
+
+	assert!(text.contains(r#""moderation":{"input":{"flagged":false},"output":{"flagged":true}}"#));
+	assert!(text.contains("data: [DONE]"));
 }
 
 #[tokio::test]
@@ -1458,14 +2523,23 @@ async fn responses_passthrough_stream_skips_completion_when_disabled() {
 	log.store(Some(llmresp));
 	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
 	let buffer_limit = 1024 * 1024;
-	let body = conversion::responses::passthrough_stream(body, buffer_limit, logger, false);
+	let body = conversion::responses::passthrough_stream(
+		body,
+		buffer_limit,
+		logger,
+		llm::LogContentFields::default(),
+	);
 	let _ = body.collect().await.unwrap();
 	let info = log2
 		.take()
 		.expect("log should have LLMInfo after stream completes");
 	assert!(
 		info.response.completion.is_none(),
-		"completion should not be set when include_completion_in_log is false"
+		"completion should not be set when log_content.completion is false"
+	);
+	assert!(
+		info.response.output_messages.is_none(),
+		"output messages should not be set when log_content.tool_calls is false"
 	);
 }
 
@@ -1623,7 +2697,10 @@ fn fixed_providers_classify_by_family() {
 	);
 	assert_eq!(
 		cache_convention_for(
-			&AIProvider::OpenAI(openai::Provider { model: None }),
+			&AIProvider::OpenAI(openai::Provider {
+				model: None,
+				moderation: None,
+			}),
 			Some(custom::ProviderFormat::Completions),
 			"gpt-4o"
 		),

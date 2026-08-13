@@ -1,0 +1,71 @@
+# Redis-backed semantic-cache agentgateway resources.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: homehub-support
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/part-of: semantic-cache
+spec:
+  ai:
+    provider:
+      openai:
+        model: homehub-support
+      host: support-backend.homehub.svc.cluster.local
+      port: 8080
+  policies:
+    auth:
+      passthrough: {}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: homehub-support
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/part-of: semantic-cache
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agentgateway-proxy
+    namespace: agentgateway-system
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /v1/chat/completions
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayBackend
+      name: homehub-support
+      namespace: agentgateway-system
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: semantic-cache-extproc
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/part-of: semantic-cache
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: homehub-support
+  traffic:
+    extProc:
+      backendRef:
+        name: semantic-router
+        namespace: agentgateway-system
+        port: 50051
+      failureMode: FailClosed
+      processingOptions:
+        requestHeaderMode: Send
+        requestBodyMode: FullDuplexStreamed
+        responseHeaderMode: Send
+        # vSR needs the complete successful response to populate the cache.
+        responseBodyMode: Buffered
+        requestTrailerMode: Send
+        responseTrailerMode: Send
+        allowModeOverride: true

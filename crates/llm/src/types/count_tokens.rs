@@ -20,8 +20,15 @@ pub struct Request {
 }
 
 impl RequestType for Request {
+	fn body_is_json(&self) -> bool {
+		true
+	}
 	fn model(&mut self) -> &mut Option<String> {
 		&mut self.model
+	}
+
+	fn to_value(&self) -> serde_json::Result<serde_json::Value> {
+		serde_json::to_value(self)
 	}
 
 	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>) {
@@ -55,6 +62,12 @@ impl RequestType for Request {
 	fn set_messages(&mut self, _messages: Vec<SimpleChatCompletionMessage>) {
 		unimplemented!(
 			"set_messages is used for prompt guard; prompt guard is disable for token counting."
+		)
+	}
+
+	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(&mut String)) {
+		unimplemented!(
+			"visit_text_mut is used for prompt guard; prompt guard is disable for token counting."
 		)
 	}
 }

@@ -14,6 +14,7 @@ use tracing::trace;
 
 use crate::serdes::{FileOrInline, schema};
 use crate::types::agent::Target;
+use crate::util::ErrorContext;
 use crate::{apply, const_string, ser_redact};
 
 const_string!(IdToken = "idToken");
@@ -346,14 +347,27 @@ pub(super) async fn insert_token(
 				_ => anyhow::bail!("idToken auth requires a hostname target or explicit audience"),
 			};
 			match credential {
-				Some(credential) => explicit_id_token(aud.as_ref(), credential).await?,
-				None => fetch_id_token(aud.as_ref()).await?,
+				Some(credential) => tokio::time::timeout(
+					super::CLOUD_AUTH_TIMEOUT,
+					explicit_id_token(aud.as_ref(), credential),
+				)
+				.await
+				.ctx("GCP ID token fetch timed out after 5s")??,
+				None => tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, fetch_id_token(aud.as_ref()))
+					.await
+					.ctx("GCP ID token fetch timed out after 5s")??,
 			}
 		},
 		GcpAuth::AccessToken { credential, .. } => match credential {
-			Some(credential) => explicit_access_token(credential).await?,
+			Some(credential) => {
+				tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, explicit_access_token(credential))
+					.await
+					.ctx("GCP access token fetch timed out after 5s")??
+			},
 			None => {
-				let token = creds()?.access_token().await?;
+				let token = tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, creds()?.access_token())
+					.await
+					.ctx("GCP access token fetch timed out after 5s")??;
 				token.token
 			},
 		},

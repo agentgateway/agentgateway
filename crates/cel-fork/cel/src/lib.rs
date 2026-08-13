@@ -17,7 +17,7 @@ use common::ast::SelectExpr;
 pub use context::Context;
 pub use functions::FunctionContext;
 pub use objects::{ResolveResult, Value};
-use parser::{Expression, ExpressionReferences, Parser};
+use parser::{CallSignature, Expression, ExpressionReferences, Parser};
 pub use parser::{ParseError, ParseErrors};
 pub mod functions;
 mod magic;
@@ -131,6 +131,37 @@ pub enum ExecutionError {
 }
 
 impl ExecutionError {
+	pub fn kind(&self) -> &'static str {
+		match self {
+			ExecutionError::InvalidArgumentCount { .. } => "invalid-argument-count",
+			ExecutionError::UnsupportedTargetType { .. } => "unsupported-target-type",
+			ExecutionError::NotSupportedAsMethod { .. } => "not-supported-as-method",
+			ExecutionError::UnsupportedKeyType(_) => "unsupported-key-type",
+			ExecutionError::UnexpectedType { .. } => "unexpected-type",
+			ExecutionError::NoSuchKey(_) => "no-such-key",
+			ExecutionError::NoSuchOverload => "no-such-overload",
+			ExecutionError::UndeclaredReference(_) => "undeclared-reference",
+			ExecutionError::MissingArgumentOrTarget => "missing-argument-or-target",
+			ExecutionError::UnsupportedStruct => "unsupported-struct",
+			ExecutionError::ValuesNotComparable(_, _) => "values-not-comparable",
+			ExecutionError::UnsupportedUnaryOperator(_, _) => "unsupported-unary-operator",
+			ExecutionError::UnsupportedBinaryOperator(_, _, _) => "unsupported-binary-operator",
+			ExecutionError::UnsupportedMapIndex(_) => "unsupported-map-index",
+			ExecutionError::UnsupportedListIndex(_) => "unsupported-list-index",
+			ExecutionError::UnsupportedIndex(_, _) => "unsupported-index",
+			ExecutionError::UnsupportedFunctionCallIdentifierType(_) => {
+				"unsupported-function-call-identifier-type"
+			},
+			ExecutionError::UnsupportedFieldsConstruction(_) => "unsupported-fields-construction",
+			ExecutionError::FunctionError { .. } => "function-error",
+			ExecutionError::DivisionByZero(_) => "division-by-zero",
+			ExecutionError::RemainderByZero(_) => "remainder-by-zero",
+			ExecutionError::Overflow(_, _, _) => "overflow",
+			ExecutionError::Conversion(_, _) => "conversion",
+			ExecutionError::IndexOutOfBounds(_) => "index-out-of-bounds",
+		}
+	}
+
 	pub fn no_such_key(name: &str) -> Self {
 		ExecutionError::NoSuchKey(Arc::from(name))
 	}
@@ -228,6 +259,25 @@ impl Program {
 	/// ```
 	pub fn references(&self) -> ExpressionReferences<'_> {
 		self.expression.references()
+	}
+
+	/// Returns every function call site in the program with its call arity.
+	///
+	/// Unlike [`Program::references`], which dedupes by name, this reports one
+	/// entry per call so that arity can be checked at each site.
+	///
+	/// # Example
+	/// ```rust
+	/// # use cel::Program;
+	/// let program = Program::compile("'ab'.contains('a')").unwrap();
+	/// let calls = program.call_signatures();
+	///
+	/// let contains = calls.iter().find(|c| c.name == "contains").unwrap();
+	/// assert_eq!(contains.arity, 2);
+	/// assert!(contains.method_style);
+	/// ```
+	pub fn call_signatures(&self) -> Vec<CallSignature<'_>> {
+		self.expression.call_signatures()
 	}
 
 	/// Returns the contained expression

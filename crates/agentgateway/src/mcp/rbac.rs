@@ -72,6 +72,8 @@ pub enum ResourceType {
 	Prompt(ResourceId),
 	/// The resource being accessed
 	Resource(ResourceId),
+	/// The task being accessed (SEP-2663); `name` is the task ID.
+	Task(ResourceId),
 }
 
 impl cel::DynamicType for ResourceType {
@@ -80,6 +82,7 @@ impl cel::DynamicType for ResourceType {
 			ResourceType::Tool(t) => ("tool", t),
 			ResourceType::Prompt(t) => ("prompt", t),
 			ResourceType::Resource(t) => ("resource", t),
+			ResourceType::Task(t) => ("task", t),
 		};
 		Value::Map(MapValue::Borrow(VecMap::from_iter([(
 			KeyRef::String(n.into()),
@@ -92,6 +95,7 @@ impl cel::DynamicType for ResourceType {
 			(ResourceType::Tool(t), "tool") => Some(t.materialize()),
 			(ResourceType::Prompt(t), "prompt") => Some(t.materialize()),
 			(ResourceType::Resource(t), "resource") => Some(t.materialize()),
+			(ResourceType::Task(t), "task") => Some(t.materialize()),
 			_ => None,
 		}
 	}

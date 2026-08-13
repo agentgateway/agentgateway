@@ -389,15 +389,14 @@ impl Connector {
 			stream
 		};
 
-		let connect_ms = connect_start.elapsed().as_millis();
+		let connect_dur = connect_start.elapsed();
 		if let Some(m) = &self.metrics {
 			let labels = metrics::ConnectLabels {
 				transport: strng::RichStrng::from(transport_name).into(),
 			};
-			// Note: convert from ms to seconds since Prometheus convention for histogram buckets is seconds.
 			m.upstream_connect_duration
 				.get_or_create(&labels)
-				.observe((connect_ms as f64) / 1000.0);
+				.observe(connect_dur.as_secs_f64());
 		}
 
 		event!(
@@ -408,7 +407,7 @@ impl Connector {
 			endpoint = %ep,
 			transport = %transport_name,
 
-			connect_ms = connect_ms,
+			connect_ms = connect_dur.as_millis(),
 
 			"connected"
 		);
@@ -488,6 +487,7 @@ impl Client {
 		let mut b = agent_pool::Client::<_, PoolKey>::builder(::hyper_util::rt::TokioExecutor::new());
 		b.pool_timer(hyper_util::rt::tokio::TokioTimer::new());
 		b.pool_idle_timeout(backend_config.pool_idle_timeout);
+		b.connect_timeout(backend_config.connect_timeout);
 		b.timer(hyper_util::rt::tokio::TokioTimer::new());
 		b.http1_preserve_header_case(true);
 		if let Some(pool_max) = backend_config.pool_max_size {
@@ -670,14 +670,21 @@ impl Client {
 			let buffer_limit = http::buffer_limit(&req);
 			let to = req.extensions().get::<BackendRequestTimeout>().cloned();
 			let call = client.request(req);
+			let map_error = |err: agent_pool::Error| {
+				if err.is_connect_timeout() {
+					ProxyError::UpstreamCallTimeout
+				} else {
+					ProxyError::UpstreamCallFailed(err)
+				}
+			};
 			let resp = if let Some(to) = to {
 				match tokio::time::timeout(to.0, call).await {
 					Err(_) => Err(ProxyError::UpstreamCallTimeout),
-					Ok(Err(e)) => Err(ProxyError::UpstreamCallFailed(e)),
+					Ok(Err(err)) => Err(map_error(err)),
 					Ok(Ok(resp)) => Ok(resp),
 				}
 			} else {
-				call.await.map_err(ProxyError::UpstreamCallFailed)
+				call.await.map_err(map_error)
 			};
 			let dur = format!("{}ms", start.elapsed().as_millis());
 			// If version changed due to ALPN negotiation, make sure we get the real version
@@ -752,5 +759,57 @@ mod tests {
 				"tunnel protocol {tp:?} should map to no source role",
 			);
 		}
+	}
+
+	/// Millisecond truncation put every observation on an exact multiple of 1ms, and a loopback
+	/// connect on 0. Asserting the recorded value is finer than a millisecond catches that however
+	/// long the connect actually takes.
+	#[tokio::test]
+	async fn upstream_connect_duration_records_sub_millisecond_connects() {
+		use frozen_collections::FzHashSet;
+		use prometheus_client::registry::Registry;
+
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let addr = listener.local_addr().unwrap();
+		tokio::spawn(async move { while listener.accept().await.is_ok() {} });
+
+		let mut registry = Registry::default();
+		let metrics = Arc::new(crate::metrics::Metrics::new(
+			&mut registry,
+			FzHashSet::default(),
+		));
+
+		let client = Client::new(
+			&Config {
+				resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
+				resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+			},
+			None,
+			crate::BackendConfig::default(),
+			Some(metrics),
+		);
+		client
+			.connect_raw(
+				Target::Address(addr),
+				Transport::Plain(ApplicationTransport::Plaintext),
+			)
+			.await
+			.expect("connect to loopback listener");
+
+		let mut encoded = String::new();
+		prometheus_client::encoding::text::encode(&mut encoded, &registry).unwrap();
+		let sum = encoded
+			.lines()
+			.find_map(|l| {
+				l.strip_prefix("upstream_connect_duration_seconds_sum{transport=\"plaintext\"} ")
+			})
+			.unwrap_or_else(|| panic!("no connect duration sum in:\n{encoded}"))
+			.parse::<f64>()
+			.unwrap();
+		let ms = sum * 1000.0;
+		assert!(
+			(ms - ms.round()).abs() > 1e-9,
+			"connect duration {ms}ms is quantized to whole milliseconds"
+		);
 	}
 }

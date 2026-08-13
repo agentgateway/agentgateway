@@ -103,9 +103,9 @@ function initialYamlText(value: unknown) {
 function isEmptyMapping(value: unknown) {
   return Boolean(
     value &&
-    typeof value === "object" &&
-    !Array.isArray(value) &&
-    Object.keys(value).length === 0,
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      Object.keys(value).length === 0,
   );
 }
 

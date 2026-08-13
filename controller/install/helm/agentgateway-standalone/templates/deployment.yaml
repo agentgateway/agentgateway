@@ -7,6 +7,9 @@ metadata:
     {{- include "agentgateway-standalone.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  {{- if not (kindIs "invalid" .Values.revisionHistoryLimit) }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "agentgateway-standalone.selectorLabels" . | nindent 6 }}
@@ -23,6 +26,9 @@ spec:
         {{- end }}
       labels:
         {{- include "agentgateway-standalone.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -33,52 +39,52 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      initContainers:
-      - name: config-bootstrap
-        image: {{ include "agentgateway-standalone.configBootstrapImage" . | quote }}
-        {{- with .Values.configBootstrap.securityContext }}
-        securityContext:
-          {{- toYaml . | nindent 10 }}
-        {{- end }}
-        command:
-        - sh
-        - -ec
-        - |
-          if [ "{{ .Values.configBootstrap.overwrite }}" = "true" ] || [ ! -f /config/config.yaml ]; then
-            tmp="$(mktemp /config/config.yaml.XXXXXX)"
-            cp /bootstrap/config.yaml "$tmp"
-            mv "$tmp" /config/config.yaml
-          fi
-        volumeMounts:
-        - name: config
-          mountPath: /config
-        - name: config-bootstrap
-          mountPath: /bootstrap
-          readOnly: true
       containers:
       - name: agentgateway
         image: {{ include "agentgateway-standalone.mainImage" . | quote }}
-        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        imagePullPolicy: {{ include "agentgateway-standalone.mainImagePullPolicy" . }}
         {{- with .Values.securityContext }}
         securityContext:
           {{- toYaml . | nindent 10 }}
         {{- end }}
+        readinessProbe:
+          httpGet:
+            path: /healthz/ready
+            port: 15021
+          periodSeconds: 10
+        startupProbe:
+          failureThreshold: 60
+          httpGet:
+            path: /healthz/ready
+            port: 15021
+          periodSeconds: 1
+          successThreshold: 1
+          timeoutSeconds: 2
         args:
         - -f
         - /config/config.yaml
+        {{- if .Values.monitoring.enabled }}
         ports:
-        - name: admin
-          containerPort: {{ .Values.admin.service.port }}
+        - name: metrics
+          containerPort: 15020
           protocol: TCP
+        {{- end }}
         env:
         - name: RUST_BACKTRACE
           value: "1"
+        - name: OIDC_COOKIE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.oidc.cookieSecretName | default (printf "%s-oidc" (include "agentgateway-standalone.fullname" .)) }}
+              key: OIDC_COOKIE_SECRET
+              optional: {{ empty .Values.oidc.cookieSecretName }}
         {{- with .Values.extraEnv }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
         volumeMounts:
         - name: config
           mountPath: /config
+          readOnly: true
         - name: tmp
           mountPath: /tmp
         {{- with .Values.extraVolumeMounts }}
@@ -91,15 +97,8 @@ spec:
       {{- end }}
       volumes:
       - name: config
-        {{- if .Values.persistence.enabled }}
-        persistentVolumeClaim:
-          claimName: {{ .Values.persistence.existingClaim | default (printf "%s-config" (include "agentgateway-standalone.fullname" .)) }}
-        {{- else }}
-        emptyDir: {}
-        {{- end }}
-      - name: config-bootstrap
         configMap:
-          name: {{ include "agentgateway-standalone.fullname" . }}-config-bootstrap
+          name: {{ include "agentgateway-standalone.fullname" . }}-config
       - name: tmp
         emptyDir: {}
       {{- with .Values.extraVolumes }}
@@ -115,5 +114,9 @@ spec:
       {{- end }}
       {{- with .Values.tolerations }}
       tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.dnsConfig }}
+      dnsConfig:
         {{- toYaml . | nindent 8 }}
       {{- end }}

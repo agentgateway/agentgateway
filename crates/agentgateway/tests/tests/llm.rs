@@ -13,7 +13,10 @@ async fn llm_openai() {
 	.await;
 	let (_mock, _bind, io) = setup_llm_mock(
 		mock,
-		AIProvider::OpenAI(openai::Provider { model: None }),
+		AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		}),
 		false,
 		"{}",
 	);
@@ -42,7 +45,10 @@ async fn llm_openai_tokenize() {
 	.await;
 	let (_mock, _bind, io) = setup_llm_mock(
 		mock,
-		AIProvider::OpenAI(openai::Provider { model: None }),
+		AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		}),
 		true,
 		"{}",
 	);
@@ -71,7 +77,10 @@ async fn llm_detect_mode_passthrough_without_rewrite() {
 	.await;
 	let provider = agentgateway::types::local::LocalNamedAIProvider {
 		name: "default".into(),
-		provider: AIProvider::OpenAI(openai::Provider { model: None }),
+		provider: AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		}),
 		host_override: Some(Target::Address(*mock.address())),
 		path_override: None,
 		path_prefix: None,
@@ -136,7 +145,10 @@ async fn llm_detect_mode_respects_model_rewrite() {
 	.await;
 	let provider = agentgateway::types::local::LocalNamedAIProvider {
 		name: "default".into(),
-		provider: AIProvider::OpenAI(openai::Provider { model: None }),
+		provider: AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		}),
 		host_override: Some(Target::Address(*mock.address())),
 		path_override: None,
 		path_prefix: None,
@@ -206,15 +218,19 @@ async fn setup_local_llm_config(yaml: &str) -> TestBind {
 	)
 	.await
 	.expect("local config normalizes");
-	t.pi.stores.binds.sync_local(
-		normalized.binds,
-		normalized.listener_routes,
-		normalized.listener_tcp_routes,
-		normalized.policies,
-		normalized.backends,
-		normalized.route_groups,
-		Default::default(),
-	);
+	t.pi
+		.stores
+		.binds
+		.sync_local(
+			normalized.binds,
+			normalized.listener_routes,
+			normalized.listener_tcp_routes,
+			normalized.policies,
+			normalized.backends,
+			normalized.route_groups,
+			Default::default(),
+		)
+		.expect("sync local binds");
 	t
 }
 
@@ -227,7 +243,7 @@ async fn llm_local_router_handles_models_virtual_model_and_missing_model() {
 	let config = format!(
 		r#"
 llm:
-  port: 4000
+  port: 0
   models:
   - name: real-model
     visibility: internal
@@ -275,7 +291,7 @@ llm:
 		mock.address()
 	);
 	let t = setup_local_llm_config(&config).await;
-	let io = t.serve_http(strng::literal!("bind/4000"));
+	let io = t.serve_http(strng::literal!("bind/0"));
 
 	// check model list respects authorization
 	{
@@ -384,7 +400,7 @@ async fn llm_conditional_virtual_model_no_match_returns_json_error() {
 	let config = format!(
 		r#"
 llm:
-  port: 4000
+  port: 0
   models:
   - name: real-model
     visibility: internal
@@ -402,7 +418,7 @@ llm:
 		mock.address()
 	);
 	let t = setup_local_llm_config(&config).await;
-	let io = t.serve_http(strng::literal!("bind/4000"));
+	let io = t.serve_http(strng::literal!("bind/0"));
 	let res = send_completions_with_model(io, "public-model", &[]).await;
 
 	assert_eq!(res.status(), StatusCode::BAD_REQUEST);
@@ -429,7 +445,7 @@ async fn llm_model_router_handles_multipart_audio_detect_request() {
 	let config = format!(
 		r#"
 llm:
-  port: 4000
+  port: 0
   models:
   - name: real-model
     provider: openAI
@@ -440,7 +456,7 @@ llm:
 		mock.address()
 	);
 	let t = setup_local_llm_config(&config).await;
-	let io = t.serve_http(strng::literal!("bind/4000"));
+	let io = t.serve_http(strng::literal!("bind/0"));
 	let body = concat!(
 		"--audio-boundary\r\n",
 		"Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n",
@@ -676,7 +692,7 @@ async fn llm_custom_provider_rejects_unsupported_format_before_upstream_call() {
 		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Embeddings]);
 
 	let res = send_completions_with_model(io, "replaceme", &[]).await;
-	assert_eq!(res.status(), 503);
+	assert_eq!(res.status(), 400);
 	let body = res.into_body().collect().await.unwrap().to_bytes();
 	assert!(
 		String::from_utf8_lossy(&body)
@@ -776,7 +792,10 @@ async fn assert_llm_remote_rate_limit_cost(
 	let mock = body_mock(response_body).await;
 	let (_mock, mut bind, io) = setup_llm_mock(
 		mock,
-		AIProvider::OpenAI(openai::Provider { model: None }),
+		AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		}),
 		false,
 		"{}",
 	);
@@ -853,7 +872,10 @@ async fn llm_openai_messages_translation_with_host_override_path_behavior(
 	.await;
 	let provider = agentgateway::test_helpers::proxymock::llm_named_provider(
 		&mock,
-		AIProvider::OpenAI(openai::Provider { model: None }),
+		AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		}),
 		false,
 	);
 	let provider = agentgateway::types::local::LocalNamedAIProvider {
@@ -894,6 +916,76 @@ async fn llm_openai_messages_translation_with_host_override_path_behavior(
 	);
 }
 
+#[tokio::test]
+async fn llm_final_transformation_applies_after_messages_translation() {
+	let mock = body_mock(include_bytes!(
+		"../../../llm/src/tests/response/completions/basic.json"
+	))
+	.await;
+	let (mock, mut bind, io) = setup_llm_mock(
+		mock,
+		AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		}),
+		false,
+		"{}",
+	);
+	bind
+		.attach_route_policy(json!({
+			"ai": {
+				"routes": { "/v1/messages": "messages" },
+				"finalTransformations": {
+					// Drop a field the converter added.
+					"reasoning_effort": r#"fail("remove")"#,
+					// Observe the converted message list.
+					"converted_message_count": "llmRequest.messages.size()"
+				}
+			}
+		}))
+		.await;
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/messages",
+		br#"{
+			"model": "gpt-4o",
+			"max_tokens": 64,
+			"system": "be brief",
+			"messages": [{"role": "user", "content": "hello"}],
+			"tools": [{
+				"name": "get_weather",
+				"description": "Look up the weather",
+				"input_schema": {
+					"type": "object",
+					"properties": {"city": {"type": "string"}},
+					"required": ["city"]
+				}
+			}]
+		}"#,
+	)
+	.await;
+
+	assert_eq!(res.status(), 200);
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request JSON");
+
+	// The request really was converted to completions format.
+	assert_eq!(upstream_body["messages"][0]["role"], json!("system"));
+	// Indexing yields Null for a missing key, so assert on key presence.
+	assert!(
+		upstream_body.get("reasoning_effort").is_none(),
+		"reasoning_effort should be removed, got: {upstream_body}"
+	);
+	assert_eq!(upstream_body["converted_message_count"], json!(2));
+}
+
 #[rstest::rstest]
 #[case::preserves_path(None, "/v1/models", "/v1/models")]
 #[case::path_prefix(Some("/openai/v1"), "/v1/models", "/openai/v1/models")]
@@ -912,7 +1004,10 @@ async fn llm_openai_passthrough_applies_path_prefix(
 	let mock = body_mock(b"{}").await;
 	let provider = agentgateway::test_helpers::proxymock::llm_named_provider(
 		&mock,
-		AIProvider::OpenAI(openai::Provider { model: None }),
+		AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		}),
 		false,
 	);
 	let provider = agentgateway::types::local::LocalNamedAIProvider {
@@ -1011,7 +1106,10 @@ async fn llm_log_body() {
 	.unwrap();
 	let (_mock, _bind, io) = setup_llm_mock(
 		mock,
-		AIProvider::OpenAI(openai::Provider { model: None }),
+		AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		}),
 		true,
 		x.as_str(),
 	);

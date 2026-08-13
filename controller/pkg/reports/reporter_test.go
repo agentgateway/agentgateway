@@ -169,6 +169,25 @@ func TestBuildGatewayStatus(t *testing.T) {
 		assert.Equal(t, string(gwv1.GatewayReasonProgrammed), programmed.Reason)
 	})
 
+	t.Run("accepted false can default programmed true", func(t *testing.T) {
+		gw := gw()
+		rm := reports.NewReportMap()
+		r := reports.NewReporter(&rm)
+		r.Gateway(gw).SetCondition(reporter.GatewayCondition{
+			Type:    gwv1.GatewayConditionAccepted,
+			Status:  metav1.ConditionFalse,
+			Reason:  gwv1.GatewayReasonInvalid,
+			Message: "partially valid",
+		})
+		status := rm.BuildGWStatus(context.Background(), *gw, 0)
+
+		programmed := meta.FindStatusCondition(status.Conditions, string(gwv1.GatewayConditionProgrammed))
+		assert.Equal(t, true, programmed != nil)
+		assert.Equal(t, metav1.ConditionTrue, programmed.Status)
+		assert.Equal(t, string(gwv1.GatewayReasonProgrammed), programmed.Reason)
+		assert.Equal(t, reports.GatewayProgrammedMessage, programmed.Message)
+	})
+
 	t.Run("set negative listener conditions from report and not add extra conditions", func(t *testing.T) {
 		gw := gw()
 		rm := reports.NewReportMap()

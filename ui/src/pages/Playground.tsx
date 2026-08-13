@@ -1,4 +1,4 @@
-import { tr } from "../i18n";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Bot,
@@ -15,15 +15,16 @@ import {
 } from "lucide-react";
 import { sendChatCompletion, sendMcpJsonRpc } from "../api/playgroundApi";
 import { claudeSubscriptionWarning } from "../claudeSubscription";
-import { currentLanguage } from "../i18n";
+import { currentLanguage, tr } from "../i18n";
 import { providerLabel } from "../config";
-import { applyPlaygroundCors, corsNeedsUpdate, currentOrigin } from "../cors";
+import { corsNeedsUpdate, currentOrigin, playgroundCorsPolicy } from "../cors";
 import { hasKeyValue, keyLabel } from "../credentialDisplay";
 import { llmPlaygroundEndpoint, mcpPlaygroundEndpoint } from "../gatewayUrls";
 import {
-  useGatewayConfig,
+  useLlmConfigData,
+  useMcpConfigData,
   useStoredStringState,
-  useUpdateConfig,
+  useUpsertPolicyResource,
 } from "../hooks";
 import { CatalogModelSelector } from "../components/CatalogModelSelector";
 import {
@@ -49,7 +50,7 @@ import {
   wildcardModelPrefix,
   wildcardResolvedSuffix,
 } from "../modelResolution";
-import type { LlmModel, LlmProvider, ProviderName } from "../types";
+import type { CorsPolicy, LlmModel, LlmProvider, ProviderName } from "../types";
 
 type ChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
@@ -117,17 +118,20 @@ const legacySecretStorageKeys = [
 ];
 
 export function PlaygroundPage() {
-  const config = useGatewayConfig();
-  const updateConfig = useUpdateConfig();
-  const models = useMemo(() => config.data?.llm?.models ?? [], [config.data]);
-  const virtualModels = useMemo(
-    () => config.data?.llm?.virtualModels ?? [],
-    [config.data],
-  );
-  const providers = useMemo(
-    () => config.data?.llm?.providers ?? [],
-    [config.data],
-  );
+  const {
+    config,
+    hybrid,
+    filePolicies,
+    policies,
+    models,
+    virtualModels,
+    providers,
+    apiKeys,
+    isLoading: configDataLoading,
+    error: configDataError,
+  } = useLlmConfigData();
+  const mcpData = useMcpConfigData();
+  const upsertPolicy = useUpsertPolicyResource();
   const modelOptions = useMemo(
     () => [
       ...models.map((item) => ({
@@ -151,14 +155,7 @@ export function PlaygroundPage() {
     ],
     [models, providers, virtualModels],
   );
-  const virtualKeys = useMemo(
-    () => config.data?.llm?.policies?.apiKey?.keys ?? [],
-    [config.data],
-  );
-  const rawVirtualKeys = useMemo(
-    () => virtualKeys.filter(hasKeyValue),
-    [virtualKeys],
-  );
+  const rawVirtualKeys = useMemo(() => apiKeys.filter(hasKeyValue), [apiKeys]);
   const [storedModel, setStoredModel] = useStoredStringState(
     storageKeys.model,
     "",
@@ -185,12 +182,12 @@ export function PlaygroundPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [runSteps, setRunSteps] = useState<RunStep[]>([]);
-  const mcpEndpoint = mcpPlaygroundEndpoint(config.data);
+  const mcpEndpoint = mcpPlaygroundEndpoint(mcpData.data);
   const derivedMcpBaseUrl = mcpEndpoint.baseUrl;
   const [mcpEnabled, setMcpEnabled] = useState(false);
   const [mcpSessionId, setMcpSessionId] = useState("");
   const [mcpTools, setMcpTools] = useState<PlaygroundTool[]>([]);
-  const mcpServerCount = config.data?.mcp?.targets?.length ?? 0;
+  const mcpServerCount = mcpData.data?.mcp?.targets?.length ?? 0;
 
   useEffect(() => {
     for (const key of legacySecretStorageKeys) localStorage.removeItem(key);
@@ -243,13 +240,28 @@ export function PlaygroundPage() {
     "";
   const selectedKeyValue =
     apiKeyMode === "saved" && rawVirtualKeys.length > 0 ? savedKey : apiKey;
+  const llmCors = policies.cors as CorsPolicy | null | undefined;
+  const fileCorsOwned = Object.prototype.hasOwnProperty.call(
+    filePolicies,
+    "cors",
+  );
+  const fileMcpCorsOwned = Boolean(
+    mcpData.rawConfig.data?.mcp?.policies &&
+      Object.prototype.hasOwnProperty.call(
+        mcpData.rawConfig.data.mcp.policies,
+        "cors",
+      ),
+  );
   const needsCors =
-    config.data && !llmEndpoint.sameOrigin
-      ? corsNeedsUpdate(config.data.llm?.policies?.cors, "llm")
+    !configDataLoading &&
+    !configDataError &&
+    config.data &&
+    !llmEndpoint.sameOrigin
+      ? corsNeedsUpdate(llmCors, "llm")
       : false;
   const needsMcpCors =
-    mcpEnabled && config.data && !mcpEndpoint.sameOrigin
-      ? corsNeedsUpdate(config.data.mcp?.policies?.cors, "mcp")
+    mcpEnabled && mcpData.data && !mcpEndpoint.sameOrigin
+      ? corsNeedsUpdate(mcpData.data.mcp?.policies?.cors, "mcp")
       : false;
   const sendBlockers = sendReadinessBlockers({
     loading,
@@ -260,6 +272,24 @@ export function PlaygroundPage() {
     apiKeyMode,
     virtualKeysCount: rawVirtualKeys.length,
   });
+  const corsSaving = upsertPolicy.isPending;
+  const corsSaveError = upsertPolicy.error?.message ?? null;
+
+  function applyLlmCors() {
+    upsertPolicy.mutate({
+      kind: "llm.policy",
+      id: "cors",
+      value: playgroundCorsPolicy(llmCors, "llm"),
+    });
+  }
+
+  function applyMcpCors() {
+    upsertPolicy.mutate({
+      kind: "mcp.policy",
+      id: "cors",
+      value: playgroundCorsPolicy(mcpData.data?.mcp?.policies?.cors, "mcp"),
+    });
+  }
 
   useEffect(() => {
     if (modelOptions.length > 0 && model && !savedModelExists) setModel("");
@@ -288,16 +318,18 @@ export function PlaygroundPage() {
     if (mcpServerCount === 0 && mcpEnabled) setMcpEnabled(false);
   }, [mcpEnabled, mcpServerCount]);
 
-  async function loadMcpTools() {
+  async function loadMcpTools(bearerToken: string) {
     let sessionId = await initializeMcpSession(
       derivedMcpBaseUrl,
       "agentgateway-ui-llm-playground",
       mcpSessionId,
+      bearerToken,
     );
     setMcpSessionId(sessionId);
     const response = await sendMcpJsonRpc({
       baseUrl: derivedMcpBaseUrl,
       sessionId,
+      bearerToken,
       body: {
         jsonrpc: "2.0",
         id: nextRpcId(),
@@ -351,7 +383,7 @@ export function PlaygroundPage() {
           { label: tr("copy.sendingChatCompletion"), state: "pending" },
           { label: tr("copy.waitingForModelResponse"), state: "pending" },
         ]);
-        const loaded = await loadMcpTools();
+        const loaded = await loadMcpTools(selectedKeyValue);
         availableMcpTools = loaded.tools;
         activeMcpSessionId = loaded.sessionId;
         if (availableMcpTools.length === 0) {
@@ -426,6 +458,7 @@ export function PlaygroundPage() {
           availableMcpTools,
           derivedMcpBaseUrl,
           activeMcpSessionId,
+          selectedKeyValue,
           setMcpSessionId,
         );
         const toolMessages: ChatMessage[] = executions.map((execution) => ({
@@ -531,21 +564,38 @@ export function PlaygroundPage() {
           "copy.sendARealChatCompletionRequestThroughTheConfiguredGatewayForSetupDebugging",
         )}
       />
+      {configDataLoading ? (
+        <StatusBanner
+          state="loading"
+          title={tr("copy.loadingLlmConfiguration")}
+        />
+      ) : configDataError ? (
+        <StatusBanner
+          state="bad"
+          title={tr("copy.configurationApiUnavailable")}
+        >
+          {configDataError.message}
+        </StatusBanner>
+      ) : null}
       {needsCors ? (
         <StatusBanner
           state="warn"
           title={tr("copy.browserAccessIsNotAllowed")}
           action={
-            <button
-              className="button"
-              type="button"
-              disabled={updateConfig.isPending}
-              onClick={() =>
-                updateConfig.mutate((next) => applyPlaygroundCors(next, "llm"))
-              }
-            >
-              {tr("copy.applyCors")}
-            </button>
+            hybrid && fileCorsOwned ? (
+              <Link className="button" to="/llm/policies" hash="cors">
+                Configure CORS
+              </Link>
+            ) : (
+              <button
+                className="button"
+                type="button"
+                disabled={corsSaving}
+                onClick={applyLlmCors}
+              >
+                Apply CORS
+              </button>
+            )
           }
         >
           {tr("copy.add")}
@@ -560,16 +610,20 @@ export function PlaygroundPage() {
           state="warn"
           title={tr("copy.mcpBrowserAccessIsNotAllowed")}
           action={
-            <button
-              className="button"
-              type="button"
-              disabled={updateConfig.isPending}
-              onClick={() =>
-                updateConfig.mutate((next) => applyPlaygroundCors(next, "mcp"))
-              }
-            >
-              {tr("copy.applyMcpCors")}
-            </button>
+            hybrid && fileMcpCorsOwned ? (
+              <Link className="button" to="/mcp/policies" hash="cors">
+                Configure CORS
+              </Link>
+            ) : (
+              <button
+                className="button"
+                type="button"
+                disabled={corsSaving}
+                onClick={applyMcpCors}
+              >
+                Apply MCP CORS
+              </button>
+            )
           }
         >
           {tr("copy.add")}
@@ -579,7 +633,7 @@ export function PlaygroundPage() {
           )}
         </StatusBanner>
       ) : null}
-      {modelOptions.length === 0 ? (
+      {!configDataLoading && !configDataError && modelOptions.length === 0 ? (
         <StatusBanner state="warn" title={tr("copy.noConfiguredModels")}>
           {tr("copy.createAModelBeforeTestingChatTraffic")}
         </StatusBanner>
@@ -595,6 +649,11 @@ export function PlaygroundPage() {
       {error ? (
         <StatusBanner state="bad" title={tr("copy.playgroundRequestFailed")}>
           {error}
+        </StatusBanner>
+      ) : null}
+      {corsSaveError ? (
+        <StatusBanner state="bad" title={tr("copy.corsUpdateFailed")}>
+          {corsSaveError}
         </StatusBanner>
       ) : null}
       <section className="playground-shell">
@@ -1114,8 +1173,8 @@ function extractToolCalls(response: unknown): ToolCall[] {
   return calls.filter((call): call is ToolCall =>
     Boolean(
       call &&
-      typeof call === "object" &&
-      typeof (call as { id?: unknown }).id === "string",
+        typeof call === "object" &&
+        typeof (call as { id?: unknown }).id === "string",
     ),
   );
 }
@@ -1168,6 +1227,7 @@ async function executeToolCalls(
   tools: PlaygroundTool[],
   baseUrl: string,
   sessionId: string,
+  bearerToken: string,
   setSessionId: (value: string) => void,
 ) {
   const executions: ToolExecution[] = [];
@@ -1177,6 +1237,7 @@ async function executeToolCalls(
       baseUrl,
       "agentgateway-ui-llm-playground",
       sessionId,
+      bearerToken,
     ));
   setSessionId(activeSessionId);
   for (const call of calls) {
@@ -1190,6 +1251,7 @@ async function executeToolCalls(
     const response = await sendMcpJsonRpc({
       baseUrl,
       sessionId: activeSessionId,
+      bearerToken,
       body: {
         jsonrpc: "2.0",
         id: nextRpcId(),

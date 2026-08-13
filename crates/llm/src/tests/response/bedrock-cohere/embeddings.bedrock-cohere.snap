@@ -45,6 +45,7 @@ info:
   },
   "parsed": {
     "input_tokens": 0,
-    "total_tokens": 0
+    "total_tokens": 0,
+    "provider_model": "cohere.embed-english-v3"
   }
 }

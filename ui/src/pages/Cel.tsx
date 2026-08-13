@@ -4,7 +4,7 @@ import Editor from "@monaco-editor/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type * as Monaco from "monaco-editor";
 import { ExternalLink, Play } from "lucide-react";
-import yaml from "js-yaml";
+import { dump, load } from "js-yaml";
 import { evaluateCel } from "../api/celApi";
 import {
   celEditorOptions,
@@ -91,6 +91,7 @@ const sampleContext = {
     responseModel: "gpt-4-turbo",
     provider: "fake-ai",
     inputTokens: 100,
+    providerInputTokens: 100,
     inputImageTokens: 60,
     inputTextTokens: 40,
     inputAudioTokens: 5,
@@ -102,6 +103,7 @@ const sampleContext = {
     outputAudioTokens: 3,
     reasoningTokens: 30,
     totalTokens: 150,
+    providerTotalTokens: 150,
     serviceTier: "default",
     countTokens: 10,
     completion: ["Hello"],
@@ -152,7 +154,7 @@ export function CelPage() {
       pendingCelExpression() ??
       'request.path.startsWith("/v1/") && metadata.tier == "prod"',
   );
-  const [context, setContext] = useState(yaml.dump(sampleContext));
+  const [context, setContext] = useState(dump(sampleContext));
   const [result, setResult] = useState<unknown>(null);
   const [hasResult, setHasResult] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -164,7 +166,7 @@ export function CelPage() {
     setLoading(true);
     setError(null);
     try {
-      const data = context.trim() ? yaml.load(context) : {};
+      const data = context.trim() ? load(context) : {};
       const response = await evaluateCel(expression, data);
       if (response.error) setError(response.error);
       setResult(response.result);

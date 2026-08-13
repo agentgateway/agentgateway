@@ -12,8 +12,13 @@ import {
   StatusBanner,
   formatNumber,
 } from "../components/Primitives";
-import { useGatewayConfig, useUpdateConfig } from "../hooks";
-import type { GatewayConfig } from "../types";
+import { ConfigSaveButton } from "../components/ConfigDiffDrawer";
+import {
+  takeHybridFileWriteOverride,
+  useLlmConfigData,
+  useUpdateConfig,
+  useUpsertConfigResource,
+} from "../hooks";
 import { useEffect, useMemo, useState } from "react";
 
 type CustomCostRow = {
@@ -25,14 +30,64 @@ type CustomCostRow = {
   cacheWrite: string;
 };
 
+type DisplayCostSource = CostCatalogSource & {
+  storage: string;
+  label: string;
+};
+
 export function CostsPage() {
-  const config = useGatewayConfig();
+  const {
+    hybrid,
+    rawConfig,
+    resources,
+    configResources,
+    isLoading: configDataLoading,
+    error: configDataError,
+  } = useLlmConfigData();
   const updateConfig = useUpdateConfig();
+  const upsertResource = useUpsertConfigResource();
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const sources = configuredCostSources(config.data);
-  const customRows = useMemo(() => inlineCostRows(sources), [sources]);
+  const catalogResource = useMemo(
+    () => resources?.find((resource) => resource.kind === "modelCatalog"),
+    [resources],
+  );
+  const catalog = useMemo(
+    () =>
+      record(catalogResource?.value) as {
+        base?: unknown;
+        custom?: unknown;
+      },
+    [catalogResource],
+  );
+  const databaseCatalog = catalogResource ? catalog : {};
+  const sources = useMemo(
+    () => [
+      ...databaseCostSources(databaseCatalog),
+      ...configuredCostSources(rawConfig.data).map(fileCostSource),
+    ],
+    [rawConfig.data, databaseCatalog],
+  );
+  const baseFile = useMemo(
+    () =>
+      configuredCostSources(rawConfig.data).find((source) => source.file)?.file,
+    [rawConfig.data],
+  );
+  const customRows = useMemo(
+    () =>
+      inlineCostRows(
+        hybrid
+          ? databaseCatalog.custom === undefined
+            ? []
+            : [{ inline: databaseCatalog.custom }]
+          : catalog.custom === undefined
+            ? sources
+            : [{ inline: catalog.custom }],
+      ),
+    [catalog.custom, databaseCatalog.custom, hybrid, sources],
+  );
+  const saving = updateConfig.isPending || upsertResource.isPending;
   const [editingCustom, setEditingCustom] = useState(false);
   const [customDraft, setCustomDraft] = useState<CustomCostRow[]>(customRows);
   const [customError, setCustomError] = useState<string | null>(null);
@@ -42,11 +97,14 @@ export function CostsPage() {
   }, [customRows, editingCustom]);
 
   async function refreshCosts() {
+    // ConfigSaveButton records file overrides for useUpdateConfig, but this endpoint writes the catalog directly.
+    if (hybrid && baseFile) takeHybridFileWriteOverride();
     setRefreshing(true);
     setError(null);
     setMessage(null);
     try {
       const refreshed = await refreshBaseCostsAndConfigure(updateConfig);
+      if (hybrid) await configResources.refetch();
       setMessage(
         tr("copy.baseCostCatalogRefreshedValueModelsFromValueProviders", [
           formatNumber(refreshed.models),
@@ -57,7 +115,7 @@ export function CostsPage() {
       setError(
         err instanceof Error
           ? err.message
-          : "Failed to refresh base cost catalog",
+          : tr("copy.failedToRefreshBaseCostCatalog"),
       );
     } finally {
       setRefreshing(false);
@@ -72,17 +130,33 @@ export function CostsPage() {
           "copy.manageModelCostCatalogsUsedForAnalyticsAndRequestCostAttribution",
         )}
         actions={
-          <button
-            className="button primary"
-            type="button"
-            disabled={refreshing || updateConfig.isPending}
+          <ConfigSaveButton
+            disabled={refreshing || saving}
+            allowHybridWrite={!baseFile}
+            hybridFileWriteMessage={tr(
+              "copy.baseCostsAreStoredInValueFileWritesAreDisabledInHybridMode",
+              baseFile,
+            )}
             onClick={() => void refreshCosts()}
           >
             <RefreshCw size={16} />
             {tr("copy.refreshBaseCosts")}
-          </button>
+          </ConfigSaveButton>
         }
       />
+      {configDataLoading ? (
+        <StatusBanner
+          state="loading"
+          title={tr("copy.loadingCostConfiguration")}
+        />
+      ) : configDataError ? (
+        <StatusBanner
+          state="bad"
+          title={tr("copy.configurationApiUnavailable")}
+        >
+          {configDataError.message}
+        </StatusBanner>
+      ) : null}
       {error ? (
         <StatusBanner state="bad" title={tr("copy.costRefreshFailed")}>
           {error}
@@ -95,7 +169,7 @@ export function CostsPage() {
             <h3>{tr("copy.catalogSources")}</h3>
             <p>
               {tr(
-                "copy.sourcesAreMergedInOrderLaterSourcesOverrideEarlierEntries",
+                "copy.sourcesAreMergedInOrderDatabaseSourcesLoadFirstAndLaterFileSourcesOverrideThem",
               )}
             </p>
           </div>
@@ -105,6 +179,7 @@ export function CostsPage() {
             <table className="data-table">
               <thead>
                 <tr>
+                  <th>{tr("copy.storage")}</th>
                   <th>{tr("copy.source")}</th>
                   <th>{tr("copy.type")}</th>
                 </tr>
@@ -113,7 +188,10 @@ export function CostsPage() {
                 {sources.map((source, index) => (
                   <tr key={index}>
                     <td>
-                      <code>{sourceLabel(source)}</code>
+                      <span className="badge">{source.storage}</span>
+                    </td>
+                    <td>
+                      <code>{source.label}</code>
                     </td>
                     <td>{sourceType(source)}</td>
                   </tr>
@@ -146,7 +224,7 @@ export function CostsPage() {
                 <button
                   className="button"
                   type="button"
-                  disabled={updateConfig.isPending}
+                  disabled={saving}
                   onClick={() => {
                     setCustomDraft(customRows);
                     setCustomError(null);
@@ -158,7 +236,7 @@ export function CostsPage() {
                 <button
                   className="button primary"
                   type="button"
-                  disabled={updateConfig.isPending}
+                  disabled={saving}
                   onClick={() => void saveCustomCosts()}
                 >
                   {tr("copy.save")}
@@ -359,28 +437,62 @@ export function CostsPage() {
       return;
     }
     try {
-      await updateConfig.mutateAsync((next) =>
-        setInlineCostRows(next, customDraft),
-      );
+      await upsertResource.mutateAsync({
+        kind: "modelCatalog",
+        value: {
+          ...(hybrid ? databaseCatalog : catalog),
+          custom: inlineCatalog(customDraft),
+        },
+      });
       setEditingCustom(false);
     } catch (err) {
       setCustomError(
-        err instanceof Error ? err.message : "Failed to save custom costs",
+        err instanceof Error ? err.message : tr("copy.failedToSaveCustomCosts"),
       );
     }
   }
 }
 
+function databaseCostSources(catalog: {
+  base?: unknown;
+  custom?: unknown;
+}): DisplayCostSource[] {
+  const sources: DisplayCostSource[] = [];
+  if (catalog.base !== undefined) {
+    sources.push({
+      inline: catalog.base,
+      storage: tr("copy.database"),
+      label: tr("copy.baseCatalog"),
+    });
+  }
+  if (catalog.custom !== undefined) {
+    sources.push({
+      inline: catalog.custom,
+      storage: tr("copy.database"),
+      label: tr("copy.customOverrides"),
+    });
+  }
+  return sources;
+}
+
+function fileCostSource(source: CostCatalogSource): DisplayCostSource {
+  return {
+    ...source,
+    storage: tr("copy.file"),
+    label: sourceLabel(source),
+  };
+}
+
 function sourceType(source: CostCatalogSource) {
-  if (source.file) return "File";
-  if ("inline" in source) return "Inline";
-  return "Unknown";
+  if (source.file) return tr("copy.file");
+  if ("inline" in source) return tr("copy.inline");
+  return tr("copy.unknown");
 }
 
 function sourceLabel(source: CostCatalogSource) {
   if (source.file) return source.file;
-  if ("inline" in source) return "Custom inline overlay";
-  return "Unknown source";
+  if ("inline" in source) return tr("copy.customInlineOverlay");
+  return tr("copy.unknownSource");
 }
 
 function emptyCustomCostRow(): CustomCostRow {
@@ -420,16 +532,6 @@ function inlineCostRows(sources: CostCatalogSource[]): CustomCostRow[] {
   );
 }
 
-function setInlineCostRows(config: GatewayConfig, rows: CustomCostRow[]) {
-  config.config = config.config ?? {};
-  const existing = configuredCostSources(config);
-  const withoutInline = existing.filter((source) => !("inline" in source));
-  config.config.modelCatalog = [
-    ...withoutInline,
-    { inline: inlineCatalog(rows) },
-  ] as never;
-}
-
 function inlineCatalog(rows: CustomCostRow[]) {
   const providers: Record<
     string,
@@ -465,17 +567,20 @@ function validateCustomRows(rows: CustomCostRow[]) {
     const hasAny = Object.values(row).some((value) => value.trim());
     if (!hasAny) continue;
     if (!row.provider.trim())
-      return "Provider is required for every custom cost row.";
+      return tr("copy.providerIsRequiredForEveryCustomCostRow");
     if (!row.model.trim())
-      return "Model is required for every custom cost row.";
+      return tr("copy.modelIsRequiredForEveryCustomCostRow");
     const rates = [row.input, row.output, row.cacheRead, row.cacheWrite].filter(
       (value) => value.trim(),
     );
     if (!rates.length)
-      return `${row.provider}/${row.model} needs at least one rate.`;
+      return tr("copy.valueNeedsAtLeastOneRate", [row.provider, row.model]);
     for (const rate of rates) {
       if (!/^\d+(\.\d{1,6})?$/.test(rate.trim()))
-        return `Invalid rate "${rate}". Use a non-negative decimal with up to 6 decimal places.`;
+        return tr(
+          "copy.invalidRateValueUseANonNegativeDecimalWithUpTo6DecimalPlaces",
+          rate,
+        );
     }
   }
   return null;

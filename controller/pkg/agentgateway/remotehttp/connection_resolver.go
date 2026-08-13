@@ -117,16 +117,25 @@ func (r *defaultResolver) resolveBackendConnection(
 	}
 
 	if backend.Policies != nil && backend.Policies.Tunnel != nil {
-		proxy, err := r.resolveTunnelProxy(krtctx, refNamespace, backend.Policies.Tunnel.BackendRef)
-		if err != nil {
-			return nil, fmt.Errorf("error resolving tunnel proxy for backend %s: %w", backendNN, err)
+		tunnel := backend.Policies.Tunnel
+		if tunnel.URL != nil {
+			proxy, _, err := ParseHTTPURL(*tunnel.URL)
+			if err != nil {
+				return nil, fmt.Errorf("error resolving tunnel proxy for backend %s: %w", backendNN, err)
+			}
+			conn.proxyURL = proxy.String()
+		} else if tunnel.BackendRef != nil {
+			proxy, err := r.resolveTunnelProxy(krtctx, refNamespace, *tunnel.BackendRef)
+			if err != nil {
+				return nil, fmt.Errorf("error resolving tunnel proxy for backend %s: %w", backendNN, err)
+			}
+			if proxy.tls != nil {
+				conn.proxyURL = "https://" + proxy.host
+			} else {
+				conn.proxyURL = "http://" + proxy.host
+			}
+			conn.proxyTLS = proxy.tls
 		}
-		if proxy.tls != nil {
-			conn.proxyURL = "https://" + proxy.host
-		} else {
-			conn.proxyURL = "http://" + proxy.host
-		}
-		conn.proxyTLS = proxy.tls
 	}
 
 	return conn, nil

@@ -20,6 +20,7 @@
 use std::collections::VecDeque;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use ::http::HeaderMap;
@@ -33,6 +34,7 @@ use tracing::warn;
 use super::{
 	FailureMode, ResponseGuard, ResponseGuardKind, StreamingEvaluator, StreamingGuardrailOutcome,
 };
+use crate::cel::RequestSnapshot;
 use crate::llm::policy::PromptGuard;
 use crate::proxy::httpproxy::PolicyClient;
 
@@ -92,11 +94,13 @@ pub fn make_evaluator(
 	guard: &ResponseGuard,
 	client: PolicyClient,
 	http_headers: HeaderMap,
+	original: Option<Arc<RequestSnapshot>>,
 ) -> Box<dyn StreamingEvaluator> {
 	Box::new(ResponseGuardEvaluator {
 		guard: guard.clone(),
 		client,
 		http_headers,
+		original,
 	})
 }
 
@@ -104,6 +108,7 @@ struct ResponseGuardEvaluator {
 	guard: ResponseGuard,
 	client: PolicyClient,
 	http_headers: HeaderMap,
+	original: Option<Arc<RequestSnapshot>>,
 }
 
 #[async_trait::async_trait]
@@ -121,6 +126,7 @@ impl StreamingEvaluator for ResponseGuardEvaluator {
 			window,
 			&self.client,
 			&self.http_headers,
+			self.original.as_deref(),
 		)
 		.await
 	}

@@ -49,6 +49,8 @@ func NewBackendPlugin(agw *plugins.AgwCollections, resolver remotehttp.Resolver,
 							Krt:                ctx,
 							Collections:        agw,
 							References:         input.References,
+							Grants:             input.Grants,
+							SourceGVK:          wellknown.AgentgatewayBackendGVK,
 							Resolver:           resolver,
 							JWKSLookup:         jwksLookup,
 							CredentialResolver: credentialResolver,
@@ -479,9 +481,14 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 
 	// Extract auth token and model based on provider
 	if llm.OpenAI != nil {
+		moderation, err := translateOpenAIInlineModeration(llm.OpenAI.Moderation)
+		if err != nil {
+			return nil, err
+		}
 		provider.Provider = &api.AIBackend_Provider_Openai{
 			Openai: &api.AIBackend_OpenAI{
-				Model: llm.OpenAI.Model,
+				Model:      llm.OpenAI.Model,
+				Moderation: moderation,
 			},
 		}
 	} else if llm.AzureOpenAI != nil {
@@ -546,7 +553,7 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 			},
 		}
 	} else if llm.Custom != nil {
-		formats, err := translateProviderFormats(llm.Custom.Formats)
+		formats, err := plugins.TranslateCustomProviderFormats(llm.Custom.Formats)
 		if err != nil {
 			return nil, err
 		}
@@ -557,7 +564,7 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 			},
 		}
 		if llm.Custom.BackendRef != nil {
-			providerBackend, err := translateCustomProviderBackendRef(ctx, namespace, *llm.Custom.BackendRef)
+			providerBackend, err := plugins.TranslateCustomProviderBackendRef(ctx.Krt, ctx.References.RouteBackend, namespace, *llm.Custom.BackendRef)
 			if err != nil {
 				return nil, err
 			}
@@ -570,69 +577,60 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 	return provider, nil
 }
 
-func translateProviderFormats(formats []agentgateway.ProviderFormatConfig) ([]*api.AIBackend_ProviderFormatConfig, error) {
-	out := make([]*api.AIBackend_ProviderFormatConfig, 0, len(formats))
-	for _, format := range formats {
-		protoFormat, err := translateProviderFormat(format.Type)
-		if err != nil {
-			return nil, err
-		}
-		protoConfig := &api.AIBackend_ProviderFormatConfig{Format: protoFormat}
-		if format.Path != "" {
-			path := string(format.Path)
-			protoConfig.Path = &path
-		}
-		out = append(out, protoConfig)
+const defaultOpenAIInlineModerationModel = "omni-moderation-latest"
+
+func translateOpenAIInlineModeration(m *agentgateway.OpenAIInlineModeration) (*api.AIBackend_OpenAI_Moderation, error) {
+	if m == nil {
+		return nil, nil
 	}
-	return out, nil
+	policy, err := translateOpenAIInlineModerationPolicy(m.Policy)
+	if err != nil {
+		return nil, err
+	}
+	model := string(m.Model)
+	if model == "" {
+		model = defaultOpenAIInlineModerationModel
+	}
+	return &api.AIBackend_OpenAI_Moderation{
+		Model:  model,
+		Policy: policy,
+	}, nil
 }
 
-func translateProviderFormat(format agentgateway.ProviderFormat) (api.AIBackend_ProviderFormat, error) {
-	switch format {
-	case agentgateway.ProviderFormatCompletions:
-		return api.AIBackend_COMPLETIONS, nil
-	case agentgateway.ProviderFormatMessages:
-		return api.AIBackend_MESSAGES, nil
-	case agentgateway.ProviderFormatResponses:
-		return api.AIBackend_RESPONSES, nil
-	case agentgateway.ProviderFormatEmbeddings:
-		return api.AIBackend_EMBEDDINGS, nil
-	case agentgateway.ProviderFormatAnthropicTokenCount:
-		return api.AIBackend_ANTHROPIC_TOKEN_COUNT, nil
-	case agentgateway.ProviderFormatRealtime:
-		return api.AIBackend_REALTIME, nil
-	case agentgateway.ProviderFormatRerank:
-		return api.AIBackend_RERANK, nil
-	default:
-		return api.AIBackend_PROVIDER_FORMAT_UNSPECIFIED, fmt.Errorf("unsupported custom provider format %q", format)
+func translateOpenAIInlineModerationPolicy(p *agentgateway.OpenAIInlineModerationPolicy) (*api.AIBackend_OpenAI_ModerationPolicy, error) {
+	if p == nil {
+		return nil, nil
 	}
+	input, err := translateOpenAIInlineModerationConfig(p.Input)
+	if err != nil {
+		return nil, err
+	}
+	output, err := translateOpenAIInlineModerationConfig(p.Output)
+	if err != nil {
+		return nil, err
+	}
+	return &api.AIBackend_OpenAI_ModerationPolicy{
+		Input:  input,
+		Output: output,
+	}, nil
 }
 
-func translateCustomProviderBackendRef(ctx plugins.PolicyCtx, namespace string, ref agentgateway.LocalBackendObjectReference) (*api.BackendReference, error) {
-	kind := gwv1.Kind(wellknown.ServiceKind)
-	if ref.Kind != nil {
-		kind = gwv1.Kind(*ref.Kind)
+func translateOpenAIInlineModerationConfig(c *agentgateway.OpenAIInlineModerationConfig) (*api.AIBackend_OpenAI_ModerationConfig, error) {
+	if c == nil {
+		return nil, nil
 	}
-	group := gwv1.Group("")
-	if ref.Group != nil {
-		group = gwv1.Group(*ref.Group)
-	}
-	gk := schema.GroupKind{
-		Group: string(group),
-		Kind:  string(kind),
-	}
-	switch gk {
-	case wellknown.ServiceGVK.GroupKind(), wellknown.InferencePoolGVK.GroupKind():
+	var mode api.AIBackend_OpenAI_ModerationMode
+	switch c.Mode {
+	case agentgateway.OpenAIInlineModerationModeScore:
+		mode = api.AIBackend_OpenAI_MODERATION_MODE_SCORE
+	case agentgateway.OpenAIInlineModerationModeBlock:
+		mode = api.AIBackend_OpenAI_MODERATION_MODE_BLOCK
 	default:
-		return nil, fmt.Errorf("custom provider backendRef may target only Service or InferencePool")
+		return nil, fmt.Errorf("unknown OpenAI inline moderation mode %q", c.Mode)
 	}
-
-	var port *gwv1.PortNumber
-	if ref.Port != nil {
-		port = new(gwv1.PortNumber(*ref.Port))
-	}
-
-	return ctx.References.RouteBackend(ctx.Krt, namespace, gk, gwv1.ObjectName(ref.Name), nil, port)
+	return &api.AIBackend_OpenAI_ModerationConfig{
+		Mode: mode,
+	}, nil
 }
 
 func translateAwsBackends(

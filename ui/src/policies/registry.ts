@@ -23,6 +23,7 @@ export const policyUi: Partial<
       icon: ComponentType<{ size?: number }>;
       customEditor?:
         | "authorization"
+        | "backendAuth"
         | "cors"
         | "extAuthz"
         | "extProc"
@@ -49,6 +50,13 @@ export const policyUi: Partial<
     },
     icon: ShieldCheck,
     customEditor: "authorization",
+  },
+  backendAuth: {
+    get title() {
+      return tr("copy.backendAuth");
+    },
+    icon: LockKeyhole,
+    customEditor: "backendAuth",
   },
   basicAuth: {
     get title() {

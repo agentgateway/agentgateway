@@ -21,5 +21,8 @@ data: [DONE]
 {
   "input_tokens": 18,
   "output_tokens": 46,
-  "total_tokens": 64
+  "total_tokens": 64,
+  "completion": [
+    "The answer is 4."
+  ]
 }

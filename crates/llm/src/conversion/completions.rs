@@ -4,6 +4,7 @@ use agent_core::strng;
 use axum_core::body::Body;
 use bytes::Bytes;
 use http::Response;
+use itertools::Itertools;
 use tracing::debug;
 
 use crate::{StreamingUsageGuard, logged_response_parsing, parse, types};
@@ -53,7 +54,7 @@ pub fn translate_google_error(bytes: &Bytes) -> Result<Bytes, crate::AIError> {
 			r#type: Some(google_error_type(&res.error).to_string()),
 			message: res.error.message.clone(),
 			param: None,
-			code: res.error.status.clone(),
+			code: res.error.status.clone().map(serde_json::Value::String),
 			event_id: None,
 		},
 	};
@@ -139,9 +140,15 @@ pub mod from_messages {
 
 	/// translate an Anthropic messages to an OpenAI completions request
 	pub fn translate(req: &types::messages::Request) -> Result<Vec<u8>, AIError> {
-		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
-		let xlated = translate_internal(typed);
+		let xlated = translate_request(req)?;
 		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+	}
+
+	pub fn translate_request(
+		req: &types::messages::Request,
+	) -> Result<types::completions::typed::Request, AIError> {
+		let typed = json::convert::<_, messages::Request>(req).map_err(AIError::RequestMarshal)?;
+		Ok(translate_internal(typed))
 	}
 
 	pub fn translate_response(bytes: &Bytes) -> Result<Box<dyn ResponseType>, AIError> {
@@ -203,6 +210,20 @@ pub mod from_messages {
 			})
 			.unwrap_or(messages::StopReason::EndTurn);
 
+		let cache_creation_input_tokens = usage.as_ref().and_then(|u| {
+			u.prompt_tokens_details
+				.as_ref()
+				.and_then(|d| d.cache_write_tokens)
+				.or(u.cache_creation_input_tokens)
+				.map(|tokens| tokens as usize)
+		});
+		let cache_read_input_tokens = usage.as_ref().and_then(|u| {
+			u.prompt_tokens_details
+				.as_ref()
+				.and_then(|d| d.cached_tokens)
+				.or(u.cache_read_input_tokens)
+				.map(|tokens| tokens as usize)
+		});
 		Ok(messages::MessagesResponse {
 			id,
 			r#type: "message".to_string(),
@@ -214,13 +235,15 @@ pub mod from_messages {
 				input_tokens: usage
 					.as_ref()
 					.map(|u| u.prompt_tokens as usize)
-					.unwrap_or(0),
+					.unwrap_or(0)
+					.saturating_sub(cache_creation_input_tokens.unwrap_or(0))
+					.saturating_sub(cache_read_input_tokens.unwrap_or(0)),
 				output_tokens: usage
 					.as_ref()
 					.map(|u| u.completion_tokens as usize)
 					.unwrap_or(0),
-				cache_creation_input_tokens: None,
-				cache_read_input_tokens: None,
+				cache_creation_input_tokens,
+				cache_read_input_tokens,
 				service_tier,
 			},
 			input_audio_tokens: usage.as_ref().and_then(|u| {
@@ -239,12 +262,18 @@ pub mod from_messages {
 		})
 	}
 
-	pub fn translate_stream(b: Body, buffer_limit: usize, log: StreamingUsageGuard) -> Body {
+	pub fn translate_stream(
+		b: Body,
+		buffer_limit: usize,
+		log: StreamingUsageGuard,
+		log_content: crate::LogContentFields,
+	) -> Body {
 		#[derive(Debug)]
 		struct PendingToolCall {
 			id: Option<String>,
 			name: Option<String>,
 			pending_json: String,
+			arguments: String,
 		}
 
 		#[derive(Debug, Default)]
@@ -381,6 +410,7 @@ pub mod from_messages {
 			events: &mut Vec<(&'static str, messages::MessagesStreamEvent)>,
 			log: &StreamingUsageGuard,
 			force: bool,
+			log_tool_calls: bool,
 		) {
 			if state.sent_message_stop {
 				return;
@@ -398,13 +428,35 @@ pub mod from_messages {
 					return;
 				},
 			};
+			let finish_reason = crate::types::serialize_str(&stop_reason);
 
 			close_text_block(state, events);
 			close_all_tool_blocks(state, events);
 
+			let cache_creation_input_tokens = usage.as_ref().and_then(|u| {
+				u.prompt_tokens_details
+					.as_ref()
+					.and_then(|d| d.cache_write_tokens)
+					.or(u.cache_creation_input_tokens)
+					.map(|tokens| tokens as usize)
+			});
+			let cache_read_input_tokens = usage.as_ref().and_then(|u| {
+				u.prompt_tokens_details
+					.as_ref()
+					.and_then(|d| d.cached_tokens)
+					.or(u.cache_read_input_tokens)
+					.map(|tokens| tokens as usize)
+			});
 			let (input_tokens, output_tokens) = usage
 				.as_ref()
-				.map(|u| (u.prompt_tokens as usize, u.completion_tokens as usize))
+				.map(|u| {
+					(
+						(u.prompt_tokens as usize)
+							.saturating_sub(cache_creation_input_tokens.unwrap_or(0))
+							.saturating_sub(cache_read_input_tokens.unwrap_or(0)),
+						u.completion_tokens as usize,
+					)
+				})
 				.unwrap_or((0, 0));
 
 			push_event(
@@ -417,8 +469,8 @@ pub mod from_messages {
 					usage: messages::MessageDeltaUsage {
 						input_tokens: Some(input_tokens),
 						output_tokens: Some(output_tokens),
-						cache_creation_input_tokens: None,
-						cache_read_input_tokens: None,
+						cache_creation_input_tokens,
+						cache_read_input_tokens,
 					},
 				},
 			);
@@ -430,6 +482,23 @@ pub mod from_messages {
 					r.response.input_tokens = Some(usage.prompt_tokens as u64);
 					r.response.output_tokens = Some(usage.completion_tokens as u64);
 					r.response.total_tokens = Some(usage.total_tokens as u64);
+					r.response.cache_creation_input_tokens =
+						cache_creation_input_tokens.map(|tokens| tokens as u64);
+					r.response.cached_input_tokens = cache_read_input_tokens.map(|tokens| tokens as u64);
+				});
+			}
+
+			if log_tool_calls
+				&& let Some(tool_parts) = super::finalize_streaming_tool_calls(
+					state
+						.pending_tool_calls
+						.drain()
+						.map(|(idx, call)| (idx, call.id, call.name, call.arguments)),
+				) {
+				let mut tool_parts = Some(tool_parts);
+				let mut finish_reason = finish_reason;
+				log.update(|r| {
+					super::build_output_messages(&mut r.response, tool_parts.take(), finish_reason.take());
 				});
 			}
 		}
@@ -444,11 +513,11 @@ pub mod from_messages {
 			let mut events: Vec<(&'static str, messages::MessagesStreamEvent)> = Vec::new();
 			match evt {
 				SseJsonEvent::Done => {
-					flush_message_end(&mut state, &mut events, &log, true);
+					flush_message_end(&mut state, &mut events, &log, true, log_content.tool_calls);
 					return events;
 				},
 				SseJsonEvent::Data(Err(e)) => {
-					tracing::warn!(
+					tracing::debug!(
 						"Failed to parse OpenAI stream response during translation: {}",
 						e
 					);
@@ -515,6 +584,7 @@ pub mod from_messages {
 												id: None,
 												name: None,
 												pending_json: String::new(),
+												arguments: String::new(),
 											});
 									if let Some(id) = &tool_call.id {
 										entry.id = Some(id.clone());
@@ -525,6 +595,7 @@ pub mod from_messages {
 										}
 										if let Some(args) = &function.arguments {
 											entry.pending_json.push_str(args);
+											entry.arguments.push_str(args);
 										}
 									}
 
@@ -571,7 +642,7 @@ pub mod from_messages {
 					}
 
 					if state.pending_stop_reason.is_some() && state.pending_usage.is_some() {
-						flush_message_end(&mut state, &mut events, &log, false);
+						flush_message_end(&mut state, &mut events, &log, false, log_content.tool_calls);
 					}
 				},
 			}
@@ -621,19 +692,6 @@ pub mod from_messages {
 		}
 	}
 
-	fn system_message_text(content: Vec<messages::ContentBlock>) -> Option<String> {
-		let text = content
-			.into_iter()
-			.filter_map(|block| match block {
-				messages::ContentBlock::Text(messages::ContentTextBlock { text, .. }) => Some(text),
-				_ => None,
-			})
-			.collect::<Vec<_>>()
-			.join("\n");
-
-		(!text.is_empty()).then_some(text)
-	}
-
 	#[allow(deprecated)]
 	fn translate_internal(req: messages::Request) -> completions::Request {
 		let messages::Request {
@@ -653,6 +711,19 @@ pub mod from_messages {
 			output_config,
 		} = req;
 
+		// Explicit prompt-cache breakpoints are accepted only by GPT 5.6 and newer models.
+		let supports_prompt_cache_breakpoint = model
+			.strip_prefix("gpt-")
+			.and_then(|model| model.split('-').next())
+			.and_then(|version| version.split_once('.'))
+			.and_then(|(major, minor)| Some((major.parse::<u32>().ok()?, minor.parse::<u32>().ok()?)))
+			.is_some_and(|version| version >= (5, 6));
+		let cache_breakpoint = |cache_control: Option<messages::CacheControlEphemeral>| {
+			cache_control
+				.filter(|_| supports_prompt_cache_breakpoint)
+				.map(Into::into)
+		};
+
 		let adaptive_thinking_requested = thinking
 			.as_ref()
 			.is_some_and(|t| matches!(t, messages::ThinkingInput::Adaptive {}));
@@ -662,9 +733,8 @@ pub mod from_messages {
 				Some(messages::ThinkingEffort::Low) => completions::ReasoningEffort::Low,
 				Some(messages::ThinkingEffort::Medium) => completions::ReasoningEffort::Medium,
 				Some(messages::ThinkingEffort::High) => completions::ReasoningEffort::High,
-				Some(messages::ThinkingEffort::Xhigh | messages::ThinkingEffort::Max) => {
-					completions::ReasoningEffort::Xhigh
-				},
+				Some(messages::ThinkingEffort::Xhigh) => completions::ReasoningEffort::Xhigh,
+				Some(messages::ThinkingEffort::Max) => completions::ReasoningEffort::Max,
 				// Anthropic adaptive thinking defaults to high effort when omitted.
 				None => completions::ReasoningEffort::High,
 			})
@@ -687,21 +757,30 @@ pub mod from_messages {
 
 		let mut msgs: Vec<completions::RequestMessage> = Vec::new();
 
-		// Handle the system prompt (convert both string and block formats to string)
+		// Preserve system block boundaries regardless of caching metadata.
 		if let Some(system) = system {
-			let system_text = match system {
-				messages::SystemPrompt::Text(text) => text,
-				messages::SystemPrompt::Blocks(blocks) => blocks
-					.into_iter()
-					.map(|block| match block {
-						messages::SystemContentBlock::Text { text, .. } => text,
-					})
-					.collect::<Vec<_>>()
-					.join("\n"),
+			let content = match system {
+				messages::SystemPrompt::Text(text) => completions::RequestSystemMessageContent::Text(text),
+				messages::SystemPrompt::Blocks(blocks) => completions::RequestSystemMessageContent::Array(
+					blocks
+						.into_iter()
+						.map(|block| match block {
+							messages::SystemContentBlock::Text {
+								text,
+								cache_control,
+							} => completions::RequestSystemMessageContentPart::Text(
+								completions::RequestMessageContentPartText {
+									text,
+									prompt_cache_breakpoint: cache_breakpoint(cache_control),
+								},
+							),
+						})
+						.collect(),
+				),
 			};
 			msgs.push(completions::RequestMessage::System(
 				completions::RequestSystemMessage {
-					content: completions::RequestSystemMessageContent::Text(system_text),
+					content,
 					name: None,
 				},
 			));
@@ -715,9 +794,16 @@ pub mod from_messages {
 
 					for block in msg.content {
 						match block {
-							messages::ContentBlock::Text(messages::ContentTextBlock { text, .. }) => {
+							messages::ContentBlock::Text(messages::ContentTextBlock {
+								text,
+								cache_control,
+								..
+							}) => {
 								parts.push(completions::RequestUserMessageContentPart::Text(
-									completions::RequestMessageContentPartText { text },
+									completions::RequestMessageContentPartText {
+										text,
+										prompt_cache_breakpoint: cache_breakpoint(cache_control),
+									},
 								));
 							},
 							messages::ContentBlock::Image(messages::ContentImageBlock { source, .. }) => {
@@ -725,6 +811,9 @@ pub mod from_messages {
 									parts.push(completions::RequestUserMessageContentPart::ImageUrl(
 										completions::RequestMessageContentPartImage {
 											image_url: completions::ImageUrl { url, detail: None },
+											// OpenAI rejects cache breakpoints on image parts even though the
+											// Chat Completions schema exposes this field.
+											prompt_cache_breakpoint: None,
 										},
 									));
 								}
@@ -732,23 +821,63 @@ pub mod from_messages {
 							messages::ContentBlock::ToolResult {
 								tool_use_id,
 								content,
+								cache_control,
 								..
 							} => {
 								let tool_content = match content {
-									ToolResultContent::Text(t) => completions::RequestToolMessageContent::Text(t),
-									ToolResultContent::Array(arr) => completions::RequestToolMessageContent::Array(
-										arr
-											.into_iter()
-											.filter_map(|p| match p {
-												ToolResultContentPart::Text { text, .. } => {
-													Some(completions::RequestToolMessageContentPart::Text(
-														completions::RequestMessageContentPartText { text },
-													))
+									ToolResultContent::Text(t) => match cache_breakpoint(cache_control) {
+										Some(breakpoint) => completions::RequestToolMessageContent::Array(vec![
+											completions::RequestToolMessageContentPart::Text(
+												completions::RequestMessageContentPartText {
+													text: t,
+													prompt_cache_breakpoint: Some(breakpoint),
 												},
-												_ => None,
-											})
-											.collect_vec(),
-									),
+											),
+										]),
+										None => completions::RequestToolMessageContent::Text(t),
+									},
+									ToolResultContent::Array(arr) => {
+										let mut tool_parts = Vec::new();
+										let mut trailing_cache_control =
+											cache_control.filter(|_| supports_prompt_cache_breakpoint);
+										for part in arr {
+											match part {
+												ToolResultContentPart::Text {
+													text,
+													cache_control,
+													..
+												} => tool_parts.push(completions::RequestToolMessageContentPart::Text(
+													completions::RequestMessageContentPartText {
+														text,
+														prompt_cache_breakpoint: cache_breakpoint(cache_control),
+													},
+												)),
+												ToolResultContentPart::Image { cache_control, .. }
+												| ToolResultContentPart::Document { cache_control, .. }
+												| ToolResultContentPart::SearchResult { cache_control, .. } => {
+													if supports_prompt_cache_breakpoint {
+														trailing_cache_control = trailing_cache_control.or(cache_control);
+													}
+												},
+											}
+										}
+										if let Some(cache_control) = trailing_cache_control {
+											let breakpoint = Some(cache_control.into());
+											if let Some(completions::RequestToolMessageContentPart::Text(part)) =
+												tool_parts.last_mut()
+											{
+												part.prompt_cache_breakpoint = breakpoint;
+											} else {
+												tool_parts.push(completions::RequestToolMessageContentPart::Text(
+													completions::RequestMessageContentPartText {
+														text: String::new(),
+														prompt_cache_breakpoint: breakpoint,
+													},
+												));
+											}
+										}
+										completions::RequestToolMessageContent::Array(tool_parts)
+									},
 								};
 								msgs.push(completions::RequestMessage::Tool(
 									completions::RequestToolMessage {
@@ -773,16 +902,20 @@ pub mod from_messages {
 					}
 				},
 				messages::Role::Assistant => {
-					let mut assistant_text = String::new();
+					let mut assistant_parts = Vec::new();
 					let mut tool_calls: Vec<completions::MessageToolCalls> = Vec::new();
 					for block in msg.content {
 						match block {
-							messages::ContentBlock::Text(messages::ContentTextBlock { text, .. }) => {
-								if !assistant_text.is_empty() {
-									assistant_text.push('\n');
-								}
-								assistant_text.push_str(&text);
-							},
+							messages::ContentBlock::Text(messages::ContentTextBlock {
+								text,
+								cache_control,
+								..
+							}) => assistant_parts.push(completions::RequestAssistantMessageContentPart::Text(
+								completions::RequestMessageContentPartText {
+									text,
+									prompt_cache_breakpoint: cache_breakpoint(cache_control),
+								},
+							)),
 							messages::ContentBlock::ToolUse {
 								id, name, input, ..
 							} => {
@@ -805,14 +938,14 @@ pub mod from_messages {
 							_ => {},
 						}
 					}
-					if !assistant_text.is_empty() || !tool_calls.is_empty() {
+					if !assistant_parts.is_empty() || !tool_calls.is_empty() {
 						msgs.push(completions::RequestMessage::Assistant(
 							completions::RequestAssistantMessage {
-								content: if assistant_text.is_empty() {
+								content: if assistant_parts.is_empty() {
 									None
 								} else {
-									Some(completions::RequestAssistantMessageContent::Text(
-										assistant_text,
+									Some(completions::RequestAssistantMessageContent::Array(
+										assistant_parts,
 									))
 								},
 								name: None,
@@ -831,10 +964,27 @@ pub mod from_messages {
 					}
 				},
 				messages::Role::System => {
-					if let Some(text) = system_message_text(msg.content) {
+					let parts = msg
+						.content
+						.into_iter()
+						.filter_map(|block| match block {
+							messages::ContentBlock::Text(messages::ContentTextBlock {
+								text,
+								cache_control,
+								..
+							}) => Some(completions::RequestSystemMessageContentPart::Text(
+								completions::RequestMessageContentPartText {
+									text,
+									prompt_cache_breakpoint: cache_breakpoint(cache_control),
+								},
+							)),
+							_ => None,
+						})
+						.collect::<Vec<_>>();
+					if !parts.is_empty() {
 						msgs.push(completions::RequestMessage::System(
 							completions::RequestSystemMessage {
-								content: completions::RequestSystemMessageContent::Text(text),
+								content: completions::RequestSystemMessageContent::Array(parts),
 								name: None,
 							},
 						));
@@ -846,20 +996,38 @@ pub mod from_messages {
 		let tools: Vec<completions::Tool> = tools
 			.into_iter()
 			.flat_map(|tools| tools.into_iter())
-			.map(|tool| {
-				completions::Tool::Function(completions::FunctionTool {
-					function: completions::FunctionObject {
-						name: tool.name,
-						description: tool.description,
-						parameters: Some(tool.input_schema),
-						strict: None,
-					},
-				})
+			.filter_map(|tool| match tool {
+				messages::Tool::Custom(tool) => {
+					Some(completions::Tool::Function(completions::FunctionTool {
+						function: completions::FunctionObject {
+							name: tool.name,
+							description: tool.description,
+							parameters: Some(tool.input_schema),
+							strict: None,
+						},
+					}))
+				},
+				// OpenAI completions has no equivalent of an Anthropic server-executed tool
+				// (e.g. web_search_20250305); drop it rather than fail the whole request.
+				messages::Tool::Server(tool) => {
+					tracing::warn!(
+						"Unsupported server tool in completions conversion: {:?}",
+						tool
+					);
+					None
+				},
 			})
 			.collect_vec();
 
-		// Function tools with reasoning_effort are not supported for GPT models.
-		let reasoning_effort = if !tools.is_empty() && model.starts_with("gpt-") {
+		// OpenAI rejects reasoning+tools+modern models+chat completions API combination.
+		// TODO: Move Messages requests with reasoning and function tools to the Responses API.
+		// Allow anything that is not a gpt model, unless its a known-allowed one.
+		let supports_reasoning_with_tools = !model.starts_with("gpt-")
+			|| model == "gpt-5"
+			|| model.starts_with("gpt-5-")
+			|| model.starts_with("gpt-5.1")
+			|| model.starts_with("gpt-5.2");
+		let reasoning_effort = if !tools.is_empty() && !supports_reasoning_with_tools {
 			Some(completions::ReasoningEffort::None)
 		} else {
 			reasoning_effort
@@ -909,6 +1077,7 @@ pub mod from_messages {
 
 		completions::Request {
 			model: Some(model),
+			moderation: None,
 			messages: msgs,
 			stream: Some(stream),
 			temperature,
@@ -956,12 +1125,72 @@ pub mod from_messages {
 	}
 }
 
+/// Build the observability tool-call content parts from accumulated streaming deltas,
+/// keyed by tool-call index. Synthesizes an id when the provider omitted one,
+/// and returns `None` when there are no tool calls.
+pub(crate) fn finalize_streaming_tool_calls(
+	entries: impl IntoIterator<Item = (u32, Option<String>, Option<String>, String)>,
+) -> Option<Vec<crate::OutputMessagePart>> {
+	let parts: Vec<crate::OutputMessagePart> = entries
+		.into_iter()
+		.sorted_by_key(|(idx, ..)| *idx)
+		.map(|(idx, id, name, arguments)| {
+			let arguments = match serde_json::from_str(&arguments) {
+				Ok(arguments) => arguments,
+				Err(_) if arguments.trim().is_empty() => serde_json::Value::Object(Default::default()),
+				Err(_) => serde_json::Value::String(arguments),
+			};
+			crate::OutputMessagePart::ToolCall {
+				id: id.unwrap_or_else(|| format!("tool_call_{idx}")).into(),
+				name: name.unwrap_or_default().into(),
+				arguments,
+			}
+		})
+		.collect();
+	(!parts.is_empty()).then_some(parts)
+}
+
+/// Builds `output_messages` on `LLMResponse` from accumulated tool call parts.
+pub(crate) fn build_output_messages(
+	response: &mut crate::LLMResponse,
+	tool_parts: Option<Vec<crate::OutputMessagePart>>,
+	finish_reason: Option<agent_core::strng::Strng>,
+) {
+	if let Some(content) = tool_parts.filter(|parts| !parts.is_empty()) {
+		response.output_messages = Some(vec![crate::OutputMessage {
+			role: agent_core::strng::literal!("assistant"),
+			content,
+			finish_reason,
+		}]);
+	}
+}
+
 pub fn passthrough_stream(
 	mut log: StreamingUsageGuard,
-	include_completion_in_log: bool,
+	log_content: crate::LogContentFields,
 	resp: Response<Body>,
 ) -> Response<Body> {
-	let mut completion = include_completion_in_log.then(String::new);
+	#[derive(Default)]
+	struct PendingPassthroughToolCall {
+		id: Option<String>,
+		name: Option<String>,
+		arguments: String,
+	}
+
+	fn finalize_tool_calls(
+		pending: &mut std::collections::HashMap<u32, PendingPassthroughToolCall>,
+	) -> Option<Vec<crate::OutputMessagePart>> {
+		finalize_streaming_tool_calls(
+			pending
+				.drain()
+				.map(|(idx, call)| (idx, call.id, call.name, call.arguments)),
+		)
+	}
+
+	let mut completion = log_content.completion.then(String::new);
+	let mut finish_reason = None;
+	let mut pending_tool_calls: Option<std::collections::HashMap<u32, PendingPassthroughToolCall>> =
+		log_content.tool_calls.then(std::collections::HashMap::new);
 	let buffer_limit = agent_http::response_buffer_limit(&resp);
 	resp.map(|b| {
 		let mut seen_provider = false;
@@ -972,10 +1201,35 @@ pub fn passthrough_stream(
 			move |f| {
 				match f {
 					Some(Ok(f)) => {
+						if let Some(reason) = f
+							.choices
+							.first()
+							.and_then(|choice| choice.finish_reason.as_ref())
+						{
+							finish_reason = crate::types::serialize_str(reason);
+						}
 						if let Some(c) = completion.as_mut()
 							&& let Some(delta) = f.choices.first().and_then(|c| c.delta.content.as_deref())
 						{
 							c.push_str(delta);
+						}
+						if let Some(pending) = pending_tool_calls.as_mut()
+							&& let Some(deltas) = f.choices.first().and_then(|c| c.delta.tool_calls.as_ref())
+						{
+							for chunk in deltas {
+								let entry = pending.entry(chunk.index).or_default();
+								if let Some(id) = &chunk.id {
+									entry.id = Some(id.clone());
+								}
+								if let Some(function) = &chunk.function {
+									if let Some(name) = &function.name {
+										entry.name = Some(name.clone());
+									}
+									if let Some(args) = &function.arguments {
+										entry.arguments.push_str(args);
+									}
+								}
+							}
 						}
 						if !saw_token {
 							saw_token = true;
@@ -1007,7 +1261,11 @@ pub fn passthrough_stream(
 									.prompt_tokens_details
 									.as_ref()
 									.and_then(|d| d.cached_tokens);
-								r.response.cache_creation_input_tokens = u.cache_creation_input_tokens;
+								r.response.cache_creation_input_tokens = u
+									.prompt_tokens_details
+									.as_ref()
+									.and_then(|d| d.cache_write_tokens)
+									.or(u.cache_creation_input_tokens);
 								r.response.reasoning_tokens = u
 									.completion_tokens_details
 									.as_ref()
@@ -1015,6 +1273,8 @@ pub fn passthrough_stream(
 								if let Some(c) = completion.take() {
 									r.response.completion = Some(vec![c]);
 								}
+								let tool_parts = pending_tool_calls.as_mut().and_then(finalize_tool_calls);
+								build_output_messages(&mut r.response, tool_parts, finish_reason.take());
 							});
 
 							log.report_usage();
@@ -1030,6 +1290,8 @@ pub fn passthrough_stream(
 							if let Some(c) = completion.take() {
 								r.response.completion = Some(vec![c]);
 							}
+							let tool_parts = pending_tool_calls.as_mut().and_then(finalize_tool_calls);
+							build_output_messages(&mut r.response, tool_parts, finish_reason.take());
 						});
 					},
 				}

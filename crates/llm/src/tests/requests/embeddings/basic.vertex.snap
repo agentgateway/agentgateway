@@ -7,13 +7,25 @@ info:
   dimensions: 1024
 ---
 {
-  "instances": [
-    {
-      "content": "hello world",
-      "task_type": "RETRIEVAL_QUERY"
+  "request": {
+    "instances": [
+      {
+        "content": "hello world",
+        "task_type": "RETRIEVAL_QUERY"
+      }
+    ],
+    "parameters": {
+      "outputDimensionality": 1024
     }
-  ],
-  "parameters": {
-    "outputDimensionality": 1024
+  },
+  "parsed": {
+    "input_format": "Embeddings",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "text-embedding-3-small",
+    "provider": "vertex",
+    "streaming": false,
+    "params": {
+      "dimensions": 1024
+    }
   }
 }

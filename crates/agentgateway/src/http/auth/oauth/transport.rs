@@ -176,7 +176,7 @@ impl<'a> From<&'a OAuthTokenExchangeAuth> for TokenRequestSpec<'a> {
 			audiences: &auth.audiences,
 			scopes: &auth.scopes,
 			resources: &auth.resources,
-			requested_token_type: auth.requested_token_type,
+			requested_token_type: auth.requested_token_type_param(),
 			expected_issued_token_type: auth.expected_issued_token_type(),
 		}
 	}
@@ -228,7 +228,7 @@ pub(super) async fn request_token(
 	json::from_body_with_limit::<TokenResponse>(resp.into_body(), limit)
 		.await
 		.map_err(|e| FetchError::Upstream(anyhow!("token exchange response decode failed: {e}")))?
-		.into_token(spec.expected_issued_token_type)
+		.into_token(spec.expected_issued_token_type.clone())
 }
 
 fn classify_token_endpoint_error(status: StatusCode, body: String) -> FetchError {
@@ -292,7 +292,7 @@ fn build_token_request_form(
 					.append_pair("actor_token", actor_token.expose_secret())
 					.append_pair("actor_token_type", actor_token_type.as_str());
 			}
-			if let Some(rtt) = spec.requested_token_type {
+			if let Some(rtt) = &spec.requested_token_type {
 				ser.append_pair("requested_token_type", rtt.as_str());
 			}
 		},

@@ -7,6 +7,7 @@ use secrecy::{ExposeSecret, SecretString};
 use tracing::trace;
 
 use crate::serdes::schema;
+use crate::util::ErrorContext;
 use crate::{apply, client, ser_redact};
 
 // The Rust sdk for Azure is the only one that requires users to manually specify their auth method
@@ -452,7 +453,9 @@ pub(super) async fn get_token(
 	// Foundry endpoints (.services.ai.azure.com) require the ai.azure.com scope
 	let is_foundry = matches!(target, crate::types::agent::Target::Hostname(h, _) if h.ends_with(".services.ai.azure.com"));
 	let scopes = if is_foundry { FOUNDRY_SCOPES } else { SCOPES };
-	let token = cred.get_token(scopes, None).await?;
+	let token = tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, cred.get_token(scopes, None))
+		.await
+		.ctx("Azure token fetch timed out after 5s")??;
 	let mut hv = http::HeaderValue::from_str(&format!("Bearer {}", token.token.secret()))?;
 	hv.set_sensitive(true);
 	trace!("attached Azure token (scope: {})", scopes[0]);

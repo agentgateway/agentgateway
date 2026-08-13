@@ -106,7 +106,7 @@ pub enum RouteType {
 	Rerank,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
 pub enum InputFormat {
 	Completions,
 	Messages,
@@ -146,10 +146,12 @@ pub enum ChatFormat {
 	OpenAIResponses,
 	AnthropicMessages,
 	BedrockConverse,
+	VertexGemini,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize)]
 pub struct LLMRequest {
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub input_tokens: Option<u64>,
 	pub input_format: InputFormat,
 	pub cache_convention: CacheTokenConvention,
@@ -157,7 +159,9 @@ pub struct LLMRequest {
 	pub provider: Strng,
 	pub streaming: bool,
 	pub params: LLMRequestParams,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub prompt: Option<Arc<Vec<SimpleChatCompletionMessage>>>,
+	#[serde(skip)]
 	pub provider_state: Option<ProviderState>,
 }
 
@@ -166,9 +170,10 @@ pub enum ProviderState {
 	Bedrock {
 		tool_names: Arc<conversion::bedrock::BedrockToolNameMap>,
 	},
+	VertexGemini,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize)]
 pub enum CacheTokenConvention {
 	#[default]
 	InputIncludesCache,
@@ -178,6 +183,22 @@ pub enum CacheTokenConvention {
 impl CacheTokenConvention {
 	pub fn pending() -> Self {
 		Self::InputIncludesCache
+	}
+
+	/// Normalize a provider-reported input token count so it always includes
+	/// tokens read from and written to cache.
+	pub fn include_cache_tokens(
+		self,
+		input_tokens: u64,
+		cached_input_tokens: Option<u64>,
+		cache_creation_input_tokens: Option<u64>,
+	) -> u64 {
+		match self {
+			Self::InputIncludesCache => input_tokens,
+			Self::InputExcludesCache => input_tokens
+				.saturating_add(cached_input_tokens.unwrap_or_default())
+				.saturating_add(cache_creation_input_tokens.unwrap_or_default()),
+		}
 	}
 }
 
@@ -227,10 +248,28 @@ impl LLMInfo {
 	pub fn input_tokens(&self) -> Option<u64> {
 		self.response.input_tokens.or(self.request.input_tokens)
 	}
+
+	/// Return a cache-inclusive input token count with consistent semantics across providers.
+	/// Falls back to the request-side tokenizer when the response has no usage count.
+	pub fn normalized_input_tokens(&self) -> Option<u64> {
+		self
+			.response
+			.input_tokens
+			.map(|input_tokens| {
+				self.request.cache_convention.include_cache_tokens(
+					input_tokens,
+					self.response.cached_input_tokens,
+					self.response.cache_creation_input_tokens,
+				)
+			})
+			.or(self.request.input_tokens)
+	}
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct LLMResponse {
+	/// Provider-reported input tokens. Whether this includes cache tokens is described by the
+	/// corresponding request's [`CacheTokenConvention`].
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub input_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -263,8 +302,19 @@ pub struct LLMResponse {
 	pub provider_model: Option<Strng>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub completion: Option<Vec<String>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub output_messages: Option<Vec<types::OutputMessage>>,
 	#[serde(skip)]
 	pub first_token: Option<Instant>,
+}
+
+/// LogContentFields controls which response content is captured for observability.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct LogContentFields {
+	/// Whether to capture the raw completion text.
+	pub completion: bool,
+	/// Whether to capture tool/function calls as structured output messages.
+	pub tool_calls: bool,
 }
 
 pub trait StreamingUsageReporter: Send {
@@ -303,7 +353,10 @@ impl Default for StreamingUsageGuard {
 	}
 }
 
-pub use types::{RequestType, ResponseType, SimpleChatCompletionMessage};
+pub use types::{
+	OutputMessage, OutputMessagePart, RequestType, ResponseType, SimpleChatCompletionMessage,
+	ToolCall,
+};
 
 pub fn logged_response_parsing(bytes: &[u8]) -> impl FnOnce(serde_json::Error) -> AIError + '_ {
 	|e| {
@@ -328,8 +381,6 @@ pub enum AIError {
 	MessageNotFound,
 	#[error("response was missing fields")]
 	IncompleteResponse,
-	#[error("unknown model")]
-	UnknownModel,
 	#[error("todo: streaming is not currently supported for this provider")]
 	StreamingUnsupported,
 	#[error("unsupported model")]

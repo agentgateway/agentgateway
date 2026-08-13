@@ -2,6 +2,7 @@ package collections
 
 import (
 	"testing"
+	"time"
 
 	"istio.io/istio/pkg/slices"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,8 +26,11 @@ func gw(annotation string, ports ...gwv1.PortNumber) *gwv1.Gateway {
 	return g
 }
 
-func ls(annotation string, ports ...gwv1.PortNumber) *gwv1.ListenerSet {
-	l := &gwv1.ListenerSet{ObjectMeta: metav1.ObjectMeta{Name: "ls"}}
+func ls(name, annotation string, created time.Time, ports ...gwv1.PortNumber) *gwv1.ListenerSet {
+	l := &gwv1.ListenerSet{ObjectMeta: metav1.ObjectMeta{
+		Name:              name,
+		CreationTimestamp: metav1.NewTime(created),
+	}}
 	if annotation != "" {
 		l.Annotations = map[string]string{annotations.InternalPorts: annotation}
 	}
@@ -41,6 +45,7 @@ func ls(annotation string, ports ...gwv1.PortNumber) *gwv1.ListenerSet {
 }
 
 func TestComputeInternalPorts(t *testing.T) {
+	now := time.Now()
 	tests := []struct {
 		name  string
 		gw    *gwv1.Gateway
@@ -53,22 +58,31 @@ func TestComputeInternalPorts(t *testing.T) {
 			want: []int32{8080},
 		},
 		{
-			name:  "listenerset annotation marks its port internal",
+			name:  "listenerset can add an internal port",
 			gw:    gw("", 80),
-			lsets: []*gwv1.ListenerSet{ls("9090", 9090)},
+			lsets: []*gwv1.ListenerSet{ls("internal", "9090", now, 9090)},
 			want:  []int32{9090},
 		},
 		{
-			name:  "disagreement on shared port stays standard",
+			name:  "gateway internal mode wins over standard listenerset",
 			gw:    gw("8080", 8080),
-			lsets: []*gwv1.ListenerSet{ls("", 8080)},
+			lsets: []*gwv1.ListenerSet{ls("standard", "", now, 8080)},
+			want:  []int32{8080},
+		},
+		{
+			name:  "gateway standard mode wins over internal listenerset",
+			gw:    gw("", 8080),
+			lsets: []*gwv1.ListenerSet{ls("internal", "8080", now, 8080)},
 			want:  nil,
 		},
 		{
-			name:  "agreement on shared port is internal",
-			gw:    gw("8080", 8080),
-			lsets: []*gwv1.ListenerSet{ls("8080", 8080)},
-			want:  []int32{8080},
+			name: "older listenerset mode wins",
+			gw:   gw("", 80),
+			lsets: []*gwv1.ListenerSet{
+				ls("newer-standard", "", now.Add(time.Minute), 9090),
+				ls("older-internal", "9090", now, 9090),
+			},
+			want: []int32{9090},
 		},
 		{
 			name: "invalid annotation is ignored",

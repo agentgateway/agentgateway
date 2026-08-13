@@ -60,6 +60,17 @@ impl RequestType for Request {
 		false
 	}
 
+	fn body_is_json(&self) -> bool {
+		matches!(self, Self::Json(_))
+	}
+
+	fn to_value(&self) -> serde_json::Result<serde_json::Value> {
+		match self {
+			Self::Raw(body) => serde_json::from_slice(body),
+			Self::Json(body) => Ok(body.clone()),
+		}
+	}
+
 	fn model(&mut self) -> &mut Option<String> {
 		unimplemented!("model is not available");
 	}
@@ -109,6 +120,10 @@ impl RequestType for Request {
 
 	fn set_messages(&mut self, _messages: Vec<SimpleChatCompletionMessage>) {
 		unimplemented!("set_messages is used for prompt guard; prompt guard is disabled for detect.")
+	}
+
+	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(&mut String)) {
+		unimplemented!("visit_text_mut is used for prompt guard; prompt guard is disabled for detect.")
 	}
 }
 
@@ -298,11 +313,42 @@ mod tests {
 			"modelVersion": "gemini-2.5-flash"
 		}));
 
-		let llm_response = resp.to_llm_response(false);
+		let llm_response = resp.to_llm_response(crate::LogContentFields::default());
 
 		assert_eq!(llm_response.input_tokens, Some(8));
 		assert_eq!(llm_response.output_tokens, Some(14));
 		assert_eq!(llm_response.total_tokens, Some(22));
+	}
+
+	#[test]
+	fn to_llm_response_extracts_gemini_cloud_code_usage() {
+		// Cloud Code (cloudcode-pa.googleapis.com) serves generateContent with the
+		// whole Gemini payload nested under a `response` key, so the unwrapped
+		// `usageMetadata` paths miss and usage is silently dropped.
+		let resp = Response::Json(serde_json::json!({
+			"response": {
+				"candidates": [{
+					"content": {
+						"role": "model",
+						"parts": [{"text": "Hello!"}]
+					}
+				}],
+				"usageMetadata": {
+					"promptTokenCount": 30460,
+					"candidatesTokenCount": 3,
+					"totalTokenCount": 30550,
+					"thoughtsTokenCount": 87
+				},
+				"modelVersion": "gemini-3.6-flash"
+			},
+			"traceId": "fb9dce3e019159b5"
+		}));
+
+		let llm_response = resp.to_llm_response(crate::LogContentFields::default());
+
+		assert_eq!(llm_response.input_tokens, Some(30460));
+		assert_eq!(llm_response.output_tokens, Some(3));
+		assert_eq!(llm_response.total_tokens, Some(30550));
 	}
 }
 
@@ -338,7 +384,7 @@ mod lookups {
 	pub const MAX_TOKENS: [&[&str]; 2] = [&["max_completion_tokens"], &["max_tokens"]];
 	pub const ENCODING_FORMAT: [&[&str]; 1] = [&["encoding_format"]];
 	pub const DIMENSIONS: [&[&str]; 1] = [&["dimensions"]];
-	pub const USAGE_INPUT_TOKENS: [&[&str]; 6] = [
+	pub const USAGE_INPUT_TOKENS: [&[&str]; 7] = [
 		&["usage", "input_tokens"],
 		// Responses streaming
 		&["response", "usage", "input_tokens"],
@@ -349,8 +395,11 @@ mod lookups {
 		&["metadata", "usage", "inputTokens"],
 		// Gemini generateContent
 		&["usageMetadata", "promptTokenCount"],
+		// Gemini generateContent via Cloud Code, which wraps the payload in a
+		// `response` envelope
+		&["response", "usageMetadata", "promptTokenCount"],
 	];
-	pub const USAGE_OUTPUT_TOKENS: [&[&str]; 6] = [
+	pub const USAGE_OUTPUT_TOKENS: [&[&str]; 7] = [
 		&["usage", "output_tokens"],
 		// Responses streaming
 		&["response", "usage", "output_tokens"],
@@ -361,13 +410,17 @@ mod lookups {
 		&["metadata", "usage", "outputTokens"],
 		// Gemini generateContent
 		&["usageMetadata", "candidatesTokenCount"],
+		// Gemini generateContent via Cloud Code
+		&["response", "usageMetadata", "candidatesTokenCount"],
 	];
-	pub const USAGE_TOTAL_TOKENS: [&[&str]; 3] = [
+	pub const USAGE_TOTAL_TOKENS: [&[&str]; 4] = [
 		&["usage", "total_tokens"],
 		// Bedrock converse
 		&["usage", "totalTokens"],
 		// Gemini generateContent
 		&["usageMetadata", "totalTokenCount"],
+		// Gemini generateContent via Cloud Code
+		&["response", "usageMetadata", "totalTokenCount"],
 	];
 	pub const INPUT_IMAGE_TOKENS: [&[&str]; 1] = [&["usage", "input_tokens_details", "image_tokens"]];
 	pub const INPUT_TEXT_TOKENS: [&[&str]; 1] = [&["usage", "input_tokens_details", "text_tokens"]];
@@ -391,7 +444,19 @@ mod lookups {
 		// Completions
 		&["usage", "completion_tokens_details", "reasoning_tokens"],
 	];
-	pub const CACHE_CREATION_INPUT_TOKENS: [&[&str]; 3] = [
+	pub const CACHE_CREATION_INPUT_TOKENS: [&[&str]; 6] = [
+		// Responses
+		&["usage", "input_tokens_details", "cache_write_tokens"],
+		// Responses streaming
+		&[
+			"response",
+			"usage",
+			"input_tokens_details",
+			"cache_write_tokens",
+		],
+		// Completions
+		&["usage", "prompt_tokens_details", "cache_write_tokens"],
+		// Provider-specific compatibility fields
 		&["usage", "cache_creation_input_tokens"],
 		&["usage", "cacheWriteInputTokens"],
 		// Bedrock invoke
@@ -427,7 +492,7 @@ impl<'de> Deserialize<'de> for Response {
 }
 
 impl ResponseType for Response {
-	fn to_llm_response(&self, _include_completion_in_log: bool) -> LLMResponse {
+	fn to_llm_response(&self, _log_content: crate::LogContentFields) -> LLMResponse {
 		let input_tokens = self.lookup(lookups::USAGE_INPUT_TOKENS, |v| v.as_u64());
 		let output_tokens = self.lookup(lookups::USAGE_OUTPUT_TOKENS, |v| v.as_u64());
 		let total_tokens = self.lookup(lookups::USAGE_TOTAL_TOKENS, |v| v.as_u64());
@@ -451,6 +516,7 @@ impl ResponseType for Response {
 				.map(Into::into),
 			provider_model: self.lookup(lookups::MODEL, |v| v.as_str()).map(Into::into),
 			completion: None,
+			output_messages: None,
 			// TODO: we could probably derive this
 			first_token: None,
 		}
@@ -473,6 +539,10 @@ impl ResponseType for Response {
 			Self::Raw(bytes) => Ok(bytes.to_vec()),
 			Self::Json(v) => Ok(serde_json::to_vec(v)?),
 		}
+	}
+
+	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(&mut String)) {
+		unimplemented!("visit_text_mut is used for prompt guard; prompt guard is disabled for detect.")
 	}
 }
 

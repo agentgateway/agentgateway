@@ -20,7 +20,7 @@ const MCPServiceTargetName = "agentgateway.dev/mcp-target-name"
 
 // InternalPorts is a comma-separated list of ports whose bind should be internal
 // (routing-only: no OS listener socket, no Service port, no container port). It may
-// be set on a Gateway or a ListenerSet, and may only reference ports defined by that
+// be set on a Gateway or a ListenerSet and may only reference ports defined by that
 // same object's listeners.
 const InternalPorts = "agentgateway.dev/internal-ports"
 

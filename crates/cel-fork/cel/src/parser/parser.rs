@@ -380,11 +380,11 @@ struct RecursionListener {
 
 impl<'a> CELListener<'a> for RecursionListener {
 	fn enter_expr(&mut self, _ctx: &ExprContext<'a>) {
-		self.depth += 1;
+		self.depth = self.depth.saturating_add(1);
 	}
 
 	fn exit_expr(&mut self, _ctx: &ExprContext<'a>) {
-		self.depth -= 1;
+		self.depth = self.depth.saturating_sub(1);
 	}
 }
 
@@ -1169,6 +1169,18 @@ mod tests {
 			Parser::new()
 				.max_recursion_depth(0)
 				.parse("(1 + 1)")
+				.is_err()
+		);
+	}
+
+	#[test]
+	fn malformed_nested_expression_does_not_panic() {
+		let expression = "ma[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[\x0c\0\0\0\0\0\0\0[[[[[[[putTo?[[[[[[[[[[ep";
+
+		assert!(
+			Parser::new()
+				.max_recursion_depth(48)
+				.parse(expression)
 				.is_err()
 		);
 	}

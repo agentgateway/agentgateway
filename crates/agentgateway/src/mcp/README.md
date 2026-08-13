@@ -48,7 +48,8 @@ negotiation, so modern clients fall back before a listen request is forwarded.
 
 For multiplexed `subscriptions/listen`, Agentgateway waits for selected upstream ACKs before
 emitting one downstream ACK. The ACK includes only accepted filters; resource URIs keep the
-client's `service+` form. Later notifications are limited to the filters accepted by their source
+client's `service+` form. Resource subscriptions may span upstreams; each target receives only
+the URIs it owns. Later notifications are limited to the filters accepted by their source
 upstream.
 Like other MCP fanout requests, setup waits for every selected upstream before the gateway can
 construct its response.

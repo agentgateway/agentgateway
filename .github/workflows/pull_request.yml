@@ -20,11 +20,19 @@ env:
   CI: true
   RUST_VERSION: "1.97.0"
   CARGO_BUILD_WARNINGS: deny
-  GO_VERSION: "1.26.4"
+  GO_VERSION: "1.26.5"
 
 jobs:
   #### Proxy jobs ####
   proxy-test:
+    env:
+      # Test binaries do not need debug symbols in CI. In particular, generating
+      # and linking MSVC PDBs accounts for a large part of the Windows build.
+      CARGO_PROFILE_TEST_DEBUG: 0
+      # This target-specific setting has no effect on the Linux and macOS matrix
+      # entries. lld-link is bundled with LLVM on the Windows runner and is much
+      # faster than the default MSVC linker for these large test executables.
+      CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER: lld-link.exe
     strategy:
       matrix:
         include:
@@ -40,19 +48,15 @@ jobs:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         persist-credentials: false
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        # The Rust build cache restores source mtimes from each path's history.
+        fetch-depth: 0
+    - name: Set up Rust build cache
+      uses: ./.github/actions/rust-build-cache
       with:
-        toolchain: "${{ env.RUST_VERSION }}"
-    - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-      # GHA 10gb cache cannot handle all 3 builds. However, because we put all the heavy linux caches on Blacksmith,
-      # we have space for windows and mac.
-      # If we change up the runners, consider if we have space for all three (note: Blacksmith has 25gb though)
-      with:
-        # Github cache will restore from 'main' OR the current branch.
-        # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
-        # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
-        save-if: ${{ github.ref == 'refs/heads/main' }}
+        rust-version: "${{ env.RUST_VERSION }}"
+        cache-key: proxy-test
+        # PRs restore the default branch cache; only postsubmit rolls it forward.
+        save: ${{ github.ref == 'refs/heads/main' }}
     - name: Start validation dependencies
       if: ${{ startsWith(matrix.os, 'blacksmith-') }}
       run: tools/manage-validation-deps.sh start
@@ -60,6 +64,14 @@ jobs:
       run: make test
       env:
         KEYCLOAK_AVAILABLE: ${{ startsWith(matrix.os, 'blacksmith-') && '1' || '' }}
+        # Generate Cargo's per-crate build report for the artifact below.
+        TIMINGS: true
+    - name: Upload cargo timings
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+      with:
+        name: cargo-timings-proxy-test-${{ runner.os }}
+        path: target/cargo-timings/cargo-timing*.html
+        retention-days: 2
     - name: Stop validation dependencies
       if: ${{ always() && startsWith(matrix.os, 'blacksmith-') }}
       run: tools/manage-validation-deps.sh stop
@@ -81,7 +93,7 @@ jobs:
         # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
         save-if: ${{ github.ref == 'refs/heads/main' }}
     - name: Generation
-      run: make generate-schema check-clean-repo
+      run: make generate-schema check-clean-repo check-default-members
     - name: Lint
       run: make lint
 
@@ -97,11 +109,21 @@ jobs:
         persist-credentials: false
     - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
       with:
-        node-version: 24
+        node-version-file: ui/.nvmrc
     - name: Lint
       run: |
-        npm ci
-        npm run lint
+        corepack enable
+        pnpm install --frozen-lockfile
+        pnpm lint
+    - name: End-to-end tests
+      run: pnpm test:e2e
+    - name: Upload Playwright traces
+      if: failure()
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+      with:
+        name: playwright-ui-traces
+        path: ui/test-results
+        retention-days: 2
 
   #### Controller jobs ####
   controller-test:
@@ -110,12 +132,13 @@ jobs:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         persist-credentials: false
-    - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+    - name: Set up controller Go build cache
+      uses: ./.github/actions/controller-build-cache
       with:
         go-version: "${{ env.GO_VERSION }}"
-        cache-dependency-path: |
-          **/*.sum
-          .github/workflows/cache-lint
+        go-cache-name: controller-test
+        # PRs can restore the default branch caches, but only postsubmit rolls them forward.
+        save: ${{ github.ref == 'refs/heads/main' }}
     - name: Test
       run: go test -race ./...
 
@@ -125,12 +148,13 @@ jobs:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         persist-credentials: false
-    - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+    - name: Set up controller Go build cache
+      uses: ./.github/actions/controller-build-cache
       with:
         go-version: "${{ env.GO_VERSION }}"
-        cache-dependency-path: |
-          **/*.sum
-          .github/workflows/cache-test
+        go-cache-name: controller-lint
+        # PRs can restore the default branch caches, but only postsubmit rolls them forward.
+        save: ${{ github.ref == 'refs/heads/main' }}
     - name: Lint
       run: make -C controller analyze
     - name: go mod tidy
@@ -148,31 +172,15 @@ jobs:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         persist-credentials: false
-    - name: Check Runner Info
-      run: |
-        cat /sys/fs/cgroup/cpu.stat || true
-        cat /proc/pressure/cpu || true
-        lscpu || true
-        openssl speed -seconds 1  -bytes 256 sha256 || rtue
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        # git-restore-mtime needs full history to find each file's latest change.
+        fetch-depth: 0
+    - name: Set up controller build caches
+      uses: ./.github/actions/controller-build-cache
       with:
-        toolchain: "${{ env.RUST_VERSION }}"
-    - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-      with:
-        # Github cache will restore from 'main' OR the current branch.
-        # If we cache PR branches, we may evict the 'main' cache and end up with no cache hits at all.
-        # Ideally, we would have main be 'high priority' and not be evicted but I don't think thats possible.
-        save-if: ${{ github.ref == 'refs/heads/main' }}
-    - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-      with:
+        rust-version: "${{ env.RUST_VERSION }}"
         go-version: "${{ env.GO_VERSION }}"
-        cache-dependency-path: |
-          **/*.sum
-          .github/workflows/cache-e2e
-    - name: Set Path
-      run: |
-        echo "./tools" >> $GITHUB_PATH
+        # PRs can restore the default branch caches, but only postsubmit rolls them forward.
+        save: ${{ github.ref == 'refs/heads/main' }}
     - name: Setup
       run: TEST_MODE=e2e ./controller/test/setup/setup-kind-ci.sh
     - name: E2E
@@ -202,29 +210,18 @@ jobs:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       with:
         persist-credentials: false
-    - name: Install Rust
-      uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9 # master
+        # git-restore-mtime needs full history to find each file's latest change.
+        fetch-depth: 0
+    - name: Set up controller build caches
+      uses: ./.github/actions/controller-build-cache
       with:
-        toolchain: "${{ env.RUST_VERSION }}"
-    - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
-      with:
-        # We only read the cache from 'E2E' job, since they should have identical cache.
-        save-if: "false"
-        shared-key: "controller-e2e" # Pull E2E job's cache
-    - uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
-      with:
+        rust-version: "${{ env.RUST_VERSION }}"
         go-version: "${{ env.GO_VERSION }}"
-        cache-dependency-path: |
-          **/*.sum
-          .github/workflows/cache-e2e
-    - name: Set Path
-      run: |
-        echo "./tools" >> $GITHUB_PATH
     - name: Setup
       run: TEST_MODE=conformance ./controller/test/setup/setup-kind-ci.sh
     - name: Conformance
       run: |
-        make -C controller all-conformance
+        make -C controller agw-conformance
     - name: Debug Info
       if: ${{ failure() }}
       run: |
@@ -257,4 +254,56 @@ jobs:
         cat-yamls ./controller/_test/conformance/*.yaml >> $GITHUB_STEP_SUMMARY
         echo -e '```\n' >> $GITHUB_STEP_SUMMARY
         echo -e '# Conformance Timings\n' >> $GITHUB_STEP_SUMMARY
+        cat controller/_test/ci-step-timings.log >> $GITHUB_STEP_SUMMARY
+
+  controller-gie-conformance:
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    steps:
+    - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      with:
+        persist-credentials: false
+        # git-restore-mtime needs full history to find each file's latest change.
+        fetch-depth: 0
+    - name: Set up controller build caches
+      uses: ./.github/actions/controller-build-cache
+      with:
+        rust-version: "${{ env.RUST_VERSION }}"
+        go-version: "${{ env.GO_VERSION }}"
+    - name: Setup
+      run: TEST_MODE=conformance ./controller/test/setup/setup-kind-ci.sh
+    - name: GIE Conformance
+      run: |
+        make -C controller gie-conformance
+    - name: Debug Info
+      if: ${{ failure() }}
+      run: |
+        kubectl describe deployment -A
+        kubectl get pods -A
+        kubectl logs -n agentgateway-system -l app.kubernetes.io/name=agentgateway
+    - name: Upload cargo timings
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+      with:
+        name: cargo-timings-gie-conformance
+        path: target/cargo-timings/cargo-timing*.html
+        retention-days: 2
+    - name: Summary
+      run: |
+        cat-yamls () {
+          local files=("$@")
+          local count=$#
+
+          for ((i=0; i<count-1; i++)); do
+          cat "${files[i]}"
+          echo -e "\n---"
+          done
+
+          if [ $count -gt 0 ]; then
+          cat "${files[count-1]}"
+          fi
+        }
+
+        echo -e '\n# GIE Conformance Reports\n\n```yaml' >> $GITHUB_STEP_SUMMARY
+        cat-yamls ./controller/_test/conformance/*.yaml >> $GITHUB_STEP_SUMMARY
+        echo -e '```\n' >> $GITHUB_STEP_SUMMARY
+        echo -e '# GIE Conformance Timings\n' >> $GITHUB_STEP_SUMMARY
         cat controller/_test/ci-step-timings.log >> $GITHUB_STEP_SUMMARY

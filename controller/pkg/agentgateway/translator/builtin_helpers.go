@@ -109,6 +109,8 @@ func GetStatus[I, IS any](spec I) IS {
 		return any(t.Status).(IS)
 	case *agentgateway.AgentgatewayBackend:
 		return any(t.Status).(IS)
+	case *agentgateway.AgentgatewayModel:
+		return any(t.Status).(IS)
 	default:
 		// For external resources (registered via extraGVKs), we don't introspect the object here.
 		// Returning the zero status ensures we always enqueue a write when desired status is set.

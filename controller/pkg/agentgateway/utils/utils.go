@@ -241,7 +241,7 @@ type AncestorBackend struct {
 	Source  TypedNamespacedName
 }
 
-func (a AncestorBackend) Equals(other AncestorBackend) bool {
+func (a *AncestorBackend) Equals(other *AncestorBackend) bool {
 	return a.Gateway == other.Gateway && a.Backend == other.Backend && a.Source == other.Source
 }
 

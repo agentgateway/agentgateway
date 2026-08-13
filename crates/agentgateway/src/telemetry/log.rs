@@ -10,6 +10,7 @@ use agent_core::metrics::CustomField;
 use agent_core::strng::{RichStrng, Strng};
 use agent_core::telemetry::{
 	OptionExt, OtelLogSink, ValueBag, current_connection_id, current_request_id, debug, display,
+	quoted,
 };
 use agent_core::{Timestamp, strng};
 use bytes::Buf;
@@ -47,7 +48,7 @@ use crate::telemetry::{log_store, trc};
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{BackendInfo, BindKey, ListenerName, RouteName, Target};
 use crate::types::loadbalancer::ActiveHandle;
-use crate::{cel, llm, mcp};
+use crate::{a2a, cel, llm, mcp};
 
 fn u64_to_i64(value: Option<u64>) -> Option<i64> {
 	value.map(|value| value.min(i64::MAX as u64) as i64)
@@ -62,6 +63,30 @@ struct DatabaseAttributes {
 	agentgateway_user: Option<String>,
 	agentgateway_group: Option<String>,
 	user_agent_name: Option<String>,
+}
+
+fn database_llm_payload(
+	mode: Option<crate::types::frontend::DatabaseLlmMode>,
+	info: Option<&LLMContext>,
+) -> Option<log_store::StoredRequestLogPayload> {
+	if mode == Some(crate::types::frontend::DatabaseLlmMode::Metadata) {
+		return None;
+	}
+	let info = info?;
+	let request_prompt_json = info
+		.prompt
+		.as_ref()
+		.and_then(|prompt| serde_json::to_value(prompt.as_ref()).ok());
+	let response_completion_json = info
+		.completion
+		.as_ref()
+		.and_then(|completion| serde_json::to_value(completion).ok());
+	(request_prompt_json.is_some() || response_completion_json.is_some()).then_some(
+		log_store::StoredRequestLogPayload {
+			request_prompt_json,
+			response_completion_json,
+		},
+	)
 }
 
 fn database_attributes(kv: &[(&str, Option<ValueBag>)]) -> DatabaseAttributes {
@@ -893,6 +918,7 @@ impl RequestLog {
 	) -> Self {
 		RequestLog {
 			cel,
+			database_llm: Default::default(),
 			metrics,
 			model_catalog,
 			start,
@@ -934,6 +960,7 @@ impl RequestLog {
 			llm_request: None,
 			llm_response: Default::default(),
 			a2a_method: None,
+			a2a_response: None,
 			inference_pool: None,
 			request_handle: None,
 			request_snapshot: None,
@@ -1026,6 +1053,10 @@ impl RequestLog {
 #[derive(Debug)]
 pub struct RequestLog {
 	pub cel: CelLogging,
+	/// Controls whether normalized LLM prompt/completion content is persisted in the database's
+	/// dedicated payload table. `None` preserves the legacy behavior of persisting content captured
+	/// by CEL expressions. This is independent from CEL attribute capture.
+	pub database_llm: Option<crate::types::frontend::DatabaseLlmMode>,
 	pub metrics: Arc<Metrics>,
 	pub model_catalog: Arc<ModelCatalog>,
 	pub start: Timestamp,
@@ -1087,6 +1118,7 @@ pub struct RequestLog {
 	pub llm_response: AsyncLog<llm::LLMInfo>,
 
 	pub a2a_method: Option<Strng>,
+	pub a2a_response: Option<a2a::ResponseInfo>,
 
 	pub inference_pool: Option<SocketAddr>,
 
@@ -1270,7 +1302,7 @@ impl Drop for DropOnLog {
 						method: mcp.method_name.as_ref().map(RichStrng::from).into(),
 						resource_type: mcp.resource_type().into(),
 						server: mcp.target_name().map(RichStrng::from).into(),
-						resource: mcp.resource_name().map(RichStrng::from).into(),
+						resource: mcp.metric_resource_name().map(RichStrng::from).into(),
 
 						route: route_identifier.clone(),
 						custom: custom_metric_fields.clone(),
@@ -1295,6 +1327,16 @@ impl Drop for DropOnLog {
 			let grpc = log.grpc_status.load();
 
 			let input_tokens = llm_response.as_ref().and_then(|l| l.input_tokens);
+			let time_to_first_token = llm_response
+				.as_ref()
+				.and_then(|l| l.time_to_first_token)
+				.and_then(|duration| duration.0.to_std().ok())
+				.map(|duration| duration.as_secs_f64());
+			let time_per_output_token = llm_response
+				.as_ref()
+				.and_then(|l| l.time_per_output_token)
+				.and_then(|duration| duration.0.to_std().ok())
+				.map(|duration| duration.as_secs_f64());
 			let cost = llm_response.as_ref().and_then(|l| l.cost.as_ref());
 			let usage_cost_total = cost.map(|b| b.total().to_string());
 			let trace_cost_fields = if enable_trace {
@@ -1396,6 +1438,34 @@ impl Drop for DropOnLog {
 				("protocol", log.backend_protocol.as_ref().map(debug)),
 				("a2a.method", log.a2a_method.display()),
 				(
+					"a2a.response.outcome",
+					log.a2a_response.as_ref().map(|r| r.outcome.as_str().into()),
+				),
+				(
+					"a2a.response.error_code",
+					log
+						.a2a_response
+						.as_ref()
+						.and_then(|r| r.error_code)
+						.map(Into::into),
+				),
+				(
+					"a2a.result.kind",
+					log
+						.a2a_response
+						.as_ref()
+						.and_then(|r| r.result_kind.as_ref())
+						.map(display),
+				),
+				(
+					"a2a.task.state",
+					log
+						.a2a_response
+						.as_ref()
+						.and_then(|r| r.task_state.as_ref())
+						.map(display),
+				),
+				(
 					"mcp.method.name",
 					mcp
 						.as_ref()
@@ -1413,6 +1483,20 @@ impl Drop for DropOnLog {
 						.as_ref()
 						.and_then(|m| m.session_id.as_ref())
 						.map(display),
+				),
+				(
+					"mcp.error.code",
+					mcp
+						.as_ref()
+						.and_then(|m| m.error.as_ref())
+						.map(|error| error.code.into()),
+				),
+				(
+					"mcp.error.message",
+					mcp
+						.as_ref()
+						.and_then(|m| m.error.as_ref())
+						.map(|error| quoted(&error.message)),
 				),
 				(
 					"inferencepool.selected_endpoint",
@@ -1465,6 +1549,22 @@ impl Drop for DropOnLog {
 						.and_then(|l| l.output_tokens)
 						.map(Into::into),
 				),
+				// Not part of official semconv
+				(
+					"gen_ai.usage.reasoning_tokens",
+					llm_response
+						.as_ref()
+						.and_then(|l| l.reasoning_tokens)
+						.map(Into::into),
+				),
+				(
+					"agw.ai.time_to_first_token",
+					time_to_first_token.map(Into::into),
+				),
+				(
+					"agw.ai.time_per_output_token",
+					time_per_output_token.map(Into::into),
+				),
 				(
 					"agw.ai.usage.cost.total",
 					usage_cost_total.as_deref().map(Into::into),
@@ -1475,6 +1575,14 @@ impl Drop for DropOnLog {
 					llm_response
 						.as_ref()
 						.and_then(|l| l.output_image_tokens)
+						.map(Into::into),
+				),
+				// Not part of official semconv
+				(
+					"gen_ai.usage.input_audio_tokens",
+					llm_response
+						.as_ref()
+						.and_then(|l| l.input_audio_tokens)
 						.map(Into::into),
 				),
 				// Not part of official semconv
@@ -1673,27 +1781,12 @@ impl Drop for DropOnLog {
 						}
 					}
 					let attributes = database_attributes(&db_kv);
-					let payload = llm_response.as_ref().and_then(|info| {
-						let request_prompt_json = info
-							.prompt
-							.as_ref()
-							.and_then(|prompt| serde_json::to_value(prompt.as_ref()).ok());
-						let response_completion_json = info
-							.completion
-							.as_ref()
-							.and_then(|completion| serde_json::to_value(completion).ok());
-						(request_prompt_json.is_some() || response_completion_json.is_some()).then_some(
-							log_store::StoredRequestLogPayload {
-								request_prompt_json,
-								response_completion_json,
-							},
-						)
-					});
+					let payload = database_llm_payload(log.database_llm, llm_response.as_ref());
 					let has_payload = payload.is_some();
 					let total_tokens = llm_response.as_ref().and_then(|llm| {
 						llm
 							.total_tokens
-							.or_else(|| Some(llm.input_tokens? + llm.output_tokens?))
+							.or_else(|| Some(llm.input_tokens?.saturating_add(llm.output_tokens?)))
 					});
 					log_store::emit(log_store::StoredRequestLog {
 						id: uuid::Uuid::now_v7().to_string(),
@@ -1798,6 +1891,11 @@ where
 }
 
 pub struct OtelAccessLogger {
+	inner: super::NonBlockingDrop<OtelAccessLoggerInner>,
+}
+
+#[derive(Debug)]
+struct OtelAccessLoggerInner {
 	provider: SdkLoggerProvider,
 	logger: opentelemetry_sdk::logs::SdkLogger,
 }
@@ -1981,11 +2079,13 @@ impl OtelAccessLogger {
 
 		let logger = provider.logger("agentgateway.access");
 
-		Ok(Self { provider, logger })
+		Ok(Self {
+			inner: super::NonBlockingDrop::new(OtelAccessLoggerInner { provider, logger }),
+		})
 	}
 
 	pub fn shutdown(&self) {
-		let _ = self.provider.shutdown();
+		let _ = self.inner.provider.shutdown();
 	}
 }
 
@@ -2008,7 +2108,7 @@ impl OtelLogSink for OtelAccessLogger {
 			_ => "INFO",
 		};
 
-		let mut record = self.logger.create_log_record();
+		let mut record = self.inner.logger.create_log_record();
 		record.set_severity_number(severity);
 		record.set_severity_text(severity_text);
 		record.set_target(target.to_string());
@@ -2052,11 +2152,11 @@ impl OtelLogSink for OtelAccessLogger {
 			);
 		}
 
-		self.logger.emit(record);
+		self.inner.logger.emit(record);
 	}
 
 	fn shutdown(&self) {
-		let _ = self.provider.shutdown();
+		let _ = self.inner.provider.shutdown();
 	}
 }
 
@@ -2176,6 +2276,7 @@ mod tests {
 	use crate::telemetry::metrics::Metrics;
 	use crate::telemetry::trc;
 	use crate::transport::stream::TCPConnectionInfo;
+	use crate::types::frontend::{DatabaseLlmMode, LoggingPolicy};
 
 	#[derive(Clone, Debug, Default)]
 	struct RecordingSpanExporter {
@@ -2206,7 +2307,7 @@ mod tests {
 			.build();
 		(
 			Arc::new(trc::Tracer {
-				provider,
+				provider: crate::telemetry::NonBlockingDrop::new(provider),
 				processor,
 				fields: Arc::new(LoggingFields::default()),
 				filter: None,
@@ -2239,6 +2340,109 @@ mod tests {
 				raw_peer_addr: None,
 			},
 		)
+	}
+
+	fn llm_context_with_content() -> LLMContext {
+		let request = llm::LLMRequest {
+			input_tokens: None,
+			input_format: llm::InputFormat::Responses,
+			cache_convention: Default::default(),
+			request_model: "test-model".into(),
+			provider: "test-provider".into(),
+			streaming: false,
+			params: Default::default(),
+			prompt: Some(Arc::new(vec![llm::SimpleChatCompletionMessage {
+				role: "user".into(),
+				content: "hello".into(),
+			}])),
+			provider_state: None,
+		};
+		let mut context = LLMContext::from(request);
+		context.completion = Some(vec!["world".to_string()]);
+		context
+	}
+
+	#[test]
+	fn database_llm_omitted_preserves_legacy_payload_without_capture_requirements() {
+		let policy: LoggingPolicy = serde_json::from_value(serde_json::json!({
+			"database": {}
+		}))
+		.unwrap();
+		let mut log = test_request_log();
+
+		crate::proxy::httpproxy::apply_logging_policy_to_log(&mut log, &policy);
+
+		assert_eq!(log.database_llm, None);
+		assert!(!log.cel.cel_context.needs_llm_prompt());
+		assert!(!log.cel.cel_context.needs_llm_completion());
+		assert!(database_llm_payload(None, Some(&llm_context_with_content())).is_some());
+	}
+
+	#[test]
+	fn database_llm_full_enables_capture_requirements() {
+		let policy: LoggingPolicy = serde_json::from_value(serde_json::json!({
+			"database": {"llm": "full"}
+		}))
+		.unwrap();
+		let mut log = test_request_log();
+
+		crate::proxy::httpproxy::apply_logging_policy_to_log(&mut log, &policy);
+
+		assert_eq!(log.database_llm, Some(DatabaseLlmMode::Full));
+		assert!(log.cel.cel_context.needs_llm_prompt());
+		assert!(log.cel.cel_context.needs_llm_completion());
+	}
+
+	#[test]
+	fn database_llm_metadata_does_not_persist_captured_content() {
+		let context = llm_context_with_content();
+		assert!(database_llm_payload(Some(DatabaseLlmMode::Metadata), Some(&context)).is_none());
+	}
+
+	#[test]
+	fn database_add_can_capture_content_without_enabling_payload_storage() {
+		let policy: LoggingPolicy = serde_json::from_value(serde_json::json!({
+			"database": {
+				"llm": "metadata",
+				"add": {"my.prompt": "llm.prompt"}
+			}
+		}))
+		.unwrap();
+		let mut log = test_request_log();
+		let database = policy.database.as_ref().unwrap();
+		for expression in database.add.values_unordered() {
+			log
+				.cel
+				.cel_context
+				.register_log_expression(expression.as_ref());
+		}
+
+		crate::proxy::httpproxy::apply_logging_policy_to_log(&mut log, &policy);
+
+		assert!(log.cel.cel_context.needs_llm_prompt());
+		assert!(!log.cel.cel_context.needs_llm_completion());
+		assert!(log.cel.database_fields.add.contains_key("my.prompt"));
+		assert!(
+			database_llm_payload(
+				Some(DatabaseLlmMode::Metadata),
+				Some(&llm_context_with_content())
+			)
+			.is_none()
+		);
+	}
+
+	#[test]
+	fn database_llm_full_persists_content_in_payload_only() {
+		let context = llm_context_with_content();
+		let payload = database_llm_payload(Some(DatabaseLlmMode::Full), Some(&context)).unwrap();
+		assert_eq!(
+			payload.request_prompt_json,
+			Some(serde_json::json!([{"role": "user", "content": "hello"}]))
+		);
+		assert_eq!(
+			payload.response_completion_json,
+			Some(serde_json::json!(["world"]))
+		);
 	}
 
 	#[test]
@@ -2303,6 +2507,83 @@ mod tests {
 		assert!(exporter.finished_spans().is_empty());
 	}
 
+	#[test]
+	fn llm_span_uses_cache_inclusive_input_tokens() {
+		let request = llm::LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			cache_convention: llm::CacheTokenConvention::InputExcludesCache,
+			request_model: strng::literal!("claude"),
+			provider: strng::literal!("anthropic"),
+			streaming: false,
+			params: llm::LLMRequestParams::default(),
+			prompt: None,
+			provider_state: None,
+		};
+		let response = llm::LLMResponse {
+			input_tokens: Some(50),
+			cached_input_tokens: Some(40),
+			cache_creation_input_tokens: Some(10),
+			input_audio_tokens: Some(3),
+			output_tokens: Some(20),
+			output_audio_tokens: Some(4),
+			reasoning_tokens: Some(5),
+			total_tokens: Some(70),
+			..Default::default()
+		};
+
+		let (tracer, exporter) = test_tracer();
+		let mut log = test_request_log();
+		log.tracer = Some(tracer.clone());
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		log.outgoing_span = Some(outgoing);
+		log.llm_request = Some(request.clone());
+		log
+			.llm_response
+			.store(Some(llm::LLMInfo::new(request, response)));
+
+		drop(DropOnLog::from(log));
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		let span = spans
+			.iter()
+			.find(|span| span.name.as_ref() == "unknown")
+			.expect("request span should be exported");
+		let value = |key: &str| {
+			span
+				.attributes
+				.iter()
+				.find(|attr| attr.key.as_str() == key)
+				.map(|attr| &attr.value)
+		};
+		assert_eq!(
+			value("gen_ai.usage.input_tokens"),
+			Some(&opentelemetry::Value::I64(100))
+		);
+		assert_eq!(
+			value("gen_ai.usage.cache_read.input_tokens"),
+			Some(&opentelemetry::Value::I64(40))
+		);
+		assert_eq!(
+			value("gen_ai.usage.cache_creation.input_tokens"),
+			Some(&opentelemetry::Value::I64(10))
+		);
+		assert_eq!(
+			value("gen_ai.usage.reasoning_tokens"),
+			Some(&opentelemetry::Value::I64(5))
+		);
+		assert_eq!(
+			value("gen_ai.usage.input_audio_tokens"),
+			Some(&opentelemetry::Value::I64(3))
+		);
+		assert_eq!(
+			value("gen_ai.usage.output_audio_tokens"),
+			Some(&opentelemetry::Value::I64(4))
+		);
+	}
+
 	#[tokio::test]
 	async fn llm_cost_breakdown_span_attributes() {
 		let catalog_file = tempfile::NamedTempFile::new().unwrap();
@@ -2314,6 +2595,7 @@ mod tests {
 		let catalog = ModelCatalog::new(vec![crate::ModelCatalogSource::File {
 			file: catalog_file.path().to_path_buf(),
 		}])
+		.await
 		.unwrap();
 		let request = llm::LLMRequest {
 			input_tokens: None,
@@ -2380,5 +2662,41 @@ mod tests {
 				.all(|attr| attr.key.as_str() != "agw.usage.cost"),
 			"cost should use the AGW AI usage namespace"
 		);
+	}
+
+	#[test]
+	fn a2a_response_span_attributes() {
+		let (tracer, exporter) = test_tracer();
+		let mut log = test_request_log();
+		log.tracer = Some(tracer.clone());
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		log.outgoing_span = Some(outgoing);
+		log.backend_protocol = Some(cel::BackendProtocol::a2a);
+		log.a2a_method = Some(strng::literal!("tasks/send"));
+		log.a2a_response = Some(a2a::ResponseInfo {
+			outcome: a2a::ResponseOutcome::Error,
+			error_code: Some(-32602),
+			result_kind: Some(strng::literal!("task")),
+			task_state: Some(strng::literal!("failed")),
+		});
+
+		drop(DropOnLog::from(log));
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		let span = spans
+			.iter()
+			.find(|span| span.name.as_ref() == "unknown")
+			.expect("request span should be exported");
+		let has = |key: &str| span.attributes.iter().any(|attr| attr.key.as_str() == key);
+		for expected in [
+			"a2a.response.outcome",
+			"a2a.response.error_code",
+			"a2a.result.kind",
+			"a2a.task.state",
+		] {
+			assert!(has(expected), "expected {expected} span attribute");
+		}
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -34,6 +35,12 @@ import (
 const (
 	localForwardAddress = "127.0.0.1"
 	localRuntimeAddress = "localhost"
+
+	// The X11 backend in golang.design/x/clipboard sends clipboard contents in
+	// one ChangeProperty request. Its 16-bit request length can hold at most
+	// 262,116 payload bytes; a larger request corrupts the connection and leaves
+	// paste clients waiting for a SelectionNotify that never arrives.
+	x11MaxClipboardPayload = 65535*4 - 24
 )
 
 var (
@@ -1500,6 +1507,14 @@ func copyDetailsToClipboard(screen tcell.Screen, text string) error {
 }
 
 func copyDetailsToNativeClipboard(text string) error {
+	x11Platform := runtime.GOOS == "linux" || runtime.GOOS == "freebsd" || runtime.GOOS == "openbsd" || runtime.GOOS == "netbsd"
+	// Native Wayland transfers do not have X11's request limit, but the package
+	// can silently fall back to X11 when Wayland data-control is unavailable.
+	// DISPLAY is therefore the only safe signal exposed to callers.
+	if len(text) > x11MaxClipboardPayload && x11Platform && os.Getenv("DISPLAY") != "" {
+		return fmt.Errorf("clipboard contents are too large for X11 (%d bytes)", len(text))
+	}
+
 	clipboardInitOnce.Do(func() {
 		clipboardInitErr = clipboard.Init()
 	})

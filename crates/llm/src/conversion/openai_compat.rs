@@ -1,3 +1,7 @@
+#[cfg(test)]
+#[path = "openai_compat_tests.rs"]
+mod tests;
+
 pub mod from_responses {
 	use types::completions::typed as completions;
 	use types::responses::typed as responses;
@@ -6,10 +10,16 @@ pub mod from_responses {
 
 	/// Translate an OpenAI Responses request into an OpenAI-compatible chat completions request.
 	pub fn translate(req: &types::responses::Request) -> Result<Vec<u8>, AIError> {
+		let xlated = translate_request(req)?;
+		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+	}
+
+	pub fn translate_request(
+		req: &types::responses::Request,
+	) -> Result<types::completions::typed::Request, AIError> {
 		let typed =
 			json::convert::<_, responses::CreateResponse>(req).map_err(AIError::RequestMarshal)?;
-		let xlated = translate_internal(typed);
-		serde_json::to_vec(&xlated).map_err(AIError::RequestMarshal)
+		Ok(translate_internal(typed))
 	}
 
 	fn translate_internal(req: responses::CreateResponse) -> completions::Request {
@@ -34,6 +44,7 @@ pub mod from_responses {
 			InputParam::Text(text) => vec![InputItem::from(InputMessage {
 				content: vec![InputContent::InputText(InputTextContent {
 					text: text.clone(),
+					prompt_cache_breakpoint: None,
 				})],
 				role: InputRole::User,
 				status: None,
@@ -45,103 +56,179 @@ pub mod from_responses {
 			match item {
 				InputItem::EasyMessage(msg) => match msg.role {
 					ResponsesRole::User => {
-						let text = match &msg.content {
-							EasyInputContent::Text(text) => text.clone(),
-							EasyInputContent::ContentList(parts) => parts
-								.iter()
-								.filter_map(|p| match p {
-									InputContent::InputText(t) => Some(t.text.as_str()),
-									_ => None,
-								})
-								.collect::<Vec<_>>()
-								.join("\n"),
+						let content = match msg.content {
+							EasyInputContent::Text(text) => completions::RequestUserMessageContent::Text(text),
+							EasyInputContent::ContentList(parts) => {
+								completions::RequestUserMessageContent::Array(
+									parts
+										.into_iter()
+										.filter_map(|part| match part {
+											InputContent::InputText(text) => {
+												Some(completions::RequestUserMessageContentPart::Text(
+													completions::RequestMessageContentPartText {
+														text: text.text,
+														prompt_cache_breakpoint: text.prompt_cache_breakpoint,
+													},
+												))
+											},
+											_ => None,
+										})
+										.collect(),
+								)
+							},
 						};
 						messages.push(completions::RequestMessage::User(
 							completions::RequestUserMessage {
-								content: completions::RequestUserMessageContent::Text(text),
+								content,
 								name: None,
 							},
 						));
 					},
 					ResponsesRole::Assistant => {
-						let text = match &msg.content {
-							EasyInputContent::Text(text) => text.clone(),
-							EasyInputContent::ContentList(parts) => parts
-								.iter()
-								.filter_map(|p| match p {
-									InputContent::InputText(t) => Some(t.text.as_str()),
-									_ => None,
-								})
-								.collect::<Vec<_>>()
-								.join("\n"),
+						let content = match msg.content {
+							EasyInputContent::Text(text) => {
+								completions::RequestAssistantMessageContent::Text(text)
+							},
+							EasyInputContent::ContentList(parts) => {
+								completions::RequestAssistantMessageContent::Array(
+									parts
+										.into_iter()
+										.filter_map(|part| match part {
+											InputContent::InputText(text) => {
+												Some(completions::RequestAssistantMessageContentPart::Text(
+													completions::RequestMessageContentPartText {
+														text: text.text,
+														prompt_cache_breakpoint: text.prompt_cache_breakpoint,
+													},
+												))
+											},
+											_ => None,
+										})
+										.collect(),
+								)
+							},
 						};
 						messages.push(completions::RequestMessage::Assistant(
 							completions::RequestAssistantMessage {
-								content: Some(completions::RequestAssistantMessageContent::Text(text)),
+								content: Some(content),
 								..Default::default()
 							},
 						));
 					},
 					ResponsesRole::System | ResponsesRole::Developer => {
-						let text = match &msg.content {
-							EasyInputContent::Text(text) => text.clone(),
-							EasyInputContent::ContentList(parts) => parts
-								.iter()
-								.filter_map(|p| match p {
-									InputContent::InputText(t) => Some(t.text.as_str()),
-									_ => None,
-								})
-								.collect::<Vec<_>>()
-								.join("\n"),
+						let content = match msg.content {
+							EasyInputContent::Text(text) => {
+								completions::RequestDeveloperMessageContent::Text(text)
+							},
+							EasyInputContent::ContentList(parts) => {
+								completions::RequestDeveloperMessageContent::Array(
+									parts
+										.into_iter()
+										.filter_map(|part| match part {
+											InputContent::InputText(text) => {
+												Some(completions::RequestDeveloperMessageContentPart::Text(
+													completions::RequestMessageContentPartText {
+														text: text.text,
+														prompt_cache_breakpoint: text.prompt_cache_breakpoint,
+													},
+												))
+											},
+											_ => None,
+										})
+										.collect(),
+								)
+							},
 						};
 						messages.push(completions::RequestMessage::Developer(
 							completions::RequestDeveloperMessage {
-								content: completions::RequestDeveloperMessageContent::Text(text),
+								content,
 								name: None,
 							},
 						));
 					},
 				},
 				InputItem::ItemReference(_) => continue,
+				InputItem::Program(_) | InputItem::ProgramOutput(_) | InputItem::CompactionTrigger(_) => {
+					tracing::debug!(
+						"Skipping unsupported Responses input item for OpenAI-compatible chat completions"
+					);
+					continue;
+				},
 				InputItem::Item(item) => match item {
 					Item::Message(msg_item) => match msg_item {
-						MessageItem::Input(msg) => {
-							let text_parts: Vec<String> = msg
-								.content
-								.iter()
-								.filter_map(|c| match c {
-									InputContent::InputText(t) => Some(t.text.clone()),
-									_ => None,
-								})
-								.collect();
-							let text = text_parts.join("\n");
-
-							match msg.role {
-								InputRole::User => {
-									messages.push(completions::RequestMessage::User(
-										completions::RequestUserMessage {
-											content: completions::RequestUserMessageContent::Text(text),
-											name: None,
-										},
-									));
-								},
-								InputRole::System => {
-									messages.push(completions::RequestMessage::System(
-										completions::RequestSystemMessage {
-											content: completions::RequestSystemMessageContent::Text(text),
-											name: None,
-										},
-									));
-								},
-								InputRole::Developer => {
-									messages.push(completions::RequestMessage::Developer(
-										completions::RequestDeveloperMessage {
-											content: completions::RequestDeveloperMessageContent::Text(text),
-											name: None,
-										},
-									));
-								},
-							}
+						MessageItem::Input(msg) => match msg.role {
+							InputRole::User => {
+								messages.push(completions::RequestMessage::User(
+									completions::RequestUserMessage {
+										content: completions::RequestUserMessageContent::Array(
+											msg
+												.content
+												.into_iter()
+												.filter_map(|content| match content {
+													InputContent::InputText(text) => {
+														Some(completions::RequestUserMessageContentPart::Text(
+															completions::RequestMessageContentPartText {
+																text: text.text,
+																prompt_cache_breakpoint: text.prompt_cache_breakpoint,
+															},
+														))
+													},
+													_ => None,
+												})
+												.collect(),
+										),
+										name: None,
+									},
+								));
+							},
+							InputRole::System => {
+								messages.push(completions::RequestMessage::System(
+									completions::RequestSystemMessage {
+										content: completions::RequestSystemMessageContent::Array(
+											msg
+												.content
+												.into_iter()
+												.filter_map(|content| match content {
+													InputContent::InputText(text) => {
+														Some(completions::RequestSystemMessageContentPart::Text(
+															completions::RequestMessageContentPartText {
+																text: text.text,
+																prompt_cache_breakpoint: text.prompt_cache_breakpoint,
+															},
+														))
+													},
+													_ => None,
+												})
+												.collect(),
+										),
+										name: None,
+									},
+								));
+							},
+							InputRole::Developer => {
+								messages.push(completions::RequestMessage::Developer(
+									completions::RequestDeveloperMessage {
+										content: completions::RequestDeveloperMessageContent::Array(
+											msg
+												.content
+												.into_iter()
+												.filter_map(|content| match content {
+													InputContent::InputText(text) => {
+														Some(completions::RequestDeveloperMessageContentPart::Text(
+															completions::RequestMessageContentPartText {
+																text: text.text,
+																prompt_cache_breakpoint: text.prompt_cache_breakpoint,
+															},
+														))
+													},
+													_ => None,
+												})
+												.collect(),
+										),
+										name: None,
+									},
+								));
+							},
 						},
 						MessageItem::Output(msg) => {
 							let text = msg
@@ -167,20 +254,25 @@ pub mod from_responses {
 						},
 					},
 					Item::FunctionCall(call) => {
-						messages.push(completions::RequestMessage::Assistant(
-							completions::RequestAssistantMessage {
-								tool_calls: Some(vec![completions::MessageToolCalls::Function(
-									completions::MessageToolCall {
-										id: call.call_id.clone(),
-										function: completions::FunctionCall {
-											name: call.name.clone(),
-											arguments: call.arguments.clone(),
-										},
-									},
-								)]),
-								..Default::default()
+						let tool_call = completions::MessageToolCalls::Function(completions::MessageToolCall {
+							id: call.call_id.clone(),
+							function: completions::FunctionCall {
+								name: call.name.clone(),
+								arguments: call.arguments.clone(),
 							},
-						));
+						});
+						if let Some(completions::RequestMessage::Assistant(message)) = messages.last_mut()
+							&& let Some(tool_calls) = &mut message.tool_calls
+						{
+							tool_calls.push(tool_call);
+						} else {
+							messages.push(completions::RequestMessage::Assistant(
+								completions::RequestAssistantMessage {
+									tool_calls: Some(vec![tool_call]),
+									..Default::default()
+								},
+							));
+						}
 					},
 					Item::FunctionCallOutput(output) => {
 						let output_text = match output.output {
@@ -203,20 +295,25 @@ pub mod from_responses {
 					},
 					Item::CustomToolCall(call) => {
 						let arguments = serde_json::to_string(&call.input).unwrap_or_else(|_| "{}".to_string());
-						messages.push(completions::RequestMessage::Assistant(
-							completions::RequestAssistantMessage {
-								tool_calls: Some(vec![completions::MessageToolCalls::Function(
-									completions::MessageToolCall {
-										id: call.id.clone(),
-										function: completions::FunctionCall {
-											name: call.name.clone(),
-											arguments,
-										},
-									},
-								)]),
-								..Default::default()
+						let tool_call = completions::MessageToolCalls::Function(completions::MessageToolCall {
+							id: call.id.clone(),
+							function: completions::FunctionCall {
+								name: call.name.clone(),
+								arguments,
 							},
-						));
+						});
+						if let Some(completions::RequestMessage::Assistant(message)) = messages.last_mut()
+							&& let Some(tool_calls) = &mut message.tool_calls
+						{
+							tool_calls.push(tool_call);
+						} else {
+							messages.push(completions::RequestMessage::Assistant(
+								completions::RequestAssistantMessage {
+									tool_calls: Some(vec![tool_call]),
+									..Default::default()
+								},
+							));
+						}
 					},
 					Item::CustomToolCallOutput(output) => {
 						let text = match &output.output {
@@ -275,6 +372,7 @@ pub mod from_responses {
 				| ToolChoiceParam::AllowedTools(_)
 				| ToolChoiceParam::Mcp(_)
 				| ToolChoiceParam::Custom(_)
+				| ToolChoiceParam::ProgrammaticToolCalling(_)
 				| ToolChoiceParam::ApplyPatch
 				| ToolChoiceParam::Shell => {
 					tracing::warn!(
@@ -293,6 +391,7 @@ pub mod from_responses {
 				responses::ReasoningEffort::Medium => Some(completions::ReasoningEffort::Medium),
 				responses::ReasoningEffort::High => Some(completions::ReasoningEffort::High),
 				responses::ReasoningEffort::Xhigh => Some(completions::ReasoningEffort::Xhigh),
+				responses::ReasoningEffort::Max => Some(completions::ReasoningEffort::Max),
 				responses::ReasoningEffort::None => None,
 			})
 		});
@@ -332,6 +431,7 @@ pub mod from_responses {
 			response_format,
 			stream: Some(stream),
 			model: req.model.clone(),
+			moderation: None,
 			temperature: req.temperature,
 			top_p: req.top_p,
 			max_completion_tokens: req.max_output_tokens,
@@ -375,17 +475,16 @@ pub mod to_responses {
 	use crate::types::ResponseType;
 	use crate::{AIError, StreamingUsageGuard, json, logged_response_parsing, parse, types};
 
+	type LoggedToolCall = (Option<String>, Option<String>, String);
+	type LoggedToolCalls = HashMap<u32, LoggedToolCall>;
+
 	/// Translate an OpenAI-compatible chat completions response into an OpenAI Responses response.
 	pub fn translate_response(bytes: &Bytes, model: &str) -> Result<Box<dyn ResponseType>, AIError> {
 		let resp = serde_json::from_slice::<completions::Response>(bytes)
 			.map_err(logged_response_parsing(bytes))?;
 		let typed = translate_response_internal(resp, model);
-		let mut passthrough =
+		let passthrough =
 			json::convert::<_, types::responses::Response>(&typed).map_err(AIError::ResponseParsing)?;
-		passthrough.rest = serde_json::Value::Object(serde_json::Map::new());
-		if let Some(usage) = passthrough.usage.as_mut() {
-			usage.rest = serde_json::Value::Object(serde_json::Map::new());
-		}
 		Ok(Box::new(passthrough))
 	}
 
@@ -419,6 +518,7 @@ pub mod to_responses {
 									arguments: f.function.arguments.clone(),
 									call_id: f.id.clone(),
 									name: f.function.name.clone(),
+									caller: None,
 									id: Some(f.id.clone()),
 									status: Some(responses::OutputStatus::Completed),
 									namespace: None,
@@ -477,6 +577,12 @@ pub mod to_responses {
 					.as_ref()
 					.and_then(|d| d.cached_tokens)
 					.unwrap_or(0) as u32,
+				cache_write_tokens: u
+					.prompt_tokens_details
+					.as_ref()
+					.and_then(|d| d.cache_write_tokens)
+					.or(u.cache_creation_input_tokens)
+					.map(|tokens| tokens as u32),
 			},
 			output_tokens_details: responses::OutputTokenDetails {
 				reasoning_tokens: u
@@ -492,7 +598,12 @@ pub mod to_responses {
 		response
 	}
 
-	pub fn translate_stream(b: Body, buffer_limit: usize, log: StreamingUsageGuard) -> Body {
+	pub fn translate_stream(
+		b: Body,
+		buffer_limit: usize,
+		log: StreamingUsageGuard,
+		log_content: crate::LogContentFields,
+	) -> Body {
 		use responses::{
 			AssistantRole, FunctionToolCall, OutputContent, OutputItem, OutputMessage, OutputStatus,
 			OutputTextContent, ResponseContentPartAddedEvent, ResponseFunctionCallArgumentsDeltaEvent,
@@ -511,6 +622,8 @@ pub mod to_responses {
 
 		let mut next_output_index: u32 = 1;
 		let mut tool_calls: HashMap<u32, (String, String, String, u32)> = HashMap::new();
+		let mut logged_tool_calls: Option<LoggedToolCalls> = log_content.tool_calls.then(HashMap::new);
+		let mut completion = log_content.completion.then(String::new);
 		let mut pending_stop_reason: Option<completions::FinishReason> = None;
 		let mut pending_usage: Option<completions::Usage> = None;
 
@@ -535,6 +648,8 @@ pub mod to_responses {
 								&log,
 								&response_id,
 								&model_holder.borrow(),
+								&mut completion,
+								&mut logged_tool_calls,
 							);
 						}
 						return events;
@@ -587,6 +702,9 @@ pub mod to_responses {
 
 						if let Some(choice) = chunk.choices.first() {
 							if let Some(content) = &choice.delta.content {
+								if let Some(completion) = completion.as_mut() {
+									completion.push_str(content);
+								}
 								if !sent_content_part {
 									sent_content_part = true;
 									sequence_number += 1;
@@ -630,6 +748,20 @@ pub mod to_responses {
 							if let Some(tcs) = &choice.delta.tool_calls {
 								for tc in tcs {
 									let tool_index = tc.index;
+									if let Some(logged_tool_calls) = logged_tool_calls.as_mut() {
+										let logged_entry = logged_tool_calls.entry(tool_index).or_default();
+										if let Some(id) = &tc.id {
+											logged_entry.0 = Some(id.clone());
+										}
+										if let Some(function) = &tc.function {
+											if let Some(name) = &function.name {
+												logged_entry.1 = Some(name.clone());
+											}
+											if let Some(args) = &function.arguments {
+												logged_entry.2.push_str(args);
+											}
+										}
+									}
 
 									let is_new = !tool_calls.contains_key(&tool_index);
 
@@ -668,6 +800,7 @@ pub mod to_responses {
 													call_id: entry.0.clone(),
 													namespace: None,
 													name: entry.1.clone(),
+													caller: None,
 													id: Some(entry.0.clone()),
 													status: Some(OutputStatus::InProgress),
 												}),
@@ -713,6 +846,8 @@ pub mod to_responses {
 								&log,
 								&response_id,
 								&model_holder.borrow(),
+								&mut completion,
+								&mut logged_tool_calls,
 							);
 						}
 					},
@@ -742,6 +877,8 @@ pub mod to_responses {
 		log: &StreamingUsageGuard,
 		response_id: &str,
 		model: &str,
+		completion: &mut Option<String>,
+		logged_tool_calls: &mut Option<LoggedToolCalls>,
 	) {
 		use responses::{
 			AssistantRole, ErrorObject, FunctionToolCall, IncompleteDetails, InputTokenDetails,
@@ -752,6 +889,34 @@ pub mod to_responses {
 
 		let stop_reason = pending_stop_reason.take();
 		let usage = pending_usage.take();
+		let response_status = match stop_reason.as_ref() {
+			Some(completions::FinishReason::Stop)
+			| Some(completions::FinishReason::ToolCalls)
+			| Some(completions::FinishReason::FunctionCall)
+			| None => responses::Status::Completed,
+			Some(completions::FinishReason::Length) => responses::Status::Incomplete,
+			Some(completions::FinishReason::ContentFilter) => responses::Status::Failed,
+		};
+		let finish_reason = crate::types::serialize_str(&response_status);
+		let tool_parts = logged_tool_calls.as_mut().and_then(|logged_tool_calls| {
+			crate::conversion::completions::finalize_streaming_tool_calls(
+				logged_tool_calls
+					.drain()
+					.map(|(idx, (id, name, arguments))| (idx, id, name, arguments)),
+			)
+		});
+		let mut tool_parts = tool_parts;
+		let mut finish_reason = finish_reason;
+		log.update(|r| {
+			if let Some(completion) = completion.take() {
+				r.response.completion = Some(vec![completion]);
+			}
+			crate::conversion::completions::build_output_messages(
+				&mut r.response,
+				tool_parts.take(),
+				finish_reason.take(),
+			);
+		});
 
 		let mut sorted_tools: Vec<_> = tool_calls.drain().collect();
 		sorted_tools.sort_by_key(|(_, (_, _, _, output_index))| *output_index);
@@ -782,6 +947,7 @@ pub mod to_responses {
 						call_id: item_id.clone(),
 						namespace: None,
 						name,
+						caller: None,
 						id: Some(item_id),
 						status: Some(OutputStatus::Completed),
 					}),
@@ -832,6 +998,11 @@ pub mod to_responses {
 					.prompt_tokens_details
 					.as_ref()
 					.and_then(|d| d.cached_tokens);
+				r.response.cache_creation_input_tokens = u
+					.prompt_tokens_details
+					.as_ref()
+					.and_then(|d| d.cache_write_tokens)
+					.or(u.cache_creation_input_tokens);
 				r.response.reasoning_tokens = u
 					.completion_tokens_details
 					.as_ref()
@@ -849,6 +1020,12 @@ pub mod to_responses {
 					.as_ref()
 					.and_then(|d| d.cached_tokens)
 					.unwrap_or(0) as u32,
+				cache_write_tokens: u
+					.prompt_tokens_details
+					.as_ref()
+					.and_then(|d| d.cache_write_tokens)
+					.or(u.cache_creation_input_tokens)
+					.map(|tokens| tokens as u32),
 			},
 			output_tokens_details: OutputTokenDetails {
 				reasoning_tokens: u

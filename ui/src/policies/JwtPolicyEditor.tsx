@@ -1,40 +1,23 @@
 import { tr } from "../i18n";
 import { useState } from "react";
-import {
-  DatabaseZap,
-  FileKey2,
-  Globe2,
-  KeyRound,
-  ShieldCheck,
-  SlidersHorizontal,
-  X,
-} from "lucide-react";
+import { DatabaseZap, FileKey2, Globe2, ShieldCheck } from "lucide-react";
 import type { SchemaHelp } from "../schemaHelp";
 import { MiniMonacoEditor } from "../components/MiniMonacoEditor";
 import { Field, FieldGroup, StatusBanner } from "../components/Primitives";
 import {
-  HeaderLocationOverride,
-  headerLocationFrom,
-} from "./HeaderLocationOverride";
+  authorizationLocationFrom,
+  authorizationLocationToValue,
+  CredentialLocationSetting,
+} from "./AuthorizationLocation";
 import { ListEditor } from "./ListEditor";
-import {
-  AdvancedSettingPanel,
-  AdvancedSettingRow,
-  PolicySection,
-} from "./PolicyLayout";
+import { PolicySection } from "./PolicyLayout";
 import { ResultingYaml } from "./ResultingYaml";
 import type { JwtPolicy } from "./types";
 import { cleanEmpty, toText } from "./policyUtils";
-import type {
-  AuthorizationLocation,
-  JWTValidationOptions,
-  LocalJwtConfig,
-} from "../gateway-config";
+import type { JWTValidationOptions, LocalJwtConfig } from "../gateway-config";
 
 type JwtMode = "strict" | "optional" | "permissive";
 type JwksMode = "file" | "url" | "inline";
-
-type JwtLocation = { header: { name: string; prefix?: string | null } };
 
 type JwtDraft = Omit<JwtPolicy, "location" | "jwtValidationOptions"> & {
   location?: unknown;
@@ -124,7 +107,6 @@ export function JwtPolicyEditor(props: {
   saving: boolean;
   onSave: (jwt: JwtPolicy) => void;
 }) {
-  const headerLocation = headerLocationFrom(props.jwt?.location);
   const initialJwks = props.jwt?.jwks;
   const initialJwksMode: JwksMode =
     isRecord(initialJwks) && typeof initialJwks.url === "string"
@@ -136,14 +118,8 @@ export function JwtPolicyEditor(props: {
           : "url";
 
   const [mode, setMode] = useState<JwtMode>(props.jwt?.mode ?? "strict");
-  const [customHeaderLocation, setCustomHeaderLocation] = useState(
-    Boolean(headerLocation),
-  );
-  const [headerName, setHeaderName] = useState(
-    headerLocation?.header.name ?? "authorization",
-  );
-  const [headerPrefix, setHeaderPrefix] = useState(
-    headerLocation?.header.prefix ?? "Bearer ",
+  const [location, setLocation] = useState(() =>
+    authorizationLocationFrom(props.jwt?.location),
   );
   const [issuer, setIssuer] = useState(props.jwt?.issuer ?? "");
   const [audiences, setAudiences] = useState(props.jwt?.audiences ?? []);
@@ -174,7 +150,7 @@ export function JwtPolicyEditor(props: {
   function buildJwtPolicy() {
     return cleanEmpty({
       mode,
-      location: buildLocation(),
+      location: authorizationLocationToValue(location),
       issuer,
       audiences,
       jwks: buildJwks(),
@@ -182,11 +158,6 @@ export function JwtPolicyEditor(props: {
         requiredClaims: Array.from(requiredClaims),
       },
     }) as JwtPolicy;
-  }
-
-  function buildLocation(): JwtLocation | undefined {
-    if (!customHeaderLocation) return undefined;
-    return { header: { name: headerName, prefix: headerPrefix || undefined } };
   }
 
   function buildJwks() {
@@ -440,14 +411,11 @@ export function JwtPolicyEditor(props: {
       </PolicySection>
 
       <CredentialLocationSetting
-        enabled={customHeaderLocation}
+        value={location}
         help={props.help}
-        headerName={headerName}
-        headerPrefix={headerPrefix}
-        tooltip={props.help.field<LocalJwtConfig>("LocalJwtConfig", "location")}
-        onEnabledChange={setCustomHeaderLocation}
-        onHeaderNameChange={setHeaderName}
-        onHeaderPrefixChange={setHeaderPrefix}
+        defaultDescription="Default: Authorization: Bearer token"
+        description={tr("copy.overrideWhereThisPolicyReadsTheCredential")}
+        onChange={setLocation}
       />
 
       <ResultingYaml value={preview} />
@@ -480,74 +448,6 @@ export function JwtPolicyEditor(props: {
     });
     setError(null);
   }
-}
-
-function CredentialLocationSetting(props: {
-  enabled: boolean;
-  help: SchemaHelp;
-  headerName: string;
-  headerPrefix: string;
-  tooltip?: string;
-  onEnabledChange: (enabled: boolean) => void;
-  onHeaderNameChange: (value: string) => void;
-  onHeaderPrefixChange: (value: string) => void;
-}) {
-  if (!props.enabled) {
-    return (
-      <AdvancedSettingRow
-        icon={<KeyRound size={17} />}
-        title={tr("copy.credentialLocation")}
-        description={tr("copy.defaultAuthorizationBearerToken")}
-        action={
-          <button
-            className="button compact-action"
-            type="button"
-            onClick={() => props.onEnabledChange(true)}
-          >
-            <SlidersHorizontal size={15} />
-            {tr("copy.customize")}
-          </button>
-        }
-      />
-    );
-  }
-
-  return (
-    <AdvancedSettingPanel
-      icon={<KeyRound size={17} />}
-      title={tr("copy.credentialLocation")}
-      description={tr("copy.overrideWhereThisPolicyReadsTheJwtFrom")}
-      action={
-        <button
-          className="button"
-          type="button"
-          onClick={() => props.onEnabledChange(false)}
-        >
-          <X size={15} />
-          {tr("copy.useDefault")}
-        </button>
-      }
-    >
-      <HeaderLocationOverride
-        enabled
-        headerName={props.headerName}
-        headerPrefix={props.headerPrefix}
-        hideResetButton
-        tooltip={props.tooltip}
-        headerNameTooltip={props.help.field<AuthorizationLocation>(
-          "AuthorizationLocation",
-          "header.name",
-        )}
-        headerPrefixTooltip={props.help.field<AuthorizationLocation>(
-          "AuthorizationLocation",
-          "header.prefix",
-        )}
-        onEnabledChange={props.onEnabledChange}
-        onHeaderNameChange={props.onHeaderNameChange}
-        onHeaderPrefixChange={props.onHeaderPrefixChange}
-      />
-    </AdvancedSettingPanel>
-  );
 }
 
 function toggleClaim(values: Set<string>, value: string) {

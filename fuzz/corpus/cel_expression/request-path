@@ -1,0 +1,1 @@
+request.path == "/admin" && source.address.startsWith("10.")

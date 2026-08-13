@@ -1,8 +1,4 @@
-use std::time::Duration;
-
-use anyhow::Context;
 use serde_json::Value;
-use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
 use sqlx::types::Json;
 use sqlx::{QueryBuilder, Row, Sqlite, SqlitePool, query_builder};
 
@@ -75,19 +71,7 @@ fn push_request_log_payload_row(
 }
 
 impl SqliteLogStore {
-	pub async fn connect(url: &str) -> anyhow::Result<Self> {
-		let options = url
-			.parse::<SqliteConnectOptions>()
-			.context("failed to parse request log sqlite database URL")?
-			.create_if_missing(true)
-			.journal_mode(SqliteJournalMode::Wal)
-			.synchronous(SqliteSynchronous::Normal)
-			.busy_timeout(Duration::from_secs(5));
-		let pool = SqlitePoolOptions::new()
-			.max_connections(5)
-			.connect_with(options)
-			.await
-			.context("failed to connect request log sqlite database")?;
+	pub async fn from_pool(pool: SqlitePool) -> anyhow::Result<Self> {
 		sqlx::raw_sql(SCHEMA).execute(&pool).await?;
 		Ok(Self { pool })
 	}

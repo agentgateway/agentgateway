@@ -10,7 +10,7 @@ use crate::types::agent::ListenerTarget;
 use crate::types::discovery::SelfIdentitySource;
 use crate::types::proto::agent::Resource as ADPResource;
 use crate::types::proto::workload::Address as XdsAddress;
-use crate::{ConfigSource, client, control, store};
+use crate::{ConfigSource, ConfigStoreMode, client, config_store, control, store};
 
 #[derive(serde::Serialize)]
 pub struct StateManager {
@@ -36,6 +36,8 @@ impl StateManager {
 		client: client::Client,
 		config_metrics: Arc<agent_xds::Metrics>,
 		awaiting_ready: tokio::sync::watch::Sender<()>,
+		config_resource_store: Option<config_store::ConfigResourceStore>,
+		model_catalog: Arc<crate::llm::cost::ModelCatalog>,
 	) -> anyhow::Result<Self> {
 		let xds = &config.xds;
 		let stores = Stores::new_with_dynamic_ca_cert_cache(
@@ -72,6 +74,8 @@ impl StateManager {
 				config: config.clone(),
 				stores: stores.clone(),
 				cfg: cfg.clone(),
+				config_resource_store: config_resource_store.clone(),
+				model_catalog,
 				client,
 				resource_manager: resource_manager.clone(),
 				gateway: ListenerTarget {
@@ -112,6 +116,8 @@ impl StateManager {
 pub struct LocalClient {
 	config: Arc<crate::Config>,
 	pub cfg: ConfigSource,
+	pub config_resource_store: Option<config_store::ConfigResourceStore>,
+	pub model_catalog: Arc<crate::llm::cost::ModelCatalog>,
 	pub stores: Stores,
 	pub client: Client,
 	pub resource_manager: crate::resource_manager::ResourceManager,
@@ -144,6 +150,10 @@ impl LocalClient {
 		let lc: LocalClient = self.to_owned();
 		let path = path.to_path_buf();
 		let mut resource_changes = lc.resource_manager.subscribe_changes();
+		let mut config_store_changes = lc
+			.config_resource_store
+			.as_ref()
+			.map(config_store::ConfigResourceStore::subscribe_changes);
 		tokio::task::spawn(async move {
 			loop {
 				tokio::select! {
@@ -170,6 +180,18 @@ impl LocalClient {
 						info!(resource, "resource changed, reloading");
 						next_state = lc.reload_config_after_change(next_state).await;
 					}
+					changed = async {
+						match &mut config_store_changes {
+							Some(changes) => changes.changed().await,
+							None => std::future::pending().await,
+						}
+					} => {
+						if changed.is_err() {
+							break;
+						}
+						info!("config resource changed, reloading");
+						next_state = lc.reload_config_after_change(next_state).await;
+					}
 				}
 			}
 		});
@@ -180,17 +202,40 @@ impl LocalClient {
 	fn watch_resource_changes(&self, mut next_state: PreviousState) {
 		let lc = self.clone();
 		let mut resource_changes = self.resource_manager.subscribe_changes();
+		let mut config_store_changes = self
+			.config_resource_store
+			.as_ref()
+			.map(config_store::ConfigResourceStore::subscribe_changes);
 		tokio::task::spawn(async move {
-			while resource_changes.changed().await.is_ok() {
-				let resource = resource_changes.borrow().resource.clone();
-				info!(resource, "resource changed, reloading");
-				next_state = lc.reload_config_after_change(next_state).await;
+			loop {
+				tokio::select! {
+					changed = resource_changes.changed() => {
+						if changed.is_err() {
+							break;
+						}
+						let resource = resource_changes.borrow().resource.clone();
+						info!(resource, "resource changed, reloading");
+						next_state = lc.reload_config_after_change(next_state).await;
+					}
+					changed = async {
+						match &mut config_store_changes {
+							Some(changes) => changes.changed().await,
+							None => std::future::pending().await,
+						}
+					} => {
+						if changed.is_err() {
+							break;
+						}
+						info!("config resource changed, reloading");
+						next_state = lc.reload_config_after_change(next_state).await;
+					}
+				}
 			}
 		});
 	}
 
 	async fn reload_config(&self, prev: PreviousState) -> anyhow::Result<PreviousState> {
-		let config_content = self.cfg.read_to_string().await?;
+		let config_content = self.config_content().await?;
 		let resources =
 			crate::resource_manager::ResourceFetcher::managed(self.resource_manager.clone());
 		let config = crate::types::local::NormalizedLocalConfig::from(
@@ -200,10 +245,15 @@ impl LocalClient {
 			config_content.as_str(),
 		)
 		.await?;
+		let model_catalog = config
+			.model_catalog
+			.unwrap_or_else(|| self.config.model_catalog.sources.clone());
+		self.model_catalog.replace_sources(model_catalog).await?;
 		info!("loaded config from {:?}", self.cfg);
 
-		// Sync the state
-		let next_binds = self.stores.binds.sync_local(
+		// Sync binds first, but always run discovery sync even when a new bind cannot open.
+		// Propagating bind errors before discovery sync would skip workload/service state.
+		let bind_result = self.stores.binds.sync_local(
 			config.binds,
 			config.listener_routes,
 			config.listener_tcp_routes,
@@ -217,11 +267,21 @@ impl LocalClient {
 				.stores
 				.discovery
 				.sync_local(config.services, config.workloads, prev.discovery)?;
+		let next_binds = bind_result?;
 
 		Ok(PreviousState {
 			binds: next_binds,
 			discovery: next_discovery,
 		})
+	}
+
+	async fn config_content(&self) -> anyhow::Result<String> {
+		if self.config.storage.mode == ConfigStoreMode::Hybrid
+			&& let Some(store) = &self.config_resource_store
+		{
+			return config_store::materialize_hybrid_config(&self.cfg, store).await;
+		}
+		self.cfg.read_to_string().await
 	}
 
 	async fn reload_config_after_change(&self, prev: PreviousState) -> PreviousState {
@@ -390,6 +450,15 @@ mod tests {
 	fn local_config(remove_field: &str) -> String {
 		format!(
 			r#"
+config:
+  modelCatalog:
+  - inline:
+      providers:
+        custom:
+          models:
+            {remove_field}:
+              rates:
+                input: "1"
 frontendPolicies:
   accessLog:
     remove:
@@ -436,6 +505,24 @@ frontendPolicies:
 		})
 		.await
 		.unwrap_or_else(|_| panic!("timed out waiting for access log remove {remove_field}"));
+	}
+
+	async fn wait_for_catalog_model(catalog: &crate::llm::cost::ModelCatalog, model: &str) {
+		tokio::time::timeout(Duration::from_secs(5), async {
+			loop {
+				if catalog
+					.list_models()
+					.providers
+					.iter()
+					.any(|provider| provider.models.iter().any(|candidate| candidate == model))
+				{
+					return;
+				}
+				tokio::time::sleep(Duration::from_millis(10)).await;
+			}
+		})
+		.await
+		.unwrap_or_else(|_| panic!("timed out waiting for catalog model {model}"));
 	}
 
 	#[tokio::test]
@@ -509,9 +596,12 @@ frontendPolicies:
 		let metrics = Arc::new(agent_xds::Metrics::new(&mut registry));
 		let client = test_client();
 		let resource_manager = crate::resource_manager::ResourceManager::new(client.clone()).unwrap();
+		let model_catalog = crate::llm::cost::ModelCatalog::empty();
 		let local_client = LocalClient {
 			config: config.clone(),
 			cfg: ConfigSource::File(path.clone()),
+			config_resource_store: None,
+			model_catalog: model_catalog.clone(),
 			stores: stores.clone(),
 			client,
 			resource_manager,
@@ -521,21 +611,26 @@ frontendPolicies:
 
 		local_client.run().await.unwrap();
 		wait_for_access_log_remove(&config, &stores, "first").await;
+		wait_for_catalog_model(&model_catalog, "first").await;
 
 		fs_err::tokio::write(&path, local_config("ready"))
 			.await
 			.unwrap();
 		wait_for_access_log_remove(&config, &stores, "ready").await;
+		wait_for_catalog_model(&model_catalog, "ready").await;
 
 		replace_config(&path, "second").await;
 		wait_for_access_log_remove(&config, &stores, "second").await;
+		wait_for_catalog_model(&model_catalog, "second").await;
 
 		fs_err::tokio::write(&path, local_config("ready-again"))
 			.await
 			.unwrap();
 		wait_for_access_log_remove(&config, &stores, "ready-again").await;
+		wait_for_catalog_model(&model_catalog, "ready-again").await;
 
 		replace_config(&path, "third").await;
 		wait_for_access_log_remove(&config, &stores, "third").await;
+		wait_for_catalog_model(&model_catalog, "third").await;
 	}
 }

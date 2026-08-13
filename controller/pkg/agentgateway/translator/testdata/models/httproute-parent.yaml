@@ -1,0 +1,270 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: model-gateway
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: http
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      kinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: tenant1
+  namespace: default
+spec:
+  parentRefs:
+  - name: model-gateway
+    sectionName: http
+  rules:
+  - name: models
+    matches:
+    - path:
+        type: PathPrefix
+        value: /tenant1
+    backendRefs:
+    - group: agentgateway.dev
+      kind: AgentgatewayModel
+      name: "*"
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: gpt-5-mini
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: tenant1
+  provider: OpenAI
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: tenant1-auth
+  namespace: default
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: tenant1
+    sectionName: models
+  traffic:
+    basicAuthentication:
+      secretRef:
+        name: tenant1-users
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tenant1-users
+  namespace: default
+stringData:
+  .htpasswd: alice:hash
+
+---
+# Output
+output:
+- gateway:
+    Name: model-gateway
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - name: backend
+            openai: {}
+      key: default/gpt-5-mini/backend.default.tenant1
+      name:
+        name: gpt-5-mini
+        namespace: default
+- gateway:
+    Name: model-gateway
+    Namespace: default
+  resource:
+    backend:
+      key: default/tenant1.00.http
+      modelRouter:
+        routerKey: /llm:router:httproute:default:tenant1:models
+      name:
+        name: tenant1
+        namespace: default
+- gateway:
+    Name: model-gateway
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/model-gateway
+      port: 80
+- gateway:
+    Name: model-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/model-gateway
+      key: default/model-gateway.http
+      name:
+        gatewayName: model-gateway
+        gatewayNamespace: default
+        listenerName: http
+      protocol: HTTP
+- gateway:
+    Name: model-gateway
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/gpt-5-mini/backend.default.tenant1
+      key: default/gpt-5-mini.default.tenant1
+      listenerKey: default/model-gateway.http
+      match:
+        model: gpt-5-mini
+      routerKey: /llm:router:httproute:default:tenant1:models
+- gateway:
+    Name: model-gateway
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/tenant1-auth:basicauth:default/tenant1/models
+      name:
+        kind: AgentgatewayPolicy
+        name: tenant1-auth
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: tenant1
+          namespace: default
+          routeRule: models
+      traffic:
+        basicAuth: {}
+- gateway:
+    Name: model-gateway
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          backend: /llm:router:httproute:default:tenant1:models
+        weight: 1
+      key: default/tenant1.00.http
+      listenerKey: default/model-gateway.http
+      matches:
+      - path:
+          pathPrefix: /tenant1
+      name:
+        kind: HTTPRoute
+        name: tenant1
+        namespace: default
+        ruleName: models
+      trafficPolicies:
+      - urlRewrite:
+          prefix: ""
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: gpt-5-mini
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: HTTPRoute
+        name: tenant1
+        namespace: default
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: model-gateway
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 1
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: http
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: tenant1
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: model-gateway
+        namespace: default
+        sectionName: http

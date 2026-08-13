@@ -1,4 +1,3 @@
-import { tr } from "../i18n";
 import {
   Link,
   Outlet,
@@ -13,7 +12,7 @@ import {
   Boxes,
   Coins,
   FileCode2,
-  Github,
+  GitFork,
   Globe,
   Home,
   KeyRound,
@@ -36,10 +35,15 @@ import { useEffect, useState } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Dropdown, Tooltip, useDismissiblePopover } from "./Primitives";
-import { useConfigDumpMode, useGatewayConfig } from "../hooks";
-import { currentLanguage, setLanguage, type AppLanguage } from "../i18n";
+import {
+  useConfigDumpMode,
+  useEffectiveGatewayConfig,
+  useMcpConfigData,
+  useTrafficConfigData,
+} from "../hooks";
 import logoDark from "../assets/agw-dark.svg";
 import logoLight from "../assets/agw-light.svg";
+import { currentLanguage, setLanguage, tr, type AppLanguage } from "../i18n";
 
 type NavItemConfig = {
   to: string;
@@ -55,11 +59,21 @@ export function Shell() {
   const router = useRouterState();
   const mode = useConfigDumpMode();
   const dumpMode = mode.data?.mode === "dump";
-  const config = useGatewayConfig({
+  const config = useEffectiveGatewayConfig({
+    enabled: Boolean(mode.data && mode.data.mode !== "dump"),
+  });
+  const mcpData = useMcpConfigData({
+    enabled: Boolean(mode.data && mode.data.mode !== "dump"),
+  });
+  const trafficData = useTrafficConfigData({
     enabled: Boolean(mode.data && mode.data.mode !== "dump"),
   });
   const [theme, setTheme] = useState(
-    () => localStorage.getItem("theme") ?? "light",
+    () =>
+      localStorage.getItem("theme") ??
+      (window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light"),
   );
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const mobileNavRef = useDismissiblePopover<HTMLDivElement>(
@@ -73,15 +87,16 @@ export function Shell() {
       : true;
   const hasMcp = dumpMode
     ? false
-    : config.data
-      ? Boolean(config.data.mcp)
+    : mcpData.data
+      ? Boolean(mcpData.data.mcp)
       : true;
   const hasTraffic = dumpMode
     ? true
-    : config.data
-      ? Boolean(config.data.binds?.length) ||
-        "gateways" in config.data ||
-        "routes" in config.data
+    : trafficData.data
+      ? Boolean(trafficData.data.binds?.length) ||
+        "gateways" in trafficData.data ||
+        "routes" in trafficData.data ||
+        "tcpRoutes" in trafficData.data
       : true;
   const hasBinds = dumpMode
     ? true
@@ -93,7 +108,7 @@ export function Shell() {
     {
       label: "GitHub",
       href: "https://github.com/agentgateway/agentgateway",
-      icon: Github,
+      icon: GitFork,
     },
     {
       label: t("shell.documentation"),
@@ -122,7 +137,6 @@ export function Shell() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem("theme", theme);
   }, [theme]);
 
   useEffect(() => {
@@ -235,7 +249,11 @@ export function Shell() {
                 className="icon-button"
                 type="button"
                 aria-label={t("shell.toggleTheme")}
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                onClick={() => {
+                  const next = theme === "dark" ? "light" : "dark";
+                  localStorage.setItem("theme", next);
+                  setTheme(next);
+                }}
               >
                 {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
               </button>

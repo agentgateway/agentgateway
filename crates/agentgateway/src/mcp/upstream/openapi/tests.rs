@@ -804,6 +804,52 @@ fn nested_schema<'a>(
 }
 
 #[test]
+fn test_parse_openapi_schema_maps_summary_to_tool_title() {
+	let raw = r#"{
+		"openapi": "3.0.0",
+		"info": {"title": "Titles", "version": "1.0.0"},
+		"paths": {
+			"/tags": {
+				"get": {
+					"operationId": "getTagsForWorkspace",
+					"summary": "Get tags in a workspace",
+					"description": "Returns the tags in a workspace",
+					"responses": {"200": {"description": "ok"}}
+				}
+			},
+			"/users": {
+				"get": {
+					"operationId": "getUsers",
+					"description": "Returns the users",
+					"responses": {"200": {"description": "ok"}}
+				}
+			}
+		}
+	}"#;
+	let open_api: OpenAPI = serde_json::from_str(raw).expect("valid OpenAPI schema");
+	let tools = super::parse_openapi_schema(&open_api).expect("schema should parse");
+
+	let (with_summary, _) = tools
+		.iter()
+		.find(|(tool, _)| tool.name == "getTagsForWorkspace")
+		.expect("tool should exist");
+	assert_eq!(
+		with_summary.title.as_deref(),
+		Some("Get tags in a workspace")
+	);
+	assert_eq!(
+		with_summary.description.as_deref(),
+		Some("Returns the tags in a workspace")
+	);
+
+	let (without_summary, _) = tools
+		.iter()
+		.find(|(tool, _)| tool.name == "getUsers")
+		.expect("tool should exist");
+	assert_eq!(without_summary.title, None);
+}
+
+#[test]
 fn test_parse_openapi_schema_includes_path_level_parameters_in_tool_schema() {
 	let raw = r#"{
 		"openapi": "3.0.0",
