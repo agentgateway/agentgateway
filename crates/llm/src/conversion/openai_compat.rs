@@ -736,7 +736,7 @@ pub mod to_responses {
 										});
 									} else if let Some(prev) = last_token_at.replace(now) {
 										let gap = now.duration_since(prev);
-										log.update(|r| r.response.inter_token_latencies.push(gap));
+										log.update(|r| r.response.inter_chunk_latencies.record(gap));
 									}
 								}
 
@@ -800,7 +800,7 @@ pub mod to_responses {
 											});
 										} else if let Some(prev) = last_token_at.replace(now) {
 											let gap = now.duration_since(prev);
-											log.update(|r| r.response.inter_token_latencies.push(gap));
+											log.update(|r| r.response.inter_chunk_latencies.record(gap));
 										}
 
 										sequence_number += 1;

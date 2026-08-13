@@ -1407,7 +1407,7 @@ data: {"type":"message_stop"}
 	}
 
 	#[tokio::test]
-	async fn passthrough_stream_records_inter_token_latencies() {
+	async fn passthrough_stream_records_inter_chunk_latencies() {
 		let input_bytes = fs::read(fixture_path("response/completions/stream.json"))
 			.expect("failed to read streaming input file");
 		let info = Arc::new(Mutex::new(LLMInfo::new(
@@ -1437,7 +1437,7 @@ data: {"type":"message_stop"}
 		let llm_response = info.lock().unwrap().response.clone();
 		// The fixture has many content-bearing chunks; every one after the first
 		// token should record a gap.
-		assert!(!llm_response.inter_token_latencies.is_empty());
+		assert!(!llm_response.inter_chunk_latencies.is_empty());
 		assert!(llm_response.first_token.is_some());
 	}
 }

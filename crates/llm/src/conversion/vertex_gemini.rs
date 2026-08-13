@@ -1501,7 +1501,7 @@ pub mod to_completions {
 				log.update(|r| r.response.first_token = Some(now));
 			} else if let Some(prev) = last_token_at.replace(now) {
 				let gap = now.duration_since(prev);
-				log.update(|r| r.response.inter_token_latencies.push(gap));
+				log.update(|r| r.response.inter_chunk_latencies.record(gap));
 			}
 			if let Some(m) = &chunk.model_version {
 				log.update(|r| {

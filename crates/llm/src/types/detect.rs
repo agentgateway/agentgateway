@@ -599,7 +599,7 @@ impl ResponseType for Response {
 			// TODO: we could probably derive this
 			first_token: None,
 			last_token_at: None,
-			inter_token_latencies: Vec::new(),
+			inter_chunk_latencies: crate::TokenGapSummary::default(),
 		}
 	}
 

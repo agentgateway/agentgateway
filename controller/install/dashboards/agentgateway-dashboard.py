@@ -279,6 +279,9 @@ def build_dashboard() -> Dashboard:
       "{{gateway}}: {{gen_ai_request_model}}",
     ),
   )
+  llm_itl = llm_median(
+    "Inter-Chunk Latency", "agentgateway_gen_ai_server_inter_chunk_latency_bucket"
+  )
 
   llm_tokens = base_timeseries("Token Consumption").with_target(
     query(
@@ -485,6 +488,7 @@ def build_dashboard() -> Dashboard:
       .with_panel(llm_ttft)
       .with_panel(llm_time)
       .with_panel(llm_tps)
+      .with_panel(llm_itl)
     )
     .with_row(Row("MCP").collapsed(True).with_panel(mcp_tools).with_panel(mcp_list))
     .with_row(Row("Latency").collapsed(True).with_panel(latency_by_route))
