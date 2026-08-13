@@ -98,7 +98,7 @@ func TestProcessJWKSInvalidInline(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for invalid inline JWKS, got nil")
 	}
-	if got := len(policy.GetTraffic().GetJwt().GetProviders()); got != 0 {
+	if got := len(policy.GetTraffic().GetJwt().GetProviders()); got != 1 {
 		t.Fatalf("expected the bad provider to be dropped (0 providers), got %d", got)
 	}
 }

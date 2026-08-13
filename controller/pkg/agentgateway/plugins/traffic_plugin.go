@@ -768,7 +768,6 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 			Audiences: pp.Audiences,
 		}
 		if i := pp.JWKS.Inline; i != nil {
-
 			var ks jose.JSONWebKeySet
 			if err := json.Unmarshal([]byte(*i), &ks); err != nil {
 				errs = append(errs, fmt.Errorf("provider %d (issuer %q): invalid inline JWKS", idx, pp.Issuer))
