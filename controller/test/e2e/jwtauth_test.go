@@ -82,8 +82,8 @@ func testJwtAuthInvalidInlineJwks(t base.Test) {
 	})
 	assertJwtResponse(t, "invalidjwksroute.com", "", http.StatusUnauthorized)
 
+	// assert that we are still accepting new config by checking secure route
 	assertJwtResponse(t, "secureroute.com", jwt1, http.StatusNotFound)
-
 	t.Apply(manifest("jwtauth", "secured-route.yaml"))
 	t.HTTPRouteAccepted("route-secure", base.Namespace)
 	assertJwtResponse(t, "secureroute.com", jwt1, http.StatusOK)
