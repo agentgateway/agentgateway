@@ -13,6 +13,11 @@ The scripts check:
 - whether the managed device can reach that address and receive an HTTP
   response.
 
+On macOS, the Codex verifier checks both user-specific and device-level managed
+preferences, including `/Library/Managed Preferences/com.openai.codex.plist`.
+It then falls back to the effective user preference domain. This supports an
+Intune preference profile assigned through either management scope.
+
 Any HTTP response proves DNS, transport, and listener reachability. A `401` or
 `403` response is therefore a successful connectivity check when agentgateway
 requires authentication. The scripts do not send an LLM request and do not

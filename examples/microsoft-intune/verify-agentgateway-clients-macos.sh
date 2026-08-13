@@ -1,12 +1,16 @@
 #!/bin/sh
 
 # Edit these values before uploading the script to Microsoft Intune.
-EXPECTED_CODEX_BASE_URL="https://llm.example.com/v1"
-EXPECTED_CLAUDE_GATEWAY_URL="https://llm.example.com/claude"
-VERIFY_CODEX=true
-VERIFY_CLAUDE_DESKTOP=true
-VERIFY_INSTALLATION=true
-VERIFY_NETWORK=true
+EXPECTED_CODEX_BASE_URL=${EXPECTED_CODEX_BASE_URL:-"https://llm.example.com/v1"}
+EXPECTED_CLAUDE_GATEWAY_URL=${EXPECTED_CLAUDE_GATEWAY_URL:-"https://llm.example.com/claude"}
+VERIFY_CODEX=${VERIFY_CODEX:-true}
+VERIFY_CLAUDE_DESKTOP=${VERIFY_CLAUDE_DESKTOP:-true}
+VERIFY_INSTALLATION=${VERIFY_INSTALLATION:-true}
+VERIFY_NETWORK=${VERIFY_NETWORK:-true}
+
+# Override only when testing the script with a temporary managed-preferences
+# directory. Intune-managed devices use the default system directory.
+MANAGED_PREFERENCES_DIRECTORY=${MANAGED_PREFERENCES_DIRECTORY:-"/Library/Managed Preferences"}
 
 failures=0
 
@@ -37,7 +41,29 @@ verify_codex() {
     fi
   fi
 
-  encoded_config=$(defaults read com.openai.codex config_toml_base64 2>/dev/null)
+  encoded_config=""
+  managed_user=$(id -un)
+
+  for preference_file in \
+    "$MANAGED_PREFERENCES_DIRECTORY/$managed_user/com.openai.codex.plist" \
+    "$MANAGED_PREFERENCES_DIRECTORY/com.openai.codex.plist"
+  do
+    if [ -r "$preference_file" ]; then
+      encoded_config=$(plutil -extract config_toml_base64 raw \
+        -expect string "$preference_file" 2>/dev/null)
+      if [ -n "$encoded_config" ]; then
+        break
+      fi
+    fi
+  done
+
+  # Fall back to the effective user preference domain for clients whose
+  # management profile writes a user-scoped preference.
+  if [ -z "$encoded_config" ]; then
+    encoded_config=$(defaults read com.openai.codex \
+      config_toml_base64 2>/dev/null)
+  fi
+
   if [ -z "$encoded_config" ]; then
     fail "Codex managed configuration is missing."
     return
