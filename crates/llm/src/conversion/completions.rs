@@ -186,8 +186,7 @@ pub mod from_messages {
 		if let Some(tool_calls) = choice.message.tool_calls {
 			content.extend(tool_calls.into_iter().filter_map(|tc| match tc {
 				completions::MessageToolCalls::Function(f) => {
-					let input =
-						serde_json::from_str::<serde_json::Value>(&f.function.arguments).unwrap_or_default();
+					let input = crate::conversion::tool_arguments_to_input(&f.function.arguments);
 					Some(messages::ContentBlock::ToolUse {
 						id: f.id,
 						name: f.function.name,

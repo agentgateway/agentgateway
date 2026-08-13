@@ -1,0 +1,37 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/anthropic/stream_tool_empty_args.json
+---
+data: {"id":"msg_tool_empty","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":0,"id":"toolu_01A","type":"function","function":{"name":"get_time"}}]}}],"created":123,"model":"claude-haiku-4-5-20251001","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"msg_tool_empty","choices":[{"index":0,"delta":{"content":null,"tool_calls":[{"index":0,"id":null,"type":null,"function":{"arguments":"{}"}}]}}],"created":123,"model":"claude-haiku-4-5-20251001","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":null}
+
+data: {"id":"msg_tool_empty","choices":[{"index":0,"delta":{"content":null},"finish_reason":"tool_calls"}],"created":123,"model":"claude-haiku-4-5-20251001","service_tier":null,"system_fingerprint":null,"object":"chat.completion.chunk","usage":{"prompt_tokens":15,"completion_tokens":8,"total_tokens":23}}
+
+data: [DONE]
+
+
+
+{
+  "input_tokens": 15,
+  "output_tokens": 8,
+  "total_tokens": 23,
+  "provider_model": "claude-haiku-4-5-20251001",
+  "completion": [
+    ""
+  ],
+  "output_messages": [
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_call",
+          "id": "toolu_01A",
+          "name": "get_time",
+          "arguments": {}
+        }
+      ],
+      "finish_reason": "tool_use"
+    }
+  ]
+}
