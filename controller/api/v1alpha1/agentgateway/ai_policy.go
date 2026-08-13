@@ -97,6 +97,24 @@ const (
 	REJECT Action = "Reject"
 )
 
+// Which category of request content a prompt guard inspects.
+// +k8s:enum
+type ContentScope string
+
+const (
+	// The system/developer prompt.
+	ContentScopeSystemPrompt ContentScope = "SystemPrompt"
+
+	// Regular user/assistant message text.
+	ContentScopeMessages ContentScope = "Messages"
+
+	// Tool call results fed back to the model.
+	ContentScopeToolOutput ContentScope = "ToolOutput"
+
+	// Tool call arguments, usually produced by the model.
+	ContentScopeToolInput ContentScope = "ToolInput"
+)
+
 // Streaming prompt guard mode.
 // +k8s:enum
 type PromptGuardStreamingMode string
@@ -226,11 +244,20 @@ type GoogleModelArmor struct {
 
 // Prompt guards to apply to requests sent by the client.
 // +kubebuilder:validation:ExactlyOneOf=regex;webhook;openAIModeration;bedrockGuardrails;googleModelArmor
+// +kubebuilder:validation:XValidation:rule="!has(self.scope) || has(self.regex) || (self.scope.size() == 2 && 'SystemPrompt' in self.scope && 'Messages' in self.scope)",message="scope: only regex guards support a non-default scope; other guard kinds always inspect the default (SystemPrompt + Messages)"
 type PromptguardRequest struct {
 	// Custom response message to return to the client. If not specified, defaults to
 	// `The request was rejected due to inappropriate content`.
 	// +optional
 	CustomResponse *CustomResponse `json:"response,omitempty"`
+
+	// Which parts of the request this guard inspects. When unset, defaults to
+	// `SystemPrompt` and `Messages`. Tool call inputs and outputs are not
+	// inspected unless `ToolInput`/`ToolOutput` are listed explicitly.
+	// +kubebuilder:validation:MinItems=1
+	// +listType=set
+	// +optional
+	Scope []ContentScope `json:"scope,omitempty"`
 
 	// Regular expression (regex) matching for prompt guards and data masking.
 	// +optional

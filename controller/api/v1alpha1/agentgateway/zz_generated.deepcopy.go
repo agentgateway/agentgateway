@@ -4936,6 +4936,11 @@ func (in *PromptguardRequest) DeepCopyInto(out *PromptguardRequest) {
 		*out = new(CustomResponse)
 		**out = **in
 	}
+	if in.Scope != nil {
+		in, out := &in.Scope, &out.Scope
+		*out = make([]ContentScope, len(*in))
+		copy(*out, *in)
+	}
 	if in.Regex != nil {
 		in, out := &in.Regex, &out.Regex
 		*out = new(Regex)

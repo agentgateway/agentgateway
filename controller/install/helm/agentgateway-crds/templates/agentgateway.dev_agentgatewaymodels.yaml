@@ -3217,6 +3217,24 @@ spec:
                                   must be set
                                 rule: '[has(self.message),has(self.statusCode)].filter(x,x==true).size()
                                   >= 1'
+                            scope:
+                              description: |-
+                                Which parts of the request this guard inspects. When unset, defaults to
+                                `SystemPrompt` and `Messages`. Tool call inputs and outputs are not
+                                inspected unless `ToolInput`/`ToolOutput` are listed explicitly.
+                              items:
+                                description: Which category of request content a prompt
+                                  guard inspects.
+                                enum:
+                                - Messages
+                                - SystemPrompt
+                                - ToolInput
+                                - ToolOutput
+                                type: string
+                              maxItems: 4
+                              minItems: 1
+                              type: array
+                              x-kubernetes-list-type: set
                             webhook:
                               description: Webhook that receives requests for prompt
                                 guarding.
@@ -3335,6 +3353,12 @@ spec:
                               type: object
                           type: object
                           x-kubernetes-validations:
+                          - message: 'scope: only regex guards support a non-default
+                              scope; other guard kinds always inspect the default
+                              (SystemPrompt + Messages)'
+                            rule: '!has(self.scope) || has(self.regex) || (self.scope.size()
+                              == 2 && ''SystemPrompt'' in self.scope && ''Messages''
+                              in self.scope)'
                           - message: exactly one of the fields in [regex webhook openAIModeration
                               bedrockGuardrails googleModelArmor] must be set
                             rule: '[has(self.regex),has(self.webhook),has(self.openAIModeration),has(self.bedrockGuardrails),has(self.googleModelArmor)].filter(x,x==true).size()
