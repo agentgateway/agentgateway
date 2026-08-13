@@ -407,6 +407,8 @@ pub enum AIError {
 	ResponseMarshal(serde_json::Error),
 	#[error("unsupported content encoding: {0}")]
 	UnsupportedEncoding(Strng),
+	#[error("failed to decode response: {0}")]
+	ResponseDecoding(axum_core::Error),
 	#[error("failed to encode response: {0}")]
 	Encoding(axum_core::Error),
 	#[error("error computing tokens")]

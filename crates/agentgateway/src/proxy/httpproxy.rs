@@ -2351,7 +2351,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						RouteType::Messages => Box::pin(llm.provider.process_messages_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2360,7 +2360,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						RouteType::Responses => Box::pin(llm.provider.process_responses_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2369,7 +2369,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						RouteType::Embeddings => Box::pin(llm.provider.process_embeddings_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2378,7 +2378,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						RouteType::Rerank => Box::pin(llm.provider.process_rerank_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2387,7 +2387,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						RouteType::AnthropicTokenCount => Box::pin(llm.provider.process_count_tokens_request(
 							&backend_info,
 							req,
@@ -2395,7 +2395,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						RouteType::Detect => Box::pin(llm.provider.process_detect_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2403,7 +2403,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						_ => unreachable!(),
 					};
 					let (mut req, llm_request, upstream_route_type) = match r {
@@ -2681,7 +2681,7 @@ async fn make_backend_call(
 				.assert_size::<{ 4 * 1024 }>(),
 		)
 		.await
-		.map_err(ProxyError::AI)?
+		.map_err(ProxyError::AIResponse)?
 	} else {
 		resp
 	};

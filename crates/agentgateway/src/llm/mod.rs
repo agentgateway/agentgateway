@@ -2055,7 +2055,7 @@ impl AIProvider {
 		let (encoding, bytes) =
 			http::compression::to_bytes_with_decompression(body, ce.as_ref(), buffer_limit)
 				.await
-				.map_err(|e| map_compression_error(e, &parts.headers))?;
+				.map_err(|e| map_response_compression_error(e, &parts.headers))?;
 
 		// Snapshot decompressed bytes for CEL response.body access before re-compression,
 		// so maybe_buffer_response_body can skip decompression entirely.
@@ -2337,7 +2337,7 @@ impl AIProvider {
 		let body = dtrace::TracingBody::maybe_wrap("llm raw response", body, buffer);
 		let ce = parts.headers.typed_get::<ContentEncoding>();
 		let (body, decompressed_encoding) = http::compression::decompress_body(body, ce.as_ref())
-			.map_err(|e| map_compression_error(e, &parts.headers))?;
+			.map_err(|e| map_response_compression_error(e, &parts.headers))?;
 
 		// Strip encoding headers after successful decompression
 		if decompressed_encoding.is_some() {
@@ -2453,7 +2453,7 @@ impl AIProvider {
 			match http::compression::to_bytes_with_decompression(body, ce.as_ref(), buffer).await {
 				Ok(v) => v,
 				Err(http::compression::Error::LimitExceeded) => return Err(AIError::RequestTooLarge),
-				Err(e) => return Err(map_compression_error(e, &parts.headers)),
+				Err(e) => return Err(map_request_compression_error(e, &parts.headers)),
 			};
 		// Strip encoding headers now that the body is plaintext so downstream
 		// translation/marshalling and upstream forwarding see a consistent body.
@@ -2592,17 +2592,36 @@ fn bedrock_tool_name_map(req: &LLMRequest) -> Option<&conversion::bedrock::Bedro
 	}
 }
 
-fn map_compression_error(e: http::compression::Error, headers: &::http::HeaderMap) -> AIError {
+fn unsupported_encoding(headers: &::http::HeaderMap) -> AIError {
+	AIError::UnsupportedEncoding(strng::new(
+		headers
+			.get(header::CONTENT_ENCODING)
+			.and_then(|v| v.to_str().ok())
+			.unwrap_or("unknown"),
+	))
+}
+
+fn map_request_compression_error(
+	e: http::compression::Error,
+	headers: &::http::HeaderMap,
+) -> AIError {
 	match e {
-		http::compression::Error::UnsupportedEncoding => AIError::UnsupportedEncoding(strng::new(
-			headers
-				.get(header::CONTENT_ENCODING)
-				.and_then(|v| v.to_str().ok())
-				.unwrap_or("unknown"),
-		)),
+		http::compression::Error::UnsupportedEncoding => unsupported_encoding(headers),
 		http::compression::Error::LimitExceeded => AIError::ResponseTooLarge,
 		http::compression::Error::Io(e) => AIError::Encoding(axum_core::Error::new(e)),
 		http::compression::Error::Body(e) => AIError::Encoding(e),
+	}
+}
+
+fn map_response_compression_error(
+	e: http::compression::Error,
+	headers: &::http::HeaderMap,
+) -> AIError {
+	match e {
+		http::compression::Error::UnsupportedEncoding => unsupported_encoding(headers),
+		http::compression::Error::LimitExceeded => AIError::ResponseTooLarge,
+		http::compression::Error::Io(e) => AIError::ResponseDecoding(axum_core::Error::new(e)),
+		http::compression::Error::Body(e) => AIError::ResponseDecoding(e),
 	}
 }
 
