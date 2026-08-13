@@ -896,7 +896,9 @@ mod tests {
 	fn test_app(read_only: bool) -> App {
 		let mut config =
 			crate::config::parse_config("{}".to_string(), None).expect("parse default config");
-		config.ui_read_only = read_only;
+		if read_only {
+			config.storage.mode = ConfigStoreMode::ReadOnly;
+		}
 		let client = Client::new(
 			&client::Config {
 				resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
