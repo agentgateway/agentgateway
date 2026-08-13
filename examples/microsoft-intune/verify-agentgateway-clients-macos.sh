@@ -7,6 +7,8 @@ VERIFY_CODEX=${VERIFY_CODEX:-true}
 VERIFY_CLAUDE_DESKTOP=${VERIFY_CLAUDE_DESKTOP:-true}
 VERIFY_INSTALLATION=${VERIFY_INSTALLATION:-true}
 VERIFY_NETWORK=${VERIFY_NETWORK:-true}
+DEFAULT_LOG_FILE="$HOME/Library/Logs/agentgateway/intune-verification.log"
+LOG_FILE=${AGENTGATEWAY_INTUNE_LOG_FILE:-"$DEFAULT_LOG_FILE"}
 
 # Override only when testing the script with a temporary managed-preferences
 # directory. Intune-managed devices use the default system directory.
@@ -14,18 +16,49 @@ MANAGED_PREFERENCES_DIRECTORY=${MANAGED_PREFERENCES_DIRECTORY:-"/Library/Managed
 
 failures=0
 
+initialize_log() {
+  case "$LOG_FILE" in
+    /*) ;;
+    *)
+      printf 'FAIL: Verification log path must be absolute: %s\n' "$LOG_FILE"
+      exit 1
+      ;;
+  esac
+
+  log_directory=$(dirname "$LOG_FILE")
+  if ! (umask 077 && mkdir -p "$log_directory" && : >"$LOG_FILE"); then
+    printf 'FAIL: Cannot create verification log at %s.\n' "$LOG_FILE"
+    exit 1
+  fi
+
+  if ! chmod 600 "$LOG_FILE" 2>/dev/null; then
+    printf 'FAIL: Cannot secure verification log at %s.\n' "$LOG_FILE"
+    exit 1
+  fi
+}
+
+log_line() {
+  printf '%s\n' "$1"
+  if ! printf '%s\n' "$1" >>"$LOG_FILE"; then
+    printf 'FAIL: Cannot write verification log at %s.\n' "$LOG_FILE"
+    exit 1
+  fi
+}
+
 pass() {
-  printf 'PASS: %s\n' "$1"
+  log_line "PASS: $1"
 }
 
 fail() {
-  printf 'FAIL: %s\n' "$1"
+  log_line "FAIL: $1"
   failures=$((failures + 1))
 }
 
 is_enabled() {
   [ "$1" = "true" ]
 }
+
+initialize_log
 
 verify_codex() {
   if is_enabled "$VERIFY_INSTALLATION"; then
@@ -146,9 +179,9 @@ if is_enabled "$VERIFY_CLAUDE_DESKTOP"; then
 fi
 
 if [ "$failures" -gt 0 ]; then
-  printf 'Verification failed with %s failed check(s).\n' "$failures"
+  log_line "Verification failed with $failures failed check(s)."
   exit 1
 fi
 
-printf 'All enabled agentgateway client checks passed.\n'
+log_line "All enabled agentgateway client checks passed."
 exit 0

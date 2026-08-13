@@ -37,6 +37,11 @@ Before uploading a script to Intune, edit the configuration block at the top.
   the paths in the script. Otherwise, add the organization's package path or
   disable this check and use the Intune managed-app report.
 - Keep the network check enabled unless another endpoint control performs it.
+- On macOS, keep the default verification log or set the
+  `AGENTGATEWAY_INTUNE_LOG_FILE` environment variable to another absolute
+  `.log` path. Because Intune does not provide a custom environment-variable
+  field for platform scripts, edit the `LOG_FILE` default before upload when
+  the organization requires a different managed path.
 
 Do not add an LLM provider key, bearer token, or another secret to either
 script.
@@ -111,7 +116,21 @@ but script retrieval uses an agent check-in that is separate from the normal
 MDM check-in.
 
 To troubleshoot a missing or failed status, select the device in the script
-report and use **Collect logs**. Intune includes its macOS agent logs from:
+report and use **Collect logs**. The verifier writes the same sanitized
+`PASS`, `FAIL`, and summary messages that it prints during execution to this
+default per-user path:
+
+```text
+/Users/USERNAME/Library/Logs/agentgateway/intune-verification.log
+```
+
+Replace `USERNAME` with the signed-in user's short name when you enter the path
+in Intune. The **Collect logs** field requires a fully expanded absolute path;
+it does not expand `$HOME` or `~`. The file is truncated at the start of each
+run, uses owner-only permissions, and does not contain decoded configuration,
+tokens, prompts, or credentials.
+
+Intune also includes its macOS agent logs from:
 
 ```text
 /Library/Logs/Microsoft/Intune
