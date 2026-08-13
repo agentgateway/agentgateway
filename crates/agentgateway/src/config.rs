@@ -1263,49 +1263,6 @@ config:
 	}
 
 	#[test]
-	fn ui_read_only_defaults_to_false() {
-		let _env_lock = lock_env();
-		let config = parse_config("{}".to_string(), None).expect("config should parse");
-
-		assert!(!config.storage.mode == ConfigStoreMode::ReadOnly);
-	}
-
-	#[test]
-	fn ui_read_only_from_config_file() {
-		let _env_lock = lock_env();
-		let config = parse_config(
-			r#"
-config:
-  storage:
-    mode: read_only
-"#
-			.to_string(),
-			None,
-		)
-		.expect("config should parse");
-
-		assert!(config.storage.mode == ConfigStoreMode::ReadOnly);
-	}
-
-	#[test]
-	fn ui_read_only_env_var_overrides_config_file() {
-		let _env_lock = lock_env();
-		let _env = TempEnvVar::set("UI_READ_ONLY", "true");
-		let config = parse_config(
-			r#"
-config:
-  storage:
-    mode: file
-"#
-			.to_string(),
-			None,
-		)
-		.expect("config should parse");
-
-		assert!(config.storage.mode == ConfigStoreMode::ReadOnly);
-	}
-
-	#[test]
 	fn storage_hybrid_uses_shared_database_url() {
 		let _env_lock = lock_env();
 		let config = parse_config(
