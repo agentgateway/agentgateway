@@ -323,6 +323,12 @@ const zhCN = {
       valueAllValueListeners: "{{value}}（所有 {{value}} 监听器）",
       valueAllListeners: "{{value}}（所有监听器）",
       valueValueConfigured: "已配置 {{value}} 个{{value}}。",
+      noRequestHeaderChangesConfigured: "未配置请求头变更",
+      noResponseHeaderChangesConfigured: "未配置响应头变更",
+      requestHeaderChangesConfigured_one: "已配置 {{count}} 项请求头变更",
+      requestHeaderChangesConfigured_other: "已配置 {{count}} 项请求头变更",
+      responseHeaderChangesConfigured_one: "已配置 {{count}} 项响应头变更",
+      responseHeaderChangesConfigured_other: "已配置 {{count}} 项响应头变更",
       valueBinds_one: "{{count}} 个绑定",
       valueBinds_other: "{{count}} 个绑定",
       valueByValue: "{{value}}（按{{value}}）",
@@ -471,6 +477,7 @@ const zhCN = {
       addProvider: "添加提供商",
       addQuery: "添加查询条件",
       addRequestHeaders: "添加请求头",
+      addResponseHeaders: "添加响应头",
       addRoute: "添加路由",
       addRule: "添加规则",
       addServer: "添加服务器",
@@ -1272,7 +1279,7 @@ const zhCN = {
       headerName: "请求头名称",
       headerName_8vzq77: "请求头名称",
       headerNameContainingTheCredential: "包含凭证的请求头名称。",
-      headerNamesToRemove: "要删除的请求头名称。",
+      headerNamesToRemove: "要删除的请求或响应头名称。",
       headerPrefix: "请求头前缀",
       headerValue: "请求头值",
       headers: "请求头",
@@ -1281,13 +1288,13 @@ const zhCN = {
       headersToAddSetOrRemoveFromTheRejectionResponse:
         "要从拒绝响应中添加、设置或删除的请求头。",
       headersToAppendUsingCelExpressionsForValues:
-        "使用 CEL 表达式附加值的请求头。",
+        "使用 CEL 表达式附加值的请求或响应头。",
       headersToAppendWithoutReplacingExistingValues:
-        "要附加的请求头而不替换现有值。",
+        "要附加的请求或响应头，且不替换现有值。",
       headersToSetUsingCelExpressionsForValues:
-        "使用 CEL 表达式设置值的请求头。",
+        "使用 CEL 表达式设置值的请求或响应头。",
       headersToSetReplacingAnyExistingValues:
-        "要设置的请求头，替换任何现有值。",
+        "要设置的请求或响应头，替换任何现有值。",
       health: "健康",
       healthConfiguresOutlierDetectionForThisModelBackend:
         "`health` 用于为此模型后端配置异常值检测。",
@@ -2005,6 +2012,7 @@ const zhCN = {
       removeGuardrails: "移除防护规则",
       removeHeaderCondition: "移除请求头条件",
       removeHeaders: "移除请求头",
+      removeResponseHeaders: "移除响应头",
       removeMatchValue: "移除匹配条件 {{value}}",
       removePattern: "移除模式",
       removeQueryCondition: "移除查询条件",
@@ -2210,6 +2218,7 @@ const zhCN = {
         "传递给 STS AssumeRole 的会话标签，用于成本归因。标签激活为成本分配标签后，会显示在 AWS 成本和使用情况报告的 `resourceTags/user:TagKey` 下。标签值可以是静态值（`value`），也可以是针对每个请求求值的 CEL 表达式（`expression`）。",
       sessionTokenOptional: "会话令牌（可选）",
       setHeaders: "设置请求头",
+      setResponseHeaders: "设置响应头",
       setRequestTimeoutLimits: "设置请求超时限制。",
       setTheProxyUrlTo: "将代理 URL 设置为",
       setUpGateways: "设置网关",

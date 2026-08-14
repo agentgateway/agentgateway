@@ -1177,6 +1177,7 @@ function ModelPoliciesInline(props: {
           defaultOpen={Boolean(props.model.requestHeaders)}
         >
           <HeaderModifierEditor
+            headerType="request"
             value={props.requestHeaders}
             help={props.help}
             onChange={props.setRequestHeaders}
@@ -1189,6 +1190,7 @@ function ModelPoliciesInline(props: {
           defaultOpen={Boolean(props.model.responseHeaders)}
         >
           <HeaderModifierEditor
+            headerType="response"
             value={props.responseHeaders}
             help={props.help}
             onChange={props.setResponseHeaders}

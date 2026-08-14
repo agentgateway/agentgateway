@@ -142,6 +142,7 @@ export function YamlMappingEditor(props: {
 }
 
 export function HeaderModifierEditor(props: {
+  headerType: "request" | "response";
   value:
     | LlmModel["requestHeaders"]
     | LlmModel["responseHeaders"]
@@ -151,10 +152,11 @@ export function HeaderModifierEditor(props: {
   onChange: (value: LlmModel["requestHeaders"] | null) => void;
 }) {
   const value = props.value ?? {};
+  const isResponse = props.headerType === "response";
   return (
     <div className="policy-editor-stack compact">
       <KeyValueEditor
-        label={tr("copy.addHeaders")}
+        label={tr(isResponse ? "copy.addResponseHeaders" : "copy.addHeaders")}
         tooltip={props.help.field<HeaderModifier>("HeaderModifier", "add")}
         values={value.add ?? {}}
         keyPlaceholder="x-header"
@@ -162,7 +164,7 @@ export function HeaderModifierEditor(props: {
         onChange={(add) => props.onChange({ ...value, add })}
       />
       <KeyValueEditor
-        label={tr("copy.setHeaders")}
+        label={tr(isResponse ? "copy.setResponseHeaders" : "copy.setHeaders")}
         tooltip={props.help.field<HeaderModifier>("HeaderModifier", "set")}
         values={value.set ?? {}}
         keyPlaceholder="x-header"
@@ -170,7 +172,9 @@ export function HeaderModifierEditor(props: {
         onChange={(set) => props.onChange({ ...value, set })}
       />
       <ListEditor
-        label={tr("copy.removeHeaders")}
+        label={tr(
+          isResponse ? "copy.removeResponseHeaders" : "copy.removeHeaders",
+        )}
         tooltip={props.help.field<HeaderModifier>("HeaderModifier", "remove")}
         values={value.remove ?? []}
         placeholder="x-header"
@@ -314,8 +318,19 @@ export function headerModifierSummary(
     Object.keys(value?.add ?? {}).length +
     Object.keys(value?.set ?? {}).length +
     (value?.remove?.length ?? 0);
-  if (count === 0) return `No ${label} header changes configured`;
-  return `${count} ${count === 1 ? "header change" : "header changes"} configured`;
+  if (count === 0) {
+    return tr(
+      label === "request"
+        ? "copy.noRequestHeaderChangesConfigured"
+        : "copy.noResponseHeaderChangesConfigured",
+    );
+  }
+  return tr(
+    label === "request"
+      ? "copy.requestHeaderChangesConfigured"
+      : "copy.responseHeaderChangesConfigured",
+    { count },
+  );
 }
 
 export function promptCachingSummary(
