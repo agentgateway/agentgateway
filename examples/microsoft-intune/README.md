@@ -49,7 +49,7 @@ script.
 ## Deploy on macOS
 
 Use
-[`verify-agentgateway-clients-macos.sh`](verify-agentgateway-clients-macos.sh)
+[`verify-agentgateway-clients-macos.sh`](verification/verify-agentgateway-clients-macos.sh)
 as an Intune macOS shell script:
 
 1. Go to **Devices > By platform > macOS > Manage devices > Scripts > Add**.
@@ -70,7 +70,7 @@ Intune](https://learn.microsoft.com/en-us/intune/device-management/tools/run-she
 ## Deploy on Windows
 
 Use
-[`Verify-AgentgatewayClientsWindows.ps1`](Verify-AgentgatewayClientsWindows.ps1)
+[`Verify-AgentgatewayClientsWindows.ps1`](verification/Verify-AgentgatewayClientsWindows.ps1)
 as the detection script in an Intune Remediations package:
 
 1. Go to **Devices > Manage devices > Scripts and remediations** and create a
@@ -97,33 +97,38 @@ nonzero exit code when a check fails. Custom compliance requires output that
 matches its rule definition, and a discovered noncompliant value is not a
 script execution failure.
 
-Use these compliance-specific artifacts for the
-`CodexGatewayConfigured` Boolean setting:
+Use the compliance artifacts for the client required by the target device
+group. Each client has independently assignable discovery scripts and a
+matching rule JSON.
 
-- [macOS Bash discovery
-  script](compliance/discover-codex-gateway-macos.sh)
-- [Windows PowerShell discovery
-  script](compliance/Discover-CodexGatewayWindows.ps1)
-- [Custom-compliance rule
-  JSON](compliance/codex-gateway-compliance.json)
+| Client | macOS discovery | Windows discovery | Rule JSON | Setting |
+| --- | --- | --- | --- | --- |
+| Codex | [`discover-gateway-macos.sh`](compliance/codex/discover-gateway-macos.sh) | [`Discover-GatewayWindows.ps1`](compliance/codex/Discover-GatewayWindows.ps1) | [`compliance.json`](compliance/codex/compliance.json) | `CodexGatewayConfigured` |
+| Claude Desktop | [`discover-gateway-macos.sh`](compliance/claude-desktop/discover-gateway-macos.sh) | [`Discover-GatewayWindows.ps1`](compliance/claude-desktop/Discover-GatewayWindows.ps1) | [`compliance.json`](compliance/claude-desktop/compliance.json) | `ClaudeDesktopGatewayConfigured` |
 
-The discovery scripts check only the durable managed Codex configuration. They
-do not test network reachability, because a temporary Gateway or network outage
-must not make every managed device noncompliant.
+The discovery scripts check only the durable managed client configuration.
+They do not test network reachability, because a temporary Gateway or network
+outage must not make every managed device noncompliant. The Claude Desktop
+scripts require both the `gateway` inference provider and the exact approved
+Gateway URL.
 
-Before uploading a discovery script, replace its example Codex URL with the
-approved address, including `/v1`. Keep its expected URL aligned with the
-managed configuration policy.
+Before uploading a discovery script, replace its example URL with the approved
+address. Include `/v1` for Codex and the configured route prefix, such as
+`/claude`, for Claude Desktop. Keep the expected URL aligned with the managed
+configuration policy.
 
 ### Configure custom compliance on macOS
 
-1. Go to **Endpoint security > Device compliance > Scripts > Add > macOS** and
-   upload `discover-codex-gateway-macos.sh`.
-2. Set **Run this script using the logged on credentials** to **Yes**. Enable
+1. Select the client-specific `discover-gateway-macos.sh` and
+   `compliance.json` files. Create separate policies and assignments when
+   different device groups require different clients.
+2. Go to **Endpoint security > Device compliance > Scripts > Add > macOS** and
+   upload the discovery script.
+3. Set **Run this script using the logged on credentials** to **Yes**. Enable
    signature enforcement when the organization signs scripts.
-3. Create a macOS compliance policy, add **Custom Compliance**, select the
-   discovery script, and upload `codex-gateway-compliance.json`.
-4. Assign the policy to the same pilot group as the application and managed
+4. Create a macOS compliance policy, add **Custom Compliance**, select the
+   discovery script, and upload the matching `compliance.json`.
+5. Assign the policy to the same pilot group as the application and managed
    configuration policies.
 
 The macOS script prints only `true` or `false`, as required for this single
@@ -132,20 +137,27 @@ exit code is reserved for a script execution error.
 
 ### Configure custom compliance on Windows
 
-1. Go to **Endpoint security > Device compliance > Scripts > Add > Windows**
-   and upload `Discover-CodexGatewayWindows.ps1`.
-2. Set **Run this script using the logged on credentials** and **Run script in
+1. Select the client-specific `Discover-GatewayWindows.ps1` and
+   `compliance.json` files. Create separate policies and assignments when
+   different device groups require different clients.
+2. Go to **Endpoint security > Device compliance > Scripts > Add > Windows**
+   and upload the discovery script.
+3. Set **Run this script using the logged on credentials** and **Run script in
    64-bit PowerShell Host** to **Yes**. Enable signature enforcement when the
    organization signs scripts.
-3. Create a Windows compliance policy, add **Custom Compliance**, select the
-   discovery script, and upload `codex-gateway-compliance.json`.
-4. Assign the policy to the same pilot group as the application and managed
+4. Create a Windows compliance policy, add **Custom Compliance**, select the
+   discovery script, and upload the matching `compliance.json`.
+5. Assign the policy to the same pilot group as the application and managed
    configuration policies.
 
-The Windows script returns one compressed JSON object:
+Each Windows script returns one compressed JSON object. For example:
 
 ```json
 {"CodexGatewayConfigured":true}
+```
+
+```json
+{"ClaudeDesktopGatewayConfigured":true}
 ```
 
 For requirements and limits, see [Custom compliance discovery scripts for
