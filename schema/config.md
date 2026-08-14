@@ -3730,6 +3730,16 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwks.url`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`binds[].listeners[].routes[].policies.jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires exactly one provider and<br>`mode: strict`.|
+|`binds[].listeners[].routes[].policies.jwtAuth.mcp.resourceMetadata`|object|Protected resource metadata returned to MCP clients at the OAuth discovery endpoint.|
+|`binds[].listeners[].routes[].policies.jwtAuth.mcp.provider`|object|Identity provider used to derive MCP authorization metadata.|
+|`binds[].listeners[].routes[].policies.jwtAuth.mcp.provider.auth0`|object||
+|`binds[].listeners[].routes[].policies.jwtAuth.mcp.provider.keycloak`|object||
+|`binds[].listeners[].routes[].policies.jwtAuth.mcp.provider.okta`|object||
+|`binds[].listeners[].routes[].policies.jwtAuth.mcp.provider.descope`|object||
+|`binds[].listeners[].routes[].policies.jwtAuth.mcp.provider.authentik`|object||
+|`binds[].listeners[].routes[].policies.jwtAuth.mcp.provider.entra`|object||
+|`binds[].listeners[].routes[].policies.jwtAuth.mcp.clientId`|string|Client ID to use for short-circuiting Dynamic Client Registration. If set, the gateway<br>will not proxy registration requests to the IDP and instead return this client ID.|
 |`binds[].listeners[].routes[].policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`binds[].listeners[].routes[].policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`binds[].listeners[].routes[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -3737,6 +3747,7 @@
 |`binds[].listeners[].routes[].policies.jwtAuth.jwks.url`|string||
 |`binds[].listeners[].routes[].policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].routes[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`binds[].listeners[].routes[].policies.jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires `mode: strict`.|
 |`binds[].listeners[].routes[].policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
 |`binds[].listeners[].routes[].policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
 |`binds[].listeners[].routes[].policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
@@ -15544,6 +15555,16 @@
 |`binds[].listeners[].policies.jwtAuth.providers[].jwks.url`|string||
 |`binds[].listeners[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`binds[].listeners[].policies.jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires exactly one provider and<br>`mode: strict`.|
+|`binds[].listeners[].policies.jwtAuth.mcp.resourceMetadata`|object|Protected resource metadata returned to MCP clients at the OAuth discovery endpoint.|
+|`binds[].listeners[].policies.jwtAuth.mcp.provider`|object|Identity provider used to derive MCP authorization metadata.|
+|`binds[].listeners[].policies.jwtAuth.mcp.provider.auth0`|object||
+|`binds[].listeners[].policies.jwtAuth.mcp.provider.keycloak`|object||
+|`binds[].listeners[].policies.jwtAuth.mcp.provider.okta`|object||
+|`binds[].listeners[].policies.jwtAuth.mcp.provider.descope`|object||
+|`binds[].listeners[].policies.jwtAuth.mcp.provider.authentik`|object||
+|`binds[].listeners[].policies.jwtAuth.mcp.provider.entra`|object||
+|`binds[].listeners[].policies.jwtAuth.mcp.clientId`|string|Client ID to use for short-circuiting Dynamic Client Registration. If set, the gateway<br>will not proxy registration requests to the IDP and instead return this client ID.|
 |`binds[].listeners[].policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`binds[].listeners[].policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`binds[].listeners[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -15551,6 +15572,7 @@
 |`binds[].listeners[].policies.jwtAuth.jwks.url`|string||
 |`binds[].listeners[].policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`binds[].listeners[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`binds[].listeners[].policies.jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires `mode: strict`.|
 |`binds[].listeners[].policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`binds[].listeners[].policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`binds[].listeners[].policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -21592,6 +21614,16 @@
 |`policies[].policy.jwtAuth.providers[].jwks.url`|string||
 |`policies[].policy.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`policies[].policy.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`policies[].policy.jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires exactly one provider and<br>`mode: strict`.|
+|`policies[].policy.jwtAuth.mcp.resourceMetadata`|object|Protected resource metadata returned to MCP clients at the OAuth discovery endpoint.|
+|`policies[].policy.jwtAuth.mcp.provider`|object|Identity provider used to derive MCP authorization metadata.|
+|`policies[].policy.jwtAuth.mcp.provider.auth0`|object||
+|`policies[].policy.jwtAuth.mcp.provider.keycloak`|object||
+|`policies[].policy.jwtAuth.mcp.provider.okta`|object||
+|`policies[].policy.jwtAuth.mcp.provider.descope`|object||
+|`policies[].policy.jwtAuth.mcp.provider.authentik`|object||
+|`policies[].policy.jwtAuth.mcp.provider.entra`|object||
+|`policies[].policy.jwtAuth.mcp.clientId`|string|Client ID to use for short-circuiting Dynamic Client Registration. If set, the gateway<br>will not proxy registration requests to the IDP and instead return this client ID.|
 |`policies[].policy.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`policies[].policy.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`policies[].policy.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -21599,6 +21631,7 @@
 |`policies[].policy.jwtAuth.jwks.url`|string||
 |`policies[].policy.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`policies[].policy.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`policies[].policy.jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires `mode: strict`.|
 |`policies[].policy.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
 |`policies[].policy.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
 |`policies[].policy.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
@@ -36674,6 +36707,16 @@
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwks.url`|string||
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routeGroups[].routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`routeGroups[].routes[].policies.jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires exactly one provider and<br>`mode: strict`.|
+|`routeGroups[].routes[].policies.jwtAuth.mcp.resourceMetadata`|object|Protected resource metadata returned to MCP clients at the OAuth discovery endpoint.|
+|`routeGroups[].routes[].policies.jwtAuth.mcp.provider`|object|Identity provider used to derive MCP authorization metadata.|
+|`routeGroups[].routes[].policies.jwtAuth.mcp.provider.auth0`|object||
+|`routeGroups[].routes[].policies.jwtAuth.mcp.provider.keycloak`|object||
+|`routeGroups[].routes[].policies.jwtAuth.mcp.provider.okta`|object||
+|`routeGroups[].routes[].policies.jwtAuth.mcp.provider.descope`|object||
+|`routeGroups[].routes[].policies.jwtAuth.mcp.provider.authentik`|object||
+|`routeGroups[].routes[].policies.jwtAuth.mcp.provider.entra`|object||
+|`routeGroups[].routes[].policies.jwtAuth.mcp.clientId`|string|Client ID to use for short-circuiting Dynamic Client Registration. If set, the gateway<br>will not proxy registration requests to the IDP and instead return this client ID.|
 |`routeGroups[].routes[].policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`routeGroups[].routes[].policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`routeGroups[].routes[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -36681,6 +36724,7 @@
 |`routeGroups[].routes[].policies.jwtAuth.jwks.url`|string||
 |`routeGroups[].routes[].policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routeGroups[].routes[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`routeGroups[].routes[].policies.jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires `mode: strict`.|
 |`routeGroups[].routes[].policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
 |`routeGroups[].routes[].policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
 |`routeGroups[].routes[].policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
@@ -48202,6 +48246,16 @@
 |`gateways.*.listeners[].jwtAuth.providers[].jwks.url`|string||
 |`gateways.*.listeners[].jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.listeners[].jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`gateways.*.listeners[].jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires exactly one provider and<br>`mode: strict`.|
+|`gateways.*.listeners[].jwtAuth.mcp.resourceMetadata`|object|Protected resource metadata returned to MCP clients at the OAuth discovery endpoint.|
+|`gateways.*.listeners[].jwtAuth.mcp.provider`|object|Identity provider used to derive MCP authorization metadata.|
+|`gateways.*.listeners[].jwtAuth.mcp.provider.auth0`|object||
+|`gateways.*.listeners[].jwtAuth.mcp.provider.keycloak`|object||
+|`gateways.*.listeners[].jwtAuth.mcp.provider.okta`|object||
+|`gateways.*.listeners[].jwtAuth.mcp.provider.descope`|object||
+|`gateways.*.listeners[].jwtAuth.mcp.provider.authentik`|object||
+|`gateways.*.listeners[].jwtAuth.mcp.provider.entra`|object||
+|`gateways.*.listeners[].jwtAuth.mcp.clientId`|string|Client ID to use for short-circuiting Dynamic Client Registration. If set, the gateway<br>will not proxy registration requests to the IDP and instead return this client ID.|
 |`gateways.*.listeners[].jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`gateways.*.listeners[].jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`gateways.*.listeners[].jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -48209,6 +48263,7 @@
 |`gateways.*.listeners[].jwtAuth.jwks.url`|string||
 |`gateways.*.listeners[].jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.listeners[].jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`gateways.*.listeners[].jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires `mode: strict`.|
 |`gateways.*.listeners[].authorization`|object|Authorization rules for incoming HTTP requests.|
 |`gateways.*.listeners[].authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`gateways.*.listeners[].authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -49488,6 +49543,16 @@
 |`gateways.*.jwtAuth.providers[].jwks.url`|string||
 |`gateways.*.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`gateways.*.jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires exactly one provider and<br>`mode: strict`.|
+|`gateways.*.jwtAuth.mcp.resourceMetadata`|object|Protected resource metadata returned to MCP clients at the OAuth discovery endpoint.|
+|`gateways.*.jwtAuth.mcp.provider`|object|Identity provider used to derive MCP authorization metadata.|
+|`gateways.*.jwtAuth.mcp.provider.auth0`|object||
+|`gateways.*.jwtAuth.mcp.provider.keycloak`|object||
+|`gateways.*.jwtAuth.mcp.provider.okta`|object||
+|`gateways.*.jwtAuth.mcp.provider.descope`|object||
+|`gateways.*.jwtAuth.mcp.provider.authentik`|object||
+|`gateways.*.jwtAuth.mcp.provider.entra`|object||
+|`gateways.*.jwtAuth.mcp.clientId`|string|Client ID to use for short-circuiting Dynamic Client Registration. If set, the gateway<br>will not proxy registration requests to the IDP and instead return this client ID.|
 |`gateways.*.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`gateways.*.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`gateways.*.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -49495,6 +49560,7 @@
 |`gateways.*.jwtAuth.jwks.url`|string||
 |`gateways.*.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`gateways.*.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`gateways.*.jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires `mode: strict`.|
 |`gateways.*.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`gateways.*.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`gateways.*.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -54340,6 +54406,16 @@
 |`routes[].policies.jwtAuth.providers[].jwks.url`|string||
 |`routes[].policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routes[].policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`routes[].policies.jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires exactly one provider and<br>`mode: strict`.|
+|`routes[].policies.jwtAuth.mcp.resourceMetadata`|object|Protected resource metadata returned to MCP clients at the OAuth discovery endpoint.|
+|`routes[].policies.jwtAuth.mcp.provider`|object|Identity provider used to derive MCP authorization metadata.|
+|`routes[].policies.jwtAuth.mcp.provider.auth0`|object||
+|`routes[].policies.jwtAuth.mcp.provider.keycloak`|object||
+|`routes[].policies.jwtAuth.mcp.provider.okta`|object||
+|`routes[].policies.jwtAuth.mcp.provider.descope`|object||
+|`routes[].policies.jwtAuth.mcp.provider.authentik`|object||
+|`routes[].policies.jwtAuth.mcp.provider.entra`|object||
+|`routes[].policies.jwtAuth.mcp.clientId`|string|Client ID to use for short-circuiting Dynamic Client Registration. If set, the gateway<br>will not proxy registration requests to the IDP and instead return this client ID.|
 |`routes[].policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`routes[].policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`routes[].policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -54347,6 +54423,7 @@
 |`routes[].policies.jwtAuth.jwks.url`|string||
 |`routes[].policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`routes[].policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`routes[].policies.jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires `mode: strict`.|
 |`routes[].policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
 |`routes[].policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
 |`routes[].policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
@@ -69561,6 +69638,16 @@
 |`llm.policies.jwtAuth.providers[].jwks.url`|string||
 |`llm.policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`llm.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`llm.policies.jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires exactly one provider and<br>`mode: strict`.|
+|`llm.policies.jwtAuth.mcp.resourceMetadata`|object|Protected resource metadata returned to MCP clients at the OAuth discovery endpoint.|
+|`llm.policies.jwtAuth.mcp.provider`|object|Identity provider used to derive MCP authorization metadata.|
+|`llm.policies.jwtAuth.mcp.provider.auth0`|object||
+|`llm.policies.jwtAuth.mcp.provider.keycloak`|object||
+|`llm.policies.jwtAuth.mcp.provider.okta`|object||
+|`llm.policies.jwtAuth.mcp.provider.descope`|object||
+|`llm.policies.jwtAuth.mcp.provider.authentik`|object||
+|`llm.policies.jwtAuth.mcp.provider.entra`|object||
+|`llm.policies.jwtAuth.mcp.clientId`|string|Client ID to use for short-circuiting Dynamic Client Registration. If set, the gateway<br>will not proxy registration requests to the IDP and instead return this client ID.|
 |`llm.policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`llm.policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`llm.policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -69568,6 +69655,7 @@
 |`llm.policies.jwtAuth.jwks.url`|string||
 |`llm.policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`llm.policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`llm.policies.jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires `mode: strict`.|
 |`llm.policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`llm.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`llm.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|
@@ -76943,6 +77031,16 @@
 |`mcp.policies.jwtAuth.providers[].jwks.url`|string||
 |`mcp.policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`mcp.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`mcp.policies.jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires exactly one provider and<br>`mode: strict`.|
+|`mcp.policies.jwtAuth.mcp.resourceMetadata`|object|Protected resource metadata returned to MCP clients at the OAuth discovery endpoint.|
+|`mcp.policies.jwtAuth.mcp.provider`|object|Identity provider used to derive MCP authorization metadata.|
+|`mcp.policies.jwtAuth.mcp.provider.auth0`|object||
+|`mcp.policies.jwtAuth.mcp.provider.keycloak`|object||
+|`mcp.policies.jwtAuth.mcp.provider.okta`|object||
+|`mcp.policies.jwtAuth.mcp.provider.descope`|object||
+|`mcp.policies.jwtAuth.mcp.provider.authentik`|object||
+|`mcp.policies.jwtAuth.mcp.provider.entra`|object||
+|`mcp.policies.jwtAuth.mcp.clientId`|string|Client ID to use for short-circuiting Dynamic Client Registration. If set, the gateway<br>will not proxy registration requests to the IDP and instead return this client ID.|
 |`mcp.policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`mcp.policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`mcp.policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -76950,6 +77048,7 @@
 |`mcp.policies.jwtAuth.jwks.url`|string||
 |`mcp.policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`mcp.policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`mcp.policies.jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires `mode: strict`.|
 |`mcp.policies.oidc`|object|Authenticate browser requests with OIDC authorization code flow.|
 |`mcp.policies.oidc.issuer`|string|Issuer used for discovery and ID token validation.|
 |`mcp.policies.oidc.discovery`|object|Optional discovery document override. If omitted, discovery uses<br>`${issuer}/.well-known/openid-configuration`.|
@@ -78251,6 +78350,16 @@
 |`ui.policies.jwtAuth.providers[].jwks.url`|string||
 |`ui.policies.jwtAuth.providers[].jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`ui.policies.jwtAuth.providers[].jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`ui.policies.jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires exactly one provider and<br>`mode: strict`.|
+|`ui.policies.jwtAuth.mcp.resourceMetadata`|object|Protected resource metadata returned to MCP clients at the OAuth discovery endpoint.|
+|`ui.policies.jwtAuth.mcp.provider`|object|Identity provider used to derive MCP authorization metadata.|
+|`ui.policies.jwtAuth.mcp.provider.auth0`|object||
+|`ui.policies.jwtAuth.mcp.provider.keycloak`|object||
+|`ui.policies.jwtAuth.mcp.provider.okta`|object||
+|`ui.policies.jwtAuth.mcp.provider.descope`|object||
+|`ui.policies.jwtAuth.mcp.provider.authentik`|object||
+|`ui.policies.jwtAuth.mcp.provider.entra`|object||
+|`ui.policies.jwtAuth.mcp.clientId`|string|Client ID to use for short-circuiting Dynamic Client Registration. If set, the gateway<br>will not proxy registration requests to the IDP and instead return this client ID.|
 |`ui.policies.jwtAuth.issuer`|string|Expected token issuer. The JWT `iss` claim is required and must match.|
 |`ui.policies.jwtAuth.audiences`|[]string|Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.|
 |`ui.policies.jwtAuth.jwks`|object|JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.|
@@ -78258,6 +78367,7 @@
 |`ui.policies.jwtAuth.jwks.url`|string||
 |`ui.policies.jwtAuth.jwtValidationOptions`|object|Claim requirements to enforce after the token signature is verified.|
 |`ui.policies.jwtAuth.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
+|`ui.policies.jwtAuth.mcp`|object|Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication<br>behavior on top of standard JWT validation. Requires `mode: strict`.|
 |`ui.policies.authorization`|object|Authorization rules for incoming HTTP requests.|
 |`ui.policies.authorization.rules`|[]object|CEL authorization rules to evaluate for a request.|
 |`ui.policies.authorization.rules[].allow`|string|Allow the request when this CEL expression is true.|

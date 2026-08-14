@@ -28,10 +28,10 @@ use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendReference, BackendTrafficPolicy,
 	BackendWithPolicies, Bind, BindMode, BindProtocol, FrontendPolicy, HeaderMatch,
 	JwtAuthentication, Listener, ListenerKey, ListenerName, ListenerProtocol, ListenerSet,
-	ListenerTarget, LocalMcpAuthentication, McpAuthentication, McpBackend, McpPrefixMode, McpTarget,
-	McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType,
-	ResourceName, Route, RouteBackendReference, RouteBackendTarget, RouteGroupKey, RouteMatch,
-	RouteName, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
+	ListenerTarget, LocalMcpAuthentication, McpAuthentication, McpAuthenticationMode, McpBackend,
+	McpPrefixMode, McpTarget, McpTargetName, McpTargetSpec, OpenAPITarget, PathMatch, PolicyPhase,
+	PolicyTarget, PolicyType, ResourceName, Route, RouteBackendReference, RouteBackendTarget,
+	RouteGroupKey, RouteMatch, RouteName, ServerTLSConfig, SimpleBackend, SimpleBackendReference,
 	SimpleBackendReferenceWithPolicies, SimpleBackendWithPolicies, SseTargetSpec,
 	StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, Target, TargetedPolicy,
 	TracingConfig, TrafficPolicy, TunnelProtocol, TypedResourceName, validate_mcp_target_name,
@@ -5235,11 +5235,19 @@ pub(crate) async fn split_policies_for_target(
 		}
 	}
 	if let Some(p) = jwt_auth {
+		let (jwt, resolved_mcp) = p.try_into(resources).await?;
+		let mcp = resolved_mcp.map(|m| McpAuthentication {
+			issuer: m.issuer,
+			audiences: m.audiences,
+			provider: m.provider,
+			resource_metadata: m.resource_metadata,
+			jwt_validator: Arc::new(jwt.clone()),
+			mode: McpAuthenticationMode::Strict,
+			client_id: m.client_id,
+			client_secret: None,
+		});
 		route_policies.push(TrafficPolicy::JwtAuth(RequestPolicy::single(
-			JwtAuthentication {
-				jwt: p.try_into(resources).await?,
-				mcp: None,
-			},
+			JwtAuthentication { jwt, mcp },
 		)));
 	}
 	let compiled_oidc = if let Some(oidc) = oidc_config {

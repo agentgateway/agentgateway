@@ -413,6 +413,115 @@ async fn mcp_authentication_runs_in_route_policy_path() {
 }
 
 #[tokio::test]
+async fn jwt_auth_mcp_resource_metadata_challenges_and_serves_well_known_endpoint() {
+	let (_mock, mut bind, io) = basic_setup().await;
+	bind
+		.attach_route_policy(json!({
+			"jwtAuth": {
+				"mode": "strict",
+				"issuer": "https://example.com",
+				"audiences": ["test-aud"],
+				"jwks": "{\"keys\":[{\"use\":\"sig\",\"kty\":\"EC\",\"kid\":\"XhO06x8JjWH1wwkWkyeEUxsooGEWoEdidEpwyd_hmuI\",\"crv\":\"P-256\",\"alg\":\"ES256\",\"x\":\"XZHF8Em5LbpqfgewAalpSEH4Ka2I2xjcxxUt2j6-lCo\",\"y\":\"g3DFz45A7EOUMgmsNXatrXw1t-PG5xsbkxUs851RxSE\"}]}",
+				"mcp": {
+					"resourceMetadata": {
+						"resource": "https://mcp.example.com/tools",
+						"scopesSupported": ["read", "write"]
+					}
+				}
+			}
+		}))
+		.await;
+
+	let res = send_request(io.clone(), Method::GET, "http://lo").await;
+	assert_eq!(res.status(), 401);
+	let www_authenticate = res.hdr(header::WWW_AUTHENTICATE);
+	assert!(
+		www_authenticate.starts_with("Bearer resource_metadata=\""),
+		"unexpected WWW-Authenticate: {www_authenticate}"
+	);
+	assert!(
+		www_authenticate.contains("/.well-known/oauth-protected-resource"),
+		"unexpected WWW-Authenticate: {www_authenticate}"
+	);
+
+	let res = send_request(
+		io,
+		Method::GET,
+		"http://lo/.well-known/oauth-protected-resource/",
+	)
+	.await;
+	assert_eq!(res.status(), 200);
+	assert_eq!(res.hdr("content-type"), "application/json");
+	let body = res.into_body().collect().await.unwrap().to_bytes();
+	let body: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(
+		body.get("resource"),
+		Some(&json!("https://mcp.example.com/tools")),
+		"expected the configured resource in {body}"
+	);
+	assert_eq!(
+		body.get("scopes_supported"),
+		Some(&json!(["read", "write"]))
+	);
+}
+
+#[tokio::test]
+async fn jwt_auth_mcp_requires_exactly_one_provider() {
+	let (_mock, mut bind, _io) = basic_setup().await;
+	let err = bind
+		.try_attach_route_policy(json!({
+			"jwtAuth": {
+				"mode": "strict",
+				"providers": [
+					{
+						"issuer": "https://example.com",
+						"jwks": "{\"keys\":[]}"
+					},
+					{
+						"issuer": "https://example2.com",
+						"jwks": "{\"keys\":[]}"
+					}
+				],
+				"mcp": {
+					"resourceMetadata": {}
+				}
+			}
+		}))
+		.await
+		.expect_err("multi-provider jwtAuth.mcp should be rejected");
+	assert!(
+		err
+			.to_string()
+			.contains("jwtAuth.mcp requires exactly one provider"),
+		"unexpected error: {err}"
+	);
+}
+
+#[tokio::test]
+async fn jwt_auth_mcp_requires_strict_mode() {
+	let (_mock, mut bind, _io) = basic_setup().await;
+	let err = bind
+		.try_attach_route_policy(json!({
+			"jwtAuth": {
+				"mode": "permissive",
+				"issuer": "https://example.com",
+				"jwks": "{\"keys\":[]}",
+				"mcp": {
+					"resourceMetadata": {}
+				}
+			}
+		}))
+		.await
+		.expect_err("non-strict jwtAuth.mcp should be rejected");
+	assert!(
+		err
+			.to_string()
+			.contains("jwtAuth.mcp requires mode: strict"),
+		"unexpected error: {err}"
+	);
+}
+
+#[tokio::test]
 async fn api_key() {
 	let (_mock, mut bind, io) = basic_setup().await;
 	bind

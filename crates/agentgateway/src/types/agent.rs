@@ -2981,6 +2981,7 @@ impl LocalMcpAuthentication {
 			audiences: Some(self.audiences.clone()),
 			jwks,
 			jwt_validation_options: self.jwt_validation_options.clone(),
+			mcp: None,
 		})
 	}
 
@@ -2990,7 +2991,7 @@ impl LocalMcpAuthentication {
 		resources: &crate::resource_manager::ResourceFetcher,
 	) -> anyhow::Result<McpAuthentication> {
 		let jwt_cfg = self.as_jwt()?;
-		let jwt = jwt_cfg.try_into(resources).await?;
+		let (jwt, _mcp) = jwt_cfg.try_into(resources).await?;
 		Ok(McpAuthentication {
 			issuer: self.issuer.clone(),
 			audiences: self.audiences.clone(),

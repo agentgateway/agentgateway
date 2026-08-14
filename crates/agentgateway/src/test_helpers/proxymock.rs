@@ -930,12 +930,16 @@ impl TestBind {
 			.insert_route(route, LISTENER_KEY);
 	}
 	pub async fn attach_route_policy(&mut self, p: serde_json::Value) {
+		self.try_attach_route_policy(p).await.unwrap()
+	}
+	/// Like [`attach_route_policy`](Self::attach_route_policy), but surfaces policy materialization
+	/// errors (e.g. invalid `jwtAuth.mcp` config) instead of panicking.
+	pub async fn try_attach_route_policy(&mut self, p: serde_json::Value) -> anyhow::Result<()> {
 		let oidc_key = strng::format!("oidc/{}", self.policies + 1);
-		let pol: local::FilterOrPolicy = serde_json::from_value(p).unwrap();
+		let pol: local::FilterOrPolicy = serde_json::from_value(p)?;
 		let resources = crate::resource_manager::ResourceFetcher::direct(self.pi.upstream.clone());
-		let pols = local::split_policies(&resources, pol, self.pi.cfg.as_policy_context(oidc_key))
-			.await
-			.unwrap();
+		let pols =
+			local::split_policies(&resources, pol, self.pi.cfg.as_policy_context(oidc_key)).await?;
 		assert!(pols.backend_policies.is_empty());
 		for v in pols.route_policies {
 			self.policies += 1;
@@ -953,6 +957,7 @@ impl TestBind {
 				policy: (v, PolicyPhase::Route).into(),
 			});
 		}
+		Ok(())
 	}
 	pub async fn attach_gateway_policy(&mut self, p: serde_json::Value) {
 		let oidc_key = strng::format!("pol/{}", self.policies + 1);
