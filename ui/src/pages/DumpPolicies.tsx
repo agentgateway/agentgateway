@@ -94,7 +94,7 @@ export function DumpPoliciesPage() {
                     </td>
                     <td>{policyInheritanceLabel(policy.inheritance)}</td>
                     <td className="row-actions">
-                      <Tooltip content="View policy">
+                      <Tooltip content={tr("copy.viewPolicy")}>
                         <button
                           className="icon-button"
                           type="button"

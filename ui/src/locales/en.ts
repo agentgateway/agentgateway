@@ -3080,6 +3080,177 @@ const en = {
         "Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).",
       yourChangesHaveNotBeenSavedAndWillBeLost:
         "Your changes have not been saved and will be lost.",
+      configDefinesTopLevelSettingsForDnsAdminNetworkingObservabilityAndSessionManagem_2uetmx:
+        "config defines top-level settings for DNS, admin, networking, observability, and session management. Unlike other sections, these are applied only at startup, except modelCatalog, which is dynamically reloaded.",
+      controlsWhetherUiManagedConfigurationIsWrittenToTheConfigFileOrADbOverlay:
+        "Controls whether UI-managed configuration is written to the config file or a DB overlay.",
+      maximumNumberOfConnectionsToOpenInThisDatabaseSConnectionPoolDefaultsTo5WhenTheR_y8kw5t:
+        "Maximum number of connections to open in this database's connection pool. Defaults to 5. When the request log and config stores have matching database settings, they share one pool with this limit.",
+      storeAllUiManagedConfigurationInTheLocalConfigFile:
+        "Store all UI-managed configuration in the local config file.",
+      readAFileBaselineAndStoreUiManagedOverlayResourcesInTheConfiguredDatabase:
+        "Read a file baseline and store UI-managed overlay resources in the configured database.",
+      injectArtificialLatencyBeforeForwardingRequests:
+        "Inject artificial latency before forwarding requests.",
+      denyTheRequestWhenThisCelExpressionIsTrueThisModeIsNotRecommendedBecauseExpressi_8r8xmb:
+        "Deny the request when this CEL expression is true. This mode is not recommended because expression failures fail to deny; prefer `Allow` or `Require`. If used, design expressions defensively against evaluation errors.",
+      celExpressionThatComputesTheFullSetOfHeadersReplacingAllExistingHeadersTheExpres_k52u6e:
+        "CEL expression that computes the full set of headers, replacing all existing headers. The expression must evaluate to a map of header name to value (a string, or a list of strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored; set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`, so those still operate on top of the replaced headers.",
+      signAShortLivedJwtWithAPrivateKeyOnEachRequest:
+        "Sign a short-lived JWT with a private key on each request.",
+      awsSigV4SigningRegionForExampleUsEast1IfUnsetTypedAwsBackendsMayProvideThisAutom_19lcckx:
+        "AWS SigV4 signing region (for example, `us-east-1`). If unset, typed AWS backends may provide this automatically; otherwise the ambient AWS region is used.",
+      signsAShortLivedJwtWithAPrivateKeyOnEachRequestAndSendsItToTheBackendForUpstream_1x1fp0x:
+        "Signs a short-lived JWT with a private key on each request and sends it to the backend. For upstreams that require per-request keypair JWTs (e.g. the Snowflake SQL API) rather than a static credential.",
+      jwsSigningAlgorithmDefaultsToRs256:
+        "JWS signing algorithm. Defaults to `RS256`.",
+      optionalJwsKeyIdHeader: "Optional JWS key ID header.",
+      staticClaimsAddedToEveryTokenEGIssSubAudValuesMayBeAnyJsonValueEGAStringNumberBo_tgmtv7:
+        "Static claims added to every token (e.g. `iss`, `sub`, `aud`). Values may be any JSON value (e.g. a string, number, boolean, or array). `iat`, `exp`, and `nbf` are reserved for the signer and cannot be configured here.",
+      tokenLifetimeUsedForExpDefaultsTo300s:
+        "Token lifetime used for `exp`. Defaults to 300 seconds.",
+      whereTheSignedTokenIsWrittenDefaultsToTheAuthorizationHeaderWithABearerPrefix:
+        "Where the signed token is written. Defaults to the `Authorization` header with a `Bearer ` prefix.",
+      requestedTokenTypeParameterWhenUnsetItIsOmittedFromTheRequestRfc8693MakesItOptio_25iu5i:
+        "`requested_token_type` parameter. When unset it is omitted from the request (RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange) reject an explicit `access_token` value paired with a custom `subject_token_type`.",
+      pemEncodedX509CertificateChainLeafFirstTheLeafPublicKeyMustCorrespondToSigningKe_9b0e33:
+        "PEM-encoded X.509 certificate chain, leaf first. The leaf public key must correspond to `signing_key` for token endpoints to validate assertions. A mismatch or comparison failure is logged and does not prevent loading.",
+      jwsCertificateHeaderEmittedFromCertificateRequiredWhenCertificateIsSet:
+        "JWS certificate header emitted from `certificate`. Required when `certificate` is set.",
+      sendTheX509CertificateChainInX5c:
+        "Send the X.509 certificate chain in `x5c`.",
+      sendTheLeafCertificateSSha256ThumbprintInX5tS256:
+        "Send the leaf certificate's SHA-256 thumbprint in `x5t#S256`.",
+      subjectTokenSentToTheIdentityProviderDefaultsToAnOpenIdConnectIdTokenReadFromThe_uefi1w:
+        "Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read from the Authorization Bearer header.",
+      whereToReadTheSubjectTokenDefaultsToTheAuthorizationBearerHeader:
+        "Where to read the subject token. Defaults to the Authorization Bearer header.",
+      rfc8693SubjectTokenTypeUriDefaultsToAnOpenIdConnectIdToken:
+        "RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.",
+      anAdditionalCredentialToInjectOnTheBackendRequest:
+        "An additional credential to inject on the backend request.",
+      whereTheCredentialIsInsertedOnTheBackendRequest:
+        "Where the credential is inserted on the backend request.",
+      credentialValue: "Credential value.",
+      policiesToConnectToTheProxyBackend:
+        "Policies to connect to the proxy backend.",
+      jsonWebKeySetUsedToVerifyTokenSignaturesCanBeInlineFromAFileOrFetchedRemotelyIfO_n5iwa6:
+        "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely. If omitted, the JWKS URL is derived from the issuer and provider.",
+      oauthClientSecretInjectedIntoProxiedTokenRequestsForConfidentialClientsCurrently_1390oc4:
+        "OAuth client secret injected into proxied token requests for confidential clients. Currently used by the `entra` provider, whose Web-platform app registrations require a client secret at the token endpoint.",
+      requestBodyValuesComputedFromCelExpressionsTheseAreAppliedAfterConversionToThePr_bijwyz:
+        "Request body values computed from CEL expressions. These are applied after conversion to the provider's request format.",
+      headersToSetOnTheWebhookRequestComputedFromCelExpressionsKeysMayBeHeaderNamesOrT_1d832f8:
+        "Headers to set on the webhook request, computed from CEL expressions. Keys may be header names or the `:path`, `:method`, and `:authority` pseudo-headers; setting `:path` replaces the default `/request` / `/response` path. Expressions are evaluated against the original incoming request (like the `transformation` policy), so `request.*` and `jwt.*` refer to the client's request.",
+      artificialLatencyInjectedBeforeTheRequestIsForwardedToTheBackendEitherADurationS_1jzhdfx:
+        'Artificial latency injected before the request is forwarded to the backend. Either a duration string such as `2s`, or a CEL expression evaluated against the request that returns a duration (e.g. `duration("500ms")`) or a number interpreted as milliseconds (e.g. `random() < 0.1 ? 500 : 0` for probabilistic delay, or `int(random() * 500)` for jitter). A non-positive result injects no delay.',
+      celExpressionEvaluatedAgainstTheRequestToComputeTheDialTargetEGExtprocWorkerPodI_gl1myq:
+        'CEL expression evaluated against the request to compute the dial target (e.g. `extproc.workerPodIp + ":" + string(extproc.workerPodPort)` to read dynamic metadata an extProc policy already set). Must evaluate to a `host:port` string. The expression and any policy that supplies its dynamic metadata are trusted to select the dial target. If unset, the target is read from the request\'s own `:authority`/URI, as today.',
+      transportPoliciesForConnectingToThisTargetSBackendNotSupportedOnStdioTargetsMcpP_141bjhs:
+        "Transport policies for connecting to this target's backend. Not supported on stdio targets. MCP policies (`mcpAuthorization`, `mcpGuardrails`) apply to the full target set and belong on the route or `mcp.policies`.",
+      configurationForRunningOpenAiInlineModerationOnRequestInputAndGeneratedOutput:
+        "Configuration for running OpenAI inline moderation on request input and generated output.",
+      theModerationModelToUseDefaultsToOmniModerationLatest:
+        "The moderation model to use. Defaults to `omni-moderation-latest`.",
+      policiesToApplyToRequestInputAndGeneratedOutput:
+        "Policies to apply to request input and generated output.",
+      policyForRequestInputModeration: "Policy for request input moderation.",
+      policyForGeneratedOutputModeration:
+        "Policy for generated output moderation.",
+      applyBestEffortSessionAffinityUsingARequestValueSelectedByACelExpressionRequests_1wx29fs:
+        "Apply best-effort session affinity using a request value selected by a CEL expression. Requests with the same value are consistently load balanced to the same healthy service endpoint or AI provider, but may be remapped when the available backends change.",
+      configuresBestEffortSessionAffinityUsingAnExistingRequestAttributeTheSourceCelEx_1udd2uh:
+        "Configures best-effort session affinity using an existing request attribute. The source CEL expression selects the affinity value. Requests with the same value are consistently load balanced to the same healthy service endpoint or AI provider. Unlike session persistence, this policy does not identify or track a previously selected backend, so changes to the available backends may remap a value.",
+      celExpressionEvaluatedAgainstRequestStateItMustReturnAStringOrBytesValueExamples_64u9wd:
+        'CEL expression evaluated against request state. It must return a string or bytes value. Examples: `request.headers["x-session-id"]` or `string(source.address)`.',
+      llmDetailStoredInTheDatabaseMetadataStoresRequestMetadataUsageTimingAndCostWitho_69c2bv:
+        "LLM detail stored in the database. `metadata` stores request metadata, usage, timing, and cost without prompt or completion content in the dedicated payload table. `full` additionally captures and stores prompt and completion content there. When omitted, legacy behavior is preserved: content captured by CEL expressions is also stored in the payload.",
+      storeLlmMetadataWithoutPromptOrCompletionContent:
+        "Store LLM metadata without prompt or completion content.",
+      storeLlmMetadataAndPromptCompletionContent:
+        "Store LLM metadata and prompt/completion content.",
+      aNamedCustomProviderConfigurationMaintainedByAgentgatewayThesePresetsDeliberatel_rc86d8:
+        "A named custom-provider configuration maintained by agentgateway. These presets deliberately live beside `Provider`: both standalone and xDS configuration expand them here, keeping endpoint and format behavior alike.",
+      idIsAStableIdentityForThisModelConfigEntryTheNameFieldRemainsTheModelMatchPattern:
+        "id is a stable identity for this model config entry. The `name` field remains the model match pattern.",
+      finalTransformationAllowsSettingValuesFromCelExpressionsForTheRequestOverridingA_5b0fab:
+        "`final_transformation` allows setting values from CEL expressions for the request, overriding any existing values. Occurs after conversion of the request to the provider format, allowing for provider-specific transformations.",
+      browserOriginsThatMayCallThisListenerUseExactOriginsSuchAsHttpLocalhost19000:
+        "Browser origins that may call this listener. Use exact origins such as http://localhost:19000.",
+      requestHeadersAllowedByBrowserPreflightChecksUseWhileDebuggingThenNarrowItForProduction:
+        "Request headers allowed by browser preflight checks. Use * while debugging, then narrow it for production.",
+      httpMethodsAllowedByBrowserPreflightChecksPlaygroundsTypicallyNeedGetAndPost:
+        "HTTP methods allowed by browser preflight checks. Playgrounds typically need GET and POST.",
+      responseHeadersBrowserJavaScriptCanReadMcpPlaygroundsNeedMcpSessionId:
+        "Response headers browser JavaScript can read. MCP playgrounds need Mcp-Session-Id.",
+      strictRequiresAValidJwtOptionalValidatesOnlyWhenPresentAndPermissiveNeverRejectsRequests:
+        "strict requires a valid JWT, optional validates only when present, and permissive never rejects requests.",
+      expectedIssuerClaimForAcceptedJwts:
+        "Expected issuer claim for accepted JWTs.",
+      acceptedAudienceClaimsLeaveEmptyOnlyWhenTheGatewayShouldNotEnforceAudienceMatching:
+        "Accepted audience claims. Leave empty only when the gateway should not enforce audience matching.",
+      jwksUsedToValidateJwtSignaturesThisMayBeInlineJsonAFileReferenceOrARemoteUrlObject:
+        "JWKS used to validate JWT signatures. This may be inline JSON, a file reference, or a remote URL object.",
+      whetherThisLimitCountsRequestsImmediatelyOrTokensAfterAnLlmResponseCompletes:
+        "Whether this limit counts requests immediately or tokens after an LLM response completes.",
+      howOftenTokensAreReplenishedSuchAs1s60sOr1m:
+        "How often tokens are replenished, such as 1s, 60s, or 1m.",
+      maximumBurstSizeForThisLocalRateLimitBucket:
+        "Maximum burst size for this local rate limit bucket.",
+      numberOfTokensAddedBackToTheBucketEveryFillInterval:
+        "Number of tokens added back to the bucket every fill interval.",
+      selectTheGuardrailIntegrationOrRuleTypeToApply:
+        "Select the guardrail integration or rule type to apply.",
+      configuredFromSchema: "Configured from schema.",
+      playgroundLlmCorsInstruction:
+        "Add {{value}} to the LLM CORS policy so this playground can call the gateway from the browser.",
+      playgroundMcpCorsInstruction:
+        "Add {{value}} to the MCP CORS policy so this playground can list and call MCP tools from the browser.",
+      playgroundMcpSessionCorsInstruction:
+        "Add {{value}} to the MCP CORS policy and expose Mcp-Session-Id so this playground can keep a browser session.",
+      gooseModelNamesInstruction:
+        "Cannot enter custom model names; set {{value}} in {{value}} for models missing from the provider list.",
+      unsupportedTargetDescription:
+        "This policy uses an unsupported {{value}} target. The visual editor currently supports host targets only.",
+      unsupportedRemoteRateLimitTarget:
+        "This policy uses a {{value}} target. The visual editor currently supports host targets only.",
+      kubernetesService: "Kubernetes service",
+      configureCors: "Configure CORS",
+      viewPolicy: "View policy",
+      viewRoute: "View route",
+      viewListener: "View listener",
+      modelMatchSendTo: "Match {{value}} and send it to {{value}}.",
+      modelMatchForwardAsIs: "Match {{value}} and forward the model as-is.",
+      modelMatchStripPrefix:
+        "Match {{value}}, strip the {{value}} prefix, and forward the remaining model as-is.",
+      claudeDesktopRestartInstruction:
+        "Fully quit and relaunch Claude Desktop. After relaunching, open the Developer menu in the menu bar.",
+      claudeDesktopOpenDeveloperMenu:
+        "Open Developer > Configure third-party inference > Gateway.",
+      openCodeCreateConfigInstruction: "Create {{value}} in your project root.",
+      openCodeRunInstruction: "Run {{value}} from the same directory.",
+      cursorOpenModelsInstruction: "Open Cursor Settings > Models.",
+      cursorOverrideBaseUrlInstruction:
+        "Enable Override OpenAI Base URL and set it to {{value}}.",
+      cursorAddModelInstruction:
+        "Add {{value}} as a custom model, then test it in Ask or Plan mode.",
+      copilotOpenSettingsInstruction:
+        "Open VS Code Settings and search for {{value}}.",
+      copilotEditSettingsInstruction:
+        "Edit {{value}} and set the advanced proxy URL.",
+      windsurfOpenSettingsInstruction: "Open Windsurf Settings.",
+      windsurfSetProxyInstruction:
+        "Set the HTTP proxy URL to {{value}} and save.",
+      legacyBindsWarning:
+        "This configuration uses {{value}} and has no {{value}}. Consider moving listener ownership to {{value}}.",
+      ruleNumber: "Rule {{value}}",
+      processorNumber: "Processor {{value}}",
+      descriptorNumber: "Descriptor {{value}}",
+      deleteNamedResourceQuestion: "Delete {{value}}? This cannot be undone.",
+      deleteTargetQuestion:
+        "Delete {{value}}? Traffic can no longer be sent to this target.",
+      deleteRouteQuestion:
+        "Delete {{value}}? Traffic matching this route will no longer reach its backends.",
     },
   },
 } as const;

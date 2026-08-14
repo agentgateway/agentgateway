@@ -139,9 +139,9 @@ export function ExtProcPolicyEditor(props: {
         schema={props.help.node(["$defs", "ExtProc"])}
         help={props.help}
       >
-        {tr("copy.thisPolicyUsesA")}
-        {unsupportedTargetLabel(props.extProc)}
-        {tr("copy.targetTheVisualEditorCurrentlySupportsHostTargetsOnly")}
+        {tr("copy.unsupportedTargetDescription", [
+          unsupportedTargetLabel(props.extProc),
+        ])}
       </UnsupportedYamlFallback>
     );
   }

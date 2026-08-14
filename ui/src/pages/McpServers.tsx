@@ -316,11 +316,7 @@ export function McpServersPage() {
             );
           }}
         >
-          <p>
-            {tr("copy.delete")}
-            <strong>{deletingServer}</strong>
-            {tr("copy.trafficCanNoLongerBeSentToThisTarget")}
-          </p>
+          <p>{tr("copy.deleteTargetQuestion", [deletingServer])}</p>
         </ConfirmDialog>
       ) : null}
     </div>

@@ -222,11 +222,7 @@ export function McpPlaygroundPage() {
             )
           }
         >
-          {tr("copy.add")}
-          {currentOrigin()}
-          {tr(
-            "copy.toTheMcpCorsPolicyAndExposeMcpSessionIdSoThisPlaygroundCanKeepABrowserSession",
-          )}
+          {tr("copy.playgroundMcpSessionCorsInstruction", [currentOrigin()])}
         </StatusBanner>
       ) : null}
       {targets.length === 0 ? (

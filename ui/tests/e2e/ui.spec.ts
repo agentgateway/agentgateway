@@ -115,7 +115,7 @@ test("updates the policy catalog when the language changes in place", async ({
 
   await expect(page.getByRole("heading", { name: "访问" })).toBeVisible();
   await expect(page.getByText("API 密钥", { exact: true })).toBeVisible();
-  await expect(page.getByText("Basic Auth", { exact: true })).toBeVisible();
+  await expect(page.getByText("基本身份验证", { exact: true })).toBeVisible();
   await expect(page.getByText("JWT 身份验证", { exact: true })).toBeVisible();
 
   await page.getByLabel("选择语言").click();
@@ -127,7 +127,7 @@ test("updates the policy catalog when the language changes in place", async ({
   await expect(page.getByText("Basic auth", { exact: true })).toBeVisible();
   await expect(page.getByText("JWT auth", { exact: true })).toBeVisible();
   await expect(page.getByText("API 密钥", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("Basic Auth", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("基本身份验证", { exact: true })).toHaveCount(0);
   await expect(page.getByText("JWT 身份验证", { exact: true })).toHaveCount(0);
 });
 
@@ -623,6 +623,21 @@ test("creates a weighted virtual model with a concrete wildcard target", async (
       },
     },
   });
+});
+
+test("localizes virtual model condition help in Chinese", async ({ page }) => {
+  await mockGateway(page, emptyConfigWithModels());
+  await page.goto("/llm/models?lang=zh-CN");
+
+  await page.getByRole("button", { name: "添加虚拟模型" }).click();
+  await page.getByRole("button", { name: "条件" }).click();
+  await page.getByRole("button", { name: "添加规则" }).click();
+
+  const help = page.locator('.help-icon[aria-label*="条件表达式"]').first();
+  await expect(help).toBeVisible();
+  await expect(help).toHaveAttribute("aria-label", /最后一个回退目标/);
+  await help.hover();
+  await expect(page.getByRole("tooltip")).toContainText("条件表达式");
 });
 
 test("hybrid model edits use the unified resource API", async ({ page }) => {

@@ -473,17 +473,8 @@ claude --model ${JSON.stringify(args.model)}`,
           <strong>{tr("copy.troubleshooting")}</strong> &gt;{" "}
           <strong>{tr("copy.enableDeveloperMode")}</strong>.
         </>,
-        <>
-          {tr("copy.fullyQuitAndRelaunchClaudeDesktopANew")}{" "}
-          <strong>{tr("copy.developer")}</strong>
-          {tr("copy.menuAppearsInTheMenuBar")}
-        </>,
-        <>
-          {tr("copy.open")}
-          <strong>{tr("copy.developer")}</strong> &gt;{" "}
-          <strong>{tr("copy.configureThirdPartyInference")}</strong> &gt;{" "}
-          <strong>{tr("copy.gateway")}</strong>.
-        </>,
+        <>{tr("copy.claudeDesktopRestartInstruction")}</>,
+        <>{tr("copy.claudeDesktopOpenDeveloperMenu")}</>,
         <>
           {tr(
             "copy.enterTheGatewayUrlAndVirtualApiKeySaveThenRestartClaudeDesktop",
@@ -521,16 +512,8 @@ codex --model "${args.model}" \\
       ),
       icon: "opencode",
       steps: [
-        <>
-          {tr("copy.createThis")}
-          <code>opencode.json</code>
-          {tr("copy.inYourProjectRoot")}
-        </>,
-        <>
-          {tr("copy.run")}
-          <code>opencode</code>
-          {tr("copy.fromTheSameDirectory")}
-        </>,
+        <>{tr("copy.openCodeCreateConfigInstruction", ["opencode.json"])}</>,
+        <>{tr("copy.openCodeRunInstruction", ["opencode"])}</>,
       ],
       language: "bash",
       code: `
@@ -576,10 +559,10 @@ opencode`,
           <code>~/.config/goose/config.yaml</code>.
         </>,
         <>
-          <code>goose configure</code>{" "}
-          {tr("copy.cannotEnterCustomModelNamesSet")} <code>GOOSE_MODEL</code>
-          {tr("copy.in")} <code>config.yaml</code>{" "}
-          {tr("copy.forModelsMissingFromTheProviderList")}
+          {tr("copy.gooseModelNamesInstruction", [
+            "config.yaml",
+            "GOOSE_MODEL",
+          ])}
         </>,
       ],
       language: "bash",
@@ -598,25 +581,9 @@ goose session`,
       description: tr("copy.useCursorSOpenAiBaseUrlOverrideWithAGatewayModel"),
       icon: "cursor",
       steps: [
-        <>
-          {tr("copy.open")}
-          <strong>{tr("copy.cursorSettings")}</strong> &gt;{" "}
-          <strong>{tr("copy.models")}</strong>.
-        </>,
-        <>
-          {tr("copy.enable")}
-          <strong>{tr("copy.overrideOpenAiBaseUrl")}</strong>
-          {tr("copy.andSetItTo")} <code>{base}</code>.
-        </>,
-        <>
-          {tr("copy.add")}
-          <code>{args.model}</code>
-          {tr("copy.asACustomModelThenTestFrom")}{" "}
-          <strong>{tr("copy.ask")}</strong>
-          {tr("copy.or")}
-          <strong>{tr("copy.plan")}</strong>
-          {tr("copy.mode")}
-        </>,
+        <>{tr("copy.cursorOpenModelsInstruction")}</>,
+        <>{tr("copy.cursorOverrideBaseUrlInstruction", [base])}</>,
+        <>{tr("copy.cursorAddModelInstruction", [args.model])}</>,
       ],
       language: "text",
       code: `Override OpenAI Base URL: ${base}
@@ -631,16 +598,8 @@ Custom model: ${args.model}`,
       ),
       icon: "copilot",
       steps: [
-        <>
-          {tr("copy.open")}
-          <strong>{tr("copy.vsCodeSettings")}</strong>
-          {tr("copy.andSearchFor")} <code>github.copilot</code>.
-        </>,
-        <>
-          {tr("copy.edit")}
-          <code>settings.json</code>
-          {tr("copy.andSetTheAdvancedProxyUrl")}
-        </>,
+        <>{tr("copy.copilotOpenSettingsInstruction", ["github.copilot"])}</>,
+        <>{tr("copy.copilotEditSettingsInstruction", ["settings.json"])}</>,
         <>{tr("copy.reloadVsCodeAndTestCopilotSuggestionsOrChat")}</>,
       ],
       language: "json",
@@ -658,19 +617,12 @@ Custom model: ${args.model}`,
       ),
       icon: "windsurf",
       steps: [
-        <>
-          {tr("copy.open")}
-          <strong>{tr("copy.windsurfSettings")}</strong>.
-        </>,
+        <>{tr("copy.windsurfOpenSettingsInstruction")}</>,
         <>
           {tr("copy.searchFor")}
           <strong>{tr("copy.httpProxy")}</strong>.
         </>,
-        <>
-          {tr("copy.setTheProxyUrlTo")}
-          <code>{base}</code>
-          {tr("copy.andSave")}
-        </>,
+        <>{tr("copy.windsurfSetProxyInstruction", [base])}</>,
       ],
       language: "text",
       code: `Http: Proxy: ${base}`,

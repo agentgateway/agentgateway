@@ -228,7 +228,7 @@ export function ProvidersPage() {
                         )}
                       </td>
                       <td className="row-actions">
-                        <Tooltip content="Add model using this provider">
+                        <Tooltip content={tr("copy.addModelUsingProvider")}>
                           <Link
                             className="icon-button"
                             aria-label={tr("copy.addModelUsingProvider")}
@@ -238,7 +238,7 @@ export function ProvidersPage() {
                             <Bot size={16} />
                           </Link>
                         </Tooltip>
-                        <Tooltip content="Edit provider">
+                        <Tooltip content={tr("copy.editProvider")}>
                           <button
                             className="icon-button"
                             aria-label={tr("copy.editProvider")}
@@ -303,11 +303,7 @@ export function ProvidersPage() {
           onCancel={() => setDeletingProvider(null)}
           onConfirm={() => deleteProvider(deletingProvider)}
         >
-          <p>
-            {tr("copy.delete")}
-            <strong>{deletingProvider}</strong>
-            {tr("copy.thisCannotBeUndone")}
-          </p>
+          <p>{tr("copy.deleteNamedResourceQuestion", [deletingProvider])}</p>
         </ConfirmDialog>
       ) : null}
     </div>

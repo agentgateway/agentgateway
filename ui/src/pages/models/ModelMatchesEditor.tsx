@@ -109,11 +109,11 @@ function MatchCard(props: {
     <section className="match-card">
       <div className="match-card-header">
         <span />
-        <Tooltip content="Remove match">
+        <Tooltip content={tr("copy.removeMatchValue", [props.index + 1])}>
           <button
             className="icon-button danger"
             type="button"
-            aria-label={tr("copy.removeMatchValue")}
+            aria-label={tr("copy.removeMatchValue", [props.index + 1])}
             onClick={props.onRemove}
           >
             <Trash2 size={15} />
@@ -206,7 +206,7 @@ function HeaderMatchRow(props: {
         />
         {tr("copy.regex")}
       </label>
-      <Tooltip content="Remove header condition">
+      <Tooltip content={tr("copy.removeHeaderCondition")}>
         <button
           className="icon-button danger"
           type="button"

@@ -213,7 +213,10 @@ export function KeysPage() {
         </StatusBanner>
       ) : null}
       {policy?.mode && policy.mode !== "strict" ? (
-        <StatusBanner state="warn" title={tr("copy.policyModeIsValue")}>
+        <StatusBanner
+          state="warn"
+          title={tr("copy.policyModeIsValue", [policy.mode])}
+        >
           {tr("copy.useStrictModeWhenKeysShouldBeMandatory")}
         </StatusBanner>
       ) : null}
@@ -380,9 +383,9 @@ export function KeysPage() {
           }}
         >
           <p>
-            {tr("copy.delete")}
-            <strong>{virtualKeyDeleteLabel(deleteKey)}</strong>
-            {tr("copy.thisCannotBeUndone")}
+            {tr("copy.deleteNamedResourceQuestion", [
+              virtualKeyDeleteLabel(deleteKey),
+            ])}
           </p>
         </ConfirmDialog>
       ) : null}

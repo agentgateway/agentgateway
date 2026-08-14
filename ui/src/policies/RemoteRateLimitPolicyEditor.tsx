@@ -75,8 +75,12 @@ export function RemoteRateLimitPolicyEditor(props: {
         help={props.help}
       >
         {isConditional(props.remoteRateLimit)
-          ? "This policy uses conditional remote rate limit entries. The visual editor currently supports one explicit remote rate limit."
-          : `This policy uses a ${unsupportedTargetLabel(props.remoteRateLimit)} target. The visual editor currently supports host targets only.`}
+          ? tr(
+              "copy.thisPolicyUsesConditionalRateLimitEntriesTheVisualEditorCurrentlySupportsSimpleRateLimitsOnly",
+            )
+          : tr("copy.unsupportedRemoteRateLimitTarget", [
+              unsupportedTargetLabel(props.remoteRateLimit),
+            ])}
       </UnsupportedYamlFallback>
     );
   }
@@ -274,10 +278,7 @@ function DescriptorEditor(props: {
     >
       <div className="remote-descriptor-header">
         <div>
-          <strong>
-            {tr("copy.descriptor")}
-            {props.index + 1}
-          </strong>
+          <strong>{tr("copy.descriptorNumber", [props.index + 1])}</strong>
           <small>
             {props.descriptor.entries.length}{" "}
             {props.descriptor.entries.length === 1 ? "entry" : "entries"}

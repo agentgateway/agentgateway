@@ -89,9 +89,9 @@ export function ExtAuthzPolicyEditor(props: {
         schema={props.help.node(["$defs", "ExtAuthz"])}
         help={props.help}
       >
-        {tr("copy.thisPolicyUsesA")}
-        {unsupportedTargetLabel(props.extAuthz)}
-        {tr("copy.targetTheVisualEditorCurrentlySupportsHostTargetsOnly")}
+        {tr("copy.unsupportedTargetDescription", [
+          unsupportedTargetLabel(props.extAuthz),
+        ])}
       </UnsupportedYamlFallback>
     );
   }

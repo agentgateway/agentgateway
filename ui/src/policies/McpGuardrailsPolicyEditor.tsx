@@ -204,10 +204,7 @@ export function McpGuardrailsPolicyEditor(props: {
                   <Server size={16} />
                 </span>
                 <div className="mcp-processor-title">
-                  <strong>
-                    {tr("copy.processor")}
-                    {index + 1}
-                  </strong>
+                  <strong>{tr("copy.processorNumber", [index + 1])}</strong>
                   <code>{processor.host || "No host configured"}</code>
                 </div>
                 <span
