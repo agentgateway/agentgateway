@@ -77,38 +77,80 @@ pub mod from_rerank {
 }
 
 pub mod from_embeddings {
+	use serde_json::Value;
+
 	use super::*;
 	use crate::json;
+	use crate::types::vertex_gemini as vg;
 
-	pub fn translate(req: &types::embeddings::Request) -> Result<Vec<u8>, AIError> {
-		let typed = json::convert::<_, types::embeddings::typed::Request>(req)
-			.map_err(AIError::RequestMarshal)?;
+	/// Vertex embedding knobs, resolved once and shared by both endpoints. Everything except
+	/// `output_dimensionality` has no OpenAI equivalent and arrives via the passthrough `rest`.
+	struct Params {
+		task_type: Option<String>,
+		title: Option<String>,
+		auto_truncate: Option<bool>,
+		output_dimensionality: Option<u64>,
+	}
 
-		let input = typed.input.as_strings();
-
-		let task_type = req
-			.rest
-			.get("task_type")
-			.and_then(|v| v.as_str())
-			.unwrap_or("RETRIEVAL_QUERY")
-			.to_string();
-
-		// Vertex natively supports batching via the instances array,
-		// so we map each input string to an Instance directly.
-		let instances = input
-			.into_iter()
-			.map(|content| types::vertex::Instance {
-				content,
-				task_type: Some(task_type.clone()),
+	impl Params {
+		fn extract(
+			req: &types::embeddings::Request,
+			typed: &types::embeddings::typed::Request,
+		) -> Self {
+			Self {
+				task_type: req
+					.rest
+					.get("task_type")
+					.and_then(|v| v.as_str().map(|s| s.to_string())),
 				title: req
 					.rest
 					.get("title")
 					.and_then(|v| v.as_str().map(|s| s.to_string())),
+				auto_truncate: req.rest.get("auto_truncate").and_then(|v| v.as_bool()),
+				output_dimensionality: typed.dimensions.map(|d| d as u64),
+			}
+		}
+	}
+
+	pub fn translate(
+		req: &types::embeddings::Request,
+		provider: &crate::vertex::Provider,
+	) -> Result<Vec<u8>, AIError> {
+		let typed = json::convert::<_, types::embeddings::typed::Request>(req)
+			.map_err(AIError::RequestMarshal)?;
+		let params = Params::extract(req, &typed);
+
+		if provider.uses_embed_content(req.model.as_deref()) {
+			translate_embed_content_request(&typed, params)
+		} else {
+			translate_predict_request(&typed, params)
+		}
+	}
+
+	fn translate_predict_request(
+		typed: &types::embeddings::typed::Request,
+		params: Params,
+	) -> Result<Vec<u8>, AIError> {
+		let Params {
+			task_type,
+			title,
+			auto_truncate,
+			output_dimensionality,
+		} = params;
+		let task_type = task_type.unwrap_or_else(|| "RETRIEVAL_QUERY".to_string());
+
+		// Vertex natively supports batching via the instances array,
+		// so we map each input string to an Instance directly.
+		let instances = typed
+			.input
+			.as_strings()
+			.into_iter()
+			.map(|content| types::vertex::Instance {
+				content,
+				task_type: Some(task_type.clone()),
+				title: title.clone(),
 			})
 			.collect();
-
-		let auto_truncate = req.rest.get("auto_truncate").and_then(|v| v.as_bool());
-		let output_dimensionality = typed.dimensions.map(|d| d as u64);
 
 		let parameters = if auto_truncate.is_some() || output_dimensionality.is_some() {
 			Some(types::vertex::Parameters {
@@ -126,7 +168,86 @@ pub mod from_embeddings {
 		serde_json::to_vec(&vertex_req).map_err(AIError::RequestMarshal)
 	}
 
-	pub fn translate_response(bytes: &[u8], model: &str) -> Result<Box<dyn ResponseType>, AIError> {
+	fn translate_embed_content_request(
+		typed: &types::embeddings::typed::Request,
+		params: Params,
+	) -> Result<Vec<u8>, AIError> {
+		// embedContent embeds one content and returns one embedding. Vertex has no batch
+		// variant, and extra parts would silently collapse into a single vector.
+		let mut inputs = typed.input.as_strings();
+		if inputs.len() != 1 {
+			return Err(AIError::RequestParsing(serde::de::Error::custom(
+				"Vertex embedContent does not support batching; `input` must contain exactly one string",
+			)));
+		}
+
+		let Params {
+			task_type,
+			title,
+			auto_truncate,
+			output_dimensionality,
+		} = params;
+
+		let embed_content_config = if task_type.is_some()
+			|| title.is_some()
+			|| output_dimensionality.is_some()
+			|| auto_truncate.is_some()
+		{
+			Some(vg::EmbedContentConfig {
+				task_type,
+				title,
+				output_dimensionality,
+				auto_truncate,
+			})
+		} else {
+			None
+		};
+
+		let vertex_req = vg::EmbedContentRequest {
+			content: vg::Content {
+				role: None,
+				parts: vec![vg::Part::Text(vg::TextPart {
+					text: inputs.remove(0),
+					thought: None,
+					thought_signature: None,
+					rest: Value::Null,
+				})],
+				rest: Value::Null,
+			},
+			embed_content_config,
+		};
+		serde_json::to_vec(&vertex_req).map_err(AIError::RequestMarshal)
+	}
+
+	pub fn translate_response(
+		bytes: &[u8],
+		provider: &crate::vertex::Provider,
+		model: &str,
+	) -> Result<Box<dyn ResponseType>, AIError> {
+		let (data, prompt_tokens) = if provider.uses_embed_content(Some(model)) {
+			translate_embed_content_response(bytes)?
+		} else {
+			translate_predict_response(bytes)?
+		};
+
+		let typed_resp = types::embeddings::typed::Response {
+			object: "list".to_string(),
+			data,
+			model: model.to_string(),
+			usage: types::embeddings::typed::Usage {
+				prompt_tokens: prompt_tokens as u32,
+				total_tokens: prompt_tokens as u32,
+			},
+		};
+		// Convert the normalized internal typed response back to the passthrough-preserving OpenAI format
+		let openai_resp = json::convert::<_, types::embeddings::Response>(&typed_resp)
+			.map_err(AIError::ResponseParsing)?;
+		Ok(Box::new(openai_resp))
+	}
+
+	fn translate_predict_response(
+		bytes: &[u8],
+	) -> Result<(Vec<types::embeddings::typed::Embedding>, u64), AIError> {
 		let resp: types::vertex::PredictResponse =
 			serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
 
@@ -146,19 +267,26 @@ pub mod from_embeddings {
 				index: i as u32,
 			});
 		}
+		Ok((data, total_prompt_tokens))
+	}
 
-		let typed_resp = types::embeddings::typed::Response {
-			object: "list".to_string(),
-			data,
-			model: model.to_string(),
-			usage: types::embeddings::typed::Usage {
-				prompt_tokens: total_prompt_tokens as u32,
-				total_tokens: total_prompt_tokens as u32,
-			},
-		};
-		// Convert the normalized internal typed response back to the passthrough-preserving OpenAI format
-		let openai_resp = json::convert::<_, types::embeddings::Response>(&typed_resp)
-			.map_err(AIError::ResponseParsing)?;
-		Ok(Box::new(openai_resp))
+	fn translate_embed_content_response(
+		bytes: &[u8],
+	) -> Result<(Vec<types::embeddings::typed::Embedding>, u64), AIError> {
+		let mut resp: vg::EmbedContentResponse =
+			serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
+
+		let prompt_tokens = resp
+			.usage_metadata
+			.as_ref()
+			.and_then(|u| u.prompt_token_count.or(u.total_token_count))
+			.unwrap_or_default();
+
+		let data = vec![types::embeddings::typed::Embedding {
+			object: "embedding".to_string(),
+			embedding: std::mem::take(&mut resp.embedding.values),
+			index: 0,
+		}];
+		Ok((data, prompt_tokens))
 	}
 }
