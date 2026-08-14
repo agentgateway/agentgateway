@@ -35,6 +35,8 @@ pub struct AgentGateway {
 	// Used to store temp dirs so they are dropped when the test completes
 	pub _temp_dirs: Vec<TempDir>,
 	port: u16,
+	#[cfg_attr(not(feature = "ui"), allow(dead_code))]
+	config_path: PathBuf,
 	task: tokio::task::JoinHandle<()>,
 	client: Client<HttpConnector, Body>,
 	shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
@@ -64,17 +66,20 @@ impl AgentGateway {
 
 		let js = serde_json::to_string(&js).unwrap();
 		let mut temp_dirs = Vec::new();
-		let (temp, config) = create_temp_config_file(&js).await?;
+		let (temp, config_path) = create_temp_config_file(&js).await?;
 		temp_dirs.push(temp);
 		info!("starting agent...");
 
 		let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel();
 		let (port_tx, port_rx) = tokio::sync::oneshot::channel::<u16>();
-
+		let config_path_for_task = config_path.clone();
 		let task = tokio::task::spawn(async move {
 			let config = Arc::new(
-				agentgateway::config::parse_config(js, Some(agentgateway::ConfigSource::File(config)))
-					.unwrap(),
+				agentgateway::config::parse_config(
+					js,
+					Some(agentgateway::ConfigSource::File(config_path_for_task)),
+				)
+				.unwrap(),
 			);
 			let config_resource_store = if config.storage.mode == agentgateway::ConfigStoreMode::Hybrid {
 				Some(
@@ -118,6 +123,7 @@ impl AgentGateway {
 		Ok(Self {
 			_temp_dirs: temp_dirs,
 			port,
+			config_path,
 			task,
 			client,
 			shutdown_tx: Some(shutdown_tx),
@@ -171,6 +177,11 @@ impl AgentGateway {
 
 	pub fn port(&self) -> u16 {
 		self.port
+	}
+
+	#[cfg_attr(not(feature = "ui"), allow(dead_code))]
+	pub fn config_path(&self) -> &std::path::Path {
+		&self.config_path
 	}
 }
 

@@ -23,6 +23,7 @@ async fn spawn_admin(cfg: &str) -> (SocketAddr, agent_core::drain::DrainTrigger)
 		shutdown.trigger(),
 		drain_rx,
 		Handle::current(),
+		Arc::new(crate::state_manager::ConfigReloadStatus::default()),
 	)
 	.await
 	.expect("admin server should bind");
