@@ -17,6 +17,7 @@ const RESPONSE_PATH: &str = "response";
 pub(super) struct EvaluationContext<'a> {
 	request: Option<&'a RequestSnapshot>,
 	llm_request: Option<&'a serde_json::Value>,
+	llm: Option<&'a cel::LLMContext>,
 }
 
 impl<'a> EvaluationContext<'a> {
@@ -27,14 +28,24 @@ impl<'a> EvaluationContext<'a> {
 		Self {
 			request,
 			llm_request,
+			llm: None,
 		}
 	}
 
+	pub(super) fn with_llm(mut self, llm: Option<&'a cel::LLMContext>) -> Self {
+		self.llm = llm;
+		self
+	}
+
 	fn executor(self) -> cel::Executor<'a> {
-		match self.llm_request {
+		let mut exec = match self.llm_request {
 			Some(llm_request) => cel::Executor::new_llm(self.request, llm_request),
 			None => cel::Executor::new_request_snapshot(self.request),
+		};
+		if let Some(llm) = self.llm {
+			exec.llm = cel::ExtensionOrDirect::Direct(Some(llm));
 		}
+		exec
 	}
 }
 
@@ -484,5 +495,85 @@ mod tests {
 		assert_eq!(req.uri().path(), "/prefixed/request");
 		// ...but context-dependent ones are skipped.
 		assert!(req.headers().get("x-user").is_none());
+	}
+
+	fn llm_ctx() -> crate::cel::LLMContext {
+		crate::cel::LLMContext::from_llm_info(
+			crate::llm::LLMInfo::new(
+				crate::llm::LLMRequest {
+					input_tokens: None,
+					input_format: crate::llm::InputFormat::Completions,
+					cache_convention: crate::llm::CacheTokenConvention::pending(),
+					request_model: "gpt-4o-mini".into(),
+					provider: "openai".into(),
+					streaming: false,
+					params: Default::default(),
+					prompt: None,
+					provider_state: None,
+				},
+				crate::llm::LLMResponse {
+					provider_model: Some("gpt-4o-mini-2024-07-18".into()),
+					..Default::default()
+				},
+			),
+			None,
+		)
+	}
+
+	#[test]
+	fn request_webhook_headers_see_llm_model_and_provider() {
+		let wh = webhook(Vec::from([
+			(
+				HeaderOrPseudo::Header(::http::HeaderName::from_static("x-llm-model")),
+				expr("llm.requestModel"),
+			),
+			(
+				HeaderOrPseudo::Header(::http::HeaderName::from_static("x-llm-provider")),
+				expr("llm.provider"),
+			),
+		]));
+		let llm = llm_ctx();
+		let req = build_request_for_request(
+			&wh,
+			EvaluationContext::new(None, None).with_llm(Some(&llm)),
+			&HeaderMap::new(),
+			vec![],
+		)
+		.unwrap();
+		assert_eq!(req.headers().get("x-llm-model").unwrap(), "gpt-4o-mini");
+		assert_eq!(req.headers().get("x-llm-provider").unwrap(), "openai");
+	}
+
+	#[test]
+	fn response_webhook_headers_see_response_model() {
+		let wh = webhook(Vec::from([
+			(
+				HeaderOrPseudo::Header(::http::HeaderName::from_static("x-llm-model")),
+				expr("llm.requestModel"),
+			),
+			(
+				HeaderOrPseudo::Header(::http::HeaderName::from_static("x-response-model")),
+				expr("llm.responseModel"),
+			),
+			(
+				HeaderOrPseudo::Header(::http::HeaderName::from_static("x-llm-provider")),
+				expr("llm.provider"),
+			),
+		]));
+		let llm = llm_ctx();
+		let req = build_request_for_response(
+			&wh,
+			EvaluationContext::new(None, None).with_llm(Some(&llm)),
+			&HeaderMap::new(),
+			vec![],
+		)
+		.unwrap();
+		assert_eq!(req.headers().get("x-llm-model").unwrap(), "gpt-4o-mini");
+		assert_eq!(
+			req.headers().get("x-response-model").unwrap(),
+			"gpt-4o-mini-2024-07-18"
+		);
+		assert_eq!(req.headers().get("x-llm-provider").unwrap(), "openai");
+		assert_eq!(req.uri().path(), "/response");
 	}
 }

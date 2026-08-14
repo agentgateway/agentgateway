@@ -1729,8 +1729,31 @@ impl AIProvider {
 				let http_headers = &parts.headers;
 				let claims = parts.extensions.get::<Claims>().cloned();
 				let original = log.as_ref().and_then(|l| l.request_snapshot.clone());
+				let request_model = req
+					.model()
+					.clone()
+					.map(strng::new)
+					.unwrap_or_default();
+				let llm_ctx = Box::new(crate::cel::LLMContext::from(LLMRequest {
+					input_tokens: None,
+					input_format: original_format,
+					cache_convention: CacheTokenConvention::pending(),
+					request_model,
+					provider: self.provider(),
+					streaming: false,
+					params: LLMRequestParams::default(),
+					prompt: None,
+					provider_state: None,
+				}));
 				if let Some((response, guardrail)) = p
-					.apply_prompt_guard(backend_info, req, http_headers, claims, original.as_deref())
+					.apply_prompt_guard(
+						backend_info,
+						req,
+						http_headers,
+						claims,
+						original.as_deref(),
+						Some(&llm_ctx),
+					)
 					.await
 					.map_err(|e| {
 						warn!("failed to call prompt guard webhook: {e}");
@@ -1993,14 +2016,20 @@ impl AIProvider {
 			let mut resp = self.translate_chat_or_detect_response(&req, &bytes)?;
 			let prompt_guard_headers =
 				response_prompt_guard_headers(&parts.headers, rate_limit.request_traceparent.as_ref());
+			let llm_ctx = Box::new(crate::cel::LLMContext::from_llm_info(
+				LLMInfo::new(req.clone(), resp.to_llm_response(log_content)),
+				model_catalog,
+			));
 
-			// Apply response prompt guard
+			// Apply response prompt guard with LLM CEL context already populated
+			// (model/provider/responseModel), so webhook header expressions can use them.
 			if let Some(dr) = Policy::apply_response_prompt_guard(
 				&client,
 				resp.as_mut(),
 				&prompt_guard_headers,
 				&rate_limit.prompt_guard,
 				req_snapshot.as_deref(),
+				Some(&llm_ctx),
 			)
 			.await
 			.map_err(|e| {

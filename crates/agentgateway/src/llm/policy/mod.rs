@@ -476,6 +476,7 @@ impl PromptGuard {
 				client,
 				claims.clone(),
 				original,
+				None,
 			)
 			.await
 			{
@@ -556,7 +557,7 @@ impl PromptGuard {
 			content: window.to_string(),
 		};
 		let (action, rejection) =
-			Policy::apply_single_response_guard(guard, &mut resp, http_headers, client, original).await?;
+			Policy::apply_single_response_guard(guard, &mut resp, http_headers, client, original, None).await?;
 		match rejection {
 			Some(rejected) => {
 				let body = rejected.into_body().collect().await?.to_bytes();
@@ -836,6 +837,7 @@ impl Policy {
 		http_headers: &HeaderMap,
 		claims: Option<Claims>,
 		original: Option<&cel::RequestSnapshot>,
+		llm: Option<&cel::LLMContext>,
 	) -> anyhow::Result<Option<(Response, &'static str)>> {
 		let client = PolicyClient::new(backend_info.inputs.clone());
 		for g in self
@@ -844,9 +846,16 @@ impl Policy {
 			.iter()
 			.flat_map(|g| g.request.iter())
 		{
-			let (action, rejection) =
-				Self::apply_single_request_guard(g, req, http_headers, &client, claims.clone(), original)
-					.await?;
+			let (action, rejection) = Self::apply_single_request_guard(
+				g,
+				req,
+				http_headers,
+				&client,
+				claims.clone(),
+				original,
+				llm,
+			)
+			.await?;
 			Self::record_guardrail_trip(&client, GuardrailPhase::Request, action);
 			if let Some(res) = rejection {
 				return Ok(Some((res, g.kind.name())));
@@ -864,10 +873,18 @@ impl Policy {
 		client: &PolicyClient,
 		claims: Option<Claims>,
 		original: Option<&cel::RequestSnapshot>,
+		llm: Option<&cel::LLMContext>,
 	) -> anyhow::Result<(GuardrailAction, Option<Response>)> {
-		let outcome =
-			Self::evaluate_single_request_guard(guard, req, http_headers, client, claims, original)
-				.await?;
+		let outcome = Self::evaluate_single_request_guard(
+			guard,
+			req,
+			http_headers,
+			client,
+			claims,
+			original,
+			llm,
+		)
+		.await?;
 		Self::apply_request_guard_outcome(outcome, req)
 	}
 
@@ -878,11 +895,12 @@ impl Policy {
 		client: &PolicyClient,
 		claims: Option<Claims>,
 		original: Option<&cel::RequestSnapshot>,
+		llm: Option<&cel::LLMContext>,
 	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
 		match &guard.kind {
 			RequestGuardKind::Regex(rg) => Ok(Self::evaluate_regex_request(req, rg, &guard.rejection)),
 			RequestGuardKind::Webhook(wh) => {
-				Self::evaluate_webhook_request(req, http_headers, client, wh, original).await
+				Self::evaluate_webhook_request(req, http_headers, client, wh, original, llm).await
 			},
 			RequestGuardKind::OpenAIModeration(m) => {
 				Self::evaluate_moderation(req, claims, client, m, &guard.rejection).await
@@ -1173,6 +1191,7 @@ impl Policy {
 		client: &PolicyClient,
 		webhook: &Webhook,
 		original: Option<&cel::RequestSnapshot>,
+		llm: Option<&cel::LLMContext>,
 	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
 		let llm_request = webhook
 			.headers
@@ -1180,7 +1199,7 @@ impl Policy {
 			.any(|(_, expression)| expression.needs_llm_request())
 			.then(|| req.to_value())
 			.transpose()?;
-		let context = webhook::EvaluationContext::new(original, llm_request.as_ref());
+		let context = webhook::EvaluationContext::new(original, llm_request.as_ref()).with_llm(llm);
 		let messages = req.get_messages();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
 		let whr = match webhook::send_request(client, webhook, context, &headers, messages).await {
@@ -1241,13 +1260,14 @@ impl Policy {
 		client: &PolicyClient,
 		webhook: &Webhook,
 		original: Option<&cel::RequestSnapshot>,
+		llm: Option<&cel::LLMContext>,
 	) -> anyhow::Result<GuardrailOutcome<ResponseGuardMutation>> {
 		let messages = resp.to_webhook_choices();
 		let headers = Self::get_webhook_forward_headers(http_headers, &webhook.forward_header_matches);
 		let whr = match webhook::send_response(
 			client,
 			webhook,
-			webhook::EvaluationContext::new(original, None),
+			webhook::EvaluationContext::new(original, None).with_llm(llm),
 			&headers,
 			messages,
 		)
@@ -1427,10 +1447,11 @@ impl Policy {
 		http_headers: &HeaderMap,
 		guards: &Vec<ResponseGuard>,
 		original: Option<&cel::RequestSnapshot>,
+		llm: Option<&cel::LLMContext>,
 	) -> anyhow::Result<Option<Response>> {
 		for g in guards {
 			let (action, rejection) =
-				Self::apply_single_response_guard(g, resp, http_headers, client, original).await?;
+				Self::apply_single_response_guard(g, resp, http_headers, client, original, llm).await?;
 			Self::record_guardrail_trip(client, GuardrailPhase::Response, action);
 			if let Some(res) = rejection {
 				return Ok(Some(res));
@@ -1445,9 +1466,10 @@ impl Policy {
 		http_headers: &HeaderMap,
 		client: &PolicyClient,
 		original: Option<&cel::RequestSnapshot>,
+		llm: Option<&cel::LLMContext>,
 	) -> anyhow::Result<(GuardrailAction, Option<Response>)> {
 		let outcome =
-			Self::evaluate_single_response_guard(guard, resp, http_headers, client, original).await?;
+			Self::evaluate_single_response_guard(guard, resp, http_headers, client, original, llm).await?;
 		Self::apply_response_guard_outcome(outcome, resp)
 	}
 
@@ -1457,11 +1479,12 @@ impl Policy {
 		http_headers: &HeaderMap,
 		client: &PolicyClient,
 		original: Option<&cel::RequestSnapshot>,
+		llm: Option<&cel::LLMContext>,
 	) -> anyhow::Result<GuardrailOutcome<ResponseGuardMutation>> {
 		match &guard.kind {
 			ResponseGuardKind::Regex(rg) => Ok(Self::evaluate_regex_response(resp, rg, &guard.rejection)),
 			ResponseGuardKind::Webhook(wh) => {
-				Self::evaluate_webhook_response(resp, http_headers, client, wh, original).await
+				Self::evaluate_webhook_response(resp, http_headers, client, wh, original, llm).await
 			},
 			ResponseGuardKind::BedrockGuardrails(bg) => {
 				Self::evaluate_bedrock_guardrails_response(resp, None, client, bg, &guard.rejection).await
