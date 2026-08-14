@@ -18,7 +18,7 @@ use crate::http::Body;
 use crate::http::auth::JwtSigningAlg;
 use crate::http::oauth::{
 	CLIENT_ASSERTION_TYPE_JWT_BEARER, GRANT_TYPE_JWT_BEARER, GRANT_TYPE_TOKEN_EXCHANGE,
-	TOKEN_TYPE_ID, TOKEN_TYPE_ID_JAG, TOKEN_TYPE_JWT,
+	TOKEN_TYPE_ACCESS, TOKEN_TYPE_ID, TOKEN_TYPE_ID_JAG, TOKEN_TYPE_JWT,
 };
 use crate::serdes::FileOrInline;
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
@@ -1012,6 +1012,7 @@ fn deserializes_cross_app_access_local_config_shape() {
 		AuthorizationLocation::Expression(expression)
 			if expression.original_expression == "jwt.the_id_token"
 	));
+	assert_eq!(oauth.subject_token.token_type, OAuthTokenType::IdToken);
 	// The IdP token-exchange leg carries the configured resource (draft requires it there).
 	assert_eq!(oauth.resources, ["https://api.chat.example.com/"]);
 	// The jwt-bearer leg carries `scope` (selects access-token scopes) but not `resource`.
@@ -1039,6 +1040,7 @@ fn cross_app_access_subject_token_source_override() {
 	// Overridden source; the exchange still declares an id_token subject.
 	config.subject_token = Some(CrossAppAccessSubjectToken {
 		source: serde_json::from_str(r#"{"expression": "jwt.the_id_token"}"#).unwrap(),
+		..Default::default()
 	});
 	let auth = CrossAppAccessAuth::from(config);
 	let subject_token = &auth.oauth_token_exchange().subject_token;
@@ -1050,6 +1052,50 @@ fn cross_app_access_subject_token_source_override() {
 	};
 	assert_eq!(expr.original_expression, "jwt.the_id_token");
 	assert_eq!(subject_token.token_type, OAuthTokenType::IdToken);
+}
+
+#[rstest]
+#[case::access_token(TOKEN_TYPE_ACCESS)]
+#[case::custom("urn:company:domain:human")]
+fn cross_app_access_subject_token_type_override(#[case] token_type: &str) {
+	let mut config = cross_app_access_config(
+		Arc::new(SimpleBackendReference::Invalid),
+		Arc::new(SimpleBackendReference::Invalid),
+	);
+	let subject_token: CrossAppAccessSubjectToken =
+		serde_json::from_value(json!({ "tokenType": token_type })).unwrap();
+	assert_eq!(
+		serde_json::to_value(&subject_token).unwrap()["tokenType"],
+		token_type
+	);
+	config.subject_token = Some(subject_token);
+
+	let auth = CrossAppAccessAuth::from(config);
+	assert_eq!(
+		auth
+			.oauth_token_exchange()
+			.subject_token
+			.token_type
+			.as_str(),
+		token_type
+	);
+}
+
+#[test]
+fn cross_app_access_rejects_id_jag_subject_token_type() {
+	let mut config = cross_app_access_config(
+		Arc::new(SimpleBackendReference::Invalid),
+		Arc::new(SimpleBackendReference::Invalid),
+	);
+	config.subject_token = Some(CrossAppAccessSubjectToken {
+		token_type: OAuthTokenType::IdJag,
+		..Default::default()
+	});
+
+	let err = CrossAppAccessAuth::from(config)
+		.validate_load()
+		.unwrap_err();
+	assert!(err.contains("subjectToken tokenType id-jag"));
 }
 
 #[test]
@@ -1100,16 +1146,24 @@ fn serializes_cross_app_access_subject_token() {
 	// A configured source is preserved on the way back to config.
 	config.subject_token = Some(CrossAppAccessSubjectToken {
 		source: serde_json::from_str(r#"{"expression": "jwt.the_id_token"}"#).unwrap(),
+		token_type: OAuthTokenType::AccessToken,
 	});
 	let serialized = serde_json::to_value(CrossAppAccessAuth::from(config)).unwrap();
 	assert_eq!(
 		serialized["subjectToken"],
-		json!({ "source": { "expression": "jwt.the_id_token" } })
+		json!({
+			"source": { "expression": "jwt.the_id_token" },
+			"tokenType": TOKEN_TYPE_ACCESS
+		})
 	);
 }
 
-#[test]
-fn round_trips_cross_app_access_header_subject_token() {
+#[rstest]
+#[case::header(r#"{"header":{"name":"x-subject-token","prefix":"Token "}}"#)]
+#[case::query_parameter(r#"{"queryParameter":{"name":"subject_token"}}"#)]
+#[case::cookie(r#"{"cookie":{"name":"subject_token"}}"#)]
+#[case::expression(r#"{"expression":"jwt.the_id_token"}"#)]
+fn round_trips_cross_app_access_subject_token_source(#[case] source: &str) {
 	let backend = || {
 		Arc::new(SimpleBackendReference::InlineBackend(Target::Hostname(
 			crate::strng::new("idp.example.com"),
@@ -1118,27 +1172,26 @@ fn round_trips_cross_app_access_header_subject_token() {
 	};
 	let mut config = cross_app_access_config(backend(), backend());
 	config.subject_token = Some(CrossAppAccessSubjectToken {
-		source: serde_json::from_value(json!({
-			"header": { "name": "x-subject-token", "prefix": "Token " }
-		}))
-		.unwrap(),
+		source: serde_json::from_str(source).unwrap(),
+		..Default::default()
 	});
 
 	let serialized = serde_json::to_value(CrossAppAccessAuth::from(config)).unwrap();
 	assert_eq!(
 		serialized["subjectToken"]["source"],
-		json!({ "header": { "name": "x-subject-token", "prefix": "Token " } })
+		serde_json::from_str::<serde_json::Value>(source).unwrap()
 	);
 
 	let mut round_trip_config = cross_app_access_config(backend(), backend());
 	round_trip_config.subject_token =
 		Some(serde_json::from_value(serialized["subjectToken"].clone()).unwrap());
 	let round_tripped = CrossAppAccessAuth::from(round_trip_config);
-	assert!(matches!(
-		&round_tripped.oauth_token_exchange().subject_token.source,
-		AuthorizationLocation::Header { name, prefix }
-			if name.as_str() == "x-subject-token" && prefix.as_deref() == Some("Token ")
-	));
+	let round_tripped =
+		serde_json::to_value(round_tripped).expect("round-tripped config should serialize");
+	assert_eq!(
+		round_tripped["subjectToken"]["source"],
+		serialized["subjectToken"]["source"]
+	);
 }
 
 #[test]
@@ -1157,8 +1210,17 @@ fn cross_app_access_validate_load_preserves_path_prefix() {
 	);
 }
 
-#[test]
-fn cross_app_access_from_proto_derives_oauth_chain() {
+#[rstest]
+#[case::default("", OAuthTokenType::IdToken)]
+#[case::access_token(TOKEN_TYPE_ACCESS, OAuthTokenType::AccessToken)]
+#[case::custom(
+	"urn:company:domain:human",
+	OAuthTokenType::Custom("urn:company:domain:human".into())
+)]
+fn cross_app_access_from_proto_derives_oauth_chain(
+	#[case] token_type: &str,
+	#[case] expected_token_type: OAuthTokenType,
+) {
 	let auth = CrossAppAccessAuth::from_proto(
 		proto::CrossAppAccessAuth {
 			identity_provider: Some(proto::cross_app_access_auth::Endpoint {
@@ -1200,6 +1262,7 @@ fn cross_app_access_from_proto_derives_oauth_chain() {
 						"jwt.the_id_token".to_string(),
 					)),
 				}),
+				token_type: token_type.to_string(),
 			}),
 			cache: None,
 		},
@@ -1209,7 +1272,7 @@ fn cross_app_access_from_proto_derives_oauth_chain() {
 
 	let oauth = auth.oauth_token_exchange();
 	assert_eq!(oauth.requested_token_type, Some(OAuthTokenType::IdJag));
-	assert_eq!(oauth.subject_token.token_type, OAuthTokenType::IdToken);
+	assert_eq!(oauth.subject_token.token_type, expected_token_type);
 	assert!(matches!(
 		&oauth.subject_token.source,
 		AuthorizationLocation::Expression(expression)
@@ -1220,6 +1283,27 @@ fn cross_app_access_from_proto_derives_oauth_chain() {
 	let chained_exchange = oauth.chained_exchange.as_ref().expect("chained exchange");
 	assert_eq!(chained_exchange.scopes, ["read"]);
 	assert!(chained_exchange.resources.is_empty());
+}
+
+#[test]
+fn cross_app_access_from_proto_rejects_malformed_subject_token_type() {
+	let err = CrossAppAccessAuth::from_proto(
+		proto::CrossAppAccessAuth {
+			subject_token: Some(proto::cross_app_access_auth::SubjectToken {
+				token_type: "https://".to_string(),
+				..Default::default()
+			}),
+			..Default::default()
+		},
+		&mut Diagnostics::default(),
+	)
+	.unwrap_err();
+
+	assert!(
+		err
+			.to_string()
+			.contains("crossAppAccess.subjectToken.tokenType")
+	);
 }
 
 #[test]

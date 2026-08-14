@@ -250,7 +250,16 @@ spec:
                         - 1))'
                 type: object
               parentRefs:
-                description: Gateways and listeners to which this model attaches.
+                description: |-
+                  Parent resources to which this model attaches. Supported parent kinds are
+                  Gateway, ListenerSet, and HTTPRoute.
+
+                  A Gateway or ListenerSet parent attaches the model directly to its
+                  listeners. An HTTPRoute parent attaches the model to the referenced rule;
+                  sectionName selects a named rule, or the HTTPRoute must contain exactly
+                  one rule when sectionName is omitted. The selected rule must use exactly
+                  one AgentgatewayModel backend with name "*". If the rule has path matches,
+                  they must use PathPrefix matching.
                 items:
                   description: |-
                     ParentReference identifies an API object (usually a Gateway) that can be considered
@@ -894,10 +903,11 @@ spec:
                                     description: TTL used when the token endpoint
                                       omits expires_in. Default 300s.
                                     maxLength: 32
+                                    pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                     type: string
                                     x-kubernetes-validations:
-                                    - message: invalid duration value
-                                      rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
+                                    - message: defaultTtl must be at least 1 second
+                                      rule: duration(self) >= duration('1s')
                                   maxEntries:
                                     description: Default 8192; 0 disables the cache.
                                     format: int32
@@ -1644,11 +1654,10 @@ spec:
                               rather than failing entirely.
                               If unset, defaults to `3s`.
                             maxLength: 32
+                            pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                             type: string
                             x-kubernetes-validations:
-                            - message: invalid duration value
-                              rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
-                            - message: evictionDuration must be at least 1 second
+                            - message: duration must be at least 1 second
                               rule: duration(self) >= duration('1s')
                           healthThreshold:
                             description: |-
@@ -1962,10 +1971,9 @@ spec:
                                           description: Deadline for receiving a response
                                             from the backend.
                                           maxLength: 32
+                                          pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                           type: string
                                           x-kubernetes-validations:
-                                          - message: invalid duration value
-                                            rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                           - message: requestTimeout must be at least
                                               1ms
                                             rule: duration(self) >= duration('1ms')
@@ -1989,10 +1997,9 @@ spec:
                                             Deadline for establishing a connection to
                                             the destination.
                                           maxLength: 32
+                                          pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                           type: string
                                           x-kubernetes-validations:
-                                          - message: invalid duration value
-                                            rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                           - message: connectTimeout must be at least
                                               100ms
                                             rule: duration(self) >= duration('100ms')
@@ -2006,10 +2013,9 @@ spec:
                                                 Time between keepalive probes.
                                                 If unset, this defaults to 180s.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: interval must be at least
                                                   1 second
                                                 rule: duration(self) >= duration('1s')
@@ -2026,10 +2032,9 @@ spec:
                                                 Time a connection needs to be idle before keepalive probes start being sent.
                                                 If unset, this defaults to 180s.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: time must be at least 1 second
                                                 rule: duration(self) >= duration('1s')
                                           type: object
@@ -2392,10 +2397,9 @@ spec:
                                           description: Deadline for receiving a response
                                             from the backend.
                                           maxLength: 32
+                                          pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                           type: string
                                           x-kubernetes-validations:
-                                          - message: invalid duration value
-                                            rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                           - message: requestTimeout must be at least
                                               1ms
                                             rule: duration(self) >= duration('1ms')
@@ -2419,10 +2423,9 @@ spec:
                                             Deadline for establishing a connection to
                                             the destination.
                                           maxLength: 32
+                                          pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                           type: string
                                           x-kubernetes-validations:
-                                          - message: invalid duration value
-                                            rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                           - message: connectTimeout must be at least
                                               100ms
                                             rule: duration(self) >= duration('100ms')
@@ -2436,10 +2439,9 @@ spec:
                                                 Time between keepalive probes.
                                                 If unset, this defaults to 180s.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: interval must be at least
                                                   1 second
                                                 rule: duration(self) >= duration('1s')
@@ -2456,10 +2458,9 @@ spec:
                                                 Time a connection needs to be idle before keepalive probes start being sent.
                                                 If unset, this defaults to 180s.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: time must be at least 1 second
                                                 rule: duration(self) >= duration('1s')
                                           type: object
@@ -2841,10 +2842,9 @@ spec:
                                           description: Deadline for receiving a response
                                             from the backend.
                                           maxLength: 32
+                                          pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                           type: string
                                           x-kubernetes-validations:
-                                          - message: invalid duration value
-                                            rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                           - message: requestTimeout must be at least
                                               1ms
                                             rule: duration(self) >= duration('1ms')
@@ -2868,10 +2868,9 @@ spec:
                                             Deadline for establishing a connection to
                                             the destination.
                                           maxLength: 32
+                                          pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                           type: string
                                           x-kubernetes-validations:
-                                          - message: invalid duration value
-                                            rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                           - message: connectTimeout must be at least
                                               100ms
                                             rule: duration(self) >= duration('100ms')
@@ -2885,10 +2884,9 @@ spec:
                                                 Time between keepalive probes.
                                                 If unset, this defaults to 180s.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: interval must be at least
                                                   1 second
                                                 rule: duration(self) >= duration('1s')
@@ -2905,10 +2903,9 @@ spec:
                                                 Time a connection needs to be idle before keepalive probes start being sent.
                                                 If unset, this defaults to 180s.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: time must be at least 1 second
                                                 rule: duration(self) >= duration('1s')
                                           type: object
@@ -3618,10 +3615,9 @@ spec:
                                           description: Deadline for receiving a response
                                             from the backend.
                                           maxLength: 32
+                                          pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                           type: string
                                           x-kubernetes-validations:
-                                          - message: invalid duration value
-                                            rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                           - message: requestTimeout must be at least
                                               1ms
                                             rule: duration(self) >= duration('1ms')
@@ -3645,10 +3641,9 @@ spec:
                                             Deadline for establishing a connection to
                                             the destination.
                                           maxLength: 32
+                                          pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                           type: string
                                           x-kubernetes-validations:
-                                          - message: invalid duration value
-                                            rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                           - message: connectTimeout must be at least
                                               100ms
                                             rule: duration(self) >= duration('100ms')
@@ -3662,10 +3657,9 @@ spec:
                                                 Time between keepalive probes.
                                                 If unset, this defaults to 180s.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: interval must be at least
                                                   1 second
                                                 rule: duration(self) >= duration('1s')
@@ -3682,10 +3676,9 @@ spec:
                                                 Time a connection needs to be idle before keepalive probes start being sent.
                                                 If unset, this defaults to 180s.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: time must be at least 1 second
                                                 rule: duration(self) >= duration('1s')
                                           type: object
@@ -4048,10 +4041,9 @@ spec:
                                           description: Deadline for receiving a response
                                             from the backend.
                                           maxLength: 32
+                                          pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                           type: string
                                           x-kubernetes-validations:
-                                          - message: invalid duration value
-                                            rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                           - message: requestTimeout must be at least
                                               1ms
                                             rule: duration(self) >= duration('1ms')
@@ -4075,10 +4067,9 @@ spec:
                                             Deadline for establishing a connection to
                                             the destination.
                                           maxLength: 32
+                                          pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                           type: string
                                           x-kubernetes-validations:
-                                          - message: invalid duration value
-                                            rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                           - message: connectTimeout must be at least
                                               100ms
                                             rule: duration(self) >= duration('100ms')
@@ -4092,10 +4083,9 @@ spec:
                                                 Time between keepalive probes.
                                                 If unset, this defaults to 180s.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: interval must be at least
                                                   1 second
                                                 rule: duration(self) >= duration('1s')
@@ -4112,10 +4102,9 @@ spec:
                                                 Time a connection needs to be idle before keepalive probes start being sent.
                                                 If unset, this defaults to 180s.
                                               maxLength: 32
+                                              pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
                                               type: string
                                               x-kubernetes-validations:
-                                              - message: invalid duration value
-                                                rule: matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')
                                               - message: time must be at least 1 second
                                                 rule: duration(self) >= duration('1s')
                                           type: object

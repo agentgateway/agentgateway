@@ -1,0 +1,75 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: combined-local-rate-limit
+  namespace: default
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: test
+  traffic:
+    rateLimit:
+      local:
+        - requests: 10
+          burst: 5
+          unit: Seconds
+        - tokens: 1000
+          unit: Minutes
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/combined-local-rate-limit:rl-local:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: combined-local-rate-limit
+        namespace: default
+      target:
+        gateway:
+          name: test
+          namespace: default
+      traffic:
+        localRateLimit:
+          fillInterval: 1s
+          maxTokens: "15"
+          rules:
+          - fillInterval: 1s
+            maxTokens: "15"
+            tokensPerFill: "10"
+          - fillInterval: 60s
+            maxTokens: "1000"
+            tokensPerFill: "1000"
+            type: TOKEN
+          tokensPerFill: "10"
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: combined-local-rate-limit
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: test
+        namespace: default
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: Attached to all targets
+        reason: Attached
+        status: "True"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

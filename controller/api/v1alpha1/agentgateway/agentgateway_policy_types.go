@@ -1,9 +1,11 @@
 package agentgateway
 
 import (
+	"encoding/json"
 	"iter"
 	"log/slog"
 	"math"
+	"time"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -326,13 +328,10 @@ type BackendEviction struct {
 	// If all endpoints are evicted, the load balancer falls back to returning evicted endpoints
 	// rather than failing entirely.
 	// If unset, defaults to `3s`.
-	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:MaxLength=32
-	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
-	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="evictionDuration must be at least 1 second"
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="duration must be at least 1 second"
 	// +kubebuilder:default="3s"
 	// +optional
-	Duration *metav1.Duration `json:"duration,omitempty"`
+	Duration *Duration `json:"duration,omitempty"`
 
 	// Health score from 0 to 100 assigned to a backend when it returns from eviction.
 	// For gradual recovery, set below 100; for full recovery immediately, set 100.
@@ -394,7 +393,6 @@ type BackendFull struct {
 
 	// Settings for MCP workloads. This is only applicable when
 	// connecting to a `Backend` of type `mcp`.
-	//
 	// +optional
 	MCP *BackendMCP `json:"mcp,omitempty"`
 
@@ -424,6 +422,32 @@ type ShortString = string
 // +kubebuilder:validation:MinLength=1
 // +kubebuilder:validation:MaxLength=1024
 type LongString = string
+
+// Duration is a string value representing a duration in time. The format is a
+// strict subset of the syntax parsed by time.ParseDuration, as specified by GEP-2257.
+// +kubebuilder:validation:Type=string
+// +kubebuilder:validation:MaxLength=32
+// +kubebuilder:validation:Pattern=`^([0-9]{1,5}(h|m|s|ms)){1,4}$`
+type Duration struct {
+	time.Duration `json:"-"`
+}
+
+func (d *Duration) UnmarshalJSON(b []byte) error {
+	var str string
+	if err := json.Unmarshal(b, &str); err != nil {
+		return err
+	}
+	pd, err := time.ParseDuration(str)
+	if err != nil {
+		return err
+	}
+	d.Duration = pd
+	return nil
+}
+
+func (d Duration) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.Duration.String())
+}
 
 // +kubebuilder:validation:MinLength=1
 // +kubebuilder:validation:MaxLength=253
@@ -704,12 +728,9 @@ type FrontendHTTP struct {
 	// Timeout before an unused connection is
 	// closed.
 	// If unset, this defaults to 10 minutes.
-	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:MaxLength=32
-	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http1IdleTimeout must be at least 1 second"
 	// +optional
-	HTTP1IdleTimeout *metav1.Duration `json:"http1IdleTimeout,omitempty"`
+	HTTP1IdleTimeout *Duration `json:"http1IdleTimeout,omitempty"`
 	// Controls HTTP/1 request header name casing when encoding responses on the same connection.
 	// This only applies to `HTTP/1`. If a request is HTTP/2 in either the incoming or outgoing request, this will be ignored.
 	// HTTP/2 requests are always lower case.
@@ -738,39 +759,31 @@ type FrontendHTTP struct {
 	// If unset, this defaults to `16Ki`.
 	// +optional
 	HTTP2MaxHeaderSize *ByteSize `json:"http2MaxHeaderSize,omitempty"`
-	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:MaxLength=32
-	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
+	// Interval between `HTTP/2` keepalive pings.
+	// If unset, keepalive pings are not sent.
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http2KeepaliveInterval must be at least 1 second"
 	// +optional
-	HTTP2KeepaliveInterval *metav1.Duration `json:"http2KeepaliveInterval,omitempty"`
-	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:MaxLength=32
-	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
+	HTTP2KeepaliveInterval *Duration `json:"http2KeepaliveInterval,omitempty"`
+	// Time to wait for a response to an `HTTP/2` keepalive ping before the connection is closed.
+	// Only applies when `http2KeepaliveInterval` is set.
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="http2KeepaliveTimeout must be at least 1 second"
 	// +optional
-	HTTP2KeepaliveTimeout *metav1.Duration `json:"http2KeepaliveTimeout,omitempty"`
+	HTTP2KeepaliveTimeout *Duration `json:"http2KeepaliveTimeout,omitempty"`
 	// Maximum time a connection is allowed to remain open.
 	// After this duration, the connection is gracefully closed after the current in-flight request completes.
 	// Useful for ensuring even traffic distribution behind load balancers during scaling events.
-	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:MaxLength=32
-	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="maxConnectionDuration must be at least 1 second"
 	// +optional
-	MaxConnectionDuration *metav1.Duration `json:"maxConnectionDuration,omitempty"`
+	MaxConnectionDuration *Duration `json:"maxConnectionDuration,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
 type FrontendTLS struct {
 	// Deadline for a TLS handshake to
 	// complete. If unset, this defaults to `15s`.
-	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:MaxLength=32
-	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('100ms')",message="handshakeTimeout must be at least 100ms"
 	// +optional
-	HandshakeTimeout *metav1.Duration `json:"handshakeTimeout,omitempty"`
+	HandshakeTimeout *Duration `json:"handshakeTimeout,omitempty"`
 
 	// Application-Layer Protocol Negotiation (`ALPN`)
 	// value to use in the TLS handshake.
@@ -861,21 +874,15 @@ type Keepalive struct {
 
 	// Time a connection needs to be idle before keepalive probes start being sent.
 	// If unset, this defaults to 180s.
-	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:MaxLength=32
-	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="time must be at least 1 second"
 	// +optional
-	Time *metav1.Duration `json:"time,omitempty"`
+	Time *Duration `json:"time,omitempty"`
 
 	// Time between keepalive probes.
 	// If unset, this defaults to 180s.
-	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:MaxLength=32
-	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="interval must be at least 1 second"
 	// +optional
-	Interval *metav1.Duration `json:"interval,omitempty"`
+	Interval *Duration `json:"interval,omitempty"`
 }
 
 // +k8s:enum
@@ -1222,13 +1229,11 @@ type RemoteJWKS struct {
 	// `".well-known/jwks.json"`.
 	// +optional
 	JwksPath *LongString `json:"jwksPath,omitempty"`
+	// How long a fetched `jwks` document is used before it is re-fetched from the IdP.
 	// +optional
-	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:MaxLength=32
-	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('5m')",message="cacheDuration must be at least 5m."
 	// +kubebuilder:default="5m"
-	CacheDuration *metav1.Duration `json:"cacheDuration,omitempty"`
+	CacheDuration *Duration `json:"cacheDuration,omitempty"`
 	// Remote JWKS server to reach.
 	PolicyBackendEndpoint `json:",inline"`
 }
@@ -1698,10 +1703,15 @@ type CrossAppAccessAuth struct {
 	Cache *OAuthTokenCache `json:"cache,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!has(self.tokenType) || (self.tokenType != 'IdJag' && self.tokenType != 'urn:ietf:params:oauth:token-type:id-jag')",message="tokenType IdJag is not supported by crossAppAccess"
 type CrossAppAccessSubjectToken struct {
 	// Where to read the subject token. Defaults to the Authorization Bearer header.
 	// +optional
 	Source *AuthorizationExtractionLocation `json:"source,omitempty"`
+
+	// OAuth RFC 8693 subject token type. Defaults to IdToken
+	// +optional
+	TokenType *OAuthTokenType `json:"tokenType,omitempty"`
 }
 
 // +kubebuilder:validation:ExactlyOneOf=backendRef;url
@@ -1960,12 +1970,9 @@ type JwtSignAuth struct {
 	Claims map[string]apiextensionsv1.JSON `json:"claims,omitempty"`
 
 	// Token lifetime used for exp. Defaults to 300s.
-	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:MaxLength=32
-	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="ttl must be at least 1 second"
 	// +optional
-	TTL *metav1.Duration `json:"ttl,omitempty"`
+	TTL *Duration `json:"ttl,omitempty"`
 
 	// Where the signed token is written on the backend request.
 	// Defaults to the Authorization header with a "Bearer " prefix.
@@ -1984,11 +1991,9 @@ type OAuthInMemoryTokenCache struct {
 	MaxEntries *uint32 `json:"maxEntries,omitempty"`
 
 	// TTL used when the token endpoint omits expires_in. Default 300s.
-	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:MaxLength=32
-	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="defaultTtl must be at least 1 second"
 	// +optional
-	DefaultTTL *metav1.Duration `json:"defaultTtl,omitempty"`
+	DefaultTTL *Duration `json:"defaultTtl,omitempty"`
 }
 
 // +k8s:enum
@@ -2446,12 +2451,9 @@ type BackendHTTP struct {
 	Version *HTTPVersion `json:"version,omitempty"`
 
 	// Deadline for receiving a response from the backend.
-	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:MaxLength=32
-	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1ms')",message="requestTimeout must be at least 1ms"
 	// +optional
-	RequestTimeout *metav1.Duration `json:"requestTimeout,omitempty"`
+	RequestTimeout *Duration `json:"requestTimeout,omitempty"`
 }
 
 // +k8s:enum
@@ -2469,12 +2471,9 @@ type BackendTCP struct {
 	Keepalive *Keepalive `json:"keepalive,omitempty"`
 	// Deadline for establishing a connection to
 	// the destination.
-	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:MaxLength=32
-	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('100ms')",message="connectTimeout must be at least 100ms"
 	// +optional
-	ConnectTimeout *metav1.Duration `json:"connectTimeout,omitempty"`
+	ConnectTimeout *Duration `json:"connectTimeout,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -3189,6 +3188,7 @@ type LocalRateLimit struct {
 
 	// Allowance of requests above the request-per-unit
 	// that should be allowed within a short period of time.
+	// +kubebuilder:validation:Minimum=0
 	// +optional
 	Burst *int32 `json:"burst,omitempty"`
 }
@@ -3225,16 +3225,14 @@ type HostnameRewrite struct {
 	Mode HostnameRewriteMode `json:"mode"`
 }
 
+// +kubebuilder:validation:AtLeastOneFieldSet
 type Timeouts struct {
 	// Timeout for an individual request from the gateway to a backend. This covers the time from when
 	// the request first starts being sent from the gateway to when the full response has been received from the backend.
 	//
-	// +kubebuilder:validation:Type=string
-	// +kubebuilder:validation:MaxLength=32
-	// +kubebuilder:validation:XValidation:rule="matches(self, '^([0-9]{1,5}(h|m|s|ms)){1,4}$')",message="invalid duration value"
-	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('100ms')",message="request must be at least 1ms"
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1ms')",message="request must be at least 1ms"
 	// +optional
-	Request *metav1.Duration `json:"request,omitempty"`
+	Request *Duration `json:"request,omitempty"`
 }
 
 // Artificial latency injection for fault-injection testing.

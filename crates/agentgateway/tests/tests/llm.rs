@@ -708,6 +708,49 @@ async fn llm_custom_provider_rejects_unsupported_format_before_upstream_call() {
 	assert_eq!(requests.len(), 0);
 }
 
+#[tokio::test]
+async fn llm_rejects_unsupported_request_encoding_as_client_error() {
+	let mock = body_mock(include_bytes!(
+		"../../../llm/src/tests/response/completions/basic.json"
+	))
+	.await;
+	let (mock, _bind, io) =
+		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Completions]);
+
+	let res = send_completions_with_model(
+		io,
+		"replaceme",
+		&[(header::CONTENT_ENCODING.as_str(), "snappy")],
+	)
+	.await;
+	assert_eq!(res.status(), StatusCode::UNSUPPORTED_MEDIA_TYPE);
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 0);
+}
+
+#[tokio::test]
+async fn llm_maps_unsupported_upstream_response_encoding_to_bad_gateway() {
+	let response_body = include_bytes!("../../../llm/src/tests/response/completions/basic.json");
+	let mock = MockServer::start().await;
+	Mock::given(wiremock::matchers::path_regex("/.*"))
+		.respond_with(
+			ResponseTemplate::new(StatusCode::OK.as_u16())
+				.insert_header(header::CONTENT_ENCODING.as_str(), "snappy")
+				.set_body_raw(response_body, "application/json"),
+		)
+		.mount(&mock)
+		.await;
+	let (_mock, _bind, io) =
+		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Completions]);
+
+	let res = send_completions_with_model(io, "replaceme", &[]).await;
+	assert_eq!(res.status(), StatusCode::BAD_GATEWAY);
+}
+
 async fn recv_rate_limit_request(
 	requests: &mut mpsc::UnboundedReceiver<
 		agentgateway::http::remoteratelimit::proto::RateLimitRequest,

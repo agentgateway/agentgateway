@@ -1062,6 +1062,9 @@ pub mod from_completions {
 		let mut saw_token = false;
 		// Track tool call JSON buffers by content block index
 		let mut tool_calls: HashMap<i32, String> = HashMap::new();
+		// Bedrock indexes every content block, while OpenAI indexes only tool calls.
+		let mut next_tool_index = 0u32;
+		let mut tool_index_map: HashMap<i32, u32> = HashMap::new();
 		let mut logged_tool_calls =
 			crate::conversion::messages::StreamingToolCalls::new(log_content.tool_calls);
 		let mut completion = log_content.completion.then(String::new);
@@ -1088,6 +1091,9 @@ pub mod from_completions {
 					// Track tool call starts for streaming
 					if let Some(bedrock::ContentBlockStart::ToolUse(tu)) = start.start {
 						tool_calls.insert(start.content_block_index, String::new());
+						let tool_index = next_tool_index;
+						next_tool_index += 1;
+						tool_index_map.insert(start.content_block_index, tool_index);
 						let name = super::restore_tool_name(tool_name_map.as_ref(), &tu.name);
 						logged_tool_calls.start(
 							start.content_block_index as usize,
@@ -1098,7 +1104,7 @@ pub mod from_completions {
 						// Emit the start of a tool call
 						let d = completions::StreamResponseDelta {
 							tool_calls: Some(vec![completions::ChatCompletionMessageToolCallChunk {
-								index: start.content_block_index as u32,
+								index: tool_index,
 								id: Some(tu.tool_use_id),
 								r#type: Some(completions::FunctionType::Function),
 								function: Some(completions::FunctionCallStream {
@@ -1166,10 +1172,13 @@ pub mod from_completions {
 							bedrock::ContentBlockDelta::ToolUse(tu) => {
 								logged_tool_calls.append_arguments(d.content_block_index as usize, &tu.input);
 								// Accumulate tool call JSON and emit deltas
-								if let Some(json_buffer) = tool_calls.get_mut(&d.content_block_index) {
+								if let (Some(json_buffer), Some(&tool_index)) = (
+									tool_calls.get_mut(&d.content_block_index),
+									tool_index_map.get(&d.content_block_index),
+								) {
 									json_buffer.push_str(&tu.input);
 									dr.tool_calls = Some(vec![completions::ChatCompletionMessageToolCallChunk {
-										index: d.content_block_index as u32,
+										index: tool_index,
 										id: None, // Only sent in the first chunk
 										r#type: None,
 										function: Some(completions::FunctionCallStream {
@@ -1198,6 +1207,7 @@ pub mod from_completions {
 				bedrock::ConverseStreamOutput::ContentBlockStop(stop) => {
 					// Clean up tool call tracking for this content block
 					tool_calls.remove(&stop.content_block_index);
+					tool_index_map.remove(&stop.content_block_index);
 					None
 				},
 				bedrock::ConverseStreamOutput::MessageStart(start) => {

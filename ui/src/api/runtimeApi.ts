@@ -10,7 +10,7 @@ export interface RuntimeInfo {
   };
   ui: {
     gatewayMode: "standalone" | "xds";
-    configStoreMode: "file" | "hybrid";
+    configStoreMode: "file" | "hybrid" | "readOnly";
   };
 }
 

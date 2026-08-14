@@ -862,6 +862,9 @@
         "name": {
           "type": "string"
         },
+        "routerKey": {
+          "type": "string"
+        },
         "kind": {
           "$ref": "#/$defs/ModelRouteKind"
         }
@@ -871,6 +874,7 @@
         "listenerKey",
         "key",
         "name",
+        "routerKey",
         "kind"
       ]
     },

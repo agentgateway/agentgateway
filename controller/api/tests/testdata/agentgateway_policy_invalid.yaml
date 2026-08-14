@@ -198,7 +198,7 @@ spec:
     tcp:
       connectTimeout: 50ms
 ---
-_err: 'invalid duration value'
+_err: "should match '^([0-9]{1,5}(h|m|s|ms)){1,4}$'"
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:
@@ -264,6 +264,19 @@ spec:
       name: dummy
   traffic:
     buffer: {}
+---
+_err: 'at least one of the fields in [request] must be set'
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: empty-timeouts
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: dummy
+  traffic:
+    timeouts: {}
 ---
 _err: 'failureMode: Unsupported value'
 apiVersion: agentgateway.dev/v1alpha1
@@ -1407,7 +1420,7 @@ spec:
           iss: acct.user
         ttl: 500ms
 ---
-_err: 'invalid duration value'
+_err: "should match '^([0-9]{1,5}(h|m|s|ms)){1,4}$'"
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayPolicy
 metadata:

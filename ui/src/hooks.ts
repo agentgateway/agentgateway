@@ -196,6 +196,19 @@ export function useConfigDumpMode() {
   });
 }
 
+async function requireWritableRuntime(
+  queryClient: ReturnType<typeof useQueryClient>,
+) {
+  const runtime =
+    queryClient.getQueryData<Awaited<ReturnType<typeof getRuntimeInfo>>>([
+      "runtime",
+    ]) ?? (await getRuntimeInfo());
+  if (runtime.ui.configStoreMode == "readOnly") {
+    throw new Error("The UI is configured as read-only.");
+  }
+  return runtime;
+}
+
 function invalidateConfigViews(queryClient: ReturnType<typeof useQueryClient>) {
   void queryClient.invalidateQueries({ queryKey: ["configResources"] });
   void queryClient.invalidateQueries({ queryKey: ["config"] });
@@ -211,10 +224,7 @@ export function useUpdateConfig() {
     mutationFn: async (
       updater: (config: GatewayConfig) => GatewayConfig | void,
     ) => {
-      const runtime =
-        queryClient.getQueryData<Awaited<ReturnType<typeof getRuntimeInfo>>>([
-          "runtime",
-        ]) ?? (await getRuntimeInfo());
+      const runtime = await requireWritableRuntime(queryClient);
       const overrideHybridFileWrite = takeHybridFileWriteOverride();
       if (runtime.ui.configStoreMode === "hybrid" && !overrideHybridFileWrite) {
         throw new Error(
@@ -242,6 +252,7 @@ export function useUpsertConfigResource() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: UpsertConfigResourceInput) => {
+      await requireWritableRuntime(queryClient);
       if (input.previousId) {
         await updateConfigResource(input.kind, input.previousId, input.value);
         return;
@@ -263,8 +274,10 @@ type UpsertConfigResourceInput = {
 export function useDeleteConfigResource() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { kind: ConfigResourceKind; id: string }) =>
-      deleteConfigResource(input.kind, input.id),
+    mutationFn: async (input: { kind: ConfigResourceKind; id: string }) => {
+      await requireWritableRuntime(queryClient);
+      return deleteConfigResource(input.kind, input.id);
+    },
     onSuccess: () => invalidateConfigViews(queryClient),
   });
 }
@@ -272,11 +285,14 @@ export function useDeleteConfigResource() {
 export function useUpsertPolicyResource() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: {
+    mutationFn: async (input: {
       kind: PolicyResourceKind;
       id: string;
       value: unknown;
-    }) => updateConfigResource(input.kind, input.id, input.value),
+    }) => {
+      await requireWritableRuntime(queryClient);
+      return updateConfigResource(input.kind, input.id, input.value);
+    },
     onSuccess: () => invalidateConfigViews(queryClient),
   });
 }

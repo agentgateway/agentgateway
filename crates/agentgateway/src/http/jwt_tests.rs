@@ -309,6 +309,12 @@ pub fn test_okp_non_ed25519_curve_rejected() {
 }
 
 fn setup_test_jwt() -> (Jwt, &'static str, &'static str, &'static str) {
+	setup_test_jwt_with_required_claims(JWTValidationOptions::default().required_claims)
+}
+
+fn setup_test_jwt_with_required_claims(
+	required_claims: HashSet<String>,
+) -> (Jwt, &'static str, &'static str, &'static str) {
 	let jwks = json!({
 		"keys": [
 			{
@@ -332,7 +338,7 @@ fn setup_test_jwt() -> (Jwt, &'static str, &'static str, &'static str) {
 		jwks,
 		issuer.to_string(),
 		Some(vec![allowed_aud.to_string()]),
-		JWTValidationOptions::default(),
+		JWTValidationOptions { required_claims },
 	)
 	.unwrap();
 	// Test-only: allow synthetic tokens without a real signature
@@ -359,14 +365,47 @@ fn setup_test_jwt() -> (Jwt, &'static str, &'static str, &'static str) {
 }
 
 fn build_unsigned_token(kid: &str, iss: &str, aud: &str, exp: u64) -> String {
+	build_unsigned_token_with_payload(kid, json!({ "iss": iss, "aud": aud, "exp": exp }))
+}
+
+fn build_unsigned_token_with_payload(kid: &str, payload: serde_json::Value) -> String {
 	use base64::Engine as _;
 	use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 	let header = json!({ "alg": "ES256", "kid": kid });
-	let payload = json!({ "iss": iss, "aud": aud, "exp": exp });
 	let h = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
 	let p = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap());
 	let s = URL_SAFE_NO_PAD.encode(b"sig");
 	format!("{h}.{p}.{s}")
+}
+
+#[test]
+pub fn test_configured_issuer_and_audiences_require_claims() {
+	use std::time::{SystemTime, UNIX_EPOCH};
+
+	use jsonwebtoken::errors::ErrorKind;
+
+	// Even an explicitly empty requiredClaims list cannot make identity constraints optional.
+	let (jwt, kid, issuer, allowed_aud) = setup_test_jwt_with_required_claims(HashSet::new());
+	let exp = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs()
+		+ 600;
+
+	let cases = [
+		("aud", json!({ "iss": issuer, "exp": exp })),
+		("iss", json!({ "aud": allowed_aud, "exp": exp })),
+	];
+	for (missing_claim, payload) in cases {
+		let token = build_unsigned_token_with_payload(kid, payload);
+		match jwt.validate_claims(&token) {
+			Err(TokenError::Invalid(error)) => assert!(
+				matches!(error.kind(), ErrorKind::MissingRequiredClaim(claim) if claim == missing_claim),
+				"expected missing {missing_claim}, got {error:?}"
+			),
+			other => panic!("expected missing {missing_claim}, got {other:?}"),
+		}
+	}
 }
 
 fn build_unsigned_token_without_kid(iss: &str, aud: &str, exp: u64) -> String {

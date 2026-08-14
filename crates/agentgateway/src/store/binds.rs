@@ -46,6 +46,7 @@ enum ResourceKind {
 	Route(RouteKey),
 	TcpRoute(RouteKey),
 	ModelRoute(RouteKey),
+	ModelRouter(RouteKey),
 	Listener(ListenerKey),
 	Backend(ListenerKey),
 }
@@ -99,6 +100,7 @@ pub struct Store {
 
 	backends: HashMap<BackendKey, Arc<BackendWithPolicies>>,
 	model_routes: HashMap<RouteKey, (ListenerKey, agent::ModelRoute)>,
+	model_routers: HashMap<RouteKey, BackendKey>,
 
 	// Listeners we got before a Bind arrived
 	pending_listeners: HashMap<BindKey, HashMap<ListenerKey, Listener>>,
@@ -143,6 +145,7 @@ pub struct FrontendPolices {
 	pub tls: Option<frontend::TLS>,
 	pub tcp: Option<frontend::TCP>,
 	pub network_authorization: Option<NetworkAuthorizationSet>,
+	pub network_ext_authz: Option<Arc<ext_authz::ExtAuthz>>,
 	pub proxy: Option<frontend::Proxy>,
 	pub connect: Option<frontend::Connect>,
 	pub access_log: Option<frontend::LoggingPolicy>,
@@ -169,6 +172,9 @@ impl FrontendPolices {
 				} else {
 					self.network_authorization = Some(NetworkAuthorizationSet::new(vec![p.0.clone()].into()));
 				}
+			},
+			FrontendPolicy::NetworkExtAuthz(p) => {
+				self.network_ext_authz.get_or_insert_with(|| p.clone());
 			},
 			FrontendPolicy::Proxy(p) => {
 				self.proxy.get_or_insert_with(|| p.clone());
@@ -652,6 +658,7 @@ impl Store {
 			policies_by_target: Default::default(),
 			backends: Default::default(),
 			model_routes: Default::default(),
+			model_routers: Default::default(),
 			pending_listeners: Default::default(),
 			http_routes: Default::default(),
 			tcp_routes: Default::default(),
@@ -786,19 +793,40 @@ impl Store {
 		matches
 	}
 
-	fn rebuild_model_router(&mut self, listener: &ListenerKey) {
-		let route_key = Self::model_router_route_key(listener);
-		let backend_name = Self::model_router_backend_name(listener);
-		let backend_key = Self::model_router_backend_key(listener);
-		self.remove_http_route(&route_key);
+	fn rebuild_model_router(&mut self, listener: &ListenerKey, router_key: &str) {
+		let implicit_route = router_key.is_empty();
+		let (backend_name, backend_key) = if implicit_route {
+			(
+				Self::model_router_backend_name(listener),
+				Self::model_router_backend_key(listener),
+			)
+		} else {
+			(
+				strng::new(router_key.trim_start_matches('/')),
+				strng::new(router_key),
+			)
+		};
+		if implicit_route {
+			self.remove_http_route(&Self::model_router_route_key(listener));
+		}
 		self.remove_backend(backend_key.clone());
+		if !implicit_route
+			&& !self
+				.model_routers
+				.values()
+				.any(|declared_key| declared_key == router_key)
+		{
+			return;
+		}
 
 		let mut models = Vec::new();
 		let mut virtual_models = Vec::new();
 		for (_, model_route) in self
 			.model_routes
 			.values()
-			.filter(|(model_listener, _)| model_listener == listener)
+			.filter(|(model_listener, model_route)| {
+				model_route.router_key == router_key && (!implicit_route || model_listener == listener)
+			})
 			.sorted_by_key(|(_, model_route)| model_route.key.clone())
 		{
 			match &model_route.kind {
@@ -807,7 +835,7 @@ impl Store {
 			}
 		}
 
-		if models.is_empty() && virtual_models.is_empty() {
+		if implicit_route && models.is_empty() && virtual_models.is_empty() {
 			return;
 		}
 
@@ -824,10 +852,13 @@ impl Store {
 				inline_policies: vec![],
 			},
 		);
+		if !implicit_route {
+			return;
+		}
 		self.insert_http_route_target(
 			RouteTarget::Listener(listener.clone()),
 			Route {
-				key: route_key,
+				key: Self::model_router_route_key(listener),
 				service_key: None,
 				service_port: 0,
 				name: RouteName {
@@ -1702,10 +1733,17 @@ impl Store {
         fields(model_route),
     )]
 	pub fn remove_model_route(&mut self, model_route: RouteKey) {
-		let Some((listener, _)) = self.model_routes.remove(&model_route) else {
+		let Some((listener, route)) = self.model_routes.remove(&model_route) else {
 			return;
 		};
-		self.rebuild_model_router(&listener);
+		self.rebuild_model_router(&listener, &route.router_key);
+	}
+
+	pub fn remove_model_router(&mut self, model_router: RouteKey) {
+		let Some(router_key) = self.model_routers.remove(&model_router) else {
+			return;
+		};
+		self.rebuild_model_router(&strng::EMPTY, &router_key);
 	}
 
 	#[instrument(
@@ -1780,16 +1818,27 @@ impl Store {
 
 	pub fn insert_model_route(&mut self, r: agent::ModelRoute, ln: ListenerKey) {
 		debug!(listener=%ln, model_route=%r.key, "insert model route");
-		let old_listener = self
+		let router_key = r.router_key.clone();
+		let old_scope = self
 			.model_routes
 			.insert(r.key.clone(), (ln.clone(), r))
-			.map(|(old_listener, _)| old_listener);
-		if let Some(old_listener) = old_listener
-			&& old_listener != ln
+			.map(|(old_listener, old_route)| (old_listener, old_route.router_key));
+		if let Some((old_listener, old_router_key)) = old_scope
+			&& (old_listener != ln || old_router_key != router_key)
 		{
-			self.rebuild_model_router(&old_listener);
+			self.rebuild_model_router(&old_listener, &old_router_key);
 		}
-		self.rebuild_model_router(&ln);
+		self.rebuild_model_router(&ln, &router_key);
+	}
+
+	pub fn insert_model_router(&mut self, key: RouteKey, router_key: BackendKey) {
+		let old = self.model_routers.insert(key, router_key.clone());
+		if let Some(old_router_key) = old
+			&& old_router_key != router_key
+		{
+			self.rebuild_model_router(&strng::EMPTY, &old_router_key);
+		}
+		self.rebuild_model_router(&strng::EMPTY, &router_key);
 	}
 
 	pub fn insert_tcp_route(&mut self, r: TCPRoute, ln: ListenerKey) {
@@ -1830,6 +1879,7 @@ impl Store {
 			ResourceKind::Route(n) => self.remove_route(n),
 			ResourceKind::TcpRoute(n) => self.remove_tcp_route(n),
 			ResourceKind::ModelRoute(n) => self.remove_model_route(n),
+			ResourceKind::ModelRouter(n) => self.remove_model_router(n),
 			ResourceKind::Listener(n) => self.remove_listener(n),
 			ResourceKind::Backend(n) => self.remove_backend(n),
 		}
@@ -1873,11 +1923,22 @@ impl Store {
 					.insert(name, ResourceKind::ModelRoute(strng::new(&w.key)));
 				self.insert_xds_model_route(w, diagnostics)
 			},
-			Some(XdsKind::Backend(w)) => {
-				self
-					.resources
-					.insert(name, ResourceKind::Backend(strng::new(&w.key)));
-				self.insert_xds_backend(w, diagnostics)
+			// ModelRouter backends are declarations. The store materializes their
+			// LLM router from the declaration and the ModelRoutes that select it,
+			// so they must not go through generic Backend decoding.
+			Some(XdsKind::Backend(w)) => match w.kind.as_ref() {
+				Some(crate::types::proto::agent::backend::Kind::ModelRouter(_)) => {
+					self
+						.resources
+						.insert(name, ResourceKind::ModelRouter(strng::new(&w.key)));
+					self.insert_xds_model_router(w)
+				},
+				_ => {
+					self
+						.resources
+						.insert(name, ResourceKind::Backend(strng::new(&w.key)));
+					self.insert_xds_backend(w, diagnostics)
+				},
 			},
 			Some(XdsKind::Policy(w)) => {
 				self
@@ -1947,6 +2008,27 @@ impl Store {
 	) -> anyhow::Result<()> {
 		let (route, listener_name) = agent::ModelRoute::from_xds(&raw, diagnostics)?;
 		self.insert_model_route(route, listener_name);
+		Ok(())
+	}
+	fn insert_xds_model_router(&mut self, raw: XdsBackend) -> anyhow::Result<()> {
+		let Some(crate::types::proto::agent::backend::Kind::ModelRouter(model_router)) =
+			raw.kind.as_ref()
+		else {
+			return Err(anyhow::anyhow!(
+				"model router backend requires model_router kind"
+			));
+		};
+		if raw.key.is_empty() || model_router.router_key.is_empty() {
+			return Err(anyhow::anyhow!(
+				"model router backend requires key and model_router.router_key"
+			));
+		}
+		if !raw.inline_policies.is_empty() {
+			return Err(anyhow::anyhow!(
+				"model router backend cannot have inline policies"
+			));
+		}
+		self.insert_model_router(strng::new(&raw.key), strng::new(&model_router.router_key));
 		Ok(())
 	}
 	fn insert_xds_backend(
@@ -2463,6 +2545,25 @@ mod tests {
 	}
 
 	#[test]
+	fn declared_model_router_exists_without_models() {
+		let mut store = Store::with_ipv6_enabled(true);
+		let listener = strng::literal!("default/gw.http");
+		let router_key = strng::literal!("/llm:router:httproute:default:tenant1:models");
+		let declaration_key = strng::literal!("default/tenant1.00.http");
+
+		store.insert_model_router(declaration_key.clone(), router_key.clone());
+		let backend = store
+			.backends
+			.get(&router_key)
+			.expect("declaration should create an empty router backend");
+		assert!(matches!(&backend.backend, Backend::LLMRouter(_, _)));
+		assert!(store.get_listener_routes(&listener).is_none());
+
+		store.remove_model_router(declaration_key);
+		assert!(!store.backends.contains_key(&router_key));
+	}
+
+	#[test]
 	fn xds_model_route_builds_listener_llm_router() {
 		use agent_xds::{Handler, XdsResource};
 
@@ -2475,6 +2576,7 @@ mod tests {
 		let model_route = crate::types::proto::agent::ModelRoute {
 			key: "default/gpt-5-mini".to_string(),
 			listener_key: listener_key.to_string(),
+			router_key: String::new(),
 			created: 0,
 			r#match: Some(crate::types::proto::agent::model_route::Match {
 				model: "gpt-5-mini".to_string(),
@@ -2496,7 +2598,7 @@ mod tests {
 		let mut updates = vec![XdsUpdate::Update(XdsResource {
 			name: strng::literal!("model/default/gpt-5-mini"),
 			resource: ADPResource {
-				kind: Some(XdsKind::ModelRoute(model_route)),
+				kind: Some(XdsKind::ModelRoute(model_route.clone())),
 			},
 		})]
 		.into_iter();
@@ -2536,6 +2638,7 @@ mod tests {
 		let second_model_route = crate::types::proto::agent::ModelRoute {
 			key: "default/claude-haiku".to_string(),
 			listener_key: listener_key.to_string(),
+			router_key: String::new(),
 			created: 0,
 			r#match: Some(crate::types::proto::agent::model_route::Match {
 				model: "claude-haiku".to_string(),
@@ -2590,6 +2693,71 @@ mod tests {
 			!store.backends.contains_key(&backend_key),
 			"last model route removal should remove synthetic backend"
 		);
+		drop(store);
+
+		let scoped_backend_key = strng::literal!("/llm:router:httproute:default:tenant1:models");
+		let mut scoped_model_route = model_route;
+		scoped_model_route.key = "default/gpt-5-mini.scoped".to_string();
+		scoped_model_route.router_key = scoped_backend_key.to_string();
+		let mut scoped_update = vec![XdsUpdate::Update(XdsResource {
+			name: strng::literal!("model/default/gpt-5-mini.scoped"),
+			resource: ADPResource {
+				kind: Some(XdsKind::ModelRoute(scoped_model_route)),
+			},
+		})]
+		.into_iter();
+		updater
+			.handle(Box::new(&mut scoped_update))
+			.expect("scoped model route accepted");
+
+		let store = updater.read();
+		assert!(
+			!store.backends.contains_key(&scoped_backend_key),
+			"a model must not create an undeclared scoped router"
+		);
+		assert!(store.get_listener_routes(&listener_key).is_none());
+		drop(store);
+
+		let mut declaration = vec![XdsUpdate::Update(XdsResource {
+			name: strng::literal!("model-router/default/tenant1.models"),
+			resource: ADPResource {
+				kind: Some(XdsKind::Backend(XdsBackend {
+					key: "default/tenant1.00.http".to_string(),
+					name: None,
+					kind: Some(crate::types::proto::agent::backend::Kind::ModelRouter(
+						crate::types::proto::agent::ModelRouterBackend {
+							router_key: scoped_backend_key.to_string(),
+						},
+					)),
+					inline_policies: vec![],
+				})),
+			},
+		})]
+		.into_iter();
+		updater
+			.handle(Box::new(&mut declaration))
+			.expect("model router declaration accepted");
+
+		let store = updater.read();
+		let backend = store
+			.backends
+			.get(&scoped_backend_key)
+			.expect("scoped model route should populate its HTTPRoute backend");
+		assert!(matches!(&backend.backend, Backend::LLMRouter(_, _)));
+		assert!(
+			store.get_listener_routes(&listener_key).is_none(),
+			"scoped model route should not synthesize an HTTP route"
+		);
+		drop(store);
+
+		let mut scoped_removal = vec![XdsUpdate::<ADPResource>::Remove(strng::literal!(
+			"model-router/default/tenant1.models"
+		))]
+		.into_iter();
+		updater
+			.handle(Box::new(&mut scoped_removal))
+			.expect("model router declaration removal accepted");
+		assert!(!updater.read().backends.contains_key(&scoped_backend_key));
 	}
 
 	#[test]
@@ -2608,6 +2776,7 @@ mod tests {
 			crate::types::proto::agent::ModelRoute {
 				key: key.to_string(),
 				listener_key: listener_key.to_string(),
+				router_key: String::new(),
 				created: 0,
 				r#match: Some(crate::types::proto::agent::model_route::Match {
 					model: name.to_string(),

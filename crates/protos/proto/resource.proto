@@ -188,8 +188,14 @@ message Backend {
     AwsBackend aws = 8;
     // Not yet implemented. Reserved for a future release.
     GuardrailBackend guardrail = 9;
+    ModelRouterBackend model_router = 10;
   }
   repeated BackendPolicySpec inline_policies = 7;
+}
+
+// Internal LLM model router materialized for an explicitly opted-in HTTPRoute rule.
+message ModelRouterBackend {
+  string router_key = 1;
 }
 
 // GuardrailBackend is a typed backend for AI guardrail provider integrations.
@@ -963,10 +969,18 @@ message TrafficPolicySpec {
       REQUEST = 0;
       TOKEN = 1;
     }
+    message Rule {
+      uint64 max_tokens = 1;
+      uint64 tokens_per_fill = 2;
+      google.protobuf.Duration fill_interval = 3;
+      Type type = 4;
+    }
+    // The singular fields contain the first rule for compatibility with older data planes.
     uint64 max_tokens = 1;
     uint64 tokens_per_fill = 2;
     google.protobuf.Duration fill_interval = 3;
     Type type = 4;
+    repeated Rule rules = 5;
   }
   message ExternalAuth {
     enum FailureMode {
@@ -2072,6 +2086,8 @@ message CrossAppAccessAuth {
   message SubjectToken {
     // Where to read the subject token. Defaults to the Authorization Bearer header.
     AuthorizationLocation source = 1;
+    // RFC 8693 subject token type URI. Empty defaults to id_token.
+    string token_type = 2;
   }
 
   // User identity provider authorization server, used for the RFC 8693 ID-JAG exchange.
@@ -2086,8 +2102,7 @@ message CrossAppAccessAuth {
   repeated string scopes = 5;
   // Response cache configuration. When unset uses InMemory cache with defaults.
   OAuthTokenExchange.TokenCache cache = 6;
-  // Subject token sent to the identity provider. Its type is fixed to an
-  // OpenID Connect ID token until other subject token types are supported.
+  // Subject token sent to the identity provider. Defaults to an OpenID Connect ID token.
   SubjectToken subject_token = 7;
 }
 
@@ -2181,4 +2196,8 @@ message ModelRoute {
 
   // Authorization rules that clients must satisfy to use a concrete model.
   TrafficPolicySpec.RBAC authorization = 8;
+
+  // Internal LLM router backend populated by this model. Empty uses the
+  // legacy listener-scoped implicit model route.
+  string router_key = 9;
 }

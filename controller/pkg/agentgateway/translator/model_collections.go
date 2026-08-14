@@ -12,6 +12,7 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/api"
@@ -39,7 +40,7 @@ func AgwModelCollection(
 		rep := reports.NewReporter(&rm)
 		routeReporter := rep.Route(obj)
 
-		parentRefs := extractParentReferenceInfo(ctx, inputs.RouteParents, obj)
+		parentRefs := extractModelParentReferenceInfo(ctx, obj)
 		resources := translateModelForParents(ctx, obj, parentRefs, routeReporter)
 
 		status := rm.BuildRouteStatusWithParentRefDefaulting(context.Background(), obj, inputs.ControllerName, true)
@@ -52,6 +53,178 @@ func AgwModelCollection(
 
 	attachments := gatewayRouteAttachmentCollection(inputs, models, wellknown.AgentgatewayModelGVK, krtopts)
 	return modelResources, attachments
+}
+
+// extractModelParentReferenceInfo resolves an HTTPRoute parent to that route's
+// Gateway listeners. The referenced HTTPRoute rule supplies normal routing and
+// policy behavior; models populate its generated LLM router backend.
+func extractModelParentReferenceInfo(ctx RouteContext, model *agentgateway.AgentgatewayModel) []RouteParentReference {
+	parents := extractParentReferenceInfo(ctx, ctx.RouteParents, model)
+	for _, ref := range model.Spec.ParentRefs {
+		if NormalizeReference(ref.Group, ref.Kind, wellknown.GatewayGVK.GroupKind()) != wellknown.HTTPRouteGVK.GroupKind() {
+			continue
+		}
+		namespace := defaultString(ref.Namespace, model.Namespace)
+		rejected := func(message string) RouteParentReference {
+			return RouteParentReference{
+				OriginalReference: ref,
+				ParentKey: utils.TypedNamespacedName{
+					NamespacedName: types.NamespacedName{Namespace: namespace, Name: string(ref.Name)},
+					Kind:           wellknown.HTTPRouteKind,
+				},
+				ParentSection: ptr.OrEmpty(ref.SectionName),
+				DeniedReason:  &ParentError{Reason: ParentErrorNotAccepted, Message: message},
+			}
+		}
+		if namespace != model.Namespace {
+			parents = append(parents, rejected("model HTTPRoute parentRef must use the model namespace"))
+			continue
+		}
+		route := ptr.Flatten(krt.FetchOne(ctx.Krt, ctx.Collections.HTTPRoutes, krt.FilterObjectName(types.NamespacedName{Namespace: namespace, Name: string(ref.Name)})))
+		if route == nil {
+			parents = append(parents, rejected("model parent HTTPRoute not found"))
+			continue
+		}
+		ruleIndex, err := modelParentRuleIndex(route.Spec.Rules, ref.SectionName)
+		if err != nil {
+			parents = append(parents, rejected(err.Error()))
+			continue
+		}
+		rule := route.Spec.Rules[ruleIndex]
+		routerKey, optedIn, err := modelServingRuleRouterKey(namespace, route.Name, ruleIndex, rule)
+		if err != nil {
+			parents = append(parents, rejected(err.Error()))
+			continue
+		}
+		if !optedIn {
+			parents = append(parents, rejected("HTTPRoute rule does not select AgentgatewayModel backends"))
+			continue
+		}
+		if modelServingRuleMatchesRoot(rule) {
+			if conflicts := rootModelRouteDirectListenerConflicts(ctx, route); len(conflicts) > 0 {
+				parents = append(parents, rejected(rootModelRouteConflictMessage(conflicts)))
+				continue
+			}
+		}
+		for _, gatewayParent := range FilteredReferences(extractParentReferenceInfo(ctx, ctx.RouteParents, route)) {
+			gatewayParent.OriginalReference = ref
+			gatewayParent.ParentKey = utils.TypedNamespacedName{NamespacedName: types.NamespacedName{Namespace: namespace, Name: route.Name}, Kind: wellknown.HTTPRouteKind}
+			gatewayParent.ParentSection = ptr.OrEmpty(ref.SectionName)
+			gatewayParent.ModelRouterKey = routerKey
+			parents = append(parents, gatewayParent)
+		}
+	}
+	return parents
+}
+
+func modelParentRuleIndex(rules []gwv1.HTTPRouteRule, sectionName *gwv1.SectionName) (int, error) {
+	if sectionName == nil {
+		if len(rules) != 1 {
+			return -1, fmt.Errorf("model HTTPRoute parentRef without sectionName requires exactly one rule")
+		}
+		return 0, nil
+	}
+	for i, rule := range rules {
+		if rule.Name != nil && *rule.Name == *sectionName {
+			return i, nil
+		}
+	}
+	return -1, fmt.Errorf("HTTPRoute rule %q not found", *sectionName)
+}
+
+func modelServingRuleMatchesRoot(rule gwv1.HTTPRouteRule) bool {
+	if len(rule.Matches) == 0 {
+		return true
+	}
+	for _, match := range rule.Matches {
+		if match.Path == nil {
+			return true
+		}
+		if ptr.OrDefault(match.Path.Type, gwv1.PathMatchPathPrefix) == gwv1.PathMatchPathPrefix &&
+			ptr.OrDefault(match.Path.Value, "/") == "/" {
+			return true
+		}
+	}
+	return false
+}
+
+func rootModelRouteDirectListenerConflicts(ctx RouteContext, route *gwv1.HTTPRoute) []string {
+	routeListeners := make(map[string]struct{})
+	for _, parent := range FilteredReferences(extractParentReferenceInfo(ctx, ctx.RouteParents, route)) {
+		routeListeners[parent.ListenerKey] = struct{}{}
+	}
+	if len(routeListeners) == 0 {
+		return nil
+	}
+
+	conflicts := make(map[string]struct{})
+	for _, model := range krt.Fetch(ctx.Krt, ctx.Models) {
+		for _, parent := range FilteredReferences(extractParentReferenceInfo(ctx, ctx.RouteParents, model)) {
+			if _, found := routeListeners[parent.ListenerKey]; found {
+				conflicts[parent.ListenerKey] = struct{}{}
+			}
+		}
+	}
+	result := make([]string, 0, len(conflicts))
+	for listener := range conflicts {
+		result = append(result, listener)
+	}
+	slices.Sort(result)
+	return result
+}
+
+func rootModelRouteConflictMessage(listeners []string) string {
+	return fmt.Sprintf("root model-serving HTTPRoute conflicts with directly attached models on listeners: %s", strings.Join(listeners, ", "))
+}
+
+func modelServingRuleRouterKey(namespace, route string, ruleIndex int, rule gwv1.HTTPRouteRule) (string, bool, error) {
+	modelBackendRefs := make([]gwv1.HTTPBackendRef, 0, 1)
+	for _, backend := range rule.BackendRefs {
+		if NormalizeReference(backend.Group, backend.Kind, wellknown.ServiceGVK.GroupKind()) == wellknown.AgentgatewayModelGVK.GroupKind() {
+			modelBackendRefs = append(modelBackendRefs, backend)
+		}
+	}
+	if len(modelBackendRefs) == 0 {
+		return "", false, nil
+	}
+	if len(rule.BackendRefs) != 1 || len(modelBackendRefs) != 1 {
+		return "", true, fmt.Errorf("model-serving HTTPRoute rule must have exactly one AgentgatewayModel backendRef and no other backends")
+	}
+	for _, match := range rule.Matches {
+		if match.Path != nil && ptr.OrDefault(match.Path.Type, gwv1.PathMatchPathPrefix) != gwv1.PathMatchPathPrefix {
+			return "", true, fmt.Errorf("model-serving HTTPRoute rule path matches must use PathPrefix")
+		}
+	}
+	for _, filter := range rule.Filters {
+		if filter.Type == gwv1.HTTPRouteFilterURLRewrite || filter.Type == gwv1.HTTPRouteFilterRequestRedirect {
+			return "", true, fmt.Errorf("model-serving HTTPRoute rule does not support URLRewrite or RequestRedirect filters")
+		}
+	}
+	backend := modelBackendRefs[0]
+	if backend.Name != "*" {
+		return "", true, fmt.Errorf("model-serving HTTPRoute backendRef name must be \"*\"")
+	}
+	if backend.Namespace != nil && string(*backend.Namespace) != namespace {
+		return "", true, fmt.Errorf("model-serving HTTPRoute backendRef must use the route namespace")
+	}
+	if backend.Port != nil {
+		return "", true, fmt.Errorf("model-serving HTTPRoute backendRef must not specify port")
+	}
+	if backend.Weight != nil && *backend.Weight != 1 {
+		return "", true, fmt.Errorf("model-serving HTTPRoute backendRef weight must be 1")
+	}
+	if len(backend.Filters) > 0 {
+		return "", true, fmt.Errorf("model-serving HTTPRoute backendRef must not have filters")
+	}
+	ruleKey := fmt.Sprintf("%d", ruleIndex)
+	if rule.Name != nil {
+		ruleKey = string(*rule.Name)
+	}
+	return modelRouterBackendKey(namespace, route, ruleKey), true, nil
+}
+
+func modelRouterBackendKey(namespace, route, rule string) string {
+	return fmt.Sprintf("/llm:router:httproute:%s:%s:%s", namespace, route, rule)
 }
 
 func translateModelForParents(
@@ -169,6 +342,7 @@ func convertAgentgatewayModel(ctx RouteContext, model *agentgateway.Agentgateway
 		ListenerKey: parent.ListenerKey,
 		Match:       &api.ModelRoute_Match{Model: effectiveModelName(model)},
 		Created:     uint64(created),
+		RouterKey:   parent.ModelRouterKey,
 	}
 	var resources []*api.Resource
 	aiPolicy, err := translateModelRouteAIPolicy(ctx, model.Namespace, model.Spec.Policies)
@@ -673,11 +847,19 @@ func translateModelVisibility(visibility agentgateway.ModelVisibility) api.Model
 }
 
 func modelRouteKey(model *agentgateway.AgentgatewayModel, parent RouteParentReference) string {
-	return config.NamespacedName(model).String() + routeKeySuffix(parent)
+	return config.NamespacedName(model).String() + modelRouteKeySuffix(parent)
 }
 
 func modelBackendKey(model *agentgateway.AgentgatewayModel, parent RouteParentReference, target string) string {
-	return utils.InternalBackendKey(model.Namespace, model.Name, target+routeKeySuffix(parent))
+	return utils.InternalBackendKey(model.Namespace, model.Name, target+modelRouteKeySuffix(parent))
+}
+
+func modelRouteKeySuffix(parent RouteParentReference) string {
+	suffix := routeKeySuffix(parent)
+	if suffix == "" && parent.ParentKey.Kind == wellknown.HTTPRouteKind {
+		return "." + parent.ParentKey.Namespace + "." + parent.ParentKey.Name
+	}
+	return suffix
 }
 
 func backendRef(key string) *api.BackendReference {

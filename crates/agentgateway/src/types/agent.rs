@@ -740,6 +740,7 @@ pub type RouteRuleName = Strng;
 pub struct ModelRoute {
 	pub key: RouteKey,
 	pub name: Strng,
+	pub router_key: BackendKey,
 	pub kind: ModelRouteKind,
 }
 
@@ -2655,6 +2656,7 @@ pub enum FrontendPolicy {
 	#[serde(rename = "tcp")]
 	TCP(frontend::TCP),
 	NetworkAuthorization(frontend::NetworkAuthorization),
+	NetworkExtAuthz(Arc<ext_authz::ExtAuthz>),
 	Proxy(frontend::Proxy),
 	Connect(frontend::Connect),
 	AccessLog(frontend::LoggingPolicy),

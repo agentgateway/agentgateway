@@ -111,6 +111,23 @@ impl TCPProxy {
 					.expect("expected source context"),
 			)?;
 		}
+		if let Some(authz) = frontend_policies.network_ext_authz.as_ref() {
+			authz
+				.check_network(
+					httpproxy::PolicyClient::new(self.inputs.clone()),
+					log
+						.source_context
+						.as_ref()
+						.expect("expected source context")
+						.clone(),
+					crate::cel::DestinationContext::from_tcp_connection(
+						connection
+							.ext::<TCPConnectionInfo>()
+							.expect("tcp connection must be set"),
+					),
+				)
+				.await?;
+		}
 		log.tls_info = connection.ext::<TLSConnectionInfo>().cloned();
 		log.backend_protocol = Some(cel::BackendProtocol::tcp);
 		let tcp_labels = TCPLabels {

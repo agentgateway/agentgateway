@@ -161,7 +161,7 @@ export function ClientSetupPage() {
     <div className="page-stack">
       <PageHeader
         title="Client Setup"
-        description="Generate connection settings and snippets for OpenAI-compatible LLM clients."
+        description="Generate connection settings and snippets for LLM clients."
       />
       {configDataError ? (
         <StatusBanner state="bad" title="Configuration API unavailable">

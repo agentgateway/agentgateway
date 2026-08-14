@@ -191,6 +191,7 @@ func TestBuildCrossAppAccess(t *testing.T) {
 			Source: &agentgateway.AuthorizationExtractionLocation{
 				Expression: ptr.Of(agentgateway.CELExpression("jwt.the_id_token")),
 			},
+			TokenType: ptr.Of(agentgateway.OAuthTokenTypeAccessToken),
 		},
 	}, "default")
 	if err != nil {
@@ -223,6 +224,45 @@ func TestBuildCrossAppAccess(t *testing.T) {
 	}
 	if got := crossAppAccess.GetSubjectToken().GetSource().GetExpression(); got != "jwt.the_id_token" {
 		t.Fatalf("subject token expression = %q, want jwt.the_id_token", got)
+	}
+	if got := crossAppAccess.GetSubjectToken().GetTokenType(); got != "urn:ietf:params:oauth:token-type:access_token" {
+		t.Fatalf("subject token type = %q, want access_token URN", got)
+	}
+}
+
+func TestBuildCrossAppAccessSubjectTokenTypes(t *testing.T) {
+	ctx := oauthTestPolicyCtx(t)
+	tests := []struct {
+		tokenType agentgateway.OAuthTokenType
+		want      string
+	}{
+		{
+			tokenType: agentgateway.OAuthTokenTypeAccessToken,
+			want:      "urn:ietf:params:oauth:token-type:access_token",
+		},
+		{
+			tokenType: "urn:company:domain:human",
+			want:      "urn:company:domain:human",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.tokenType), func(t *testing.T) {
+			got, err := BuildCrossAppAccess(ctx, &agentgateway.CrossAppAccessAuth{
+				IdentityProvider:            crossAppAccessEndpoint("idp"),
+				ResourceAuthorizationServer: crossAppAccessEndpoint("resource-as"),
+				Audience:                    "https://resource.example.com",
+				SubjectToken: &agentgateway.CrossAppAccessSubjectToken{
+					TokenType: new(tt.tokenType),
+				},
+			}, "default")
+			if err != nil {
+				t.Fatalf("BuildCrossAppAccess() error = %v, want nil", err)
+			}
+			if got.GetSubjectToken().GetTokenType() != tt.want {
+				t.Fatalf("subject token type = %q, want %q", got.GetSubjectToken().GetTokenType(), tt.want)
+			}
+		})
 	}
 }
 

@@ -431,6 +431,8 @@ pub enum ConfigStoreMode {
 	File,
 	/// Read a file baseline and store UI-managed overlay resources in the configured database.
 	Hybrid,
+	/// Disallow write operations to the config from the UI
+	ReadOnly,
 }
 
 #[apply(schema_de!)]

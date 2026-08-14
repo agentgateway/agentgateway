@@ -3,6 +3,7 @@
 package e2e_test
 
 import (
+	"encoding/base64"
 	"net/http"
 	"testing"
 
@@ -37,6 +38,9 @@ func TestAgentgatewayModelRouting(tt *testing.T) {
 	t.Run("Visibility", func(t base.Test) {
 		testAgentgatewayModelVisibility(t, gw)
 	})
+	t.Run("GatewayBoundModelsUseDefaultRoute", func(t base.Test) {
+		testGatewayBoundModelsUseDefaultRoute(t, gw)
+	})
 	t.Run("WeightedVirtualModel", func(t base.Test) {
 		testAgentgatewayModelWeightedRouting(t, gw)
 	})
@@ -51,6 +55,12 @@ func TestAgentgatewayModelRouting(tt *testing.T) {
 	})
 	t.Run("FailoverVirtualModelAuthorization", func(t base.Test) {
 		testAgentgatewayModelFailoverAuthorization(t, gw)
+	})
+	t.Run("PathScopedModelRoute", func(t base.Test) {
+		testPathScopedModelRoute(t, gw)
+	})
+	t.Run("MultiplePathScopedModelRoutes", func(t base.Test) {
+		testMultiplePathScopedModelRoutes(t, gw)
 	})
 }
 
@@ -85,6 +95,25 @@ func testAgentgatewayModelVisibility(t base.Test, gw base.Gateway) {
 			Body:       gomega.ContainSubstring(`model_not_found`),
 		},
 		modelRoutingCompletion("internal-fast")...,
+	)
+}
+
+// A model bound directly to a Gateway listener must work without an HTTPRoute.
+// This is the default path for users who do not need path-scoped model sets.
+func testGatewayBoundModelsUseDefaultRoute(t base.Test, gw base.Gateway) {
+	gw.Send(
+		t,
+		&testmatchers.HttpResponse{
+			StatusCode: http.StatusOK,
+			Body:       gomega.ContainSubstring(`"id":"public-direct"`),
+		},
+		curl.WithPath("/v1/models"),
+	)
+
+	gw.Send(
+		t,
+		modelRoutingExpectModel("agw-public-direct"),
+		modelRoutingCompletion("public-direct")...,
 	)
 }
 
@@ -145,6 +174,96 @@ func testAgentgatewayModelFailoverAuthorization(t base.Test, gw base.Gateway) {
 	)
 }
 
+func testPathScopedModelRoute(t base.Test, gw base.Gateway) {
+	t.HTTPRouteAccepted("scoped-models", modelRoutingNamespace)
+
+	gw.Send(
+		t,
+		base.Expect(http.StatusUnauthorized),
+		curl.WithPath("/scoped/v1/models"),
+	)
+	gw.Send(
+		t,
+		base.Expect(http.StatusUnauthorized),
+		append(
+			modelRoutingCompletion("scoped-model"),
+			curl.WithPath("/scoped/v1/chat/completions"),
+		)...,
+	)
+
+	gw.Send(
+		t,
+		&testmatchers.HttpResponse{
+			StatusCode: http.StatusOK,
+			Body: gomega.And(
+				gomega.ContainSubstring(`"id":"scoped-model"`),
+				gomega.Not(gomega.ContainSubstring(`"id":"tenant-a-model"`)),
+			),
+		},
+		curl.WithPath("/scoped/v1/models"),
+		curl.WithHeader("Authorization", basicAuthHeader("scoped", "alicepassword")),
+	)
+
+	gw.Send(
+		t,
+		modelRoutingExpectModel("agw-scoped-model"),
+		append(
+			modelRoutingCompletion("scoped-model"),
+			curl.WithPath("/scoped/v1/chat/completions"),
+			curl.WithHeader("Authorization", basicAuthHeader("scoped", "alicepassword")),
+		)...,
+	)
+}
+
+func testMultiplePathScopedModelRoutes(t base.Test, gw base.Gateway) {
+	t.HTTPRouteAccepted("tenant-a-models", modelRoutingNamespace)
+	t.HTTPRouteAccepted("tenant-b-models", modelRoutingNamespace)
+
+	for _, tt := range []struct {
+		path          string
+		user          string
+		password      string
+		model         string
+		otherModel    string
+		upstreamModel string
+	}{
+		{"/tenant-a", "tenant-a", "alicepassword", "tenant-a-model", "tenant-b-model", "agw-tenant-a-model"},
+		{"/tenant-b", "tenant-b", "bobpassword", "tenant-b-model", "tenant-a-model", "agw-tenant-b-model"},
+	} {
+		t.Run(tt.model, func(t base.Test) {
+			gw.Send(
+				t,
+				&testmatchers.HttpResponse{
+					StatusCode: http.StatusOK,
+					Body: gomega.And(
+						gomega.ContainSubstring(`"id":"`+tt.model+`"`),
+						gomega.Not(gomega.ContainSubstring(`"id":"`+tt.otherModel+`"`)),
+					),
+				},
+				curl.WithPath(tt.path+"/v1/models"),
+				curl.WithHeader("Authorization", basicAuthHeader(tt.user, tt.password)),
+			)
+
+			gw.Send(
+				t,
+				modelRoutingExpectModel(tt.upstreamModel),
+				append(
+					modelRoutingCompletion(tt.model),
+					curl.WithPath(tt.path+"/v1/chat/completions"),
+					curl.WithHeader("Authorization", basicAuthHeader(tt.user, tt.password)),
+				)...,
+			)
+		})
+	}
+
+	gw.Send(
+		t,
+		base.Expect(http.StatusUnauthorized),
+		curl.WithPath("/tenant-a/v1/models"),
+		curl.WithHeader("Authorization", basicAuthHeader("tenant-b", "bobpassword")),
+	)
+}
+
 func modelRoutingGateway(t base.Test) base.Gateway {
 	name := types.NamespacedName{Name: modelRoutingGatewayName, Namespace: modelRoutingNamespace}
 	return base.Gateway{
@@ -170,4 +289,8 @@ func modelRoutingExpectModel(selectedModel string) *testmatchers.HttpResponse {
 			"x-agw-response-model": "gpt-4o-mini",
 		},
 	}
+}
+
+func basicAuthHeader(username, password string) string {
+	return "Basic " + base64.StdEncoding.EncodeToString([]byte(username+":"+password))
 }

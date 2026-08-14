@@ -108,6 +108,10 @@ output:
         localRateLimit:
           fillInterval: 60s
           maxTokens: "110"
+          rules:
+          - fillInterval: 60s
+            maxTokens: "110"
+            tokensPerFill: "100"
           tokensPerFill: "100"
 - canonical: true
   hostname: gateway-pool-endpoint-picker.default.svc.cluster.local

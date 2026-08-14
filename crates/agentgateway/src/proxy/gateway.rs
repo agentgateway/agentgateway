@@ -882,6 +882,16 @@ impl Gateway {
 		{
 			anyhow::bail!("network authorization denied: {e}");
 		}
+		if let Some(authz) = policies.network_ext_authz.as_ref() {
+			authz
+				.check_network(
+					super::httpproxy::PolicyClient::new(inputs.clone()),
+					src.clone(),
+					dst.clone(),
+				)
+				.await
+				.map_err(|e| anyhow::anyhow!("network external authorization denied: {e}"))?;
+		}
 		stream.ext_mut().insert(src);
 		stream.ext_mut().insert(dst);
 

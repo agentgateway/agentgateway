@@ -56,7 +56,15 @@ type AgentgatewayModelList struct {
 // +kubebuilder:validation:XValidation:rule="has(self.bedrock) == (has(self.provider) && self.provider == 'Bedrock')",message="bedrock must be set if and only if provider is Bedrock"
 // +kubebuilder:validation:XValidation:rule="has(self.custom) == (has(self.provider) && self.provider == 'Custom')",message="custom must be set if and only if provider is Custom"
 type AgentgatewayModelSpec struct {
-	// Gateways and listeners to which this model attaches.
+	// Parent resources to which this model attaches. Supported parent kinds are
+	// Gateway, ListenerSet, and HTTPRoute.
+	//
+	// A Gateway or ListenerSet parent attaches the model directly to its
+	// listeners. An HTTPRoute parent attaches the model to the referenced rule;
+	// sectionName selects a named rule, or the HTTPRoute must contain exactly
+	// one rule when sectionName is omitted. The selected rule must use exactly
+	// one AgentgatewayModel backend with name "*". If the rule has path matches,
+	// they must use PathPrefix matching.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16
 	// +required

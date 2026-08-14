@@ -17,11 +17,7 @@ controller/testbox
 
 # JavaScript / TypeScript dependencies and generated artifacts
 node_modules/
-**/node_modules/
-ui2/out/
-ui2/dist/
-ui2/.vite/
-ui/out/
+ui/dist/
 ui/public/*-schema.json
 ui/src/cel.d.ts
 ui/src/gateway-admin.d.ts
@@ -33,8 +29,6 @@ playwright-report/
 **/playwright-report/
 **/*.tsbuildinfo
 npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 pnpm-debug.log*
 cfg.yaml
 

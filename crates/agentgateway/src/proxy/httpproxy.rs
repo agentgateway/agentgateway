@@ -391,7 +391,7 @@ async fn apply_backend_policies(
 		}
 		if matches!(
 			a2a_type,
-			a2a::RequestType::Call(_) | a2a::RequestType::AgentCard(_)
+			a2a::RequestType::Call(_) | a2a::RequestType::AgentCard(_, _)
 		) {
 			log.add(|l| {
 				l.backend_protocol = Some(cel::BackendProtocol::a2a);
@@ -2103,9 +2103,13 @@ async fn make_backend_call(
 			if let Some(provider_backend) = &provider.provider_backend {
 				let provider_backend =
 					super::resolve_simple_backend_with_policies(provider_backend, inputs.as_ref())?;
-				let provider_backend_policies = inputs.stores.read_binds().sub_backend_policies(
+				// Use backend_policies (not sub_backend_policies) so policies indexed without a
+				// port -- like the InferenceRouting policy the controller attaches to an
+				// InferencePool's synthesized service -- are found for the provider backend.
+				let provider_backend_policies = inputs.stores.read_binds().backend_policies(
 					provider_backend.backend.target(),
-					Some(&provider_backend.inline_policies),
+					&[&provider_backend.inline_policies],
+					None,
 				);
 				let effective_policies = provider_defaults
 					.merge(policies.as_ref().clone())
@@ -2348,7 +2352,7 @@ async fn make_backend_call(
 							Some(inputs.model_catalog.as_handle()),
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						RouteType::Messages => Box::pin(llm.provider.process_messages_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2358,7 +2362,7 @@ async fn make_backend_call(
 							Some(inputs.model_catalog.as_handle()),
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						RouteType::Responses => Box::pin(llm.provider.process_responses_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2368,7 +2372,7 @@ async fn make_backend_call(
 							Some(inputs.model_catalog.as_handle()),
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						RouteType::Embeddings => Box::pin(llm.provider.process_embeddings_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2377,7 +2381,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						RouteType::Rerank => Box::pin(llm.provider.process_rerank_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2386,7 +2390,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						RouteType::AnthropicTokenCount => Box::pin(llm.provider.process_count_tokens_request(
 							&backend_info,
 							req,
@@ -2394,7 +2398,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						RouteType::Detect => Box::pin(llm.provider.process_detect_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2402,7 +2406,7 @@ async fn make_backend_call(
 							&mut log,
 						))
 						.await
-						.map_err(ProxyError::AI)?,
+						.map_err(ProxyError::AIRequest)?,
 						_ => unreachable!(),
 					};
 					let (mut req, llm_request, upstream_route_type) = match r {
@@ -2680,7 +2684,7 @@ async fn make_backend_call(
 				.assert_size::<{ 4 * 1024 }>(),
 		)
 		.await
-		.map_err(ProxyError::AI)?
+		.map_err(ProxyError::AIResponse)?
 	} else {
 		resp
 	};

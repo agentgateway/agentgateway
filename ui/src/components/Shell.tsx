@@ -12,7 +12,7 @@ import {
   Boxes,
   Coins,
   FileCode2,
-  Github,
+  GitFork,
   Globe,
   Home,
   KeyRound,
@@ -31,11 +31,12 @@ import {
   Sun,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Tooltip, useDismissiblePopover } from "./Primitives";
+import { StatusBanner, Tooltip, useDismissiblePopover } from "./Primitives";
 import {
   useConfigDumpMode,
   useEffectiveGatewayConfig,
   useMcpConfigData,
+  useRuntimeInfo,
   useTrafficConfigData,
 } from "../hooks";
 import logoDark from "../assets/agw-dark.svg";
@@ -54,7 +55,7 @@ const projectLinks = [
   {
     label: "GitHub",
     href: "https://github.com/agentgateway/agentgateway",
-    icon: Github,
+    icon: GitFork,
   },
   {
     label: "Documentation",
@@ -70,6 +71,7 @@ const projectLinks = [
 
 export function Shell() {
   const router = useRouterState();
+  const runtime = useRuntimeInfo();
   const mode = useConfigDumpMode();
   const dumpMode = mode.data?.mode === "dump";
   const config = useEffectiveGatewayConfig({
@@ -236,6 +238,11 @@ export function Shell() {
           </div>
         </header>
         <main className="content">
+          {runtime.data?.ui.configStoreMode == "readOnly" && (
+            <StatusBanner state="info" title="Read-only mode">
+              The UI is configured as read-only. Editing is disabled.
+            </StatusBanner>
+          )}
           <Outlet />
         </main>
       </div>

@@ -768,7 +768,24 @@ impl TestBind {
 		servers: Vec<(&str, SocketAddr, bool)>,
 		stateful: bool,
 	) -> Self {
-		self.with_multiplex_mcp_backend_policies(name, servers, stateful, vec![])
+		self.with_multiplex_mcp_backend_failure_mode(name, servers, stateful, FailureMode::FailClosed)
+	}
+
+	pub fn with_multiplex_mcp_backend_failure_mode(
+		self,
+		name: &str,
+		servers: Vec<(&str, SocketAddr, bool)>,
+		stateful: bool,
+		failure_mode: FailureMode,
+	) -> Self {
+		self.with_multiplex_mcp_backend_options(
+			name,
+			servers,
+			stateful,
+			vec![],
+			Default::default(),
+			failure_mode,
+		)
 	}
 
 	pub fn with_multiplex_mcp_backend_policies(
@@ -795,6 +812,25 @@ impl TestBind {
 		policies: Vec<BackendTrafficPolicy>,
 		prefix_mode: crate::types::agent::McpPrefixMode,
 	) -> Self {
+		self.with_multiplex_mcp_backend_options(
+			name,
+			servers,
+			stateful,
+			policies,
+			prefix_mode,
+			FailureMode::FailClosed,
+		)
+	}
+
+	fn with_multiplex_mcp_backend_options(
+		self,
+		name: &str,
+		servers: Vec<(&str, SocketAddr, bool)>,
+		stateful: bool,
+		policies: Vec<BackendTrafficPolicy>,
+		prefix_mode: crate::types::agent::McpPrefixMode,
+		failure_mode: FailureMode,
+	) -> Self {
 		let b = Backend::MCP(
 			ResourceName::new(name.into(), "".into()),
 			McpBackend {
@@ -820,7 +856,7 @@ impl TestBind {
 					.collect_vec(),
 				stateful,
 				prefix_mode,
-				failure_mode: FailureMode::FailClosed,
+				failure_mode,
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
 			},
 		);

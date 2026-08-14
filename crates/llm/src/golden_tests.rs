@@ -664,7 +664,11 @@ mod responses {
 		("tool_call", ALL_COMPLETIONS),
 		(
 			"truncated_tool_call",
-			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_RESPONSES],
+			&[
+				COMPLETIONS_TO_COMPLETIONS,
+				COMPLETIONS_TO_MESSAGES,
+				COMPLETIONS_TO_RESPONSES,
+			],
 		),
 	];
 	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[
@@ -707,7 +711,15 @@ mod responses {
 		("stream_basic", ALL_ANTHROPIC),
 		("stream_thinking", ALL_ANTHROPIC),
 		(
+			"stream_message_delta_usage",
+			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
+		),
+		(
 			"stream_tool",
+			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
+		),
+		(
+			"stream_tool_empty_args",
 			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
 		),
 	];
@@ -1072,7 +1084,7 @@ data: [DONE]
 			axum_core::body::Body::from(input),
 			1024 * 1024,
 			StreamingUsageGuard::default(),
-			crate::LogContentFields::default(),
+			LogContentFields::default(),
 		)
 		.collect()
 		.await
@@ -1095,6 +1107,56 @@ data: [DONE]
 				"cache_read_input_tokens": 20,
 			})
 		);
+	}
+
+	/// Anthropic streams a single empty `input_json_delta` for a tool call with no arguments.
+	/// OpenAI clients concatenate the deltas and parse the result, so the concatenation has to be
+	/// a JSON object: forwarding `""` verbatim makes the client's *next* request fail upstream with
+	/// `tool_use.input: Input should be a valid dictionary`.
+	#[tokio::test]
+	async fn messages_to_completions_stream_emits_object_for_empty_tool_arguments() {
+		let input = r#"event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_01A","name":"get_time","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":""}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+"#;
+		let output = conversion::messages::from_completions::translate_stream(
+			axum_core::body::Body::from(input),
+			1024 * 1024,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+		)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+
+		// Accumulate `arguments` across chunks exactly as an OpenAI client does.
+		let arguments: String = String::from_utf8(output.to_vec())
+			.unwrap()
+			.lines()
+			.filter_map(|line| line.strip_prefix("data: "))
+			.filter_map(|data| serde_json::from_str::<Value>(data).ok())
+			.filter_map(|chunk| {
+				chunk["choices"][0]["delta"]["tool_calls"][0]["function"]["arguments"]
+					.as_str()
+					.map(str::to_string)
+			})
+			.collect();
+
+		assert!(
+			serde_json::from_str::<serde_json::Map<String, Value>>(&arguments).is_ok(),
+			"streamed tool arguments must concatenate to a JSON object, got {arguments:?}"
+		);
+		assert_eq!(arguments, "{}");
 	}
 
 	#[test]
