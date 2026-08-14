@@ -79,7 +79,11 @@ function TransformSection(props: {
       defaultOpen={hasTransformContent(props.value)}
     >
       <KeyValueEditor
-        label={tr("copy.addHeaders")}
+        label={tr(
+          props.kind === "response"
+            ? "copy.addResponseHeaders"
+            : "copy.addHeaders",
+        )}
         tooltip={props.help.field<LocalTransform>("LocalTransform", "add")}
         values={props.value.add ?? {}}
         keyPlaceholder="header name"
@@ -88,7 +92,11 @@ function TransformSection(props: {
         onChange={(add) => props.onChange({ ...props.value, add })}
       />
       <KeyValueEditor
-        label={tr("copy.setHeaders")}
+        label={tr(
+          props.kind === "response"
+            ? "copy.setResponseHeaders"
+            : "copy.setHeaders",
+        )}
         tooltip={props.help.field<LocalTransform>("LocalTransform", "set")}
         values={props.value.set ?? {}}
         keyPlaceholder="header name"
@@ -97,7 +105,11 @@ function TransformSection(props: {
         onChange={(set) => props.onChange({ ...props.value, set })}
       />
       <ListEditor
-        label={tr("copy.removeHeaders")}
+        label={tr(
+          props.kind === "response"
+            ? "copy.removeResponseHeaders"
+            : "copy.removeHeaders",
+        )}
         tooltip={props.help.field<LocalTransform>("LocalTransform", "remove")}
         values={props.value.remove ?? []}
         placeholder={tr("copy.headerName")}

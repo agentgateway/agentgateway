@@ -330,6 +330,17 @@ const en = {
       valueAllValueListeners: "{{value}} (all {{value}} listeners)",
       valueAllListeners: "{{value}} (all listeners)",
       valueValueConfigured: "{{value}} {{value}} configured.",
+      noRequestHeaderChangesConfigured: "No request header changes configured",
+      noResponseHeaderChangesConfigured:
+        "No response header changes configured",
+      requestHeaderChangesConfigured_one:
+        "{{count}} request header change configured",
+      requestHeaderChangesConfigured_other:
+        "{{count}} request header changes configured",
+      responseHeaderChangesConfigured_one:
+        "{{count}} response header change configured",
+      responseHeaderChangesConfigured_other:
+        "{{count}} response header changes configured",
       valueBinds_one: "{{count}} bind",
       valueBinds_other: "{{count}} binds",
       valueByValue: "{{value}} by {{value}}",
@@ -481,6 +492,7 @@ const en = {
       addProvider: "Add provider",
       addQuery: "Add query",
       addRequestHeaders: "Add request headers",
+      addResponseHeaders: "Add response headers",
       addRoute: "Add route",
       addRule: "Add rule",
       addServer: "Add server",
@@ -2099,6 +2111,7 @@ const en = {
       removeGuardrails: "Remove guardrails",
       removeHeaderCondition: "Remove header condition",
       removeHeaders: "Remove headers",
+      removeResponseHeaders: "Remove response headers",
       removeMatchValue: "Remove match {{value}}",
       removePattern: "Remove pattern",
       removeQueryCondition: "Remove query condition",
@@ -2318,6 +2331,7 @@ const en = {
         "Session tags passed to STS AssumeRole for cost attribution. Once activated as\ncost allocation tags, each tag surfaces in the AWS Cost & Usage Report under\n`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL\nexpression evaluated against each request (`expression`).",
       sessionTokenOptional: "Session token (optional)",
       setHeaders: "Set headers",
+      setResponseHeaders: "Set response headers",
       setRequestTimeoutLimits: "Set request timeout limits.",
       setTheProxyUrlTo: "Set the proxy URL to",
       setUpGateways: "Set up gateways",
