@@ -49,9 +49,11 @@ pub(super) async fn apply_token_validation(
 		"MCP auth configured; validating Authorization header (mode={:?})",
 		auth.mode
 	);
-	auth.jwt_validator.apply(None, req).await.map_err(|e| {
-		create_auth_required_response(ProxyError::JwtAuthenticationFailure(e), req, auth)
-	})?;
+	Box::pin(auth.jwt_validator.apply(None, req))
+		.await
+		.map_err(|e| {
+			create_auth_required_response(ProxyError::JwtAuthenticationFailure(e), req, auth)
+		})?;
 	Ok(())
 }
 

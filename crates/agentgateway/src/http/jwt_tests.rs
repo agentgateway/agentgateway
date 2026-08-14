@@ -258,6 +258,7 @@ pub fn test_ed25519_jwt_validation() {
 		mode: Mode::Strict,
 		providers: vec![provider],
 		location: bearer_location(),
+		refreshers: Vec::new(),
 	};
 	let now = std::time::SystemTime::now()
 		.duration_since(std::time::UNIX_EPOCH)
@@ -357,6 +358,7 @@ fn setup_test_jwt_with_required_claims(
 			mode: Mode::Strict,
 			providers: vec![provider],
 			location: bearer_location(),
+			refreshers: Vec::new(),
 		},
 		kid,
 		issuer,
@@ -488,6 +490,7 @@ pub async fn test_apply_strict_missing_token() {
 		mode: super::Mode::Strict,
 		providers: vec![],
 		location: bearer_location(),
+		refreshers: Vec::new(),
 	};
 
 	// Minimal Request without Authorization header
@@ -508,6 +511,7 @@ pub async fn test_apply_permissive_no_token_ok() {
 		mode: Mode::Permissive,
 		providers: base.providers.clone(),
 		location: bearer_location(),
+		refreshers: Vec::new(),
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let mut log = make_min_req_log();
@@ -524,6 +528,7 @@ pub async fn test_apply_permissive_invalid_token_ok_and_keeps_header() {
 		mode: Mode::Permissive,
 		providers: base.providers.clone(),
 		location: bearer_location(),
+		refreshers: Vec::new(),
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	req.headers_mut().insert(
@@ -553,6 +558,7 @@ pub async fn test_apply_permissive_valid_token_inserts_claims_and_removes_header
 		mode: Mode::Permissive,
 		providers: base.providers.clone(),
 		location: bearer_location(),
+		refreshers: Vec::new(),
 	};
 	let now = SystemTime::now()
 		.duration_since(UNIX_EPOCH)
@@ -584,6 +590,7 @@ pub async fn test_apply_optional_no_token_ok() {
 		mode: Mode::Optional,
 		providers: base.providers.clone(),
 		location: bearer_location(),
+		refreshers: Vec::new(),
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let mut log = make_min_req_log();
@@ -600,6 +607,7 @@ pub async fn test_apply_optional_invalid_token_err() {
 		mode: Mode::Optional,
 		providers: base.providers.clone(),
 		location: bearer_location(),
+		refreshers: Vec::new(),
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	req.headers_mut().insert(
@@ -620,6 +628,7 @@ pub async fn test_apply_optional_valid_token_inserts_claims_and_removes_header()
 		mode: Mode::Optional,
 		providers: base.providers.clone(),
 		location: bearer_location(),
+		refreshers: Vec::new(),
 	};
 	let now = SystemTime::now()
 		.duration_since(UNIX_EPOCH)
@@ -654,6 +663,7 @@ pub async fn test_apply_query_parameter_token_inserts_claims_and_removes_query_p
 		location: crate::http::auth::AuthorizationLocation::QueryParameter {
 			name: "token".into(),
 		},
+		refreshers: Vec::new(),
 	};
 	let now = SystemTime::now()
 		.duration_since(UNIX_EPOCH)
@@ -786,6 +796,7 @@ fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {
 			mode: Mode::Strict,
 			providers: vec![provider1, provider2],
 			location: bearer_location(),
+			refreshers: Vec::new(),
 		},
 		(kid1, issuer1, aud1),
 		(kid2, issuer2, aud2),
@@ -881,6 +892,7 @@ pub fn test_empty_required_claims_accepts_token_without_exp() {
 		mode: Mode::Strict,
 		providers: vec![provider],
 		location: bearer_location(),
+		refreshers: Vec::new(),
 	};
 
 	let token = build_unsigned_token_without_exp(kid, issuer, aud);
@@ -940,6 +952,7 @@ pub fn test_default_required_claims_rejects_token_without_exp() {
 		mode: Mode::Strict,
 		providers: vec![provider],
 		location: bearer_location(),
+		refreshers: Vec::new(),
 	};
 
 	let token = build_unsigned_token_without_exp(kid, issuer, aud);
@@ -997,6 +1010,7 @@ pub fn test_empty_required_claims_still_rejects_expired_tokens() {
 		mode: Mode::Strict,
 		providers: vec![provider],
 		location: bearer_location(),
+		refreshers: Vec::new(),
 	};
 
 	let token = build_unsigned_token_with_expired_exp(kid, issuer, aud);
@@ -1054,6 +1068,7 @@ pub fn test_required_claims_with_nbf_rejects_missing_nbf() {
 		mode: Mode::Strict,
 		providers: vec![provider],
 		location: bearer_location(),
+		refreshers: Vec::new(),
 	};
 
 	// Token with exp but without nbf should be rejected when nbf is required
@@ -1067,5 +1082,160 @@ pub fn test_required_claims_with_nbf_rejects_missing_nbf() {
 	assert!(
 		result.is_err(),
 		"required_claims with nbf should reject tokens missing nbf claim"
+	);
+}
+
+#[tokio::test]
+async fn test_unknown_kid_triggers_on_demand_jwks_refresh() {
+	use std::sync::Arc;
+
+	use parking_lot::Mutex;
+	use wiremock::matchers::{method, path};
+	use wiremock::{Mock, MockServer, Request, Respond, ResponseTemplate};
+
+	// Reuse the ed25519 fixture private key for both kids so a single
+	// signature verifies against either; this test is about kid lookup and
+	// on-demand refetching, not distinct key material.
+	const ED25519_PRIVATE_KEY: &[u8] = &[
+		0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04, 0x20,
+		0x6a, 0xc3, 0xfd, 0xee, 0xee, 0x29, 0x8a, 0x92, 0x63, 0x8b, 0x70, 0x0c, 0x4b, 0x11, 0x7c, 0xc3,
+		0x2e, 0x2d, 0x2a, 0xce, 0x0d, 0xfd, 0x78, 0x76, 0x94, 0xe2, 0x4c, 0xae, 0x8a, 0xd5, 0x82, 0x34,
+	];
+	const ED25519_PUBLIC_X: &str = "2-Jj2UvNCvQiUPNYRgSi0cJSPiJI6Rs6D0UTeEpQVj8";
+
+	fn jwks_with_kids(kids: &[&str]) -> serde_json::Value {
+		json!({
+			"keys": kids
+				.iter()
+				.map(|kid| json!({
+					"use": "sig",
+					"kty": "OKP",
+					"kid": kid,
+					"crv": "Ed25519",
+					"x": ED25519_PUBLIC_X,
+				}))
+				.collect::<Vec<_>>()
+		})
+	}
+
+	fn build_token(kid: &str, issuer: &str, aud: &str, exp: u64) -> String {
+		let claims = json!({ "iss": issuer, "aud": aud, "sub": "test-user", "exp": exp });
+		let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::EdDSA);
+		header.kid = Some(kid.to_string());
+		jsonwebtoken::encode(
+			&header,
+			&claims,
+			&jsonwebtoken::EncodingKey::from_ed_der(ED25519_PRIVATE_KEY),
+		)
+		.unwrap()
+	}
+
+	fn test_client() -> crate::client::Client {
+		crate::client::Client::new(
+			&crate::client::Config {
+				resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
+				resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+			},
+			None,
+			crate::BackendConfig::default(),
+			None,
+		)
+	}
+
+	struct RotatingJwks {
+		body: Arc<Mutex<serde_json::Value>>,
+	}
+	impl Respond for RotatingJwks {
+		fn respond(&self, _req: &Request) -> ResponseTemplate {
+			ResponseTemplate::new(200).set_body_json(self.body.lock().clone())
+		}
+	}
+
+	let issuer = "https://example.com";
+	let aud = "test-aud";
+	let body = Arc::new(Mutex::new(jwks_with_kids(&["kid-a"])));
+	let mock = MockServer::start().await;
+	Mock::given(method("GET"))
+		.and(path("/jwks"))
+		.respond_with(RotatingJwks { body: body.clone() })
+		.mount(&mock)
+		.await;
+
+	let config: LocalJwtConfig = serde_json::from_value(json!({
+		"mode": "strict",
+		"issuer": issuer,
+		"audiences": [aud],
+		"jwks": { "url": format!("{}/jwks", mock.uri()) },
+	}))
+	.unwrap();
+
+	// Managed mode is required: it is the only mode that attaches a
+	// JwksRefresher, matching the standalone/local-config runtime path.
+	let manager = crate::resource_manager::ResourceManager::new(test_client()).unwrap();
+	let resources = crate::resource_manager::ResourceFetcher::managed(manager);
+	let scope = resources.scope_full_computation();
+	let jwt = config
+		.try_into(&resources)
+		.await
+		.expect("initial jwks load");
+	scope.finish(true);
+
+	assert_eq!(
+		mock
+			.received_requests()
+			.await
+			.expect("jwks recording")
+			.len(),
+		1,
+		"startup should fetch the jwks exactly once"
+	);
+
+	let now = std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.unwrap()
+		.as_secs();
+
+	*body.lock() = jwks_with_kids(&["kid-a", "kid-b"]);
+
+	let token_b = build_token("kid-b", issuer, aud, now + 600);
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	req.headers_mut().insert(
+		crate::http::header::AUTHORIZATION,
+		crate::http::HeaderValue::from_str(&format!("Bearer {token_b}")).unwrap(),
+	);
+	let res = jwt.apply(None, &mut req).await;
+	assert!(
+		res.is_ok(),
+		"unknown kid should trigger a refresh and then succeed: {res:?}"
+	);
+	assert_eq!(
+		mock
+			.received_requests()
+			.await
+			.expect("jwks recording")
+			.len(),
+		2,
+		"unknown kid should trigger exactly one on-demand refetch"
+	);
+
+	let token_c = build_token("kid-c", issuer, aud, now + 600);
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	req.headers_mut().insert(
+		crate::http::header::AUTHORIZATION,
+		crate::http::HeaderValue::from_str(&format!("Bearer {token_c}")).unwrap(),
+	);
+	let res = jwt.apply(None, &mut req).await;
+	assert!(
+		matches!(res, Err(TokenError::UnknownKeyId(_))),
+		"still-unknown kid inside the debounce window must fail: {res:?}"
+	);
+	assert_eq!(
+		mock
+			.received_requests()
+			.await
+			.expect("jwks recording")
+			.len(),
+		2,
+		"debounce window must prevent a second refetch"
 	);
 }
