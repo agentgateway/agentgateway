@@ -1783,6 +1783,7 @@ enum ChatFmt {
 	Anthropic,
 	Completions,
 	Responses,
+	Gemini,
 }
 
 #[cfg(test)]
@@ -1885,6 +1886,11 @@ fn run_apply_regex_scoped(
 			let action = Policy::apply_regex(&mut req, &rules, &rejection, &scope).unwrap();
 			(action, serde_json::to_value(&req).unwrap())
 		},
+		ChatFmt::Gemini => {
+			let mut req: crate::llm::types::gemini::Request = serde_json::from_value(input).unwrap();
+			let action = Policy::apply_regex(&mut req, &rules, &rejection, &scope).unwrap();
+			(action, req.to_value().unwrap())
+		},
 	}
 }
 
@@ -1914,6 +1920,11 @@ fn run_apply_regex_response(
 			let mut resp: crate::llm::types::responses::Response = serde_json::from_value(input).unwrap();
 			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
 			(action, serde_json::to_value(&resp).unwrap())
+		},
+		ChatFmt::Gemini => {
+			let mut resp: crate::llm::types::gemini::Response = serde_json::from_value(input).unwrap();
+			let action = Policy::apply_regex_response(&mut resp, &rules, &rejection).unwrap();
+			(action, serde_json::to_value(&resp.0).unwrap())
 		},
 	}
 }
@@ -2118,6 +2129,53 @@ fn run_apply_regex_response(
 	}),
 	Expect::Unchanged
 )]
+// Gemini tool traffic: function args, a function response, and a code-execution round trip
+// all stay untouched under the default scope; system and visible text are still guarded.
+#[case::gemini_mask_tool_output_untouched(
+	ChatFmt::Gemini,
+	Action::Mask,
+	email_and_ssn(),
+	serde_json::json!({
+		"systemInstruction": {"parts": [
+			{"text": "You are a helpful assistant. Contact admin@example.com for help."}
+		]},
+		"contents": [
+			{"role": "user", "parts": [{"text": "list pods"}]},
+			{"role": "model", "parts": [
+				{"text": "Calling the tool."},
+				{"functionCall": {"name": "k8s_get_resources", "args": {"ns": "kagent"}}}
+			]},
+			{"role": "user", "parts": [
+				{"functionResponse": {"name": "k8s_get_resources",
+					"response": {"output": "pod-a Running, owner ssn 123-45-6789"}}}
+			]},
+			{"role": "model", "parts": [
+				{"executableCode": {"language": "PYTHON", "code": "lookup('owner ssn 123-45-6789')"}},
+				{"codeExecutionResult": {"outcome": "OUTCOME_OK", "output": "owner ssn 123-45-6789"}}
+			]}
+		]
+	}),
+	Expect::Masked(serde_json::json!({
+		"systemInstruction": {"parts": [
+			{"text": "You are a helpful assistant. Contact <EMAIL_ADDRESS> for help."}
+		]},
+		"contents": [
+			{"role": "user", "parts": [{"text": "list pods"}]},
+			{"role": "model", "parts": [
+				{"text": "Calling the tool."},
+				{"functionCall": {"name": "k8s_get_resources", "args": {"ns": "kagent"}}}
+			]},
+			{"role": "user", "parts": [
+				{"functionResponse": {"name": "k8s_get_resources",
+					"response": {"output": "pod-a Running, owner ssn 123-45-6789"}}}
+			]},
+			{"role": "model", "parts": [
+				{"executableCode": {"language": "PYTHON", "code": "lookup('owner ssn 123-45-6789')"}},
+				{"codeExecutionResult": {"outcome": "OUTCOME_OK", "output": "owner ssn 123-45-6789"}}
+			]}
+		]
+	}))
+)]
 fn test_apply_regex_preserves_tool_structure(
 	#[case] fmt: ChatFmt,
 	#[case] action: Action,
@@ -2267,6 +2325,28 @@ fn test_apply_regex_preserves_tool_structure(
 		]
 	})
 )]
+// A function response and replayed code-execution output are both guardable tool output.
+#[case::gemini_mask_tool_output(
+	ChatFmt::Gemini,
+	serde_json::json!({
+		"contents": [
+			{"role": "user", "parts": [
+				{"functionResponse": {"name": "lookup",
+					"response": {"output": "owner ssn 123-45-6789"}}},
+				{"codeExecutionResult": {"outcome": "OUTCOME_OK", "output": "ssn 123-45-6789 in row 1"}}
+			]}
+		]
+	}),
+	serde_json::json!({
+		"contents": [
+			{"role": "user", "parts": [
+				{"functionResponse": {"name": "lookup",
+					"response": {"output": "owner ssn <SSN>"}}},
+				{"codeExecutionResult": {"outcome": "OUTCOME_OK", "output": "ssn <SSN> in row 1"}}
+			]}
+		]
+	})
+)]
 fn test_apply_regex_tool_output_scope_enabled(
 	#[case] fmt: ChatFmt,
 	#[case] input: serde_json::Value,
@@ -2316,6 +2396,23 @@ fn responses_tool_input_request() -> serde_json::Value {
 		"input": [
 			{"type": "function_call", "call_id": "call_01", "name": "save_note",
 				"arguments": "{\"note\":\"owner ssn 123-45-6789\"}"}
+		]
+	})
+}
+
+#[cfg(test)]
+fn gemini_tool_input_request() -> serde_json::Value {
+	serde_json::json!({
+		"contents": [
+			{"role": "model", "parts": [
+				{"text": "Saving the note."},
+				{"functionCall": {"name": "save_note", "args": {
+					"note": "owner ssn 123-45-6789",
+					"tags": ["ssn 123-45-6789"],
+					"priority": 1
+				}}},
+				{"executableCode": {"language": "PYTHON", "code": "save('owner ssn 123-45-6789')"}}
+			]}
 		]
 	})
 }
@@ -2384,6 +2481,31 @@ fn responses_tool_input_request() -> serde_json::Value {
 	ChatFmt::Responses,
 	default_content_scope(),
 	responses_tool_input_request(),
+	Expect::Unchanged
+)]
+// Model-generated code is tool input like function args: guarded only when opted in.
+#[case::gemini_masked_when_enabled(
+	ChatFmt::Gemini,
+	all_scopes(),
+	gemini_tool_input_request(),
+	Expect::Masked(serde_json::json!({
+		"contents": [
+			{"role": "model", "parts": [
+				{"text": "Saving the note."},
+				{"functionCall": {"name": "save_note", "args": {
+					"note": "owner ssn <SSN>",
+					"tags": ["ssn <SSN>"],
+					"priority": 1
+				}}},
+				{"executableCode": {"language": "PYTHON", "code": "save('owner ssn <SSN>')"}}
+			]}
+		]
+	}))
+)]
+#[case::gemini_untouched_by_default(
+	ChatFmt::Gemini,
+	default_content_scope(),
+	gemini_tool_input_request(),
 	Expect::Unchanged
 )]
 fn test_apply_regex_tool_input_scope(
