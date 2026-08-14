@@ -31,6 +31,7 @@ agent-llm.workspace = true
 agent-xds.workspace = true
 agent-pool.workspace = true
 anyhow.workspace = true
+ed25519-dalek.workspace = true
 arc-swap.workspace = true
 async-compression.workspace = true
 async-openai.workspace = true
