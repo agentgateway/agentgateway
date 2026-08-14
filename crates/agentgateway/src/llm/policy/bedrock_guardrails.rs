@@ -163,7 +163,8 @@ pub async fn send(
 	let uri = format!("https://{}{}", host, path);
 
 	tracing::debug!(
-		request_body = %serde_json::to_string_pretty(&request_body).unwrap_or_default(),
+		source = ?request_body.source,
+		content_blocks = request_body.content.len(),
 		uri = %uri,
 		"Sending Bedrock guardrail request"
 	);
