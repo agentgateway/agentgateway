@@ -1708,6 +1708,26 @@ async fn dns_rebinding_protection_rejects_non_localhost_origin() {
 		.unwrap();
 	assert_eq!(forbidden.status(), reqwest::StatusCode::FORBIDDEN);
 
+	let null_origin = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.header("Origin", "null")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(null_origin.status(), reqwest::StatusCode::FORBIDDEN);
+
+	// Well-known GETs normally bypass the MCP service and pass directly to the
+	// upstream. DNS rebinding validation must still run before that fast path.
+	let forbidden_well_known = client
+		.get(format!("http://{io}/.well-known/oauth-protected-resource"))
+		.header("Origin", "http://evil.example")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(
+		forbidden_well_known.status(),
+		reqwest::StatusCode::FORBIDDEN
+	);
+
 	let allowed = mcp_json_post(&client, &url, &mcp_initialize_body())
 		.header("Origin", format!("http://127.0.0.1:{}", io.port()))
 		.send()

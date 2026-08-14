@@ -40,6 +40,11 @@ impl App {
 		backend: &McpBackend,
 		req: &Request,
 	) -> Option<SimpleBackendReference> {
+		// Invalid well-known requests must not bypass the validation in `serve`
+		// through the direct upstream passthrough path.
+		if backend.dns_rebinding_protection && !mcp::dns_rebinding::is_localhost_request(req) {
+			return None;
+		}
 		if backend.targets.len() != 1 {
 			return None;
 		}

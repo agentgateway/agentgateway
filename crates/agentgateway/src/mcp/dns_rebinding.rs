@@ -21,80 +21,60 @@ pub fn reject_non_localhost(req: &Request) -> Option<Response> {
 	Some(response)
 }
 
-fn is_localhost_request(req: &Request) -> bool {
-	let origin = req
-		.headers()
-		.get(header::ORIGIN)
-		.and_then(|v| v.to_str().ok())
-		.filter(|o| *o != "null");
-	if let Some(origin) = origin
-		&& !is_localhost_origin(origin)
-	{
+pub(super) fn is_localhost_request(req: &Request) -> bool {
+	if !has_localhost_authority(req) {
 		return false;
 	}
 
-	if let Some(host) = request_host(req) {
-		return is_localhost_host(host);
+	let mut origins = req.headers().get_all(header::ORIGIN).iter();
+	let Some(origin) = origins.next() else {
+		// Non-browser and same-origin requests may omit Origin.
+		return true;
+	};
+	// Origin is a singleton header. Reject duplicates rather than validating only
+	// the first value and accidentally ignoring a conflicting one.
+	if origins.next().is_some() {
+		return false;
 	}
-
-	// No Host: accept only when Origin already proved localhost.
-	origin.is_some_and(is_localhost_origin)
+	origin.to_str().ok().is_some_and(is_localhost_origin)
 }
 
-fn request_host(req: &Request) -> Option<&str> {
-	req
-		.headers()
-		.get(header::HOST)
-		.and_then(|v| v.to_str().ok())
-		.or_else(|| req.uri().host())
+fn has_localhost_authority(req: &Request) -> bool {
+	// Inbound HTTP/1 Host is normalized into the URI authority before routing;
+	// HTTP/2 already carries it as :authority. Keep that normalized value as the
+	// sole source of truth.
+	req.uri().host().is_some_and(is_localhost_host)
 }
 
 fn is_localhost_origin(origin: &str) -> bool {
-	let Some(rest) = origin
-		.strip_prefix("http://")
-		.or_else(|| origin.strip_prefix("https://"))
-	else {
+	// `null` is a real browser Origin for opaque origins, not an absent header.
+	// It is deliberately rejected by this localhost-only policy.
+	let Ok(origin) = url::Url::parse(origin.trim()) else {
 		return false;
 	};
-	let host = rest.split('/').next().unwrap_or(rest);
-	is_localhost_host(host)
+	matches!(origin.scheme(), "http" | "https")
+		&& origin.username().is_empty()
+		&& origin.password().is_none()
+		&& origin.path() == "/"
+		&& origin.query().is_none()
+		&& origin.fragment().is_none()
+		&& origin.host_str().is_some_and(is_localhost_host)
 }
 
 fn is_localhost_host(host: &str) -> bool {
-	let host = strip_port(host.trim());
-	let host = host
-		.strip_prefix('[')
-		.and_then(|h| h.strip_suffix(']'))
-		.unwrap_or(host);
+	let host = host.trim_matches(['[', ']']);
 	host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "::1"
-}
-
-/// Strip a trailing `:port`, keeping IPv6 bracket form (`[::1]:8080` → `[::1]`).
-fn strip_port(host: &str) -> &str {
-	if let Some(rest) = host.strip_prefix('[')
-		&& let Some(end) = rest.find(']')
-	{
-		// `end` is relative to `rest`; include the leading '[' and trailing ']'.
-		return &host[..=end + 1];
-	}
-	if let Some((name, port)) = host.rsplit_once(':')
-		&& !port.is_empty()
-		&& port.bytes().all(|b| b.is_ascii_digit())
-	{
-		return name;
-	}
-	host
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 
-	fn req(host: Option<&str>, origin: Option<&str>) -> Request {
-		let mut b = ::http::Request::builder().method("POST").uri("http://127.0.0.1:8080/mcp");
-		if let Some(host) = host {
-			b = b.header(header::HOST, host);
-		}
+	fn req(authority: Option<&str>, origin: Option<&str>) -> Request {
+		let uri = authority
+			.map(|authority| format!("http://{authority}/mcp"))
+			.unwrap_or_else(|| "/mcp".to_string());
+		let mut b = ::http::Request::builder().method("POST").uri(uri);
 		if let Some(origin) = origin {
 			b = b.header(header::ORIGIN, origin);
 		}
@@ -103,12 +83,15 @@ mod tests {
 
 	#[test]
 	fn accepts_localhost_hosts() {
-		for host in ["localhost", "localhost:8080", "127.0.0.1", "127.0.0.1:9", "[::1]", "[::1]:8080"]
-		{
-			assert!(
-				is_localhost_request(&req(Some(host), None)),
-				"host {host}"
-			);
+		for host in [
+			"localhost",
+			"localhost:8080",
+			"127.0.0.1",
+			"127.0.0.1:9",
+			"[::1]",
+			"[::1]:8080",
+		] {
+			assert!(is_localhost_request(&req(Some(host), None)), "host {host}");
 		}
 	}
 
@@ -116,6 +99,7 @@ mod tests {
 	fn rejects_non_localhost_host() {
 		assert!(!is_localhost_request(&req(Some("evil.com"), None)));
 		assert!(!is_localhost_request(&req(Some("evil.com:443"), None)));
+		assert!(!is_localhost_request(&req(None, None)));
 	}
 
 	#[test]
@@ -133,9 +117,37 @@ mod tests {
 			Some("http://localhost:8080")
 		)));
 		assert!(is_localhost_request(&req(
-			None,
+			Some("127.0.0.1"),
 			Some("http://127.0.0.1")
 		)));
+	}
+
+	#[test]
+	fn rejects_null_and_malformed_origins() {
+		for origin in [
+			"null",
+			"http://[::1].evil.example",
+			"http://[::1]garbage",
+			"http://localhost/path",
+			"ftp://localhost",
+		] {
+			assert!(
+				!is_localhost_request(&req(Some("localhost"), Some(origin))),
+				"origin {origin}"
+			);
+		}
+	}
+
+	#[test]
+	fn rejects_duplicate_origins() {
+		let request = ::http::Request::builder()
+			.method("POST")
+			.uri("http://localhost/mcp")
+			.header(header::ORIGIN, "http://localhost")
+			.header(header::ORIGIN, "http://evil.example")
+			.body(crate::http::Body::empty())
+			.unwrap();
+		assert!(!is_localhost_request(&request));
 	}
 
 	#[test]
