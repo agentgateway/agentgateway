@@ -913,7 +913,7 @@ mod tests {
 			config_resource_store: None,
 			resource_manager: crate::resource_manager::ResourceManager::new(client)
 				.expect("resource manager"),
-			model_catalog: Arc::new(crate::llm::cost::ModelCatalog::default()),
+			model_catalog: Arc::new(crate::llm::catalog::ModelCatalog::default()),
 		}
 	}
 
