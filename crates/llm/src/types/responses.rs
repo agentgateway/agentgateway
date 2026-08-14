@@ -645,7 +645,17 @@ impl ResponseType for Response {
 			if let OutputItem::Message(msg) = o {
 				for c in &mut msg.content {
 					if let Content::OutputText(t) = c {
+						if t.annotations.is_empty() && t.logprobs.is_none() {
+							f(&mut t.text);
+							continue;
+						}
+						// offset-based metadata cannot survive a text rewrite
+						let original = t.text.clone();
 						f(&mut t.text);
+						if t.text != original {
+							t.annotations.clear();
+							t.logprobs = None;
+						}
 					}
 				}
 			}

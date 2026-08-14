@@ -302,9 +302,26 @@ impl<Mask> From<&GuardrailOutcome<Mask>> for GuardrailAction {
 	}
 }
 
+impl<Mask> GuardrailOutcome<Mask> {
+	fn map_mask<M2>(self, f: impl FnOnce(Mask) -> M2) -> GuardrailOutcome<M2> {
+		match self {
+			GuardrailOutcome::None => GuardrailOutcome::None,
+			GuardrailOutcome::Masked(mask) => GuardrailOutcome::Masked(f(mask)),
+			GuardrailOutcome::Rejected(resp) => GuardrailOutcome::Rejected(resp),
+			GuardrailOutcome::FailOpen => GuardrailOutcome::FailOpen,
+		}
+	}
+}
+
+#[derive(Debug)]
 struct TextReplacements(Vec<Option<String>>);
 
 impl TextReplacements {
+	/// Replace every visited text, one replacement per text in visit order
+	fn replace_all(texts: Vec<String>) -> Self {
+		Self(texts.into_iter().map(Some).collect())
+	}
+
 	fn apply(self, visit_text: impl FnOnce(&mut dyn FnMut(&mut String))) {
 		let mut replacements = self.0.into_iter();
 		visit_text(&mut |text| {
@@ -922,21 +939,23 @@ impl Policy {
 		guardrails: &BedrockGuardrails,
 		rejection: &RequestRejection,
 	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
-		let resp = bedrock_guardrails::send_request(req, claims, client, guardrails).await?;
-		if resp.is_blocked() {
-			Ok(GuardrailOutcome::Rejected(rejection.as_response()))
-		} else if resp.is_anonymized() {
-			let output_texts = resp.output_texts();
-			let mut msgs = req.get_messages();
-			for (msg, text) in msgs.iter_mut().zip(output_texts) {
-				msg.content = text.into();
-			}
-			Ok(GuardrailOutcome::Masked(RequestGuardMutation::Messages(
-				msgs,
-			)))
-		} else {
-			Ok(GuardrailOutcome::None)
+		let content = Self::request_texts(req);
+		if content.is_empty() {
+			return Ok(GuardrailOutcome::None);
 		}
+		let sent_count = content.len();
+		let resp = bedrock_guardrails::send(
+			bedrock_guardrails::GuardrailSource::Input,
+			content,
+			claims,
+			client,
+			guardrails,
+		)
+		.await?;
+		Ok(
+			Self::bedrock_guardrail_outcome(resp, sent_count, rejection)
+				.map_mask(RequestGuardMutation::Texts),
+		)
 	}
 
 	async fn evaluate_bedrock_guardrails_response(
@@ -951,23 +970,44 @@ impl Policy {
 		if content.is_empty() {
 			return Ok(GuardrailOutcome::None);
 		}
+		let sent_count = content.len();
 
-		let guardrail_resp =
-			bedrock_guardrails::send_response(content, claims, client, guardrails).await?;
-		if guardrail_resp.is_blocked() {
-			Ok(GuardrailOutcome::Rejected(rejection.as_response()))
-		} else if guardrail_resp.is_anonymized() {
-			let output_texts = guardrail_resp.output_texts();
-			let mut choices = resp.to_webhook_choices();
-			for (choice, text) in choices.iter_mut().zip(output_texts) {
-				choice.message.content = text.into();
-			}
-			Ok(GuardrailOutcome::Masked(ResponseGuardMutation::Choices(
-				choices,
-			)))
-		} else {
-			Ok(GuardrailOutcome::None)
+		let guardrail_resp = bedrock_guardrails::send(
+			bedrock_guardrails::GuardrailSource::Output,
+			content,
+			claims,
+			client,
+			guardrails,
+		)
+		.await?;
+		Ok(
+			Self::bedrock_guardrail_outcome(guardrail_resp, sent_count, rejection)
+				.map_mask(ResponseGuardMutation::Texts),
+		)
+	}
+
+	/// Mask only when anonymized with one output per block sent; any other
+	/// intervention rejects (its outputs are a canned message, not masks).
+	fn bedrock_guardrail_outcome(
+		resp: bedrock_guardrails::ApplyGuardrailResponse,
+		sent_count: usize,
+		rejection: &RequestRejection,
+	) -> GuardrailOutcome<TextReplacements> {
+		if !resp.is_intervened() {
+			return GuardrailOutcome::None;
 		}
+		if resp.is_anonymized() {
+			let outputs = resp.into_output_texts();
+			if outputs.len() == sent_count {
+				return GuardrailOutcome::Masked(TextReplacements::replace_all(outputs));
+			}
+			tracing::warn!(
+				expected = sent_count,
+				got = outputs.len(),
+				"Bedrock guardrail masked output count mismatch; rejecting content"
+			);
+		}
+		GuardrailOutcome::Rejected(rejection.as_response())
 	}
 
 	async fn evaluate_google_model_armor_request(
@@ -1029,7 +1069,7 @@ impl Policy {
 		model_armor: &GoogleModelArmor,
 		rejection: &RequestRejection,
 	) -> anyhow::Result<GuardrailOutcome<ResponseGuardMutation>> {
-		let content = Self::response_texts(resp);
+		let content = Self::webhook_choice_texts(resp);
 
 		if content.is_empty() {
 			return Ok(GuardrailOutcome::None);
@@ -1051,7 +1091,7 @@ impl Policy {
 		config: &AzureContentSafety,
 		rejection: &RequestRejection,
 	) -> anyhow::Result<GuardrailOutcome<ResponseGuardMutation>> {
-		let content = Self::response_texts(resp);
+		let content = Self::webhook_choice_texts(resp);
 
 		if content.is_empty() {
 			return Ok(GuardrailOutcome::None);
@@ -1075,12 +1115,28 @@ impl Policy {
 		Ok(GuardrailOutcome::None)
 	}
 
-	fn response_texts(resp: &dyn ResponseType) -> Vec<String> {
+	/// One flattened text per choice; masking guards must use `response_texts`
+	/// instead so counts align with `visit_text_mut` order.
+	fn webhook_choice_texts(resp: &dyn ResponseType) -> Vec<String> {
 		resp
 			.to_webhook_choices()
 			.into_iter()
 			.map(|c| c.message.content.to_string())
 			.collect()
+	}
+
+	fn collect_texts(visit: impl FnOnce(&mut dyn FnMut(&mut String))) -> Vec<String> {
+		let mut texts = Vec::new();
+		visit(&mut |text| texts.push(text.clone()));
+		texts
+	}
+
+	fn request_texts(req: &mut dyn RequestType) -> Vec<String> {
+		Self::collect_texts(|f| req.visit_text_mut(f))
+	}
+
+	fn response_texts(resp: &mut dyn ResponseType) -> Vec<String> {
+		Self::collect_texts(|f| resp.visit_text_mut(f))
 	}
 
 	#[cfg(test)]

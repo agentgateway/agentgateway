@@ -545,7 +545,7 @@ mod bedrock_guardrails_tests {
 		assert!(!response.is_blocked());
 		assert!(response.is_anonymized());
 		assert_eq!(
-			response.output_texts(),
+			response.into_output_texts(),
 			vec!["My name is {NAME} and my email is {EMAIL}"]
 		);
 	}
@@ -598,22 +598,274 @@ mod bedrock_guardrails_tests {
 		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
 		assert!(response.is_anonymized());
 		assert_eq!(
-			response.output_texts(),
+			response.into_output_texts(),
 			vec!["First message with {NAME}", "Second message with {EMAIL}"]
 		);
 	}
 
+	/// An intervention with no recognized assessment action (e.g. automated reasoning
+	/// findings carry no `action` field) must not be treated as maskable: its output
+	/// is a canned message, not per-block masked text.
 	#[test]
 	fn test_apply_guardrail_response_intervened_no_assessments() {
 		let json = json!({
 			"action": "GUARDRAIL_INTERVENED",
-			"outputs": [{"text": "modified content"}],
-			"assessments": []
+			"outputs": [{"text": "I can't help with that."}],
+			"assessments": [{
+				"automatedReasoningPolicy": {
+					"findings": [{"invalid": {"logicWarning": {"type": "ALWAYS_FALSE"}}}]
+				}
+			}]
 		});
 		let response: ApplyGuardrailResponse = serde_json::from_value(json).unwrap();
 		assert!(!response.is_blocked());
-		assert!(response.is_anonymized());
+		assert!(!response.is_anonymized());
+		assert!(response.is_intervened());
 	}
+}
+
+/// Build an intervened ApplyGuardrail response from output texts and assessments JSON.
+fn bedrock_intervened(
+	outputs: &[&str],
+	assessments: serde_json::Value,
+) -> bedrock_guardrails::ApplyGuardrailResponse {
+	serde_json::from_value(serde_json::json!({
+		"action": "GUARDRAIL_INTERVENED",
+		"outputs": outputs.iter().map(|t| serde_json::json!({"text": t})).collect::<Vec<_>>(),
+		"assessments": assessments,
+	}))
+	.unwrap()
+}
+
+fn bedrock_anonymized_assessments() -> serde_json::Value {
+	serde_json::json!([{
+		"sensitiveInformationPolicy": {
+			"piiEntities": [{"action": "ANONYMIZED", "match": "x", "type": "NAME"}]
+		}
+	}])
+}
+
+/// Assert what the Bedrock guard would send, then run an anonymize verdict through
+/// the real outcome path and apply the resulting mask to the request.
+fn apply_bedrock_request_mask(req: &mut dyn RequestType, sent: &[&str], masked: &[&str]) {
+	assert_eq!(Policy::request_texts(req), sent);
+	let outcome = Policy::bedrock_guardrail_outcome(
+		bedrock_intervened(masked, bedrock_anonymized_assessments()),
+		sent.len(),
+		&RequestRejection::default(),
+	);
+	assert!(matches!(outcome, GuardrailOutcome::Masked(_)));
+	let (_, rejection) =
+		Policy::apply_request_guard_outcome(outcome.map_mask(RequestGuardMutation::Texts), req)
+			.unwrap();
+	assert!(rejection.is_none());
+}
+
+/// Same as `apply_bedrock_request_mask`, but for responses.
+fn apply_bedrock_response_mask(resp: &mut dyn ResponseType, sent: &[&str], masked: &[&str]) {
+	assert_eq!(Policy::response_texts(resp), sent);
+	let outcome = Policy::bedrock_guardrail_outcome(
+		bedrock_intervened(masked, bedrock_anonymized_assessments()),
+		sent.len(),
+		&RequestRejection::default(),
+	);
+	assert!(matches!(outcome, GuardrailOutcome::Masked(_)));
+	let (_, rejection) =
+		Policy::apply_response_guard_outcome(outcome.map_mask(ResponseGuardMutation::Texts), resp)
+			.unwrap();
+	assert!(rejection.is_none());
+}
+
+#[test]
+fn bedrock_request_mask_preserves_completions_content_parts() {
+	let mut req: crate::llm::types::completions::Request =
+		serde_json::from_value(serde_json::json!({
+			"model": "gpt-4o",
+			"messages": [{
+				"role": "user",
+				"content": [
+					{"type": "text", "text": "My name is Jane"},
+					{"type": "image_url", "image_url": {"url": "https://example.com/image.png"}},
+					{"type": "text", "text": "Email jane@example.com"}
+				]
+			}]
+		}))
+		.unwrap();
+
+	apply_bedrock_request_mask(
+		&mut req,
+		&["My name is Jane", "Email jane@example.com"],
+		&["My name is {NAME}", "Email {EMAIL}"],
+	);
+
+	let value = serde_json::to_value(req).unwrap();
+	assert_eq!(
+		value["messages"][0]["content"][0]["text"],
+		"My name is {NAME}"
+	);
+	assert_eq!(
+		value["messages"][0]["content"][1]["image_url"]["url"],
+		"https://example.com/image.png"
+	);
+	assert_eq!(value["messages"][0]["content"][2]["text"], "Email {EMAIL}");
+}
+
+#[test]
+fn bedrock_request_mask_preserves_anthropic_content_parts() {
+	let mut req: crate::llm::types::messages::Request = serde_json::from_value(serde_json::json!({
+		"model": "claude-sonnet-4-20250514",
+		"max_tokens": 128,
+		"system": [{"type": "text", "text": "Contact Jane", "cache_control": {"type": "ephemeral"}}],
+		"messages": [{
+			"role": "user",
+			"content": [
+				{"type": "text", "text": "Email jane@example.com"},
+				{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "AA=="}}
+			]
+		}]
+	}))
+	.unwrap();
+
+	apply_bedrock_request_mask(
+		&mut req,
+		&["Contact Jane", "Email jane@example.com"],
+		&["Contact {NAME}", "Email {EMAIL}"],
+	);
+
+	let value = serde_json::to_value(req).unwrap();
+	assert_eq!(value["system"][0]["text"], "Contact {NAME}");
+	assert_eq!(value["system"][0]["cache_control"]["type"], "ephemeral");
+	assert_eq!(value["messages"][0]["content"][0]["text"], "Email {EMAIL}");
+	assert_eq!(value["messages"][0]["content"][1]["source"]["data"], "AA==");
+}
+
+#[test]
+fn bedrock_request_mask_preserves_responses_input_items() {
+	let mut req: crate::llm::types::responses::Request = serde_json::from_value(serde_json::json!({
+		"model": "gpt-4o",
+		"instructions": "Contact Jane",
+		"input": [{
+			"role": "user",
+			"content": [
+				{"type": "input_text", "text": "Email jane@example.com"},
+				{"type": "input_image", "image_url": "https://example.com/image.png"}
+			]
+		}]
+	}))
+	.unwrap();
+
+	apply_bedrock_request_mask(
+		&mut req,
+		&["Contact Jane", "Email jane@example.com"],
+		&["Contact {NAME}", "Email {EMAIL}"],
+	);
+
+	let value = serde_json::to_value(req).unwrap();
+	assert_eq!(value["instructions"], "Contact {NAME}");
+	assert_eq!(value["input"][0]["content"][0]["text"], "Email {EMAIL}");
+	assert_eq!(
+		value["input"][0]["content"][1]["image_url"],
+		"https://example.com/image.png"
+	);
+}
+
+/// A blocked intervention returns a single canned message no matter how many blocks
+/// were sent; it must reject rather than error out or misapply the canned text.
+#[test]
+fn bedrock_blocked_intervention_with_canned_output_rejects() {
+	let resp = bedrock_intervened(
+		&["Sorry, I can't help with that."],
+		serde_json::json!([{
+			"topicPolicy": {"topics": [{"action": "BLOCKED", "name": "Finance", "type": "DENY"}]}
+		}]),
+	);
+	let outcome = Policy::bedrock_guardrail_outcome(resp, 3, &RequestRejection::default());
+	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
+}
+
+/// Automated reasoning findings carry no `action` field; even when the output count
+/// happens to match, the canned message must not be applied as a mask.
+#[test]
+fn bedrock_unrecognized_intervention_rejects_instead_of_masking() {
+	let resp = bedrock_intervened(
+		&["I can't help with that."],
+		serde_json::json!([{
+			"automatedReasoningPolicy": {"findings": [{"impossible": {}}]}
+		}]),
+	);
+	let outcome = Policy::bedrock_guardrail_outcome(resp, 1, &RequestRejection::default());
+	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
+}
+
+/// Masked outputs that can't be mapped one-to-one onto the sent blocks must reject
+/// rather than misalign replacements or fail the whole request.
+#[test]
+fn bedrock_masked_output_count_mismatch_rejects() {
+	let resp = bedrock_intervened(&["Email {EMAIL}"], bedrock_anonymized_assessments());
+	let outcome = Policy::bedrock_guardrail_outcome(resp, 2, &RequestRejection::default());
+	assert!(matches!(outcome, GuardrailOutcome::Rejected(_)));
+}
+
+#[test]
+fn bedrock_response_mask_preserves_choice_metadata() {
+	let mut resp: crate::llm::types::completions::Response =
+		serde_json::from_value(serde_json::json!({
+			"model": "gpt-4o",
+			"usage": null,
+			"choices": [{
+				"index": 0,
+				"finish_reason": "tool_calls",
+				"message": {
+					"role": "assistant",
+					"content": "Contact Jane",
+					"tool_calls": [{"id": "call_1", "type": "function"}]
+				}
+			}]
+		}))
+		.unwrap();
+
+	apply_bedrock_response_mask(&mut resp, &["Contact Jane"], &["Contact {NAME}"]);
+
+	let value = serde_json::to_value(resp).unwrap();
+	assert_eq!(value["choices"][0]["message"]["content"], "Contact {NAME}");
+	assert_eq!(
+		value["choices"][0]["message"]["tool_calls"][0]["id"],
+		"call_1"
+	);
+	assert_eq!(value["choices"][0]["finish_reason"], "tool_calls");
+}
+
+/// Masking rewrites the text a citation's offsets point into; stale offsets and
+/// logprobs must be dropped, while untouched parts keep theirs.
+#[test]
+fn bedrock_response_mask_clears_stale_annotation_offsets() {
+	let mut resp: crate::llm::types::responses::Response =
+		serde_json::from_value(serde_json::json!({
+			"id": "resp_01", "status": "completed", "model": "gpt-4o",
+			"output": [
+				{"type": "message", "id": "msg_01", "role": "assistant", "status": "completed", "content": [
+					{"type": "output_text", "logprobs": null, "text": "See the docs.", "annotations": [
+						{"type": "url_citation", "url": "https://example.com", "title": "Docs", "start_index": 0, "end_index": 12}
+					]},
+					{"type": "output_text", "logprobs": null, "text": "Email jane@example.com", "annotations": []}
+				]}
+			]
+		}))
+		.unwrap();
+
+	apply_bedrock_response_mask(
+		&mut resp,
+		&["See the docs.", "Email jane@example.com"],
+		&["See the docs.", "Email {EMAIL}"],
+	);
+
+	let value = serde_json::to_value(resp).unwrap();
+	let parts = &value["output"][0]["content"];
+	// untouched part keeps its citation
+	assert_eq!(parts[0]["text"], "See the docs.");
+	assert_eq!(parts[0]["annotations"][0]["url"], "https://example.com");
+	assert_eq!(parts[1]["text"], "Email {EMAIL}");
+	assert_eq!(parts[1]["annotations"], serde_json::json!([]));
 }
 
 // ============================================================================
