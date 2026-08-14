@@ -1,6 +1,6 @@
 ---
 source: crates/agentgateway/src/import.rs
-description: src/tests/import/litellm/inbound-api-key-unsafe.yaml
+description: src/tests/import/litellm/inbound-api-key-literal.yaml
 ---
 source: litellm
 config:
@@ -19,13 +19,22 @@ config:
         provider: openAI
         params:
           model: gpt-4o
+    policies:
+      apiKey:
+        keys:
+          - key: literal-master-key
+        mode: strict
+        location:
+          header:
+            name: x-litellm-key
+            prefix: "Bearer "
 findings:
   - sourcePath: "model_list[0]"
     status: exact
     message: Imported model deployment for chat
   - sourcePath: general_settings.master_key
-    status: manual
-    message: Literal LiteLLM master_key was not emitted to avoid materializing an inbound secret; use os.environ/<NAME>
+    status: exact
+    message: Mapped LiteLLM master_key and custom API-key header to strict inbound API-key authentication
   - sourcePath: general_settings.litellm_key_header_name
-    status: manual
-    message: LiteLLM custom API-key header was not emitted because master_key is not environment-backed
+    status: exact
+    message: "Mapped LiteLLM's custom API-key header name to the inbound API-key policy"

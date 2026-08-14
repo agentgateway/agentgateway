@@ -34,4 +34,4 @@ findings:
     message: Imported model deployment for chat
   - sourcePath: general_settings.master_key
     status: approximate
-    message: Mapped the environment-backed master_key to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers
+    message: Mapped LiteLLM master_key to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers

@@ -34,7 +34,7 @@ findings:
     message: Imported model deployment for chat
   - sourcePath: general_settings.master_key
     status: exact
-    message: Mapped the environment-backed master_key and LiteLLM custom API-key header to strict inbound API-key authentication
+    message: Mapped LiteLLM master_key and custom API-key header to strict inbound API-key authentication
   - sourcePath: general_settings.litellm_key_header_name
     status: exact
     message: "Mapped LiteLLM's custom API-key header name to the inbound API-key policy"

@@ -511,8 +511,7 @@ fn import_litellm_inbound_api_key(settings: &Map<String, Value>, plan: &mut Impo
 		plan.findings.push(ImportFinding {
 			source_path: "general_settings.master_key".to_string(),
 			status: ImportStatus::Manual,
-			message: "LiteLLM master_key must be an environment-backed string and was not emitted"
-				.to_string(),
+			message: "LiteLLM master_key must be a string and was not emitted".to_string(),
 		});
 		report_unmapped_inbound_header(
 			settings,
@@ -522,43 +521,33 @@ fn import_litellm_inbound_api_key(settings: &Map<String, Value>, plan: &mut Impo
 		);
 		return;
 	};
-	let Some(environment) = master_key.strip_prefix("os.environ/") else {
-		plan.findings.push(ImportFinding {
-			source_path: "general_settings.master_key".to_string(),
-			status: ImportStatus::Manual,
-			message: "Literal LiteLLM master_key was not emitted to avoid materializing an inbound secret; use os.environ/<NAME>"
-				.to_string(),
-		});
-		report_unmapped_inbound_header(
-			settings,
-			plan,
-			ImportStatus::Manual,
-			"LiteLLM custom API-key header was not emitted because master_key is not environment-backed",
-		);
-		return;
+	let key = match master_key.strip_prefix("os.environ/") {
+		Some("") => {
+			plan.findings.push(ImportFinding {
+				source_path: "general_settings.master_key".to_string(),
+				status: ImportStatus::Manual,
+				message:
+					"LiteLLM master_key environment reference must name a variable and was not emitted"
+						.to_string(),
+			});
+			report_unmapped_inbound_header(
+				settings,
+				plan,
+				ImportStatus::Manual,
+				"LiteLLM custom API-key header was not emitted because master_key has an empty environment reference",
+			);
+			return;
+		},
+		Some(environment) => json!(format!("${environment}")),
+		None => json!(master_key),
 	};
-	if environment.is_empty() {
-		plan.findings.push(ImportFinding {
-			source_path: "general_settings.master_key".to_string(),
-			status: ImportStatus::Manual,
-			message: "LiteLLM master_key environment reference must name a variable and was not emitted"
-				.to_string(),
-		});
-		report_unmapped_inbound_header(
-			settings,
-			plan,
-			ImportStatus::Manual,
-			"LiteLLM custom API-key header was not emitted because master_key has an empty environment reference",
-		);
-		return;
-	}
 
 	let (header_name, prefix, status, message) = match settings.get("litellm_key_header_name") {
 		None => (
 			"authorization".to_string(),
 			Some("Bearer ".to_string()),
 			ImportStatus::Approximate,
-			"Mapped the environment-backed master_key to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers"
+			"Mapped LiteLLM master_key to strict Authorization Bearer authentication; LiteLLM also accepts other credential headers"
 				.to_string(),
 		),
 		Some(Value::String(name)) => {
@@ -566,7 +555,7 @@ fn import_litellm_inbound_api_key(settings: &Map<String, Value>, plan: &mut Impo
 				plan.findings.push(ImportFinding {
 					source_path: "general_settings.master_key".to_string(),
 					status: ImportStatus::Manual,
-					message: "Environment-backed master_key was not emitted because LiteLLM custom API-key header name is invalid"
+					message: "LiteLLM master_key was not emitted because LiteLLM custom API-key header name is invalid"
 						.to_string(),
 				});
 				plan.findings.push(ImportFinding {
@@ -581,7 +570,7 @@ fn import_litellm_inbound_api_key(settings: &Map<String, Value>, plan: &mut Impo
 				name.as_str().to_string(),
 				Some("Bearer ".to_string()),
 				ImportStatus::Exact,
-				"Mapped the environment-backed master_key and LiteLLM custom API-key header to strict inbound API-key authentication"
+				"Mapped LiteLLM master_key and custom API-key header to strict inbound API-key authentication"
 					.to_string(),
 			)
 		},
@@ -589,7 +578,7 @@ fn import_litellm_inbound_api_key(settings: &Map<String, Value>, plan: &mut Impo
 			plan.findings.push(ImportFinding {
 				source_path: "general_settings.master_key".to_string(),
 				status: ImportStatus::Manual,
-				message: "Environment-backed master_key was not emitted because LiteLLM custom API-key header name is not a string"
+				message: "LiteLLM master_key was not emitted because LiteLLM custom API-key header name is not a string"
 					.to_string(),
 			});
 			plan.findings.push(ImportFinding {
@@ -603,7 +592,7 @@ fn import_litellm_inbound_api_key(settings: &Map<String, Value>, plan: &mut Impo
 	};
 
 	plan.inbound_api_key = Some(ImportedInboundAPIKey {
-		key: json!(format!("${environment}")),
+		key,
 		header_name,
 		prefix,
 	});
@@ -1397,8 +1386,8 @@ mod tests {
 	}
 
 	#[test]
-	fn does_not_materialize_literal_litellm_master_key() {
-		assert_litellm_golden("inbound-api-key-unsafe");
+	fn imports_literal_litellm_master_key() {
+		assert_litellm_golden("inbound-api-key-literal");
 	}
 
 	#[test]
