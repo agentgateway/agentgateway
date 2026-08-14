@@ -220,7 +220,7 @@ export function TrafficPolicySection(props: {
             props.schemaRoot,
             [key],
             "Configured from schema.",
-          ) ?? "Configured from schema.",
+          ) ?? translateText("Configured from schema."),
         icon: trafficPolicyIcons[key] ?? ui?.icon ?? Shield,
         customEditor: ui?.customEditor,
       };

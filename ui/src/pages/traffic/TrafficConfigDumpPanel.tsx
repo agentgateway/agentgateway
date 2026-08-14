@@ -249,7 +249,7 @@ export function TrafficDumpRoutesView(props: {
                     <td>{backendListSummary(backends)}</td>
                     <td>{policies.length + backendPolicies.length}</td>
                     <td className="row-actions">
-                      <Tooltip content="View route">
+                      <Tooltip content={tr("copy.viewRoute")}>
                         <button
                           className="icon-button"
                           type="button"
@@ -311,7 +311,7 @@ function RuntimeListenerTable(props: {
               <td>{listenerRouteObjectCount(listener)}</td>
               <td>{listenerBackendCount(listener)}</td>
               <td className="row-actions">
-                <Tooltip content="View listener">
+                <Tooltip content={tr("copy.viewListener")}>
                   <button
                     className="icon-button"
                     type="button"

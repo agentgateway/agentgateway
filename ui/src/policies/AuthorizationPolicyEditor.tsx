@@ -186,10 +186,7 @@ export function AuthorizationPolicyEditor(props: {
                 <div className="authz-rule-header">
                   <div>
                     <div className="authz-rule-title">
-                      <strong>
-                        {tr("copy.rule")}
-                        {index + 1}
-                      </strong>
+                      <strong>{tr("copy.ruleNumber", [index + 1])}</strong>
                       <span className={`badge authz-effect ${rule.effect}`}>
                         {rule.effect}
                       </span>

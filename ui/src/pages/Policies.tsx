@@ -223,7 +223,7 @@ export function PolicyCatalogPage(props: {
             props.schemaRoot,
             [policyKey],
             "Configured from schema.",
-          ) ?? "Configured from schema.",
+          ) ?? translateText("Configured from schema."),
         icon: ui?.icon ?? Shield,
         customEditor: ui?.customEditor,
       };

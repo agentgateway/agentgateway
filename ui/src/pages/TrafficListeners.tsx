@@ -252,7 +252,7 @@ function TrafficListenersEditorPage() {
                       <span className="badge">
                         {bind.tunnelProtocol ?? "direct"}
                       </span>
-                      <Tooltip content="Add listener">
+                      <Tooltip content={tr("copy.addListener")}>
                         <button
                           className="icon-button"
                           type="button"
@@ -262,7 +262,7 @@ function TrafficListenersEditorPage() {
                           <Plus size={16} />
                         </button>
                       </Tooltip>
-                      <Tooltip content="Edit bind">
+                      <Tooltip content={tr("copy.editBind")}>
                         <button
                           className="icon-button"
                           type="button"
@@ -272,7 +272,7 @@ function TrafficListenersEditorPage() {
                           <Pencil size={16} />
                         </button>
                       </Tooltip>
-                      <Tooltip content="Delete bind">
+                      <Tooltip content={tr("copy.deleteBind")}>
                         <button
                           className="icon-button danger"
                           type="button"
@@ -323,7 +323,7 @@ function TrafficListenersEditorPage() {
                               </td>
                               <td>{listenerBackendCount(listener)}</td>
                               <td className="row-actions">
-                                <Tooltip content="Add route">
+                                <Tooltip content={tr("copy.addRoute")}>
                                   <Link
                                     className="icon-button"
                                     aria-label={tr("copy.addRoute")}
@@ -335,7 +335,7 @@ function TrafficListenersEditorPage() {
                                     <RouteIcon size={16} />
                                   </Link>
                                 </Tooltip>
-                                <Tooltip content="Edit listener">
+                                <Tooltip content={tr("copy.editListener")}>
                                   <button
                                     className="icon-button"
                                     type="button"
@@ -351,7 +351,7 @@ function TrafficListenersEditorPage() {
                                     <Pencil size={16} />
                                   </button>
                                 </Tooltip>
-                                <Tooltip content="Delete listener">
+                                <Tooltip content={tr("copy.deleteListener")}>
                                   <button
                                     className="icon-button danger"
                                     type="button"

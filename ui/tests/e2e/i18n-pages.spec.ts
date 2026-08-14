@@ -152,10 +152,17 @@ function isSuspiciousMixedCopy(text: string) {
   if (hanCount < 2) return false;
   const prose = text
     .replace(/https?:\/\/\S+/giu, "")
+    .replace(/`[^`]*`/g, "")
     .replace(
       /\b(?:Agentgateway|OpenAI|Anthropic|Claude|Gemini|Ollama|Azure|AWS|Amazon|Google|Bedrock|Guardrails|VS|Code|Copilot|Business|Enterprise|API|HTTP|HTTPS|TCP|JWT|JWKS|OIDC|OAuth|LLM|MCP|CEL|CORS|JSON|YAML|URL|SDK|CLI|TLS|OTLP|gRPC|Basic|Bearer|POST|GET|PUT|PATCH|DELETE|SQLite|WebSocket)\b/giu,
       "",
     );
   const englishWords = prose.match(/[A-Za-z][A-Za-z'-]{2,}/g) ?? [];
-  return englishWords.length >= 3;
+  if (englishWords.length >= 3) return true;
+  return (
+    englishWords.length >= 2 &&
+    /\b(?:when|must|only|true|false|default|requires|should|is|are|to|from|with|without)\b/iu.test(
+      prose,
+    )
+  );
 }

@@ -606,11 +606,7 @@ export function ModelsPage() {
               : deleteModel(deleting.id)
           }
         >
-          <p>
-            {tr("copy.delete")}
-            <strong>{deleting.name}</strong>
-            {tr("copy.thisCannotBeUndone")}
-          </p>
+          <p>{tr("copy.deleteNamedResourceQuestion", [deleting.name])}</p>
         </ConfirmDialog>
       ) : null}
     </div>
@@ -793,24 +789,9 @@ function ModelEditor(props: {
           </p>
           <p>{tr("copy.someExamples")}</p>
           <ul>
-            <li>
-              {tr("copy.match")}
-              <code>fast</code>
-              {tr("copy.andSendTo")}
-              <code>gpt-mini</code>.
-            </li>
-            <li>
-              {tr("copy.match")}
-              <code>*</code>
-              {tr("copy.andForwardTheModelAsIs")}
-            </li>
-            <li>
-              {tr("copy.match")}
-              <code>openai/*</code>
-              {tr("copy.andStripThe")}
-              <code>openai/</code>{" "}
-              {tr("copy.prefixForwardingTheRemainingModelAsIs")}
-            </li>
+            <li>{tr("copy.modelMatchSendTo", ["fast", "gpt-mini"])}</li>
+            <li>{tr("copy.modelMatchForwardAsIs", ["*"])}</li>
+            <li>{tr("copy.modelMatchStripPrefix", ["openai/*", "openai/"])}</li>
           </ul>
         </div>
       </details>

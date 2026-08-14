@@ -204,10 +204,7 @@ export function TrafficGatewaysPage() {
             ) : null
           }
         >
-          {tr("copy.thisConfigurationUsesLegacy")}
-          <code>binds</code>
-          {tr("copy.andHasNo")} <code>gateways</code>
-          {tr("copy.considerMovingListenerOwnershipTo")} <code>gateways</code>.
+          {tr("copy.legacyBindsWarning", ["binds", "gateways", "gateways"])}
         </StatusBanner>
       ) : null}
 

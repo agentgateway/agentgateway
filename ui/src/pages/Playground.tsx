@@ -584,7 +584,7 @@ export function PlaygroundPage() {
           action={
             hybrid && fileCorsOwned ? (
               <Link className="button" to="/llm/policies" hash="cors">
-                Configure CORS
+                {tr("copy.configureCors")}
               </Link>
             ) : (
               <button
@@ -593,16 +593,12 @@ export function PlaygroundPage() {
                 disabled={corsSaving}
                 onClick={applyLlmCors}
               >
-                Apply CORS
+                {tr("copy.applyCors")}
               </button>
             )
           }
         >
-          {tr("copy.add")}
-          {currentOrigin()}
-          {tr(
-            "copy.toTheLlmCorsPolicySoThisPlaygroundCanCallTheGatewayFromTheBrowser",
-          )}
+          {tr("copy.playgroundLlmCorsInstruction", [currentOrigin()])}
         </StatusBanner>
       ) : null}
       {needsMcpCors ? (
@@ -612,7 +608,7 @@ export function PlaygroundPage() {
           action={
             hybrid && fileMcpCorsOwned ? (
               <Link className="button" to="/mcp/policies" hash="cors">
-                Configure CORS
+                {tr("copy.configureCors")}
               </Link>
             ) : (
               <button
@@ -621,16 +617,12 @@ export function PlaygroundPage() {
                 disabled={corsSaving}
                 onClick={applyMcpCors}
               >
-                Apply MCP CORS
+                {tr("copy.applyMcpCors")}
               </button>
             )
           }
         >
-          {tr("copy.add")}
-          {currentOrigin()}
-          {tr(
-            "copy.toTheMcpCorsPolicySoThePlaygroundCanListAndCallMcpToolsFromTheBrowser",
-          )}
+          {tr("copy.playgroundMcpCorsInstruction", [currentOrigin()])}
         </StatusBanner>
       ) : null}
       {!configDataLoading && !configDataError && modelOptions.length === 0 ? (

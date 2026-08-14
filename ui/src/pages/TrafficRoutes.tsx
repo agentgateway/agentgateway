@@ -366,7 +366,7 @@ function TrafficRoutesEditorPage() {
                     </td>
                     <td>{backendListSummary(context.route.backends)}</td>
                     <td className="row-actions">
-                      <Tooltip content="Edit route">
+                      <Tooltip content={tr("copy.editRoute")}>
                         <button
                           className="icon-button"
                           type="button"
@@ -376,7 +376,7 @@ function TrafficRoutesEditorPage() {
                           <Pencil size={16} />
                         </button>
                       </Tooltip>
-                      <Tooltip content="Delete route">
+                      <Tooltip content={tr("copy.deleteRoute")}>
                         <button
                           className="icon-button danger"
                           type="button"
@@ -445,11 +445,9 @@ function TrafficRoutesEditorPage() {
           }
         >
           <p>
-            {tr("copy.delete")}{" "}
-            <strong>
-              {routeDisplayName(deletingRoute.route, deletingRoute.routeIndex)}
-            </strong>
-            {tr("copy.trafficMatchingThisRouteWillNoLongerReachItsBackends")}
+            {tr("copy.deleteRouteQuestion", [
+              routeDisplayName(deletingRoute.route, deletingRoute.routeIndex),
+            ])}
           </p>
         </ConfirmDialog>
       ) : null}
@@ -1396,7 +1394,7 @@ function HeaderConditionRow(props: {
           />
           {tr("copy.regex")}
         </label>
-        <Tooltip content="Remove header condition">
+        <Tooltip content={tr("copy.removeHeaderCondition")}>
           <button
             className="icon-button danger"
             type="button"
@@ -1509,7 +1507,7 @@ function QueryConditionRow(props: {
           />
           {tr("copy.regex")}
         </label>
-        <Tooltip content="Remove query condition">
+        <Tooltip content={tr("copy.removeQueryCondition")}>
           <button
             className="icon-button danger"
             type="button"
@@ -1612,7 +1610,7 @@ function RouteBackendRow(props: {
           <strong>{backendSummary(props.backend)}</strong>
           <span>{tr("copy.unsupportedBackendShapeInThisForm")}</span>
         </div>
-        <Tooltip content="Remove backend">
+        <Tooltip content={tr("copy.removeBackend")}>
           <button
             className="icon-button danger"
             type="button"
@@ -1698,7 +1696,7 @@ function RouteBackendRow(props: {
           }
         />
       </div>
-      <Tooltip content="Remove backend">
+      <Tooltip content={tr("copy.removeBackend")}>
         <button
           className="icon-button danger"
           type="button"
