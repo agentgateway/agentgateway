@@ -1721,6 +1721,7 @@ impl LocalBackend {
 					prefix_mode: tgt.prefix_mode.unwrap_or_default(),
 					failure_mode: tgt.failure_mode.unwrap_or_default(),
 					session_idle_ttl: mcp_session_ttl,
+					dns_rebinding_protection: tgt.dns_rebinding_protection,
 				};
 				backends.push(Backend::MCP(name, m).into());
 				backends
@@ -1787,6 +1788,10 @@ pub struct LocalMcpBackend {
 	/// Defaults to `failClosed`.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub failure_mode: Option<FailureMode>,
+	/// Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).
+	/// Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.
+	#[serde(default)]
+	pub dns_rebinding_protection: bool,
 }
 
 #[apply(schema_de!)]

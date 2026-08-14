@@ -124,6 +124,12 @@ impl App {
 		let tracer = log.span_writer();
 		req.extensions_mut().insert(tracer);
 
+		if backend.dns_rebinding_protection
+			&& let Some(resp) = mcp::dns_rebinding::reject_non_localhost(&req)
+		{
+			return Ok(resp);
+		}
+
 		authorization_policies.register(log.cel.ctx());
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 

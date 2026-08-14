@@ -1662,6 +1662,88 @@ fn mcp_json_post<'a>(
 		.json(body)
 }
 
+fn mcp_initialize_body() -> serde_json::Value {
+	serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {"name": "test-client", "version": "0.0.1"}
+		}
+	})
+}
+
+#[tokio::test]
+async fn dns_rebinding_protection_off_allows_non_localhost_origin() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let resp = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.header("Origin", "http://evil.example")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+}
+
+#[tokio::test]
+async fn dns_rebinding_protection_rejects_non_localhost_origin() {
+	let mock = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_dns_rebinding_protection(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let forbidden = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.header("Origin", "http://evil.example")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(forbidden.status(), reqwest::StatusCode::FORBIDDEN);
+
+	let allowed = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.header("Origin", format!("http://127.0.0.1:{}", io.port()))
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(allowed.status(), reqwest::StatusCode::OK);
+}
+
+#[tokio::test]
+async fn dns_rebinding_protection_rejects_non_localhost_host() {
+	use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+	let mock = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_dns_rebinding_protection(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	let io = t.serve_real_listener(BIND_KEY).await;
+
+	let mut stream = tokio::net::TcpStream::connect(io).await.unwrap();
+	let body = mcp_initialize_body().to_string();
+	let req = format!(
+		"POST /mcp HTTP/1.1\r\nHost: evil.example\r\nContent-Type: application/json\r\nAccept: application/json, text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+		body.len()
+	);
+	stream.write_all(req.as_bytes()).await.unwrap();
+	let mut buf = Vec::new();
+	stream.read_to_end(&mut buf).await.unwrap();
+	let text = String::from_utf8_lossy(&buf);
+	assert!(
+		text.starts_with("HTTP/1.1 403"),
+		"expected 403 for Host: evil.example, got: {text}"
+	);
+}
+
 #[tokio::test]
 async fn streamable_http_downstream_sse_frames_include_message_event() {
 	use wiremock::{Mock, ResponseTemplate};
@@ -3683,6 +3765,7 @@ async fn setup_proxy_policies_with_target(
 			legacy_sse,
 			policies,
 			target_policies,
+			false,
 		)
 		.with_bind(simple_bind())
 		.with_route(basic_route(mock.addr));

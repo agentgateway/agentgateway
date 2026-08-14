@@ -699,7 +699,16 @@ impl TestBind {
 		legacy_sse: bool,
 		policies: Vec<BackendTrafficPolicy>,
 	) -> Self {
-		self.with_mcp_backend_and_target_policies(b, stateful, legacy_sse, policies, vec![])
+		self.with_mcp_backend_and_target_policies(b, stateful, legacy_sse, policies, vec![], false)
+	}
+
+	pub fn with_mcp_backend_dns_rebinding_protection(
+		self,
+		b: SocketAddr,
+		stateful: bool,
+		legacy_sse: bool,
+	) -> Self {
+		self.with_mcp_backend_and_target_policies(b, stateful, legacy_sse, vec![], vec![], true)
 	}
 
 	// Like `with_mcp_backend_policies`, but also attaches `target_policies` to the
@@ -713,6 +722,7 @@ impl TestBind {
 		legacy_sse: bool,
 		policies: Vec<BackendTrafficPolicy>,
 		target_policies: Vec<BackendTrafficPolicy>,
+		dns_rebinding_protection: bool,
 	) -> Self {
 		let opb = Backend::Opaque(
 			ResourceName::new(strng::format!("basic-{}", b), "".into()),
@@ -740,6 +750,7 @@ impl TestBind {
 				prefix_mode: Default::default(),
 				failure_mode: FailureMode::FailClosed,
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				dns_rebinding_protection,
 			},
 		);
 		{
@@ -858,6 +869,7 @@ impl TestBind {
 				prefix_mode,
 				failure_mode,
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				dns_rebinding_protection: false,
 			},
 		);
 		{

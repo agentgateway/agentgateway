@@ -1734,6 +1734,11 @@ pub struct McpBackend {
 	#[serde(with = "crate::serdes::serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	pub session_idle_ttl: Duration,
+	/// When true, reject MCP requests whose Host/Origin is not localhost
+	/// (`localhost`, `127.0.0.1`, `[::1]`, with optional port). Off by default:
+	/// agentgateway is typically not a browser-facing localhost MCP server.
+	#[serde(default)]
+	pub dns_rebinding_protection: bool,
 }
 
 impl McpBackend {

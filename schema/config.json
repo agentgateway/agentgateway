@@ -7566,6 +7566,11 @@
               "type": "null"
             }
           ]
+        },
+        "dnsRebindingProtection": {
+          "description": "Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).\nOff by default; see https://github.com/agentgateway/agentgateway/issues/1855.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false,
@@ -11731,6 +11736,11 @@
               "type": "null"
             }
           ]
+        },
+        "dnsRebindingProtection": {
+          "description": "Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).\nOff by default; see https://github.com/agentgateway/agentgateway/issues/1855.",
+          "type": "boolean",
+          "default": false
         },
         "policies": {
           "description": "Policies applied to MCP requests.",
