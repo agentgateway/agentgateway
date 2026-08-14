@@ -8,7 +8,7 @@ use headers::Header;
 use headers_accept::Accept;
 use hyper::Request;
 use hyper::body::Incoming;
-use mediatype::MediaType;
+use mediatype::{MediaType, ReadParams, WriteParams};
 use prometheus_client::encoding::prometheus_protobuf::encode_to_vec as encode_protobuf;
 use prometheus_client::encoding::text::encode as encode_text;
 use prometheus_client::registry::Registry;
@@ -91,7 +91,7 @@ impl From<ContentType> for &str {
 	}
 }
 
-fn content_type_from_media_type(m: MediaType) -> Option<ContentType> {
+fn content_type_from_media_type(m: &MediaType) -> Option<ContentType> {
 	let ty_str: &str = m.ty.as_str();
 	if ty_str == mediatype::names::TEXT.as_str() && m.subty == mediatype::names::PLAIN.as_str() {
 		return Some(ContentType::PlainText);
@@ -105,6 +105,7 @@ fn content_type_from_media_type(m: MediaType) -> Option<ContentType> {
 }
 
 const AVAILABLE_MEDIA_TYPES: [MediaType<'static>; 4] = [
+	MediaType::new(mediatype::names::TEXT, mediatype::names::PLAIN),
 	MediaType::new(
 		mediatype::names::APPLICATION,
 		mediatype::Name::new_unchecked("vnd.google.protobuf"),
@@ -117,7 +118,6 @@ const AVAILABLE_MEDIA_TYPES: [MediaType<'static>; 4] = [
 		mediatype::names::APPLICATION,
 		mediatype::Name::new_unchecked("x-protobuf"),
 	),
-	MediaType::new(mediatype::names::TEXT, mediatype::names::PLAIN),
 ];
 
 #[inline(always)]
@@ -127,18 +127,18 @@ fn content_type<T>(req: &Request<T>) -> ContentType {
 		Ok(header) => header,
 		Err(_) => return ContentType::default(),
 	};
-	accept
-		// Using this call ensures quality parameters are handled correctly.
-		// We don't use Accept::negotiate, because extra parameters are not
-		// enforced and create mismatch conditions that require creating more
-		// mappings in AVAILABLE_MEDIA_TYPES for every case.
+	let normalized_accept = accept
 		.media_types()
-		.map(mediatype::MediaTypeBuf::essence)
-		.find(|mediatype| {
-			AVAILABLE_MEDIA_TYPES
-				.iter()
-				.any(|available| mediatype == available)
+		.map(|media_type| {
+			let mut normalized = media_type.essence();
+			if let Some(q) = media_type.get_param(mediatype::names::Q) {
+				normalized.set_param(mediatype::names::Q, q);
+			}
+			normalized
 		})
+		.collect::<Accept>();
+	normalized_accept
+		.negotiate(&AVAILABLE_MEDIA_TYPES)
 		.and_then(content_type_from_media_type)
 		.unwrap_or_default()
 }
@@ -181,6 +181,42 @@ mod test {
 		assert_eq!(
 			Into::<&str>::into(super::content_type(&unsupported_req_accept)),
 			"text/plain;charset=utf-8"
-		)
+		);
+
+		let q_values_req = http::Request::builder()
+			.header(
+				"Accept",
+				"application/vnd.google.protobuf;proto=io.prometheus.client.MetricSet;encoding=delimited;q=0.1, text/plain;q=0.9",
+			)
+			.body("text is preferred")
+			.unwrap();
+		assert_eq!(
+			Into::<&str>::into(super::content_type(&q_values_req)),
+			"text/plain;charset=utf-8"
+		);
+
+		let q_zero_req = http::Request::builder()
+			.header(
+				"Accept",
+				"application/vnd.google.protobuf;proto=io.prometheus.client.MetricSet;encoding=delimited;q=0, text/plain;q=1",
+			)
+			.body("protobuf is forbidden")
+			.unwrap();
+		assert_eq!(
+			Into::<&str>::into(super::content_type(&q_zero_req)),
+			"text/plain;charset=utf-8"
+		);
+
+		let parameterized_protobuf_req = http::Request::builder()
+			.header(
+				"Accept",
+				"application/vnd.google.protobuf;proto=io.prometheus.client.MetricSet;encoding=delimited",
+			)
+			.body("protobuf parameters describe the representation")
+			.unwrap();
+		assert_eq!(
+			Into::<&str>::into(super::content_type(&parameterized_protobuf_req)),
+			"application/vnd.google.protobuf;proto=io.prometheus.client.MetricSet;encoding=delimited;version=1.0.0"
+		);
 	}
 }
