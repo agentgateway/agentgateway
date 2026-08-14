@@ -557,7 +557,8 @@ impl PromptGuard {
 			content: window.to_string(),
 		};
 		let (action, rejection) =
-			Policy::apply_single_response_guard(guard, &mut resp, http_headers, client, original, None).await?;
+			Policy::apply_single_response_guard(guard, &mut resp, http_headers, client, original, None)
+				.await?;
 		match rejection {
 			Some(rejected) => {
 				let body = rejected.into_body().collect().await?.to_bytes();
@@ -875,16 +876,9 @@ impl Policy {
 		original: Option<&cel::RequestSnapshot>,
 		llm: Option<&cel::LLMContext>,
 	) -> anyhow::Result<(GuardrailAction, Option<Response>)> {
-		let outcome = Self::evaluate_single_request_guard(
-			guard,
-			req,
-			http_headers,
-			client,
-			claims,
-			original,
-			llm,
-		)
-		.await?;
+		let outcome =
+			Self::evaluate_single_request_guard(guard, req, http_headers, client, claims, original, llm)
+				.await?;
 		Self::apply_request_guard_outcome(outcome, req)
 	}
 
@@ -1469,7 +1463,8 @@ impl Policy {
 		llm: Option<&cel::LLMContext>,
 	) -> anyhow::Result<(GuardrailAction, Option<Response>)> {
 		let outcome =
-			Self::evaluate_single_response_guard(guard, resp, http_headers, client, original, llm).await?;
+			Self::evaluate_single_response_guard(guard, resp, http_headers, client, original, llm)
+				.await?;
 		Self::apply_response_guard_outcome(outcome, resp)
 	}
 

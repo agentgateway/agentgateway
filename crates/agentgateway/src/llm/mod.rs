@@ -1729,11 +1729,7 @@ impl AIProvider {
 				let http_headers = &parts.headers;
 				let claims = parts.extensions.get::<Claims>().cloned();
 				let original = log.as_ref().and_then(|l| l.request_snapshot.clone());
-				let request_model = req
-					.model()
-					.clone()
-					.map(strng::new)
-					.unwrap_or_default();
+				let request_model = req.model().clone().map(strng::new).unwrap_or_default();
 				let llm_ctx = Box::new(crate::cel::LLMContext::from(LLMRequest {
 					input_tokens: None,
 					input_format: original_format,
