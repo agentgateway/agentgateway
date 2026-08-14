@@ -385,6 +385,20 @@ impl ConfigImporter for LiteLlmImporter {
 			apply_fallbacks(fallbacks, source_path, &mut plan);
 		}
 
+		let default_fallbacks = config
+			.router_settings
+			.get("default_fallbacks")
+			.map(|default_fallbacks| ("router_settings.default_fallbacks", default_fallbacks))
+			.or_else(|| {
+				config
+					.litellm_settings
+					.get("default_fallbacks")
+					.map(|default_fallbacks| ("litellm_settings.default_fallbacks", default_fallbacks))
+			});
+		if let Some((source_path, default_fallbacks)) = default_fallbacks {
+			apply_default_fallbacks(default_fallbacks, source_path, &mut plan);
+		}
+
 		if let Some(strategy) = config.router_settings.get("routing_strategy") {
 			let (status, message) = match strategy.as_str() {
 				Some("simple-shuffle") => (
@@ -410,14 +424,25 @@ impl ConfigImporter for LiteLlmImporter {
 			});
 		}
 		for setting in config.router_settings.keys() {
-			if matches!(setting.as_str(), "fallbacks" | "routing_strategy") {
-				continue;
+			match setting.as_str() {
+				"fallbacks" | "routing_strategy" | "default_fallbacks" => continue,
+				"context_window_fallbacks" | "content_policy_fallbacks" => {
+					plan.findings.push(ImportFinding {
+						source_path: format!("router_settings.{setting}"),
+						status: ImportStatus::Manual,
+						message: format!(
+							"LiteLLM {setting} is conditional on specific error types and cannot be represented by agentgateway's unconditional priority failover; configure equivalent behavior manually"
+						),
+					});
+				},
+				_ => {
+					plan.findings.push(ImportFinding {
+						source_path: format!("router_settings.{setting}"),
+						status: ImportStatus::Manual,
+						message: "No automatic mapping is available; review this router setting".to_string(),
+					});
+				},
 			}
-			plan.findings.push(ImportFinding {
-				source_path: format!("router_settings.{setting}"),
-				status: ImportStatus::Manual,
-				message: "No automatic mapping is available; review this router setting".to_string(),
-			});
 		}
 		for (section, values) in [
 			("general_settings", &config.general_settings),
@@ -438,7 +463,7 @@ impl ConfigImporter for LiteLlmImporter {
 			}
 		}
 		for setting in config.litellm_settings.keys() {
-			if setting == "fallbacks" {
+			if matches!(setting.as_str(), "fallbacks" | "default_fallbacks") {
 				continue;
 			}
 			if setting == "database_url" {
@@ -1091,6 +1116,83 @@ fn apply_fallbacks(value: &Value, source_path: &str, plan: &mut ImportPlan) {
 	});
 }
 
+fn apply_default_fallbacks(value: &Value, source_path: &str, plan: &mut ImportPlan) {
+	let Some(entries) = value.as_array() else {
+		plan.findings.push(ImportFinding {
+			source_path: source_path.to_string(),
+			status: ImportStatus::Unsupported,
+			message: "Default fallbacks must be a list of model names".to_string(),
+		});
+		return;
+	};
+	if entries.is_empty() {
+		plan.findings.push(ImportFinding {
+			source_path: source_path.to_string(),
+			status: ImportStatus::Exact,
+			message: "default_fallbacks is empty; no routes changed".to_string(),
+		});
+		return;
+	}
+
+	let mut seen = HashSet::new();
+	let mut default_targets: Vec<(String, Vec<String>)> = Vec::new();
+	for entry in entries {
+		let Some(name) = entry.as_str() else {
+			plan.findings.push(ImportFinding {
+				source_path: source_path.to_string(),
+				status: ImportStatus::Manual,
+				message: "Default fallback entry must be a string and was not emitted".to_string(),
+			});
+			continue;
+		};
+		if !seen.insert(name) {
+			continue;
+		}
+		if let Some(route) = plan.routes.get(name) {
+			default_targets.push((name.to_string(), route.targets.clone()));
+		} else {
+			plan.findings.push(ImportFinding {
+				source_path: source_path.to_string(),
+				status: ImportStatus::Manual,
+				message: format!("Default fallback target model {name:?} was not imported"),
+			});
+		}
+	}
+
+	let mut changed = false;
+	for (route_name, route) in plan.routes.iter_mut() {
+		if !route.fallback_groups.is_empty() {
+			continue;
+		}
+		let own_targets: HashSet<&str> = route.targets.iter().map(String::as_str).collect();
+		let groups = default_targets
+			.iter()
+			.filter(|(name, _)| name != route_name)
+			.map(|(_, targets)| {
+				targets
+					.iter()
+					.filter(|target| !own_targets.contains(target.as_str()))
+					.cloned()
+					.collect::<Vec<String>>()
+			})
+			.filter(|group| !group.is_empty());
+		for group in groups {
+			route.fallback_groups.push(group);
+			changed = true;
+		}
+	}
+
+	if changed {
+		plan.findings.push(ImportFinding {
+			source_path: source_path.to_string(),
+			status: ImportStatus::Approximate,
+			message:
+				"Mapped default_fallbacks to priority-based failover for routes without explicit fallbacks"
+					.to_string(),
+		});
+	}
+}
+
 fn sanitize_name(name: &str) -> String {
 	let sanitized = name
 		.chars()
@@ -1216,6 +1318,16 @@ mod tests {
 	#[test]
 	fn keeps_routing_for_a_single_model_with_fallbacks() {
 		assert_litellm_golden("single-model-fallback");
+	}
+
+	#[test]
+	fn applies_default_fallbacks_to_routes_without_explicit_fallbacks() {
+		assert_litellm_golden("default-fallbacks");
+	}
+
+	#[test]
+	fn reports_conditional_fallback_settings_as_manual() {
+		assert_litellm_golden("conditional-fallbacks");
 	}
 
 	#[test]
