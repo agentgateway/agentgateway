@@ -1737,7 +1737,7 @@ pub struct McpBackend {
 	/// When true, reject MCP requests whose Host/Origin is not localhost
 	/// (`localhost`, `127.0.0.1`, `[::1]`, with optional port). Off by default:
 	/// agentgateway is typically not a browser-facing localhost MCP server.
-	#[serde(default)]
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
 	pub dns_rebinding_protection: bool,
 }
 

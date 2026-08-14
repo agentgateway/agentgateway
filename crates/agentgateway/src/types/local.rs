@@ -1790,7 +1790,7 @@ pub struct LocalMcpBackend {
 	pub failure_mode: Option<FailureMode>,
 	/// Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).
 	/// Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.
-	#[serde(default)]
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
 	pub dns_rebinding_protection: bool,
 }
 
