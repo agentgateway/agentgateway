@@ -75,7 +75,7 @@ func extractModelAncestorBackends(ctx RouteContext, model *agentgateway.Agentgat
 		Kind: wellknown.AgentgatewayModelGVK.Kind,
 	}
 	gateways := sets.Set[types.NamespacedName]{}
-	for _, parent := range FilteredReferences(extractParentReferenceInfo(ctx, ctx.RouteParents, model)) {
+	for _, parent := range FilteredReferences(extractModelParentReferenceInfo(ctx, model)) {
 		gateways.Insert(parent.ParentGateway)
 	}
 	kind := wellknown.ServiceKind
