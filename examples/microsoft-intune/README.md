@@ -89,6 +89,75 @@ support issues](https://learn.microsoft.com/en-us/intune/device-management/tools
 For a one-time Windows check, upload the same file as a [Windows platform
 script](https://learn.microsoft.com/en-us/intune/device-management/tools/run-powershell-scripts-windows).
 
+## Add custom compliance reporting
+
+The operational verification scripts cannot be used unchanged as Intune
+custom-compliance discovery scripts. They print diagnostic lines and return a
+nonzero exit code when a check fails. Custom compliance requires output that
+matches its rule definition, and a discovered noncompliant value is not a
+script execution failure.
+
+Use these compliance-specific artifacts for the
+`CodexGatewayConfigured` Boolean setting:
+
+- [macOS Bash discovery
+  script](compliance/discover-codex-gateway-macos.sh)
+- [Windows PowerShell discovery
+  script](compliance/Discover-CodexGatewayWindows.ps1)
+- [Custom-compliance rule
+  JSON](compliance/codex-gateway-compliance.json)
+
+The discovery scripts check only the durable managed Codex configuration. They
+do not test network reachability, because a temporary Gateway or network outage
+must not make every managed device noncompliant.
+
+Before uploading a discovery script, replace its example Codex URL with the
+approved address, including `/v1`. Keep its expected URL aligned with the
+managed configuration policy.
+
+### Configure custom compliance on macOS
+
+1. Go to **Endpoint security > Device compliance > Scripts > Add > macOS** and
+   upload `discover-codex-gateway-macos.sh`.
+2. Set **Run this script using the logged on credentials** to **Yes**. Enable
+   signature enforcement when the organization signs scripts.
+3. Create a macOS compliance policy, add **Custom Compliance**, select the
+   discovery script, and upload `codex-gateway-compliance.json`.
+4. Assign the policy to the same pilot group as the application and managed
+   configuration policies.
+
+The macOS script prints only `true` or `false`, as required for this single
+Boolean rule, and returns exit code `0` for either discovered value. A nonzero
+exit code is reserved for a script execution error.
+
+### Configure custom compliance on Windows
+
+1. Go to **Endpoint security > Device compliance > Scripts > Add > Windows**
+   and upload `Discover-CodexGatewayWindows.ps1`.
+2. Set **Run this script using the logged on credentials** and **Run script in
+   64-bit PowerShell Host** to **Yes**. Enable signature enforcement when the
+   organization signs scripts.
+3. Create a Windows compliance policy, add **Custom Compliance**, select the
+   discovery script, and upload `codex-gateway-compliance.json`.
+4. Assign the policy to the same pilot group as the application and managed
+   configuration policies.
+
+The Windows script returns one compressed JSON object:
+
+```json
+{"CodexGatewayConfigured":true}
+```
+
+For requirements and limits, see [Custom compliance discovery scripts for
+Microsoft
+Intune](https://learn.microsoft.com/en-us/intune/device-security/compliance/create-custom-script)
+and [Custom compliance JSON files in Microsoft
+Intune](https://learn.microsoft.com/en-us/intune/device-security/compliance/create-custom-json).
+
+Custom compliance reports state but does not repair configuration. Keep the
+managed preference or remediation policy assigned. A corrected setting can
+take up to eight hours to appear compliant.
+
 ## Verify delivery and execution
 
 An assignment shows that Intune intends to deliver a script. A per-device or

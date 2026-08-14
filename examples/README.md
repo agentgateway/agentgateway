@@ -44,4 +44,5 @@ are named `<type>-<name>`, where `type` is one of `mcp`, `llm`, or `traffic`.
 ### Client management
 
 * [microsoft-intune](microsoft-intune/README.md): verify Intune-managed Codex
-  and Claude Desktop configuration on macOS and Windows clients.
+  and Claude Desktop configuration, and report Codex custom compliance on
+  macOS and Windows clients.
