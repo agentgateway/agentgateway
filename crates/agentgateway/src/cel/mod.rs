@@ -2,18 +2,18 @@
 // Under Apache 2.0 license (https://github.com/Kuadrant/wasm-shim/blob/main/LICENSE)
 
 use std::fmt::{Debug, Formatter};
-use std::sync::Arc;
+use std::sync::OnceLock;
 
 pub use cel::Value;
 pub use cel::types::dynamic::DynamicType;
 use cel::{Context, ExecutionError, ParseError, ParseErrors, Program};
 use flagset::FlagSet;
 pub use helpers::*;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize, Serializer};
 use tracing::log::debug;
 pub use types::*;
 
+mod custom;
 mod helpers;
 mod types;
 
@@ -82,17 +82,34 @@ impl Debug for Expression {
 	}
 }
 
-fn root_context() -> Arc<Context> {
-	let mut ctx = Context::default();
-	agent_celx::insert_all(&mut ctx);
-	Arc::new(ctx)
+struct RootContext {
+	context: Context,
+	registry: custom::Registry,
 }
 
-static ROOT_CONTEXT: Lazy<Arc<Context>> = Lazy::new(root_context);
+static ROOT_CONTEXT: OnceLock<RootContext> = OnceLock::new();
+
+fn context() -> &'static Context {
+	&ROOT_CONTEXT
+		.get_or_init(|| {
+			let mut ctx = Context::default();
+			agent_celx::insert_all(&mut ctx);
+			RootContext {
+				context: ctx,
+				registry: custom::Registry::default(),
+			}
+		})
+		.context
+}
+
+pub fn register_custom_functions(definitions: &str) -> Result<(), Error> {
+	custom::register(definitions)
+}
 
 flagset::flags! {
 	enum Attributes: u32 {
 		Source,
+		Destination,
 
 		Request,
 		RequestBody,
@@ -101,8 +118,10 @@ flagset::flags! {
 		ResponseBody,
 
 		Llm,
+		LlmRequest,
 		LlmPrompt,
 		LlmCompletion,
+		LlmToolCalls,
 
 		Backend,
 
@@ -160,6 +179,11 @@ impl ContextBuilder {
 	pub fn register_log_request(&mut self) {
 		self.logging_attributes |= Attributes::Request;
 	}
+	/// Request full LLM payload capture for the database log sink without requiring a CEL
+	/// expression to also emit that payload as an attribute.
+	pub fn register_log_llm_payload(&mut self) {
+		self.logging_attributes |= Attributes::Llm | Attributes::LlmPrompt | Attributes::LlmCompletion;
+	}
 	fn any_has(&self, attr: impl Into<FlagSet<Attributes>>) -> bool {
 		let x = attr.into();
 		self.request_attributes.contains(x)
@@ -193,6 +217,7 @@ impl ContextBuilder {
 		clear: bool,
 	) -> Option<RequestSnapshot> {
 		if self.any_has(Attributes::Source)
+			|| self.any_has(Attributes::Destination)
 			|| self.any_has(Attributes::Request)
 			|| self.any_has(Attributes::Llm)
 			|| self.any_has(Attributes::Proxy)
@@ -218,7 +243,7 @@ impl ContextBuilder {
 			let Ok(body) = crate::http::inspect_body(req).await else {
 				return;
 			};
-			req.extensions_mut().insert(BufferedBody(body));
+			req.extensions_mut().insert(BufferedBody::from(body));
 		} else if self.log_only_has(Attributes::RequestBody) {
 			if req.extensions().get::<BufferedBody>().is_some() {
 				return;
@@ -245,7 +270,7 @@ impl ContextBuilder {
 			let Ok(body) = crate::http::inspect_response_body(resp).await else {
 				return;
 			};
-			resp.extensions_mut().insert(BufferedBody(body));
+			resp.extensions_mut().insert(BufferedBody::from(body));
 		} else if self.log_only_has(Attributes::ResponseBody) {
 			if resp.extensions().get::<BufferedBody>().is_some() {
 				return;
@@ -275,11 +300,18 @@ impl ContextBuilder {
 	pub fn needs_llm_completion(&self) -> bool {
 		self.any_has(Attributes::LlmCompletion)
 	}
+	pub fn needs_llm_tool_calls(&self) -> bool {
+		self.any_has(Attributes::LlmToolCalls)
+	}
 }
 
 impl Expression {
 	pub fn ast(&self) -> &cel::IdedExpr {
 		self.expression.expression()
+	}
+
+	pub fn needs_llm_request(&self) -> bool {
+		self.attributes.contains(Attributes::LlmRequest)
 	}
 
 	/// new_permissive compiles the expression. If the expression cannot be compiled, its instead replaced
@@ -313,74 +345,10 @@ impl Expression {
 		let expression =
 			Program::compile_with_optimizer(&original_expression, agent_celx::DefaultOptimizer)?;
 
-		let mut props: Vec<Vec<&str>> = Vec::with_capacity(5);
-		properties::properties(
-			&expression.expression().expr,
-			&mut props,
-			&mut Vec::default(),
-		);
+		let mut attributes = attributes_for(expression.expression());
 
 		let include_all = expression.references().functions().contains(&"variables");
-
-		// For now we only look at the first level. We could be more precise
-		let mut attributes: FlagSet<Attributes> = FlagSet::default();
-
-		for tokens in props {
-			match tokens.as_slice() {
-				["request", "body", ..] => {
-					attributes |= Attributes::Request | Attributes::RequestBody;
-				},
-				["request", ..] => {
-					attributes |= Attributes::Request;
-				},
-				["response", "body", ..] => {
-					attributes |= Attributes::Response | Attributes::ResponseBody;
-				},
-				["response", ..] => {
-					attributes |= Attributes::Response;
-				},
-				["llm", "prompt", ..] => {
-					attributes |= Attributes::Llm | Attributes::LlmPrompt;
-				},
-				["llm", "completion", ..] => {
-					attributes |= Attributes::Llm | Attributes::LlmCompletion;
-				},
-				["llm", ..] => {
-					attributes |= Attributes::Llm;
-				},
-				["source", ..] => {
-					attributes |= Attributes::Source;
-				},
-				["backend", ..] => {
-					attributes |= Attributes::Backend;
-				},
-				["jwt", ..] => {
-					attributes |= Attributes::Jwt;
-				},
-				["apiKey", ..] => {
-					attributes |= Attributes::ApiKey;
-				},
-				["basicAuth", ..] => {
-					attributes |= Attributes::BasicAuth;
-				},
-				["mcp", ..] => {
-					attributes |= Attributes::Mcp;
-				},
-				["extauthz", ..] => {
-					attributes |= Attributes::Extauthz;
-				},
-				["extproc", ..] => {
-					attributes |= Attributes::Extproc;
-				},
-				["metadata", ..] => {
-					attributes |= Attributes::Metadata;
-				},
-				["proxy", ..] => {
-					attributes |= Attributes::Proxy;
-				},
-				_ => {},
-			}
-		}
+		attributes |= custom::attributes_for_functions(expression.references().functions().into_iter());
 
 		if include_all {
 			attributes |= FlagSet::full();
@@ -392,6 +360,80 @@ impl Expression {
 			original_expression,
 		})
 	}
+}
+
+fn attributes_for(expression: &cel::IdedExpr) -> FlagSet<Attributes> {
+	let mut props: Vec<Vec<&str>> = Vec::with_capacity(5);
+	properties::properties(&expression.expr, &mut props, &mut Vec::default());
+
+	// For now we only look at the first level. We could be more precise.
+	let mut attributes: FlagSet<Attributes> = FlagSet::default();
+	for tokens in props {
+		match tokens.as_slice() {
+			["request", "body" | "bodyPrefix", ..] => {
+				attributes |= Attributes::Request | Attributes::RequestBody;
+			},
+			["request", ..] => {
+				attributes |= Attributes::Request;
+			},
+			["response", "body" | "bodyPrefix", ..] => {
+				attributes |= Attributes::Response | Attributes::ResponseBody;
+			},
+			["response", ..] => {
+				attributes |= Attributes::Response;
+			},
+			["llm", "prompt", ..] => {
+				attributes |= Attributes::Llm | Attributes::LlmPrompt;
+			},
+			["llm", "completion", ..] => {
+				attributes |= Attributes::Llm | Attributes::LlmCompletion;
+			},
+			["llm", "toolCalls", ..] => {
+				attributes |= Attributes::Llm | Attributes::LlmToolCalls;
+			},
+			["llm", ..] => {
+				attributes |= Attributes::Llm;
+			},
+			["llmRequest", ..] => {
+				attributes |= Attributes::LlmRequest;
+			},
+			["source", ..] => {
+				attributes |= Attributes::Source;
+			},
+			["destination", ..] => {
+				attributes |= Attributes::Destination;
+			},
+			["backend", ..] => {
+				attributes |= Attributes::Backend;
+			},
+			["jwt", ..] => {
+				attributes |= Attributes::Jwt;
+			},
+			["apiKey", ..] => {
+				attributes |= Attributes::ApiKey;
+			},
+			["basicAuth", ..] => {
+				attributes |= Attributes::BasicAuth;
+			},
+			["mcp", ..] => {
+				attributes |= Attributes::Mcp;
+			},
+			["extauthz", ..] => {
+				attributes |= Attributes::Extauthz;
+			},
+			["extproc", ..] => {
+				attributes |= Attributes::Extproc;
+			},
+			["metadata", ..] => {
+				attributes |= Attributes::Metadata;
+			},
+			["proxy", ..] => {
+				attributes |= Attributes::Proxy;
+			},
+			_ => {},
+		}
+	}
+	attributes
 }
 
 #[cfg(test)]

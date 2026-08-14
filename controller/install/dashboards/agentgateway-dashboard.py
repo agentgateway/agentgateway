@@ -88,6 +88,10 @@ def bytes_timeseries(title: str, desc: str = "") -> Timeseries:
   return base_timeseries(title, desc).unit("bytes")
 
 
+def usd_timeseries(title: str, desc: str = "") -> Timeseries:
+  return base_timeseries(title, desc).unit("currencyUSD")
+
+
 def query(expr: str, legend: str) -> PrometheusQuery:
   return raw_query(expr).legend_format(legend)
 
@@ -109,6 +113,10 @@ def irate(expr: str) -> str:
 
 def rate(expr: str) -> str:
   return f"rate({expr}[$__rate_interval])"
+
+
+def increase(expr: str) -> str:
+  return f"increase({expr}[$__rate_interval])"
 
 
 def quantile(quantile_value: str, expr: str) -> str:
@@ -133,6 +141,18 @@ def labels(metric_name: str, label_values: dict[str, str]) -> str:
 def filtered_sum(expr: str, by: list[str]) -> str:
   return prom_sum(
     rate(
+      labels(
+        expr,
+        {"namespace": "~$namespace", "gateway": "~$gateway"},
+      ),
+    ),
+    by=by,
+  )
+
+
+def filtered_increase_sum(expr: str, by: list[str]) -> str:
+  return prom_sum(
+    increase(
       labels(
         expr,
         {"namespace": "~$namespace", "gateway": "~$gateway"},
@@ -267,6 +287,15 @@ def build_dashboard() -> Dashboard:
         by=["gen_ai_token_type", "gen_ai_request_model", "gateway"],
       ),
       "{{gateway}}: {{gen_ai_request_model}} ({{gen_ai_token_type}})",
+    )
+  )
+  llm_cost = usd_timeseries("USD Cost per Interval").with_target(
+    query(
+      filtered_increase_sum(
+        "agentgateway_gen_ai_client_cost_usd_total",
+        by=["gen_ai_request_model", "gateway"],
+      ),
+      "{{gateway}}: {{gen_ai_request_model}}",
     )
   )
 
@@ -452,6 +481,7 @@ def build_dashboard() -> Dashboard:
       Row("LLM")
       .collapsed(True)
       .with_panel(llm_tokens)
+      .with_panel(llm_cost)
       .with_panel(llm_ttft)
       .with_panel(llm_time)
       .with_panel(llm_tps)

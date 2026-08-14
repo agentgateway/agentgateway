@@ -18,7 +18,8 @@ Common flags and environment variables:
 - `-agw.fail-fast-persist=true` (`FAIL_FAST_AND_PERSIST=true`): reuse setup and keep resources only after a failure.
 - `-agw.skip-install=true` (`SKIP_INSTALL=true`): assume the installation already exists.
 - `-agw.skip-bug-report=true` (`SKIP_BUG_REPORT=true`): skip failure dump collection.
-- `-agw.trace=true` / `-agw.verbose=true` (`AGW_E2E_TRACE=true` or `E2E_VERBOSE=true`): emit timing traces for apply/wait/setup steps.
+- `-agw.trace=true` (`AGW_E2E_TRACE=true`): emit timing traces for apply/wait/setup steps.
+- `-agw.verbose=true` (`E2E_VERBOSE=true`): emit timing traces and each failed Istio retry attempt.
 
 Subtests are standard Go subtests, so `-run` filtering works naturally:
 

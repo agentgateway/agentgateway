@@ -1,0 +1,137 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/completions/tool-call.json
+info:
+  model: gpt-3.5-turbo
+  messages:
+    - role: user
+      content: How is the current weather in Columbus?
+    - role: assistant
+      content: ~
+      tool_calls:
+        - id: call_iMGPsr4Xx1u0G5sOzFsTCbQU
+          type: function
+          function:
+            name: get_weather
+            arguments: "{\"format\":\"celsius\",\"location\":\"Columbus, OH\"}"
+        - id: call_5rQmXtLpZ9wKvNbJhGyDsFcE
+          type: function
+          function:
+            name: get_time
+            arguments: ""
+    - role: tool
+      tool_call_id: call_iMGPsr4Xx1u0G5sOzFsTCbQU
+      name: get_weather
+      content: "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+    - role: tool
+      tool_call_id: call_5rQmXtLpZ9wKvNbJhGyDsFcE
+      name: get_time
+      content: "{ \"time\": \"2026-08-12T12:00:00Z\" }"
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "How is the current weather in Columbus?"
+          }
+        ]
+      },
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "toolUse": {
+              "toolUseId": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
+              "name": "get_weather",
+              "input": {
+                "format": "celsius",
+                "location": "Columbus, OH"
+              }
+            }
+          },
+          {
+            "toolUse": {
+              "toolUseId": "call_5rQmXtLpZ9wKvNbJhGyDsFcE",
+              "name": "get_time",
+              "input": {}
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "content": [
+          {
+            "toolResult": {
+              "toolUseId": "call_iMGPsr4Xx1u0G5sOzFsTCbQU",
+              "content": [
+                {
+                  "text": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+                }
+              ],
+              "status": null
+            }
+          },
+          {
+            "toolResult": {
+              "toolUseId": "call_5rQmXtLpZ9wKvNbJhGyDsFcE",
+              "content": [
+                {
+                  "text": "{ \"time\": \"2026-08-12T12:00:00Z\" }"
+                }
+              ],
+              "status": null
+            }
+          }
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 4096
+    },
+    "toolConfig": {
+      "tools": [
+        {
+          "toolSpec": {
+            "name": "agentgateway_dummy_do_not_call",
+            "description": null,
+            "inputSchema": {
+              "json": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-3.5-turbo",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "How is the current weather in Columbus?"
+      },
+      {
+        "role": "assistant",
+        "content": ""
+      },
+      {
+        "role": "tool",
+        "content": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+      },
+      {
+        "role": "tool",
+        "content": "{ \"time\": \"2026-08-12T12:00:00Z\" }"
+      }
+    ]
+  }
+}

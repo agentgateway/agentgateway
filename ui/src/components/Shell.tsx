@@ -12,7 +12,7 @@ import {
   Boxes,
   Coins,
   FileCode2,
-  Github,
+  GitFork,
   Globe,
   Home,
   KeyRound,
@@ -23,6 +23,7 @@ import {
   ScrollText,
   ShieldCheck,
   Shield,
+  SlidersHorizontal,
   Bolt,
   Moon,
   Play,
@@ -30,8 +31,14 @@ import {
   Sun,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Tooltip, useDismissiblePopover } from "./Primitives";
-import { useConfigDumpMode, useGatewayConfig } from "../hooks";
+import { StatusBanner, Tooltip, useDismissiblePopover } from "./Primitives";
+import {
+  useConfigDumpMode,
+  useEffectiveGatewayConfig,
+  useMcpConfigData,
+  useRuntimeInfo,
+  useTrafficConfigData,
+} from "../hooks";
 import logoDark from "../assets/agw-dark.svg";
 import logoLight from "../assets/agw-light.svg";
 
@@ -41,13 +48,14 @@ type NavItemConfig = {
   icon: React.ComponentType<{ size?: number }>;
   placeholder?: boolean;
   groupStart?: boolean;
+  exact?: boolean;
 };
 
 const projectLinks = [
   {
     label: "GitHub",
     href: "https://github.com/agentgateway/agentgateway",
-    icon: Github,
+    icon: GitFork,
   },
   {
     label: "Documentation",
@@ -63,13 +71,24 @@ const projectLinks = [
 
 export function Shell() {
   const router = useRouterState();
+  const runtime = useRuntimeInfo();
   const mode = useConfigDumpMode();
   const dumpMode = mode.data?.mode === "dump";
-  const config = useGatewayConfig({
+  const config = useEffectiveGatewayConfig({
+    enabled: Boolean(mode.data && mode.data.mode !== "dump"),
+  });
+  const mcpData = useMcpConfigData({
+    enabled: Boolean(mode.data && mode.data.mode !== "dump"),
+  });
+  const trafficData = useTrafficConfigData({
     enabled: Boolean(mode.data && mode.data.mode !== "dump"),
   });
   const [theme, setTheme] = useState(
-    () => localStorage.getItem("theme") ?? "light",
+    () =>
+      localStorage.getItem("theme") ??
+      (window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light"),
   );
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const mobileNavRef = useDismissiblePopover<HTMLDivElement>(
@@ -83,27 +102,38 @@ export function Shell() {
       : true;
   const hasMcp = dumpMode
     ? false
-    : config.data
-      ? Boolean(config.data.mcp)
+    : mcpData.data
+      ? Boolean(mcpData.data.mcp)
       : true;
   const hasTraffic = dumpMode
     ? true
-    : config.data
-      ? "binds" in config.data
+    : trafficData.data
+      ? Boolean(trafficData.data.binds?.length) ||
+        "gateways" in trafficData.data ||
+        "routes" in trafficData.data ||
+        "tcpRoutes" in trafficData.data
       : true;
-  const navGroups = navigationGroups({ hasLlm, hasMcp, hasTraffic, dumpMode });
+  const hasBinds = dumpMode
+    ? true
+    : config.data
+      ? Boolean(config.data.binds?.length)
+      : false;
+  const navGroups = navigationGroups({
+    hasLlm,
+    hasMcp,
+    hasTraffic,
+    hasBinds,
+    dumpMode,
+  });
   const nav = navGroups.flatMap((group) => group.items);
   const currentNav =
-    nav.find((item) =>
-      item.to === "/"
-        ? router.location.pathname === "/"
-        : router.location.pathname.startsWith(item.to),
-    ) ?? nav[0];
+    nav
+      .filter((item) => navItemActive(item, router.location.pathname))
+      .sort((left, right) => right.to.length - left.to.length)[0] ?? nav[0];
   const CurrentIcon = currentNav.icon;
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem("theme", theme);
   }, [theme]);
 
   useEffect(() => {
@@ -196,7 +226,11 @@ export function Shell() {
                 className="icon-button"
                 type="button"
                 aria-label="Toggle theme"
-                onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+                onClick={() => {
+                  const next = theme === "dark" ? "light" : "dark";
+                  localStorage.setItem("theme", next);
+                  setTheme(next);
+                }}
               >
                 {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
               </button>
@@ -204,6 +238,11 @@ export function Shell() {
           </div>
         </header>
         <main className="content">
+          {runtime.data?.ui.configStoreMode == "readOnly" && (
+            <StatusBanner state="info" title="Read-only mode">
+              The UI is configured as read-only. Editing is disabled.
+            </StatusBanner>
+          )}
           <Outlet />
         </main>
       </div>
@@ -212,6 +251,7 @@ export function Shell() {
 }
 
 function navigationGroups(options: {
+  hasBinds: boolean;
   hasLlm: boolean;
   hasMcp: boolean;
   hasTraffic: boolean;
@@ -294,7 +334,16 @@ function navigationGroups(options: {
         ]
       : options.hasTraffic
         ? [
-            { to: "/traffic/listeners", label: "Listeners", icon: Network },
+            { to: "/traffic/gateways", label: "Gateways", icon: Network },
+            ...(options.hasBinds
+              ? [
+                  {
+                    to: "/traffic/listeners",
+                    label: "Listeners",
+                    icon: Network,
+                  },
+                ]
+              : []),
             { to: "/traffic/routes", label: "Routes", icon: Route },
           ]
         : [
@@ -312,7 +361,17 @@ function navigationGroups(options: {
       ? [{ to: "/cel", label: "CEL Playground", icon: Braces }]
       : [
           { to: "/cel", label: "CEL Playground", icon: Braces },
-          { to: "/raw-config", label: "Raw Configuration", icon: FileCode2 },
+          {
+            to: "/raw-config",
+            label: "Raw Configuration",
+            icon: FileCode2,
+            exact: true,
+          },
+          {
+            to: "/settings",
+            label: "Settings",
+            icon: SlidersHorizontal,
+          },
         ],
   });
   return groups;
@@ -359,14 +418,13 @@ function MobileNavItem(props: {
   currentPath: string;
   placeholder?: boolean;
   groupStart?: boolean;
+  exact?: boolean;
 }) {
   const Icon = props.icon;
   const navigate = useNavigate();
   const active = props.placeholder
     ? false
-    : props.to === "/"
-      ? props.label === "Home" && props.currentPath === "/"
-      : props.currentPath.startsWith(props.to);
+    : navItemActive(props, props.currentPath);
   if (props.placeholder) {
     return (
       <button
@@ -400,7 +458,11 @@ function eyebrowForPath(path: string) {
   if (path === "/") return "Gateway overview";
   if (path.startsWith("/mcp")) return "MCP configuration";
   if (path.startsWith("/traffic")) return "Traffic configuration";
-  if (path.startsWith("/cel") || path.startsWith("/raw-config"))
+  if (
+    path.startsWith("/cel") ||
+    path.startsWith("/raw-config") ||
+    path.startsWith("/settings")
+  )
     return "Policy tools";
   return "LLM configuration";
 }
@@ -412,14 +474,13 @@ function NavItem(props: {
   currentPath: string;
   placeholder?: boolean;
   groupStart?: boolean;
+  exact?: boolean;
 }) {
   const Icon = props.icon;
   const navigate = useNavigate();
   const active = props.placeholder
     ? false
-    : props.to === "/"
-      ? props.label === "Home" && props.currentPath === "/"
-      : props.currentPath.startsWith(props.to);
+    : navItemActive(props, props.currentPath);
   if (props.placeholder) {
     return (
       <button
@@ -441,4 +502,10 @@ function NavItem(props: {
       <span>{props.label}</span>
     </Link>
   );
+}
+
+function navItemActive(item: { to: string; exact?: boolean }, path: string) {
+  if (item.to === "/") return path === "/";
+  if (item.exact) return path === item.to;
+  return path === item.to || path.startsWith(`${item.to}/`);
 }

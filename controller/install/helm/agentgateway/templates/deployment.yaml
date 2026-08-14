@@ -11,6 +11,9 @@ metadata:
   {{- end }}
 spec:
   replicas: {{ .Values.controller.replicaCount }}
+  {{- if not (kindIs "invalid" .Values.controller.revisionHistoryLimit) }}
+  revisionHistoryLimit: {{ .Values.controller.revisionHistoryLimit }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "agentgateway.selectorLabels" . | nindent 6 }}
@@ -172,8 +175,20 @@ spec:
             - name: AGW_ENABLE_INFER_EXT
               value: "true"
             {{- end }}
+            {{- if .Values.agentgatewayModels.enabled }}
+            - name: AGW_ENABLE_AGENTGATEWAY_MODELS
+              value: "true"
+            {{- end }}
             - name: AGW_XDS_MODE
               value: {{ .Values.controller.xds.mode | quote }}
+            {{- if .Values.gatewayClassName }}
+            - name: AGW_AGENTGATEWAY_CLASS_NAME
+              value: {{ .Values.gatewayClassName | quote }}
+            {{- end }}
+            {{- if .Values.controllerName }}
+            - name: AGW_CONTROLLER_NAME
+              value: {{ .Values.controllerName | quote }}
+            {{- end }}
             - name: AGW_GATEWAY_CLASS_PARAMETERS_REFS
               value: {{ .Values.gatewayClassParametersRefs | toJson | quote }}
             - name: POD_NAMESPACE
@@ -188,6 +203,9 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
           {{- end }}
+      {{- with .Values.controller.extraContainers }}
+      {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- if.Values.controller.extraVolumes }}
       volumes:
         {{- with .Values.controller.extraVolumes }}
@@ -204,6 +222,10 @@ spec:
       {{- end }}
       {{- with .Values.tolerations }}
       tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.dnsConfig }}
+      dnsConfig:
         {{- toYaml . | nindent 8 }}
       {{- end }}
 {{- if .Values.gatewayClassParametersRefs }}

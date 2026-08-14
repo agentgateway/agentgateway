@@ -80,6 +80,23 @@ func EventuallyGatewayListenerAttachedRoutes(t Test, gatewayName string, gateway
 	})
 }
 
+func EventuallyGatewayListenerCondition(t Test, gatewayName string, gatewayNamespace string, listener gwv1.SectionName, cond gwv1.ListenerConditionType, expect metav1.ConditionStatus) {
+	t.Helper()
+	retry.UntilSuccessOrFail(t, func() error {
+		gw := &gwv1.Gateway{}
+		if err := t.E2EClusterContext().ControllerClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: gatewayName, Namespace: gatewayNamespace}, gw); err != nil {
+			return fmt.Errorf("failed to get Gateway %s/%s: %w", gatewayNamespace, gatewayName, err)
+		}
+		for _, l := range gw.Status.Listeners {
+			if l.Name != listener {
+				continue
+			}
+			return expectMatch(l.Conditions, matchers.HaveCondition(string(cond), expect), "Gateway %s/%s listener %s condition %s=%s", gatewayNamespace, gatewayName, listener, cond, expect)
+		}
+		return fmt.Errorf("listener %s not found in Gateway %s/%s; full status: %+v", listener, gatewayNamespace, gatewayName, gw.Status)
+	})
+}
+
 func EventuallyHTTPRouteCondition(t Test, routeName string, routeNamespace string, cond gwv1.RouteConditionType, expect metav1.ConditionStatus) {
 	t.Helper()
 	retry.UntilSuccessOrFail(t, func() error {
@@ -99,6 +116,17 @@ func EventuallyGRPCRouteCondition(t Test, routeName string, routeNamespace strin
 			return fmt.Errorf("failed to get GRPCRoute %s/%s: %w", routeNamespace, routeName, err)
 		}
 		return expectMatch(extractParentConditions(route.Status.Parents), matchers.HaveAnyParentCondition(string(cond), expect), "GRPCRoute %s/%s parent condition %s=%s", routeNamespace, routeName, cond, expect)
+	})
+}
+
+func EventuallyAgentgatewayModelCondition(t Test, modelName string, modelNamespace string, cond gwv1.RouteConditionType, expect metav1.ConditionStatus) {
+	t.Helper()
+	retry.UntilSuccessOrFail(t, func() error {
+		model := &agentgateway.AgentgatewayModel{}
+		if err := t.E2EClusterContext().ControllerClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: modelName, Namespace: modelNamespace}, model); err != nil {
+			return fmt.Errorf("failed to get AgentgatewayModel %s/%s: %w", modelNamespace, modelName, err)
+		}
+		return expectMatch(extractParentConditions(model.Status.Parents), matchers.HaveAnyParentCondition(string(cond), expect), "AgentgatewayModel %s/%s parent condition %s=%s", modelNamespace, modelName, cond, expect)
 	})
 }
 

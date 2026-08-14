@@ -28,6 +28,8 @@ import { ModelsPage } from "./pages/Models";
 import { McpPoliciesPage, PoliciesPage } from "./pages/Policies";
 import { PlaygroundPage } from "./pages/Playground";
 import { ProvidersPage } from "./pages/Providers";
+import { RawSettingsPage } from "./pages/RawSettings";
+import { TrafficGatewaysPage } from "./pages/TrafficGateways";
 import { TrafficListenersPage } from "./pages/TrafficListeners";
 import { TrafficRoutesPage } from "./pages/TrafficRoutes";
 import "@fontsource/geist-sans/latin-400.css";
@@ -155,6 +157,12 @@ const trafficListenersRoute = createRoute({
   component: TrafficListenersPage,
 });
 
+const trafficGatewaysRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/traffic/gateways",
+  component: TrafficGatewaysPage,
+});
+
 const trafficGetStartedRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/traffic/get-started",
@@ -177,6 +185,12 @@ const rawConfigRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/raw-config",
   component: RawConfigRoute,
+});
+
+const rawSettingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings",
+  component: RawSettingsPage,
 });
 
 function RawConfigRoute() {
@@ -214,9 +228,11 @@ const router = createRouter({
     mcpPoliciesRoute,
     mcpPlaygroundRoute,
     trafficGetStartedRoute,
+    trafficGatewaysRoute,
     trafficListenersRoute,
     trafficRoutesRoute,
     celRoute,
+    rawSettingsRoute,
     rawConfigRoute,
   ]),
 });

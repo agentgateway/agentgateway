@@ -1,0 +1,27 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/embeddings/cohere-v4.json
+info:
+  model: "cohere.embed-v4:0"
+  input: hello world
+  dimensions: 512
+---
+{
+  "request": {
+    "texts": [
+      "hello world"
+    ],
+    "input_type": "search_query",
+    "output_dimension": 512
+  },
+  "parsed": {
+    "input_format": "Embeddings",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "cohere.embed-v4:0",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {
+      "dimensions": 512
+    }
+  }
+}

@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use agent_core::prelude::Strng;
 use agent_core::strng;
 use bytes::Bytes;
+use futures_util::stream;
+use headers::{ContentEncoding, HeaderMapExt};
 use percent_encoding::{AsciiSet, CONTROLS, utf8_percent_encode};
 use rand::seq::IndexedRandom;
 use serde_json::Value;
@@ -10,20 +11,29 @@ use serde_json::Value;
 use crate::http::transformation_cel::TransformationMetadata;
 use crate::http::{self, Request, Response};
 use crate::types::agent::{
-	BackendReference, BackendTrafficPolicy, HeaderMatch, HeaderValueMatch, RouteBackendReference,
-	TrafficPolicy,
+	Authorization, BackendTrafficPolicy, HeaderMatch, RouteBackendReference,
 };
-use crate::{apply, cel, schema_enum};
+use crate::{apply, cel, llm, schema_enum, schema_ser_schema};
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct ModelRoute {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub id: Option<String>,
 	pub name: String,
+	pub created: u64,
 	pub visibility: ModelVisibility,
 	pub header_matches: Vec<Vec<HeaderMatch>>,
-	pub backend_key: Strng,
-	pub route_policies: Vec<TrafficPolicy>,
+	pub backend: RouteBackendReference,
+	#[cfg_attr(feature = "schema", schemars(with = "serde_json::Value"))]
+	pub policies: ModelRoutePolicies,
+	#[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
 	pub backend_policies: Vec<BackendTrafficPolicy>,
+}
+
+#[apply(schema_ser_schema!)]
+pub struct ModelRoutePolicies {
+	pub llm: Arc<llm::Policy>,
+	pub authorization: Option<Authorization>,
 }
 
 #[apply(schema_enum!)]
@@ -42,31 +52,59 @@ impl ModelVisibility {
 	}
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+pub fn default_route_types() -> Arc<llm::Policy> {
+	Arc::new(llm::Policy {
+		routes: [
+			(
+				strng::new("/v1/chat/completions"),
+				llm::RouteType::Completions,
+			),
+			(strng::new("/v1/messages"), llm::RouteType::Messages),
+			(
+				strng::new("/v1/messages/count_tokens"),
+				llm::RouteType::AnthropicTokenCount,
+			),
+			(strng::new(":rawPredict"), llm::RouteType::Messages),
+			(strng::new(":streamRawPredict"), llm::RouteType::Messages),
+			(strng::new("/v1/responses"), llm::RouteType::Responses),
+			(strng::new("/v1/images/generations"), llm::RouteType::Detect),
+			(strng::new("/v1/images/edits"), llm::RouteType::Detect),
+			(strng::new("/v1/images/variations"), llm::RouteType::Detect),
+			(strng::new("/v1/responses/compact"), llm::RouteType::Detect),
+			(strng::new("/v1/embeddings"), llm::RouteType::Embeddings),
+			(strng::new("/v1/rerank"), llm::RouteType::Rerank),
+			(strng::new("/v2/rerank"), llm::RouteType::Rerank),
+			(strng::new("*"), llm::RouteType::Passthrough),
+		]
+		.into_iter()
+		.collect(),
+		..Default::default()
+	})
+}
+
+#[apply(schema_ser_schema!)]
 pub struct VirtualModelRoute {
 	pub name: String,
-	pub route_policies: Vec<TrafficPolicy>,
+	pub created: u64,
+	#[cfg_attr(feature = "schema", schemars(with = "serde_json::Value"))]
+	pub llm_policy: Arc<llm::Policy>,
 	pub routing: VirtualModelRouting,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub enum VirtualModelRouting {
 	Weighted(Vec<WeightedTarget>),
-	Failover { backend_key: Strng },
+	Failover { backend: RouteBackendReference },
 	Conditional(Vec<ConditionalTarget>),
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct WeightedTarget {
 	pub model: String,
 	pub weight: usize,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
+#[apply(schema_ser_schema!)]
 pub struct ConditionalTarget {
 	pub model: String,
 	pub when: Option<Arc<cel::Expression>>,
@@ -77,13 +115,12 @@ pub struct ConditionalTarget {
 pub struct ModelRouter {
 	models: Vec<ModelRoute>,
 	virtual_models: Vec<VirtualModelRoute>,
-	created: u64,
 }
 
 #[derive(Debug, Clone)]
 pub struct ResolvedBackend {
 	pub backend: RouteBackendReference,
-	pub route_policies: Vec<TrafficPolicy>,
+	pub llm_policy: Arc<llm::Policy>,
 }
 
 pub enum ResolveResult {
@@ -100,19 +137,24 @@ struct RequestedModel {
 
 enum RequestedModelLocation {
 	Body(Value),
+	Multipart,
 	Path,
 }
 
+impl RequestedModelLocation {
+	fn llm_request(&self) -> Option<&Value> {
+		match self {
+			Self::Body(body) => Some(body),
+			Self::Multipart | Self::Path => None,
+		}
+	}
+}
+
 impl ModelRouter {
-	pub fn new(
-		models: Vec<ModelRoute>,
-		virtual_models: Vec<VirtualModelRoute>,
-		created: u64,
-	) -> Self {
+	pub fn new(models: Vec<ModelRoute>, virtual_models: Vec<VirtualModelRoute>) -> Self {
 		Self {
 			models,
 			virtual_models,
-			created,
 		}
 	}
 
@@ -148,8 +190,9 @@ impl ModelRouter {
 		);
 
 		match self.resolve_concrete_model(&requested_model.model, false, req) {
-			Some(route) => ResolveResult::Backend(route),
-			None => ResolveResult::DirectResponse(model_not_found_response()),
+			Ok(Some(route)) => ResolveResult::Backend(route),
+			Ok(None) => ResolveResult::DirectResponse(model_not_found_response()),
+			Err(()) => ResolveResult::DirectResponse(model_authorization_denied_response()),
 		}
 	}
 
@@ -159,12 +202,12 @@ impl ModelRouter {
 			.iter()
 			.filter(|model| model.visibility == ModelVisibility::Public)
 			.filter(|model| model_authorized(model, req))
-			.map(|model| model_list_entry(&model.name, self.created))
+			.map(|model| model_list_entry(&model.name, model.created))
 			.chain(
 				self
 					.virtual_models
 					.iter()
-					.map(|model| model_list_entry(&model.name, self.created)),
+					.map(|model| model_list_entry(&model.name, model.created)),
 			)
 			.collect::<Vec<_>>();
 		let body = serde_json::json!({
@@ -199,18 +242,17 @@ impl ModelRouter {
 					},
 				}
 			},
-			VirtualModelRouting::Failover { backend_key } => {
+			VirtualModelRouting::Failover { backend } => {
 				return ResolveResult::Backend(ResolvedBackend {
-					backend: RouteBackendReference {
-						weight: 1,
-						target: BackendReference::Backend(strng::format!("/{}", backend_key)).into(),
-						inline_policies: vec![],
-					},
-					route_policies: virtual_model.route_policies.clone(),
+					backend: backend.clone(),
+					llm_policy: virtual_model.llm_policy.clone(),
 				});
 			},
 			VirtualModelRouting::Conditional(targets) => {
-				let exec = cel::Executor::new_request(req);
+				let exec = match location.llm_request() {
+					Some(llm_request) => cel::Executor::new_llm_request(req, llm_request),
+					None => cel::Executor::new_request(req),
+				};
 				match targets.iter().find(|target| {
 					target
 						.when
@@ -236,8 +278,8 @@ impl ModelRouter {
 			return ResolveResult::DirectResponse(*resp);
 		}
 		match self.resolve_concrete_model(&target, true, req) {
-			Some(route) => ResolveResult::Backend(route),
-			None => {
+			Ok(Some(route)) => ResolveResult::Backend(route),
+			Ok(None) => {
 				tracing::debug!(
 					virtual_model = %virtual_model.name,
 					target_model = %target,
@@ -252,6 +294,7 @@ impl ModelRouter {
 					"virtual_model_target_not_found",
 				))
 			},
+			Err(()) => ResolveResult::DirectResponse(model_authorization_denied_response()),
 		}
 	}
 
@@ -260,21 +303,28 @@ impl ModelRouter {
 		requested_model: &str,
 		allow_internal: bool,
 		req: &Request,
-	) -> Option<ResolvedBackend> {
+	) -> Result<Option<ResolvedBackend>, ()> {
 		// `models` can store things like `provider/*`. The concrete `requested_model` will be like `provider/real-model`.
-		let model = self.models.iter().find(|model| {
+		let matches = |model: &ModelRoute| {
 			(allow_internal || model.visibility == ModelVisibility::Public)
 				&& model_name_matches(&model.name, requested_model)
 				&& header_matches(&model.header_matches, req)
-		})?;
-		Some(ResolvedBackend {
-			backend: RouteBackendReference {
-				weight: 1,
-				target: BackendReference::Backend(strng::format!("/{}", model.backend_key)).into(),
-				inline_policies: model.backend_policies.clone(),
-			},
-			route_policies: model.route_policies.clone(),
-		})
+		};
+		let Some(model) = self
+			.models
+			.iter()
+			.find(|model| matches(model) && model_authorized(model, req))
+		else {
+			return if self.models.iter().any(matches) {
+				Err(())
+			} else {
+				Ok(None)
+			};
+		};
+		Ok(Some(ResolvedBackend {
+			backend: model.backend.clone(),
+			llm_policy: model.policies.llm.clone(),
+		}))
 	}
 }
 
@@ -283,6 +333,22 @@ fn model_not_found_response() -> Response {
 		::http::StatusCode::NOT_FOUND,
 		"Model not found",
 		"model_not_found",
+	)
+}
+
+fn model_authorization_denied_response() -> Response {
+	llm_error_response(
+		::http::StatusCode::FORBIDDEN,
+		"Model authorization denied",
+		"model_authorization_denied",
+	)
+}
+
+fn request_body_too_large_response() -> Response {
+	llm_error_response(
+		::http::StatusCode::PAYLOAD_TOO_LARGE,
+		"LLM request body exceeded the buffer limit",
+		"request_body_too_large",
 	)
 }
 
@@ -305,12 +371,10 @@ fn llm_error_response(status: ::http::StatusCode, message: &str, code: &str) -> 
 
 fn model_authorized(model: &ModelRoute, req: &Request) -> bool {
 	let rules = model
-		.route_policies
+		.policies
+		.authorization
 		.iter()
-		.filter_map(|policy| match policy {
-			TrafficPolicy::Authorization(authorization) => Some(authorization.0.clone()),
-			_ => None,
-		})
+		.map(|authorization| authorization.0.clone())
 		.collect::<Vec<_>>();
 	if rules.is_empty() {
 		return true;
@@ -353,27 +417,8 @@ fn header_matches(matches: &[Vec<HeaderMatch>], req: &Request) -> bool {
 
 fn headers_match(headers: &[HeaderMatch], req: &Request) -> bool {
 	for HeaderMatch { name, value } in headers {
-		let Some(have) = http::get_pseudo_or_header_value(name, req) else {
+		if !http::request_header_matches(name, value, req) {
 			return false;
-		};
-		match value {
-			HeaderValueMatch::Exact(want) => {
-				if have.as_ref() != *want {
-					return false;
-				}
-			},
-			HeaderValueMatch::Regex(want) => {
-				let Some(have_str) = have.to_str().ok() else {
-					return false;
-				};
-				let Some(m) = want.find(have_str) else {
-					return false;
-				};
-				if !(m.start() == 0 && m.end() == have_str.len()) {
-					return false;
-				}
-			},
-			HeaderValueMatch::Invalid => return false,
 		}
 	}
 	true
@@ -402,6 +447,13 @@ async fn requested_model(req: &mut Request) -> RouterResult<RequestedModel> {
 	}
 
 	let body = body_bytes(req).await?;
+	if let Some(boundary) = multipart_boundary(req) {
+		let model = multipart_model(&body, &boundary).await?;
+		return Ok(RequestedModel {
+			model,
+			location: RequestedModelLocation::Multipart,
+		});
+	}
 	let body: Value = serde_json::from_slice(&body).map_err(|err| {
 		tracing::debug!(%err, "failed to parse LLM request body");
 		Box::new(llm_error_response(
@@ -435,6 +487,8 @@ fn rewrite_request_model(
 	match location {
 		RequestedModelLocation::Body(body) => rewrite_body_model(req, body, target),
 		RequestedModelLocation::Path => rewrite_uri_model(req, target),
+		// TODO: Rewrite multipart model fields for virtual model routing.
+		RequestedModelLocation::Multipart => Ok(()),
 	}
 }
 
@@ -492,10 +546,17 @@ fn rewrite_uri_model(req: &mut Request, target: &str) -> RouterResult<()> {
 
 fn rewrite_path_model(path: &str, target: &str) -> Option<String> {
 	if path.ends_with(":streamRawPredict") || path.ends_with(":rawPredict") {
-		let (prefix, rest) = path.split_once("/publishers/anthropic/models/")?;
-		let (_, suffix) = rest.split_once(':')?;
+		// Vertex: .../publishers/{publisher}/models/{model}:{rawPredict|streamRawPredict}
+		// Preserve the publisher from the path; only rewrite the model id. Matching only
+		// `publishers/anthropic` incorrectly dropped virtual-model rewrites for other publishers.
+		let (prefix, rest) = path.split_once("/publishers/")?;
+		let (publisher, after_publisher) = rest.split_once("/models/")?;
+		if publisher.is_empty() {
+			return None;
+		}
+		let (_, suffix) = after_publisher.split_once(':')?;
 		return Some(format!(
-			"{prefix}/publishers/anthropic/models/{}:{suffix}",
+			"{prefix}/publishers/{publisher}/models/{}:{suffix}",
 			encode_model_path_segment(target)
 		));
 	}
@@ -522,25 +583,217 @@ fn encode_model_path_segment(model: &str) -> String {
 	utf8_percent_encode(model, MODEL_SEGMENT).to_string()
 }
 
-async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
-	if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
-		return Ok(body.0.clone());
-	}
-	let body = http::inspect_body(req).await.map_err(|err| {
-		tracing::debug!(%err, "failed to read LLM request body");
+fn multipart_boundary(req: &Request) -> Option<String> {
+	req
+		.headers()
+		.get(::http::header::CONTENT_TYPE)
+		.and_then(|content_type| content_type.to_str().ok())
+		.and_then(|content_type| multer::parse_boundary(content_type).ok())
+}
+
+async fn multipart_model(body: &Bytes, boundary: &str) -> RouterResult<String> {
+	let stream = stream::once(std::future::ready(Ok::<Bytes, multer::Error>(body.clone())));
+	let mut multipart = multer::Multipart::new(stream, boundary);
+	while let Some(field) = multipart.next_field().await.map_err(|err| {
+		tracing::debug!(%err, "failed to parse LLM multipart request body");
 		Box::new(llm_error_response(
 			::http::StatusCode::BAD_REQUEST,
-			"Failed to read LLM request body",
-			"request_body_read_failed",
+			"LLM multipart request body must be valid multipart/form-data",
+			"invalid_request_body",
 		))
-	})?;
-	req.extensions_mut().insert(cel::BufferedBody(body.clone()));
+	})? {
+		if field.name() == Some("model") {
+			return field.text().await.map_err(|err| {
+				tracing::debug!(%err, "failed to parse LLM multipart model field");
+				Box::new(llm_error_response(
+					::http::StatusCode::BAD_REQUEST,
+					"LLM multipart request body has invalid string field 'model'",
+					"invalid_model",
+				))
+			});
+		}
+	}
+	Err(Box::new(llm_error_response(
+		::http::StatusCode::BAD_REQUEST,
+		"LLM multipart request body is missing string field 'model'",
+		"missing_model",
+	)))
+}
+
+async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
+	let limit = http::buffer_limit(req);
+	let content_encoding = req.headers().typed_get::<ContentEncoding>();
+	if content_encoding.is_some() {
+		let body = if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
+			http::Body::from(
+				body
+					.bytes()
+					.cloned()
+					.ok_or_else(|| Box::new(request_body_too_large_response()))?,
+			)
+		} else {
+			std::mem::take(req.body_mut())
+		};
+		let (encoding, body) =
+			http::compression::to_bytes_with_decompression(body, content_encoding.as_ref(), limit)
+				.await
+				.map_err(|err| match err {
+					http::compression::Error::LimitExceeded => Box::new(request_body_too_large_response()),
+					err => {
+						tracing::debug!(%err, "failed to decode LLM request body");
+						Box::new(llm_error_response(
+							::http::StatusCode::BAD_REQUEST,
+							"Failed to decode LLM request body",
+							"request_body_decode_failed",
+						))
+					},
+				})?;
+		*req.body_mut() = http::Body::from(body.clone());
+		if encoding.is_some() {
+			req.headers_mut().remove(::http::header::CONTENT_ENCODING);
+			req.headers_mut().remove(::http::header::CONTENT_LENGTH);
+			req.headers_mut().remove(::http::header::TRANSFER_ENCODING);
+		}
+		req
+			.extensions_mut()
+			.insert(cel::BufferedBody::complete(body.clone()));
+		return Ok(body);
+	}
+	if let Some(body) = req.extensions().get::<cel::BufferedBody>() {
+		return body
+			.bytes()
+			.cloned()
+			.ok_or_else(|| Box::new(request_body_too_large_response()));
+	}
+	let inspection = http::inspect_body_with_limit(req.body_mut(), limit)
+		.await
+		.map_err(|err| {
+			tracing::debug!(%err, "failed to read LLM request body");
+			Box::new(llm_error_response(
+				::http::StatusCode::BAD_REQUEST,
+				"Failed to read LLM request body",
+				"request_body_read_failed",
+			))
+		})?;
+	let body = match inspection {
+		http::BodyInspection::Complete(body) => body,
+		http::BodyInspection::Partial(_) => {
+			return Err(Box::new(request_body_too_large_response()));
+		},
+	};
+	req
+		.extensions_mut()
+		.insert(cel::BufferedBody::complete(body.clone()));
 	Ok(body)
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::transport::BufferLimit;
+	use crate::types::agent::RouteBackendTarget;
+
+	#[tokio::test]
+	async fn conditional_virtual_model_can_use_llm_request() {
+		let model = |name: &str| ModelRoute {
+			id: None,
+			name: name.to_string(),
+			created: 0,
+			visibility: ModelVisibility::Internal,
+			header_matches: vec![],
+			backend: RouteBackendReference {
+				weight: 1,
+				target: RouteBackendTarget::Invalid,
+				inline_policies: vec![],
+			},
+			policies: ModelRoutePolicies {
+				llm: default_route_types(),
+				authorization: None,
+			},
+			backend_policies: vec![],
+		};
+		let router = ModelRouter::new(
+			vec![model("economy-model"), model("premium-model")],
+			vec![VirtualModelRoute {
+				name: "smart-model".to_string(),
+				created: 0,
+				llm_policy: default_route_types(),
+				routing: VirtualModelRouting::Conditional(vec![
+					ConditionalTarget {
+						model: "economy-model".to_string(),
+						when: Some(Arc::new(
+							cel::Expression::new_strict("llmRequest.max_tokens <= 1024")
+								.expect("valid CEL expression"),
+						)),
+					},
+					ConditionalTarget {
+						model: "premium-model".to_string(),
+						when: None,
+					},
+				]),
+			}],
+		);
+		let mut req = ::http::Request::builder()
+			.uri("http://example.com/v1/chat/completions")
+			.body(http::Body::from(
+				r#"{"model":"smart-model","max_tokens":256}"#,
+			))
+			.expect("valid request");
+
+		assert!(matches!(
+			router.resolve(&mut req).await,
+			ResolveResult::Backend(_)
+		));
+		let body = http::read_body_with_limit(req.into_body(), 1024)
+			.await
+			.expect("rewritten request body");
+		let body: Value = serde_json::from_slice(&body).expect("valid JSON request body");
+		assert_eq!(body["model"], "economy-model");
+	}
+
+	#[test]
+	fn concrete_model_authorization_filters_requests() {
+		let authorization = Authorization(Arc::new(crate::http::authorization::RuleSet::new(
+			crate::http::authorization::PolicySet::new(
+				vec![Arc::new(
+					cel::Expression::new_strict("request.headers['x-model-access'] == 'allowed'".to_string())
+						.expect("valid CEL expression"),
+				)],
+				vec![],
+				vec![],
+			),
+		)));
+		let model = ModelRoute {
+			id: None,
+			name: "gpt-5-mini".to_string(),
+			created: 0,
+			visibility: ModelVisibility::Public,
+			header_matches: vec![],
+			backend: RouteBackendReference {
+				weight: 1,
+				target: RouteBackendTarget::Invalid,
+				inline_policies: vec![],
+			},
+			policies: ModelRoutePolicies {
+				llm: default_route_types(),
+				authorization: Some(authorization),
+			},
+			backend_policies: vec![],
+		};
+
+		let allowed = ::http::Request::builder()
+			.uri("http://example.com/v1/chat/completions")
+			.header("x-model-access", "allowed")
+			.body(http::Body::empty())
+			.expect("valid request");
+		let denied = ::http::Request::builder()
+			.uri("http://example.com/v1/chat/completions")
+			.body(http::Body::empty())
+			.expect("valid request");
+
+		assert!(model_authorized(&model, &allowed));
+		assert!(!model_authorized(&model, &denied));
+	}
 
 	#[test]
 	fn rewrite_path_model_rewrites_bedrock_converse_and_preserves_suffix() {
@@ -581,6 +834,26 @@ mod tests {
 	}
 
 	#[test]
+	fn rewrite_path_model_rewrites_vertex_raw_predict_for_non_anthropic_publishers() {
+		assert_eq!(
+			rewrite_path_model(
+				"/v1/projects/p/locations/us/publishers/google/models/virtual:rawPredict",
+				"gemini-2.0-flash",
+			)
+			.as_deref(),
+			Some("/v1/projects/p/locations/us/publishers/google/models/gemini-2.0-flash:rawPredict")
+		);
+		assert_eq!(
+			rewrite_path_model(
+				"/v1/projects/p/locations/us/publishers/meta/models/virtual:streamRawPredict",
+				"llama-3.1-70b",
+			)
+			.as_deref(),
+			Some("/v1/projects/p/locations/us/publishers/meta/models/llama-3.1-70b:streamRawPredict")
+		);
+	}
+
+	#[test]
 	fn rewrite_uri_model_preserves_query() {
 		let mut req = ::http::Request::builder()
 			.uri("http://example.com/model/virtual/converse?trace=true")
@@ -590,6 +863,58 @@ mod tests {
 		assert_eq!(
 			req.uri().to_string(),
 			"http://example.com/model/real%2Fmodel/converse?trace=true"
+		);
+	}
+
+	#[tokio::test]
+	async fn body_bytes_rejects_json_body_over_buffer_limit() {
+		let request_body = br#"{"model":"real-model","messages":[{"role":"user","content":"this part is over the limit"}]}"#;
+		let mut req = ::http::Request::builder()
+			.uri("http://example.com/v1/chat/completions")
+			.body(http::Body::from(request_body.as_slice()))
+			.unwrap();
+		req.extensions_mut().insert(BufferLimit(24));
+
+		let resp = *body_bytes(&mut req)
+			.await
+			.expect_err("over-limit body should fail");
+		assert_eq!(resp.status(), ::http::StatusCode::PAYLOAD_TOO_LARGE);
+		let error_body = http::read_body_with_limit(resp.into_body(), 1024)
+			.await
+			.expect("error body");
+		let error: Value = serde_json::from_slice(&error_body).expect("error JSON");
+		assert_eq!(error["error"]["code"], "request_body_too_large");
+
+		let restored = http::read_body_with_limit(req.into_body(), 1024)
+			.await
+			.expect("restored request body");
+		assert_eq!(restored, Bytes::from_static(request_body));
+	}
+
+	#[tokio::test]
+	async fn requested_model_decodes_gzip_body() {
+		let body = br#"{"model":"claude-opus-4-8","messages":[]}"#;
+		let compressed = http::compression::encode_body(body, "gzip")
+			.await
+			.expect("gzip encode");
+		let mut req = ::http::Request::builder()
+			.uri("http://example.com/v1/messages")
+			.header(::http::header::CONTENT_ENCODING, "gzip")
+			.header(::http::header::CONTENT_LENGTH, compressed.len())
+			.body(http::Body::from(compressed))
+			.unwrap();
+
+		let requested = requested_model(&mut req)
+			.await
+			.expect("gzip request body should decode");
+		assert_eq!(requested.model, "claude-opus-4-8");
+		assert!(!req.headers().contains_key(::http::header::CONTENT_ENCODING));
+		assert!(!req.headers().contains_key(::http::header::CONTENT_LENGTH));
+		assert_eq!(
+			http::read_body_with_limit(req.into_body(), 1024)
+				.await
+				.expect("decompressed request body"),
+			Bytes::from_static(body)
 		);
 	}
 }

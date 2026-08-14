@@ -13,12 +13,42 @@ import type {
   ProviderName,
   VirtualApiKey,
 } from "./types";
+import type {
+  ConfigResource,
+  ConfigResourceKind,
+} from "./api/configResourcesApi";
+import { keyValue } from "./credentialDisplay";
 
 const promptLogKey = "gen_ai.prompt";
 const completionLogKey = "gen_ai.completion";
 const promptLogExpression = "llm.prompt";
 const completionLogExpression =
   'llm.completion.map(c, {"role":"assistant", "content": c})';
+
+type AccessLogConfig = {
+  add?: Record<string, string>;
+  database?: {
+    llm?: "metadata" | "full";
+    add?: Record<string, string>;
+  };
+};
+
+function hasLegacyUiPromptCompletionMappings(
+  add: Record<string, string> | undefined,
+) {
+  return (
+    add?.[promptLogKey] === promptLogExpression &&
+    add?.[completionLogKey] === completionLogExpression
+  );
+}
+
+export const mcpSettingsFields = [
+  "gateways",
+  "port",
+  "statefulMode",
+  "prefixMode",
+  "failureMode",
+] as const;
 
 export const providerNames: ProviderName[] = [
   "openai",
@@ -126,15 +156,6 @@ export function ensureLlm(config: GatewayConfig): LlmConfig {
     config.llm = { models: [] };
     ensureLlmFrontendDefaults(config);
   }
-  if (!Array.isArray(config.llm.models)) {
-    config.llm.models = [];
-  }
-  if (!Array.isArray(config.llm.providers)) {
-    config.llm.providers = [];
-  }
-  if (!Array.isArray(config.llm.virtualModels)) {
-    config.llm.virtualModels = [];
-  }
   return config.llm;
 }
 
@@ -160,14 +181,55 @@ export function ensureMcp(config: GatewayConfig): McpConfig {
   return config.mcp;
 }
 
+export function startupLlmConfig(
+  config: GatewayConfig,
+  port: number,
+): LlmConfig {
+  const gateways = config.ui?.gateways;
+  if (gateways) {
+    return {
+      gateways,
+      models: [],
+      providers: [],
+      virtualModels: [],
+    };
+  }
+  return {
+    port,
+    models: [],
+    providers: [],
+    virtualModels: [],
+  };
+}
+
+export function startupMcpConfig(
+  config: GatewayConfig,
+  port: number,
+): McpConfig {
+  const gateways = config.ui?.gateways;
+  if (gateways) {
+    return {
+      gateways,
+      targets: [],
+    };
+  }
+  return { port, targets: [] };
+}
+
+export function usesUiGateways(config: GatewayConfig | undefined) {
+  const gateways = config?.ui?.gateways;
+  return Array.isArray(gateways) ? gateways.length > 0 : Boolean(gateways);
+}
+
 export function upsertModel(
   config: GatewayConfig,
   model: LlmModel,
-  previousName?: string,
+  previousId?: string,
 ) {
   const llm = ensureLlm(config);
+  llm.models ??= [];
   const index = llm.models.findIndex(
-    (item) => item.name === (previousName ?? model.name),
+    (item) => modelIdentity(item) === (previousId ?? modelIdentity(model)),
   );
   if (index >= 0) {
     llm.models[index] = model;
@@ -176,9 +238,8 @@ export function upsertModel(
   }
 }
 
-export function removeModel(config: GatewayConfig, name: string) {
-  const llm = ensureLlm(config);
-  llm.models = llm.models.filter((model) => model.name !== name);
+export function modelIdentity(model: LlmModel): string {
+  return model.id || model.name;
 }
 
 export function upsertVirtualModel(
@@ -187,6 +248,7 @@ export function upsertVirtualModel(
   previousName?: string,
 ) {
   const llm = ensureLlm(config);
+  llm.virtualModels ??= [];
   const index =
     llm.virtualModels?.findIndex(
       (item) => item.name === (previousName ?? model.name),
@@ -198,19 +260,13 @@ export function upsertVirtualModel(
   }
 }
 
-export function removeVirtualModel(config: GatewayConfig, name: string) {
-  const llm = ensureLlm(config);
-  llm.virtualModels = (llm.virtualModels ?? []).filter(
-    (model) => model.name !== name,
-  );
-}
-
 export function upsertLlmProvider(
   config: GatewayConfig,
   provider: LlmProvider,
   previousName?: string,
 ) {
   const llm = ensureLlm(config);
+  llm.providers ??= [];
   const index =
     llm.providers?.findIndex(
       (item) => item.name === (previousName ?? provider.name),
@@ -222,10 +278,26 @@ export function upsertLlmProvider(
   }
 }
 
-export function removeLlmProvider(config: GatewayConfig, name: string) {
-  const llm = ensureLlm(config);
-  llm.providers = (llm.providers ?? []).filter(
-    (provider) => provider.name !== name,
+export function isDatabaseConfigResource(
+  resources: ConfigResource<ConfigResourceKind>[] | undefined,
+  kind: ConfigResourceKind,
+  id: string,
+) {
+  return (resources ?? []).some(
+    (resource) => resource.kind === kind && resource.id === id,
+  );
+}
+
+export function fileOwnedMcpSettingFields(
+  config: GatewayConfig | null | undefined,
+  hybrid: boolean,
+): ReadonlySet<string> {
+  if (!hybrid) return new Set();
+  const mcp = config?.mcp;
+  return new Set(
+    mcpSettingsFields.filter((field) =>
+      Object.prototype.hasOwnProperty.call(mcp ?? {}, field),
+    ),
   );
 }
 
@@ -237,13 +309,6 @@ function ensureLlmPolicies(config: GatewayConfig): LlmPolicyWithGuardrails {
   const llm = ensureLlm(config);
   llm.policies ??= {};
   return llm.policies as LlmPolicyWithGuardrails;
-}
-
-export function getLlmGuardrails(
-  config: GatewayConfig | undefined,
-): LlmGuardrail | null {
-  return ((config?.llm?.policies as LlmPolicyWithGuardrails | undefined)
-    ?.guardrails ?? null) as LlmGuardrail | null;
 }
 
 export function setLlmGuardrails(
@@ -271,11 +336,6 @@ export function upsertMcpTarget(
   }
 }
 
-export function removeMcpTarget(config: GatewayConfig, name: string) {
-  const mcp = ensureMcp(config);
-  mcp.targets = mcp.targets.filter((target) => target.name !== name);
-}
-
 export function getApiKeyPolicy(config: GatewayConfig): LlmApiKeyPolicy {
   const policies = ensureLlmPolicies(config);
   policies.apiKey ??= {
@@ -293,7 +353,7 @@ export function upsertVirtualKey(
 ) {
   const policy = getApiKeyPolicy(config);
   const index = policy.keys.findIndex(
-    (item) => item.key === (previousKey ?? key.key),
+    (item) => keyValue(item) === (previousKey ?? keyValue(key)),
   );
   if (index >= 0) {
     policy.keys[index] = key;
@@ -302,28 +362,20 @@ export function upsertVirtualKey(
   }
 }
 
-export function removeVirtualKey(config: GatewayConfig, key: string) {
-  const policy = getApiKeyPolicy(config);
-  policy.keys = policy.keys.filter((item) => item.key !== key);
-}
-
-export function disableApiKeyPolicy(config: GatewayConfig) {
-  if (!config.llm?.policies) return;
-  delete config.llm.policies.apiKey;
-  if (Object.keys(config.llm.policies).length === 0) delete config.llm.policies;
-}
-
 export function promptCompletionLoggingEnabled(
   config: GatewayConfig | undefined,
 ) {
   const accessLog = config?.frontendPolicies?.accessLog as
-    | {
-        add?: Record<string, string>;
-        database?: { add?: Record<string, string> };
-      }
+    | AccessLogConfig
     | undefined;
-  const add = accessLog?.database?.add ?? accessLog?.add;
-  return Boolean(add && promptLogKey in add && completionLogKey in add);
+  if (accessLog?.database?.llm) return accessLog.database.llm === "full";
+
+  // Treat mappings previously generated by this UI as full logging until the
+  // setting is next saved. Arbitrary mappings using the same keys remain
+  // independent from this managed setting.
+  return [accessLog?.database?.add, accessLog?.add].some(
+    hasLegacyUiPromptCompletionMappings,
+  );
 }
 
 export function setPromptCompletionLogging(
@@ -333,30 +385,19 @@ export function setPromptCompletionLogging(
   if (!config.frontendPolicies) config.frontendPolicies = {};
   const frontendPolicies = config.frontendPolicies;
   if (!frontendPolicies.accessLog) frontendPolicies.accessLog = {};
-  const accessLog = frontendPolicies.accessLog as {
-    add?: Record<string, string>;
-    database?: { add?: Record<string, string> };
-  };
+  const accessLog = frontendPolicies.accessLog as AccessLogConfig;
   accessLog.database ??= {};
-  accessLog.database.add ??= {};
-  if (enabled) {
-    accessLog.database.add[promptLogKey] = promptLogExpression;
-    accessLog.database.add[completionLogKey] = completionLogExpression;
-    return;
+  accessLog.database.llm = enabled ? "full" : "metadata";
+
+  // Database-only mappings previously owned by this UI are superseded by the
+  // normalized payload. Preserve custom mappings, and preserve top-level
+  // mappings because they may also be consumed by stdout or OTLP.
+  const databaseAdd = accessLog.database.add;
+  if (databaseAdd && hasLegacyUiPromptCompletionMappings(databaseAdd)) {
+    delete databaseAdd[promptLogKey];
+    delete databaseAdd[completionLogKey];
+    if (Object.keys(databaseAdd).length === 0) delete accessLog.database.add;
   }
-  delete accessLog.database.add[promptLogKey];
-  delete accessLog.database.add[completionLogKey];
-  if (Object.keys(accessLog.database.add).length === 0)
-    delete accessLog.database.add;
-  if (Object.keys(accessLog.database).length === 0) delete accessLog.database;
-  if (accessLog.add) {
-    delete accessLog.add[promptLogKey];
-    delete accessLog.add[completionLogKey];
-    if (Object.keys(accessLog.add).length === 0) delete accessLog.add;
-  }
-  if (Object.keys(accessLog).length === 0) delete frontendPolicies.accessLog;
-  if (Object.keys(frontendPolicies).length === 0)
-    delete config.frontendPolicies;
 }
 
 export function uiLogAttributeExpressions(config: GatewayConfig | undefined) {
@@ -420,19 +461,35 @@ export function modelWarnings(model: LlmModel): string[] {
   return warnings;
 }
 
-export function configWarnings(config: GatewayConfig): string[] {
+export function configWarnings(
+  config: GatewayConfig,
+  effectiveLlm?: {
+    models: LlmModel[];
+    policies: NonNullable<LlmConfig["policies"]>;
+  },
+): string[] {
   const warnings: string[] = [];
-  const models = config.llm?.models ?? [];
+  const models = effectiveLlm?.models ?? config.llm?.models ?? [];
   const mcpTargets = config.mcp?.targets ?? [];
-  if (!config.llm) warnings.push("LLM config is not initialized.");
   const duplicateNames = models
+    .filter((model) => !model.id)
     .map((model) => model.name)
     .filter((name, index, names) => names.indexOf(name) !== index);
   if (duplicateNames.length > 0)
     warnings.push(
-      `Duplicate model names: ${Array.from(new Set(duplicateNames)).join(", ")}.`,
+      `Duplicate model names may be ambiguous: ${Array.from(new Set(duplicateNames)).join(", ")}.`,
     );
-  const apiPolicy = config.llm?.policies?.apiKey;
+  const duplicateIds = models
+    .map((model) => model.id)
+    .filter((id): id is string => Boolean(id))
+    .filter((id, index, ids) => ids.indexOf(id) !== index);
+  if (duplicateIds.length > 0) {
+    warnings.push(
+      `Duplicate model IDs: ${Array.from(new Set(duplicateIds)).join(", ")}.`,
+    );
+  }
+  const apiPolicy = (effectiveLlm?.policies.apiKey ??
+    config.llm?.policies?.apiKey) as LlmApiKeyPolicy | null | undefined;
   if (apiPolicy?.mode && apiPolicy.mode !== "strict") {
     warnings.push(
       `Virtual API key mode is ${apiPolicy.mode}; unauthenticated requests may be accepted.`,
@@ -493,4 +550,10 @@ export function makeEmptyMcpTarget(): McpTarget {
       path: "/mcp",
     },
   };
+}
+
+export function enableTrafficConfig(config: GatewayConfig, port = 8080) {
+  if (!("gateways" in config)) {
+    config.gateways = { public: { port } };
+  }
 }

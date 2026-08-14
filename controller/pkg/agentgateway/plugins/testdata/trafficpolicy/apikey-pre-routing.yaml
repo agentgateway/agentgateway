@@ -23,7 +23,7 @@ metadata:
 type: Opaque
 data:
   key1: dGVzdC1hcGkta2V5LTEyMw==
-  key2: ewogICJrZXkiOiAidGVzdC1hcGkta2V5LTQ1NiIsCiAgIm1ldGFkYXRhIjogeyJ1c2VyIjogImFkbWluIn0KfQ==
+  key2: ewogICJrZXlIYXNoIjogInNoYTI1Njo1M2Q3OWIyOTg4OTc3MWQ1YzM0NDRlMjg2YTcwNDA1NTQ0MDVmNjA1MjI4YTlmOTEyOGRmNWEwZmUzMjFjMDk3IiwKICAibWV0YWRhdGEiOiB7InVzZXIiOiAiYWRtaW4ifQp9
 ---
 # Output
 output:
@@ -44,11 +44,11 @@ output:
       traffic:
         apiKeyAuth:
           apiKeys:
-          - key: test-api-key-123
-            metadata: {}
-          - key: test-api-key-456
+          - keyHash: sha256:53d79b29889771d5c3444e286a7040554405f605228a9f9128df5a0fe321c097
             metadata:
               user: admin
+          - key: test-api-key-123
+            metadata: {}
         phase: GATEWAY
 status:
 - apiVersion: agentgateway.dev/v1alpha1

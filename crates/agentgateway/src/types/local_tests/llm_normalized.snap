@@ -7,6 +7,7 @@ binds:
     address: "[::]:8080"
     protocol: http
     tunnelProtocol: direct
+    mode: standard
     listeners:
       ns/name/bind/8080/llm:
         gatewayName: name

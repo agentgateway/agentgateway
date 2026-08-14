@@ -5,6 +5,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use ::http::header::{HeaderName, HeaderValue};
+use agent_core::version::BuildInfo;
 use headers::HeaderMapExt;
 use http::Method;
 use http::header::{ACCEPT, CONTENT_LENGTH, CONTENT_TYPE, HOST, TRANSFER_ENCODING};
@@ -28,7 +29,8 @@ pub struct UpstreamOpenAPICall {
 	pub method: String, /* TODO: Switch to Method, but will require getting rid of Serialize/Deserialize */
 	pub path: String,
 	pub allowed_headers: HashSet<String>,
-	// todo: params
+	#[serde(default)]
+	pub content_type: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -332,24 +334,35 @@ pub(crate) fn parse_openapi_schema(
 							// Build the schema
 							let mut final_schema = JsonSchema::default();
 
+							let mut request_content_type: Option<String> = None;
 							let body: Option<(String, serde_json::Value, bool)> = match op.request_body.as_ref() {
 								Some(body) => {
 									let body = resolve_request_body(body, open_api)?;
-									match body.content.get("application/json") {
-										Some(media_type) => {
-											let schema_ref = media_type
-												.schema
-												.as_ref()
-												.ok_or(ParseError::MissingReference("application/json".to_string()))?;
-											let schema = resolve_nested_schema(schema_ref, open_api)?;
-											let body_schema =
-												serde_json::to_value(schema).map_err(ParseError::SerdeError)?;
-											final_schema
-												.properties
-												.insert(BODY_NAME.clone(), body_schema.clone());
-											Some((BODY_NAME.clone(), body_schema, body.required))
-										},
-										None => None,
+									if let Some(media_type) = body.content.get("application/json") {
+										let schema_ref = media_type
+											.schema
+											.as_ref()
+											.ok_or(ParseError::MissingReference("application/json".to_string()))?;
+										let schema = resolve_nested_schema(schema_ref, open_api)?;
+										let body_schema =
+											serde_json::to_value(schema).map_err(ParseError::SerdeError)?;
+										final_schema
+											.properties
+											.insert(BODY_NAME.clone(), body_schema.clone());
+										Some((BODY_NAME.clone(), body_schema, body.required))
+									} else if body.content.contains_key("application/octet-stream") {
+										request_content_type = Some("application/octet-stream".to_string());
+										let body_schema = json!({
+											"type": "string",
+											"format": "byte",
+											"description": "Base64-encoded binary content"
+										});
+										final_schema
+											.properties
+											.insert(BODY_NAME.clone(), body_schema.clone());
+										Some((BODY_NAME.clone(), body_schema, body.required))
+									} else {
+										None
 									}
 								},
 								None => None,
@@ -438,7 +451,7 @@ pub(crate) fn parse_openapi_schema(
 									"final schema is not an object".to_string(),
 								))?
 								.clone();
-							let tool = Tool::new_with_raw(
+							let mut tool = Tool::new_with_raw(
 								Cow::Owned(name.clone()),
 								Some(Cow::Owned(
 									op.description
@@ -448,11 +461,16 @@ pub(crate) fn parse_openapi_schema(
 								)),
 								Arc::new(final_json),
 							);
+							if let Some(summary) = op.summary.as_ref().filter(|s| !s.is_empty()) {
+								let end = std::cmp::min(64, summary.len());
+								tool = tool.with_title(summary[..summary.floor_char_boundary(end)].to_string());
+							}
 							let upstream = UpstreamOpenAPICall {
 								// method: Method::from_bytes(method.as_ref()).expect("todo"),
 								method: method.to_string(),
 								path: path.clone(),
 								allowed_headers,
+								content_type: request_content_type,
 							};
 							Ok((tool, upstream))
 						},
@@ -657,43 +675,64 @@ impl Handler {
 			ClientRequest::ListPromptsRequest(_) => Messages::from_result(
 				id,
 				ListPromptsResult {
-					meta: None,
-					next_cursor: None,
-					prompts: vec![],
+					..Default::default()
 				},
 			),
 			ClientRequest::ListResourcesRequest(_) => Messages::from_result(
 				id,
 				ListResourcesResult {
-					meta: None,
-					next_cursor: None,
-					resources: vec![],
+					..Default::default()
 				},
 			),
 			ClientRequest::ListResourceTemplatesRequest(_) => Messages::from_result(
 				id,
 				ListResourceTemplatesResult {
-					meta: None,
-					next_cursor: None,
-					resource_templates: vec![],
+					..Default::default()
 				},
 			),
-			ClientRequest::ListTasksRequest(_) => Messages::from_result(id, ListTasksResult::new(vec![])),
-			ClientRequest::GetTaskInfoRequest(_) => Messages::from_result(
+			ClientRequest::DiscoverRequest(_) => Messages::from_result(
 				id,
-				GetTaskResult {
-					task: Task::default(),
-					meta: None,
-				},
+				DiscoverResult::new(
+					ProtocolVersion::KNOWN_VERSIONS.to_vec(),
+					ServerCapabilities::builder().enable_tools().build(),
+				)
+				.with_server_info(Implementation::new(
+					"agentgateway",
+					BuildInfo::new().version.to_string(),
+				)),
 			),
-			ClientRequest::GetTaskResultRequest(_) => {
-				return Err(UpstreamError::InvalidMethod(method.to_string()));
+			ClientRequest::GetTaskRequest(r) => {
+				return Err(UpstreamError::InvalidRequest(format!(
+					"unknown task {}",
+					r.params.task_id
+				)));
 			},
-			ClientRequest::CancelTaskRequest(_) => Messages::empty(),
+			ClientRequest::UpdateTaskRequest(r) => {
+				return Err(UpstreamError::InvalidRequest(format!(
+					"unknown task {}",
+					r.params.task_id
+				)));
+			},
+			ClientRequest::CancelTaskRequest(r) => {
+				return Err(UpstreamError::InvalidRequest(format!(
+					"unknown task {}",
+					r.params.task_id
+				)));
+			},
 			ClientRequest::ReadResourceRequest(_) => {
 				Messages::from_result(id, ReadResourceResult::new(vec![]))
 			},
 			ClientRequest::PingRequest(_) => Messages::from_result(id, ServerResult::empty(())),
+			ClientRequest::SubscriptionsListenRequest(_) => {
+				Messages::from(ServerJsonRpcMessage::notification(
+					ServerNotification::SubscriptionsAcknowledgedNotification(
+						SubscriptionsAcknowledgedNotification::new(
+							SubscriptionsAcknowledgedNotificationParams::new(SubscriptionFilter::new()),
+						),
+					),
+				))
+				.then_pending()
+			},
 			ClientRequest::CustomRequest(_)
 			| ClientRequest::SetLevelRequest(_)
 			| ClientRequest::SubscribeRequest(_)
@@ -713,18 +752,18 @@ impl Handler {
 				let serialized_content = serde_json::to_string(&res)
 					.map_err(|e| anyhow::anyhow!("Failed to serialize tool response: {}", e))?;
 
-				let mut result = CallToolResult::success(vec![Content::text(serialized_content)]);
+				let mut result = CallToolResult::success(vec![ContentBlock::text(serialized_content)]);
 				result.structured_content = Some(res);
 				Messages::from_result(id, result)
 			},
 			ClientRequest::ListToolsRequest(_) => Messages::from_result(
 				id,
 				ListToolsResult {
-					meta: None,
-					next_cursor: None,
 					tools: self.tools(),
+					..Default::default()
 				},
 			),
+			_ => return Err(UpstreamError::InvalidMethod(method.to_string())),
 		};
 		Ok(res)
 	}
@@ -842,8 +881,23 @@ impl Handler {
 
 		// Build request body
 		let body = if let Some(body_val) = body_value {
-			rb = rb.header(CONTENT_TYPE, HeaderValue::from_static("application/json"));
-			serde_json::to_vec(&body_val).map_err(|e| UpstreamError::OpenAPIError(e.into()))?
+			match info.content_type.as_deref() {
+				Some("application/octet-stream") => {
+					rb = rb.header(
+						CONTENT_TYPE,
+						HeaderValue::from_static("application/octet-stream"),
+					);
+					let s = body_val.as_str().unwrap_or_default();
+					use base64::Engine;
+					base64::engine::general_purpose::STANDARD
+						.decode(s)
+						.map_err(|e| UpstreamError::OpenAPIError(e.into()))?
+				},
+				_ => {
+					rb = rb.header(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+					serde_json::to_vec(&body_val).map_err(|e| UpstreamError::OpenAPIError(e.into()))?
+				},
+			}
 		} else {
 			Vec::new()
 		};

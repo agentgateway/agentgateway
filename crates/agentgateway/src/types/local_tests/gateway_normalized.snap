@@ -1,0 +1,141 @@
+---
+source: crates/agentgateway/src/types/local_tests.rs
+description: "Config normalization test for gateway: YAML -> LocalConfig -> NormalizedLocalConfig -> YAML"
+---
+binds:
+  - key: bind/12345
+    address: "[::]:12345"
+    protocol: http
+    tunnelProtocol: direct
+    mode: standard
+    listeners:
+      gateway/default:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: "*"
+        key: gateway/default
+        listenerName: default
+        protocol: HTTP
+  - key: bind/12346
+    address: "[::]:12346"
+    protocol: http
+    tunnelProtocol: direct
+    mode: standard
+    listeners:
+      gateway/alt:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: "*"
+        key: gateway/alt
+        listenerName: alt
+        protocol: HTTP
+  - key: bind/12347
+    address: "[::]:12347"
+    protocol: http
+    tunnelProtocol: direct
+    mode: standard
+    listeners:
+      gateway/with-listeners/a:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: a.example.com
+        key: gateway/with-listeners/a
+        listenerName: with-listeners/a
+        protocol: HTTP
+      gateway/with-listeners/listener1:
+        gatewayName: name
+        gatewayNamespace: ns
+        hostname: b.example.com
+        key: gateway/with-listeners/listener1
+        listenerName: with-listeners/listener1
+        protocol: HTTP
+listener_routes:
+  - - gateway/default
+    - - backends:
+          - backend: /gateway/default/default/route0/backend0
+            weight: 1
+        key: gateway/default/default/route0
+        matches:
+          - path:
+              pathPrefix: /
+        name: route0
+        namespace: default
+      - backends:
+          - backend: /gateway/default/default/route1/backend0
+            weight: 1
+        key: gateway/default/default/route1
+        matches:
+          - path:
+              pathPrefix: /
+        name: route1
+        namespace: default
+  - - gateway/alt
+    - - backends:
+          - backend: /gateway/alt/default/route0/backend0
+            weight: 1
+        key: gateway/alt/default/route0
+        matches:
+          - path:
+              pathPrefix: /
+        name: route0
+        namespace: default
+      - backends:
+          - backend: /gateway/alt/default/route1/backend0
+            weight: 1
+        key: gateway/alt/default/route1
+        matches:
+          - path:
+              pathPrefix: /
+        name: route1
+        namespace: default
+  - - gateway/with-listeners/a
+    - - backends:
+          - backend: /gateway/with-listeners/a/default/route0/backend0
+            weight: 1
+        key: gateway/with-listeners/a/default/route0
+        matches:
+          - path:
+              pathPrefix: /
+        name: route0
+        namespace: default
+  - - gateway/with-listeners/listener1
+    - []
+listener_tcp_routes:
+  - - gateway/default
+    - []
+  - - gateway/alt
+    - []
+  - - gateway/with-listeners/a
+    - []
+  - - gateway/with-listeners/listener1
+    - []
+policies: []
+backends:
+  - backend:
+      host:
+        name: gateway/default/default/route0/backend0
+        namespace: ""
+        target: "explicit-default:80"
+  - backend:
+      host:
+        name: gateway/default/default/route1/backend0
+        namespace: ""
+        target: "implicit-default:80"
+  - backend:
+      host:
+        name: gateway/alt/default/route0/backend0
+        namespace: ""
+        target: "alt:80"
+  - backend:
+      host:
+        name: gateway/alt/default/route1/backend0
+        namespace: ""
+        target: "multiple-gateways:80"
+  - backend:
+      host:
+        name: gateway/with-listeners/a/default/route0/backend0
+        namespace: ""
+        target: "multiple-gateways:80"
+route_groups: []
+workloads: []
+services: []

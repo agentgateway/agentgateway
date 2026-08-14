@@ -1,0 +1,38 @@
+llm:
+  port: 4000
+  models:
+  - name: economy-model
+    visibility: internal
+    provider: openAI
+    params:
+      model: gpt-4o-mini
+      apiKey: "replace-me"
+      baseUrl: https://api.openai.com/v1
+  - name: balanced-model
+    visibility: internal
+    provider: openAI
+    params:
+      model: gpt-4o
+      apiKey: "replace-me"
+      baseUrl: https://api.openai.com/v1
+  - name: premium-model
+    visibility: internal
+    provider: openAI
+    params:
+      model: gpt-4o
+      apiKey: "replace-me"
+      baseUrl: https://api.openai.com/v1
+  virtualModels:
+  - name: smart-model
+    routing:
+      conditional:
+        targets:
+        # An explicit metadata.cost_tier takes precedence. Without one, use
+        # the requested output-token budget to select a tier.
+        - when: 'default(llmRequest.metadata.cost_tier, "") == "economy" || (default(llmRequest.metadata.cost_tier, "") == "" && default(llmRequest.max_tokens, 1024) <= 1024)'
+          model: economy-model
+        - when: 'default(llmRequest.metadata.cost_tier, "") == "balanced" || (default(llmRequest.metadata.cost_tier, "") == "" && default(llmRequest.max_tokens, 1024) <= 4096)'
+          model: balanced-model
+        # The final target is the required fallback. It handles premium,
+        # unknown explicit tiers, and requests above the balanced threshold.
+        - model: premium-model

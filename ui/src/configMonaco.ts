@@ -173,7 +173,8 @@ function registerConfigYamlCompletions(monaco: typeof Monaco) {
         suggestions: Object.entries(properties)
           .filter(([name]) => !existing.has(name))
           .map(([name, property]) => {
-            const resolved = resolveSchema(property);
+            const resolved =
+              editableObjectSchema(property) ?? resolveSchema(property);
             const structured = isStructuredSchema(resolved);
             return {
               label: name,
@@ -239,7 +240,8 @@ function objectSchemaAtPath(
   schema: Record<string, unknown>,
   path: string[],
 ): Record<string, unknown> | undefined {
-  let current: Record<string, unknown> | undefined = resolveSchema(schema);
+  let current: Record<string, unknown> | undefined =
+    editableObjectSchema(schema);
   for (const segment of path) {
     if (!current) return undefined;
     if (
@@ -248,8 +250,9 @@ function objectSchemaAtPath(
       typeof current.items === "object" &&
       !Array.isArray(current.items)
     ) {
-      current = resolveSchema(current.items as Record<string, unknown>);
+      current = editableObjectSchema(current.items as Record<string, unknown>);
     }
+    if (!current) return undefined;
     const properties = current.properties;
     if (
       !properties ||
@@ -257,28 +260,112 @@ function objectSchemaAtPath(
       Array.isArray(properties)
     )
       return undefined;
-    current = resolveSchema(
+    current = editableObjectSchema(
       (properties as Record<string, Record<string, unknown>>)[segment],
     );
   }
   return current;
 }
 
-function resolveSchema(
+function editableObjectSchema(
   schema: Record<string, unknown> | undefined,
-): Record<string, unknown> {
-  if (!schema) return {};
+  seenRefs = new Set<string>(),
+): Record<string, unknown> | undefined {
+  if (!schema) return undefined;
   if (typeof schema.$ref === "string") {
+    if (seenRefs.has(schema.$ref)) return schema;
     const resolved = schema.$ref.startsWith("#/definitions/")
       ? getByPath(
           monacoConfigSchema as Record<string, unknown>,
           schema.$ref.slice(2).split("/"),
         )
       : undefined;
+    if (!resolved || typeof resolved !== "object" || Array.isArray(resolved))
+      return schema;
+    const nextRefs = new Set(seenRefs);
+    nextRefs.add(schema.$ref);
+    return editableObjectSchema(resolved as Record<string, unknown>, nextRefs);
+  }
+  if (Array.isArray(schema.allOf)) {
+    return schema.allOf.reduce<Record<string, unknown>>((merged, candidate) => {
+      const resolved = editableObjectSchema(
+        candidate as Record<string, unknown>,
+        seenRefs,
+      );
+      return mergeObjectSchemas(merged, resolved);
+    }, {});
+  }
+
+  const branches = Array.isArray(schema.anyOf)
+    ? schema.anyOf
+    : Array.isArray(schema.oneOf)
+      ? schema.oneOf
+      : undefined;
+  if (!branches) return schema;
+
+  const merged = branches.reduce<Record<string, unknown>>(
+    (current, branch) => {
+      const resolved = editableObjectSchema(
+        branch as Record<string, unknown>,
+        seenRefs,
+      );
+      if (
+        !resolved ||
+        schemaTypeValues(resolved).includes("null") ||
+        !isStructuredSchema(resolved)
+      )
+        return current;
+      return mergeObjectSchemas(current, resolved);
+    },
+    schema.properties ? { ...schema } : {},
+  );
+
+  return Object.keys(merged).length ? merged : schema;
+}
+
+function mergeObjectSchemas(
+  left: Record<string, unknown>,
+  right: Record<string, unknown> | undefined,
+) {
+  if (!right) return left;
+  const leftProperties =
+    left.properties && typeof left.properties === "object"
+      ? (left.properties as Record<string, unknown>)
+      : {};
+  const rightProperties =
+    right.properties && typeof right.properties === "object"
+      ? (right.properties as Record<string, unknown>)
+      : {};
+  return {
+    ...left,
+    ...right,
+    properties: {
+      ...leftProperties,
+      ...rightProperties,
+    },
+  };
+}
+
+function resolveSchema(
+  schema: Record<string, unknown> | undefined,
+  seenRefs = new Set<string>(),
+): Record<string, unknown> {
+  if (!schema) return {};
+  if (typeof schema.$ref === "string") {
+    if (seenRefs.has(schema.$ref)) return schema;
+    const resolved = schema.$ref.startsWith("#/definitions/")
+      ? getByPath(
+          monacoConfigSchema as Record<string, unknown>,
+          schema.$ref.slice(2).split("/"),
+        )
+      : undefined;
+    const nextRefs = new Set(seenRefs);
+    nextRefs.add(schema.$ref);
     return resolveSchema(
       resolved && typeof resolved === "object" && !Array.isArray(resolved)
         ? (resolved as Record<string, unknown>)
         : {},
+      nextRefs,
     );
   }
   const anyOf = Array.isArray(schema.anyOf)
@@ -288,11 +375,17 @@ function resolveSchema(
       : undefined;
   if (anyOf) {
     const branch = selectEditableBranch(anyOf);
-    return resolveSchema(branch as Record<string, unknown> | undefined);
+    return resolveSchema(
+      branch as Record<string, unknown> | undefined,
+      seenRefs,
+    );
   }
   if (Array.isArray(schema.allOf)) {
     return schema.allOf.reduce<Record<string, unknown>>((merged, candidate) => {
-      const resolved = resolveSchema(candidate as Record<string, unknown>);
+      const resolved = resolveSchema(
+        candidate as Record<string, unknown>,
+        seenRefs,
+      );
       return {
         ...merged,
         ...resolved,
@@ -318,6 +411,7 @@ function normalizeEditorSchema(schema: JSONSchema): JSONSchema {
   const normalized = normalizeEditorSchemaNode(
     schema as Record<string, unknown>,
     schema as Record<string, unknown>,
+    new Set(),
   );
   return normalized as JSONSchema;
 }
@@ -325,12 +419,16 @@ function normalizeEditorSchema(schema: JSONSchema): JSONSchema {
 function normalizeEditorSchemaNode(
   schema: Record<string, unknown>,
   root: Record<string, unknown>,
+  expandingRefs: Set<string>,
 ): Record<string, unknown> {
   if (typeof schema.$ref === "string") {
+    if (expandingRefs.has(schema.$ref)) return schema;
     const resolved = resolveSchemaReference(root, schema.$ref);
     if (resolved) {
+      const nextRefs = new Set(expandingRefs);
+      nextRefs.add(schema.$ref);
       return {
-        ...normalizeEditorSchemaNode(resolved, root),
+        ...normalizeEditorSchemaNode(resolved, root, nextRefs),
         ...copySchemaAnnotations(schema),
       };
     }
@@ -346,7 +444,11 @@ function normalizeEditorSchemaNode(
       const branch = selectEditableBranch(branches, root);
       if (branch && typeof branch === "object" && !Array.isArray(branch)) {
         return {
-          ...normalizeEditorSchemaNode(branch as Record<string, unknown>, root),
+          ...normalizeEditorSchemaNode(
+            branch as Record<string, unknown>,
+            root,
+            expandingRefs,
+          ),
           ...copySchemaAnnotations(schema),
         };
       }
@@ -363,7 +465,11 @@ function normalizeEditorSchemaNode(
       Object.entries(next.properties).map(([key, value]) => [
         key,
         value && typeof value === "object" && !Array.isArray(value)
-          ? normalizeEditorSchemaNode(value as Record<string, unknown>, root)
+          ? normalizeEditorSchemaNode(
+              value as Record<string, unknown>,
+              root,
+              expandingRefs,
+            )
           : value,
       ]),
     );
@@ -376,6 +482,7 @@ function normalizeEditorSchemaNode(
     next.items = normalizeEditorSchemaNode(
       next.items as Record<string, unknown>,
       root,
+      expandingRefs,
     );
   }
   if (
@@ -386,19 +493,28 @@ function normalizeEditorSchemaNode(
     next.additionalProperties = normalizeEditorSchemaNode(
       next.additionalProperties as Record<string, unknown>,
       root,
+      expandingRefs,
     );
   }
   if (Array.isArray(next.anyOf)) {
     next.anyOf = next.anyOf.map((branch) =>
       branch && typeof branch === "object" && !Array.isArray(branch)
-        ? normalizeEditorSchemaNode(branch as Record<string, unknown>, root)
+        ? normalizeEditorSchemaNode(
+            branch as Record<string, unknown>,
+            root,
+            expandingRefs,
+          )
         : branch,
     );
   }
   if (Array.isArray(next.oneOf)) {
     next.oneOf = next.oneOf.map((branch) =>
       branch && typeof branch === "object" && !Array.isArray(branch)
-        ? normalizeEditorSchemaNode(branch as Record<string, unknown>, root)
+        ? normalizeEditorSchemaNode(
+            branch as Record<string, unknown>,
+            root,
+            expandingRefs,
+          )
         : branch,
     );
   }
@@ -503,6 +619,11 @@ function schemaTypeLabel(schema: Record<string, unknown>) {
   if (schema.properties) return "object";
   if (schema.items) return "array";
   return undefined;
+}
+
+function schemaTypeValues(schema: Record<string, unknown>) {
+  if (Array.isArray(schema.type)) return schema.type;
+  return typeof schema.type === "string" ? [schema.type] : [];
 }
 
 function leadingSpaces(value: string) {

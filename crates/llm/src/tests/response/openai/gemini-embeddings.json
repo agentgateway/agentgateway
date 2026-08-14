@@ -1,0 +1,13 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "object": "embedding",
+      "embedding": [
+        -0.024183841422200203,
+        -0.0059304218739271164
+      ]
+    }
+  ],
+  "model": "gemini-embedding-001"
+}

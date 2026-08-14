@@ -6,13 +6,14 @@ import (
 	"io/fs"
 	"path/filepath"
 
-	"helm.sh/helm/v3/pkg/chart"
-	"helm.sh/helm/v3/pkg/chart/loader"
+	"helm.sh/helm/v4/pkg/chart/loader/archive"
+	chartv2 "helm.sh/helm/v4/pkg/chart/v2"
+	"helm.sh/helm/v4/pkg/chart/v2/loader"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/version"
 )
 
-func loadChart(fs embed.FS) (*chart.Chart, error) {
+func loadChart(fs embed.FS) (*chartv2.Chart, error) {
 	c, err := loadFs(fs)
 	if err != nil {
 		return nil, err
@@ -26,8 +27,8 @@ func loadChart(fs embed.FS) (*chart.Chart, error) {
 	return c, nil
 }
 
-func loadFs(filesystem fs.FS) (*chart.Chart, error) {
-	var bufferedFiles []*loader.BufferedFile
+func loadFs(filesystem fs.FS) (*chartv2.Chart, error) {
+	var bufferedFiles []*archive.BufferedFile
 	entries, err := fs.ReadDir(filesystem, ".")
 	if err != nil {
 		return nil, err
@@ -55,7 +56,7 @@ func loadFs(filesystem fs.FS) (*chart.Chart, error) {
 			return relErr
 		}
 
-		bufferedFile := &loader.BufferedFile{
+		bufferedFile := &archive.BufferedFile{
 			Name: relativePath,
 			Data: data,
 		}

@@ -1,0 +1,20 @@
+{
+  "model": "gpt-4o",
+  "max_output_tokens": 64,
+  "input": "Extract the city name.",
+  "text": {
+    "format": {
+      "type": "json_schema",
+      "name": "city_schema",
+      "description": "Structured city extraction",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "city": { "type": "string" }
+        },
+        "required": ["city"],
+        "additionalProperties": false
+      }
+    }
+  }
+}

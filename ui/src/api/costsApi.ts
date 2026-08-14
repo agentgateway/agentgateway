@@ -1,7 +1,7 @@
 import { requestJson } from "./base";
 
 export interface RefreshBaseCostsResponse {
-  file: string;
+  file?: string;
   providers: number;
   models: number;
 }

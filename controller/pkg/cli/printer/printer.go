@@ -1,10 +1,10 @@
 package printer
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 
-	"github.com/goccy/go-json"
 	"sigs.k8s.io/yaml"
 )
 

@@ -1,0 +1,26 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/anthropic/stream_message_delta_usage.json
+---
+event:message_start
+data:{"type":"message_start","message":{"id":"msg","type":"message","role":"assistant","content":[],"model":"glm-5.2","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":34824,"output_tokens":0}}}
+
+event:message_delta
+data:{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"input_tokens":3883,"output_tokens":49,"cache_creation_input_tokens":0,"cache_read_input_tokens":30464,"prompt_tokens_details":{"cached_tokens":30464}}}
+
+event:message_stop
+data:{"type":"message_stop"}
+
+
+
+{
+  "input_tokens": 3883,
+  "output_tokens": 49,
+  "total_tokens": 3932,
+  "cache_creation_input_tokens": 0,
+  "cached_input_tokens": 30464,
+  "provider_model": "glm-5.2",
+  "completion": [
+    ""
+  ]
+}

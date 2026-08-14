@@ -11,6 +11,7 @@ Usage of AI during contributions must abide by the [Linux Foundation Generative 
 In addition, please:
 
 * Refrain from generating issues, comments, or PR descriptions with AI.
+* Do not use agents to broadly scan the issue tracker and submit unsolicited fixes. Contributions should come from a specific problem you understand, an issue you are actively working with maintainers on, or a change you are prepared to own through review.
 * Refrain from "vibe coding". AI should be used to assist and accelerate code that you (the human!) would write on your own. You should only submit code that you fully understand and take ownership of, and that you would be able to explain and justify to a reviewer.
 * Make sure that you have tested the changes and verify the code works as expected! If you have used AI to help write tests, make sure the tests are useful and are testing the feature correctly.
 * When using (non-trivial) AI assistance, please indicate this.

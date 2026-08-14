@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=../../schema/local.json
+gateways:
+  default:
+    port: 12345
+  alt:
+    port: 12346
+  with-listeners:
+    port: 12347
+    listeners:
+      - hostname: a.example.com
+        name: a
+      - hostname: b.example.com
+routes:
+- gateways: [default]
+  backends:
+  - host: explicit-default:80
+- backends:
+  - host: implicit-default:80
+- gateways: alt
+  backends:
+  - host: alt:80
+- gateways: [alt, with-listeners/a]
+  backends:
+    - host: multiple-gateways:80

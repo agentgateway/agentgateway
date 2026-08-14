@@ -389,15 +389,14 @@ impl Connector {
 			stream
 		};
 
-		let connect_ms = connect_start.elapsed().as_millis();
+		let connect_dur = connect_start.elapsed();
 		if let Some(m) = &self.metrics {
 			let labels = metrics::ConnectLabels {
 				transport: strng::RichStrng::from(transport_name).into(),
 			};
-			// Note: convert from ms to seconds since Prometheus convention for histogram buckets is seconds.
 			m.upstream_connect_duration
 				.get_or_create(&labels)
-				.observe((connect_ms as f64) / 1000.0);
+				.observe(connect_dur.as_secs_f64());
 		}
 
 		event!(
@@ -408,7 +407,7 @@ impl Connector {
 			endpoint = %ep,
 			transport = %transport_name,
 
-			connect_ms = connect_ms,
+			connect_ms = connect_dur.as_millis(),
 
 			"connected"
 		);
@@ -488,6 +487,7 @@ impl Client {
 		let mut b = agent_pool::Client::<_, PoolKey>::builder(::hyper_util::rt::TokioExecutor::new());
 		b.pool_timer(hyper_util::rt::tokio::TokioTimer::new());
 		b.pool_idle_timeout(backend_config.pool_idle_timeout);
+		b.connect_timeout(backend_config.connect_timeout);
 		b.timer(hyper_util::rt::tokio::TokioTimer::new());
 		b.http1_preserve_header_case(true);
 		if let Some(pool_max) = backend_config.pool_max_size {
@@ -605,109 +605,123 @@ impl Client {
 			.map_err(ProxyError::UpstreamTCPCallFailed)
 	}
 
-	pub async fn call(&self, call: Call) -> Result<http::Response, ProxyError> {
+	pub fn call(
+		&self,
+		call: Call,
+	) -> impl std::future::Future<Output = Result<http::Response, ProxyError>> + '_ {
+		let client = &self.client;
+		let connector = &self.connector;
 		let start = std::time::Instant::now();
 		let Call {
 			mut req,
 			target,
 			transport,
 		} = call;
-		let dest = self
-			.connector
-			.resolve_target(transport.skip_dns_resolution(), &target)
-			.await?;
-		http::modify_req_uri(&mut req, |uri| {
-			let scheme = transport.scheme();
-			// Strip the port from the hostname if its the default already
-			// The hyper client does this for HTTP/1.1 but not for HTTP2
-			if let Some(a) = uri.authority.as_mut()
-				&& ((scheme == Scheme::HTTPS && a.port_u16() == Some(443))
-					|| (scheme == Scheme::HTTP && a.port_u16() == Some(80)))
+		async move {
+			let dest = connector
+				.resolve_target(transport.skip_dns_resolution(), &target)
+				.await?;
+			http::modify_req_uri(&mut req, |uri| {
+				let scheme = transport.scheme();
+				// Strip the port from the hostname if its the default already
+				// The hyper client does this for HTTP/1.1 but not for HTTP2
+				if let Some(a) = uri.authority.as_mut()
+					&& ((scheme == Scheme::HTTPS && a.port_u16() == Some(443))
+						|| (scheme == Scheme::HTTP && a.port_u16() == Some(80)))
+				{
+					*a =
+						Authority::from_str(a.host()).expect("host must be valid since it was already a host");
+				}
+				uri.scheme = Some(scheme);
+
+				Ok(())
+			})
+			.map_err(ProxyError::Processing)?;
+			if req.extensions().get::<filters::AutoHostname>().is_some() {
+				req.headers_mut().remove(::http::header::HOST);
+			}
+			let version = req.version();
+			let transport_name = transport.name();
+			// We are going to do a HTTP absolute form tunnel request. For CONNECT this is handled
+			// in the connect layer, but here we need to merge it into the request
+			if let Transport::Tunnel(app, tc) = &transport
+				&& let Some(h) = tc.token.as_ref()
+				&& matches!(app, ApplicationTransport::Plaintext)
 			{
-				*a = Authority::from_str(a.host()).expect("host must be valid since it was already a host");
+				req
+					.headers_mut()
+					.insert(http::header::PROXY_AUTHORIZATION, h.clone());
 			}
-			uri.scheme = Some(scheme);
+			let key = PoolKey(target.clone(), dest, transport, version);
+			trace!(?req, ?key, "sending request");
+			req.extensions_mut().insert(key);
+			let method = req.method().clone();
+			let uri = req.uri().clone();
+			let path = uri.path();
+			let host = uri.authority().to_owned();
+			event!(
+				target: "upstream request",
+				parent: None,
+				tracing::Level::TRACE,
 
-			Ok(())
-		})
-		.map_err(ProxyError::Processing)?;
-		if req.extensions().get::<filters::AutoHostname>().is_some() {
-			req.headers_mut().remove(::http::header::HOST);
+				request =? req,
+				extensions =? crate::http::DebugExtensions(&req)
+			);
+			let buffer_limit = http::buffer_limit(&req);
+			let to = req.extensions().get::<BackendRequestTimeout>().cloned();
+			let call = client.request(req);
+			let map_error = |err: agent_pool::Error| {
+				if err.is_connect_timeout() {
+					ProxyError::UpstreamCallTimeout
+				} else {
+					ProxyError::UpstreamCallFailed(err)
+				}
+			};
+			let resp = if let Some(to) = to {
+				match tokio::time::timeout(to.0, call).await {
+					Err(_) => Err(ProxyError::UpstreamCallTimeout),
+					Ok(Err(err)) => Err(map_error(err)),
+					Ok(Ok(resp)) => Ok(resp),
+				}
+			} else {
+				call.await.map_err(map_error)
+			};
+			let dur = format!("{}ms", start.elapsed().as_millis());
+			// If version changed due to ALPN negotiation, make sure we get the real version
+			let version = resp.as_ref().map(|resp| resp.version()).unwrap_or(version);
+			event!(
+				target: "upstream request",
+				parent: None,
+				tracing::Level::DEBUG,
+
+				target = %target,
+				endpoint = %dest,
+				transport = %transport_name,
+
+				http.method = %method,
+				http.host = host.as_ref().map(display),
+				http.path = %path,
+				http.version = ?version,
+				http.status = resp.as_ref().ok().map(|s| s.status().as_u16()).unwrap_or_default(),
+
+				duration = dur,
+			);
+			let mut resp = resp?;
+
+			event!(
+				target: "upstream response",
+				parent: None,
+				tracing::Level::TRACE,
+
+				response =?resp
+			);
+
+			resp
+				.extensions_mut()
+				.insert(transport::BufferLimit::new(buffer_limit));
+			resp.extensions_mut().insert(ResolvedDestination(dest));
+			Ok(resp)
 		}
-		let version = req.version();
-		let transport_name = transport.name();
-		// We are going to do a HTTP absolute form tunnel request. For CONNECT this is handled
-		// in the connect layer, but here we need to merge it into the request
-		if let Transport::Tunnel(app, tc) = &transport
-			&& let Some(h) = tc.token.as_ref()
-			&& matches!(app, ApplicationTransport::Plaintext)
-		{
-			req
-				.headers_mut()
-				.insert(http::header::PROXY_AUTHORIZATION, h.clone());
-		}
-		let key = PoolKey(target.clone(), dest, transport, version);
-		trace!(?req, ?key, "sending request");
-		req.extensions_mut().insert(key);
-		let method = req.method().clone();
-		let uri = req.uri().clone();
-		let path = uri.path();
-		let host = uri.authority().to_owned();
-		event!(
-			target: "upstream request",
-			parent: None,
-			tracing::Level::TRACE,
-
-			request =? req,
-			extensions =? crate::http::DebugExtensions(&req)
-		);
-		let buffer_limit = http::buffer_limit(&req);
-		let to = req.extensions().get::<BackendRequestTimeout>().cloned();
-		let call = self.client.request(req);
-		let resp = if let Some(to) = to {
-			match tokio::time::timeout(to.0, call).await {
-				Err(_) => Err(ProxyError::UpstreamCallTimeout),
-				Ok(Err(e)) => Err(ProxyError::UpstreamCallFailed(e)),
-				Ok(Ok(resp)) => Ok(resp),
-			}
-		} else {
-			call.await.map_err(ProxyError::UpstreamCallFailed)
-		};
-		let dur = format!("{}ms", start.elapsed().as_millis());
-		// If version changed due to ALPN negotiation, make sure we get the real version
-		let version = resp.as_ref().map(|resp| resp.version()).unwrap_or(version);
-		event!(
-			target: "upstream request",
-			parent: None,
-			tracing::Level::DEBUG,
-
-			target = %target,
-			endpoint = %dest,
-			transport = %transport_name,
-
-			http.method = %method,
-			http.host = host.as_ref().map(display),
-			http.path = %path,
-			http.version = ?version,
-			http.status = resp.as_ref().ok().map(|s| s.status().as_u16()).unwrap_or_default(),
-
-			duration = dur,
-		);
-		let mut resp = resp?;
-
-		event!(
-			target: "upstream response",
-			parent: None,
-			tracing::Level::TRACE,
-
-			response =?resp
-		);
-
-		resp
-			.extensions_mut()
-			.insert(transport::BufferLimit::new(buffer_limit));
-		resp.extensions_mut().insert(ResolvedDestination(dest));
-		Ok(resp)
 	}
 }
 
@@ -745,5 +759,57 @@ mod tests {
 				"tunnel protocol {tp:?} should map to no source role",
 			);
 		}
+	}
+
+	/// Millisecond truncation put every observation on an exact multiple of 1ms, and a loopback
+	/// connect on 0. Asserting the recorded value is finer than a millisecond catches that however
+	/// long the connect actually takes.
+	#[tokio::test]
+	async fn upstream_connect_duration_records_sub_millisecond_connects() {
+		use frozen_collections::FzHashSet;
+		use prometheus_client::registry::Registry;
+
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let addr = listener.local_addr().unwrap();
+		tokio::spawn(async move { while listener.accept().await.is_ok() {} });
+
+		let mut registry = Registry::default();
+		let metrics = Arc::new(crate::metrics::Metrics::new(
+			&mut registry,
+			FzHashSet::default(),
+		));
+
+		let client = Client::new(
+			&Config {
+				resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
+				resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+			},
+			None,
+			crate::BackendConfig::default(),
+			Some(metrics),
+		);
+		client
+			.connect_raw(
+				Target::Address(addr),
+				Transport::Plain(ApplicationTransport::Plaintext),
+			)
+			.await
+			.expect("connect to loopback listener");
+
+		let mut encoded = String::new();
+		prometheus_client::encoding::text::encode(&mut encoded, &registry).unwrap();
+		let sum = encoded
+			.lines()
+			.find_map(|l| {
+				l.strip_prefix("upstream_connect_duration_seconds_sum{transport=\"plaintext\"} ")
+			})
+			.unwrap_or_else(|| panic!("no connect duration sum in:\n{encoded}"))
+			.parse::<f64>()
+			.unwrap();
+		let ms = sum * 1000.0;
+		assert!(
+			(ms - ms.round()).abs() > 1e-9,
+			"connect duration {ms}ms is quantized to whole milliseconds"
+		);
 	}
 }

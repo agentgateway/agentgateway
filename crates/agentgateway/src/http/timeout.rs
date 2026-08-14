@@ -9,9 +9,8 @@ use tokio::time::{Instant, Sleep, sleep_until};
 
 use crate::*;
 
-#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
+#[derive(Default, Eq, PartialEq)]
 #[cfg_attr(feature = "schema", schemars(rename = "TimeoutPolicy"))]
 pub struct Policy {
 	/// Maximum time allowed for the full downstream request and response.

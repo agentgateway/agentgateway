@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use agent_core::prelude::Strng;
+use agent_core::prelude::{AssertSize, Strng};
 use axum::response::Response;
 
 use crate::http::authorization::RuleSets;
@@ -17,7 +17,8 @@ use crate::proxy::httpproxy::{MustSnapshot, PolicyClient};
 use crate::store::{BackendPolicies, Stores};
 use crate::telemetry::log::RequestLog;
 use crate::types::agent::{
-	BackendTargetRef, McpBackend, McpTargetSpec, ResourceName, SimpleBackend, SimpleBackendReference,
+	BackendTargetRef, McpBackend, McpPrefixMode, McpTargetSpec, ResourceName, SimpleBackend,
+	SimpleBackendReference,
 };
 use crate::{ProxyInputs, cel, mcp};
 
@@ -46,7 +47,11 @@ impl App {
 		if backend_policies.mcp_authentication.is_some() {
 			return None;
 		}
-		if !req.uri().path().contains("/.well-known/") {
+		if !matches!(
+			req.method(),
+			&::http::Method::GET | &::http::Method::OPTIONS
+		) || !auth::is_well_known_endpoint(req.uri().path())
+		{
 			return None;
 		}
 		match backend.targets.first().map(|t| &t.spec) {
@@ -83,16 +88,14 @@ impl App {
 						namespace: backend_group_name.namespace.as_ref(),
 						section: Some(t.name.as_ref()),
 					};
-					let backend_policies = backend_policies
-						.clone()
-						.merge(binds.sub_backend_policies(sub_backend_target, inline_pols));
+					let target_policies = binds.sub_backend_policies(sub_backend_target, inline_pols);
+					let backend_policies = backend_policies.clone().merge(target_policies);
 					tracing::trace!("merged policies {:?}", backend_policies);
 					Ok::<_, ProxyError>(Arc::new(McpTarget {
 						name: t.name.clone(),
 						spec: t.spec.clone(),
 						backend: be.map(|b| b.backend),
 						backend_policies,
-						always_use_prefix: backend.always_use_prefix,
 					}))
 				})
 				.collect::<Result<Vec<_>, _>>()?;
@@ -100,6 +103,7 @@ impl App {
 			McpBackendGroup {
 				targets: nt,
 				stateful: backend.stateful,
+				prefix_mode: backend.prefix_mode,
 				failure_mode: backend.failure_mode,
 				session_idle_ttl: backend.session_idle_ttl,
 			}
@@ -148,15 +152,20 @@ impl App {
 			// Legacy handling
 			// Assume this is streamable HTTP otherwise
 			let sse = LegacySSEService::new(sessions);
-			Box::pin(sse.handle(
-				req,
-				RelayInputs {
-					backend: backends.clone(),
-					policies: authorization_policies.clone(),
-					mcp_guardrails: mcp_guardrails.clone(),
-					client: client.clone(),
-				},
-			))
+			Box::pin(
+				sse
+					.handle(
+						req,
+						RelayInputs {
+							backend_id: backend_group_name.clone(),
+							backend: backends.clone(),
+							policies: authorization_policies.clone(),
+							mcp_guardrails: mcp_guardrails.clone(),
+							client: client.clone(),
+						},
+					)
+					.assert_size::<{ 20 * 1024 }>(),
+			)
 			.await
 		} else {
 			let streamable = StreamableHttpService::new(
@@ -165,15 +174,20 @@ impl App {
 					stateful_mode: backend.stateful,
 				},
 			);
-			Box::pin(streamable.handle(
-				req,
-				RelayInputs {
-					backend: backends.clone(),
-					policies: authorization_policies.clone(),
-					mcp_guardrails: mcp_guardrails.clone(),
-					client: client.clone(),
-				},
-			))
+			Box::pin(
+				streamable
+					.handle(
+						req,
+						RelayInputs {
+							backend_id: backend_group_name,
+							backend: backends.clone(),
+							policies: authorization_policies.clone(),
+							mcp_guardrails: mcp_guardrails.clone(),
+							client: client.clone(),
+						},
+					)
+					.assert_size::<{ 4 * 1024 }>(),
+			)
 			.await
 		};
 		let upstream_end = Instant::now();
@@ -210,6 +224,7 @@ impl App {
 pub struct McpBackendGroup {
 	pub targets: Vec<Arc<McpTarget>>,
 	pub stateful: bool,
+	pub prefix_mode: McpPrefixMode,
 	pub failure_mode: FailureMode,
 	pub session_idle_ttl: Duration,
 }
@@ -219,6 +234,7 @@ impl Default for McpBackendGroup {
 		Self {
 			targets: vec![],
 			stateful: true,
+			prefix_mode: McpPrefixMode::default(),
 			failure_mode: crate::mcp::FailureMode::default(),
 			session_idle_ttl: mcp::DEFAULT_SESSION_IDLE_TTL,
 		}
@@ -231,5 +247,4 @@ pub struct McpTarget {
 	pub spec: crate::types::agent::McpTargetSpec,
 	pub backend_policies: BackendPolicies,
 	pub backend: Option<SimpleBackend>,
-	pub always_use_prefix: bool,
 }

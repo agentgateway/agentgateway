@@ -1,39 +1,106 @@
 import { Link } from "@tanstack/react-router";
-import { Bot, Network, Server } from "lucide-react";
+import { Bot, Network, Server, Settings } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import { configWarnings, ensureLlmFrontendDefaults } from "../config";
+import {
+  enableTrafficConfig,
+  ensureLlm,
+  ensureLlmFrontendDefaults,
+  fileOwnedMcpSettingFields,
+  startupLlmConfig,
+  startupMcpConfig,
+} from "../config";
 import { refreshBaseCostsAndConfigure } from "../costs";
-import { useConfigDumpMode, useGatewayConfig, useUpdateConfig } from "../hooks";
+import {
+  useConfigDumpMode,
+  useLlmConfigData,
+  useMcpConfigData,
+  useTrafficConfigData,
+  useUpdateConfig,
+  useUpsertConfigResource,
+} from "../hooks";
 import { PageHeader, StatusBanner } from "../components/Primitives";
 import { trafficStats } from "../traffic";
 import {
   ReadonlyModeBanner,
   TrafficDumpOverview,
 } from "./traffic/TrafficConfigDumpPanel";
+import { LlmSettingsDrawer } from "./models/LlmSettingsDrawer";
+import { useSchemaHelp } from "../schemaHelp";
+import { McpSettingsDrawer } from "./McpServers";
+import type { GatewayConfig } from "../types";
+import type { McpSettingsResource } from "../api/configResourcesApi";
+
+const uiAuthPolicyKeys = [
+  "oidc",
+  "jwtAuth",
+  "extAuthz",
+  "basicAuth",
+  "apiKey",
+  "authorization",
+];
 
 export function HomePage() {
   const mode = useConfigDumpMode();
   const dumpMode = mode.data?.mode === "dump";
-  const config = useGatewayConfig({
+  const {
+    config,
+    rawConfig,
+    runtime,
+    hybrid,
+    models,
+    virtualModels,
+    providers,
+    warnings,
+    isLoading: configDataLoading,
+    error: configDataError,
+  } = useLlmConfigData({
+    enabled: Boolean(mode.data && mode.data.mode !== "dump"),
+  });
+  const mcpData = useMcpConfigData({
+    enabled: Boolean(mode.data && mode.data.mode !== "dump"),
+  });
+  const trafficData = useTrafficConfigData({
     enabled: Boolean(mode.data && mode.data.mode !== "dump"),
   });
   const update = useUpdateConfig();
+  const upsertResource = useUpsertConfigResource();
+  const help = useSchemaHelp();
   const [locallyEnabled, setLocallyEnabled] = useState<Set<StartupSurface>>(
     () => new Set(),
   );
-  const hasLlm = Boolean(config.data?.llm);
-  const hasMcp = Boolean(config.data?.mcp);
-  const hasTraffic = Boolean(config.data && "binds" in config.data);
-  const models = config.data?.llm?.models ?? [];
-  const virtualModels = config.data?.llm?.virtualModels ?? [];
-  const mcpServers = config.data?.mcp?.targets ?? [];
-  const warnings = config.data ? configWarnings(config.data) : [];
+  const hasLlm = Boolean(
+    config.data?.llm ||
+      models.length ||
+      virtualModels.length ||
+      providers.length,
+  );
+  const hasMcp = Boolean(mcpData.data?.mcp);
+  const hasTraffic = Boolean(
+    trafficData.data &&
+      (Boolean(trafficData.data.binds?.length) ||
+        "gateways" in trafficData.data ||
+        "routes" in trafficData.data ||
+        "tcpRoutes" in trafficData.data),
+  );
+  const hasBinds = Boolean(config.data?.binds?.length);
+  const mcpServers = mcpData.data?.mcp?.targets ?? [];
+  const fileOwnedMcpSettings = fileOwnedMcpSettingFields(
+    rawConfig.data,
+    hybrid,
+  );
+  const pageDataLoading =
+    configDataLoading || mcpData.isLoading || trafficData.isLoading;
+  const pageDataError = configDataError ?? mcpData.error ?? trafficData.error;
+  const uiGatewayNeedsAuthWarning =
+    !runtime.isLoading && !runtime.isError && uiExposedWithoutAuth(config.data);
   const callableModels = models.length + virtualModels.length;
-  const traffic = trafficStats(config.data);
+  const traffic = trafficStats(trafficData.data);
   const [startupEvaluated, setStartupEvaluated] = useState(false);
   const [startupFlow, setStartupFlow] = useState(false);
   const [costRefreshError, setCostRefreshError] = useState<string | null>(null);
+  const [llmSettingsOpen, setLlmSettingsOpen] = useState(false);
+  const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
   const showStartup = Boolean(config.data && startupFlow);
   const selectedSurfaces =
     Number(hasLlm || locallyEnabled.has("llm")) +
@@ -41,27 +108,35 @@ export function HomePage() {
     Number(hasTraffic || locallyEnabled.has("apis"));
 
   useEffect(() => {
-    if (!config.data || startupEvaluated) return;
-    setStartupFlow(!hasLlm && !hasMcp && !hasTraffic);
+    if (!config.data || pageDataLoading || pageDataError || startupEvaluated)
+      return;
+    setStartupFlow(
+      !hasLlm &&
+        !hasMcp &&
+        (!hasTraffic || isDefaultUiGatewayScaffold(config.data)),
+    );
     setStartupEvaluated(true);
-  }, [config.data, hasLlm, hasMcp, hasTraffic, startupEvaluated]);
+  }, [
+    config.data,
+    pageDataError,
+    pageDataLoading,
+    hasLlm,
+    hasMcp,
+    hasTraffic,
+    startupEvaluated,
+  ]);
 
   async function enableSurface(surface: StartupSurface) {
     setCostRefreshError(null);
     try {
       await update.mutateAsync((next) => {
         if (surface === "llm") {
-          next.llm = {
-            port: 4000,
-            models: [],
-            providers: [],
-            virtualModels: [],
-          };
+          next.llm = startupLlmConfig(next, 4000);
           ensureLlmFrontendDefaults(next);
         } else if (surface === "mcp") {
-          next.mcp = { port: 3000, targets: [] };
+          next.mcp = startupMcpConfig(next, 3000);
         } else {
-          next.binds = [];
+          enableTrafficConfig(next);
         }
       });
       setLocallyEnabled((current) => new Set(current).add(surface));
@@ -81,7 +156,7 @@ export function HomePage() {
     }
   }
 
-  if (mode.isLoading || (!dumpMode && config.isLoading)) {
+  if (mode.isLoading || (!dumpMode && pageDataLoading)) {
     return (
       <div className="page-stack">
         <StatusBanner state="loading" title="Loading gateway configuration" />
@@ -118,9 +193,9 @@ export function HomePage() {
             </p>
           </div>
 
-          {config.isError ? (
+          {pageDataError ? (
             <StatusBanner state="bad" title="Configuration API unavailable">
-              {config.error.message}
+              {pageDataError.message}
             </StatusBanner>
           ) : null}
           {update.isError ? (
@@ -192,11 +267,11 @@ export function HomePage() {
     <div className="page-stack">
       <PageHeader title="Gateway Overview" />
 
-      {config.isLoading ? (
+      {pageDataLoading ? (
         <StatusBanner state="loading" title="Loading gateway configuration" />
-      ) : config.isError ? (
+      ) : pageDataError ? (
         <StatusBanner state="bad" title="Configuration API unavailable">
-          {config.error.message}
+          {pageDataError.message}
         </StatusBanner>
       ) : costRefreshError ? (
         <StatusBanner state="warn" title="Cost catalog refresh failed">
@@ -218,6 +293,20 @@ export function HomePage() {
           </ul>
         </StatusBanner>
       ) : null}
+      {uiGatewayNeedsAuthWarning ? (
+        <StatusBanner
+          state="warn"
+          title="UI is exposed without authentication"
+          action={
+            <Link className="button" to="/settings">
+              Configure UI policies
+            </Link>
+          }
+        >
+          Unauthenticated users can access the UI; consider adding
+          authentication or authorization policies to secure the UI.
+        </StatusBanner>
+      ) : null}
 
       <section className="surface-overview-list" aria-label="Gateway surfaces">
         <SurfaceRow
@@ -234,13 +323,23 @@ export function HomePage() {
           overview={[
             `${models.length} ${models.length === 1 ? "model" : "models"}`,
             `${virtualModels.length} virtual ${virtualModels.length === 1 ? "model" : "models"}`,
-            `${config.data?.llm?.providers?.length ?? 0} shared ${config.data?.llm?.providers?.length === 1 ? "provider" : "providers"}`,
-            `Port ${config.data?.llm?.port ?? 4000}`,
+            `${providers.length} shared ${providers.length === 1 ? "provider" : "providers"}`,
+            surfaceEndpointLabel(
+              config.data?.llm?.gateways,
+              config.data?.llm?.port ?? 4000,
+            ),
           ]}
-          links={[
-            { to: "/llm/playground", label: "Open playground" },
-            { to: "/llm/analytics", label: "Analytics" },
-          ]}
+          actions={
+            <button
+              className="button"
+              type="button"
+              disabled={update.isPending}
+              onClick={() => setLlmSettingsOpen(true)}
+            >
+              <Settings size={16} />
+              Settings
+            </button>
+          }
         />
         <SurfaceRow
           title="MCP"
@@ -254,9 +353,22 @@ export function HomePage() {
           setupLabel="Set up servers"
           overview={[
             `${mcpServers.length} configured ${mcpServers.length === 1 ? "server" : "servers"}`,
-            `Port ${config.data?.mcp?.port ?? 3000}`,
+            surfaceEndpointLabel(
+              mcpData.data?.mcp?.gateways,
+              mcpData.data?.mcp?.port ?? 3000,
+            ),
           ]}
-          links={[{ to: "/mcp/playground", label: "Open playground" }]}
+          actions={
+            <button
+              className="button"
+              type="button"
+              disabled={update.isPending}
+              onClick={() => setMcpSettingsOpen(true)}
+            >
+              <Settings size={16} />
+              Settings
+            </button>
+          }
         />
         <SurfaceRow
           title="Traffic"
@@ -264,20 +376,109 @@ export function HomePage() {
           enabled={hasTraffic}
           disabled={update.isPending}
           onEnable={() => void enableSurface("apis")}
-          setupNeeded={traffic.listeners === 0}
-          setupText="Add a listener before HTTP or TCP traffic can be served."
-          setupTo="/traffic/listeners"
-          setupLabel="Set up listeners"
-          overview={[
-            `${traffic.binds} ${traffic.binds === 1 ? "bind" : "binds"}`,
-            `${traffic.listeners} ${traffic.listeners === 1 ? "listener" : "listeners"}`,
-            `${traffic.httpRoutes + traffic.tcpRoutes} ${traffic.httpRoutes + traffic.tcpRoutes === 1 ? "route" : "routes"}`,
-          ]}
-          links={[{ to: "/traffic/routes", label: "Manage routes" }]}
+          setupNeeded={
+            hasBinds ? traffic.listeners === 0 : traffic.gateways === 0
+          }
+          setupText={
+            hasBinds
+              ? "Add a listener before HTTP or TCP traffic can be served."
+              : "Add a gateway before HTTP traffic can be served."
+          }
+          setupTo={hasBinds ? "/traffic/listeners" : "/traffic/gateways"}
+          setupLabel={hasBinds ? "Set up listeners" : "Set up gateways"}
+          overview={
+            hasBinds
+              ? [
+                  `${traffic.binds} ${traffic.binds === 1 ? "bind" : "binds"}`,
+                  `${traffic.listeners} ${traffic.listeners === 1 ? "listener" : "listeners"}`,
+                  `${traffic.httpRoutes + traffic.tcpRoutes} ${traffic.httpRoutes + traffic.tcpRoutes === 1 ? "route" : "routes"}`,
+                ]
+              : [
+                  `${traffic.gateways} ${traffic.gateways === 1 ? "gateway" : "gateways"}`,
+                  `${traffic.httpRoutes} ${traffic.httpRoutes === 1 ? "route" : "routes"}`,
+                ]
+          }
         />
       </section>
+      {llmSettingsOpen ? (
+        <LlmSettingsDrawer
+          config={config.data}
+          llm={config.data?.llm}
+          help={help}
+          saving={update.isPending}
+          saveError={update.isError ? update.error.message : null}
+          onClose={() => setLlmSettingsOpen(false)}
+          onSave={(settings) =>
+            update.mutate(
+              (next) => {
+                Object.assign(ensureLlm(next), settings);
+              },
+              {
+                onSuccess: () => setLlmSettingsOpen(false),
+              },
+            )
+          }
+        />
+      ) : null}
+      {mcpSettingsOpen ? (
+        <McpSettingsDrawer
+          config={mcpData.data}
+          mcp={mcpData.data?.mcp}
+          databaseBacked={hybrid}
+          readOnlyFields={fileOwnedMcpSettings}
+          help={help}
+          saving={update.isPending || upsertResource.isPending}
+          saveError={
+            update.error?.message ?? upsertResource.error?.message ?? null
+          }
+          onClose={() => setMcpSettingsOpen(false)}
+          onSave={(settings) => {
+            const value = Object.fromEntries(
+              Object.entries(settings).filter(([, field]) => field != null),
+            ) as McpSettingsResource;
+            upsertResource.mutate(
+              { kind: "mcp.settings", value },
+              { onSuccess: () => setMcpSettingsOpen(false) },
+            );
+          }}
+        />
+      ) : null}
     </div>
   );
+}
+
+function surfaceEndpointLabel(
+  gateways: string | string[] | undefined,
+  port: number,
+) {
+  if (gateways == null || gateways.length === 0) return `Port ${port}`;
+  return `Gateway ${Array.isArray(gateways) ? gateways.join(", ") : gateways}`;
+}
+
+function uiExposedWithoutAuth(config: GatewayConfig | null | undefined) {
+  if (!uiGateway(config)) return false;
+  const policies = config?.ui?.policies as Record<string, unknown> | undefined;
+  return !uiAuthPolicyKeys.some((key) => Boolean(policies?.[key]));
+}
+
+function uiGateway(config: GatewayConfig | null | undefined) {
+  const gateways = config?.ui?.gateways;
+  if (Array.isArray(gateways)) return gateways[0];
+  if (gateways) return gateways;
+  return config?.ui && config.gateways?.default ? "default" : undefined;
+}
+
+function isDefaultUiGatewayScaffold(config: GatewayConfig) {
+  if (!config.ui || uiGateway(config) !== "default") return false;
+  if (
+    config.binds?.length ||
+    config.routes?.length ||
+    config.tcpRoutes?.length
+  ) {
+    return false;
+  }
+  const gatewayNames = Object.keys(config.gateways ?? {});
+  return gatewayNames.length === 1 && gatewayNames[0] === "default";
 }
 
 type StartupSurface = "llm" | "mcp" | "apis";
@@ -310,7 +511,8 @@ function SurfaceRow(props: {
   disabled: boolean;
   enabled: boolean;
   icon: ReactNode;
-  links: Array<{ label: string; to: string }>;
+  actions?: ReactNode;
+  links?: Array<{ label: string; to: string }>;
   onEnable: () => void;
   overview: string[];
   setupLabel: string;
@@ -361,21 +563,21 @@ function SurfaceRow(props: {
         )}
       </div>
       <div className="surface-row-actions">
-        {props.setupNeeded ? (
-          <Link
-            className="button primary"
-            to={props.setupTo}
-            hash={props.setupHash}
-          >
-            {props.setupLabel}
-          </Link>
-        ) : (
-          props.links.map((link) => (
-            <Link key={link.to} className="button" to={link.to}>
-              {link.label}
-            </Link>
-          ))
-        )}
+        {!props.setupNeeded
+          ? (props.actions ??
+            props.links?.map((link) => (
+              <Link key={link.to} className="button" to={link.to}>
+                {link.label}
+              </Link>
+            )))
+          : null}
+        <Link
+          className="button primary"
+          to={props.setupTo}
+          hash={props.setupHash}
+        >
+          {props.setupLabel}
+        </Link>
       </div>
     </div>
   );

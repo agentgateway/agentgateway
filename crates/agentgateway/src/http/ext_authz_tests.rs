@@ -2,21 +2,26 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
-use ::http::{HeaderMap, HeaderName, HeaderValue};
+use ::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
+use bytes::Bytes;
 
 use crate::http::HeaderOrPseudo;
 use crate::http::ext_authz::proto::{
 	HeaderValue as ProtoHeaderValue, HeaderValueOption, QueryParameter,
 };
 use crate::http::ext_authz::{BodyOptions, ExtAuthz, ExtAuthzDynamicMetadata, FailureMode};
-use crate::types::agent::SimpleBackendReference;
+use crate::types::agent::{
+	BackendTrafficPolicy, SimpleBackendReference, SimpleBackendReferenceWithPolicies, Target,
+};
 use crate::*;
 
 impl Default for ExtAuthz {
 	fn default() -> Self {
 		Self {
-			target: Arc::new(SimpleBackendReference::Invalid),
-			policies: Default::default(),
+			target: SimpleBackendReferenceWithPolicies {
+				target: Arc::new(SimpleBackendReference::Invalid),
+				policies: Default::default(),
+			},
 			failure_mode: FailureMode::default(),
 			include_request_headers: Vec::new(),
 			include_request_body: None,
@@ -28,6 +33,38 @@ impl Default for ExtAuthz {
 			},
 		}
 	}
+}
+
+#[test]
+fn ext_authz_https_host_defaults_port_and_tls_policy() {
+	let authz: ExtAuthz = serde_json::from_value(serde_json::json!({
+		"host": "https://foo.com/",
+	}))
+	.expect("deserialize ext_authz");
+
+	assert!(matches!(
+		authz.target.target.as_ref(),
+		SimpleBackendReference::InlineBackend(Target::Hostname(host, 443)) if host.as_str() == "foo.com"
+	));
+	assert!(matches!(
+		authz.target.policies.as_slice(),
+		[BackendTrafficPolicy::BackendTLS(_)]
+	));
+}
+
+#[test]
+fn ext_authz_url_host_rejects_unknown_scheme_with_explicit_port() {
+	let err = serde_json::from_value::<ExtAuthz>(serde_json::json!({
+		"host": "foo://example.com:123",
+	}))
+	.expect_err("unsupported scheme should be rejected");
+
+	assert!(
+		err
+			.to_string()
+			.contains("backend URL scheme must be http or https"),
+		"got: {err}"
+	);
 }
 
 #[test]
@@ -297,14 +334,16 @@ fn test_ext_authz_cache_lookup_misses_expired_entry() {
 fn test_cached_grpc_response(
 	expires_in: Duration,
 	original_ttl: Duration,
-) -> super::CachedGrpcResponse {
-	super::CachedGrpcResponse {
+) -> super::CachedExtAuthzResponse {
+	super::CachedExtAuthzResponse {
 		expires_at: Instant::now() + expires_in,
 		original_ttl,
 		refreshing: Arc::new(AtomicBool::new(false)),
-		response: super::CachedGrpcPolicyResponse::DenyWithoutResponse {
-			dynamic_metadata: None,
-		},
+		response: super::CachedPolicyResponse::Grpc(
+			super::CachedGrpcPolicyResponse::DenyWithoutResponse {
+				dynamic_metadata: None,
+			},
+		),
 	}
 }
 
@@ -487,6 +526,72 @@ fn test_cached_grpc_allow_replays_request_and_response_mutations() {
 			.unwrap(),
 		"alice"
 	);
+}
+
+#[test]
+fn test_cached_http_allow_replays_request_headers_and_metadata() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example.com/admin")
+		.body(http::Body::empty())
+		.unwrap();
+	let cached = super::CachedHttpPolicyResponse::Allow {
+		headers: HeaderMap::from_iter([(
+			HeaderName::from_static("x-authz-user"),
+			HeaderValue::from_static("alice"),
+		)]),
+		dynamic_metadata: Some(serde_json::Map::from_iter([(
+			"subject".to_string(),
+			serde_json::Value::String("alice".to_string()),
+		)])),
+	};
+
+	let response = cached.apply(&mut req).unwrap();
+
+	assert!(response.direct_response.is_none());
+	assert!(response.response_headers.is_none());
+	assert_eq!(req.headers().get("x-authz-user").unwrap(), "alice");
+	assert_eq!(
+		req
+			.extensions()
+			.get::<ExtAuthzDynamicMetadata>()
+			.unwrap()
+			.0
+			.get("subject")
+			.unwrap(),
+		"alice"
+	);
+}
+
+#[tokio::test]
+async fn test_cached_http_direct_response_replays_status_headers_and_body() {
+	let mut req = ::http::Request::builder()
+		.uri("http://example.com/admin")
+		.body(http::Body::empty())
+		.unwrap();
+	let cached = super::CachedHttpPolicyResponse::DirectResponse {
+		status: StatusCode::UNAUTHORIZED,
+		headers: HeaderMap::from_iter([(
+			HeaderName::from_static("www-authenticate"),
+			HeaderValue::from_static("Bearer"),
+		)]),
+		body: Bytes::from_static(b"nope"),
+	};
+
+	let response = cached.apply(&mut req).unwrap();
+
+	let mut direct_response = response.direct_response.unwrap();
+	assert_eq!(direct_response.status(), StatusCode::UNAUTHORIZED);
+	assert_eq!(
+		direct_response.headers().get("www-authenticate").unwrap(),
+		"Bearer"
+	);
+	let body = crate::http::inspect_response_body(&mut direct_response)
+		.await
+		.unwrap();
+	assert!(matches!(
+		body,
+		crate::http::BodyInspection::Complete(body) if body == Bytes::from_static(b"nope")
+	));
 }
 
 #[test]

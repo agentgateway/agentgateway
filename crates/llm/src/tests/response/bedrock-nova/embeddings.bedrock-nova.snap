@@ -1,0 +1,37 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/bedrock-nova/embeddings.json
+info:
+  embeddings:
+    - embedding:
+        - -0.006603240966796875
+        - -0.054168701171875
+        - 0.0121917724609375
+      embeddingType: TEXT
+---
+{
+  "response": {
+    "object": "list",
+    "model": "amazon.nova-2-multimodal-embeddings-v1:0",
+    "usage": {
+      "prompt_tokens": 0,
+      "total_tokens": 0
+    },
+    "data": [
+      {
+        "index": 0,
+        "object": "embedding",
+        "embedding": [
+          -0.006603240966796875,
+          -0.054168701171875,
+          0.0121917724609375
+        ]
+      }
+    ]
+  },
+  "parsed": {
+    "input_tokens": 0,
+    "total_tokens": 0,
+    "provider_model": "amazon.nova-2-multimodal-embeddings-v1:0"
+  }
+}

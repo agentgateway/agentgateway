@@ -11,6 +11,7 @@ import (
 
 var (
 	DeploymentGVK              = appsv1.SchemeGroupVersion.WithKind("Deployment")
+	DaemonSetGVK               = appsv1.SchemeGroupVersion.WithKind("DaemonSet")
 	SecretGVK                  = corev1.SchemeGroupVersion.WithKind("Secret")
 	ConfigMapGVK               = corev1.SchemeGroupVersion.WithKind("ConfigMap")
 	ServiceGVK                 = corev1.SchemeGroupVersion.WithKind("Service")

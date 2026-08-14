@@ -6,3 +6,15 @@ spec:
   shutdown:
     max: 0
     min: 0
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: daemonset-workload
+spec:
+  workload:
+    kind: DaemonSet
+  daemonSet:
+    spec:
+      updateStrategy:
+        type: RollingUpdate

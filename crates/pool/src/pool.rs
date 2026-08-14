@@ -434,7 +434,7 @@ impl H2Load {
 		let max = self.max_streams.load(Ordering::Acquire);
 		let prev = self
 			.active_streams
-			.fetch_update(Ordering::AcqRel, Ordering::Acquire, |active| {
+			.try_update(Ordering::AcqRel, Ordering::Acquire, |active| {
 				if active < max { Some(active + 1) } else { None }
 			});
 

@@ -36,9 +36,10 @@ func TestLookupFailsClosedWhenKeysetIsMissing(t *testing.T) {
 	stop := test.NewStop(t)
 	target := remotehttp.FetchTarget{URL: "https://issuer.example/jwks"}
 	persisted := NewPersistedEntriesFromCollection(
-		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, nil, krt.WithName("jwks/LookupMissingPersistedConfigMaps")),
+		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, nil, krt.WithName("jwks/LookupMissingPersistedConfigMaps"), krt.WithStop(stop)),
 		DefaultJwksStorePrefix,
 		"agentgateway-system",
+		krt.WithStop(stop),
 	)
 	lookupIndex := NewLookup(
 		persisted,
@@ -75,9 +76,10 @@ func TestLookupReturnsPersistedKeyset(t *testing.T) {
 	assert.NoError(t, SetJwksInConfigMap(cm, keyset))
 
 	persisted := NewPersistedEntriesFromCollection(
-		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{cm}, krt.WithName("jwks/LookupPersistedConfigMaps")),
+		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{cm}, krt.WithName("jwks/LookupPersistedConfigMaps"), krt.WithStop(stop)),
 		DefaultJwksStorePrefix,
 		"agentgateway-system",
+		krt.WithStop(stop),
 	)
 	lookupIndex := NewLookup(
 		persisted,
@@ -115,9 +117,10 @@ func TestLookupRequiresCanonicalPersistedKeysetName(t *testing.T) {
 	assert.NoError(t, SetJwksInConfigMap(cm, keyset))
 
 	persisted := NewPersistedEntriesFromCollection(
-		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{cm}, krt.WithName("jwks/LookupLegacyNameConfigMaps")),
+		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{cm}, krt.WithName("jwks/LookupLegacyNameConfigMaps"), krt.WithStop(stop)),
 		DefaultJwksStorePrefix,
 		"agentgateway-system",
+		krt.WithStop(stop),
 	)
 	lookupIndex := NewLookup(
 		persisted,
@@ -138,11 +141,13 @@ func TestLookupRequiresCanonicalPersistedKeysetName(t *testing.T) {
 
 func TestLookupPropagatesResolverError(t *testing.T) {
 	sentinel := errors.New("resolver failed")
+	stop := test.NewStop(t)
 	lookupIndex := NewLookup(
 		NewPersistedEntriesFromCollection(
-			krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, nil, krt.WithName("jwks/LookupResolverErrorConfigMaps")),
+			krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, nil, krt.WithName("jwks/LookupResolverErrorConfigMaps"), krt.WithStop(stop)),
 			DefaultJwksStorePrefix,
 			"agentgateway-system",
+			krt.WithStop(stop),
 		),
 		staticLookupResolver{err: sentinel},
 	)

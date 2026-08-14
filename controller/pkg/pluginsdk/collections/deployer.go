@@ -1,6 +1,7 @@
 package collections
 
 import (
+	"cmp"
 	"fmt"
 
 	"istio.io/istio/pilot/pkg/serviceregistry/ambient"
@@ -13,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	"github.com/agentgateway/agentgateway/controller/api/annotations"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
@@ -78,10 +80,75 @@ func GatewaysForDeployerTransformationFunc(
 			},
 			ControllerName:  string(gwClass.Spec.ControllerName),
 			Ports:           smallset.New(ports.UnsortedList()...),
+			InternalPorts:   ComputeInternalPorts(gw, lsets),
 			MeshTrustDomain: td,
 		}
 		return ir
 	}
+}
+
+// ComputeInternalPorts returns the ports whose winning listener selects an internal
+// bind. Gateway listeners have precedence over ListenerSets. ListenerSets are ordered
+// oldest first, then by namespace/name, matching listener conflict validation.
+// A lower-precedence listener with a different mode is rejected by translation and
+// cannot change Service/container exposure here.
+func ComputeInternalPorts(gw *gwv1.Gateway, lsets []*gwv1.ListenerSet) smallset.Set[int32] {
+	portModes := map[int32]bool{}
+
+	gwInternal, _ := annotations.ParseInternalPorts(
+		gw.GetAnnotations()[annotations.InternalPorts],
+		func(p int32) bool {
+			for _, l := range gw.Spec.Listeners {
+				if int32(l.Port) == p {
+					return true
+				}
+			}
+			return false
+		},
+	)
+	for _, l := range gw.Spec.Listeners {
+		portModes[int32(l.Port)] = gwInternal.Has(l.Port)
+	}
+
+	slices.SortFunc(lsets, func(a, b *gwv1.ListenerSet) int {
+		if r := a.CreationTimestamp.Compare(b.CreationTimestamp.Time); r != 0 {
+			return r
+		}
+		if r := cmp.Compare(a.Namespace, b.Namespace); r != 0 {
+			return r
+		}
+		return cmp.Compare(a.Name, b.Name)
+	})
+	for _, ls := range lsets {
+		lsInternal, _ := annotations.ParseInternalPorts(
+			ls.GetAnnotations()[annotations.InternalPorts],
+			func(p int32) bool {
+				for _, l := range ls.Spec.Listeners {
+					if port, err := kubeutils.DetectListenerPortNumber(l.Protocol, l.Port); err == nil && port == p {
+						return true
+					}
+				}
+				return false
+			},
+		)
+		for _, l := range ls.Spec.Listeners {
+			port, err := kubeutils.DetectListenerPortNumber(l.Protocol, l.Port)
+			if err != nil {
+				continue
+			}
+			if _, winnerSelected := portModes[port]; !winnerSelected {
+				portModes[port] = lsInternal.Has(port)
+			}
+		}
+	}
+
+	internal := sets.New[int32]()
+	for port, mode := range portModes {
+		if mode {
+			internal.Insert(port)
+		}
+	}
+	return smallset.New(internal.UnsortedList()...)
 }
 
 type GatewayForDeployer struct {
@@ -90,6 +157,10 @@ type GatewayForDeployer struct {
 	ControllerName string
 	// All ports from all listeners
 	Ports smallset.Set[int32]
+	// InternalPorts are ports whose bind is internal (routing-only). They are excluded
+	// from the generated Service and container ports. Derived from the winning listener's
+	// agentgateway.dev/internal-ports annotation.
+	InternalPorts smallset.Set[int32]
 	// MeshTrustDomain changes should trigger reconciliation
 	// this field isn't read outside of Equals for a trigger
 	MeshTrustDomain string
@@ -146,5 +217,6 @@ func (c GatewayForDeployer) Equals(in GatewayForDeployer) bool {
 	return c.ObjectSource.Equals(in.ObjectSource) &&
 		c.ControllerName == in.ControllerName &&
 		c.MeshTrustDomain == in.MeshTrustDomain &&
-		slices.Equal(c.Ports.List(), in.Ports.List())
+		slices.Equal(c.Ports.List(), in.Ports.List()) &&
+		slices.Equal(c.InternalPorts.List(), in.InternalPorts.List())
 }

@@ -555,6 +555,13 @@ pub enum Extension {
 	Wrapped(http::Extensions, Arc<Extension>),
 }
 
+/// HTTP CONNECT request headers captured when terminating a CONNECT tunnel,
+/// carried on the per-stream socket extension so they can be surfaced to CEL
+/// policies via `source.connectHeaders`. New type wrapper to avoid colliding
+/// with other `HeaderMap`-typed extensions in the type-keyed `Extension` map.
+#[derive(Clone, Debug, Default)]
+pub struct ConnectHeaders(pub http::HeaderMap);
+
 impl Default for Extension {
 	fn default() -> Self {
 		Self::new()

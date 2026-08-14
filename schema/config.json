@@ -4,16 +4,26 @@
   "type": "object",
   "properties": {
     "config": {
-      "$ref": "#/$defs/RawConfig",
+      "description": "config defines top-level settings for DNS, admin, networking, observability, and session\nmanagement. Unlike other sections, these are applied only at startup, except modelCatalog,\nwhich is dynamically reloaded.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RawConfig"
+        },
+        {
+          "type": "null"
+        }
+      ],
       "default": null
     },
     "binds": {
+      "description": "binds defines the low-level API for configuring the proxy.\nEach bind represents a single port the proxy listens on, as well as the full set of configuration\n(listeners, routes, backends) for that port.\nDeprecated; usage of `gateways` and `routes` is recommended instead.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/LocalBind"
       }
     },
     "frontendPolicies": {
+      "description": "frontendPolicies defines top level policies applying to all traffic.",
       "$ref": "#/$defs/LocalFrontendPolicies"
     },
     "policies": {
@@ -24,24 +34,60 @@
       }
     },
     "workloads": {
+      "description": "workloads defines the set of workloads that the proxy can serve. These are selected by `services`.\nThis is an advanced feature that is mostly for testing; usage of inline `backends` on routes and\npolicies is typically preferred.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      },
       "default": []
     },
     "services": {
+      "description": "services defines the set of services that the proxy can route to. These consist of `workloads`.\nThis is an advanced feature that is mostly for testing; usage of inline `backends` on routes and\npolicies is typically preferred.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      },
       "default": []
     },
     "backends": {
+      "description": "backends defines explicit backends that can be referenced by routes and policies.\nTypically, inline backends are used on the routes/policies, but this allows re-using the same backend\nacross different configurations.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/FullLocalBackend"
       }
     },
     "routeGroups": {
+      "description": "routeGroups provides a set of route groups used for route delegation. This is an advanced feature\nprimarily used for testing.",
       "type": "array",
       "items": {
         "$ref": "#/$defs/LocalRouteGroup"
       }
     },
+    "gateways": {
+      "description": "gateways defines the entrypoint to the proxy, setting up ports and listeners that features (LLM, MCP, and UI) and routes can attach to.\nEach gateway defines a port that proxy will listen on, and optionally TLS settings for that port.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/LocalGateway"
+      }
+    },
+    "routes": {
+      "description": "routes defines HTTP routes attached to one or more named gateways.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/LocalAttachedRoute"
+      }
+    },
+    "tcpRoutes": {
+      "description": "tcpRoutes defines TCP routes attached to one or more named TCP/TLS gateways.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/LocalAttachedTCPRoute"
+      }
+    },
     "llm": {
+      "description": "llm defines a set of LLM models to be exposed by the proxy. When configured, LLM models will be\nserved under the attached `gateways` using the standard serving paths (`/v1/models`, `/v1/chat/completions`, etc).",
       "anyOf": [
         {
           "$ref": "#/$defs/LocalLLMConfig"
@@ -52,9 +98,21 @@
       ]
     },
     "mcp": {
+      "description": "mcp defines a set of MCP servers exposed by the proxy. When configured, the MCP servers will be\nserved under the attached `gateways` at /mcp and /sse.\nAll MCP servers listed will be served as a single virtual MCP server.",
       "anyOf": [
         {
           "$ref": "#/$defs/LocalSimpleMcpConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "ui": {
+      "description": "ui defines settings for how the UI and UI backend is exposed. By default, the UI is exposed only\non the admin interface (typically localhost:15000). This setting allows attaching to `gateways`\nto serve externally, as well as attaching policies to UI traffic.\nIt is strongly recommended to utilize authentication (typically OIDC) when exposing the UI externally.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LocalUIConfig"
         },
         {
           "type": "null"
@@ -68,6 +126,7 @@
       "type": "object",
       "properties": {
         "enableIpv6": {
+          "description": "Enable IPv6 address resolution and binding. Defaults to true.",
           "type": [
             "boolean",
             "null"
@@ -112,43 +171,61 @@
             }
           ]
         },
+        "storage": {
+          "description": "Controls whether UI-managed configuration is written to the config file or a DB overlay.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RawStorageConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "caAddress": {
+          "description": "Address of the Certificate Authority used to issue SPIFFE certificates.",
           "type": [
             "string",
             "null"
           ]
         },
         "caAuthToken": {
+          "description": "Authentication token for communicating with the Certificate Authority.",
           "type": [
             "string",
             "null"
           ]
         },
         "xdsAddress": {
+          "description": "Address of the xDS control plane used for dynamic configuration.",
           "type": [
             "string",
             "null"
           ]
         },
         "xdsAuthToken": {
+          "description": "Authentication token for communicating with the xDS control plane.",
           "type": [
             "string",
             "null"
           ]
         },
         "namespace": {
+          "description": "Kubernetes namespace for this gateway instance.",
           "type": [
             "string",
             "null"
           ]
         },
         "gateway": {
+          "description": "Name of this gateway. Required when xDS is configured.",
           "type": [
             "string",
             "null"
           ]
         },
         "trustDomain": {
+          "description": "SPIFFE trust domain for this gateway.",
           "type": [
             "string",
             "null"
@@ -169,18 +246,21 @@
           ]
         },
         "serviceAccount": {
+          "description": "Kubernetes service account for this gateway, used in its SPIFFE identity.",
           "type": [
             "string",
             "null"
           ]
         },
         "clusterId": {
+          "description": "Identifier for the cluster this gateway runs in. Defaults to \"Kubernetes\".",
           "type": [
             "string",
             "null"
           ]
         },
         "network": {
+          "description": "Network name for this gateway, used for locality-aware routing.",
           "type": [
             "string",
             "null"
@@ -240,7 +320,13 @@
             }
           ]
         },
+        "customFunctions": {
+          "description": "Custom CEL functions available to all CEL expressions. These can define re-usable snippets that\ncan be used in any expressions.\nConfigure as a block string containing one or more definitions, for example:\n`customFunctions: |`\n`  isInternal() { request.headers[\"x-env\"] == \"internal\" }`\n`  this.joined(prefix, parts...) { prefix + this + parts.join(\"\") }`",
+          "type": "string",
+          "default": ""
+        },
         "connectionTerminationDeadline": {
+          "description": "Maximum time to wait for connections to close gracefully during shutdown.",
           "type": [
             "string",
             "null"
@@ -248,6 +334,7 @@
           "default": null
         },
         "connectionMinTerminationDeadline": {
+          "description": "Minimum time to allow for graceful connection termination. Defaults to zero.",
           "type": [
             "string",
             "null"
@@ -255,12 +342,18 @@
           "default": null
         },
         "workerThreads": {
-          "type": [
-            "string",
-            "null"
+          "description": "Number of worker threads for the async runtime. Accepts a number or a string such as \"auto\".",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StringOrInt"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "tracing": {
+          "description": "Distributed tracing configuration.",
           "anyOf": [
             {
               "$ref": "#/$defs/RawTracing"
@@ -271,6 +364,7 @@
           ]
         },
         "logging": {
+          "description": "Logging configuration, including filter, level, format, and custom fields.",
           "anyOf": [
             {
               "$ref": "#/$defs/RawLogging"
@@ -281,6 +375,7 @@
           ]
         },
         "metrics": {
+          "description": "Metrics configuration, including metric removal and custom fields.",
           "anyOf": [
             {
               "$ref": "#/$defs/RawMetrics"
@@ -291,6 +386,7 @@
           ]
         },
         "backend": {
+          "description": "Configuration for upstream connections, including keepalives, timeouts, and pooling.",
           "$ref": "#/$defs/BackendConfig",
           "default": {
             "keepalives": {
@@ -305,6 +401,7 @@
           }
         },
         "hbone": {
+          "description": "HBONE (HTTP/2 CONNECT tunnel) protocol configuration.",
           "anyOf": [
             {
               "$ref": "#/$defs/RawHBONE"
@@ -378,6 +475,7 @@
           "type": "object",
           "properties": {
             "file": {
+              "description": "Path to a file on disk containing the model cost catalog.",
               "type": "string"
             }
           },
@@ -389,7 +487,20 @@
           "type": "object",
           "properties": {
             "inline": {
+              "description": "Model cost catalog provided inline as a string.",
               "type": "string"
+            }
+          },
+          "required": [
+            "inline"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "inline": {
+              "description": "Model cost catalog provided inline as structured data.",
+              "$ref": "#/$defs/Catalog"
             }
           },
           "required": [
@@ -398,16 +509,207 @@
         }
       ]
     },
+    "Catalog": {
+      "type": "object",
+      "properties": {
+        "providers": {
+          "description": "Map of provider name to its supported models and pricing.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Provider"
+          },
+          "default": {}
+        }
+      },
+      "additionalProperties": false
+    },
+    "Provider": {
+      "type": "object",
+      "properties": {
+        "models": {
+          "description": "Map of model ID to its pricing rates and tiers.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Model"
+          },
+          "default": {}
+        }
+      },
+      "additionalProperties": false
+    },
+    "Model": {
+      "type": "object",
+      "properties": {
+        "rates": {
+          "description": "Base pricing rates for this model.",
+          "$ref": "#/$defs/Rates"
+        },
+        "tiers": {
+          "description": "Context-length pricing tiers that override the base rates.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Tier"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Rates": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "description": "Cost per 1M input (prompt) tokens.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output": {
+          "description": "Cost per 1M output (completion) tokens.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cacheRead": {
+          "description": "Cost per 1M tokens read from cache.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cacheWrite": {
+          "description": "Cost per 1M tokens written to cache.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasoning": {
+          "description": "Cost per 1M reasoning tokens. Falls back to the output rate if unset.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inputAudio": {
+          "description": "Cost per 1M input audio tokens. Falls back to the input rate if unset.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "outputAudio": {
+          "description": "Cost per 1M output audio tokens. Falls back to the output rate if unset.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "Money": {
+      "type": "string"
+    },
+    "Tier": {
+      "type": "object",
+      "properties": {
+        "contextOver": {
+          "description": "Context-token threshold above which this tier's rates apply.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "rates": {
+          "description": "Pricing rates for this tier, overlaid on the base model rates.",
+          "$ref": "#/$defs/Rates"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "contextOver",
+        "rates"
+      ]
+    },
     "Config": {
       "type": "object",
       "properties": {
         "url": {
+          "description": "Connection URL for the request log database. A postgres:// or postgresql:// URL uses Postgres; any other value is treated as a SQLite database.",
           "type": "string"
+        },
+        "maxConnections": {
+          "description": "Maximum number of connections to open in this database's connection pool. Defaults to 5.\nWhen the request log and config stores have matching database settings, they share one pool\nwith this limit.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 1,
+          "default": null
         }
       },
       "additionalProperties": false,
       "required": [
         "url"
+      ]
+    },
+    "RawStorageConfig": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/ConfigStoreMode",
+          "default": "file"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ConfigStoreMode": {
+      "oneOf": [
+        {
+          "description": "Store all UI-managed configuration in the local config file.",
+          "type": "string",
+          "const": "file"
+        },
+        {
+          "description": "Read a file baseline and store UI-managed overlay resources in the configured database.",
+          "type": "string",
+          "const": "hybrid"
+        },
+        {
+          "description": "Disallow write operations to the config from the UI",
+          "type": "string",
+          "const": "readOnly"
+        }
       ]
     },
     "RawStandardAttributes": {
@@ -447,6 +749,7 @@
       "type": "object",
       "properties": {
         "sessionTtl": {
+          "description": "Time to live for MCP sessions before they are closed automatically. Defaults to 30 minutes.",
           "type": [
             "string",
             "null"
@@ -456,16 +759,24 @@
       },
       "additionalProperties": false
     },
+    "StringOrInt": {
+      "type": [
+        "string",
+        "integer"
+      ]
+    },
     "RawTracing": {
       "type": "object",
       "properties": {
         "otlpEndpoint": {
+          "description": "OTLP collector endpoint URL for exporting traces.",
           "type": [
             "string",
             "null"
           ]
         },
         "headers": {
+          "description": "HTTP headers to include on OTLP trace exports, such as authentication headers.",
           "type": "object",
           "additionalProperties": {
             "type": "string"
@@ -473,10 +784,12 @@
           "default": {}
         },
         "otlpProtocol": {
+          "description": "OTLP transport protocol: `grpc` or `http`.",
           "$ref": "#/$defs/Protocol",
           "default": "grpc"
         },
         "fields": {
+          "description": "Custom fields to add to or remove from trace spans.",
           "anyOf": [
             {
               "$ref": "#/$defs/RawLoggingFields"
@@ -529,6 +842,7 @@
       "type": "object",
       "properties": {
         "remove": {
+          "description": "Field names to remove from log entries.",
           "type": "array",
           "items": {
             "type": "string"
@@ -536,6 +850,7 @@
           "default": []
         },
         "add": {
+          "description": "Map of field name to a CEL expression that computes the value to add to logs.",
           "type": "object",
           "additionalProperties": {
             "type": "string"
@@ -556,12 +871,14 @@
       "type": "object",
       "properties": {
         "filter": {
+          "description": "CEL expression that selects which requests are logged.",
           "type": [
             "string",
             "null"
           ]
         },
         "fields": {
+          "description": "Custom fields to add to or remove from log entries.",
           "anyOf": [
             {
               "$ref": "#/$defs/RawLoggingFields"
@@ -572,6 +889,7 @@
           ]
         },
         "level": {
+          "description": "Log level: a single level (e.g. `info`), a comma-separated string of per-module levels (e.g. `info,agent_core=trace`), or a list of per-module levels (e.g. `[info, agent_core=trace]`).",
           "anyOf": [
             {
               "$ref": "#/$defs/RawLoggingLevel"
@@ -582,6 +900,7 @@
           ]
         },
         "format": {
+          "description": "Log output format: `text` or `json`.",
           "anyOf": [
             {
               "$ref": "#/$defs/LoggingFormat"
@@ -592,6 +911,7 @@
           ]
         },
         "database": {
+          "description": "Log-store database configuration; enables request logging to a database backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/Config"
@@ -628,6 +948,7 @@
       "type": "object",
       "properties": {
         "remove": {
+          "description": "Metric names to exclude from collection.",
           "type": "array",
           "items": {
             "type": "string"
@@ -635,6 +956,7 @@
           "default": []
         },
         "fields": {
+          "description": "Custom fields to add to all metrics.",
           "anyOf": [
             {
               "$ref": "#/$defs/RawMetricFields"
@@ -651,6 +973,7 @@
       "type": "object",
       "properties": {
         "add": {
+          "description": "Map of field name to a CEL expression that computes the value to add to metrics.",
           "type": "object",
           "additionalProperties": {
             "type": "string"
@@ -664,6 +987,7 @@
       "type": "object",
       "properties": {
         "keepalives": {
+          "description": "TCP keepalive configuration for upstream connections.",
           "$ref": "#/$defs/KeepaliveConfig",
           "default": {
             "enabled": true,
@@ -673,6 +997,7 @@
           }
         },
         "connectTimeout": {
+          "description": "Maximum time to wait when establishing a connection to an upstream. Defaults to 10 seconds.",
           "type": "string",
           "default": "10s"
         },
@@ -698,18 +1023,22 @@
       "type": "object",
       "properties": {
         "enabled": {
+          "description": "Enable TCP keepalive probes on backend connections. Defaults to true.",
           "type": "boolean",
           "default": true
         },
         "time": {
+          "description": "Idle time before the first keepalive probe is sent.",
           "type": "string",
           "default": "3m0s"
         },
         "interval": {
+          "description": "Time between successive keepalive probes.",
           "type": "string",
           "default": "3m0s"
         },
         "retries": {
+          "description": "Number of unacknowledged probes before the connection is considered dead.",
           "type": "integer",
           "format": "uint32",
           "minimum": 0,
@@ -722,6 +1051,7 @@
       "type": "object",
       "properties": {
         "windowSize": {
+          "description": "HTTP/2 per-stream flow-control window size in bytes. Defaults to 4 MiB.",
           "type": [
             "integer",
             "null"
@@ -730,6 +1060,7 @@
           "minimum": 0
         },
         "connectionWindowSize": {
+          "description": "HTTP/2 connection-level flow-control window size in bytes. Defaults to 16 MiB.",
           "type": [
             "integer",
             "null"
@@ -738,6 +1069,7 @@
           "minimum": 0
         },
         "frameSize": {
+          "description": "HTTP/2 maximum frame size in bytes. Defaults to 1 MiB.",
           "type": [
             "integer",
             "null"
@@ -746,6 +1078,7 @@
           "minimum": 0
         },
         "poolMaxStreamsPerConn": {
+          "description": "Maximum concurrent streams per pooled connection. Defaults to 100.",
           "type": [
             "integer",
             "null"
@@ -755,6 +1088,7 @@
           "maximum": 65535
         },
         "poolUnusedReleaseTimeout": {
+          "description": "Duration after which unused pooled connections are released.",
           "type": [
             "string",
             "null"
@@ -767,25 +1101,36 @@
       "type": "object",
       "properties": {
         "port": {
-          "type": "integer",
+          "description": "Port to bind on. Omit it for an internal wildcard bind (which serves any destination port\nvia in-process routing). A numeric port is required unless `mode` is `internal`.",
+          "type": [
+            "integer",
+            "null"
+          ],
           "format": "uint16",
           "minimum": 0,
-          "maximum": 65535
+          "maximum": 65535,
+          "default": null
         },
         "listeners": {
+          "description": "Named listeners bound on this port, which may use different protocols and TLS.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/LocalListener"
           }
         },
         "tunnelProtocol": {
+          "description": "Protocol used to tunnel backend connections, such as Direct or HBONE.",
           "$ref": "#/$defs/TunnelProtocol",
           "default": "direct"
+        },
+        "mode": {
+          "description": "Whether the bind opens an OS listener socket. Defaults to `standard` (binds the port).\nSet to `internal` to create a routing-only bind that does not bind a socket.",
+          "$ref": "#/$defs/BindMode",
+          "default": "standard"
         }
       },
       "additionalProperties": false,
       "required": [
-        "port",
         "listeners"
       ]
     },
@@ -793,6 +1138,7 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "Name identifying this listener, referenced by `gateways: gateway-name/listener-name`.",
           "type": [
             "string",
             "null"
@@ -800,6 +1146,7 @@
           "default": null
         },
         "namespace": {
+          "description": "Namespace scoping this listener.",
           "type": [
             "string",
             "null"
@@ -814,9 +1161,11 @@
           ]
         },
         "protocol": {
+          "description": "Protocol this listener accepts: HTTP, HTTPS, TCP, TLS, or HBONE.",
           "$ref": "#/$defs/LocalListenerProtocol"
         },
         "tls": {
+          "description": "TLS configuration, used with the HTTPS and TLS protocols.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalTLSServerConfig"
@@ -827,6 +1176,7 @@
           ]
         },
         "routes": {
+          "description": "HTTP routes attached directly to this listener.",
           "type": [
             "array",
             "null"
@@ -836,6 +1186,7 @@
           }
         },
         "tcpRoutes": {
+          "description": "TCP routes attached directly to this listener.",
           "type": [
             "array",
             "null"
@@ -845,6 +1196,7 @@
           }
         },
         "policies": {
+          "description": "Gateway-level policies applied to all traffic on this listener.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalGatewayPolicy"
@@ -876,12 +1228,15 @@
           "default": "static"
         },
         "cert": {
+          "description": "Path to the TLS certificate file (leaf certificate, or CA certificate in dynamic CA mode).",
           "type": "string"
         },
         "key": {
+          "description": "Path to the TLS private key file.",
           "type": "string"
         },
         "root": {
+          "description": "Path to a root CA certificate file used to validate client certificates.",
           "type": [
             "string",
             "null"
@@ -996,6 +1351,7 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "Name identifying this route.",
           "type": [
             "string",
             "null"
@@ -1003,6 +1359,7 @@
           "default": null
         },
         "namespace": {
+          "description": "Namespace scoping this route.",
           "type": [
             "string",
             "null"
@@ -1010,6 +1367,7 @@
           "default": null
         },
         "ruleName": {
+          "description": "Specific rule within this route.",
           "type": [
             "string",
             "null"
@@ -1024,6 +1382,7 @@
           }
         },
         "matches": {
+          "description": "Conditions (path, method, headers, query) that select this route.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/RouteMatch"
@@ -1037,6 +1396,7 @@
           ]
         },
         "policies": {
+          "description": "Route-level policies applied before backend selection.",
           "anyOf": [
             {
               "$ref": "#/$defs/FilterOrPolicy"
@@ -1047,6 +1407,7 @@
           ]
         },
         "backends": {
+          "description": "Weighted backends this route forwards traffic to.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/LocalRouteBackend"
@@ -1059,21 +1420,25 @@
       "type": "object",
       "properties": {
         "headers": {
+          "description": "HTTP headers that must match for this route to apply.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/HeaderMatch"
           }
         },
         "path": {
+          "description": "Path match rule (exact, prefix, or regex). Defaults to a \"/\" prefix match.",
           "$ref": "#/$defs/PathMatch",
           "default": {
             "pathPrefix": "/"
           }
         },
         "method": {
+          "description": "HTTP method that must match for this route to apply.",
           "type": "string"
         },
         "query": {
+          "description": "Query parameters that must match for this route to apply.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/QueryMatch"
@@ -1086,9 +1451,11 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "HTTP header or pseudo-header name (such as `:method`) to match.",
           "type": "string"
         },
         "value": {
+          "description": "Exact or regex pattern the header value must match.",
           "$ref": "#/$defs/HeaderValueMatch"
         }
       },
@@ -1182,9 +1549,11 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "Query parameter name to match.",
           "type": "string"
         },
         "value": {
+          "description": "Exact or regex pattern the query parameter value must match.",
           "$ref": "#/$defs/QueryValueMatch"
         }
       },
@@ -1412,13 +1781,12 @@
           "description": "Authentication credentials sent to the backend.",
           "anyOf": [
             {
-              "$ref": "#/$defs/BackendAuth"
+              "$ref": "#/$defs/BackendAuthCompat"
             },
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "localRateLimit": {
           "description": "Local rate limits for incoming requests.",
@@ -1560,6 +1928,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/RetryPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "delay": {
+          "description": "Inject artificial latency before forwarding requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DelayPolicy"
             },
             {
               "type": "null"
@@ -1761,7 +2141,7 @@
       "properties": {
         "backend": {
           "description": "Backend that receives mirrored request copies.",
-          "$ref": "#/$defs/SimpleLocalBackend"
+          "$ref": "#/$defs/SimpleLocalBackendSerde"
         },
         "percentage": {
           "description": "Fraction of matching requests to mirror, from 0.0 to 1.0.",
@@ -1775,12 +2155,8 @@
         "percentage"
       ]
     },
-    "SimpleLocalBackend": {
+    "SimpleLocalBackendSerde": {
       "oneOf": [
-        {
-          "type": "string",
-          "enum": []
-        },
         {
           "description": "Service reference. Service must be defined in the top level services list.",
           "type": "object",
@@ -1789,9 +2165,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -1840,19 +2218,7 @@
       ]
     },
     "NamespacedHostname": {
-      "type": "object",
-      "properties": {
-        "namespace": {
-          "type": "string"
-        },
-        "hostname": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "namespace",
-        "hostname"
-      ]
+      "type": "string"
     },
     "LocalExplicitOrConditional_DirectResponse": {
       "anyOf": [
@@ -2072,7 +2438,7 @@
               ]
             },
             {
-              "description": "Deny the request when this CEL expression is true.",
+              "description": "Deny the request when this CEL expression is true. This mode is not\nrecommended because expression failures fail to deny; prefer `Allow` or\n`Require`. If used, design expressions defensively against evaluation errors.",
               "type": "object",
               "properties": {
                 "deny": {
@@ -2110,8 +2476,7 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/Processor"
-          },
-          "minItems": 1
+          }
         }
       },
       "additionalProperties": false,
@@ -2135,7 +2500,7 @@
           "type": "object",
           "properties": {
             "policies": {
-              "description": "Policies to connect to the backend.",
+              "description": "Backend policies used when connecting to the service.",
               "anyOf": [
                 {
                   "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -2178,9 +2543,11 @@
                   "type": "object",
                   "properties": {
                     "name": {
+                      "description": "Name of the target Service, as defined in the top-level `services` list.",
                       "$ref": "#/$defs/NamespacedHostname"
                     },
                     "port": {
+                      "description": "Port on the target Service to route to.",
                       "type": "integer",
                       "format": "uint16",
                       "minimum": 0,
@@ -2278,13 +2645,12 @@
           "description": "Authentication credentials sent to this backend.",
           "anyOf": [
             {
-              "$ref": "#/$defs/BackendAuth"
+              "$ref": "#/$defs/BackendAuthCompat"
             },
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "http": {
           "description": "HTTP protocol settings for this backend.",
@@ -2379,6 +2745,14 @@
             "type": "string"
           },
           "default": []
+        },
+        "replace": {
+          "description": "CEL expression that computes the full set of headers, replacing all existing headers.\nThe expression must evaluate to a map of header name to value (a string, or a list of\nstrings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;\nset those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,\nso those still operate on top of the replaced headers.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
         },
         "body": {
           "description": "CEL expression that computes a replacement body.",
@@ -2485,112 +2859,206 @@
         "X25519_MLKEM768"
       ]
     },
-    "BackendAuth": {
-      "oneOf": [
+    "BackendAuthCompat": {
+      "anyOf": [
         {
-          "description": "Forward the validated incoming JWT to the backend.",
-          "type": "object",
-          "properties": {
-            "passthrough": {
-              "type": "object",
-              "properties": {
-                "location": {
-                  "description": "Where to place the forwarded credential in the backend request.",
-                  "anyOf": [
-                    {
-                      "$ref": "#/$defs/AuthorizationLocation"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              },
-              "additionalProperties": false
-            }
-          },
-          "required": [
-            "passthrough"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "description": "Send a configured secret value to the backend.",
           "type": "object",
           "properties": {
             "key": {
-              "type": "object",
-              "properties": {
-                "value": {
-                  "description": "Secret value to send to the backend.",
-                  "$ref": "#/$defs/FileOrInline"
-                },
-                "location": {
-                  "description": "Where to place the secret in the backend request.",
-                  "anyOf": [
-                    {
-                      "$ref": "#/$defs/AuthorizationLocation"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "value"
-              ]
+              "$ref": "#/$defs/FileOrInline"
             }
           },
           "required": [
             "key"
-          ],
-          "additionalProperties": false
+          ]
         },
         {
-          "description": "Authenticate to Google Cloud services.",
           "type": "object",
           "properties": {
-            "gcp": {
-              "$ref": "#/$defs/GcpAuth"
+            "credentials": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/BackendAuthCredential"
+              }
+            }
+          },
+          "oneOf": [
+            {
+              "description": "Forward the validated incoming JWT to the backend.",
+              "type": "object",
+              "properties": {
+                "passthrough": {
+                  "type": "object",
+                  "properties": {
+                    "location": {
+                      "description": "Where to place the forwarded credential in the backend request.",
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/AuthorizationLocation"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "passthrough"
+              ]
+            },
+            {
+              "description": "Send a configured secret value to the backend.",
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "description": "Secret value to send to the backend.",
+                      "$ref": "#/$defs/FileOrInline"
+                    },
+                    "location": {
+                      "description": "Where to place the secret in the backend request.",
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/AuthorizationLocation"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "additionalProperties": false,
+                  "required": [
+                    "value"
+                  ]
+                }
+              },
+              "required": [
+                "key"
+              ]
+            },
+            {
+              "description": "Authenticate to Google Cloud services.",
+              "type": "object",
+              "properties": {
+                "gcp": {
+                  "$ref": "#/$defs/GcpAuth"
+                }
+              },
+              "required": [
+                "gcp"
+              ]
+            },
+            {
+              "description": "Sign backend requests with AWS credentials.",
+              "type": "object",
+              "properties": {
+                "aws": {
+                  "$ref": "#/$defs/AwsAuth"
+                }
+              },
+              "required": [
+                "aws"
+              ]
+            },
+            {
+              "description": "Authenticate to Azure services.",
+              "type": "object",
+              "properties": {
+                "azure": {
+                  "$ref": "#/$defs/AzureAuth"
+                }
+              },
+              "required": [
+                "azure"
+              ]
+            },
+            {
+              "description": "Authenticate to GitHub Copilot.",
+              "type": "string",
+              "const": "copilot"
+            },
+            {
+              "description": "Sign a short-lived JWT with a private key on each request.",
+              "type": "object",
+              "properties": {
+                "jwtSign": {
+                  "$ref": "#/$defs/JwtSignAuth"
+                }
+              },
+              "required": [
+                "jwtSign"
+              ]
+            },
+            {
+              "description": "Use OAuth token exchange flows to obtain a backend access token.",
+              "type": "object",
+              "properties": {
+                "oauthTokenExchange": {
+                  "$ref": "#/$defs/OAuthTokenExchangeAuth"
+                }
+              },
+              "required": [
+                "oauthTokenExchange"
+              ]
+            },
+            {
+              "description": "Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.",
+              "type": "object",
+              "properties": {
+                "crossAppAccess": {
+                  "$ref": "#/$defs/CrossAppAccessAuth"
+                }
+              },
+              "required": [
+                "crossAppAccess"
+              ]
+            }
+          ],
+          "required": [
+            "credentials"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "credentials": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/BackendAuthCredential"
+              }
             }
           },
           "required": [
-            "gcp"
-          ],
-          "additionalProperties": false
+            "credentials"
+          ]
         },
         {
-          "description": "Sign backend requests with AWS credentials.",
+          "$ref": "#/$defs/BackendAuth"
+        }
+      ]
+    },
+    "FileOrInline": {
+      "anyOf": [
+        {
           "type": "object",
           "properties": {
-            "aws": {
-              "$ref": "#/$defs/AwsAuth"
+            "file": {
+              "description": "Path to a file on disk to load the value from.",
+              "type": "string"
             }
           },
           "required": [
-            "aws"
-          ],
-          "additionalProperties": false
+            "file"
+          ]
         },
         {
-          "description": "Authenticate to Azure services.",
-          "type": "object",
-          "properties": {
-            "azure": {
-              "$ref": "#/$defs/AzureAuth"
-            }
-          },
-          "required": [
-            "azure"
-          ],
-          "additionalProperties": false
-        },
-        {
-          "description": "Authenticate to GitHub Copilot.",
-          "type": "string",
-          "const": "copilot"
+          "type": "string"
         }
       ]
     },
@@ -2673,45 +3141,17 @@
           "additionalProperties": false
         },
         {
-          "description": "Read the credential from a CEL expression evaluated against the incoming request.",
+          "description": "Read the credential from a CEL expression evaluated against the incoming request.\nCEL expression that returns the credential string. This location can extract credentials but cannot insert them.",
           "type": "object",
           "properties": {
             "expression": {
-              "type": "object",
-              "properties": {
-                "expression": {
-                  "description": "CEL expression that returns the credential string. This location can extract credentials but cannot insert them.",
-                  "$ref": "#/$defs/Expression"
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "expression"
-              ]
+              "$ref": "#/$defs/Expression"
             }
           },
           "required": [
             "expression"
           ],
           "additionalProperties": false
-        }
-      ]
-    },
-    "FileOrInline": {
-      "anyOf": [
-        {
-          "type": "object",
-          "properties": {
-            "file": {
-              "type": "string"
-            }
-          },
-          "required": [
-            "file"
-          ]
-        },
-        {
-          "type": "string"
         }
       ]
     },
@@ -2838,6 +3278,13 @@
                 "null"
               ]
             },
+            "region": {
+              "description": "AWS SigV4 signing region (for example, \"us-east-1\"). If unset, typed AWS\nbackends may provide this automatically; otherwise the ambient AWS region\nis used.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "assumeRole": {
               "description": "Optional AWS STS role to assume before signing requests.",
               "anyOf": [
@@ -2860,11 +3307,83 @@
         "roleArn": {
           "description": "AWS IAM role ARN to assume.",
           "type": "string"
+        },
+        "sessionName": {
+          "description": "Custom session name (RoleSessionName) for CloudTrail and Cost & Usage Report\nattribution. Either a static string or `{expression: ...}` with a CEL\nexpression evaluated against each request. Max 64 chars, matching\n`[\\w+=,.@-]`. If unset, the AWS SDK generates a random session name.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AwsSessionName"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tags": {
+          "description": "Session tags passed to STS AssumeRole for cost attribution. Once activated as\ncost allocation tags, each tag surfaces in the AWS Cost & Usage Report under\n`resourceTags/user:TagKey`. A tag value is either static (`value`) or a CEL\nexpression evaluated against each request (`expression`).",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AwsSessionTag"
+          }
         }
       },
       "additionalProperties": false,
       "required": [
         "roleArn"
+      ]
+    },
+    "AwsSessionName": {
+      "description": "Session name (RoleSessionName) in configuration form: a static string, or a\nCEL expression evaluated against each request. Untagged, so a plain string\nkeeps its existing meaning.",
+      "anyOf": [
+        {
+          "description": "Static session name.",
+          "type": "string"
+        },
+        {
+          "description": "CEL expression evaluated against each request to produce the session\nname, for example `jwt.sub` or `request.headers[\"x-team\"]`. If the\nexpression does not produce a valid session name at request time, the\nrequest is rejected.",
+          "type": "object",
+          "properties": {
+            "expression": {
+              "$ref": "#/$defs/Expression"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "expression"
+          ]
+        }
+      ]
+    },
+    "AwsSessionTag": {
+      "description": "An AWS STS session tag passed to AssumeRole for cost attribution.\nExactly one of `value` and `expression` must be set.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "Tag key.",
+          "type": "string"
+        },
+        "value": {
+          "description": "Static tag value.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expression": {
+          "description": "CEL expression evaluated against each request to produce the tag value, for\nexample `jwt.sub` or `request.headers[\"x-app\"]`. If the expression does not\nproduce a valid tag value at request time, the request is rejected.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "key"
       ]
     },
     "AzureAuth": {
@@ -3019,6 +3538,812 @@
         }
       ]
     },
+    "JwtSignAuth": {
+      "description": "Signs a short-lived JWT with a private key on each request and sends it to\nthe backend. For upstreams that require per-request keypair JWTs (e.g. the\nSnowflake SQL API) rather than a static credential.",
+      "type": "object",
+      "properties": {
+        "signingKey": {
+          "description": "PEM-encoded private signing key (RSA or EC, matching `alg`).",
+          "$ref": "#/$defs/FileOrInline"
+        },
+        "alg": {
+          "description": "JWS signing algorithm. Defaults to RS256.",
+          "$ref": "#/$defs/JwtSigningAlg",
+          "default": "RS256"
+        },
+        "kid": {
+          "description": "Optional JWS key ID header.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "claims": {
+          "description": "Static claims added to every token (e.g. iss, sub, aud). Values may be\nany JSON value (e.g. a string, number, bool, or array). `iat`, `exp`,\nand `nbf` are reserved for the signer and cannot be configured here.",
+          "type": "object",
+          "additionalProperties": true,
+          "default": {}
+        },
+        "ttl": {
+          "description": "Token lifetime used for `exp`. Defaults to 300s.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "location": {
+          "description": "Where the signed token is written. Defaults to the Authorization\nheader with a `Bearer ` prefix.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AuthorizationLocation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "signingKey"
+      ]
+    },
+    "JwtSigningAlg": {
+      "type": "string",
+      "enum": [
+        "RS256",
+        "RS384",
+        "RS512",
+        "PS256",
+        "ES256",
+        "ES384"
+      ]
+    },
+    "OAuthTokenExchangeAuth": {
+      "type": "object",
+      "properties": {
+        "policies": {
+          "description": "Backend policies used when connecting to the service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "description": "Token endpoint path on the backend; defaults to \"/\".",
+          "type": "string"
+        },
+        "grantType": {
+          "description": "Selects which RFC the request follows; defaults to token exchange (RFC 8693).",
+          "$ref": "#/$defs/OAuthGrantType",
+          "default": "tokenExchange"
+        },
+        "subjectToken": {
+          "description": "Where the subject token is read from, and its token type. Defaults to the\nAuthorization Bearer header with token type access_token.",
+          "$ref": "#/$defs/TokenSpec",
+          "default": {
+            "source": {
+              "header": {
+                "name": "authorization",
+                "prefix": "Bearer "
+              }
+            },
+            "tokenType": "urn:ietf:params:oauth:token-type:access_token"
+          }
+        },
+        "actorToken": {
+          "description": "RFC 8693 delegation actor token. Token-exchange grant only.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActorTokenSpec"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "audiences": {
+          "description": "`audience` parameters naming the target services at the authorization server.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scopes": {
+          "description": "`scope` values for the requested token, sent space-delimited.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "resources": {
+          "description": "`resource` parameters with the target service URIs.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requestedTokenType": {
+          "description": "`requested_token_type` parameter. When unset it is omitted from the request\n(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)\nreject an explicit access_token value paired with a custom `subject_token_type`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "clientAuth": {
+          "description": "Client authentication used when calling the token endpoint.\nWhen unset, no client authentication fields are sent.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OAuthClientAuth"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "additionalParams": {
+          "description": "Extra form parameters appended to the token request.\nValues are CEL expressions evaluated against the incoming request.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "authorizationLocation": {
+          "description": "Where to place the exchanged token in the backend request. Defaults to the\nAuthorization header with a \"Bearer \" prefix. The CEL `expression` source is\nnot valid here (it cannot insert).",
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Bearer "
+            }
+          }
+        },
+        "cache": {
+          "description": "Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s\nTTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenCacheConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "writeOnly": true
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "description": "Port on the target Service to route to.",
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ]
+    },
+    "OAuthGrantType": {
+      "oneOf": [
+        {
+          "description": "RFC 8693 token exchange; the subject token is sent as `subject_token`.",
+          "type": "string",
+          "const": "tokenExchange"
+        },
+        {
+          "description": "RFC 7523; the subject token is sent as the `assertion`.",
+          "type": "string",
+          "const": "jwtBearer"
+        }
+      ]
+    },
+    "TokenSpec": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Where the token is read from in the incoming request. The CEL `expression`\nsource is permitted (extraction only).",
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Bearer "
+            }
+          }
+        },
+        "tokenType": {
+          "description": "RFC 8693 token type URN; when omitted defaults to access_token",
+          "type": "string",
+          "default": "urn:ietf:params:oauth:token-type:access_token"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ActorTokenSpec": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Where the actor token is read from in the incoming request. The CEL\n`expression` source is permitted (extraction only). Unlike subject tokens,\nactor tokens have no default source.",
+          "$ref": "#/$defs/AuthorizationLocation"
+        },
+        "tokenType": {
+          "description": "RFC 8693 actor token type URN; when omitted defaults to access_token and is still sent",
+          "type": "string",
+          "default": "urn:ietf:params:oauth:token-type:access_token"
+        },
+        "enforceMayAct": {
+          "description": "Enforce that the subject's `may_act` claim authorizes the actor before exchanging.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source"
+      ]
+    },
+    "OAuthClientAuth": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RawOAuthClientAuth"
+        },
+        {
+          "$ref": "#/$defs/RawDefaultClientSecretBasicAuth"
+        }
+      ]
+    },
+    "RawOAuthClientAuth": {
+      "oneOf": [
+        {
+          "description": "`client_id`/`client_secret` sent in the HTTP Basic Authorization header (RFC 6749 §2.3.1).",
+          "type": "object",
+          "properties": {
+            "clientId": {
+              "description": "`client_id` parameter identifying the gateway at the authorization server.",
+              "type": "string"
+            },
+            "clientSecret": {
+              "$ref": "#/$defs/FileOrInline"
+            },
+            "method": {
+              "type": "string",
+              "const": "clientSecretBasic"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "clientId",
+            "clientSecret"
+          ]
+        },
+        {
+          "description": "`client_id`/`client_secret` sent in the request form body.",
+          "type": "object",
+          "properties": {
+            "clientId": {
+              "description": "`client_id` parameter identifying the gateway at the authorization server.",
+              "type": "string"
+            },
+            "clientSecret": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FileOrInline"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "method": {
+              "type": "string",
+              "const": "clientSecretPost"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "clientId"
+          ]
+        },
+        {
+          "description": "`privateKeyJwt` client assertion (RFC 7523).",
+          "type": "object",
+          "properties": {
+            "clientId": {
+              "description": "`client_id` parameter identifying the gateway at the authorization server.",
+              "type": "string"
+            },
+            "signingKey": {
+              "description": "PEM-encoded private signing key (RSA or EC, matching `alg`).",
+              "$ref": "#/$defs/FileOrInline"
+            },
+            "certificate": {
+              "description": "PEM-encoded X.509 certificate chain, leaf first. The leaf public key must\ncorrespond to `signing_key` for token endpoints to validate assertions.\nA mismatch or comparison failure is logged and does not prevent loading.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/FileOrInline"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "certificateHeader": {
+              "description": "JWS certificate header emitted from `certificate`. Required when `certificate` is set.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CertificateHeader"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "alg": {
+              "$ref": "#/$defs/JwtSigningAlg",
+              "default": "RS256"
+            },
+            "kid": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "assertionAudience": {
+              "type": "string"
+            },
+            "method": {
+              "type": "string",
+              "const": "privateKeyJwt"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "method",
+            "clientId",
+            "signingKey",
+            "assertionAudience"
+          ]
+        }
+      ]
+    },
+    "CertificateHeader": {
+      "oneOf": [
+        {
+          "description": "Send the X.509 certificate chain in `x5c`.",
+          "type": "string",
+          "const": "x5c"
+        },
+        {
+          "description": "Send the leaf certificate's SHA-256 thumbprint in `x5t#S256`.",
+          "type": "string",
+          "const": "x5t#S256"
+        }
+      ]
+    },
+    "RawDefaultClientSecretBasicAuth": {
+      "type": "object",
+      "properties": {
+        "clientId": {
+          "description": "`client_id` parameter identifying the gateway at the authorization server.",
+          "type": "string"
+        },
+        "clientSecret": {
+          "description": "OAuth 2.0 client secret sent via HTTP Basic auth to the authorization server.",
+          "$ref": "#/$defs/FileOrInline"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "clientId",
+        "clientSecret"
+      ]
+    },
+    "TokenCacheConfig": {
+      "type": "object",
+      "properties": {
+        "maxEntries": {
+          "description": "Maximum number of token exchange responses to keep in the cache. Set to 0 to disable.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0
+        },
+        "defaultTtl": {
+          "description": "TTL used when the token endpoint omits `expires_in`. Defaults to 300s.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "CrossAppAccessAuth": {
+      "type": "object",
+      "properties": {
+        "identityProvider": {
+          "description": "The user's IdP authorization server, used for the RFC 8693 token exchange.",
+          "$ref": "#/$defs/CrossAppAccessEndpoint"
+        },
+        "resourceAuthorizationServer": {
+          "description": "The resource authorization server, which exchanges the ID-JAG for an access token.",
+          "$ref": "#/$defs/CrossAppAccessEndpoint"
+        },
+        "audience": {
+          "description": "Identifier of the resource authorization server. The issued ID-JAG is bound to this audience.",
+          "type": "string"
+        },
+        "resources": {
+          "description": "`resource` parameters naming the protected resource APIs.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scopes": {
+          "description": "`scope` values for the requested token, sent space-delimited.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "subjectToken": {
+          "description": "Subject token sent to the identity provider. Defaults to an OpenID Connect ID token read\nfrom the Authorization Bearer header.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CrossAppAccessSubjectToken"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cache": {
+          "description": "Response cache configuration. Defaults to an in-memory cache with 8192 entries and a 300s\nTTL when the token endpoint omits `expires_in`. Set `maxEntries` to 0 to disable.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TokenCacheConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "writeOnly": true
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "identityProvider",
+        "resourceAuthorizationServer",
+        "audience"
+      ]
+    },
+    "CrossAppAccessEndpoint": {
+      "type": "object",
+      "properties": {
+        "policies": {
+          "description": "Backend policies used when connecting to the service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "path": {
+          "description": "Token endpoint path on the backend; defaults to \"/\".",
+          "type": "string"
+        },
+        "clientAuth": {
+          "description": "Client authentication used when calling the token endpoint.",
+          "$ref": "#/$defs/OAuthClientAuth"
+        }
+      },
+      "unevaluatedProperties": false,
+      "oneOf": [
+        {
+          "description": "Service reference. Service must be defined in the top level services list.",
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
+                  "$ref": "#/$defs/NamespacedHostname"
+                },
+                "port": {
+                  "description": "Port on the target Service to route to.",
+                  "type": "integer",
+                  "format": "uint16",
+                  "minimum": 0,
+                  "maximum": 65535
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "port"
+              ]
+            }
+          },
+          "required": [
+            "service"
+          ]
+        },
+        {
+          "description": "Hostname or IP address",
+          "type": "object",
+          "properties": {
+            "host": {
+              "description": "Hostname or IP address",
+              "type": "string"
+            }
+          },
+          "required": [
+            "host"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "backend": {
+              "description": "Explicit backend reference. Backend must be defined in the top level backends list",
+              "type": "string"
+            }
+          },
+          "required": [
+            "backend"
+          ]
+        }
+      ],
+      "required": [
+        "clientAuth"
+      ]
+    },
+    "CrossAppAccessSubjectToken": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "Where to read the subject token. Defaults to the Authorization Bearer header.",
+          "$ref": "#/$defs/AuthorizationLocation",
+          "default": {
+            "header": {
+              "name": "authorization",
+              "prefix": "Bearer "
+            }
+          }
+        },
+        "tokenType": {
+          "description": "RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "BackendAuthCredential": {
+      "description": "An additional credential to inject on the backend request.",
+      "type": "object",
+      "properties": {
+        "location": {
+          "description": "Where the credential is inserted on the backend request.",
+          "$ref": "#/$defs/AuthorizationLocation"
+        },
+        "key": {
+          "description": "Credential value.",
+          "$ref": "#/$defs/FileOrInline"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "location",
+        "key"
+      ]
+    },
+    "BackendAuth": {
+      "oneOf": [
+        {
+          "description": "Forward the validated incoming JWT to the backend.",
+          "type": "object",
+          "properties": {
+            "passthrough": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "description": "Where to place the forwarded credential in the backend request.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/AuthorizationLocation"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "passthrough"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Send a configured secret value to the backend.",
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "object",
+              "properties": {
+                "value": {
+                  "description": "Secret value to send to the backend.",
+                  "$ref": "#/$defs/FileOrInline"
+                },
+                "location": {
+                  "description": "Where to place the secret in the backend request.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/AuthorizationLocation"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "value"
+              ]
+            }
+          },
+          "required": [
+            "key"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Authenticate to Google Cloud services.",
+          "type": "object",
+          "properties": {
+            "gcp": {
+              "$ref": "#/$defs/GcpAuth"
+            }
+          },
+          "required": [
+            "gcp"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Sign backend requests with AWS credentials.",
+          "type": "object",
+          "properties": {
+            "aws": {
+              "$ref": "#/$defs/AwsAuth"
+            }
+          },
+          "required": [
+            "aws"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Authenticate to Azure services.",
+          "type": "object",
+          "properties": {
+            "azure": {
+              "$ref": "#/$defs/AzureAuth"
+            }
+          },
+          "required": [
+            "azure"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Authenticate to GitHub Copilot.",
+          "type": "string",
+          "const": "copilot"
+        },
+        {
+          "description": "Sign a short-lived JWT with a private key on each request.",
+          "type": "object",
+          "properties": {
+            "jwtSign": {
+              "$ref": "#/$defs/JwtSignAuth"
+            }
+          },
+          "required": [
+            "jwtSign"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Use OAuth token exchange flows to obtain a backend access token.",
+          "type": "object",
+          "properties": {
+            "oauthTokenExchange": {
+              "$ref": "#/$defs/OAuthTokenExchangeAuth"
+            }
+          },
+          "required": [
+            "oauthTokenExchange"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Use Cross App Access (Identity Assertion / ID-JAG) to obtain a backend access token.",
+          "type": "object",
+          "properties": {
+            "crossAppAccess": {
+              "$ref": "#/$defs/CrossAppAccessAuth"
+            }
+          },
+          "required": [
+            "crossAppAccess"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
     "HTTP": {
       "type": "object",
       "properties": {
@@ -3049,7 +4374,7 @@
         },
         "connectTimeout": {
           "description": "Maximum time allowed to establish a backend TCP connection.",
-          "$ref": "#/$defs/Duration"
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -3058,31 +4383,23 @@
         "connectTimeout"
       ]
     },
-    "Duration": {
-      "type": "object",
-      "properties": {
-        "secs": {
-          "type": "integer",
-          "format": "uint64",
-          "minimum": 0
-        },
-        "nanos": {
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        }
-      },
-      "required": [
-        "secs",
-        "nanos"
-      ]
-    },
     "Tunnel": {
       "type": "object",
       "properties": {
         "proxy": {
           "description": "Proxy backend used to tunnel the connection.",
-          "$ref": "#/$defs/SimpleLocalBackend"
+          "$ref": "#/$defs/SimpleLocalBackendSerde"
+        },
+        "policies": {
+          "description": "Policies to connect to the proxy backend",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -3102,12 +4419,14 @@
       "type": "object",
       "properties": {
         "allowed": {
+          "description": "Headers to forward; an empty list forwards all headers.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/HeaderOrPseudo"
           }
         },
         "disallowed": {
+          "description": "Headers to drop; takes precedence over the allow list.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/HeaderOrPseudo"
@@ -3152,8 +4471,15 @@
           "$ref": "#/$defs/ResourceMetadata"
         },
         "jwks": {
-          "description": "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.",
-          "$ref": "#/$defs/FileInlineOrRemote"
+          "description": "JSON Web Key Set used to verify token signatures. Can be inline, from a file, or fetched remotely.\nIf omitted, the JWKS URL is derived from the issuer and provider.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FileInlineOrRemote"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "mode": {
           "description": "Controls whether MCP requests must include a valid JWT.",
@@ -3180,14 +4506,20 @@
             "string",
             "null"
           ]
+        },
+        "clientSecret": {
+          "description": "OAuth client secret injected into proxied token requests for confidential clients.\nCurrently used by the `entra` provider, whose Web-platform app registrations require a\nclient secret at the token endpoint.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false,
       "required": [
         "issuer",
         "audiences",
-        "resourceMetadata",
-        "jwks"
+        "resourceMetadata"
       ]
     },
     "McpIDP": {
@@ -3230,6 +4562,45 @@
             "okta"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "descope": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "descope"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "authentik": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "authentik"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "entra": {
+              "type": "object",
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "entra"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -3243,6 +4614,7 @@
           "type": "object",
           "properties": {
             "file": {
+              "description": "Path to a file on disk to load the value from.",
               "type": "string"
             }
           },
@@ -3286,11 +4658,11 @@
       ]
     },
     "JWTValidationOptions": {
-      "description": "JWT validation options controlling which claims must be present in a token.\n\nThe `required_claims` set specifies which RFC 7519 registered claims must\nexist in the token payload before validation proceeds. Only the following\nvalues are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered\nclaims such as `iat` and `jti` are **not** enforced by the underlying\n`jsonwebtoken` library and will be silently ignored.\n\nThis only enforces **presence**. Standard claims like `exp` and `nbf`\nhave their values validated independently (e.g., expiry is always checked\nwhen the `exp` claim is present, regardless of this setting).\n\nDefaults to `[\"exp\"]`.",
+      "description": "JWT validation options controlling which claims must be present in a token.\n\nThe `required_claims` set specifies which RFC 7519 registered claims must\nexist in the token payload before validation proceeds. Only the following\nvalues are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered\nclaims such as `iat` and `jti` are **not** enforced by the underlying\n`jsonwebtoken` library and will be silently ignored.\n\nThis only enforces **presence**. A configured issuer and non-empty audience\nlist independently require `iss` and `aud`, respectively. Standard claims\nlike `exp` and `nbf` have their values validated independently (e.g., expiry\nis always checked when the `exp` claim is present, regardless of this setting).\n\nDefaults to `[\"exp\"]`.",
       "type": "object",
       "properties": {
         "requiredClaims": {
-          "description": "Claims that must be present in the token before validation.\nOnly \"exp\", \"nbf\", \"aud\", \"iss\", \"sub\" are enforced; others\n(including \"iat\" and \"jti\") are ignored.\nDefaults to [\"exp\"]. Use an empty list to require no claims.",
+          "description": "Claims that must be present in the token before validation.\nOnly \"exp\", \"nbf\", \"aud\", \"iss\", \"sub\" are enforced; others\n(including \"iat\" and \"jti\") are ignored.\nDefaults to [\"exp\"]. Use an empty list to add no claim requirements beyond\nthose implied by the configured issuer and audiences.",
           "type": "array",
           "uniqueItems": true,
           "items": {
@@ -3339,6 +4711,16 @@
         },
         "transformations": {
           "description": "Request body values computed from CEL expressions.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "finalTransformations": {
+          "description": "Request body values computed from CEL expressions.\nThese are applied after conversion to the provider's request format.",
           "type": [
             "object",
             "null"
@@ -3643,7 +5025,14 @@
       "properties": {
         "target": {
           "description": "Backend that receives guardrail webhook requests.",
-          "$ref": "#/$defs/SimpleLocalBackend"
+          "$ref": "#/$defs/SimpleLocalBackendSerde"
+        },
+        "headers": {
+          "description": "Headers to set on the webhook request, computed from CEL expressions.\nKeys may be header names or the `:path`, `:method`, and `:authority` pseudo-headers;\nsetting `:path` replaces the default `/request` / `/response` path.\nExpressions are evaluated against the original incoming request (like the\n`transformation` policy), so `request.*` and `jwt.*` refer to the client's request.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
         },
         "forwardHeaderMatches": {
           "description": "Incoming request headers to forward to the webhook.",
@@ -3967,17 +5356,18 @@
           }
         }
       },
-      "additionalProperties": false,
-      "minProperties": 1
+      "additionalProperties": false
     },
     "SimpleChatCompletionMessage": {
       "description": "SimpleChatCompletionMessage is a simplified chat message",
       "type": "object",
       "properties": {
         "role": {
+          "description": "Message role, such as \"system\", \"user\", or \"assistant\".",
           "type": "string"
         },
         "content": {
+          "description": "Message text content.",
           "type": "string"
         }
       },
@@ -4026,6 +5416,7 @@
       "additionalProperties": false
     },
     "RouteType": {
+      "description": "The HTTP endpoint class, such as `/v1/chat/completions` or `/v1/messages`.\n\nThis is used both for the client route we matched and for the upstream route\nwe finally send to. For chat, those can differ: a client Anthropic\n`/v1/messages` request is `RouteType::Messages` and `InputFormat::Messages`,\nbut it may be translated and sent upstream as `RouteType::Completions`.\n\n`RouteType` is about the HTTP endpoint. `InputFormat` is about the parsed\nclient payload and the response shape we owe back to that client. The main\ndifference is this type includes things like Detect and Passthrough.",
       "oneOf": [
         {
           "description": "OpenAI /v1/chat/completions",
@@ -4243,7 +5634,7 @@
           "type": "string"
         },
         "policies": {
-          "description": "Backend policies used when connecting to the remote rate limit service.",
+          "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -4276,9 +5667,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -4422,7 +5815,7 @@
           "type": "string"
         },
         "policies": {
-          "description": "Backend policies used when connecting to the remote rate limit service.",
+          "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -4456,9 +5849,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -4557,11 +5952,11 @@
               }
             },
             "issuer": {
-              "description": "Expected token issuer, matched against the JWT `iss` claim.",
+              "description": "Expected token issuer. The JWT `iss` claim is required and must match.",
               "type": "string"
             },
             "audiences": {
-              "description": "Accepted token audiences, matched against the JWT `aud` claim when set.",
+              "description": "Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.",
               "type": [
                 "array",
                 "null"
@@ -4610,11 +6005,11 @@
       "type": "object",
       "properties": {
         "issuer": {
-          "description": "Expected token issuer, matched against the JWT `iss` claim.",
+          "description": "Expected token issuer. The JWT `iss` claim is required and must match.",
           "type": "string"
         },
         "audiences": {
-          "description": "Accepted token audiences, matched against the JWT `aud` claim when set.",
+          "description": "Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.",
           "type": [
             "array",
             "null"
@@ -4815,22 +6210,45 @@
       ]
     },
     "LocalAPIKey": {
-      "type": "object",
-      "properties": {
-        "key": {
-          "description": "API key value to accept.",
-          "$ref": "#/$defs/APIKey"
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "key": {
+              "description": "API key value to accept.",
+              "$ref": "#/$defs/APIKey"
+            },
+            "metadata": {
+              "description": "Optional metadata attached to requests authenticated with this key."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "key"
+          ]
         },
-        "metadata": {
-          "description": "Optional metadata attached to requests authenticated with this key."
+        {
+          "type": "object",
+          "properties": {
+            "keyHash": {
+              "description": "SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.",
+              "$ref": "#/$defs/APIKeyHash"
+            },
+            "metadata": {
+              "description": "Optional metadata attached to requests authenticated with this key."
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "keyHash"
+          ]
         }
-      },
-      "additionalProperties": false,
-      "required": [
-        "key"
       ]
     },
     "APIKey": {
+      "type": "string"
+    },
+    "APIKeyHash": {
       "type": "string"
     },
     "APIKeyMode": {
@@ -4895,7 +6313,7 @@
           "default": null
         },
         "policies": {
-          "description": "Backend policies used when connecting to the authorization service.",
+          "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -4936,7 +6354,7 @@
           ]
         },
         "cache": {
-          "description": "Cache gRPC authorization results using CEL expressions as the cache key.\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.",
+          "description": "Cache authorization results using CEL expressions as the cache key.\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.",
           "anyOf": [
             {
               "$ref": "#/$defs/CacheConfig"
@@ -4956,9 +6374,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -5070,6 +6490,17 @@
                     }
                   ]
                 },
+                "body": {
+                  "description": "CEL expression that computes the authorization request body.\nStrings and bytes are used directly; other values are JSON-encoded.\nIf set, this replaces forwarding the incoming request body.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Expression"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
                 "includeResponseHeaders": {
                   "description": "Authorization response headers to copy into the backend request.",
                   "type": "array",
@@ -5159,12 +6590,11 @@
       "type": "object",
       "properties": {
         "key": {
-          "description": "Non-empty list of CEL expressions that make up the cache key.",
+          "description": "CEL expressions that make up the cache key. Empty keys are accepted, but do not produce cache hits.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/Expression"
-          },
-          "minItems": 1
+          }
         },
         "ttl": {
           "description": "CEL expression that returns how long cached authorization results are reused.\nThe expression is evaluated after the authorization response has been applied\nto the request, and must return either a duration or timestamp.",
@@ -5188,7 +6618,7 @@
       "type": "object",
       "properties": {
         "policies": {
-          "description": "Backend policies used when connecting to the authorization service.",
+          "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -5229,7 +6659,7 @@
           ]
         },
         "cache": {
-          "description": "Cache gRPC authorization results using CEL expressions as the cache key.\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.",
+          "description": "Cache authorization results using CEL expressions as the cache key.\nWarning: the safety of this feature depends on the cache key accurately capturing the fields\nthe server operates on. For example, if you return a different result based on header A but only\ncache header B, users may get incorrect cache hits.",
           "anyOf": [
             {
               "$ref": "#/$defs/CacheConfig"
@@ -5250,9 +6680,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -5339,7 +6771,7 @@
           "default": null
         },
         "policies": {
-          "description": "Backend policies used when connecting to the external processing service.",
+          "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -5410,9 +6842,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -5568,7 +7002,7 @@
       "type": "object",
       "properties": {
         "policies": {
-          "description": "Backend policies used when connecting to the external processing service.",
+          "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -5640,9 +7074,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -5806,9 +7242,21 @@
           ],
           "format": "uint",
           "minimum": 0
+        },
+        "failureMode": {
+          "description": "Behavior when the body exceeds maxBytes: failClosed (reject) or failOpen (continue).",
+          "$ref": "#/$defs/FailureMode2",
+          "default": "failClosed"
         }
       },
       "additionalProperties": false
+    },
+    "FailureMode2": {
+      "type": "string",
+      "enum": [
+        "failClosed",
+        "failOpen"
+      ]
     },
     "TimeoutPolicy": {
       "type": "object",
@@ -5886,16 +7334,31 @@
         "codes"
       ]
     },
+    "DelayPolicy": {
+      "type": "object",
+      "properties": {
+        "duration": {
+          "description": "Artificial latency injected before the request is forwarded to the backend. Either a duration\nstring such as `2s`, or a CEL expression evaluated against the request that returns a duration\n(e.g. `duration(\"500ms\")`) or a number interpreted as milliseconds (e.g.\n`random() < 0.1 ? 500 : 0` for probabilistic delay, or `int(random() * 500)` for jitter). A\nnon-positive result injects no delay.",
+          "$ref": "#/$defs/Expression"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "duration"
+      ]
+    },
     "LocalRouteBackend": {
       "type": "object",
       "properties": {
         "weight": {
+          "description": "Relative weight for load balancing across backends. Defaults to 1.",
           "type": "integer",
           "format": "uint",
           "minimum": 0,
           "default": 1
         },
         "policies": {
+          "description": "Backend-level policies such as TLS, authentication, and transformations.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalBackendPolicies"
@@ -5909,15 +7372,18 @@
       "unevaluatedProperties": false,
       "oneOf": [
         {
+          "description": "Route to a Service defined in the top-level `services` list.",
           "type": "object",
           "properties": {
             "service": {
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -5947,6 +7413,7 @@
           ]
         },
         {
+          "description": "Hostname or IP address of the upstream to route to.",
           "type": "object",
           "properties": {
             "host": {
@@ -5958,10 +7425,35 @@
           ]
         },
         {
+          "description": "Route to the in-process admin service instead of a network upstream.",
+          "type": "object",
+          "properties": {
+            "internal": {
+              "$ref": "#/$defs/InternalBackend"
+            }
+          },
+          "required": [
+            "internal"
+          ]
+        },
+        {
           "type": "object",
           "properties": {
             "dynamic": {
               "type": "object",
+              "properties": {
+                "target": {
+                  "description": "CEL expression evaluated against the request to compute the dial\ntarget (e.g. `extproc.workerPodIp + \":\" + string(extproc.workerPodPort)`\nto read dynamic metadata an extProc policy already set). Must\nevaluate to a `host:port` string. The expression and any policy that\nsupplies its dynamic metadata are trusted to select the dial target.\nIf unset, the target is read from the request's own :authority/URI, as\ntoday.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Expression"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
               "additionalProperties": false
             }
           },
@@ -6026,10 +7518,25 @@
         }
       ]
     },
+    "InternalBackend": {
+      "description": "Selects how an internal backend maps proxy requests to the admin API.",
+      "anyOf": [
+        {
+          "description": "Forward the request to the admin API using the request's current path and query.",
+          "type": "string",
+          "const": "forward"
+        },
+        {
+          "description": "Rewrite all requests to this admin API path, preserving the original query string.",
+          "type": "string"
+        }
+      ]
+    },
     "LocalMcpBackend": {
       "type": "object",
       "properties": {
         "targets": {
+          "description": "MCP server targets to multiplex together.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/LocalMcpTarget"
@@ -6039,6 +7546,7 @@
           "$ref": "#/$defs/McpStatefulMode"
         },
         "prefixMode": {
+          "description": "How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).",
           "anyOf": [
             {
               "$ref": "#/$defs/McpPrefixMode"
@@ -6069,12 +7577,14 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "Name identifying this MCP target, used to prefix tool and resource names when multiplexing.",
           "type": "string"
         },
         "policies": {
+          "description": "Transport policies for connecting to this target's backend. Not supported\non stdio targets. MCP policies (mcpAuthorization, mcpGuardrails) apply to\nthe full target set and belong on the route or `mcp.policies`.",
           "anyOf": [
             {
-              "$ref": "#/$defs/MCPLocalBackendPolicies"
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
             },
             {
               "type": "null"
@@ -6088,40 +7598,68 @@
       "unevaluatedProperties": false,
       "oneOf": [
         {
+          "description": "Connect to a remote MCP server over HTTP with Server-Sent Events (SSE) streaming.",
           "type": "object",
           "properties": {
             "sse": {
               "type": "object",
-              "properties": {
-                "host": {
-                  "type": [
-                    "string",
-                    "null"
+              "unevaluatedProperties": false,
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "host": {
+                      "description": "Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "host"
                   ]
                 },
-                "port": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "uint16",
-                  "minimum": 0,
-                  "maximum": 65535
-                },
-                "path": {
-                  "type": [
-                    "string",
-                    "null"
+                {
+                  "type": "object",
+                  "properties": {
+                    "host": {
+                      "description": "Hostname or IP address of the MCP server.",
+                      "type": "string"
+                    },
+                    "port": {
+                      "description": "Port on the MCP server to connect to.",
+                      "type": "integer",
+                      "format": "uint16",
+                      "minimum": 0,
+                      "maximum": 65535
+                    },
+                    "path": {
+                      "description": "Request path on the MCP server.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "host",
+                    "port",
+                    "path"
                   ]
                 },
-                "backend": {
-                  "type": [
-                    "string",
-                    "null"
+                {
+                  "type": "object",
+                  "properties": {
+                    "backend": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "backend"
                   ]
                 }
-              },
-              "additionalProperties": false
+              ]
             }
           },
           "required": [
@@ -6133,36 +7671,63 @@
           "properties": {
             "mcp": {
               "type": "object",
-              "properties": {
-                "host": {
-                  "type": [
-                    "string",
-                    "null"
+              "unevaluatedProperties": false,
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "host": {
+                      "description": "Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "host"
                   ]
                 },
-                "port": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "uint16",
-                  "minimum": 0,
-                  "maximum": 65535
-                },
-                "path": {
-                  "type": [
-                    "string",
-                    "null"
+                {
+                  "type": "object",
+                  "properties": {
+                    "host": {
+                      "description": "Hostname or IP address of the MCP server.",
+                      "type": "string"
+                    },
+                    "port": {
+                      "description": "Port on the MCP server to connect to.",
+                      "type": "integer",
+                      "format": "uint16",
+                      "minimum": 0,
+                      "maximum": 65535
+                    },
+                    "path": {
+                      "description": "Request path on the MCP server.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "host",
+                    "port",
+                    "path"
                   ]
                 },
-                "backend": {
-                  "type": [
-                    "string",
-                    "null"
+                {
+                  "type": "object",
+                  "properties": {
+                    "backend": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "backend"
                   ]
                 }
-              },
-              "additionalProperties": false
+              ]
             }
           },
           "required": [
@@ -6210,38 +7775,67 @@
             "openapi": {
               "type": "object",
               "properties": {
-                "host": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "port": {
-                  "type": [
-                    "integer",
-                    "null"
-                  ],
-                  "format": "uint16",
-                  "minimum": 0,
-                  "maximum": 65535
-                },
-                "path": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
-                "backend": {
-                  "type": [
-                    "string",
-                    "null"
-                  ]
-                },
                 "schema": {
                   "$ref": "#/$defs/FileInlineOrRemote"
                 }
               },
-              "additionalProperties": false,
+              "unevaluatedProperties": false,
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "host": {
+                      "description": "Hostname or URI of the MCP server, for example `https://example.com` or `example.com:443`.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "host"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "host": {
+                      "description": "Hostname or IP address of the MCP server.",
+                      "type": "string"
+                    },
+                    "port": {
+                      "description": "Port on the MCP server to connect to.",
+                      "type": "integer",
+                      "format": "uint16",
+                      "minimum": 0,
+                      "maximum": 65535
+                    },
+                    "path": {
+                      "description": "Request path on the MCP server.",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "host",
+                    "port",
+                    "path"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "backend": {
+                      "type": "string"
+                    },
+                    "path": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "backend"
+                  ]
+                }
+              ],
               "required": [
                 "schema"
               ]
@@ -6253,120 +7847,8 @@
         }
       ]
     },
-    "MCPLocalBackendPolicies": {
-      "type": "object",
-      "properties": {
-        "requestHeaderModifier": {
-          "description": "Modify request headers before forwarding to this backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "transformations": {
-          "description": "Modify request and response data for this backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalTransformationConfig"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "backendTLS": {
-          "description": "TLS settings used when connecting to this backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalBackendTLS"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "backendAuth": {
-          "description": "Authentication credentials sent to this backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/BackendAuth"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "http": {
-          "description": "HTTP protocol settings for this backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HTTP"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "tcp": {
-          "description": "TCP protocol settings for this backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TCP"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "backendTunnel": {
-          "description": "Tunnel settings used when connecting to this backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Tunnel"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "mcpAuthorization": {
-          "description": "Authorization rules for MCP requests.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/McpAuthorization"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "mcpGuardrails": {
-          "description": "External MCP policy processors.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/McpGuardrails"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        }
-      },
-      "additionalProperties": false
-    },
     "McpStatefulMode": {
+      "description": "Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).",
       "type": "string",
       "enum": [
         "stateless",
@@ -6374,10 +7856,23 @@
       ]
     },
     "McpPrefixMode": {
-      "type": "string",
-      "enum": [
-        "always",
-        "conditional"
+      "description": "Controls how upstream tool/prompt names are exposed to clients.",
+      "oneOf": [
+        {
+          "description": "Prefix names with the target name only when there are multiple targets.",
+          "type": "string",
+          "const": "conditional"
+        },
+        {
+          "description": "Always prefix names, even with a single target.",
+          "type": "string",
+          "const": "always"
+        },
+        {
+          "description": "Never prefix names; with multiple targets, calls are routed by looking\nup which target serves the name. Requires names to be unique across targets.",
+          "type": "string",
+          "const": "never"
+        }
       ]
     },
     "McpBackendFailureMode": {
@@ -6420,9 +7915,11 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "Name identifying this provider, referenced by `llm.models[].provider`.",
           "type": "string"
         },
         "provider": {
+          "description": "The upstream LLM provider type and its configuration.",
           "$ref": "#/$defs/AIProvider"
         },
         "hostOverride": {
@@ -6452,6 +7949,7 @@
           "default": false
         },
         "policies": {
+          "description": "Backend policies applied to traffic to this provider.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalBackendPolicies"
@@ -6572,6 +8070,100 @@
       "type": "object",
       "properties": {
         "model": {
+          "description": "Model ID to send to OpenAI, overriding the model in the client request.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "moderation": {
+          "description": "Configuration for running OpenAI inline moderation on request input and generated output.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpenAIModeration"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "OpenAIModeration": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "description": "The moderation model to use. Defaults to `omni-moderation-latest`.",
+          "type": "string",
+          "default": "omni-moderation-latest"
+        },
+        "policy": {
+          "description": "Policies to apply to request input and generated output.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpenAIModerationPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "OpenAIModerationPolicy": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "description": "Policy for request input moderation.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpenAIModerationConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output": {
+          "description": "Policy for generated output moderation.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/OpenAIModerationConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "OpenAIModerationConfig": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/OpenAIModerationMode"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "mode"
+      ]
+    },
+    "OpenAIModerationMode": {
+      "type": "string",
+      "enum": [
+        "score",
+        "block"
+      ]
+    },
+    "GeminiProvider": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "description": "Model ID to send to Gemini, overriding the model in the client request.",
           "type": [
             "string",
             "null"
@@ -6580,33 +8172,25 @@
       },
       "additionalProperties": false
     },
-    "GeminiProvider": {
-      "type": "object",
-      "properties": {
-        "model": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      }
-    },
     "VertexProvider": {
       "type": "object",
       "properties": {
         "model": {
+          "description": "Model ID to send to Vertex AI, overriding the model in the client request.",
           "type": [
             "string",
             "null"
           ]
         },
         "region": {
+          "description": "Vertex AI region. Special values: `global` uses the global endpoint, while `us` and `eu`\nuse restricted multi-region endpoints. Other values are treated as regional locations.",
           "type": [
             "string",
             "null"
           ]
         },
         "projectId": {
+          "description": "Google Cloud project ID for Vertex AI.",
           "type": "string"
         }
       },
@@ -6619,6 +8203,7 @@
       "type": "object",
       "properties": {
         "model": {
+          "description": "Model ID to send to Anthropic, overriding the model in the client request.",
           "type": [
             "string",
             "null"
@@ -6631,27 +8216,32 @@
       "type": "object",
       "properties": {
         "model": {
+          "description": "Model ID to send to Bedrock, overriding the model in the client request.",
           "type": [
             "string",
             "null"
           ]
         },
         "region": {
+          "description": "AWS region for the Bedrock endpoint.",
           "type": "string"
         },
         "guardrailIdentifier": {
+          "description": "Identifier of the Bedrock guardrail to apply.",
           "type": [
             "string",
             "null"
           ]
         },
         "guardrailVersion": {
+          "description": "Version of the Bedrock guardrail to apply.",
           "type": [
             "string",
             "null"
           ]
         }
       },
+      "additionalProperties": false,
       "required": [
         "region"
       ]
@@ -6660,6 +8250,7 @@
       "type": "object",
       "properties": {
         "model": {
+          "description": "Model ID to send to Azure, overriding the model in the client request.",
           "type": [
             "string",
             "null"
@@ -6674,6 +8265,7 @@
           "$ref": "#/$defs/AzureResourceType"
         },
         "apiVersion": {
+          "description": "Azure API version query parameter for the endpoint.",
           "type": [
             "string",
             "null"
@@ -6717,6 +8309,7 @@
       "type": "object",
       "properties": {
         "model": {
+          "description": "Model ID to send to GitHub Copilot, overriding the model in the client request.",
           "type": [
             "string",
             "null"
@@ -6729,6 +8322,7 @@
       "type": "object",
       "properties": {
         "model": {
+          "description": "Model ID to send to the provider, overriding the model in the client request.",
           "type": [
             "string",
             "null"
@@ -6742,6 +8336,7 @@
           ]
         },
         "formats": {
+          "description": "Supported API payload formats and optional path overrides for this provider.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/ProviderFormatConfig"
@@ -6757,9 +8352,11 @@
       "type": "object",
       "properties": {
         "type": {
+          "description": "Upstream API shape this custom provider says it accepts.",
           "$ref": "#/$defs/ProviderFormat"
         },
         "path": {
+          "description": "Optional path override for this specific upstream format.",
           "type": [
             "string",
             "null"
@@ -6772,6 +8369,7 @@
       ]
     },
     "ProviderFormat": {
+      "description": "A custom provider's advertised upstream wire format.\n\nUnlike `InputFormat`, this describes what the backend accepts, not what the\nclient sent. Unlike `RouteType`, it is only for LLM payload endpoints that\ncan be converted or passed through; generic routes such as models,\npassthrough, and detect do not have a `ProviderFormat`.",
       "type": "string",
       "enum": [
         "completions",
@@ -6825,13 +8423,12 @@
           "description": "Authentication credentials sent to this backend.",
           "anyOf": [
             {
-              "$ref": "#/$defs/BackendAuth"
+              "$ref": "#/$defs/BackendAuthCompat"
             },
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "http": {
           "description": "HTTP protocol settings for this backend.",
@@ -6916,6 +8513,18 @@
           ],
           "default": null
         },
+        "authorization": {
+          "description": "Authorize incoming requests after this backend is selected.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Authorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "mcpAuthorization": {
           "description": "Authorization rules for MCP requests.",
           "anyOf": [
@@ -6957,6 +8566,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/InferenceRouting"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "sessionAffinity": {
+          "description": "Apply best-effort session affinity using a request value selected by a CEL expression.\nRequests with the same value are consistently load balanced to the same healthy service\nendpoint or AI provider, but may be remapped when the available backends change.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionAffinityPolicy"
             },
             {
               "type": "null"
@@ -7047,7 +8668,7 @@
       "properties": {
         "endpointPicker": {
           "description": "Endpoint picker backend that selects the destination endpoint.",
-          "$ref": "#/$defs/SimpleLocalBackend"
+          "$ref": "#/$defs/SimpleLocalBackendSerde"
         },
         "destinationMode": {
           "description": "How to use the destination returned by the endpoint picker.",
@@ -7074,10 +8695,25 @@
         }
       ]
     },
+    "SessionAffinityPolicy": {
+      "description": "Configures best-effort session affinity using an existing request attribute.\n\nThe source CEL expression selects the affinity value. Requests with the same value are\nconsistently load balanced to the same healthy service endpoint or AI provider. Unlike session\npersistence, this policy does not identify or track a previously selected backend, so changes to\nthe available backends may remap a value.",
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "CEL expression evaluated against request state. It must return a string or bytes value.\nExamples: `request.headers[\"x-session-id\"]` or `string(source.address)`.",
+          "$ref": "#/$defs/Expression"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source"
+      ]
+    },
     "LocalAIProviders": {
       "type": "object",
       "properties": {
         "providers": {
+          "description": "LLM providers in this group, load balanced together.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/LocalNamedAIProvider"
@@ -7110,9 +8746,11 @@
       "type": "object",
       "properties": {
         "agentRuntimeArn": {
+          "description": "ARN of the Bedrock AgentCore runtime (arn:aws:bedrock-agentcore:REGION:ACCOUNT:runtime/ID).",
           "type": "string"
         },
         "qualifier": {
+          "description": "Endpoint qualifier (version or alias) for the AgentCore runtime invocation.",
           "type": [
             "string",
             "null"
@@ -7128,6 +8766,7 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "Name identifying this route.",
           "type": [
             "string",
             "null"
@@ -7135,6 +8774,7 @@
           "default": null
         },
         "namespace": {
+          "description": "Namespace scoping this route.",
           "type": [
             "string",
             "null"
@@ -7142,6 +8782,7 @@
           "default": null
         },
         "ruleName": {
+          "description": "Specific rule within this route.",
           "type": [
             "string",
             "null"
@@ -7156,6 +8797,7 @@
           }
         },
         "policies": {
+          "description": "TCP-level policies applied to traffic on this route.",
           "anyOf": [
             {
               "$ref": "#/$defs/TCPFilterOrPolicy"
@@ -7166,6 +8808,7 @@
           ]
         },
         "backends": {
+          "description": "Weighted backends this TCP route forwards traffic to.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/LocalTCPRouteBackend"
@@ -7178,6 +8821,7 @@
       "type": "object",
       "properties": {
         "backendTLS": {
+          "description": "TLS configuration for connections to the TCP route's backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalBackendTLS"
@@ -7194,12 +8838,14 @@
       "type": "object",
       "properties": {
         "weight": {
+          "description": "Relative weight for load balancing across TCP backends. Defaults to 1.",
           "type": "integer",
           "format": "uint",
           "minimum": 0,
           "default": 1
         },
         "policies": {
+          "description": "Backend-level policies for TCP backends, such as TLS, authentication, and tunneling.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalTCPBackendPolicies"
@@ -7220,9 +8866,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -7413,6 +9061,20 @@
         "connect"
       ]
     },
+    "BindMode": {
+      "oneOf": [
+        {
+          "description": "Open a listener socket on the bind's address (the normal behavior).",
+          "type": "string",
+          "const": "standard"
+        },
+        {
+          "description": "Do not open a socket. The bind is registered for routing only and is reachable\nvia in-process re-entry (e.g. another listener redirecting CONNECT traffic to it).",
+          "type": "string",
+          "const": "internal"
+        }
+      ]
+    },
     "LocalFrontendPolicies": {
       "type": "object",
       "properties": {
@@ -7457,6 +9119,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/NetworkAuthorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "networkExtAuthz": {
+          "description": "HTTP external authorization performed once for each downstream network connection.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExtAuthz"
             },
             {
               "type": "null"
@@ -7894,10 +9568,32 @@
       "type": "object",
       "properties": {
         "policies": {
-          "description": "Backend policies used when exporting OTLP logs.",
+          "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "filter": {
+          "description": "CEL expression that decides whether a request is exported over OTLP.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fields": {
+          "description": "OTLP-specific access log fields. If unset, the parent access log fields are used.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AccessLogFields"
             },
             {
               "type": "null"
@@ -7924,9 +9620,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -7971,6 +9669,27 @@
         }
       ]
     },
+    "AccessLogFields": {
+      "type": "object",
+      "properties": {
+        "remove": {
+          "description": "Access log field names to remove.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "add": {
+          "description": "Access log fields to add, computed from CEL expressions.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
     "TracingProtocol": {
       "type": "string",
       "enum": [
@@ -7981,6 +9700,17 @@
     "DatabaseLoggingConfig": {
       "type": "object",
       "properties": {
+        "llm": {
+          "description": "LLM detail stored in the database. `metadata` stores request metadata, usage, timing, and\ncost without prompt or completion content in the dedicated payload table. `full`\nadditionally captures and stores prompt and completion content there. When omitted, legacy\nbehavior is preserved: content captured by CEL expressions is also stored in the payload.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DatabaseLlmMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "add": {
           "description": "Database-only fields to add, computed from CEL expressions.",
           "type": "object",
@@ -7991,12 +9721,26 @@
       },
       "additionalProperties": false
     },
+    "DatabaseLlmMode": {
+      "oneOf": [
+        {
+          "description": "Store LLM metadata without prompt or completion content.",
+          "type": "string",
+          "const": "metadata"
+        },
+        {
+          "description": "Store LLM metadata and prompt/completion content.",
+          "type": "string",
+          "const": "full"
+        }
+      ]
+    },
     "TracingConfig": {
       "description": "Configuration for dynamic tracing policy",
       "type": "object",
       "properties": {
         "policies": {
-          "description": "Backend policies used when exporting traces.",
+          "description": "Backend policies used when connecting to the service.",
           "anyOf": [
             {
               "$ref": "#/$defs/SimpleLocalBackendPolicies"
@@ -8028,7 +9772,7 @@
           "description": "Optional per-policy override for random sampling. If set, overrides global config for\nrequests that use this frontend policy.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Expression"
+              "$ref": "#/$defs/StringBoolFloat"
             },
             {
               "type": "null"
@@ -8040,13 +9784,24 @@
           "description": "Optional per-policy override for client sampling. If set, overrides global config for\nrequests that use this frontend policy.",
           "anyOf": [
             {
-              "$ref": "#/$defs/Expression"
+              "$ref": "#/$defs/StringBoolFloat"
             },
             {
               "type": "null"
             }
           ],
           "default": null
+        },
+        "filter": {
+          "description": "Optional CEL filter with KEEP semantics. When set, only requests for which the expression\nevaluates to `true` have their trace span(s) exported; all other spans are dropped. When\nunset, no filtering is applied (all sampled spans are exported). Composes after sampling\n(only sampled spans are evaluated). This matches `accessLog.filter` (keep-semantics):\n`true` keeps. Missing/errored fields evaluate to `false`, so on eval error the span is\ndropped (fail closed).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "path": {
           "description": "OTLP HTTP path used to export traces.",
@@ -8069,9 +9824,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -8154,9 +9911,11 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "Name identifying this resource.",
           "type": "string"
         },
         "namespace": {
+          "description": "Namespace scoping this resource, used in fully qualified `namespace/name` references.",
           "type": "string"
         }
       },
@@ -8222,18 +9981,22 @@
       "type": "object",
       "properties": {
         "gatewayName": {
+          "description": "Name of the gateway this target references.",
           "type": "string"
         },
         "gatewayNamespace": {
+          "description": "Namespace of the gateway this target references.",
           "type": "string"
         },
         "listenerName": {
+          "description": "Specific listener within the gateway; if unset, targets the gateway itself.",
           "type": [
             "string",
             "null"
           ]
         },
         "port": {
+          "description": "Port to target, as an alternative to listener_name.",
           "type": [
             "integer",
             "null"
@@ -8253,18 +10016,22 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "Name identifying this route.",
           "type": "string"
         },
         "namespace": {
+          "description": "Namespace scoping this route, used in fully qualified `namespace/name` references.",
           "type": "string"
         },
         "ruleName": {
+          "description": "Specific rule within the route, for targeted policy references.",
           "type": [
             "string",
             "null"
           ]
         },
         "kind": {
+          "description": "Resource kind used in policy target references.",
           "type": [
             "string",
             "null"
@@ -8356,12 +10123,15 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "Name of the listener set resource.",
           "type": "string"
         },
         "namespace": {
+          "description": "Namespace of the listener set resource.",
           "type": "string"
         },
         "section": {
+          "description": "Specific listener within the listener set to target.",
           "type": [
             "string",
             "null"
@@ -8385,9 +10155,11 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "Identifier for this backend, referenced by routes.",
           "type": "string"
         },
         "policies": {
+          "description": "Backend-level policies such as TLS, authentication, transformations, and health checks.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalBackendPolicies"
@@ -8404,6 +10176,7 @@
       "unevaluatedProperties": false,
       "oneOf": [
         {
+          "description": "Hostname or IP address of the upstream to route to.",
           "type": "object",
           "properties": {
             "host": {
@@ -8412,6 +10185,18 @@
           },
           "required": [
             "host"
+          ]
+        },
+        {
+          "description": "Route to the in-process admin service instead of a network upstream.",
+          "type": "object",
+          "properties": {
+            "internal": {
+              "$ref": "#/$defs/InternalBackend"
+            }
+          },
+          "required": [
+            "internal"
           ]
         },
         {
@@ -8453,9 +10238,11 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "Identifier for this route group, referenced by delegating routes.",
           "type": "string"
         },
         "routes": {
+          "description": "HTTP routes grouped together for delegation and reuse.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/LocalRoute"
@@ -8468,10 +10255,460 @@
         "routes"
       ]
     },
-    "LocalLLMConfig": {
+    "LocalGateway": {
       "type": "object",
       "properties": {
         "port": {
+          "description": "port is the port to listen on for this gateway.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint16",
+          "minimum": 0,
+          "maximum": 65535
+        },
+        "protocol": {
+          "description": "protocol controls whether this gateway accepts HTTP/HTTPS routes or TCP/TLS routes. When omitted, gateways\ndefault to HTTP, or HTTPS when tls is set.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalGatewayProtocol"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "listeners": {
+          "description": "listeners defines multiple named listeners under this gateway. When set, only `port` may be configured on the top level gateway.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalGatewayListener"
+          }
+        },
+        "tls": {
+          "description": "tls enables HTTPS for this gateway. Maybe not be set with `listeners`",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTLSServerConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "oidc": {
+          "description": "Authenticate browser requests with OIDC authorization code flow.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOidcConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "jwtAuth": {
+          "description": "Authenticate incoming requests with JWT bearer tokens.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalJwtConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authorization": {
+          "description": "Authorization rules for incoming HTTP requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Authorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "extAuthz": {
+          "description": "Authorize incoming requests by calling an external authorization service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalExplicitOrConditional_ExtAuthz"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "extProc": {
+          "description": "Send request and response data to an external processing service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalExplicitOrConditional_ExtProc"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cors": {
+          "description": "Handle CORS preflight requests and append configured CORS headers to applicable requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CorsSerde"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "transformations": {
+          "description": "Modify request and response headers, bodies, or metadata.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalExplicitOrConditional_LocalTransformationConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "basicAuth": {
+          "description": "Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBasicAuth"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "apiKey": {
+          "description": "Authenticate incoming requests with API keys.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalAPIKeys"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalGatewayProtocol": {
+      "type": "string",
+      "enum": [
+        "HTTP",
+        "HTTPS",
+        "TCP",
+        "TLS"
+      ]
+    },
+    "LocalGatewayListener": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "name identifies this listener for gateway references like `gateways: gateway-name/listener-name`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "hostname": {
+          "description": "Hostname defines what hostnames are served under this listener. Can be a wildcard.\nThis allows serving multiple domains with different TLS configurations.\nIf unset, all domains will be served (implicit wildcard).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "protocol": {
+          "description": "protocol controls whether this listener accepts HTTP/HTTPS routes or TCP/TLS routes. When omitted, listeners\ndefault to HTTP, or HTTPS when tls is set.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalGatewayProtocol"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tls": {
+          "description": "tls enables HTTPS for this listener.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalTLSServerConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "oidc": {
+          "description": "Authenticate browser requests with OIDC authorization code flow.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOidcConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "jwtAuth": {
+          "description": "Authenticate incoming requests with JWT bearer tokens.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalJwtConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authorization": {
+          "description": "Authorization rules for incoming HTTP requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Authorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "extAuthz": {
+          "description": "Authorize incoming requests by calling an external authorization service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalExplicitOrConditional_ExtAuthz"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "extProc": {
+          "description": "Send request and response data to an external processing service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalExplicitOrConditional_ExtProc"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cors": {
+          "description": "Handle CORS preflight requests and append configured CORS headers to applicable requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CorsSerde"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "transformations": {
+          "description": "Modify request and response headers, bodies, or metadata.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalExplicitOrConditional_LocalTransformationConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "basicAuth": {
+          "description": "Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBasicAuth"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "apiKey": {
+          "description": "Authenticate incoming requests with API keys.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalAPIKeys"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalAttachedRoute": {
+      "type": "object",
+      "properties": {
+        "gateways": {
+          "description": "gateways attaches this route to named gateways or gateway listeners.\nThis can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.\nIf unset, the 'default' gateway will be used.",
+          "$ref": "#/$defs/LocalGatewayRefs",
+          "default": []
+        },
+        "name": {
+          "description": "Name identifying this route.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "namespace": {
+          "description": "Namespace scoping this route.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "ruleName": {
+          "description": "Specific rule within this route.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "hostnames": {
+          "description": "Can be a wildcard",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "matches": {
+          "description": "Conditions (path, method, headers, query) that select this route.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RouteMatch"
+          },
+          "default": [
+            {
+              "path": {
+                "pathPrefix": "/"
+              }
+            }
+          ]
+        },
+        "policies": {
+          "description": "Route-level policies applied before backend selection.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FilterOrPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "backends": {
+          "description": "Weighted backends this route forwards traffic to.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalRouteBackend"
+          }
+        }
+      }
+    },
+    "LocalGatewayRefs": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      ]
+    },
+    "LocalAttachedTCPRoute": {
+      "type": "object",
+      "properties": {
+        "gateways": {
+          "description": "gateways attaches this route to named TCP/TLS gateways or gateway listeners.\nThis can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.\nIf unset, the 'default' gateway will be used.",
+          "$ref": "#/$defs/LocalGatewayRefs",
+          "default": []
+        },
+        "name": {
+          "description": "Name identifying this route.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "namespace": {
+          "description": "Namespace scoping this route.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "ruleName": {
+          "description": "Specific rule within this route.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "hostnames": {
+          "description": "Can be a wildcard",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "policies": {
+          "description": "TCP-level policies applied to traffic on this route.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TCPFilterOrPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "backends": {
+          "description": "Weighted backends this TCP route forwards traffic to.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LocalTCPRouteBackend"
+          }
+        }
+      }
+    },
+    "LocalLLMConfig": {
+      "type": "object",
+      "properties": {
+        "gateways": {
+          "description": "gateways attaches the LLM routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.\nWhen omitted and a gateway named `default` exists, the LLM API routes attach to it unless `port` is set.",
+          "$ref": "#/$defs/LocalGatewayRefs",
+          "default": []
+        },
+        "port": {
+          "description": "port defines the port to serve the LLM routes under. Deprecated; use `gateways` instead.",
           "type": [
             "integer",
             "null"
@@ -8481,6 +10718,7 @@
           "maximum": 65535
         },
         "tls": {
+          "description": "tls defines the TLS settings to serve the LLM routes under when using `port`. Deprecated; use `gateways` instead.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalTLSServerConfig"
@@ -8584,18 +10822,21 @@
           ]
         },
         "awsRegion": {
+          "description": "AWS region to use for the Bedrock provider.",
           "type": [
             "string",
             "null"
           ]
         },
         "vertexRegion": {
+          "description": "Google Cloud region to use for the Vertex AI provider.",
           "type": [
             "string",
             "null"
           ]
         },
         "vertexProject": {
+          "description": "Google Cloud project ID to use for the Vertex AI provider.",
           "type": [
             "string",
             "null"
@@ -8680,6 +10921,16 @@
       "$ref": "#/$defs/FileOrInline"
     },
     "LocalModelAIProvider": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/LocalBuiltinModelAIProvider"
+        },
+        {
+          "$ref": "#/$defs/ProviderPreset"
+        }
+      ]
+    },
+    "LocalBuiltinModelAIProvider": {
       "oneOf": [
         {
           "type": "string",
@@ -8691,20 +10942,7 @@
             "anthropic",
             "bedrock",
             "azure",
-            "copilot",
-            "cohere",
-            "ollama",
-            "baseten",
-            "cerebras",
-            "deepinfra",
-            "deepseek",
-            "groq",
-            "huggingface",
-            "mistral",
-            "openrouter",
-            "togetherai",
-            "xai",
-            "fireworks"
+            "copilot"
           ]
         },
         {
@@ -8733,10 +10971,30 @@
         }
       ]
     },
+    "ProviderPreset": {
+      "description": "A named custom-provider configuration maintained by agentgateway.\n\nThese presets deliberately live beside `Provider`: both standalone and xDS\nconfiguration expand them here, keeping endpoint and format behavior alike.",
+      "type": "string",
+      "enum": [
+        "cohere",
+        "ollama",
+        "baseten",
+        "cerebras",
+        "deepinfra",
+        "deepseek",
+        "groq",
+        "huggingface",
+        "mistral",
+        "openrouter",
+        "togetherai",
+        "xai",
+        "fireworks"
+      ]
+    },
     "LocalLLMProviderDefaults": {
       "type": "object",
       "properties": {
         "defaults": {
+          "description": "Request payload fields to set when not already present in the request.",
           "type": [
             "object",
             "null"
@@ -8744,6 +11002,7 @@
           "additionalProperties": true
         },
         "overrides": {
+          "description": "Request payload fields to set, overriding any existing values in the request.",
           "type": [
             "object",
             "null"
@@ -8751,6 +11010,7 @@
           "additionalProperties": true
         },
         "transformation": {
+          "description": "CEL expressions that compute request payload fields, overriding existing values.",
           "type": [
             "object",
             "null"
@@ -8760,6 +11020,7 @@
           }
         },
         "requestHeaders": {
+          "description": "Headers to add, set, or remove on requests to the LLM provider.",
           "anyOf": [
             {
               "$ref": "#/$defs/HeaderModifier"
@@ -8771,6 +11032,7 @@
           "default": null
         },
         "responseHeaders": {
+          "description": "Headers to add, set, or remove on responses from the LLM provider.",
           "anyOf": [
             {
               "$ref": "#/$defs/HeaderModifier"
@@ -8782,6 +11044,7 @@
           "default": null
         },
         "backendTLS": {
+          "description": "TLS configuration for connecting to the LLM provider.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalBackendTLS"
@@ -8792,6 +11055,7 @@
           ]
         },
         "tls": {
+          "description": "TLS configuration for connecting to the LLM provider.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalBackendTLS"
@@ -8802,17 +11066,18 @@
           ]
         },
         "auth": {
+          "description": "Authentication configuration for connecting to the LLM provider.",
           "anyOf": [
             {
-              "$ref": "#/$defs/BackendAuth"
+              "$ref": "#/$defs/BackendAuthCompat"
             },
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "health": {
+          "description": "Outlier detection and health checking for this provider backend.",
           "anyOf": [
             {
               "$ref": "#/$defs/LocalHealthPolicy"
@@ -8823,6 +11088,7 @@
           ]
         },
         "backendTunnel": {
+          "description": "Tunneling configuration for connecting to the LLM provider.",
           "anyOf": [
             {
               "$ref": "#/$defs/Tunnel"
@@ -8834,6 +11100,7 @@
           "default": null
         },
         "promptCaching": {
+          "description": "Cache-point insertion for LLM providers that support prompt caching.",
           "anyOf": [
             {
               "$ref": "#/$defs/PromptCachingConfig"
@@ -8859,6 +11126,13 @@
     "LocalLLMModels": {
       "type": "object",
       "properties": {
+        "id": {
+          "description": "id is a stable identity for this model config entry. The name field remains the model match pattern.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "name": {
           "description": "name is the name of the model we are matching from a users request. If params.model is set, that\nwill be used in the request to the LLM provider. If not, the incoming model is used.",
           "type": "string"
@@ -8923,6 +11197,16 @@
             "$ref": "#/$defs/Expression"
           }
         },
+        "finalTransformation": {
+          "description": "final_transformation allows setting values from CEL expressions for the request, overriding any existing values.\nOccurs after conversion of the request to the provider format, allowing for provider-specific transformations.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
         "requestHeaders": {
           "description": "requestHeaders modifies headers in requests to the LLM provider.",
           "anyOf": [
@@ -8973,13 +11257,12 @@
           "description": "auth configures authentication when connecting to the LLM provider.",
           "anyOf": [
             {
-              "$ref": "#/$defs/BackendAuth"
+              "$ref": "#/$defs/BackendAuthCompat"
             },
             {
               "type": "null"
             }
-          ],
-          "default": null
+          ]
         },
         "health": {
           "description": "health configures outlier detection for this model backend.",
@@ -9082,6 +11365,7 @@
       "type": "object",
       "properties": {
         "headers": {
+          "description": "Request headers to match for conditional model routing.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/HeaderMatch"
@@ -9171,6 +11455,7 @@
           "type": "string"
         },
         "weight": {
+          "description": "Relative proportion of traffic sent to this target model. Defaults to 1.",
           "type": "integer",
           "format": "uint",
           "minimum": 0,
@@ -9400,7 +11685,13 @@
     "LocalSimpleMcpConfig": {
       "type": "object",
       "properties": {
+        "gateways": {
+          "description": "gateways attaches the MCP routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.\nWhen omitted and a gateway named `default` exists, the MCP routes attach to it unless port is set.",
+          "$ref": "#/$defs/LocalGatewayRefs",
+          "default": []
+        },
         "port": {
+          "description": "port defines the port to serve the LLM routes under. Deprecated; use `gateways` instead.",
           "type": [
             "integer",
             "null"
@@ -9410,6 +11701,7 @@
           "maximum": 65535
         },
         "targets": {
+          "description": "MCP server targets to multiplex together.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/LocalMcpTarget"
@@ -9419,6 +11711,7 @@
           "$ref": "#/$defs/McpStatefulMode"
         },
         "prefixMode": {
+          "description": "How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).",
           "anyOf": [
             {
               "$ref": "#/$defs/McpPrefixMode"
@@ -9440,6 +11733,7 @@
           ]
         },
         "policies": {
+          "description": "Policies applied to MCP requests.",
           "anyOf": [
             {
               "$ref": "#/$defs/FilterOrPolicy"
@@ -9454,6 +11748,125 @@
       "required": [
         "targets"
       ]
+    },
+    "LocalUIConfig": {
+      "type": "object",
+      "properties": {
+        "gateways": {
+          "description": "gateways attaches the UI and UI backend routes to named gateways. This can take the form of `<gateway-name>` or `<gateway-name>/<listener-name>` to attach to a specific listener within a gateway.\nWhen omitted and a gateway named `default` exists, the UI routes attach to it.",
+          "$ref": "#/$defs/LocalGatewayRefs",
+          "default": []
+        },
+        "policies": {
+          "description": "policies defines route-level policies for the UI and required UI API routes.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalUIPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "LocalUIPolicy": {
+      "type": "object",
+      "properties": {
+        "cors": {
+          "description": "Handle CORS preflight requests and append configured CORS headers to applicable requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CorsSerde"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "oidc": {
+          "description": "Authenticate browser requests with OIDC authorization code flow.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalOidcConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "jwtAuth": {
+          "description": "Authenticate incoming requests with JWT bearer tokens.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalJwtConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "authorization": {
+          "description": "Authorization rules for incoming HTTP requests.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Authorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "extAuthz": {
+          "description": "Authorize incoming requests by calling an external authorization service.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalExplicitOrConditional_ExtAuthz"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "basicAuth": {
+          "description": "Authenticate incoming requests with Basic Auth credentials from an htpasswd user database.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalBasicAuth"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "apiKey": {
+          "description": "Authenticate incoming requests with API keys.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LocalAPIKeys"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "csrf": {
+          "description": "Handle CSRF protection by validating request origins against configured allowed origins.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Csrf"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

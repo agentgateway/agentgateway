@@ -1,4 +1,4 @@
-import yaml from "js-yaml";
+import { dump, load } from "js-yaml";
 import type { CorsPolicy, LlmPolicy } from "../types";
 import type { LocalRateLimitConfig, SchemaNode } from "./types";
 
@@ -75,6 +75,9 @@ export function policySummary(
         Boolean(rule && typeof rule === "object" && "require" in rule),
       ).length;
     return `${allow} allow, ${deny} deny, ${require} require`;
+  }
+  if (key === "backendAuth") {
+    return backendAuthSummary(value);
   }
   return "Configured";
 }
@@ -155,7 +158,7 @@ export function toText(value: unknown) {
 }
 
 export function toYamlText(value: unknown) {
-  return yaml.dump(value, { noRefs: true, lineWidth: 100 });
+  return dump(value, { noRefs: true, lineWidth: 100 });
 }
 
 export function toYamlMappingText(value: unknown) {
@@ -164,7 +167,7 @@ export function toYamlMappingText(value: unknown) {
 }
 
 export function parseYamlText(value: string) {
-  return yaml.load(value) as unknown;
+  return load(value) as unknown;
 }
 
 export function appendUnique(values: string[], value: string) {
@@ -207,4 +210,31 @@ export function titleFromKey(key: string) {
       return acronyms[word] ?? word;
     },
   );
+}
+
+function backendAuthSummary(value: unknown) {
+  if (value === "copilot") return "GitHub Copilot";
+  if (!isRecord(value)) return "Configured";
+  if ("oauth" in value) {
+    const oauth = value.oauth;
+    if (!isRecord(oauth)) return "OAuth token exchange";
+    const target =
+      typeof oauth.host === "string"
+        ? oauth.host
+        : typeof oauth.backend === "string"
+          ? oauth.backend
+          : isRecord(oauth.service) && typeof oauth.service.name === "string"
+            ? oauth.service.name
+            : "";
+    return target
+      ? `OAuth token exchange to ${target}`
+      : "OAuth token exchange";
+  }
+  if ("crossAppAccess" in value) return "Cross App Access";
+  if ("passthrough" in value) return "Passthrough";
+  if ("key" in value) return "Static key";
+  if ("gcp" in value) return "Google Cloud";
+  if ("aws" in value) return "AWS";
+  if ("azure" in value) return "Azure";
+  return "Configured";
 }

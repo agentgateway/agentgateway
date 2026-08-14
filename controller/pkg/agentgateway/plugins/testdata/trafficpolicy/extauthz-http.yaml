@@ -16,6 +16,11 @@ spec:
       failureMode: FailOpen
       forwardBody:
         maxSize: 1Ki
+      cache:
+        key:
+        - request.path
+        ttl: 5m
+        maxEntries: 50
       http:
         path: |
           "/prefix/" + request.path
@@ -57,6 +62,11 @@ output:
           namespace: default
       traffic:
         extAuthz:
+          cache:
+            key:
+            - request.path
+            maxEntries: 50
+            ttl: duration("5m")
           failureMode: ALLOW
           http:
             addRequestHeaders:

@@ -54,6 +54,11 @@ func handleOpenAIChatCompletions(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 		"service_tier": "default",
+		"usage": map[string]any{
+			"prompt_tokens":     10,
+			"completion_tokens": 10,
+			"total_tokens":      20,
+		},
 	})
 }
 

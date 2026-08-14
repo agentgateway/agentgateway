@@ -65,6 +65,7 @@ pub struct Config {
 	pub identity: Identity,
 	pub auth: AuthSource,
 	pub ca_cert: RootCert,
+	#[serde(serialize_with = "crate::serdes::ser_sensitive_header_vec")]
 	pub ca_headers: Vec<(String, String)>,
 	pub allowed_trust_domains: Arc<[Strng]>,
 	pub skip_validate_trust_domain: bool,

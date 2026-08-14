@@ -1,0 +1,186 @@
+---
+# Source: agentgateway-standalone/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: test-release
+  namespace: default
+  labels:
+    helm.sh/chart: agentgateway-standalone-0.0.1
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/component: standalone
+    app.kubernetes.io/version: "0.0.0-dev"
+    app.kubernetes.io/managed-by: Helm
+---
+# Source: agentgateway-standalone/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: test-release-config
+  namespace: default
+  labels:
+    helm.sh/chart: agentgateway-standalone-0.0.1
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/component: standalone
+    app.kubernetes.io/version: "0.0.0-dev"
+    app.kubernetes.io/managed-by: Helm
+data:
+  config.yaml: |
+
+    config:
+      storage:
+        mode: file
+    gateways:
+      default:
+        port: 4000
+    llm:
+      models: []
+    mcp:
+      targets: []
+    ui: {}
+---
+# Source: agentgateway-standalone/templates/service-gateway.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: test-release
+  namespace: default
+  labels:
+    helm.sh/chart: agentgateway-standalone-0.0.1
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/component: standalone
+    app.kubernetes.io/version: "0.0.0-dev"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: "LoadBalancer"
+  ports:
+  - name: "http"
+    protocol: "TCP"
+    port: 80
+    targetPort: 4000
+  selector:
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/component: standalone
+---
+# Source: agentgateway-standalone/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-release
+  namespace: default
+  labels:
+    helm.sh/chart: agentgateway-standalone-0.0.1
+    app.kubernetes.io/name: agentgateway-standalone
+    app.kubernetes.io/instance: test-release
+    app.kubernetes.io/component: standalone
+    app.kubernetes.io/version: "0.0.0-dev"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agentgateway-standalone
+      app.kubernetes.io/instance: test-release
+      app.kubernetes.io/component: standalone
+  template:
+    metadata:
+      annotations:
+        checksum/config: a8a21268a2cbaefa819117a8b657dbab610aea9fddd3b2bd645115ba44922dc6
+        prometheus.io/path: /metrics
+        prometheus.io/port: "15020"
+        prometheus.io/scrape: "true"
+      labels:
+        app.kubernetes.io/name: agentgateway-standalone
+        app.kubernetes.io/instance: test-release
+        app.kubernetes.io/component: standalone
+    spec:
+      serviceAccountName: test-release
+      containers:
+      - name: agentgateway
+        image: "cr.agentgateway.dev/agentgateway:v0.0.0-dev"
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+        readinessProbe:
+          httpGet:
+            path: /healthz/ready
+            port: 15021
+          periodSeconds: 10
+        startupProbe:
+          failureThreshold: 60
+          httpGet:
+            path: /healthz/ready
+            port: 15021
+          periodSeconds: 1
+          successThreshold: 1
+          timeoutSeconds: 2
+        args:
+        - -f
+        - /config/config.yaml
+        env:
+        - name: RUST_BACKTRACE
+          value: "1"
+        - name: OIDC_COOKIE_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: test-release-oidc
+              key: OIDC_COOKIE_SECRET
+              optional: true
+        - name: LOG_FORMAT
+          value: json
+        - name: API_TOKEN
+          valueFrom:
+            secretKeyRef:
+              key: token
+              name: agw-secret
+        volumeMounts:
+        - name: config
+          mountPath: /config
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        - mountPath: /var/lib/agentgateway/plugins
+          name: plugin-cache
+        resources:
+          limits:
+            cpu: "1"
+            memory: 1Gi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+      volumes:
+      - name: config
+        configMap:
+          name: test-release-config
+      - name: tmp
+        emptyDir: {}
+      - emptyDir: {}
+        name: plugin-cache
+      nodeSelector:
+        kubernetes.io/os: linux
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: standalone
+            topologyKey: kubernetes.io/hostname
+      tolerations:
+        - effect: NoSchedule
+          key: dedicated
+          operator: Equal
+          value: agentgateway
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "3"

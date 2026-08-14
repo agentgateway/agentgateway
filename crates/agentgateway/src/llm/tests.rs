@@ -2,9 +2,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use agent_core::strng;
-use base64::Engine;
 use http_body_util::BodyExt;
-use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 
 use super::*;
@@ -14,13 +12,37 @@ fn llm_request_with_tokens(input_tokens: Option<u64>) -> LLMRequest {
 	LLMRequest {
 		input_tokens,
 		input_format: InputFormat::Completions,
-		native_format: Some(custom::ProviderFormat::Completions),
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "test-model".into(),
 		provider: "test-provider".into(),
 		streaming: true,
 		params: Default::default(),
 		prompt: None,
+		provider_state: None,
+	}
+}
+
+#[test]
+fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
+	let provider = AIProvider::Vertex(vertex::Provider {
+		project_id: strng::new("test-project"),
+		model: None,
+		region: None,
+	});
+	let model = Some("google/gemini-2.5-flash-lite");
+
+	assert_eq!(
+		provider
+			.chat_translation(InputFormat::Completions, model)
+			.unwrap()
+			.output,
+		ChatFormat::VertexGemini
+	);
+	for input in [InputFormat::Messages, InputFormat::Responses] {
+		assert_eq!(
+			provider.chat_translation(input, model).unwrap().output,
+			ChatFormat::OpenAICompletions
+		);
 	}
 }
 
@@ -53,7 +75,54 @@ fn streaming_amend_on_drop_updates_local_rate_limit() {
 		None,
 		None,
 	);
-	amend.report_rate_limit();
+	amend.report_usage();
+
+	assert!(
+		rate_limit
+			.check_llm_request(&llm_request_with_tokens(Some(7)))
+			.is_err()
+	);
+	assert!(
+		rate_limit
+			.check_llm_request(&llm_request_with_tokens(Some(6)))
+			.is_ok()
+	);
+}
+
+#[test]
+fn streaming_amend_on_drop_uses_cache_inclusive_input_tokens() {
+	let rate_limit =
+		crate::http::localratelimit::RateLimit::try_from(crate::http::localratelimit::RateLimitSpec {
+			max_tokens: 10,
+			tokens_per_fill: 10,
+			fill_interval: std::time::Duration::from_secs(60),
+			limit_type: crate::http::localratelimit::RateLimitType::Tokens,
+		})
+		.unwrap();
+	let mut request = llm_request_with_tokens(Some(5));
+	request.cache_convention = CacheTokenConvention::InputExcludesCache;
+	let log = AsyncLog::default();
+	log.store(Some(LLMInfo {
+		request,
+		response: LLMResponse {
+			input_tokens: Some(2),
+			cached_input_tokens: Some(2),
+			cache_creation_input_tokens: Some(1),
+			output_tokens: Some(4),
+			..Default::default()
+		},
+	}));
+
+	let mut amend = AmendOnDrop::new(
+		log,
+		LLMResponsePolicies {
+			local_rate_limit: vec![rate_limit.clone()],
+			..Default::default()
+		},
+		None,
+		None,
+	);
+	amend.report_usage();
 
 	assert!(
 		rate_limit
@@ -68,7 +137,7 @@ fn streaming_amend_on_drop_updates_local_rate_limit() {
 }
 
 fn test_root() -> &'static Path {
-	Path::new("src/llm/tests")
+	Path::new("../llm/src/tests")
 }
 
 fn fixture_path(relative_path: &str) -> PathBuf {
@@ -118,803 +187,6 @@ fn response_prompt_guard_headers_overwrites_upstream_traceparent() {
 	);
 }
 
-fn snapshot_path_and_name(relative_path: &str, provider: &str) -> (String, String) {
-	let rel = Path::new(relative_path);
-	let parent = rel.parent().unwrap_or_else(|| Path::new(""));
-	let stem = rel
-		.file_stem()
-		.unwrap_or_else(|| panic!("{relative_path}: missing filename"))
-		.to_string_lossy();
-	(
-		format!("tests/{}", parent.display()),
-		format!("{stem}.{provider}"),
-	)
-}
-
-fn test_response(
-	provider: &str,
-	relative_path: &str,
-	xlate: impl Fn(Bytes) -> Result<Box<dyn ResponseType>, AIError>,
-) {
-	let input_path = fixture_path(relative_path);
-	let provider_str = &fs::read(&input_path)
-		.unwrap_or_else(|e| panic!("{relative_path}: Failed to read response input file: {e}"));
-	let provider_value = serde_json::from_slice::<Value>(provider_str)
-		.unwrap_or_else(|_| Value::String(String::from_utf8_lossy(provider_str).to_string()));
-
-	let resp = xlate(Bytes::copy_from_slice(provider_str))
-		.expect("Failed to translate provider response to expected format");
-	let llm_response = resp.to_llm_response(false);
-	let raw = resp.serialize().expect("Failed to serialize response");
-	let resp_val = serde_json::from_slice::<Value>(&raw)
-		.unwrap_or_else(|_| Value::String(String::from_utf8_lossy(&raw).to_string()));
-	let report = json!({
-		"response": resp_val,
-		"parsed": llm_response,
-	});
-	let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
-
-	insta::with_settings!({
-			info => &provider_value,
-			description => input_path.to_string_lossy().to_string(),
-			omit_expression => true,
-			prepend_module_to_snapshot => false,
-			snapshot_path => snapshot_path,
-	}, {
-			 insta::assert_json_snapshot!(snapshot_name, report, {
-			".response.id" => "[id]",
-			".response.output.*.id" => "[id]",
-			".response.created" => "[date]",
-		});
-	});
-}
-
-async fn test_streaming(
-	provider: &str,
-	relative_path: &str,
-	xlate: impl AsyncFnOnce(Response, AsyncLog<llm::LLMInfo>) -> Result<Response, AIError>,
-) {
-	let input_path = fixture_path(relative_path);
-	let input_bytes = &fs::read(&input_path)
-		.unwrap_or_else(|_| panic!("{relative_path}: Failed to read streaming input file"));
-	let body = Body::from(input_bytes.clone());
-	let log = AsyncLog::default();
-	let log2 = log.clone();
-	let mut resp = Response::new(body);
-	resp.headers_mut().insert(
-		crate::http::x_headers::X_AMZN_REQUESTID,
-		"request_id".try_into().unwrap(),
-	);
-	let resp = xlate(resp, log).await.expect("failed to translate stream");
-	let resp_bytes = resp.collect().await.unwrap().to_bytes();
-	let llm_response = log2.take().unwrap().response;
-	let llm_resp_str = serde_json::to_string_pretty(&llm_response).unwrap();
-	let resp_body = match String::from_utf8(resp_bytes.to_vec()) {
-		Ok(s)
-			if !s
-				.chars()
-				.any(|c| c.is_control() && !matches!(c, '\n' | '\r' | '\t')) =>
-		{
-			s
-		},
-		Ok(s) => format!(
-			"base64: {}",
-			base64::engine::general_purpose::STANDARD.encode(s.as_bytes())
-		),
-		Err(e) => format!(
-			"base64: {}",
-			base64::engine::general_purpose::STANDARD.encode(e.into_bytes())
-		),
-	};
-	let resp_str = resp_body + "\n\n" + llm_resp_str.as_str();
-	let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
-	let snapshot_name = snapshot_name + "-streaming";
-
-	insta::with_settings!({
-			description => input_path.to_string_lossy().to_string(),
-			omit_expression => true,
-			prepend_module_to_snapshot => false,
-			snapshot_path => snapshot_path,
-			filters => vec![
-				(r#""created":[0-9]+"#, r#""created":123"#),
-				(r#""created_at":[0-9]+"#, r#""created_at":123"#),
-				(r#""id":"(resp|msg|call)_[0-9a-f]+""#, r#""id":"$1_xxx""#),
-				(r#""item_id":"(msg|call)_[0-9a-f]+""#, r#""item_id":"$1_xxx""#),
-				(r#""call_id":"call_[0-9a-f]+""#, r#""call_id":"call_xxx""#),
-			]
-	}, {
-			 insta::assert_snapshot!(snapshot_name, resp_str);
-	});
-}
-
-fn test_request<I>(
-	provider: &str,
-	relative_path: &str,
-	xlate: impl Fn(I) -> Result<Vec<u8>, AIError>,
-) where
-	I: DeserializeOwned,
-{
-	let input_path = fixture_path(relative_path);
-	let input_str = &fs::read_to_string(&input_path).expect("Failed to read input file");
-	let input_raw: Value = serde_json::from_str(input_str).expect("Failed to parse input json");
-	let input_typed: I = serde_json::from_str(input_str).expect("Failed to parse input JSON");
-
-	let provider_response =
-		xlate(input_typed).expect("Failed to translate input format to provider request ");
-	let provider_value =
-		serde_json::from_slice::<Value>(&provider_response).expect("Failed to parse provider response");
-	let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
-
-	insta::with_settings!({
-			info => &input_raw,
-			description => input_path.to_string_lossy().to_string(),
-			omit_expression => true,
-			prepend_module_to_snapshot => false,
-			snapshot_path => snapshot_path,
-	}, {
-			 insta::assert_json_snapshot!(snapshot_name, provider_value, {
-			".id" => "[id]",
-			".created" => "[date]",
-		});
-	});
-}
-
-const ANTHROPIC: &str = "anthropic";
-const BEDROCK: &str = "bedrock";
-const VERTEX: &str = "vertex";
-const OPENAI: &str = "openai";
-const GEMINI: &str = "gemini";
-const COMPLETIONS: &str = "completions";
-const BEDROCK_TITAN: &str = "bedrock-titan";
-const BEDROCK_COHERE: &str = "bedrock-cohere";
-const COHERE: &str = "cohere";
-
-mod requests {
-	use super::*;
-
-	const COMPLETION_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[ANTHROPIC, BEDROCK]),
-		("full", &[ANTHROPIC, BEDROCK]),
-		("tool-call", &[ANTHROPIC, BEDROCK]),
-		("parallel-tool-call", &[BEDROCK]),
-		("reasoning", &[ANTHROPIC, BEDROCK]),
-		("reasoning_max", &[ANTHROPIC]),
-		// Replaying a prior assistant thinking turn back to Bedrock: a signed reasoning block is
-		// re-emitted as a `reasoningContent` block (signature preserved), an unsigned one is not.
-		("reasoning_replay", &[BEDROCK]),
-		("reasoning_replay_unsigned", &[BEDROCK]),
-	];
-	const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[COMPLETIONS, BEDROCK, VERTEX]),
-		("system_message", &[COMPLETIONS, BEDROCK, VERTEX]),
-		("tools", &[COMPLETIONS, BEDROCK, VERTEX]),
-		("reasoning", &[COMPLETIONS, BEDROCK, VERTEX]),
-		// Replaying a prior assistant `thinking` block to Bedrock Converse must preserve its
-		// cryptographic `signature` (mapped to reasoningContent.reasoningText.signature) so
-		// Bedrock can validate the replayed thinking.
-		("reasoning_replay", &[BEDROCK]),
-	];
-	const RESPONSES_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[BEDROCK, GEMINI]),
-		("instructions", &[BEDROCK, GEMINI]),
-		("input-list", &[BEDROCK, GEMINI]),
-		("parallel-tool-call", &[BEDROCK, GEMINI]),
-	];
-	pub const COUNT_TOKENS_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[ANTHROPIC, BEDROCK, VERTEX]),
-		("with_system", &[ANTHROPIC, BEDROCK, VERTEX]),
-	];
-	const EMBEDDINGS_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[OPENAI, BEDROCK_TITAN, BEDROCK_COHERE, VERTEX]),
-		("array", &[OPENAI, BEDROCK_COHERE, VERTEX]),
-	];
-	const RERANK_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[COHERE, BEDROCK, VERTEX]),
-		("passthrough-fields", &[COHERE, BEDROCK, VERTEX]),
-	];
-
-	#[test]
-	fn from_completions() {
-		let bedrock_provider = bedrock::Provider {
-			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
-			region: strng::new("us-west-2"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
-		};
-
-		let bedrock =
-			|i| conversion::bedrock::from_completions::translate(&i, &bedrock_provider, None, None);
-		let anthropic = |i| conversion::messages::from_completions::translate(&i);
-
-		for (name, providers) in COMPLETION_REQUESTS {
-			for provider in *providers {
-				match *provider {
-					BEDROCK => test_request(
-						BEDROCK,
-						&format!("requests/completions/{name}.json"),
-						bedrock,
-					),
-					ANTHROPIC => test_request(
-						ANTHROPIC,
-						&format!("requests/completions/{name}.json"),
-						anthropic,
-					),
-					other => panic!("unsupported provider in COMPLETION_REQUESTS: {other}"),
-				}
-			}
-		}
-	}
-
-	#[test]
-	fn from_messages() {
-		let bedrock_provider = bedrock::Provider {
-			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
-			region: strng::new("us-west-2"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
-		};
-		let vertex_provider = vertex::Provider {
-			model: Some(strng::new("anthropic/claude-sonnet-4-5")),
-			region: Some(strng::new("us-central1")),
-			project_id: strng::new("test-project-123"),
-		};
-
-		let bedrock_request =
-			|i| conversion::bedrock::from_messages::translate(&i, &bedrock_provider, None);
-		let vertex_request = |input: types::messages::Request| -> Result<Vec<u8>, AIError> {
-			let anthropic_body = serde_json::to_vec(&input).map_err(AIError::RequestMarshal)?;
-			vertex_provider.prepare_anthropic_message_body(anthropic_body)
-		};
-		let completions_request = |i| conversion::completions::from_messages::translate(&i);
-		for (name, providers) in MESSAGES_REQUESTS {
-			let test = &format!("requests/messages/{name}.json");
-			for provider in *providers {
-				match *provider {
-					BEDROCK => test_request(BEDROCK, test, bedrock_request),
-					COMPLETIONS => test_request(COMPLETIONS, test, completions_request),
-					VERTEX => test_request(VERTEX, test, vertex_request),
-					other => panic!("unsupported provider in MESSAGES_REQUESTS: {other}"),
-				}
-			}
-		}
-	}
-
-	#[test]
-	fn from_responses() {
-		let bedrock_provider = bedrock::Provider {
-			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
-			region: strng::new("us-west-2"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
-		};
-
-		for (name, providers) in RESPONSES_REQUESTS {
-			let test = &format!("requests/responses/{name}.json");
-			for provider in *providers {
-				match *provider {
-					BEDROCK => test_request(BEDROCK, test, |req| {
-						conversion::bedrock::from_responses::translate(&req, &bedrock_provider, None, None)
-					}),
-					GEMINI => test_request(GEMINI, test, |req| {
-						conversion::openai_compat::from_responses::translate(&req)
-					}),
-					other => panic!("unsupported provider in RESPONSES_REQUESTS: {other}"),
-				}
-			}
-		}
-	}
-
-	#[tokio::test]
-	async fn from_embeddings() {
-		let titan_provider = bedrock::Provider {
-			model: Some(strng::new("amazon.titan-embed-text-v2:0")),
-			region: strng::new("us-west-2"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
-		};
-
-		let cohere_provider = bedrock::Provider {
-			model: Some(strng::new("cohere.embed-english-v3")),
-			region: strng::new("us-west-2"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
-		};
-
-		let vertex_provider = vertex::Provider {
-			model: Some(strng::new("text-embedding-004")),
-			region: Some(strng::new("us-central1")),
-			project_id: strng::new("test-project-123"),
-		};
-
-		let titan_request = |i| conversion::bedrock::from_embeddings::translate(&i, &titan_provider);
-		let cohere_request = |i| conversion::bedrock::from_embeddings::translate(&i, &cohere_provider);
-		let vertex_request = |i: types::embeddings::Request| i.to_vertex(&vertex_provider);
-		let openai_request = |i: types::embeddings::Request| i.to_openai();
-		for (name, providers) in EMBEDDINGS_REQUESTS {
-			for provider in *providers {
-				match *provider {
-					BEDROCK_TITAN => {
-						test_request(
-							BEDROCK_TITAN,
-							&format!("requests/embeddings/{name}.json"),
-							titan_request,
-						);
-					},
-					BEDROCK_COHERE => test_request(
-						BEDROCK_COHERE,
-						&format!("requests/embeddings/{name}.json"),
-						cohere_request,
-					),
-					VERTEX => {
-						test_request(
-							VERTEX,
-							&format!("requests/embeddings/{name}.json"),
-							vertex_request,
-						);
-					},
-					OPENAI => {
-						test_request(
-							OPENAI,
-							&format!("requests/embeddings/{name}.json"),
-							openai_request,
-						);
-					},
-					other => panic!("unsupported provider in EMBEDDINGS_REQUESTS: {other}"),
-				}
-			}
-		}
-	}
-
-	#[tokio::test]
-	async fn from_rerank() {
-		let bedrock_provider = bedrock::Provider {
-			model: Some(strng::new("cohere.rerank-v3-5:0")),
-			region: strng::new("us-west-2"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
-		};
-		let vertex_provider = vertex::Provider {
-			model: Some(strng::new("semantic-ranker-default@latest")),
-			region: Some(strng::new("global")),
-			project_id: strng::new("test-project-123"),
-		};
-
-		let bedrock_request = |i: types::rerank::Request| {
-			conversion::bedrock::from_rerank::translate(&i, &bedrock_provider)
-		};
-		let vertex_request = |i: types::rerank::Request| i.to_vertex(&vertex_provider);
-		let cohere_request = |i: types::rerank::Request| i.to_openai();
-		for (name, providers) in RERANK_REQUESTS {
-			for provider in *providers {
-				let path = format!("requests/rerank/{name}.json");
-				match *provider {
-					BEDROCK => test_request(BEDROCK, &path, bedrock_request),
-					VERTEX => test_request(VERTEX, &path, vertex_request),
-					COHERE => test_request(COHERE, &path, cohere_request),
-					other => panic!("unsupported provider in RERANK_REQUESTS: {other}"),
-				}
-			}
-		}
-	}
-
-	#[tokio::test]
-	async fn from_count_tokens() {
-		let mut headers = http::HeaderMap::new();
-		headers.insert("anthropic-version", "2023-06-01".parse().unwrap());
-		let vertex_provider = vertex::Provider {
-			model: Some(strng::new("anthropic/claude-sonnet-4-5")),
-			region: Some(strng::new("us-central1")),
-			project_id: strng::new("test-project-123"),
-		};
-
-		let bedrock_request =
-			|input: types::count_tokens::Request| input.to_bedrock_token_count(&headers);
-		let anthropic_request = |i: types::count_tokens::Request| i.to_anthropic();
-		let vertex_request = |input: types::count_tokens::Request| -> Result<Vec<u8>, AIError> {
-			let anthropic_body = input.to_anthropic()?;
-			vertex_provider.prepare_anthropic_count_tokens_body(anthropic_body)
-		};
-		for (name, providers) in COUNT_TOKENS_REQUESTS {
-			let test = &format!("requests/count-tokens/{name}.json");
-			for provider in *providers {
-				match *provider {
-					ANTHROPIC => test_request(provider, test, anthropic_request),
-					BEDROCK => test_request(provider, test, bedrock_request),
-					VERTEX => test_request(provider, test, vertex_request),
-					other => panic!("unsupported provider in COUNT_TOKENS_REQUESTS: {other}"),
-				}
-			}
-		}
-	}
-}
-
-mod response {
-	use super::*;
-
-	// <response from provider> --> <response to user>
-	const COMPLETIONS_TO_COMPLETIONS: &str = "completions-completions";
-	const MESSAGES_TO_MESSAGES: &str = "messages-messages";
-	const MESSAGES_TO_COMPLETIONS: &str = "messages-completions";
-	const MESSAGES_TO_DETECT: &str = "messages-detect";
-	const COMPLETIONS_TO_MESSAGES: &str = "completions-messages";
-	const COMPLETIONS_TO_DETECT: &str = "completions-detect";
-	const BEDROCK_TO_MESSAGES: &str = "bedrock-messages";
-	const BEDROCK_TO_COMPLETIONS: &str = "bedrock-completions";
-	const BEDROCK_TO_RESPONSES: &str = "bedrock-responses";
-	const BEDROCK_TO_DETECT: &str = "bedrock-detect";
-	const RESPONSES_TO_RESPONSES: &str = "responses-responses";
-	const RESPONSES_TO_DETECT: &str = "responses-detect";
-
-	const ALL_BEDROCK: &[&str] = &[
-		BEDROCK_TO_MESSAGES,
-		BEDROCK_TO_COMPLETIONS,
-		BEDROCK_TO_RESPONSES,
-	];
-	const BEDROCK_RESPONSES: &[(&str, &[&str])] = &[
-		("basic", ALL_BEDROCK),
-		("tool", ALL_BEDROCK),
-		// Reasoning block forwarding: `reasoning` carries a signature (surfaced as
-		// reasoning_signature on the completions path), `reasoning_unsigned` does not.
-		("reasoning", ALL_BEDROCK),
-		("reasoning_unsigned", ALL_BEDROCK),
-	];
-	const BEDROCK_STREAM_RESPONSES: &[(&str, &[&str])] = &[
-		("basic", ALL_BEDROCK),
-		("tool", ALL_BEDROCK),
-		("reasoning", ALL_BEDROCK),
-	];
-
-	const ALL_ANTHROPIC: &[&str] = &[
-		MESSAGES_TO_MESSAGES,
-		MESSAGES_TO_COMPLETIONS,
-		MESSAGES_TO_DETECT,
-	];
-	const ANTHROPIC_RESPONSES: &[(&str, &[&str])] = &[
-		("basic", ALL_ANTHROPIC),
-		("tool", ALL_ANTHROPIC),
-		("thinking", ALL_ANTHROPIC),
-		("multiple_text_blocks", ALL_ANTHROPIC),
-	];
-	const ANTHROPIC_STREAM_RESPONSES: &[(&str, &[&str])] = &[
-		("stream_basic", ALL_ANTHROPIC),
-		("stream_thinking", ALL_ANTHROPIC),
-	];
-
-	const ALL_COMPLETIONS: &[&str] = &[
-		COMPLETIONS_TO_COMPLETIONS,
-		COMPLETIONS_TO_MESSAGES,
-		COMPLETIONS_TO_DETECT,
-	];
-	const COMPLETIONS_RESPONSES: &[(&str, &[&str])] = &[
-		("basic", ALL_COMPLETIONS),
-		("audio", ALL_COMPLETIONS),
-		("openrouter_reasoning", ALL_COMPLETIONS),
-		("gemini_zero_completion_tokens", ALL_COMPLETIONS),
-		("gemini_with_completion_tokens", ALL_COMPLETIONS),
-	];
-	const COMPLETIONS_STREAM_RESPONSES: &[(&str, &[&str])] = &[
-		("stream", ALL_COMPLETIONS),
-		("stream_tool_empty_content", &[COMPLETIONS_TO_MESSAGES]),
-	];
-
-	const EMBEDDING_RESPONSES: &[(&str, &[&str])] = &[
-		("response/bedrock-titan/embeddings.json", &[BEDROCK_TITAN]),
-		("response/bedrock-cohere/embeddings.json", &[BEDROCK_COHERE]),
-		("response/vertex/embeddings.json", &[VERTEX]),
-		("response/openai/embeddings.json", &[OPENAI]),
-	];
-	const COUNT_TOKEN_RESPONSES: &[(&str, &[&str])] = &[("count_tokens", &[ANTHROPIC])];
-	const RERANK_RESPONSES: &[(&str, &[&str])] = &[
-		("response/bedrock/rerank.json", &[BEDROCK]),
-		("response/vertex/rerank.json", &[VERTEX]),
-		("response/vertex/rerank-no-details.json", &[VERTEX]),
-		("response/cohere/rerank.json", &[COHERE]),
-	];
-
-	const ALL_RESPONSES: &[&str] = &[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT];
-	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[("basic", ALL_RESPONSES)];
-	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] =
-		&[("stream", ALL_RESPONSES), ("stream-image", ALL_RESPONSES)];
-
-	const DETECT_RESPONSES: &[(&str, &[&str])] = &[
-		// ("non-json", &[COMPLETIONS_TO_DETECT]),
-		// ("broken-sse", &[COMPLETIONS_TO_DETECT]),
-		// ("stream-image-generation", &[COMPLETIONS_TO_DETECT]),
-		// ("bedrock-basic.bin", &[BEDROCK_TO_DETECT]),
-		("bedrock-invoke.bin", &[BEDROCK_TO_DETECT]),
-		// ("bedrock-broken.bin", &[BEDROCK_TO_DETECT]),
-	];
-
-	#[tokio::test]
-	async fn from_bedrock() {
-		for (name, providers) in BEDROCK_RESPONSES {
-			let test = &format!("response/bedrock/{name}.json");
-			for provider in *providers {
-				test_response_for_provider(provider, test)
-			}
-		}
-		for (name, providers) in BEDROCK_STREAM_RESPONSES {
-			let test = &format!("response/bedrock/{name}.bin");
-			for provider in *providers {
-				test_streaming_response_for_provider(provider, test).await
-			}
-		}
-	}
-
-	#[tokio::test]
-	async fn from_anthropic() {
-		for (name, providers) in ANTHROPIC_RESPONSES {
-			let test = &format!("response/anthropic/{name}.json");
-			for provider in *providers {
-				test_response_for_provider(provider, test)
-			}
-		}
-
-		for (name, providers) in ANTHROPIC_STREAM_RESPONSES {
-			let test = &format!("response/anthropic/{name}.json");
-			for provider in *providers {
-				test_streaming_response_for_provider(provider, test).await
-			}
-		}
-	}
-
-	#[tokio::test]
-	async fn from_completions() {
-		for (name, providers) in COMPLETIONS_RESPONSES {
-			let test = &format!("response/completions/{name}.json");
-			for provider in *providers {
-				test_response_for_provider(provider, test)
-			}
-		}
-
-		for (name, providers) in COMPLETIONS_STREAM_RESPONSES {
-			let test = &format!("response/completions/{name}.json");
-			for provider in *providers {
-				test_streaming_response_for_provider(provider, test).await
-			}
-		}
-	}
-
-	#[tokio::test]
-	async fn from_responses() {
-		for (name, providers) in RESPONSES_RESPONSES {
-			let test = &format!("response/responses/{name}.json");
-			for provider in *providers {
-				test_response_for_provider(provider, test)
-			}
-		}
-
-		for (name, providers) in RESPONSES_STREAM_RESPONSES {
-			let test = &format!("response/responses/{name}.json");
-			for provider in *providers {
-				test_streaming_response_for_provider(provider, test).await
-			}
-		}
-	}
-
-	#[tokio::test]
-	async fn detect() {
-		for (name, providers) in DETECT_RESPONSES {
-			let test = &format!("response/detect/{name}");
-			for provider in *providers {
-				// Test each one as a stream and not
-				test_response_for_provider(provider, test);
-				test_streaming_response_for_provider(provider, test).await
-			}
-		}
-	}
-
-	fn test_response_for_provider(provider: &str, test: &str) {
-		let (p, r) = build_provider_request(provider);
-		let test_fn = |i: Bytes| p.process_success(&r, &i);
-		test_response(provider, test, test_fn)
-	}
-
-	async fn test_streaming_response_for_provider(provider: &str, test: &str) {
-		use crate::proxy::httpproxy::PolicyClient;
-		use crate::test_helpers::proxymock::setup_proxy_test;
-		let (p, r) = build_provider_request(provider);
-		let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
-		let test_fn = async |i: Response, log: AsyncLog<llm::LLMInfo>| {
-			p.process_streaming(
-				client,
-				r,
-				LLMResponsePolicies::default(),
-				None,
-				log,
-				false,
-				None,
-				i,
-			)
-			.await
-		};
-		test_streaming(provider, test, test_fn).await
-	}
-
-	fn build_provider_request(provider: &str) -> (AIProvider, LLMRequest) {
-		let bedrock_provider = AIProvider::Bedrock(bedrock::Provider {
-			model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
-			region: strng::new("us-west-2"),
-			guardrail_identifier: None,
-			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
-		});
-		let (p, r) = match provider {
-			RESPONSES_TO_RESPONSES => (
-				AIProvider::OpenAI(openai::Provider { model: None }),
-				dummy_llm_req(InputFormat::Responses),
-			),
-			COMPLETIONS_TO_COMPLETIONS => (
-				AIProvider::OpenAI(openai::Provider { model: None }),
-				dummy_llm_req(InputFormat::Completions),
-			),
-			COMPLETIONS_TO_MESSAGES => (
-				AIProvider::OpenAI(openai::Provider { model: None }),
-				dummy_llm_req(InputFormat::Messages),
-			),
-			MESSAGES_TO_MESSAGES => (
-				AIProvider::Anthropic(anthropic::Provider { model: None }),
-				dummy_llm_req(InputFormat::Messages),
-			),
-			MESSAGES_TO_COMPLETIONS => (
-				AIProvider::Anthropic(anthropic::Provider { model: None }),
-				dummy_llm_req(InputFormat::Completions),
-			),
-			BEDROCK_TO_MESSAGES => (bedrock_provider, dummy_llm_req(InputFormat::Messages)),
-			BEDROCK_TO_COMPLETIONS => (bedrock_provider, dummy_llm_req(InputFormat::Completions)),
-			BEDROCK_TO_RESPONSES => (bedrock_provider, dummy_llm_req(InputFormat::Responses)),
-			BEDROCK_TO_DETECT => (bedrock_provider, dummy_llm_req(InputFormat::Detect)),
-			COMPLETIONS_TO_DETECT => (
-				AIProvider::OpenAI(openai::Provider { model: None }),
-				dummy_llm_req(InputFormat::Detect),
-			),
-			MESSAGES_TO_DETECT => (
-				AIProvider::Anthropic(anthropic::Provider { model: None }),
-				dummy_llm_req(InputFormat::Detect),
-			),
-			RESPONSES_TO_DETECT => (
-				AIProvider::OpenAI(openai::Provider { model: None }),
-				dummy_llm_req(InputFormat::Detect),
-			),
-			// No other ones are supported.
-			// We do not have Responses<-->Completions
-			other => panic!("unsupported provider for responses: {other}"),
-		};
-		(p, r)
-	}
-
-	pub fn dummy_llm_req(input_format: InputFormat) -> LLMRequest {
-		LLMRequest {
-			input_tokens: None,
-			input_format,
-			native_format: input_format.provider_format(),
-			cache_convention: CacheTokenConvention::pending(),
-			request_model: "input-model".into(),
-			provider: Default::default(),
-			streaming: false,
-			params: Default::default(),
-			prompt: None,
-		}
-	}
-
-	#[tokio::test]
-	async fn from_embeddings() {
-		let titan = |i: Bytes| {
-			conversion::bedrock::from_embeddings::translate_response(
-				&i,
-				&http::HeaderMap::new(),
-				"amazon.titan-embed-text-v2:0",
-			)
-		};
-		let cohere = |i: Bytes| {
-			conversion::bedrock::from_embeddings::translate_response(
-				&i,
-				&http::HeaderMap::new(),
-				"cohere.embed-english-v3",
-			)
-		};
-		let vertex =
-			|i: Bytes| conversion::vertex::from_embeddings::translate_response(&i, "text-embedding-004");
-		let openai = |i: Bytes| {
-			serde_json::from_slice::<types::embeddings::Response>(&i)
-				.map(|e| Box::new(e) as Box<dyn ResponseType>)
-				.map_err(AIError::ResponseParsing)
-		};
-
-		for (test, providers) in EMBEDDING_RESPONSES {
-			for provider in *providers {
-				match *provider {
-					BEDROCK_TITAN => test_response(BEDROCK_TITAN, test, titan),
-					BEDROCK_COHERE => test_response(BEDROCK_COHERE, test, cohere),
-					VERTEX => test_response(VERTEX, test, vertex),
-					OPENAI => test_response(OPENAI, test, openai),
-					other => panic!("unsupported provider in EMBEDDING_RESPONSES: {other}"),
-				}
-			}
-		}
-	}
-
-	#[tokio::test]
-	async fn from_rerank() {
-		let bedrock = |i: Bytes| conversion::bedrock::from_rerank::translate_response(&i);
-		let vertex = |i: Bytes| conversion::vertex::from_rerank::translate_response(&i);
-		let cohere = |i: Bytes| {
-			types::rerank::parse_response_lenient(&i)
-				.map(|e| Box::new(e) as Box<dyn ResponseType>)
-				.map_err(AIError::ResponseParsing)
-		};
-
-		for (test, providers) in RERANK_RESPONSES {
-			for provider in *providers {
-				match *provider {
-					BEDROCK => test_response(BEDROCK, test, bedrock),
-					VERTEX => test_response(VERTEX, test, vertex),
-					COHERE => test_response(COHERE, test, cohere),
-					other => panic!("unsupported provider in RERANK_RESPONSES: {other}"),
-				}
-			}
-		}
-	}
-
-	#[tokio::test]
-	async fn from_count_tokens() {
-		for (name, providers) in COUNT_TOKEN_RESPONSES {
-			let test = &format!("response/anthropic/{name}.json");
-			for provider in *providers {
-				match *provider {
-					ANTHROPIC => {
-						let input_path = fixture_path(test);
-						let response_str =
-							&fs::read_to_string(&input_path).expect("Failed to read response file");
-						let bytes = Bytes::copy_from_slice(response_str.as_bytes());
-						let provider_value = serde_json::from_str::<Value>(response_str).unwrap();
-
-						let (returned_bytes, count) =
-							types::count_tokens::Response::translate_response(bytes.clone())
-								.expect("Failed to translate count_tokens response");
-
-						assert_eq!(
-							returned_bytes, bytes,
-							"Response bytes should be returned unchanged"
-						);
-
-						let resp: types::count_tokens::Response =
-							serde_json::from_slice(&returned_bytes).expect("Failed to deserialize response");
-						let (snapshot_path, snapshot_name) = snapshot_path_and_name(test, ANTHROPIC);
-
-						insta::with_settings!({
-								info => &provider_value,
-								description => input_path.to_string_lossy().to_string(),
-								omit_expression => true,
-								prepend_module_to_snapshot => false,
-								snapshot_path => snapshot_path,
-						}, {
-								 insta::assert_json_snapshot!(snapshot_name, serde_json::json!({
-									"input_tokens": resp.input_tokens,
-									"token_count": count,
-								}));
-						});
-					},
-					other => panic!("unsupported provider in COUNT_TOKEN_RESPONSES: {other}"),
-				}
-			}
-		}
-	}
-}
-
 #[tokio::test]
 async fn test_passthrough() {
 	let input_path = fixture_path("requests/completions/full.json");
@@ -931,13 +203,331 @@ async fn test_passthrough() {
 	);
 }
 
+fn openai_inline_moderation_param() -> openai::ModerationParam {
+	openai::ModerationParam {
+		model: strng::new("omni-moderation-latest"),
+		policy: Some(openai::ModerationPolicyParam {
+			input: Some(openai::ModerationConfigParam {
+				mode: openai::ModerationMode::Block,
+			}),
+			output: Some(openai::ModerationConfigParam {
+				mode: openai::ModerationMode::Score,
+			}),
+		}),
+	}
+}
+
+fn openai_inline_moderation_value() -> Value {
+	json!({
+		"model": "omni-moderation-latest",
+		"policy": {
+			"input": { "mode": "block" },
+			"output": { "mode": "score" }
+		}
+	})
+}
+
+fn openai_test_backend_info() -> crate::http::auth::BackendInfo {
+	let inputs = crate::test_helpers::proxymock::setup_proxy_test("{}")
+		.unwrap()
+		.pi;
+	crate::http::auth::BackendInfo {
+		target: crate::types::agent::BackendTarget::Invalid,
+		call_target: Target::from(("api.openai.com", 443)),
+		inputs,
+	}
+}
+
+#[tokio::test]
+async fn openai_inline_moderation_injected_for_completions() {
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: Some(openai_inline_moderation_param()),
+	});
+	let backend_info = openai_test_backend_info();
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "gpt-5",
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		upstream_route_type,
+		..
+	} = provider
+		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("OpenAI completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(upstream_route_type, RouteType::Completions);
+	assert_eq!(
+		forwarded_json["moderation"],
+		openai_inline_moderation_value()
+	);
+}
+
+#[tokio::test]
+async fn openai_inline_moderation_overrides_client_value_for_completions() {
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: Some(openai_inline_moderation_param()),
+	});
+	let backend_info = openai_test_backend_info();
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "gpt-5",
+				"messages": [{"role": "user", "content": "hello"}],
+				"moderation": {
+					"model": "client-selected-model",
+					"policy": {
+						"input": { "mode": "score" },
+						"output": { "mode": "score" }
+					}
+				}
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded, ..
+	} = provider
+		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("OpenAI completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(
+		forwarded_json["moderation"],
+		openai_inline_moderation_value()
+	);
+}
+
+#[tokio::test]
+async fn openai_client_moderation_passthrough_without_config() {
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
+	let backend_info = openai_test_backend_info();
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+					"model": "gpt-5",
+					"messages": [{"role": "user", "content": "hello"}],
+					"moderation": {
+						"model": "client-selected-model",
+						"policy": {
+							"input": {
+								"mode": "future-mode",
+								"future_option": { "enabled": true }
+							},
+							"output": { "mode": "block" }
+						}
+					},
+					"future_top_level": { "enabled": true }
+				}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded, ..
+	} = provider
+		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("OpenAI completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(
+		forwarded_json["moderation"],
+		json!({
+			"model": "client-selected-model",
+			"policy": {
+				"input": {
+					"mode": "future-mode",
+					"future_option": { "enabled": true }
+				},
+				"output": { "mode": "block" }
+			}
+		})
+	);
+	assert_eq!(
+		forwarded_json["future_top_level"],
+		json!({ "enabled": true })
+	);
+}
+
+#[tokio::test]
+async fn openai_inline_moderation_injected_for_responses() {
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: Some(openai_inline_moderation_param()),
+	});
+	let backend_info = openai_test_backend_info();
+	let req = ::http::Request::builder()
+		.uri("/v1/responses")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "gpt-5",
+				"input": "hello"
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		upstream_route_type,
+		..
+	} = provider
+		.process_responses_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("OpenAI responses request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(upstream_route_type, RouteType::Responses);
+	assert_eq!(
+		forwarded_json["moderation"],
+		openai_inline_moderation_value()
+	);
+}
+
+#[tokio::test]
+async fn openai_inline_moderation_injected_after_messages_translation() {
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: Some(openai_inline_moderation_param()),
+	});
+	let backend_info = openai_test_backend_info();
+	let req = ::http::Request::builder()
+		.uri("/v1/messages")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "gpt-5",
+				"max_tokens": 64,
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		upstream_route_type,
+		..
+	} = provider
+		.process_messages_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("Anthropic messages request should translate to OpenAI completions")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(upstream_route_type, RouteType::Completions);
+	assert_eq!(
+		forwarded_json["moderation"],
+		openai_inline_moderation_value()
+	);
+}
+
+#[test]
+fn openai_response_passthrough_preserves_moderation_fields() {
+	let completion_response: types::completions::Response = serde_json::from_value(json!({
+		"model": "gpt-5",
+		"usage": null,
+		"choices": [],
+		"moderation": {
+			"input": { "flagged": false },
+			"output": { "flagged": true }
+		}
+	}))
+	.expect("completion response should deserialize");
+	let completion_roundtrip =
+		serde_json::to_value(completion_response).expect("completion response should serialize");
+	assert_eq!(
+		completion_roundtrip["moderation"],
+		json!({
+			"input": { "flagged": false },
+			"output": { "flagged": true }
+		})
+	);
+
+	let responses_response: types::responses::Response = serde_json::from_value(json!({
+		"id": "resp_123",
+		"status": "completed",
+		"output": [],
+		"model": "gpt-5",
+		"moderation": {
+			"input": { "flagged": false },
+			"output": { "flagged": true }
+		}
+	}))
+	.expect("responses response should deserialize");
+	let responses_roundtrip =
+		serde_json::to_value(responses_response).expect("responses response should serialize");
+	assert_eq!(
+		responses_roundtrip["moderation"],
+		json!({
+			"input": { "flagged": false },
+			"output": { "flagged": true }
+		})
+	);
+}
+
 #[tokio::test]
 async fn openai_provider_normalizes_max_tokens_before_forwarding() {
 	use crate::http::auth::BackendInfo;
 	use crate::test_helpers::proxymock::setup_proxy_test;
 	use crate::types::agent::BackendTarget;
 
-	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
 		target: BackendTarget::Invalid,
@@ -957,7 +547,11 @@ async fn openai_provider_normalizes_max_tokens_before_forwarding() {
 		))
 		.unwrap();
 
-	let RequestResult::Success(forwarded, llm_request) = provider
+	let RequestResult::Success {
+		request: forwarded,
+		llm_request,
+		..
+	} = provider
 		.process_completions_request(&backend_info, None, req, false, &mut None)
 		.await
 		.expect("OpenAI completions request should process")
@@ -975,12 +569,75 @@ async fn openai_provider_normalizes_max_tokens_before_forwarding() {
 }
 
 #[tokio::test]
+async fn openai_provider_normalizes_max_tokens_after_model_alias() {
+	use crate::http::auth::BackendInfo;
+	use crate::llm::policy::Policy;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("api.openai.com", 443)),
+		inputs,
+	};
+	let policy = Policy {
+		model_aliases: std::collections::HashMap::from([(
+			strng::new("fast-model"),
+			strng::new("gpt-5.4"),
+		)]),
+		..Default::default()
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "fast-model",
+				"max_tokens": 1024,
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		llm_request,
+		..
+	} = provider
+		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None)
+		.await
+		.expect("OpenAI completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(forwarded_json["model"], json!("gpt-5.4"));
+	assert!(forwarded_json.get("max_tokens").is_none());
+	assert_eq!(forwarded_json["max_completion_tokens"], json!(1024));
+	assert_eq!(llm_request.request_model, "gpt-5.4");
+	assert_eq!(llm_request.params.max_tokens, Some(1024));
+}
+
+#[tokio::test]
 async fn openai_provider_preserves_max_tokens_for_non_gpt_models() {
 	use crate::http::auth::BackendInfo;
 	use crate::test_helpers::proxymock::setup_proxy_test;
 	use crate::types::agent::BackendTarget;
 
-	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
 	let inputs = setup_proxy_test("{}").unwrap().pi;
 	let backend_info = BackendInfo {
 		target: BackendTarget::Invalid,
@@ -1000,7 +657,11 @@ async fn openai_provider_preserves_max_tokens_for_non_gpt_models() {
 		))
 		.unwrap();
 
-	let RequestResult::Success(forwarded, llm_request) = provider
+	let RequestResult::Success {
+		request: forwarded,
+		llm_request,
+		..
+	} = provider
 		.process_completions_request(&backend_info, None, req, false, &mut None)
 		.await
 		.expect("OpenAI-compatible completions request should process")
@@ -1015,6 +676,813 @@ async fn openai_provider_preserves_max_tokens_for_non_gpt_models() {
 	assert_eq!(forwarded_json["max_tokens"], json!(1024));
 	assert!(forwarded_json.get("max_completion_tokens").is_none());
 	assert_eq!(llm_request.params.max_tokens, Some(1024));
+}
+
+#[tokio::test]
+async fn count_tokens_resolves_model_alias_once_for_upstream_request() {
+	use crate::http::auth::BackendInfo;
+	use crate::llm::policy::Policy;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("api.anthropic.com", 443)),
+		inputs,
+	};
+	let policy = Policy {
+		model_aliases: std::collections::HashMap::from([
+			(strng::new("short-name"), strng::new("middle-name")),
+			(strng::new("middle-name"), strng::new("final-name")),
+		]),
+		..Default::default()
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/messages/count_tokens")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "short-name",
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		llm_request,
+		..
+	} = provider
+		.process_count_tokens_request(&backend_info, req, Some(&policy), &mut None)
+		.await
+		.expect("count_tokens request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(forwarded_json["model"], json!("middle-name"));
+	assert_eq!(llm_request.request_model, "middle-name");
+}
+
+#[tokio::test]
+async fn count_tokens_uses_native_endpoint_after_model_alias() {
+	use crate::http::auth::BackendInfo;
+	use crate::llm::policy::Policy;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::Vertex(vertex::Provider {
+		model: None,
+		region: None,
+		project_id: strng::new("test-project"),
+	});
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("us-central1-aiplatform.googleapis.com", 443)),
+		inputs,
+	};
+	let policy = Policy {
+		model_aliases: std::collections::HashMap::from([(
+			strng::new("short-name"),
+			strng::new("claude-3-5-sonnet"),
+		)]),
+		..Default::default()
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/messages/count_tokens")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "short-name",
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		llm_request,
+		upstream_route_type,
+		..
+	} = provider
+		.process_count_tokens_request(&backend_info, req, Some(&policy), &mut None)
+		.await
+		.expect("count_tokens request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(upstream_route_type, RouteType::AnthropicTokenCount);
+	assert_eq!(forwarded_json["model"], json!("claude-3-5-sonnet"));
+	assert_eq!(llm_request.request_model, "claude-3-5-sonnet");
+}
+
+#[tokio::test]
+async fn vertex_anthropic_messages_prepares_vertex_body() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::Vertex(vertex::Provider {
+		model: None,
+		region: Some(strng::new("us-central1")),
+		project_id: strng::new("test-project"),
+	});
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("us-central1-aiplatform.googleapis.com", 443)),
+		inputs,
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/messages")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "claude-haiku-4-5-20251001",
+				"max_tokens": 64,
+				"messages": [{"role": "user", "content": "say hi"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		upstream_route_type,
+		..
+	} = provider
+		.process_messages_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("Vertex Anthropic messages request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(upstream_route_type, RouteType::Messages);
+	assert!(forwarded_json.get("model").is_none());
+	assert_eq!(
+		forwarded_json["anthropic_version"],
+		json!("vertex-2023-10-16")
+	);
+}
+
+#[tokio::test]
+async fn provider_model_is_set_before_llm_transformations() {
+	use crate::http::auth::BackendInfo;
+	use crate::llm::policy::Policy;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: Some("gcp/failover-model".into()),
+		moderation: None,
+	});
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("api.openai.com", 443)),
+		inputs,
+	};
+	let policy = Policy {
+		transformations: Some(
+			[(
+				"model".to_string(),
+				std::sync::Arc::new(
+					crate::cel::Expression::new_strict(r#"llmRequest.model.stripPrefix("gcp/")"#).unwrap(),
+				),
+			)]
+			.into_iter()
+			.collect(),
+		),
+		..Default::default()
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "public-model",
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		llm_request,
+		..
+	} = provider
+		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None)
+		.await
+		.expect("OpenAI completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(forwarded_json["model"], json!("failover-model"));
+	assert_eq!(llm_request.request_model, "failover-model");
+}
+
+#[tokio::test]
+async fn messages_to_completions_final_transformation() {
+	use crate::llm::policy::Policy;
+
+	async fn create_llm_request(vec_body: Vec<u8>, policy: Option<&Policy>) -> (Request, RouteType) {
+		let provider = AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		});
+		let backend_info = openai_test_backend_info();
+		let req = ::http::Request::builder()
+			.uri("/v1/messages")
+			.header(::http::header::CONTENT_TYPE, "application/json")
+			.body(Body::from(vec_body))
+			.unwrap();
+		let RequestResult::Success {
+			request: forwarded,
+			upstream_route_type,
+			..
+		} = provider
+			.process_messages_request(&backend_info, policy, req, false, &mut None)
+			.await
+			.expect("Anthropic messages request should translate to OpenAI completions")
+		else {
+			panic!("expected forwarded request");
+		};
+		(forwarded, upstream_route_type)
+	}
+	let expr = |e: &str| std::sync::Arc::new(crate::cel::Expression::new_strict(e).unwrap());
+
+	let policy = Policy {
+		final_transformations: Some(
+			[
+				// Only true final-conversion: `system` became messages[0].
+				(
+					"converted_message_count".to_string(),
+					expr("llmRequest.messages.size()"),
+				),
+				// Mutate a field carried through the conversion.
+				("max_tokens".to_string(), expr("32")),
+				("reasoning_effort".to_string(), expr("fail(\"remove\")")),
+			]
+			.into_iter()
+			.collect(),
+		),
+		..Default::default()
+	};
+
+	let vec_body = br#"{
+				"model": "gpt-4o",
+				"max_tokens": 64,
+				"system": "be brief",
+				"messages": [{"role": "user", "content": "hello"}],
+				"tools": [{
+					"name": "get_weather",
+					"description": "Look up the weather",
+					"input_schema": {
+						"type": "object",
+						"properties": {"city": {"type": "string"}},
+						"required": ["city"]
+					}
+				}]
+			}"#
+		.to_vec();
+
+	let (forwarded, upstream_route_type) = create_llm_request(vec_body.clone(), Some(&policy)).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(upstream_route_type, RouteType::Completions);
+	// The request really was converted to completions format.
+	assert_eq!(forwarded_json["messages"][0]["role"], json!("system"));
+	// 2 (system + user), not the 1 message the client sent.
+	assert_eq!(forwarded_json["converted_message_count"], json!(2));
+	assert_eq!(forwarded_json["max_tokens"], json!(32));
+	// Indexing returns Null for a missing key too, so assert on key presence.
+	let reasoning_effort = forwarded_json.get("reasoning_effort");
+	assert!(
+		reasoning_effort.is_none(),
+		"reasoning_effort should be removed, got: {reasoning_effort:?}"
+	);
+
+	let (forwarded, upstream_route_type) = create_llm_request(vec_body, None).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+	assert_eq!(upstream_route_type, RouteType::Completions);
+	// The request really was converted to completions format.
+	assert_eq!(forwarded_json["messages"][0]["role"], json!("system"));
+	// 2 (system + user), not the 1 message the client sent.
+	assert_eq!(forwarded_json["max_completion_tokens"], json!(64));
+	// Indexing returns Null for a missing key too, so assert on key presence.
+	let reasoning_effort = forwarded_json.get("reasoning_effort");
+	assert!(
+		reasoning_effort.is_some(),
+		"reasoning_effort should not be empty, got: {reasoning_effort:?}"
+	);
+}
+
+#[tokio::test]
+async fn detect_final_transformations_skip_opaque_bodies() {
+	use crate::llm::policy::Policy;
+
+	async fn create_detect_request(
+		content_type: &str,
+		body: &[u8],
+		policy: Option<&Policy>,
+	) -> (Request, RouteType) {
+		let provider = AIProvider::OpenAI(openai::Provider {
+			model: None,
+			moderation: None,
+		});
+		let backend_info = openai_test_backend_info();
+		let req = ::http::Request::builder()
+			.uri("/v1/passthrough")
+			.header(::http::header::CONTENT_TYPE, content_type)
+			.body(Body::from(body.to_vec()))
+			.unwrap();
+		let RequestResult::Success {
+			request: forwarded,
+			upstream_route_type,
+			..
+		} = provider
+			.process_detect_request(&backend_info, policy, req, &mut None)
+			.await
+			.expect("detect request should process")
+		else {
+			panic!("expected forwarded request");
+		};
+		(forwarded, upstream_route_type)
+	}
+
+	let expr = |e: &str| std::sync::Arc::new(crate::cel::Expression::new_strict(e).unwrap());
+	let policy = Policy {
+		final_transformations: Some(
+			[("max_tokens".to_string(), expr("32"))]
+				.into_iter()
+				.collect(),
+		),
+		..Default::default()
+	};
+
+	// Inner spaces and key order survive only if the body is never round-tripped through serde.
+	let json_body = br#"{ "model": "gpt-4o", "max_tokens": 64 }"#;
+
+	// A non-JSON content type is passed through opaquely even when the body happens to parse as
+	// JSON, so final transformations must not rewrite (or re-serialize) it.
+	let (forwarded, route_type) = create_detect_request("text/plain", json_body, Some(&policy)).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	assert_eq!(route_type, RouteType::Detect);
+	assert_eq!(
+		forwarded_body.as_ref(),
+		json_body.as_slice(),
+		"passthrough body must be forwarded byte-for-byte"
+	);
+
+	// A body that fails to parse falls back to raw passthrough, which must not become an error.
+	let raw_body = b"\x00\x01not json at all";
+	let (forwarded, route_type) =
+		create_detect_request("application/octet-stream", raw_body, Some(&policy)).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	assert_eq!(route_type, RouteType::Detect);
+	assert_eq!(forwarded_body.as_ref(), raw_body.as_slice());
+
+	// Malformed JSON under a JSON content type takes the same raw fallback.
+	let bad_json = br#"{"model": "gpt-4o", "#;
+	let (forwarded, route_type) =
+		create_detect_request("application/json", bad_json, Some(&policy)).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	assert_eq!(route_type, RouteType::Detect);
+	assert_eq!(forwarded_body.as_ref(), bad_json.as_slice());
+
+	// A genuine JSON detect body is still transformed: this is the behavior the guard preserves.
+	let (forwarded, route_type) =
+		create_detect_request("application/json", json_body, Some(&policy)).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+	assert_eq!(route_type, RouteType::Detect);
+	assert_eq!(forwarded_json["max_tokens"], json!(32));
+	assert_eq!(forwarded_json["model"], json!("gpt-4o"));
+
+	// Without a policy the JSON body is unchanged apart from the parse/serialize round trip.
+	let (forwarded, _) = create_detect_request("application/json", json_body, None).await;
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+	assert_eq!(forwarded_json["max_tokens"], json!(64));
+}
+
+#[tokio::test]
+async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
+	use crate::http::auth::BackendInfo;
+	use crate::llm::policy::Policy;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model: Some(strng::new(
+			"bedrock-runtime/us/anthropic.claude-3-5-sonnet-20241022-v2:0",
+		)),
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	});
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("bedrock-runtime.us-east-1.amazonaws.com", 443)),
+		inputs,
+	};
+	let policy = Policy {
+		transformations: Some(
+			[(
+				"model".to_string(),
+				std::sync::Arc::new(
+					crate::cel::Expression::new_strict(
+						r#"llmRequest.model.stripPrefix("bedrock-runtime/us/")"#,
+					)
+					.unwrap(),
+				),
+			)]
+			.into_iter()
+			.collect(),
+		),
+		..Default::default()
+	};
+	let expected_model = "anthropic.claude-3-5-sonnet-20241022-v2:0";
+
+	let req = ::http::Request::builder()
+		.uri("https://gateway.example.com/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			json!({
+				"model": "client-model",
+				"messages": [{"role": "user", "content": "hello"}],
+				"stream": true,
+			})
+			.to_string(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: mut forwarded,
+		llm_request,
+		upstream_route_type,
+	} = provider
+		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None)
+		.await
+		.expect("Bedrock completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	assert_eq!(llm_request.request_model, expected_model);
+	provider
+		.setup_request(
+			&mut forwarded,
+			upstream_route_type,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+		)
+		.expect("Bedrock upstream request should be finalized");
+	assert_eq!(
+		forwarded.uri().path(),
+		format!("/model/{expected_model}/converse-stream")
+	);
+}
+
+#[tokio::test]
+async fn bedrock_provider_model_overrides_client_model() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let configured_model = "anthropic.claude-3-5-sonnet-20241022-v2:0";
+	let provider = AIProvider::bedrock(bedrock::Provider {
+		model: Some(strng::new(configured_model)),
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	});
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("bedrock-runtime.us-east-1.amazonaws.com", 443)),
+		inputs,
+	};
+	let req = ::http::Request::builder()
+		.uri("https://gateway.example.com/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "client-model",
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: mut forwarded,
+		llm_request,
+		upstream_route_type,
+	} = provider
+		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("Bedrock completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	assert_eq!(llm_request.request_model, configured_model);
+	provider
+		.setup_request(
+			&mut forwarded,
+			upstream_route_type,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+		)
+		.expect("Bedrock upstream request should be finalized");
+	assert_eq!(
+		forwarded.uri().path(),
+		format!("/model/{configured_model}/converse")
+	);
+}
+
+#[tokio::test]
+async fn llm_transformations_can_set_missing_model() {
+	use crate::http::auth::BackendInfo;
+	use crate::llm::policy::Policy;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("api.openai.com", 443)),
+		inputs,
+	};
+	let policy = Policy {
+		transformations: Some(
+			[(
+				"model".to_string(),
+				std::sync::Arc::new(crate::cel::Expression::new_strict(r#""transformed-model""#).unwrap()),
+			)]
+			.into_iter()
+			.collect(),
+		),
+		..Default::default()
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"messages": [{"role": "user", "content": "hello"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		llm_request,
+		..
+	} = provider
+		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None)
+		.await
+		.expect("OpenAI completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+
+	assert_eq!(forwarded_json["model"], json!("transformed-model"));
+	assert_eq!(llm_request.request_model, "transformed-model");
+}
+
+#[tokio::test]
+async fn copilot_anthropic_model_uses_messages_route() {
+	use crate::http::auth::BackendInfo;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let inputs = setup_proxy_test("{}").unwrap().pi;
+	let backend_info = BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("api.githubcopilot.com", 443)),
+		inputs,
+	};
+	let req = ::http::Request::builder()
+		.uri("/v1/messages")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{
+				"model": "claude-sonnet-4",
+				"max_tokens": 64,
+				"messages": [{"role": "user", "content": "say hi"}]
+			}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		llm_request,
+		upstream_route_type,
+	} = provider
+		.process_messages_request(&backend_info, None, req, false, &mut None)
+		.await
+		.expect("Copilot Anthropic messages request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+
+	assert_eq!(upstream_route_type, RouteType::Messages);
+	assert_eq!(
+		llm_request.cache_convention,
+		CacheTokenConvention::InputExcludesCache
+	);
+
+	let mut setup_req =
+		crate::http::tests_common::request("https://example.com/v1/messages", http::Method::POST, &[]);
+	provider
+		.setup_request(
+			&mut setup_req,
+			upstream_route_type,
+			Some(&llm_request),
+			None,
+			None,
+			false,
+		)
+		.expect("setup_request should succeed");
+	assert_eq!(setup_req.uri().path(), "/v1/messages");
+
+	let forwarded_body = forwarded.collect().await.unwrap().to_bytes();
+	let forwarded_json: Value =
+		serde_json::from_slice(&forwarded_body).expect("forwarded request should be JSON");
+	assert_eq!(forwarded_json["model"], json!("claude-sonnet-4"));
+	assert_eq!(forwarded_json["max_tokens"], json!(64));
+}
+
+#[test]
+fn copilot_embeddings_response_adds_missing_openai_fields() {
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let mut request = llm_request_with_tokens(None);
+	request.input_format = InputFormat::Embeddings;
+	request.request_model = "text-embedding-3-small".into();
+	let response = Bytes::from_static(
+		br#"{"data":[{"embedding":[0.5,-0.25],"index":0,"object":"embedding"}],"usage":{"prompt_tokens":2,"total_tokens":2}}"#,
+	);
+
+	let (llm_response, body) = provider
+		.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
+		.expect("Copilot embeddings response should normalize");
+	let body: Value = serde_json::from_slice(&body).expect("normalized response should be JSON");
+
+	assert_eq!(body["object"], json!("list"));
+	assert_eq!(body["model"], json!("text-embedding-3-small"));
+	assert_eq!(body["data"][0]["embedding"], json!([0.5, -0.25]));
+	assert_eq!(llm_response.input_tokens, Some(2));
+	assert_eq!(llm_response.total_tokens, Some(2));
+}
+
+#[test]
+fn copilot_embeddings_response_preserves_missing_usage() {
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let mut request = llm_request_with_tokens(None);
+	request.input_format = InputFormat::Embeddings;
+	request.request_model = "text-embedding-3-small".into();
+	let response =
+		Bytes::from_static(br#"{"data":[{"embedding":[0.5],"index":0,"object":"embedding"}]}"#);
+
+	let (_, body) = provider
+		.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
+		.expect("Copilot embeddings response should normalize");
+	let body: Value = serde_json::from_slice(&body).expect("normalized response should be JSON");
+
+	assert!(body.get("usage").is_none());
+}
+
+#[test]
+fn copilot_embeddings_response_preserves_explicit_openai_fields() {
+	let provider = AIProvider::Copilot(copilot::Provider { model: None });
+	let mut request = llm_request_with_tokens(None);
+	request.input_format = InputFormat::Embeddings;
+	request.request_model = "requested-model".into();
+	let response = Bytes::from_static(
+		br#"{"object":"upstream-list","model":"upstream-model","data":[{"embedding":[0.5],"index":0,"object":"embedding"}],"usage":{"prompt_tokens":1,"total_tokens":1}}"#,
+	);
+
+	let (_, body) = provider
+		.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
+		.expect("Copilot embeddings response should preserve explicit fields");
+	let body: Value = serde_json::from_slice(&body).expect("normalized response should be JSON");
+
+	assert_eq!(body["object"], json!("upstream-list"));
+	assert_eq!(body["model"], json!("upstream-model"));
+}
+
+#[test]
+fn copilot_embeddings_parse_error_logs_normalized_response() {
+	#[derive(Clone)]
+	struct LogWriter(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+	impl std::io::Write for LogWriter {
+		fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+			self.0.lock().unwrap().extend_from_slice(buf);
+			Ok(buf.len())
+		}
+
+		fn flush(&mut self) -> std::io::Result<()> {
+			Ok(())
+		}
+	}
+
+	let logs = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+	let writer = LogWriter(logs.clone());
+	let subscriber = tracing_subscriber::fmt()
+		.with_ansi(false)
+		.without_time()
+		.with_writer(move || writer.clone())
+		.finish();
+
+	tracing::subscriber::with_default(subscriber, || {
+		let provider = AIProvider::Copilot(copilot::Provider { model: None });
+		let mut request = llm_request_with_tokens(None);
+		request.input_format = InputFormat::Embeddings;
+		request.request_model = "text-embedding-3-small".into();
+		let response = Bytes::from_static(br#"{"usage":"invalid"}"#);
+
+		assert!(
+			provider
+				.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
+				.is_err()
+		);
+	});
+
+	let logs = String::from_utf8(logs.lock().unwrap().clone()).unwrap();
+	assert!(logs.contains(r#""object":"list""#), "{logs}");
+	assert!(
+		logs.contains(r#""model":"text-embedding-3-small""#),
+		"{logs}"
+	);
+}
+
+#[test]
+fn non_copilot_embeddings_response_still_requires_openai_fields() {
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
+	let mut request = llm_request_with_tokens(None);
+	request.input_format = InputFormat::Embeddings;
+	let response = Bytes::from_static(
+		br#"{"data":[{"embedding":[0.5],"index":0,"object":"embedding"}],"usage":{"prompt_tokens":1,"total_tokens":1}}"#,
+	);
+
+	assert!(
+		provider
+			.process_embeddings_response(&request, &::http::HeaderMap::new(), response)
+			.is_err()
+	);
 }
 
 #[test]
@@ -1171,114 +1639,6 @@ fn test_messages_output_config_format_maps_to_openai_response_format() {
 	);
 }
 
-fn apply_test_prompts<R: RequestType + Serialize>(mut r: R) -> Result<Vec<u8>, AIError> {
-	r.prepend_prompts(vec![
-		SimpleChatCompletionMessage {
-			role: strng::new("system"),
-			content: strng::new("prepend system prompt"),
-		},
-		SimpleChatCompletionMessage {
-			role: strng::new("user"),
-			content: strng::new("prepend user message"),
-		},
-		SimpleChatCompletionMessage {
-			role: strng::new("assistant"),
-			content: strng::new("prepend assistant message"),
-		},
-	]);
-	r.append_prompts(vec![
-		SimpleChatCompletionMessage {
-			role: strng::new("user"),
-			content: strng::new("append user message"),
-		},
-		SimpleChatCompletionMessage {
-			role: strng::new("system"),
-			content: strng::new("append system prompt"),
-		},
-		SimpleChatCompletionMessage {
-			role: strng::new("assistant"),
-			content: strng::new("append assistant prompt"),
-		},
-	]);
-	serde_json::to_vec(&r).map_err(AIError::RequestMarshal)
-}
-
-#[test]
-fn test_prompt_enrichment() {
-	test_request::<types::messages::Request>(
-		ANTHROPIC,
-		"requests/policies/anthropic_with_system.json",
-		apply_test_prompts,
-	);
-	test_request::<types::responses::Request>(
-		OPENAI,
-		"requests/policies/openai_with_inputs.json",
-		apply_test_prompts,
-	);
-	test_request::<types::completions::Request>(
-		OPENAI,
-		"requests/policies/openai_with_messages.json",
-		apply_test_prompts,
-	);
-	test_request::<types::responses::Request>(
-		OPENAI,
-		"requests/policies/openai_with_text_input.json",
-		apply_test_prompts,
-	);
-	test_request::<types::responses::Request>(
-		OPENAI,
-		"requests/responses/assistant-history.json",
-		apply_test_prompts,
-	);
-}
-
-#[test]
-fn test_get_messages() {
-	use crate::llm::types::RequestType;
-
-	fn extract_messages<R: RequestType + DeserializeOwned>(fixture: &str, provider: &str) {
-		let path = fixture_path(fixture);
-		let input_str = fs::read_to_string(&path).expect("Failed to read input file");
-		let raw: Value = serde_json::from_str(&input_str).expect("Failed to parse input json");
-		let request: R = serde_json::from_str(&input_str).expect("Failed to parse json");
-
-		let out: Vec<Value> = request
-			.get_messages()
-			.iter()
-			.map(|m| {
-				serde_json::json!({
-					"role": m.role.as_str(),
-					"content": m.content.as_str(),
-				})
-			})
-			.collect();
-
-		let (snapshot_path, snapshot_name) = snapshot_path_and_name(fixture, provider);
-		insta::with_settings!({
-			info => &raw,
-			description => path.to_string_lossy().to_string(),
-			omit_expression => true,
-			prepend_module_to_snapshot => false,
-			snapshot_path => snapshot_path,
-		}, {
-			insta::assert_json_snapshot!(snapshot_name, out);
-		});
-	}
-
-	extract_messages::<types::completions::Request>(
-		"requests/completions/full.json",
-		"get-messages-completions",
-	);
-	extract_messages::<types::messages::Request>(
-		"requests/completions/full.json",
-		"get-messages-messages",
-	);
-	extract_messages::<types::responses::Request>(
-		"requests/responses/assistant-history.json",
-		"get-messages-responses",
-	);
-}
-
 /// Verifies that `process_response` routes a non-success response through
 /// the buffered error path even when the request has `streaming: true`.
 ///
@@ -1290,13 +1650,11 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 	use crate::proxy::httpproxy::PolicyClient;
 	use crate::test_helpers::proxymock::setup_proxy_test;
 
-	let bedrock = AIProvider::Bedrock(bedrock::Provider {
+	let bedrock = AIProvider::bedrock(bedrock::Provider {
 		model: Some(strng::new("anthropic.claude-3-5-sonnet-20241022-v2:0")),
 		region: strng::new("us-west-2"),
 		guardrail_identifier: None,
 		guardrail_version: None,
-		source_credentials_cache: Default::default(),
-		assume_role_cache: Default::default(),
 	});
 
 	let error_json = r#"{"message":"Expected toolResult blocks at messages.2.content for the following Ids: tooluse_abc123"}"#;
@@ -1304,13 +1662,13 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 	let req = LLMRequest {
 		input_tokens: None,
 		input_format: InputFormat::Completions,
-		native_format: Some(custom::ProviderFormat::Completions),
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "input-model".into(),
 		provider: Default::default(),
 		streaming: true,
 		params: Default::default(),
 		prompt: None,
+		provider_state: None,
 	};
 
 	let body = Body::from(error_json.as_bytes().to_vec());
@@ -1330,7 +1688,7 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 			LLMResponsePolicies::default(),
 			None,
 			AsyncLog::default(),
-			false,
+			llm::LogContentFields::default(),
 			None,
 			resp,
 		)
@@ -1358,17 +1716,83 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 	);
 }
 
+#[test]
+fn openai_completions_error_translates_to_messages_client() {
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
+	let mut req = llm_request_with_tokens(None);
+	req.input_format = InputFormat::Messages;
+	req.request_model = "gpt-4o".into();
+
+	let error = Bytes::from_static(
+		br#"{"error":{"message":"bad request","type":"invalid_request_error","param":null,"code":400}}"#,
+	);
+	let translated = provider
+		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error)
+		.expect("OpenAI error should translate to messages error");
+	let body: Value = serde_json::from_slice(&translated).expect("translated error should be JSON");
+
+	assert_eq!(body["type"], json!("error"));
+	assert_eq!(body["error"]["type"], json!("invalid_request_error"));
+	assert_eq!(body["error"]["message"], json!("bad request"));
+}
+
+#[test]
+fn custom_messages_error_translates_to_completions_client() {
+	let provider = custom_provider(custom::ProviderFormat::Messages);
+	let mut req = llm_request_with_tokens(None);
+	req.input_format = InputFormat::Completions;
+	req.request_model = "claude-test".into();
+
+	let error = Bytes::from_static(
+		br#"{"type":"error","error":{"type":"invalid_request_error","message":"bad request"}}"#,
+	);
+	let translated = provider
+		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error)
+		.expect("Anthropic error should translate to completions error");
+	let body: Value = serde_json::from_slice(&translated).expect("translated error should be JSON");
+
+	assert_eq!(body["error"]["type"], json!("invalid_request_error"));
+	assert_eq!(body["error"]["message"], json!("bad request"));
+}
+
+#[test]
+fn foundry_claude_messages_error_uses_anthropic_shape() {
+	let provider = AIProvider::azure(azure::Provider {
+		model: None,
+		resource_name: strng::new("example"),
+		resource_type: azure::AzureResourceType::Foundry,
+		api_version: None,
+		project_name: Some(strng::new("project")),
+	});
+	let mut req = llm_request_with_tokens(None);
+	req.input_format = InputFormat::Messages;
+	req.request_model = "claude-haiku-4-5".into();
+
+	let error = Bytes::from_static(
+		br#"{"type":"error","error":{"type":"invalid_request_error","message":"bad request"}}"#,
+	);
+	let translated = provider
+		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error)
+		.expect("Foundry Claude messages error should stay Anthropic-shaped");
+	let body: Value = serde_json::from_slice(&translated).expect("translated error should be JSON");
+
+	assert_eq!(body["type"], json!("error"));
+	assert_eq!(body["error"]["type"], json!("invalid_request_error"));
+	assert_eq!(body["error"]["message"], json!("bad request"));
+}
+
 #[tokio::test]
 async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done() {
 	use crate::proxy::httpproxy::PolicyClient;
 	use crate::test_helpers::proxymock::setup_proxy_test;
-	let bedrock = AIProvider::Bedrock(bedrock::Provider {
+	let bedrock = AIProvider::bedrock(bedrock::Provider {
 		model: Some(strng::new("openai.gpt-oss-120b-1:0")),
 		region: strng::new("us-east-1"),
 		guardrail_identifier: None,
 		guardrail_version: None,
-		source_credentials_cache: Default::default(),
-		assume_role_cache: Default::default(),
 	});
 
 	let body = Body::from(
@@ -1392,22 +1816,21 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 			LLMRequest {
 				input_tokens: None,
 				input_format: InputFormat::Completions,
-				native_format: Some(custom::ProviderFormat::Completions),
 				cache_convention: CacheTokenConvention::pending(),
 				request_model: "input-model".into(),
 				provider: Default::default(),
 				streaming: true,
 				params: Default::default(),
 				prompt: None,
+				provider_state: None,
 			},
 			LLMResponsePolicies::default(),
 			None,
 			AsyncLog::default(),
-			false,
+			llm::LogContentFields::default(),
 			None,
 			resp,
 		)
-		.await
 		.expect("Bedrock streaming translation should succeed");
 
 	crate::http::tests_common::assert_header(
@@ -1430,7 +1853,10 @@ async fn process_streaming_bedrock_completions_normalizes_sse_headers_and_done()
 
 #[test]
 fn setup_request_openai_applies_prefixed_path_without_host_override() {
-	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
 	let mut req = crate::http::tests_common::request(
 		"https://example.com/v1/messages?trace=repro",
 		http::Method::POST,
@@ -1458,7 +1884,10 @@ fn setup_request_openai_applies_prefixed_path_without_host_override() {
 
 #[test]
 fn setup_request_openai_normalizes_trailing_slash_in_path_prefix() {
-	let provider = AIProvider::OpenAI(openai::Provider { model: None });
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
 	let mut req = crate::http::tests_common::request(
 		"https://example.com/v1/messages?trace=repro",
 		http::Method::POST,
@@ -1493,13 +1922,13 @@ fn setup_request_custom_path_override_wins_over_format_path() {
 	let llm_request = LLMRequest {
 		input_tokens: None,
 		input_format: InputFormat::Completions,
-		native_format: Some(custom::ProviderFormat::Messages),
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: "input-model".into(),
 		provider: Default::default(),
 		streaming: false,
 		params: Default::default(),
 		prompt: None,
+		provider_state: None,
 	};
 	let mut req = crate::http::tests_common::request(
 		"https://proxy.example.com/v1/chat/completions?trace=repro",
@@ -1526,13 +1955,13 @@ fn llm_request_for_path(request_model: &str) -> LLMRequest {
 	LLMRequest {
 		input_tokens: None,
 		input_format: InputFormat::Messages,
-		native_format: Some(custom::ProviderFormat::Messages),
 		cache_convention: CacheTokenConvention::pending(),
 		request_model: request_model.into(),
 		provider: Default::default(),
 		streaming: false,
 		params: Default::default(),
 		prompt: None,
+		provider_state: None,
 	}
 }
 
@@ -1591,13 +2020,11 @@ fn setup_request_vertex_applies_path_prefix_with_host_override() {
 #[test]
 fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 	assert_prefixed_host_override_path(
-		AIProvider::Bedrock(bedrock::Provider {
+		AIProvider::bedrock(bedrock::Provider {
 			model: None,
 			region: strng::new("us-east-1"),
 			guardrail_identifier: None,
 			guardrail_version: None,
-			source_credentials_cache: Default::default(),
-			assume_role_cache: Default::default(),
 		}),
 		"anthropic.claude-3-5-sonnet-20241022-v2:0",
 		"/proxy/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
@@ -1608,13 +2035,12 @@ fn setup_request_bedrock_applies_path_prefix_with_host_override() {
 #[test]
 fn setup_request_azure_applies_path_prefix_with_host_override() {
 	assert_prefixed_host_override_path(
-		AIProvider::Azure(azure::Provider {
+		AIProvider::azure(azure::Provider {
 			model: None,
 			resource_name: strng::new("example"),
 			resource_type: azure::AzureResourceType::OpenAI,
 			api_version: Some(strng::new("2024-02-15-preview")),
 			project_name: None,
-			cached_cred: Default::default(),
 		}),
 		"gpt-4.1",
 		"/proxy/openai/deployments/gpt-4.1/chat/completions",
@@ -1644,6 +2070,32 @@ fn completions_response_missing_message_and_usage_fields() {
 	assert_eq!(usage.total_tokens, 12);
 }
 
+#[test]
+fn completions_to_messages_response_allows_missing_openai_metadata() {
+	let body = Bytes::from_static(
+		br#"{
+			"id": "chatcmpl-1",
+			"model": "gpt-5-mini",
+			"choices": [{
+				"message": {"role": "assistant", "content": "hi"},
+				"finish_reason": "stop"
+			}],
+			"usage": {
+				"completion_tokens": 16,
+				"prompt_tokens": 9,
+				"prompt_tokens_details": {"cached_tokens": 0},
+				"total_tokens": 25
+			},
+			"copilot_usage": {
+				"token_details": []
+			}
+		}"#,
+	);
+
+	conversion::completions::from_messages::translate_response(&body)
+		.expect("messages response translation should not require OpenAI metadata");
+}
+
 #[tokio::test]
 async fn bedrock_from_messages_stream_captures_completion() {
 	let input_bytes =
@@ -1655,18 +2107,18 @@ async fn bedrock_from_messages_stream_captures_completion() {
 		request: LLMRequest {
 			input_tokens: None,
 			input_format: InputFormat::Messages,
-			native_format: Some(custom::ProviderFormat::Messages),
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
 			provider: "bedrock".into(),
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
+			provider_state: None,
 		},
 		response: LLMResponse::default(),
 	};
 	log.store(Some(llmresp));
-	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None);
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
 	let buffer_limit = 1024 * 1024;
 	let body = conversion::bedrock::from_messages::translate_stream(
 		body,
@@ -1674,7 +2126,11 @@ async fn bedrock_from_messages_stream_captures_completion() {
 		logger,
 		"us.anthropic.claude-haiku-4-5-20251001-v1:0",
 		"msg_123",
-		true,
+		llm::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		},
+		None,
 	);
 	let _ = body.collect().await.unwrap();
 	let info = log2
@@ -1701,18 +2157,18 @@ async fn bedrock_from_messages_stream_skips_completion_when_disabled() {
 		request: LLMRequest {
 			input_tokens: None,
 			input_format: InputFormat::Messages,
-			native_format: Some(custom::ProviderFormat::Messages),
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
 			provider: "bedrock".into(),
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
+			provider_state: None,
 		},
 		response: LLMResponse::default(),
 	};
 	log.store(Some(llmresp));
-	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None);
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
 	let buffer_limit = 1024 * 1024;
 	let body = conversion::bedrock::from_messages::translate_stream(
 		body,
@@ -1720,7 +2176,8 @@ async fn bedrock_from_messages_stream_skips_completion_when_disabled() {
 		logger,
 		"us.anthropic.claude-haiku-4-5-20251001-v1:0",
 		"msg_123",
-		false,
+		llm::LogContentFields::default(),
+		None,
 	);
 	let _ = body.collect().await.unwrap();
 	let info = log2
@@ -1728,7 +2185,70 @@ async fn bedrock_from_messages_stream_skips_completion_when_disabled() {
 		.expect("log should have LLMInfo after stream completes");
 	assert!(
 		info.response.completion.is_none(),
-		"completion should not be set when include_completion_in_log is false"
+		"completion should not be set when log_content.completion is false"
+	);
+	assert!(
+		info.response.output_messages.is_none(),
+		"output messages should not be set when log_content.tool_calls is false"
+	);
+}
+
+#[tokio::test]
+async fn bedrock_from_messages_stream_captures_tool_calls() {
+	let input_bytes =
+		fs::read(fixture_path("response/bedrock/tool.bin")).expect("Failed to read fixture");
+	let body = Body::from(input_bytes);
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	let llmresp = LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			cache_convention: CacheTokenConvention::pending(),
+			request_model: "us.anthropic.claude-haiku-4-5-20251001-v1:0".into(),
+			provider: "bedrock".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+			provider_state: None,
+		},
+		response: LLMResponse::default(),
+	};
+	log.store(Some(llmresp));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
+	let body = conversion::bedrock::from_messages::translate_stream(
+		body,
+		1024 * 1024,
+		logger,
+		"us.anthropic.claude-haiku-4-5-20251001-v1:0",
+		"msg_123",
+		llm::LogContentFields {
+			completion: false,
+			tool_calls: true,
+		},
+		None,
+	);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	assert!(info.response.completion.is_none());
+	let output_messages = info
+		.response
+		.output_messages
+		.expect("output messages should be set for Bedrock tool calls");
+	assert_eq!(
+		output_messages[0].finish_reason.as_deref(),
+		Some("tool_use")
+	);
+	let tool_calls = output_messages[0].tool_calls();
+	assert_eq!(tool_calls.len(), 2);
+	assert_eq!(tool_calls[0].name.as_str(), "top_song");
+	assert_eq!(tool_calls[0].arguments, serde_json::json!({"sign": "WZPZ"}));
+	assert_eq!(tool_calls[1].name.as_str(), "hello");
+	assert_eq!(
+		tool_calls[1].arguments,
+		serde_json::json!({"sign": "world"})
 	);
 }
 
@@ -1743,20 +2263,28 @@ async fn messages_passthrough_stream_captures_completion() {
 		request: LLMRequest {
 			input_tokens: None,
 			input_format: InputFormat::Messages,
-			native_format: Some(custom::ProviderFormat::Messages),
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "claude-haiku-4-5-20251001".into(),
 			provider: "anthropic".into(),
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
+			provider_state: None,
 		},
 		response: LLMResponse::default(),
 	};
 	log.store(Some(llmresp));
-	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None);
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
 	let buffer_limit = 1024 * 1024;
-	let body = conversion::messages::passthrough_stream(body, buffer_limit, logger, true);
+	let body = conversion::messages::passthrough_stream(
+		body,
+		buffer_limit,
+		logger,
+		llm::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		},
+	);
 	// Consume the body to drive the stream to completion
 	let _ = body.collect().await.unwrap();
 	let info = log2
@@ -1783,32 +2311,96 @@ async fn messages_passthrough_stream_skips_completion_when_disabled() {
 		request: LLMRequest {
 			input_tokens: None,
 			input_format: InputFormat::Messages,
-			native_format: Some(custom::ProviderFormat::Messages),
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "claude-haiku-4-5-20251001".into(),
 			provider: "anthropic".into(),
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
+			provider_state: None,
 		},
 		response: LLMResponse::default(),
 	};
 	log.store(Some(llmresp));
-	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None);
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
 	let buffer_limit = 1024 * 1024;
-	let body = conversion::messages::passthrough_stream(body, buffer_limit, logger, false);
+	let body = conversion::messages::passthrough_stream(
+		body,
+		buffer_limit,
+		logger,
+		llm::LogContentFields::default(),
+	);
 	let _ = body.collect().await.unwrap();
 	let info = log2
 		.take()
 		.expect("log should have LLMInfo after stream completes");
 	assert!(
 		info.response.completion.is_none(),
-		"completion should not be set when include_completion_in_log is false"
+		"completion should not be set when log_content.completion is false"
+	);
+	assert!(
+		info.response.output_messages.is_none(),
+		"output messages should not be set when log_content.tool_calls is false"
 	);
 }
 
 #[tokio::test]
-async fn responses_passthrough_stream_captures_completion() {
+async fn messages_passthrough_stream_captures_tool_calls() {
+	let input_bytes =
+		fs::read(fixture_path("response/anthropic/stream_tool.json")).expect("Failed to read fixture");
+	let body = Body::from(input_bytes);
+	let log = AsyncLog::default();
+	let log2 = log.clone();
+	let llmresp = LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			cache_convention: CacheTokenConvention::pending(),
+			request_model: "claude-haiku-4-5-20251001".into(),
+			provider: "anthropic".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+			provider_state: None,
+		},
+		response: LLMResponse::default(),
+	};
+	log.store(Some(llmresp));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
+	let body = conversion::messages::passthrough_stream(
+		body,
+		1024 * 1024,
+		logger,
+		llm::LogContentFields {
+			completion: false,
+			tool_calls: true,
+		},
+	);
+	let _ = body.collect().await.unwrap();
+	let info = log2
+		.take()
+		.expect("log should have LLMInfo after stream completes");
+	assert!(info.response.completion.is_none());
+	let output_messages = info
+		.response
+		.output_messages
+		.expect("output messages should be set for Anthropic tool calls");
+	assert_eq!(
+		output_messages[0].finish_reason.as_deref(),
+		Some("tool_use")
+	);
+	let tool_calls = output_messages[0].tool_calls();
+	assert_eq!(tool_calls.len(), 1);
+	assert_eq!(tool_calls[0].id.as_str(), "toolu_01A");
+	assert_eq!(tool_calls[0].name.as_str(), "get_weather");
+	assert_eq!(
+		tool_calls[0].arguments,
+		serde_json::json!({"location": "San Francisco"})
+	);
+}
+
+#[tokio::test]
+async fn responses_passthrough_stream_captures_completion_and_tool_calls() {
 	let input_path = fixture_path("response/responses/stream.json");
 	let input_bytes = fs::read(&input_path).expect("Failed to read fixture");
 	let body = Body::from(input_bytes);
@@ -1818,20 +2410,28 @@ async fn responses_passthrough_stream_captures_completion() {
 		request: LLMRequest {
 			input_tokens: None,
 			input_format: InputFormat::Responses,
-			native_format: Some(custom::ProviderFormat::Responses),
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "gpt-4.1-mini".into(),
 			provider: "openai".into(),
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
+			provider_state: None,
 		},
 		response: LLMResponse::default(),
 	};
 	log.store(Some(llmresp));
-	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None);
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
 	let buffer_limit = 1024 * 1024;
-	let body = conversion::responses::passthrough_stream(body, buffer_limit, logger, true);
+	let body = conversion::responses::passthrough_stream(
+		body,
+		buffer_limit,
+		logger,
+		llm::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		},
+	);
 	let _ = body.collect().await.unwrap();
 	let info = log2
 		.take()
@@ -1841,6 +2441,62 @@ async fn responses_passthrough_stream_captures_completion() {
 		.completion
 		.expect("completion should be set for responses streaming");
 	assert_eq!(completion.join(""), "Hello");
+	let output_messages = info
+		.response
+		.output_messages
+		.expect("output messages should be set for responses streaming");
+	assert_eq!(
+		output_messages[0].finish_reason.as_deref(),
+		Some("completed")
+	);
+	let tool_calls = output_messages[0].tool_calls();
+	assert_eq!(tool_calls.len(), 1);
+	assert_eq!(tool_calls[0].id.as_str(), "call_xxx");
+	assert_eq!(tool_calls[0].name.as_str(), "get_weather");
+	assert_eq!(
+		tool_calls[0].arguments,
+		serde_json::json!({"location": "San Francisco"})
+	);
+}
+
+#[tokio::test]
+async fn responses_passthrough_stream_preserves_moderation_chunks() {
+	let input_bytes = br#"event: response.completed
+data: {"type":"response.completed","sequence_number":1,"response":{"created_at":123,"id":"resp_123","model":"gpt-5","object":"response","output":[],"status":"completed","moderation":{"input":{"flagged":false},"output":{"flagged":true}}}}
+
+data: [DONE]
+
+"#;
+	let body = Body::from(input_bytes.to_vec());
+	let log = AsyncLog::default();
+	let llmresp = LLMInfo {
+		request: LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Responses,
+			cache_convention: CacheTokenConvention::pending(),
+			request_model: "gpt-5".into(),
+			provider: "openai".into(),
+			streaming: true,
+			params: Default::default(),
+			prompt: None,
+			provider_state: None,
+		},
+		response: LLMResponse::default(),
+	};
+	log.store(Some(llmresp));
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
+	let buffer_limit = 1024 * 1024;
+	let body = conversion::responses::passthrough_stream(
+		body,
+		buffer_limit,
+		logger,
+		llm::LogContentFields::default(),
+	);
+	let output = body.collect().await.unwrap().to_bytes();
+	let text = String::from_utf8(output.to_vec()).expect("stream should be valid UTF-8");
+
+	assert!(text.contains(r#""moderation":{"input":{"flagged":false},"output":{"flagged":true}}"#));
+	assert!(text.contains("data: [DONE]"));
 }
 
 #[tokio::test]
@@ -1854,27 +2510,36 @@ async fn responses_passthrough_stream_skips_completion_when_disabled() {
 		request: LLMRequest {
 			input_tokens: None,
 			input_format: InputFormat::Responses,
-			native_format: Some(custom::ProviderFormat::Responses),
 			cache_convention: CacheTokenConvention::pending(),
 			request_model: "gpt-4.1-mini".into(),
 			provider: "openai".into(),
 			streaming: true,
 			params: Default::default(),
 			prompt: None,
+			provider_state: None,
 		},
 		response: LLMResponse::default(),
 	};
 	log.store(Some(llmresp));
-	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None);
+	let logger = AmendOnDrop::new(log, LLMResponsePolicies::default(), None, None).into_llm();
 	let buffer_limit = 1024 * 1024;
-	let body = conversion::responses::passthrough_stream(body, buffer_limit, logger, false);
+	let body = conversion::responses::passthrough_stream(
+		body,
+		buffer_limit,
+		logger,
+		llm::LogContentFields::default(),
+	);
 	let _ = body.collect().await.unwrap();
 	let info = log2
 		.take()
 		.expect("log should have LLMInfo after stream completes");
 	assert!(
 		info.response.completion.is_none(),
-		"completion should not be set when include_completion_in_log is false"
+		"completion should not be set when log_content.completion is false"
+	);
+	assert!(
+		info.response.output_messages.is_none(),
+		"output messages should not be set when log_content.tool_calls is false"
 	);
 }
 
@@ -1892,6 +2557,69 @@ fn custom_provider(format: custom::ProviderFormat) -> AIProvider {
 		provider_override: None,
 		formats: vec![custom::ProviderFormatConfig { format, path: None }],
 	})
+}
+
+#[tokio::test]
+async fn read_body_decodes_gzip_request_before_json_parse() {
+	// Regression: a gzip-compressed request body (Content-Encoding: gzip) must be
+	// decompressed before the JSON parse. Clients such as the Claude Code harness
+	// gzip request bodies above a size threshold; previously the reader handed the
+	// raw compressed bytes to serde_json and failed with a misleading
+	// "LLM request body must be valid JSON" 400, even for tiny payloads.
+	let provider = custom_provider(custom::ProviderFormat::Messages);
+
+	let plaintext =
+		br#"{"model":"claude-sonnet-4-5","max_tokens":8,"messages":[{"role":"user","content":"hi"}]}"#;
+	let gz = crate::http::compression::encode_body(plaintext, "gzip")
+		.await
+		.expect("gzip encode");
+	// The payload is genuinely compressed (gzip magic) and tiny, so this exercises
+	// content-encoding decoding rather than the buffer-size path.
+	assert_eq!(&gz[..2], &[0x1f, 0x8b]);
+
+	let req = ::http::Request::builder()
+		.uri("/v1/messages")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.header(::http::header::CONTENT_ENCODING, "gzip")
+		.body(Body::from(gz.to_vec()))
+		.unwrap();
+
+	let (parts, parsed) = provider
+		.read_body_and_default_model::<types::messages::Request>(None, req, &mut None)
+		.await
+		.expect("gzip request body should decode and parse as JSON");
+
+	assert_eq!(parsed.model.as_deref(), Some("claude-sonnet-4-5"));
+	// The encoding header is stripped now that the body is plaintext.
+	assert!(
+		parts
+			.headers
+			.get(::http::header::CONTENT_ENCODING)
+			.is_none()
+	);
+}
+
+#[tokio::test]
+async fn read_body_still_parses_plaintext_request() {
+	// A plaintext (unencoded) request body must continue to parse unchanged — the
+	// decompression path is a no-op when no Content-Encoding is present.
+	let provider = custom_provider(custom::ProviderFormat::Messages);
+
+	let req = ::http::Request::builder()
+		.uri("/v1/messages")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			br#"{"model":"claude-sonnet-4-5","max_tokens":8,"messages":[{"role":"user","content":"hi"}]}"#
+				.to_vec(),
+		))
+		.unwrap();
+
+	let (_parts, parsed) = provider
+		.read_body_and_default_model::<types::messages::Request>(None, req, &mut None)
+		.await
+		.expect("plaintext request body should parse as JSON");
+
+	assert_eq!(parsed.model.as_deref(), Some("claude-sonnet-4-5"));
 }
 
 #[test]
@@ -1969,7 +2697,10 @@ fn fixed_providers_classify_by_family() {
 	);
 	assert_eq!(
 		cache_convention_for(
-			&AIProvider::OpenAI(openai::Provider { model: None }),
+			&AIProvider::OpenAI(openai::Provider {
+				model: None,
+				moderation: None,
+			}),
 			Some(custom::ProviderFormat::Completions),
 			"gpt-4o"
 		),

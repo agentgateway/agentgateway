@@ -206,7 +206,7 @@ spec:
           {{- end }}
 `))
 
-var tcpRouteYAMLTemplate = template.Must(template.New("tcproute").Funcs(ancestorTemplateFuncs).Parse(`apiVersion: gateway.networking.k8s.io/v1alpha2
+var tcpRouteYAMLTemplate = template.Must(template.New("tcproute").Funcs(ancestorTemplateFuncs).Parse(`apiVersion: gateway.networking.k8s.io/v1
 kind: TCPRoute
 metadata:
   name: "{{ .Route.Name }}"
@@ -363,7 +363,7 @@ func routeForKind(kind string) ancestorRoute {
 		}
 	case "TCPRoute":
 		return ancestorRoute{
-			APIVersion:  "gateway.networking.k8s.io/v1alpha2",
+			APIVersion:  "gateway.networking.k8s.io/v1",
 			Kind:        "TCPRoute",
 			Name:        "tcp-route",
 			SectionName: "tcp",

@@ -4,6 +4,7 @@
 package main
 
 import (
+	"cmp"
 	"flag"
 	"fmt"
 	"go/ast"
@@ -11,7 +12,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -61,8 +62,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	sort.Slice(metrics, func(i, j int) bool {
-		return metrics[i].fullName() < metrics[j].fullName()
+	slices.SortFunc(metrics, func(a, b metricInfo) int {
+		return cmp.Compare(a.fullName(), b.fullName())
 	})
 
 	if outputMarkdown != nil && *outputMarkdown {

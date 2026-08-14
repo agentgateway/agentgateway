@@ -496,14 +496,13 @@ pub mod time {
 
 	use super::{FunctionContext, ResolveResult, Result};
 	use crate::magic::{Argument, This};
-	use crate::objects::StringValue;
 	use crate::{ExecutionError, Value};
 
 	/// Duration parses the provided argument into a [`Value::Duration`] value.
 	///
-	/// The argument must be string, and must be in the format of a duration. See
-	/// the [`parse_duration`] documentation for more information on the supported
-	/// formats.
+	/// A string argument must be in the format of a duration. Existing duration
+	/// values are returned unchanged. See the [`parse_duration`] documentation for
+	/// more information on the supported formats.
 	///
 	/// # Examples
 	/// - `1h` parses as 1 hour
@@ -515,8 +514,12 @@ pub mod time {
 	/// - `1ns` parses as 1 nanosecond
 	/// - `1.5ns` parses as 1 nanosecond (sub-nanosecond durations not supported)
 	pub fn duration<'a>(ftx: &mut FunctionContext<'a, '_>, value: Argument) -> ResolveResult<'a> {
-		let value: StringValue = value.load_value(ftx)?;
-		Ok(Value::Duration(_duration(value.as_ref())?))
+		let value: Value = value.load_value(ftx)?;
+		Ok(Value::Duration(match value {
+			Value::String(value) => _duration(value.as_ref())?,
+			Value::Duration(value) => value,
+			v => return Err(ftx.error(format!("cannot convert {v:?} to duration"))),
+		}))
 	}
 
 	/// Timestamp converts the provided argument into a [`Value::Timestamp`] value.
@@ -1055,6 +1058,10 @@ mod tests {
 			(
 				"duration getSeconds overflow",
 				"duration('90s').getSeconds() == 90",
+			),
+			(
+				"duration duration",
+				"duration(duration('13s')).getSeconds() == 13",
 			),
 		]
 		.iter()

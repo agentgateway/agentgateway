@@ -41,7 +41,7 @@ func TestOwnersFromPolicyUseCanonicalSpecScopedPaths(t *testing.T) {
 	assert.Equal(t, PolicyBackendMCPAuthenticationLookupOwner(policy.Namespace, policy.Name, policy.Spec.Backend.MCP.Authentication.JWKS), owners[1])
 }
 
-func TestOwnersFromPolicyRequireAtLeastOneTargetRef(t *testing.T) {
+func TestOwnersFromPolicyRequireAtLeastOneTarget(t *testing.T) {
 	policy := &agentgateway.AgentgatewayPolicy{}
 	policy.Namespace = "default"
 	policy.Name = "example"
@@ -54,4 +54,22 @@ func TestOwnersFromPolicyRequireAtLeastOneTargetRef(t *testing.T) {
 	}
 
 	assert.Nil(t, OwnersFromPolicy(policy))
+}
+
+func TestOwnersFromPolicyWithTargetSelectors(t *testing.T) {
+	policy := &agentgateway.AgentgatewayPolicy{}
+	policy.Namespace = "default"
+	policy.Name = "example"
+	policy.Spec.TargetSelectors = make([]agentgateway.LocalPolicyTargetSelectorWithSectionName, 1)
+	policy.Spec.Traffic = &agentgateway.Traffic{
+		JWTAuthentication: &agentgateway.JWTAuthentication{
+			Providers: []agentgateway.JWTProvider{{
+				JWKS: agentgateway.JWKS{Remote: &agentgateway.RemoteJWKS{}},
+			}},
+		},
+	}
+
+	owners := OwnersFromPolicy(policy)
+	assert.Len(t, owners, 1)
+	assert.Equal(t, "AgentgatewayPolicy/default/example#spec.traffic.jwtAuthentication.providers[0].jwks.remote", owners[0].ID.String())
 }

@@ -170,10 +170,6 @@ impl<S> Server<S> {
 		self.binds.first().and_then(Listener::tcp_addr)
 	}
 
-	pub fn state_mut(&mut self) -> &mut S {
-		&mut self.state
-	}
-
 	pub fn spawn<F, R>(self, f: F)
 	where
 		S: Send + Sync + 'static,

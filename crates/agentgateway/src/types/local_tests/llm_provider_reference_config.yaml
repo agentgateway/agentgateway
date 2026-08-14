@@ -17,6 +17,13 @@ llm:
         minTokens: 1024
       transformation:
         model: llmRequest.model.stripPrefix("anthropic/")
+  - name: completions-shared
+    provider:
+      custom:
+        formats:
+        - type: completions
+    params:
+      baseUrl: https://llm.example.com/v1
   models:
   - name: anthropic/*
     provider:
@@ -28,3 +35,6 @@ llm:
     promptCaching:
       cacheMessages: true
       minTokens: 2048
+  - name: example/*
+    provider:
+      reference: completions-shared

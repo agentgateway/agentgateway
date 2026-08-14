@@ -17,7 +17,6 @@ use crate::types::agent::{
 	SimpleBackendWithPolicies, TCPRoute, TCPRouteBackend, TCPRouteBackendReference, Target,
 	TransportProtocol,
 };
-use crate::types::discovery::gatewayaddress::Destination;
 use crate::types::discovery::{NetworkAddress, WaypointIdentity};
 use crate::types::{agent, frontend};
 use crate::{ProxyInputs, Stores, *};
@@ -111,6 +110,23 @@ impl TCPProxy {
 					.as_ref()
 					.expect("expected source context"),
 			)?;
+		}
+		if let Some(authz) = frontend_policies.network_ext_authz.as_ref() {
+			authz
+				.check_network(
+					httpproxy::PolicyClient::new(self.inputs.clone()),
+					log
+						.source_context
+						.as_ref()
+						.expect("expected source context")
+						.clone(),
+					crate::cel::DestinationContext::from_tcp_connection(
+						connection
+							.ext::<TCPConnectionInfo>()
+							.expect("tcp connection must be set"),
+					),
+				)
+				.await?;
 		}
 		log.tls_info = connection.ext::<TLSConnectionInfo>().cloned();
 		log.backend_protocol = Some(cel::BackendProtocol::tcp);
@@ -239,13 +255,14 @@ impl TCPProxy {
 			SimpleBackend::Aws(_, config) => {
 				let default_policies = BackendPolicies {
 					backend_tls: Some(http::backendtls::SYSTEM_TRUST.clone()),
-					backend_auth: Some(http::auth::BackendAuth::Aws(
-						http::auth::AwsAuth::Implicit {
+					backend_auth: Some(http::auth::BackendAuth::new(
+						http::auth::BackendAuthKind::Aws(http::auth::AwsAuth::Implicit {
 							service_name: None,
+							region: None,
 							assume_role: None,
 							source_credentials_cache: Default::default(),
 							assume_role_cache: Default::default(),
-						},
+						}),
 					)),
 					..Default::default()
 				};
@@ -385,24 +402,23 @@ fn resolve_waypoint_service(
 			address: dst.ip(),
 		})?;
 
-	let wp = svc.waypoint.as_ref()?;
-	let is_ours = match &wp.destination {
-		Destination::Address(addr) => {
-			let stores_ref = stores.clone();
-			self_id.matches_address(addr, |a| {
-				let discovery = stores_ref.read_discovery();
-				discovery
-					.services
-					.get_by_vip(a)
-					.map(|s| (s.name.clone(), s.namespace.clone()))
-			})
-		},
-		Destination::Hostname(n) => self_id.matches_hostname(n),
-	};
+	if !svc.has_fronting_waypoint() {
+		return None;
+	}
+	let is_ours = self_id.fronts_service(&svc, |a| {
+		stores
+			.read_discovery()
+			.services
+			.get_by_vip(a)
+			.map(|s| (s.name.clone(), s.namespace.clone()))
+	});
 	if !is_ours {
 		warn!(
-			"service {} is meant for waypoint {:?}, but we are {}.{}",
-			svc.hostname, wp.destination, self_id.gateway, self_id.namespace
+			"service {} is not fronted by waypoint {}.{}; its waypoints are {:?}",
+			svc.hostname,
+			self_id.gateway,
+			self_id.namespace,
+			svc.fronting_waypoint_destinations(),
 		);
 		return None;
 	}
@@ -931,6 +947,7 @@ mod tests {
 				Default::default(),
 			)),
 			model_catalog: ModelCatalog::empty(),
+			admin: None,
 			upstream: client,
 			ca: None,
 			mcp_state: crate::mcp::App::new(stores, encoder),
@@ -979,38 +996,43 @@ mod tests {
 		assert!(
 			matches!(
 				&result.backend_policies.backend_auth,
-				Some(crate::http::auth::BackendAuth::Aws(
-					crate::http::auth::AwsAuth::Implicit {
-						service_name: None,
-						assume_role: None,
-						..
-					}
-				))
+				Some(crate::http::auth::BackendAuth {
+					kind: Some(crate::http::auth::BackendAuthKind::Aws(
+						crate::http::auth::AwsAuth::Implicit {
+							service_name: None,
+							assume_role: None,
+							..
+						}
+					)),
+					..
+				})
 			),
 			"should default to AWS implicit auth"
 		);
 		assert!(result.http_version_override.is_none());
 		assert!(result.transport_override.is_none());
-		assert!(result.network_gateway.is_none());
+		assert!(result.network_gateway().is_none());
 	}
 
 	#[test]
 	fn test_build_backend_call_aws_user_policies_override() {
 		use secrecy::SecretString;
 
-		use crate::http::auth::{AwsAuth, BackendAuth};
+		use crate::http::auth::{AwsAuth, BackendAuth, BackendAuthKind};
 
 		let inputs = make_proxy_inputs();
 		let backend = make_aws_simple_backend();
 
 		let user_policies = BackendPolicies {
-			backend_auth: Some(BackendAuth::Aws(AwsAuth::ExplicitConfig {
-				access_key_id: SecretString::from("AKID"),
-				secret_access_key: SecretString::from("SECRET"),
-				region: Some("us-west-2".to_string()),
-				session_token: None,
-				service_name: None,
-			})),
+			backend_auth: Some(BackendAuth::new(BackendAuthKind::Aws(
+				AwsAuth::ExplicitConfig {
+					access_key_id: SecretString::from("AKID"),
+					secret_access_key: SecretString::from("SECRET"),
+					region: Some("us-west-2".to_string()),
+					session_token: None,
+					service_name: None,
+				},
+			))),
 			..Default::default()
 		};
 
@@ -1021,10 +1043,13 @@ mod tests {
 		assert!(
 			matches!(
 				&result.backend_policies.backend_auth,
-				Some(BackendAuth::Aws(AwsAuth::ExplicitConfig {
-					service_name: None,
+				Some(BackendAuth {
+					kind: Some(BackendAuthKind::Aws(AwsAuth::ExplicitConfig {
+						service_name: None,
+						..
+					})),
 					..
-				}))
+				})
 			),
 			"user-provided auth should override default implicit auth"
 		);

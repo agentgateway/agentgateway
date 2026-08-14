@@ -21,6 +21,13 @@ spec:
         backendRef:
           name: otel-collector
           port: 4318
+        filter: 'request.path != "/healthz"'
+        attributes:
+          remove:
+          - response.headers["set-cookie"]
+          add:
+          - expression: response.code
+            name: otlp.response_code
         protocol: HTTP
         path: /custom/v1/logs
 ---
@@ -50,6 +57,13 @@ output:
             - request.headers["authorization"]
           filter: response.code >= 400
           otlpAccessLog:
+            fields:
+              add:
+              - expression: response.code
+                name: otlp.response_code
+              remove:
+              - response.headers["set-cookie"]
+            filter: request.path != "/healthz"
             path: /custom/v1/logs
             providerBackend:
               port: 4318

@@ -1,0 +1,163 @@
+# Tier-aware Agentgateway models and conditional ExtProc policy.
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: openai-gpt-4
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/part-of: tiered-semantic-routing
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agentgateway-proxy
+    sectionName: http
+  match:
+    model: gpt-4.1
+  provider: OpenAI
+  policies:
+    auth:
+      secretRef:
+        name: openai-secret
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: openai-gpt-5
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/part-of: tiered-semantic-routing
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agentgateway-proxy
+    sectionName: http
+  match:
+    model: gpt-5.4
+  provider: OpenAI
+  policies:
+    auth:
+      secretRef:
+        name: openai-secret
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: anthropic-haiku
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/part-of: tiered-semantic-routing
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agentgateway-proxy
+    sectionName: http
+  match:
+    model: claude-haiku-4.5
+  provider: Anthropic
+  policies:
+    authorization:
+      policy:
+        matchExpressions:
+        - 'request.headers["x-entitlement-tier"] in ["standard", "pro"]'
+    transformations:
+    - field: model
+      expression: '"claude-haiku-4-5-20251001"'
+    auth:
+      secretRef:
+        name: anthropic-secret
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: anthropic-sonnet
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/part-of: tiered-semantic-routing
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agentgateway-proxy
+    sectionName: http
+  match:
+    model: claude-sonnet-4.6
+  provider: Anthropic
+  policies:
+    authorization:
+      policy:
+        matchExpressions:
+        - 'request.headers["x-entitlement-tier"] == "pro"'
+    transformations:
+    - field: model
+      expression: '"claude-sonnet-4-6"'
+    auth:
+      secretRef:
+        name: anthropic-secret
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: tiered-semantic-routing
+  namespace: agentgateway-system
+  labels:
+    app.kubernetes.io/part-of: tiered-semantic-routing
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agentgateway-proxy
+  traffic:
+    phase: PreRouting
+    authorization:
+      policy:
+        matchExpressions:
+        - 'request.headers["x-entitlement-tier"] in ["basic", "standard", "pro"]'
+    extProc:
+      conditional:
+      - condition: request.headers["x-entitlement-tier"] == "basic"
+        policy:
+          backendRef:
+            name: semantic-router-basic
+            port: 50051
+          failureMode: FailClosed
+          processingOptions:
+            requestHeaderMode: Send
+            requestBodyMode: FullDuplexStreamed
+            responseHeaderMode: Send
+            # Agentgateway performs provider response translation. vSR only
+            # needs the response headers for this model-selection example.
+            responseBodyMode: None
+            requestTrailerMode: Send
+            responseTrailerMode: Send
+            allowModeOverride: false
+      - condition: request.headers["x-entitlement-tier"] == "standard"
+        policy:
+          backendRef:
+            name: semantic-router-standard
+            port: 50051
+          failureMode: FailClosed
+          processingOptions:
+            requestHeaderMode: Send
+            requestBodyMode: FullDuplexStreamed
+            responseHeaderMode: Send
+            responseBodyMode: None
+            requestTrailerMode: Send
+            responseTrailerMode: Send
+            allowModeOverride: false
+      - condition: request.headers["x-entitlement-tier"] == "pro"
+        policy:
+          backendRef:
+            name: semantic-router-pro
+            port: 50051
+          failureMode: FailClosed
+          processingOptions:
+            requestHeaderMode: Send
+            requestBodyMode: FullDuplexStreamed
+            responseHeaderMode: Send
+            responseBodyMode: None
+            requestTrailerMode: Send
+            responseTrailerMode: Send
+            allowModeOverride: false

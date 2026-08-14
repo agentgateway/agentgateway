@@ -22,9 +22,21 @@ use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, TracingC
 
 #[derive(Clone, Debug)]
 pub struct Tracer {
-	pub provider: SdkTracerProvider,
+	pub provider: super::NonBlockingDrop<SdkTracerProvider>,
 	pub processor: SharedSpanProcessor,
 	pub fields: Arc<LoggingFields>,
+	pub(crate) filter: Option<Arc<cel::Expression>>,
+}
+
+/// Decides whether a trace span should be exported given an optional CEL *keep* filter.
+/// Keep semantics (matching `accessLog.filter`): when `filter` evaluates to `true`, the span is
+/// exported (returns true); otherwise it is dropped. On eval error / missing fields, `eval_bool`
+/// returns false, so the span is dropped. `None` => no filtering (always export).
+pub(crate) fn should_export_span(filter: Option<&cel::Expression>, exec: &cel::Executor) -> bool {
+	match filter {
+		Some(f) => exec.eval_bool(f),
+		None => true,
+	}
 }
 
 #[derive(Clone)]
@@ -133,6 +145,7 @@ pub enum Protocol {
 #[derive(serde::Serialize, Clone, Debug)]
 pub struct DeprecatedConfig {
 	pub endpoint: Option<String>,
+	#[serde(serialize_with = "crate::serdes::ser_sensitive_header_map")]
 	pub headers: HashMap<String, String>,
 	pub protocol: Protocol,
 	pub fields: LoggingFields,
@@ -215,12 +228,13 @@ impl Tracer {
 		// Choose exporter based on per-policy protocol:
 		// - gRPC when protocol is "grpc"
 		// - otherwise HTTP (fall back to gRPC if no HTTP path is available)
+		let target = &config.target;
 		let (provider, processor) = if config.protocol == crate::types::agent::TracingProtocol::Grpc {
 			// Use gRPC exporter that routes via PolicyClient/GrpcReferenceChannel
 			let exporter = PolicyGrpcSpanExporter::new(
 				policy_client.inputs.clone(),
-				Arc::new(config.provider_backend.clone()),
-				config.policies.clone(),
+				target.target.clone(),
+				target.policies.clone(),
 				exporter_runtime.clone(),
 			);
 			let processor = new_trace_processor(&resource, exporter);
@@ -233,8 +247,8 @@ impl Tracer {
 			let path = config.path.clone();
 			let http_client = PolicyOtelHttpClient {
 				policy_client,
-				backend_ref: config.provider_backend.clone(),
-				policies: config.policies.clone(),
+				backend_ref: target.target.as_ref().clone(),
+				policies: target.policies.clone(),
 				runtime: exporter_runtime,
 			};
 			let exporter = opentelemetry_otlp::SpanExporter::builder()
@@ -250,9 +264,10 @@ impl Tracer {
 			(provider, processor)
 		};
 		Ok(Tracer {
-			provider,
+			provider: super::NonBlockingDrop::new(provider),
 			processor,
 			fields,
+			filter: config.filter.clone(),
 		})
 	}
 
@@ -275,6 +290,9 @@ impl Tracer {
 			.collect_vec();
 		let out_span = request.outgoing_span.as_ref().unwrap();
 		if !out_span.is_sampled() {
+			return;
+		}
+		if !should_export_span(self.filter.as_deref(), &cel_exec.executor) {
 			return;
 		}
 		let start = request.start.as_system_time();
@@ -698,17 +716,28 @@ mod traceparent {
 		type Error = anyhow::Error;
 
 		fn try_from(value: &str) -> Result<Self, Self::Error> {
-			if value.len() != 55 {
-				anyhow::bail!("traceparent malformed length was {}", value.len())
+			let segs: [&str; 4] = value
+				.split('-')
+				.collect::<Vec<_>>()
+				.try_into()
+				.map_err(|_| anyhow::anyhow!("traceparent malformed: expected 4 fields"))?;
+			if [segs[0].len(), segs[1].len(), segs[2].len(), segs[3].len()] != [2, 32, 16, 2] {
+				anyhow::bail!("traceparent malformed field lengths")
 			}
 
-			let segs: Vec<&str> = value.split('-').collect();
-
+			let version = u8::from_str_radix(segs[0], 16)?;
+			let trace_id = u128::from_str_radix(segs[1], 16)?;
+			let span_id = u64::from_str_radix(segs[2], 16)?;
+			let flags = u8::from_str_radix(segs[3], 16)?;
+			// W3C: version 0xff is forbidden, and all-zero trace-id / parent-id are invalid.
+			if version == 0xff || trace_id == 0 || span_id == 0 {
+				anyhow::bail!("traceparent has invalid W3C fields")
+			}
 			Ok(Self {
-				version: u8::from_str_radix(segs[0], 16)?,
-				trace_id: u128::from_str_radix(segs[1], 16)?,
-				span_id: u64::from_str_radix(segs[2], 16)?,
-				flags: u8::from_str_radix(segs[3], 16)?,
+				version,
+				trace_id,
+				span_id,
+				flags,
 			})
 		}
 	}
@@ -734,6 +763,37 @@ mod tests {
 	};
 	use crate::telemetry::metrics::Metrics;
 	use crate::transport::stream::TCPConnectionInfo;
+
+	#[test]
+	fn traceparent_parses_valid_and_rejects_malformed() {
+		let valid = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+		assert_eq!(
+			format!("{:?}", TraceParent::try_from(valid).unwrap()),
+			valid
+		);
+
+		// 55 chars but no hyphens: must not panic on segment indexing.
+		assert!(TraceParent::try_from("0".repeat(55).as_str()).is_err());
+		// Wrong field count and wrong field lengths.
+		assert!(TraceParent::try_from("00-4bf9-00f067aa0ba902b7-01").is_err());
+		assert!(
+			TraceParent::try_from("00-4bf92f3577b34da6a3ce929d0e0e47360-0f067aa0ba902b7-01").is_err()
+		);
+		// Non-hex in a correctly-shaped value.
+		assert!(
+			TraceParent::try_from("zz-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01").is_err()
+		);
+		// W3C-invalid values: forbidden version, all-zero trace-id, all-zero parent-id.
+		assert!(
+			TraceParent::try_from("ff-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01").is_err()
+		);
+		assert!(
+			TraceParent::try_from("00-00000000000000000000000000000000-00f067aa0ba902b7-01").is_err()
+		);
+		assert!(
+			TraceParent::try_from("00-4bf92f3577b34da6a3ce929d0e0e4736-0000000000000000-01").is_err()
+		);
+	}
 
 	#[derive(Clone, Debug, Default)]
 	struct RecordingSpanExporter {
@@ -764,9 +824,10 @@ mod tests {
 			.build();
 		(
 			Tracer {
-				provider,
+				provider: crate::telemetry::NonBlockingDrop::new(provider),
 				processor,
 				fields: Arc::new(LoggingFields::default()),
+				filter: None,
 			},
 			exporter,
 		)
@@ -777,6 +838,8 @@ mod tests {
 			cel_context: crate::cel::ContextBuilder::new(),
 			filter: None,
 			fields: LoggingFields::default(),
+			otlp_filter: None,
+			otlp_fields: LoggingFields::default(),
 			metric_fields: MetricFields::default(),
 			database_fields: LoggingFields::default(),
 		};
@@ -812,12 +875,16 @@ mod tests {
 
 		let filter = None;
 		let fields = LoggingFields::default();
+		let otlp_filter = None;
+		let otlp_fields = LoggingFields::default();
 		let metric_fields = Arc::new(MetricFields::default());
 		let database_fields = LoggingFields::default();
 		let cel_exec = CelLoggingExecutor {
 			executor: crate::cel::Executor::new_empty(),
 			filter: &filter,
 			fields: &fields,
+			otlp_filter: &otlp_filter,
+			otlp_fields: &otlp_fields,
 			metric_fields: &metric_fields,
 			database_fields: &database_fields,
 		};
@@ -834,5 +901,96 @@ mod tests {
 		assert_eq!(span.parent_span_id, incoming.span_id.into());
 		assert!(span.parent_span_is_remote);
 		assert!(span.links.iter().next().is_none());
+	}
+
+	#[test]
+	fn should_export_span_keep_filter_cases() {
+		use crate::cel::{Executor, Expression, snapshot_request, snapshot_response};
+
+		// Keep-semantics: the expression returns `true` for spans we want to export.
+		// Here we export everything except the noisy probe/SSE-connection spans.
+		let keep_expr = Expression::new_strict(
+			"!((request.method == 'GET' && response.code == 405) || (mcp != null && request.method == 'GET' && response.code == 200))",
+		)
+		.unwrap();
+
+		fn req(method: ::http::Method) -> crate::http::Request {
+			::http::Request::builder()
+				.method(method)
+				.uri("http://example.com/")
+				.body(crate::http::Body::empty())
+				.unwrap()
+		}
+		fn resp(code: u16) -> crate::http::Response {
+			::http::Response::builder()
+				.status(code)
+				.body(crate::http::Body::empty())
+				.unwrap()
+		}
+
+		let mcp = crate::mcp::MCPInfo {
+			method_name: Some("tools/call".to_string()),
+			..Default::default()
+		};
+
+		// GET + 405, no mcp => drop (should_export == false)
+		{
+			let req_snap = snapshot_request(&mut req(::http::Method::GET), true);
+			let resp_snap = snapshot_response(&mut resp(405));
+			let exec = Executor::new_logger(Some(&req_snap), Some(&resp_snap), None, None, None, None);
+			assert!(!should_export_span(Some(&keep_expr), &exec));
+		}
+
+		// GET + 200, mcp present => drop (false)
+		{
+			let req_snap = snapshot_request(&mut req(::http::Method::GET), true);
+			let resp_snap = snapshot_response(&mut resp(200));
+			let exec = Executor::new_logger(
+				Some(&req_snap),
+				Some(&resp_snap),
+				None,
+				Some(&mcp),
+				None,
+				None,
+			);
+			assert!(!should_export_span(Some(&keep_expr), &exec));
+		}
+
+		// POST + 200, mcp present (tool call) => keep (true)
+		{
+			let req_snap = snapshot_request(&mut req(::http::Method::POST), true);
+			let resp_snap = snapshot_response(&mut resp(200));
+			let exec = Executor::new_logger(
+				Some(&req_snap),
+				Some(&resp_snap),
+				None,
+				Some(&mcp),
+				None,
+				None,
+			);
+			assert!(should_export_span(Some(&keep_expr), &exec));
+		}
+
+		// GET + 200, no mcp => keep (true)
+		{
+			let req_snap = snapshot_request(&mut req(::http::Method::GET), true);
+			let resp_snap = snapshot_response(&mut resp(200));
+			let exec = Executor::new_logger(Some(&req_snap), Some(&resp_snap), None, None, None, None);
+			assert!(should_export_span(Some(&keep_expr), &exec));
+		}
+
+		// GET + no response snapshot (unknown status) => expression errors => drop (false).
+		// Under keep-semantics, eval errors fail closed (the span is dropped).
+		{
+			let req_snap = snapshot_request(&mut req(::http::Method::GET), true);
+			let exec = Executor::new_logger(Some(&req_snap), None, None, None, None, None);
+			assert!(!should_export_span(Some(&keep_expr), &exec));
+		}
+
+		// filter == None => keep (true)
+		{
+			let exec = Executor::new_empty();
+			assert!(should_export_span(None, &exec));
+		}
 	}
 }

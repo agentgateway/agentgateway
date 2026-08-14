@@ -2,8 +2,9 @@ package jwks
 
 import (
 	"fmt"
-	"reflect"
 	"time"
+
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 )
@@ -43,11 +44,11 @@ func (o RemoteJwksOwner) Equals(other RemoteJwksOwner) bool {
 	return o.ID == other.ID &&
 		o.DefaultNamespace == other.DefaultNamespace &&
 		o.TTL == other.TTL &&
-		reflect.DeepEqual(o.Remote, other.Remote)
+		apiequality.Semantic.DeepEqual(o.Remote, other.Remote)
 }
 
 func OwnersFromPolicy(policy *agentgateway.AgentgatewayPolicy) []RemoteJwksOwner {
-	if len(policy.Spec.TargetRefs) == 0 {
+	if len(policy.Spec.TargetRefs) == 0 && len(policy.Spec.TargetSelectors) == 0 {
 		return nil
 	}
 

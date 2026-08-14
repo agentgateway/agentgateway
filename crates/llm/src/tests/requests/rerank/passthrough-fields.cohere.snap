@@ -1,0 +1,32 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/rerank/passthrough-fields.json
+info:
+  model: rerank-v3.5
+  query: q
+  documents:
+    - a
+  max_tokens_per_doc: 512
+  return_documents: false
+  truncation: END
+---
+{
+  "request": {
+    "model": "rerank-v3.5",
+    "query": "q",
+    "documents": [
+      "a"
+    ],
+    "return_documents": false,
+    "max_tokens_per_doc": 512,
+    "truncation": "END"
+  },
+  "parsed": {
+    "input_format": "Rerank",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "rerank-v3.5",
+    "provider": "cohere",
+    "streaming": false,
+    "params": {}
+  }
+}

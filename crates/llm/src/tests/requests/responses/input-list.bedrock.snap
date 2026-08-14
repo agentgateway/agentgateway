@@ -1,0 +1,41 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/responses/input-list.json
+info:
+  input:
+    - role: user
+      content: Hello
+  model: gpt-4o
+  stream: true
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "text": "Hello"
+          }
+        ]
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 4096
+    }
+  },
+  "parsed": {
+    "input_format": "Responses",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-4o",
+    "provider": "bedrock",
+    "streaming": true,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "Hello"
+      }
+    ]
+  }
+}

@@ -1,0 +1,17 @@
+- key: test-ns/never-prefix-mcp-backend/static-target
+  name:
+    name: never-prefix-mcp-backend
+    namespace: test-ns
+  static:
+    host: mcp-server.example.com
+    port: 8080
+- key: test-ns/never-prefix-mcp-backend
+  mcp:
+    prefixMode: NEVER
+    targets:
+    - backend:
+        backend: test-ns/never-prefix-mcp-backend/static-target
+      name: static-target
+  name:
+    name: never-prefix-mcp-backend
+    namespace: test-ns

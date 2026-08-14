@@ -1,0 +1,36 @@
+{{- range .Values.gateway.extraServices }}
+{{- $name := required "gateway.extraServices[].name is required" .name }}
+{{- if not .ports }}
+{{- fail (printf "gateway.extraServices[%s].ports must contain at least one port" $name) }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentgateway-standalone.fullname" $ }}-{{ $name }}
+  namespace: {{ include "agentgateway-standalone.namespace" $ }}
+  labels:
+    {{- include "agentgateway-standalone.labels" $ | nindent 4 }}
+    {{- with .extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .type | default $.Values.gateway.service.type | quote }}
+{{- $serviceSpecFields := include "agentgateway-standalone.serviceSpecFields" . }}
+{{- if $serviceSpecFields }}
+{{ $serviceSpecFields | trim | nindent 2 }}
+{{- end }}
+  ports:
+  {{- range .ports }}
+  - name: {{ .name | quote }}
+    protocol: {{ .protocol | default "TCP" | quote }}
+    port: {{ .port }}
+    targetPort: {{ .targetPort | default .port }}
+  {{- end }}
+  selector:
+    {{- include "agentgateway-standalone.selectorLabels" $ | nindent 4 }}
+{{- end }}

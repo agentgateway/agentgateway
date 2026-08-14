@@ -428,7 +428,7 @@
                 "gradientMode": "opacity",
                 "showPoints": "never"
               },
-              "unit": "s"
+              "unit": "currencyUSD"
             },
             "overrides": []
           },
@@ -437,6 +437,60 @@
             "w": 12,
             "x": 12,
             "y": 33
+          },
+          "interval": "5s",
+          "options": {
+            "legend": {
+              "calcs": [
+                "last",
+                "max",
+                "mean"
+              ],
+              "displayMode": "table",
+              "placement": "bottom",
+              "showLegend": true,
+              "sortBy": "Last",
+              "sortDesc": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "asc"
+            }
+          },
+          "repeatDirection": "h",
+          "targets": [
+            {
+              "expr": "sum by (gen_ai_request_model,gateway) (increase(agentgateway_gen_ai_client_cost_usd_total{namespace=~\"$namespace\",gateway=~\"$gateway\"}[$__rate_interval]))",
+              "legendFormat": "{{gateway}}: {{gen_ai_request_model}}",
+              "refId": ""
+            }
+          ],
+          "title": "USD Cost per Interval",
+          "transformations": [],
+          "transparent": false,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$datasource"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "fillOpacity": 10,
+                "gradientMode": "opacity",
+                "showPoints": "never"
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 10,
+            "w": 12,
+            "x": 0,
+            "y": 43
           },
           "interval": "5s",
           "options": {
@@ -489,7 +543,7 @@
           "gridPos": {
             "h": 10,
             "w": 12,
-            "x": 0,
+            "x": 12,
             "y": 43
           },
           "interval": "5s",
@@ -543,8 +597,8 @@
           "gridPos": {
             "h": 10,
             "w": 12,
-            "x": 12,
-            "y": 43
+            "x": 0,
+            "y": 53
           },
           "interval": "5s",
           "options": {
@@ -588,7 +642,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 53
+        "y": 63
       },
       "id": 0,
       "panels": [
@@ -612,7 +666,7 @@
             "h": 10,
             "w": 12,
             "x": 0,
-            "y": 54
+            "y": 64
           },
           "interval": "5s",
           "options": {
@@ -666,7 +720,7 @@
             "h": 10,
             "w": 12,
             "x": 12,
-            "y": 54
+            "y": 64
           },
           "interval": "5s",
           "options": {
@@ -710,7 +764,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 64
+        "y": 74
       },
       "id": 0,
       "panels": [
@@ -734,7 +788,7 @@
             "h": 10,
             "w": 12,
             "x": 0,
-            "y": 65
+            "y": 75
           },
           "interval": "5s",
           "options": {
@@ -788,7 +842,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 75
+        "y": 85
       },
       "id": 0,
       "panels": [
@@ -811,7 +865,7 @@
             "h": 10,
             "w": 12,
             "x": 0,
-            "y": 76
+            "y": 86
           },
           "interval": "5s",
           "options": {
@@ -865,7 +919,7 @@
             "h": 10,
             "w": 12,
             "x": 12,
-            "y": 76
+            "y": 86
           },
           "interval": "5s",
           "options": {
@@ -909,7 +963,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 86
+        "y": 96
       },
       "id": 0,
       "panels": [
@@ -933,7 +987,7 @@
             "h": 10,
             "w": 12,
             "x": 0,
-            "y": 87
+            "y": 97
           },
           "interval": "5s",
           "options": {
@@ -1017,7 +1071,7 @@
             "h": 10,
             "w": 12,
             "x": 12,
-            "y": 87
+            "y": 97
           },
           "interval": "5s",
           "options": {
@@ -1095,7 +1149,7 @@
             "h": 10,
             "w": 12,
             "x": 0,
-            "y": 97
+            "y": 107
           },
           "interval": "5s",
           "options": {
@@ -1158,7 +1212,7 @@
             "h": 10,
             "w": 12,
             "x": 12,
-            "y": 97
+            "y": 107
           },
           "interval": "5s",
           "options": {

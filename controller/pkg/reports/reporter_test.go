@@ -10,7 +10,6 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/reports"
@@ -58,6 +57,62 @@ func TestBuildGatewayStatus(t *testing.T) {
 		assert.Equal(t, 4, len(status.Listeners[0].Conditions))
 	})
 
+	t.Run("preserve invalid parameters over accepted report condition", func(t *testing.T) {
+		gw := gw()
+		gw.Status.Conditions = append(gw.Status.Conditions, metav1.Condition{
+			Type:    string(gwv1.GatewayConditionAccepted),
+			Status:  metav1.ConditionFalse,
+			Reason:  string(gwv1.GatewayReasonInvalidParameters),
+			Message: "bad params",
+		})
+		rm := reports.NewReportMap()
+		r := reports.NewReporter(&rm)
+		r.Gateway(gw).SetCondition(reporter.GatewayCondition{
+			Type:    gwv1.GatewayConditionAccepted,
+			Status:  metav1.ConditionTrue,
+			Reason:  gwv1.GatewayReasonAccepted,
+			Message: reports.GatewayAcceptedMessage,
+		})
+
+		status := rm.BuildGWStatus(context.Background(), *gw, 0)
+		accepted := meta.FindStatusCondition(status.Conditions, string(gwv1.GatewayConditionAccepted))
+
+		assert.Equal(t, true, accepted != nil)
+		assert.Equal(t, metav1.ConditionFalse, accepted.Status)
+		assert.Equal(t, string(gwv1.GatewayReasonInvalidParameters), accepted.Reason)
+		assert.Equal(t, "bad params", accepted.Message)
+
+		programmed := meta.FindStatusCondition(status.Conditions, string(gwv1.GatewayConditionProgrammed))
+		assert.Equal(t, true, programmed != nil)
+		assert.Equal(t, metav1.ConditionFalse, programmed.Status)
+		assert.Equal(t, string(gwv1.GatewayReasonInvalid), programmed.Reason)
+		assert.Equal(t, "bad params", programmed.Message)
+	})
+
+	t.Run("preserve specific programmed condition with invalid parameters", func(t *testing.T) {
+		gw := gw()
+		gw.Status.Conditions = append(gw.Status.Conditions, metav1.Condition{
+			Type:    string(gwv1.GatewayConditionAccepted),
+			Status:  metav1.ConditionFalse,
+			Reason:  string(gwv1.GatewayReasonInvalidParameters),
+			Message: "bad params",
+		})
+		rm := reports.NewReportMap()
+		r := reports.NewReporter(&rm)
+		r.Gateway(gw).SetCondition(reporter.GatewayCondition{
+			Type:   gwv1.GatewayConditionProgrammed,
+			Status: metav1.ConditionFalse,
+			Reason: gwv1.GatewayReasonAddressNotUsable,
+		})
+
+		status := rm.BuildGWStatus(context.Background(), *gw, 0)
+		programmed := meta.FindStatusCondition(status.Conditions, string(gwv1.GatewayConditionProgrammed))
+
+		assert.Equal(t, true, programmed != nil)
+		assert.Equal(t, metav1.ConditionFalse, programmed.Status)
+		assert.Equal(t, string(gwv1.GatewayReasonAddressNotUsable), programmed.Reason)
+	})
+
 	t.Run("set negative gateway conditions from report and not add extra conditions", func(t *testing.T) {
 		gw := gw()
 		rm := reports.NewReportMap()
@@ -77,6 +132,60 @@ func TestBuildGatewayStatus(t *testing.T) {
 		programmed := meta.FindStatusCondition(status.Conditions, string(gwv1.GatewayConditionProgrammed))
 		assert.Equal(t, true, programmed != nil)
 		assert.Equal(t, metav1.ConditionFalse, programmed.Status)
+	})
+
+	t.Run("remove stale invalid condition", func(t *testing.T) {
+		gw := gw()
+		gw.Generation = 2
+		gw.Status.Conditions = append(gw.Status.Conditions, metav1.Condition{
+			Type:               string(gwv1.GatewayConditionAccepted),
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: 1,
+			Reason:             string(gwv1.GatewayReasonInvalidParameters),
+			Message:            "bad params",
+		})
+		rm := reports.NewReportMap()
+		r := reports.NewReporter(&rm)
+		r.Gateway(gw).SetCondition(reporter.GatewayCondition{
+			Type:    gwv1.GatewayConditionAccepted,
+			Status:  metav1.ConditionTrue,
+			Reason:  gwv1.GatewayReasonAccepted,
+			Message: reports.GatewayAcceptedMessage,
+		})
+		status := rm.BuildGWStatus(context.Background(), *gw, 0)
+		accepted := meta.FindStatusCondition(status.Conditions, string(gwv1.GatewayConditionAccepted))
+
+		assert.Equal(t, true, status != nil)
+		assert.Equal(t, true, accepted != nil)
+		assert.Equal(t, metav1.ConditionTrue, accepted.Status)
+		assert.Equal(t, int64(2), accepted.ObservedGeneration)
+		assert.Equal(t, string(gwv1.GatewayReasonAccepted), accepted.Reason)
+		assert.Equal(t, reports.GatewayAcceptedMessage, accepted.Message)
+
+		programmed := meta.FindStatusCondition(status.Conditions, string(gwv1.GatewayConditionProgrammed))
+		assert.Equal(t, true, programmed != nil)
+		assert.Equal(t, metav1.ConditionTrue, programmed.Status)
+		assert.Equal(t, int64(2), programmed.ObservedGeneration)
+		assert.Equal(t, string(gwv1.GatewayReasonProgrammed), programmed.Reason)
+	})
+
+	t.Run("accepted false can default programmed true", func(t *testing.T) {
+		gw := gw()
+		rm := reports.NewReportMap()
+		r := reports.NewReporter(&rm)
+		r.Gateway(gw).SetCondition(reporter.GatewayCondition{
+			Type:    gwv1.GatewayConditionAccepted,
+			Status:  metav1.ConditionFalse,
+			Reason:  gwv1.GatewayReasonInvalid,
+			Message: "partially valid",
+		})
+		status := rm.BuildGWStatus(context.Background(), *gw, 0)
+
+		programmed := meta.FindStatusCondition(status.Conditions, string(gwv1.GatewayConditionProgrammed))
+		assert.Equal(t, true, programmed != nil)
+		assert.Equal(t, metav1.ConditionTrue, programmed.Status)
+		assert.Equal(t, string(gwv1.GatewayReasonProgrammed), programmed.Reason)
+		assert.Equal(t, reports.GatewayProgrammedMessage, programmed.Message)
 	})
 
 	t.Run("set negative listener conditions from report and not add extra conditions", func(t *testing.T) {
@@ -345,7 +454,7 @@ func TestBuildRouteStatus(t *testing.T) {
 				switch route := tt.obj.(type) {
 				case *gwv1.HTTPRoute:
 					route.Status.RouteStatus = *status
-				case *gwv1a2.TCPRoute:
+				case *gwv1.TCPRoute:
 					route.Status.RouteStatus = *status
 				case *gwv1.TLSRoute:
 					route.Status.RouteStatus = *status
@@ -387,7 +496,7 @@ func TestBuildRouteStatus(t *testing.T) {
 					route.Spec.ParentRefs = append(route.Spec.ParentRefs, gwv1.ParentReference{
 						Name: "additional-gateway",
 					})
-				case *gwv1a2.TCPRoute:
+				case *gwv1.TCPRoute:
 					route.Spec.ParentRefs = append(route.Spec.ParentRefs, gwv1.ParentReference{
 						Name: "additional-gateway",
 					})
@@ -464,7 +573,7 @@ func TestBuildRouteStatus(t *testing.T) {
 				switch r1 := tt.route1.(type) {
 				case *gwv1.HTTPRoute:
 					r1.Spec.ParentRefs[0].SectionName = new(tt.listener1.Name)
-				case *gwv1a2.TCPRoute:
+				case *gwv1.TCPRoute:
 					r1.Spec.ParentRefs[0].SectionName = new(tt.listener1.Name)
 				case *gwv1.TLSRoute:
 					r1.Spec.ParentRefs[0].SectionName = new(tt.listener1.Name)
@@ -475,7 +584,7 @@ func TestBuildRouteStatus(t *testing.T) {
 				switch r2 := tt.route2.(type) {
 				case *gwv1.HTTPRoute:
 					r2.Spec.ParentRefs[0].SectionName = new(tt.listener2.Name)
-				case *gwv1a2.TCPRoute:
+				case *gwv1.TCPRoute:
 					r2.Spec.ParentRefs[0].SectionName = new(tt.listener2.Name)
 				case *gwv1.TLSRoute:
 					r2.Spec.ParentRefs[0].SectionName = new(tt.listener2.Name)
@@ -517,7 +626,7 @@ func TestBuildRouteStatusWithMissingParentReferences(t *testing.T) {
 			switch r := tt.route.(type) {
 			case *gwv1.HTTPRoute:
 				r.Spec.ParentRefs = nil
-			case *gwv1a2.TCPRoute:
+			case *gwv1.TCPRoute:
 				r.Spec.ParentRefs = nil
 			case *gwv1.TLSRoute:
 				r.Spec.ParentRefs = nil
@@ -593,7 +702,7 @@ func fakeTranslate(reporter reporter.Reporter, obj client.Object) {
 		for _, pr := range route.Spec.ParentRefs {
 			routeReporter.ParentRef(&pr)
 		}
-	case *gwv1a2.TCPRoute:
+	case *gwv1.TCPRoute:
 		routeReporter := reporter.Route(route)
 		for _, pr := range route.Spec.ParentRefs {
 			routeReporter.ParentRef(&pr)
@@ -630,7 +739,7 @@ func httpRoute(conditions ...metav1.Condition) client.Object {
 }
 
 func tcpRoute(conditions ...metav1.Condition) client.Object {
-	route := &gwv1a2.TCPRoute{
+	route := &gwv1.TCPRoute{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "route",
 			Namespace: "default",

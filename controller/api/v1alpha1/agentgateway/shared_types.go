@@ -39,14 +39,23 @@ type LocalPolicyTargetReference struct {
 }
 
 // Selects one same-namespace object by `group`, `kind`, `name`, and,
-// optionally, `sectionName`.
+// optionally, `sectionName` or `port`.
 // The object must be in the same namespace as the policy.
+// +kubebuilder:validation:AtMostOneOf=sectionName;port
 type LocalPolicyTargetReferenceWithSectionName struct {
 	LocalPolicyTargetReference `json:",inline"`
 
 	// The named section of the target resource.
 	// +optional
 	SectionName *gwv1.SectionName `json:"sectionName,omitempty"`
+
+	// The port of the target resource this policy applies to.
+	// At most one of `sectionName` or `port` may be set.
+	// Only valid on frontend policies targeting a `Gateway`.
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Port *int32 `json:"port,omitempty"`
 }
 
 // Selects same-namespace objects by `group`, `kind`, and `matchLabels`.
@@ -73,12 +82,21 @@ type LocalPolicyTargetSelector struct {
 // the specified labels.
 // Prefer `targetRefs` when reconciliation latency is important, especially
 // when many policies target the same resource.
+// +kubebuilder:validation:AtMostOneOf=sectionName;port
 type LocalPolicyTargetSelectorWithSectionName struct {
 	LocalPolicyTargetSelector `json:",inline"`
 
 	// The named section of each selected target resource.
 	// +optional
 	SectionName *gwv1.SectionName `json:"sectionName,omitempty"`
+
+	// The port of each selected target resource this policy applies to.
+	// At most one of `sectionName` or `port` may be set.
+	// Only valid on frontend policies targeting a `Gateway`.
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=65535
+	Port *int32 `json:"port,omitempty"`
 }
 
 type PolicyStatus struct {
@@ -128,23 +146,58 @@ type HeaderModifiers struct {
 	Response *gwv1.HTTPHeaderFilter `json:"response,omitempty"`
 }
 
-// References a same-namespace credential.
-// Set only `name` to reference a Kubernetes Secret.
+// References a same-namespace credential
+// Set only `name` for a Kubernetes Secret
 //
 // +structType=atomic
 // +kubebuilder:validation:XValidation:rule="(!has(self.group) || size(self.group) == 0) ? (!has(self.kind) || size(self.kind) == 0 || self.kind == 'Secret') : (has(self.kind) && size(self.kind) > 0)",message="custom credential refs must set both group and kind"
 type LocalSecretObjectRef struct {
-	// The name of the referenced credential.
+	// Name of the referenced credential
 	// +required
 	Name gwv1.ObjectName `json:"name"`
 
-	// The API group of the referenced credential.
-	// Empty selects the core API group.
+	// API group of the referenced credential; empty selects the core API group
 	// +optional
 	Group string `json:"group,omitempty"`
 
-	// The kind of the referenced credential.
-	// Empty defaults to `Secret`.
+	// Kind of the referenced credential; empty defaults to `Secret`
 	// +optional
 	Kind string `json:"kind,omitempty"`
+}
+
+// References a same-namespace credential and optional key
+// Set only `name` for a Kubernetes Secret. When `key` is omitted, a
+// location-specific default key is used.
+//
+// +structType=atomic
+// +kubebuilder:validation:XValidation:rule="(!has(self.group) || size(self.group) == 0) ? (!has(self.kind) || size(self.kind) == 0 || self.kind == 'Secret') : (has(self.kind) && size(self.kind) > 0)",message="custom credential refs must set both group and kind"
+type LocalSecretKeyRef struct {
+	// Name of the referenced credential
+	// +required
+	Name gwv1.ObjectName `json:"name"`
+
+	// API group of the referenced credential; empty selects the core API group
+	// +optional
+	Group string `json:"group,omitempty"`
+
+	// Kind of the referenced credential; empty defaults to `Secret`
+	// +optional
+	Kind string `json:"kind,omitempty"`
+
+	// Key in the referenced Secret. If omitted, a location-specific default is used
+	//
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=253
+	// +optional
+	Key *string `json:"key,omitempty"`
+}
+
+// ObjectRef returns the credential reference without the key override, for
+// APIs that expect a bare LocalSecretObjectRef.
+func (r LocalSecretKeyRef) ObjectRef() LocalSecretObjectRef {
+	return LocalSecretObjectRef{
+		Name:  r.Name,
+		Group: r.Group,
+		Kind:  r.Kind,
+	}
 }

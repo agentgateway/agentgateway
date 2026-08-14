@@ -9,7 +9,8 @@ features = []
 [advisories]
 version = 2
 ignore = [
-    { id= "RUSTSEC-2024-0436", reason = "acceptable unmaintained package used in non-critical areas"}
+    { id= "RUSTSEC-2024-0436", reason = "acceptable unmaintained package used in non-critical areas"},
+    { id= "RUSTSEC-2026-0189", reason = "rmcp 0.10.0 is test-only and does not use the affected Streamable HTTP server transport"}
 ]
 
 [licenses]

@@ -1,9 +1,20 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Bot, Network, Server } from "lucide-react";
 import { useEffect, useState } from "react";
-import { ensureLlmFrontendDefaults } from "../config";
+import {
+  enableTrafficConfig,
+  ensureLlmFrontendDefaults,
+  startupLlmConfig,
+  startupMcpConfig,
+  usesUiGateways,
+} from "../config";
 import { refreshBaseCostsAndConfigure } from "../costs";
-import { useGatewayConfig, useUpdateConfig } from "../hooks";
+import {
+  useEffectiveGatewayConfig,
+  useMcpConfigData,
+  useTrafficConfigData,
+  useUpdateConfig,
+} from "../hooks";
 import {
   Field,
   PageHeader,
@@ -46,11 +57,15 @@ const surfaceConfig: Record<
   traffic: {
     title: "Enable Traffic",
     description:
-      "Create the traffic configuration section so HTTP and TCP listeners, routes, backends, and policies can be configured.",
+      "Create the traffic configuration section so HTTP gateways, routes, backends, and policies can be configured.",
     icon: Network,
-    enabled: (config) => Boolean(config && "binds" in config),
-    destination: "/traffic/listeners",
-    destinationLabel: "Continue to listeners",
+    enabled: (config) =>
+      Boolean(
+        config &&
+          ("gateways" in config || "routes" in config || "binds" in config),
+      ),
+    destination: "/traffic/gateways",
+    destinationLabel: "Continue to gateways",
   },
 };
 
@@ -67,27 +82,41 @@ export function TrafficGetStartedPage() {
 }
 
 function GetStartedPage(props: { surface: SurfaceKind }) {
-  const config = useGatewayConfig();
+  const config = useEffectiveGatewayConfig();
+  const mcpData = useMcpConfigData();
+  const trafficData = useTrafficConfigData();
   const update = useUpdateConfig();
   const navigate = useNavigate();
   const surface = surfaceConfig[props.surface];
   const Icon = surface.icon;
-  const enabled = surface.enabled(config.data);
+  const effectiveConfig =
+    props.surface === "mcp"
+      ? mcpData.data
+      : props.surface === "traffic"
+        ? trafficData.data
+        : config.data;
+  const loading =
+    config.isLoading ||
+    (props.surface === "mcp" && mcpData.isLoading) ||
+    (props.surface === "traffic" && trafficData.isLoading);
+  const configError =
+    config.error ??
+    (props.surface === "mcp"
+      ? mcpData.error
+      : props.surface === "traffic"
+        ? trafficData.error
+        : null);
+  const enabled = surface.enabled(effectiveConfig);
+  const useGateways = usesUiGateways(trafficData.data ?? config.data);
   const [port, setPort] = useState(() =>
     String(defaultSurfacePort(props.surface)),
   );
 
   useEffect(() => {
-    if (!config.isLoading && !config.isError && enabled) {
+    if (!loading && !configError && enabled) {
       void navigate({ to: surface.destination, replace: true });
     }
-  }, [
-    config.isError,
-    config.isLoading,
-    enabled,
-    navigate,
-    surface.destination,
-  ]);
+  }, [configError, enabled, loading, navigate, surface.destination]);
 
   async function enable() {
     if (enabled) {
@@ -97,20 +126,20 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
     try {
       await update.mutateAsync((next) => {
         if (props.surface === "llm") {
-          next.llm = next.llm ?? {
-            port: parsePort(port, 4000),
-            models: [],
-            providers: [],
-            virtualModels: [],
-          };
+          next.llm = next.llm ?? startupLlmConfig(next, parsePort(port, 4000));
           ensureLlmFrontendDefaults(next);
         } else if (props.surface === "mcp") {
-          next.mcp = next.mcp ?? {
-            port: parsePort(port, defaultSurfacePort(props.surface)),
-            targets: [],
-          };
-        } else if (!("binds" in next)) {
-          next.binds = [];
+          next.mcp =
+            next.mcp ??
+            startupMcpConfig(
+              next,
+              parsePort(port, defaultSurfacePort(props.surface)),
+            );
+        } else {
+          enableTrafficConfig(
+            next,
+            parsePort(port, defaultSurfacePort(props.surface)),
+          );
         }
       });
       void navigate({ to: surface.destination });
@@ -122,7 +151,7 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
     }
   }
 
-  if (!config.isLoading && !config.isError && enabled) {
+  if (!loading && !configError && enabled) {
     return (
       <div className="page-stack">
         <StatusBanner
@@ -137,12 +166,12 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
     <div className="page-stack">
       <PageHeader title={surface.title} description={surface.description} />
 
-      {config.isLoading ? (
+      {loading ? (
         <StatusBanner state="loading" title="Loading gateway configuration" />
       ) : null}
-      {config.isError ? (
+      {configError ? (
         <StatusBanner state="bad" title="Configuration API unavailable">
-          {config.error.message}
+          {configError.message}
         </StatusBanner>
       ) : null}
       {update.isError ? (
@@ -170,7 +199,9 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
           </div>
         </div>
 
-        {!enabled && (props.surface === "llm" || props.surface === "mcp") ? (
+        {!enabled &&
+        !useGateways &&
+        (props.surface === "llm" || props.surface === "mcp") ? (
           <details className="schema-details">
             <summary>Advanced</summary>
             <Field label="Port">
@@ -193,7 +224,7 @@ function GetStartedPage(props: { surface: SurfaceKind }) {
             <button
               className="button primary"
               type="button"
-              disabled={config.isLoading || update.isPending}
+              disabled={loading || update.isPending}
               onClick={() => void enable()}
             >
               Enable
@@ -215,5 +246,6 @@ function parsePort(value: string, fallback: number) {
 
 function defaultSurfacePort(surface: SurfaceKind) {
   if (surface === "llm") return 4000;
+  if (surface === "traffic") return 8080;
   return 3000;
 }

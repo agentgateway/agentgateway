@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Bot,
@@ -13,14 +14,16 @@ import {
   User,
 } from "lucide-react";
 import { sendChatCompletion, sendMcpJsonRpc } from "../api/playgroundApi";
+import { claudeSubscriptionWarning } from "../claudeSubscription";
 import { providerLabel } from "../config";
-import { applyPlaygroundCors, corsNeedsUpdate, currentOrigin } from "../cors";
-import { keyLabel } from "../credentialDisplay";
-import { gatewayEndpoint, gatewayOrigin } from "../gatewayUrls";
+import { corsNeedsUpdate, currentOrigin, playgroundCorsPolicy } from "../cors";
+import { hasKeyValue, keyLabel } from "../credentialDisplay";
+import { llmPlaygroundEndpoint, mcpPlaygroundEndpoint } from "../gatewayUrls";
 import {
-  useGatewayConfig,
+  useLlmConfigData,
+  useMcpConfigData,
   useStoredStringState,
-  useUpdateConfig,
+  useUpsertPolicyResource,
 } from "../hooks";
 import { CatalogModelSelector } from "../components/CatalogModelSelector";
 import {
@@ -46,7 +49,7 @@ import {
   wildcardModelPrefix,
   wildcardResolvedSuffix,
 } from "../modelResolution";
-import type { LlmModel, LlmProvider, ProviderName } from "../types";
+import type { CorsPolicy, LlmModel, LlmProvider, ProviderName } from "../types";
 
 type ChatMessage = {
   role: "system" | "user" | "assistant" | "tool";
@@ -114,17 +117,20 @@ const legacySecretStorageKeys = [
 ];
 
 export function PlaygroundPage() {
-  const config = useGatewayConfig();
-  const updateConfig = useUpdateConfig();
-  const models = useMemo(() => config.data?.llm?.models ?? [], [config.data]);
-  const virtualModels = useMemo(
-    () => config.data?.llm?.virtualModels ?? [],
-    [config.data],
-  );
-  const providers = useMemo(
-    () => config.data?.llm?.providers ?? [],
-    [config.data],
-  );
+  const {
+    config,
+    hybrid,
+    filePolicies,
+    policies,
+    models,
+    virtualModels,
+    providers,
+    apiKeys,
+    isLoading: configDataLoading,
+    error: configDataError,
+  } = useLlmConfigData();
+  const mcpData = useMcpConfigData();
+  const upsertPolicy = useUpsertPolicyResource();
   const modelOptions = useMemo(
     () => [
       ...models.map((item) => ({
@@ -148,16 +154,14 @@ export function PlaygroundPage() {
     ],
     [models, providers, virtualModels],
   );
-  const virtualKeys = useMemo(
-    () => config.data?.llm?.policies?.apiKey?.keys ?? [],
-    [config.data],
-  );
+  const rawVirtualKeys = useMemo(() => apiKeys.filter(hasKeyValue), [apiKeys]);
   const [storedModel, setStoredModel] = useStoredStringState(
     storageKeys.model,
     "",
   );
   const [model, setModel] = useState(() => queryModel() ?? storedModel);
-  const llmBaseUrl = gatewayOrigin(config.data?.llm?.port ?? 4000);
+  const llmEndpoint = llmPlaygroundEndpoint(config.data);
+  const llmBaseUrl = llmEndpoint.baseUrl;
   const [specificModel, setSpecificModel] = useStoredStringState(
     storageKeys.specificModel,
     "",
@@ -177,14 +181,12 @@ export function PlaygroundPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [runSteps, setRunSteps] = useState<RunStep[]>([]);
-  const derivedMcpBaseUrl = gatewayEndpoint(
-    config.data?.mcp?.port ?? 3000,
-    "/mcp",
-  );
+  const mcpEndpoint = mcpPlaygroundEndpoint(mcpData.data);
+  const derivedMcpBaseUrl = mcpEndpoint.baseUrl;
   const [mcpEnabled, setMcpEnabled] = useState(false);
   const [mcpSessionId, setMcpSessionId] = useState("");
   const [mcpTools, setMcpTools] = useState<PlaygroundTool[]>([]);
-  const mcpServerCount = config.data?.mcp?.targets?.length ?? 0;
+  const mcpServerCount = mcpData.data?.mcp?.targets?.length ?? 0;
 
   useEffect(() => {
     for (const key of legacySecretStorageKeys) localStorage.removeItem(key);
@@ -221,28 +223,44 @@ export function PlaygroundPage() {
   const selectedCatalogProvider = selectedModelConfig
     ? modelProviderLabel(selectedModelConfig, providers)
     : null;
-  const selectedKeyOptionRef = virtualKeys.some(
+  const selectedKeyOptionRef = rawVirtualKeys.some(
     (item, index) => virtualKeyStorageRef(item, index) === selectedKeyRef,
   )
     ? selectedKeyRef
-    : virtualKeys[0]
-      ? virtualKeyStorageRef(virtualKeys[0], 0)
+    : rawVirtualKeys[0]
+      ? virtualKeyStorageRef(rawVirtualKeys[0], 0)
       : "";
   const savedKey =
-    virtualKeys.find(
+    rawVirtualKeys.find(
       (item, index) =>
         virtualKeyStorageRef(item, index) === selectedKeyOptionRef,
     )?.key ??
-    virtualKeys[0]?.key ??
+    rawVirtualKeys[0]?.key ??
     "";
   const selectedKeyValue =
-    apiKeyMode === "saved" && virtualKeys.length > 0 ? savedKey : apiKey;
-  const needsCors = config.data
-    ? corsNeedsUpdate(config.data.llm?.policies?.cors, "llm")
-    : false;
+    apiKeyMode === "saved" && rawVirtualKeys.length > 0 ? savedKey : apiKey;
+  const llmCors = policies.cors as CorsPolicy | null | undefined;
+  const fileCorsOwned = Object.prototype.hasOwnProperty.call(
+    filePolicies,
+    "cors",
+  );
+  const fileMcpCorsOwned = Boolean(
+    mcpData.rawConfig.data?.mcp?.policies &&
+      Object.prototype.hasOwnProperty.call(
+        mcpData.rawConfig.data.mcp.policies,
+        "cors",
+      ),
+  );
+  const needsCors =
+    !configDataLoading &&
+    !configDataError &&
+    config.data &&
+    !llmEndpoint.sameOrigin
+      ? corsNeedsUpdate(llmCors, "llm")
+      : false;
   const needsMcpCors =
-    mcpEnabled && config.data
-      ? corsNeedsUpdate(config.data.mcp?.policies?.cors, "mcp")
+    mcpEnabled && mcpData.data && !mcpEndpoint.sameOrigin
+      ? corsNeedsUpdate(mcpData.data.mcp?.policies?.cors, "mcp")
       : false;
   const sendBlockers = sendReadinessBlockers({
     loading,
@@ -251,8 +269,26 @@ export function PlaygroundPage() {
     modelOptionsCount: modelOptions.length,
     selectedKeyValue,
     apiKeyMode,
-    virtualKeysCount: virtualKeys.length,
+    virtualKeysCount: rawVirtualKeys.length,
   });
+  const corsSaving = upsertPolicy.isPending;
+  const corsSaveError = upsertPolicy.error?.message ?? null;
+
+  function applyLlmCors() {
+    upsertPolicy.mutate({
+      kind: "llm.policy",
+      id: "cors",
+      value: playgroundCorsPolicy(llmCors, "llm"),
+    });
+  }
+
+  function applyMcpCors() {
+    upsertPolicy.mutate({
+      kind: "mcp.policy",
+      id: "cors",
+      value: playgroundCorsPolicy(mcpData.data?.mcp?.policies?.cors, "mcp"),
+    });
+  }
 
   useEffect(() => {
     if (modelOptions.length > 0 && model && !savedModelExists) setModel("");
@@ -264,14 +300,14 @@ export function PlaygroundPage() {
 
   useEffect(() => {
     if (
-      virtualKeys[0]?.key &&
-      !virtualKeys.some(
+      rawVirtualKeys[0]?.key &&
+      !rawVirtualKeys.some(
         (item, index) => virtualKeyStorageRef(item, index) === selectedKeyRef,
       )
     ) {
-      setSelectedKeyRef(virtualKeyStorageRef(virtualKeys[0], 0));
+      setSelectedKeyRef(virtualKeyStorageRef(rawVirtualKeys[0], 0));
     }
-  }, [selectedKeyRef, setSelectedKeyRef, virtualKeys]);
+  }, [selectedKeyRef, setSelectedKeyRef, rawVirtualKeys]);
 
   useEffect(() => {
     localStorage.setItem(storageKeys.apiKeyMode, apiKeyMode);
@@ -281,16 +317,18 @@ export function PlaygroundPage() {
     if (mcpServerCount === 0 && mcpEnabled) setMcpEnabled(false);
   }, [mcpEnabled, mcpServerCount]);
 
-  async function loadMcpTools() {
+  async function loadMcpTools(bearerToken: string) {
     let sessionId = await initializeMcpSession(
       derivedMcpBaseUrl,
       "agentgateway-ui-llm-playground",
       mcpSessionId,
+      bearerToken,
     );
     setMcpSessionId(sessionId);
     const response = await sendMcpJsonRpc({
       baseUrl: derivedMcpBaseUrl,
       sessionId,
+      bearerToken,
       body: {
         jsonrpc: "2.0",
         id: nextRpcId(),
@@ -344,7 +382,7 @@ export function PlaygroundPage() {
           { label: "Sending chat completion", state: "pending" },
           { label: "Waiting for model response", state: "pending" },
         ]);
-        const loaded = await loadMcpTools();
+        const loaded = await loadMcpTools(selectedKeyValue);
         availableMcpTools = loaded.tools;
         activeMcpSessionId = loaded.sessionId;
         if (availableMcpTools.length === 0) {
@@ -416,6 +454,7 @@ export function PlaygroundPage() {
           availableMcpTools,
           derivedMcpBaseUrl,
           activeMcpSessionId,
+          selectedKeyValue,
           setMcpSessionId,
         );
         const toolMessages: ChatMessage[] = executions.map((execution) => ({
@@ -513,21 +552,32 @@ export function PlaygroundPage() {
         title="LLM Playground"
         description="Send a real chat completion request through the configured gateway for setup debugging."
       />
+      {configDataLoading ? (
+        <StatusBanner state="loading" title="Loading LLM configuration" />
+      ) : configDataError ? (
+        <StatusBanner state="bad" title="Configuration API unavailable">
+          {configDataError.message}
+        </StatusBanner>
+      ) : null}
       {needsCors ? (
         <StatusBanner
           state="warn"
           title="Browser access is not allowed"
           action={
-            <button
-              className="button"
-              type="button"
-              disabled={updateConfig.isPending}
-              onClick={() =>
-                updateConfig.mutate((next) => applyPlaygroundCors(next, "llm"))
-              }
-            >
-              Apply CORS
-            </button>
+            hybrid && fileCorsOwned ? (
+              <Link className="button" to="/llm/policies" hash="cors">
+                Configure CORS
+              </Link>
+            ) : (
+              <button
+                className="button"
+                type="button"
+                disabled={corsSaving}
+                onClick={applyLlmCors}
+              >
+                Apply CORS
+              </button>
+            )
           }
         >
           Add {currentOrigin()} to the LLM CORS policy so this playground can
@@ -539,30 +589,44 @@ export function PlaygroundPage() {
           state="warn"
           title="MCP browser access is not allowed"
           action={
-            <button
-              className="button"
-              type="button"
-              disabled={updateConfig.isPending}
-              onClick={() =>
-                updateConfig.mutate((next) => applyPlaygroundCors(next, "mcp"))
-              }
-            >
-              Apply MCP CORS
-            </button>
+            hybrid && fileMcpCorsOwned ? (
+              <Link className="button" to="/mcp/policies" hash="cors">
+                Configure CORS
+              </Link>
+            ) : (
+              <button
+                className="button"
+                type="button"
+                disabled={corsSaving}
+                onClick={applyMcpCors}
+              >
+                Apply MCP CORS
+              </button>
+            )
           }
         >
           Add {currentOrigin()} to the MCP CORS policy so the playground can
           list and call MCP tools from the browser.
         </StatusBanner>
       ) : null}
-      {modelOptions.length === 0 ? (
+      {!configDataLoading && !configDataError && modelOptions.length === 0 ? (
         <StatusBanner state="warn" title="No configured models">
           Create a model before testing chat traffic.
+        </StatusBanner>
+      ) : null}
+      {claudeSubscriptionWarning(selectedModelConfig, providers) ? (
+        <StatusBanner state="warn" title="Claude subscription key detected">
+          {claudeSubscriptionWarning(selectedModelConfig, providers)}
         </StatusBanner>
       ) : null}
       {error ? (
         <StatusBanner state="bad" title="Playground request failed">
           {error}
+        </StatusBanner>
+      ) : null}
+      {corsSaveError ? (
+        <StatusBanner state="bad" title="CORS update failed">
+          {corsSaveError}
         </StatusBanner>
       ) : null}
       <section className="playground-shell">
@@ -580,15 +644,9 @@ export function PlaygroundPage() {
                   searchable
                   options={modelOptions.map((item) => ({
                     value: item.name,
-                    label:
-                      item.kind === "virtual" ? (
-                        <span className="select-option-copy">
-                          <strong>{item.name}</strong>
-                          <small>Virtual model</small>
-                        </span>
-                      ) : (
-                        item.name
-                      ),
+                    label: item.name,
+                    description:
+                      item.kind === "virtual" ? "Virtual model" : undefined,
                     icon: item.icon,
                     searchText: item.searchText,
                   }))}
@@ -624,12 +682,12 @@ export function PlaygroundPage() {
                 <Dropdown
                   ariaLabel="Virtual API key"
                   value={
-                    apiKeyMode === "saved" && virtualKeys.length > 0
+                    apiKeyMode === "saved" && rawVirtualKeys.length > 0
                       ? selectedKeyOptionRef
                       : "__raw__"
                   }
                   options={[
-                    ...virtualKeys.map((item, index) => ({
+                    ...rawVirtualKeys.map((item, index) => ({
                       value: virtualKeyStorageRef(item, index),
                       label: keyLabel(item),
                       icon: <KeyRound size={16} />,
@@ -650,7 +708,7 @@ export function PlaygroundPage() {
                   }}
                 />
               </FieldGroup>
-              {apiKeyMode === "raw" || virtualKeys.length === 0 ? (
+              {apiKeyMode === "raw" || rawVirtualKeys.length === 0 ? (
                 <Field label="Raw API key">
                   <input
                     value={apiKey}
@@ -801,10 +859,7 @@ function storedApiKeyMode(): "saved" | "raw" {
     : "saved";
 }
 
-function virtualKeyStorageRef(
-  key: { key: string; metadata?: unknown },
-  index: number,
-) {
+function virtualKeyStorageRef(key: { metadata?: unknown }, index: number) {
   const metadata =
     key.metadata &&
     typeof key.metadata === "object" &&
@@ -1087,8 +1142,8 @@ function extractToolCalls(response: unknown): ToolCall[] {
   return calls.filter((call): call is ToolCall =>
     Boolean(
       call &&
-      typeof call === "object" &&
-      typeof (call as { id?: unknown }).id === "string",
+        typeof call === "object" &&
+        typeof (call as { id?: unknown }).id === "string",
     ),
   );
 }
@@ -1140,6 +1195,7 @@ async function executeToolCalls(
   tools: PlaygroundTool[],
   baseUrl: string,
   sessionId: string,
+  bearerToken: string,
   setSessionId: (value: string) => void,
 ) {
   const executions: ToolExecution[] = [];
@@ -1149,6 +1205,7 @@ async function executeToolCalls(
       baseUrl,
       "agentgateway-ui-llm-playground",
       sessionId,
+      bearerToken,
     ));
   setSessionId(activeSessionId);
   for (const call of calls) {
@@ -1162,6 +1219,7 @@ async function executeToolCalls(
     const response = await sendMcpJsonRpc({
       baseUrl,
       sessionId: activeSessionId,
+      bearerToken,
       body: {
         jsonrpc: "2.0",
         id: nextRpcId(),

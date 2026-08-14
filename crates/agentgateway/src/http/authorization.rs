@@ -16,6 +16,12 @@ impl HTTPAuthorizationSet {
 	pub fn new(rs: RuleSets) -> Self {
 		Self(rs)
 	}
+	pub fn merge(self, other: Self) -> Self {
+		Self(self.0.merge(other.0))
+	}
+	pub fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
+		self.0.expressions()
+	}
 	pub fn apply(&self, req: &http::Request) -> anyhow::Result<()> {
 		tracing::debug!(info=?http::DebugExtensions(req), "Checking HTTP request");
 		let exec = cel::Executor::new_request(req);
@@ -45,7 +51,25 @@ impl crate::store::RequestPolicyTrait for HTTPAuthorizationSet {
 	}
 }
 
-#[derive(Clone, Debug)]
+impl crate::store::BackendPolicyTrait for HTTPAuthorizationSet {
+	async fn apply(
+		&self,
+		_client: &crate::proxy::httpproxy::PolicyClient,
+		_log: &mut Option<&mut crate::telemetry::log::RequestLog>,
+		req: &mut http::Request,
+	) -> Result<http::PolicyResponse, crate::proxy::ProxyResponse> {
+		self
+			.apply(req)
+			.map_err(|_| crate::proxy::ProxyResponse::from(ProxyError::AuthorizationFailed))?;
+		Ok(http::PolicyResponse::default())
+	}
+
+	fn expressions(&self) -> impl Iterator<Item = &cel::Expression> {
+		self.0.expressions()
+	}
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct NetworkAuthorizationSet(RuleSets);
 
 impl NetworkAuthorizationSet {
@@ -108,7 +132,9 @@ enum RuleSerde {
 enum RuleTypeSerde {
 	/// Allow the request when this CEL expression is true.
 	Allow(String),
-	/// Deny the request when this CEL expression is true.
+	/// Deny the request when this CEL expression is true. This mode is not
+	/// recommended because expression failures fail to deny; prefer `Allow` or
+	/// `Require`. If used, design expressions defensively against evaluation errors.
 	Deny(String),
 	/// Require this CEL expression to be true.
 	Require(String),
@@ -184,9 +210,7 @@ where
 	Ok(res)
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
 pub struct RuleSets(Vec<Arc<RuleSet>>);
 
 impl From<Vec<RuleSet>> for RuleSets {
@@ -198,6 +222,13 @@ impl From<Vec<RuleSet>> for RuleSets {
 impl RuleSets {
 	pub fn from_arcs(value: Vec<Arc<RuleSet>>) -> Self {
 		Self(value)
+	}
+
+	/// Combine two sets so both apply: a deny in either denies, all requires must
+	/// hold, and allow rules are OR'd across both.
+	pub fn merge(mut self, other: Self) -> Self {
+		self.0.extend(other.0);
+		self
 	}
 }
 

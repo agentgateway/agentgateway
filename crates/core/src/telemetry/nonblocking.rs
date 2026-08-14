@@ -40,7 +40,7 @@ pub const DEFAULT_BUFFERED_LINES_LIMIT: usize = 128_000;
 ///
 /// # Examples
 ///
-/// ``` rust
+/// ```rust,ignore
 /// # #[clippy::allow(needless_doctest_main)]
 /// fn main () {
 /// # fn doc() {

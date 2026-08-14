@@ -1,6 +1,6 @@
 import Ajv2020 from "ajv/dist/2020";
 import type { ErrorObject } from "ajv";
-import { publicAssetPath } from "./basePath";
+import configSchema from "../../schema/config.json";
 import type { GatewayConfig } from "./types";
 
 let validatorPromise: Promise<ReturnType<Ajv2020["compile"]>> | null = null;
@@ -25,21 +25,16 @@ export async function getGatewayConfigValidationErrors(
 }
 
 async function getValidator() {
-  validatorPromise ??= fetch(publicAssetPath("config-schema.json"))
-    .then((response) => {
-      if (!response.ok)
-        throw new Error(`Failed to load config schema: ${response.status}`);
-      return response.json() as Promise<object>;
-    })
-    .then((schema) => {
-      sanitizeEmptyEnums(schema);
-      const ajv = new Ajv2020({
-        allErrors: true,
-        validateFormats: false,
-        strict: false,
-      });
-      return ajv.compile(schema);
+  validatorPromise ??= Promise.resolve().then(() => {
+    const schema = structuredClone(configSchema);
+    sanitizeEmptyEnums(schema);
+    const ajv = new Ajv2020({
+      allErrors: true,
+      validateFormats: false,
+      strict: false,
     });
+    return ajv.compile(schema);
+  });
   return validatorPromise;
 }
 

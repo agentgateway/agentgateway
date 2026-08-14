@@ -1,7 +1,8 @@
 {{- if .Values.monitoring.enabled }}
-{{- if .Values.monitoring.serviceMonitor.enabled }}
+{{- if .Values.monitoring.proxy.podMonitor.enabled }}
+---
 apiVersion: monitoring.coreos.com/v1
-kind: ServiceMonitor
+kind: PodMonitor
 metadata:
   name: {{ include "agentgateway.fullname" . }}-proxy
   namespace: {{ .Release.Namespace }}
@@ -12,16 +13,23 @@ metadata:
     {{- end }}
 spec:
   selector:
-    matchLabels:
-      gateway.networking.k8s.io/gateway-class-name: agentgateway
+    matchExpressions:
+    - key: gateway.networking.k8s.io/gateway-class-name
+      operator: In
+      values:
+      {{- range .Values.monitoring.proxy.gatewayClassNames }}
+      - {{ . | quote }}
+      {{- end }}
   {{- with .Values.monitoring.proxy.namespaceSelector }}
   namespaceSelector:
     {{- toYaml . | nindent 4 }}
   {{- end }}
-  endpoints:
+  podMetricsEndpoints:
   - port: metrics
     path: /metrics
     interval: {{ .Values.monitoring.serviceMonitor.interval }}
+{{- end }}
+{{- if .Values.monitoring.serviceMonitor.enabled }}
 ---
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
@@ -46,9 +54,7 @@ spec:
     interval: {{ .Values.monitoring.serviceMonitor.interval }}
 {{- end }}
 {{- if .Values.monitoring.grafanaDashboard.enabled }}
-{{- if .Values.monitoring.serviceMonitor.enabled }}
 ---
-{{- end }}
 apiVersion: v1
 kind: ConfigMap
 metadata:

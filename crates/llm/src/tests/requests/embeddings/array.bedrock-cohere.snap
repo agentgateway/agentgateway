@@ -1,0 +1,26 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/embeddings/array.json
+info:
+  model: text-embedding-3-small
+  input:
+    - hello
+    - world
+---
+{
+  "request": {
+    "texts": [
+      "hello",
+      "world"
+    ],
+    "input_type": "search_query"
+  },
+  "parsed": {
+    "input_format": "Embeddings",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "text-embedding-3-small",
+    "provider": "bedrock",
+    "streaming": false,
+    "params": {}
+  }
+}

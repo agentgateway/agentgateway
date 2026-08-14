@@ -1,0 +1,27 @@
+{
+  "model": "anthropic.claude-3-sonnet",
+  "max_tokens": 100,
+  "temperature": 0.7,
+  "top_p": 0.8,
+  "top_k": 50,
+  "output_config": {
+    "effort": "high",
+    "format": {
+      "type": "json_schema",
+      "schema": {
+        "type": "object",
+        "properties": {
+          "answer": { "type": "number" }
+        },
+        "required": ["answer"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "messages": [
+    {
+      "role": "user",
+      "content": "What is 2+2?"
+    }
+  ]
+}

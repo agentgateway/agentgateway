@@ -3,10 +3,12 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
-use crate::http::auth::BackendAuth;
+use crate::http::auth::BackendAuthKind;
 use crate::http::jwt::Claims;
 use crate::llm::RequestType;
-use crate::llm::policy::{AnalyzeTextConfig, AzureContentSafety, DetectJailbreakConfig};
+use crate::llm::policy::{
+	AnalyzeTextConfig, AzureContentSafety, DetectJailbreakConfig, with_default_timeout,
+};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
@@ -194,7 +196,7 @@ fn resolve_host(root: &AzureContentSafety) -> agent_core::strng::Strng {
 fn build_policies(root: &AzureContentSafety) -> Vec<BackendTrafficPolicy> {
 	let mut pols = vec![
 		BackendTrafficPolicy::BackendTLS(crate::http::backendtls::SYSTEM_TRUST.clone()),
-		BackendTrafficPolicy::BackendAuth(BackendAuth::Azure(root.cached_azure_auth.clone())),
+		BackendTrafficPolicy::backend_auth(BackendAuthKind::Azure(root.cached_azure_auth.clone())),
 	];
 	pols.extend(root.policies.iter().cloned());
 	pols
@@ -240,12 +242,12 @@ async fn send_content_safety_request<Req: Serialize, Resp: serde::de::Deserializ
 			strng::literal!("_azure-content-safety"),
 			strng::literal!(""),
 		),
-		(),
+		None,
 	);
 
 	let resp = client
 		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
-		.call_with_explicit_policies_list(req, mock_be, pols)
+		.call_with_explicit_policies_list(with_default_timeout(req), mock_be, pols)
 		.await?;
 
 	let status = resp.status();

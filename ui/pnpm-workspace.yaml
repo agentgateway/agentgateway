@@ -1,0 +1,3 @@
+# Save new dependencies as =1.2.3, not pnpm's default ^1.2.3.
+# https://pnpm.io/settings/other#saveprefix
+savePrefix: '='

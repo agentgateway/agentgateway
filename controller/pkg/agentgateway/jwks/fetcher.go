@@ -14,17 +14,20 @@ import (
 	"time"
 
 	"github.com/go-jose/go-jose/v4"
+	"golang.org/x/sync/errgroup"
 	"istio.io/istio/pkg/util/sets"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
+	"github.com/agentgateway/agentgateway/controller/pkg/utils/ssrf"
 )
 
 const (
-	initialRetryDelay = 100 * time.Millisecond
-	maxRetryDelay     = 15 * time.Second
-	maxRetryShift     = 30
-	clientTimeout     = 10 * time.Second
+	initialRetryDelay    = 100 * time.Millisecond
+	maxRetryDelay        = 15 * time.Second
+	maxRetryShift        = 30
+	clientTimeout        = 10 * time.Second
+	maxConcurrentFetches = 10
 )
 
 type fetchAt struct {
@@ -138,9 +141,10 @@ func nextRetryDelay(retryAttempt int) time.Duration {
 
 func makeFetchClient(tlsConfig *tls.Config, proxyURL string, proxyTLSConfig *tls.Config) (*http.Client, error) {
 	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	dialContext := ssrf.SafeDialContext(dialer)
 	transport := &http.Transport{
 		TLSClientConfig:   tlsConfig,
-		DialContext:       dialer.DialContext,
+		DialContext:       dialContext,
 		DisableKeepAlives: true,
 	}
 	if proxyURL != "" {
@@ -155,7 +159,7 @@ func makeFetchClient(tlsConfig *tls.Config, proxyURL string, proxyTLSConfig *tls
 			httpProxy := *parsed
 			httpProxy.Scheme = "http"
 			transport.Proxy = http.ProxyURL(&httpProxy)
-			transport.DialContext = proxyTLSDialContext(dialer, proxyTLSConfig)
+			transport.DialContext = proxyTLSDialContext(dialContext, proxyTLSConfig)
 		} else {
 			transport.Proxy = http.ProxyURL(parsed)
 		}
@@ -169,9 +173,12 @@ func makeFetchClient(tlsConfig *tls.Config, proxyURL string, proxyTLSConfig *tls
 // proxyTLSDialContext returns a DialContext function that wraps TCP connections
 // in TLS using the given proxy TLS configuration. This is used when the tunnel
 // proxy backend has a TLS policy, so the CONNECT request is sent over TLS.
-func proxyTLSDialContext(dialer *net.Dialer, proxyTLSConfig *tls.Config) func(ctx context.Context, network, addr string) (net.Conn, error) {
+func proxyTLSDialContext(
+	dialContext func(context.Context, string, string) (net.Conn, error),
+	proxyTLSConfig *tls.Config,
+) func(ctx context.Context, network, addr string) (net.Conn, error) {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		conn, err := dialer.DialContext(ctx, network, addr)
+		conn, err := dialContext(ctx, network, addr)
 		if err != nil {
 			return nil, err
 		}
@@ -275,6 +282,16 @@ func (f *Fetcher) Run(ctx context.Context) {
 	}
 }
 
+type fetchResult struct {
+	requestKey   remotehttp.FetchKey
+	generation   uint64
+	ttl          time.Duration
+	keyset       Keyset
+	retryErr     error
+	retryDelay   time.Duration
+	retryAttempt int
+}
+
 func (f *Fetcher) maybeFetchJwks(ctx context.Context) {
 	now := time.Now()
 	due := f.popDue(now)
@@ -282,35 +299,83 @@ func (f *Fetcher) maybeFetchJwks(ctx context.Context) {
 		return
 	}
 
-	updates := sets.New[remotehttp.FetchKey]()
+	// Pre-validate all due fetches serially (fast map lookups under lock).
+	type validFetch struct {
+		fetch fetchAt
+		state fetchState
+	}
+	valid := make([]validFetch, 0, len(due))
 	for _, fetch := range due {
 		state, ok := f.lookup(fetch.RequestKey)
 		if !ok || state.generation != fetch.Generation {
 			continue
 		}
+		valid = append(valid, validFetch{fetch: fetch, state: state})
+	}
+	if len(valid) == 0 {
+		return
+	}
 
-		logger.Debug("fetching jwks", "request_key", fetch.RequestKey, "target", state.source.Target.URL)
+	// Fetch JWKS in parallel with bounded concurrency using errgroup.
+	results := make(chan fetchResult, len(valid))
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(maxConcurrentFetches)
 
-		requestURL, jwks, err := f.fetchJwks(ctx, state.source)
-		if err != nil {
-			next := nextRetryDelay(fetch.RetryAttempt)
-			logger.Error("error fetching jwks", "request_key", fetch.RequestKey, "target", state.source.Target.URL, "error", err, "retryAttempt", fetch.RetryAttempt, "next", next.String())
-			f.scheduleAt(fetch.RequestKey, state.generation, now.Add(next), fetch.RetryAttempt+1)
+	for _, vf := range valid {
+		g.Go(func() error {
+			logger.Debug("fetching jwks", "request_key", vf.fetch.RequestKey, "target", vf.state.source.Target.URL)
+
+			requestURL, jwks, err := f.fetchJwks(gctx, vf.state.source)
+			if err != nil {
+				retryDelay := nextRetryDelay(vf.fetch.RetryAttempt)
+				logger.Error("error fetching jwks", "request_key", vf.fetch.RequestKey, "target", vf.state.source.Target.URL, "error", err, "retry_attempt", vf.fetch.RetryAttempt, "next", retryDelay.String())
+				results <- fetchResult{
+					requestKey: vf.fetch.RequestKey, generation: vf.fetch.Generation,
+					retryErr: err, retryDelay: retryDelay, retryAttempt: vf.fetch.RetryAttempt,
+				}
+				return nil
+			}
+
+			keyset, err := buildKeyset(vf.fetch.RequestKey, requestURL, jwks)
+			if err != nil {
+				retryDelay := nextRetryDelay(vf.fetch.RetryAttempt)
+				logger.Error("error adding jwks", "request_key", vf.fetch.RequestKey, "jwks_uri", requestURL, "error", err)
+				results <- fetchResult{
+					requestKey: vf.fetch.RequestKey, generation: vf.fetch.Generation,
+					retryErr: err, retryDelay: retryDelay, retryAttempt: vf.fetch.RetryAttempt,
+				}
+				return nil
+			}
+
+			results <- fetchResult{
+				requestKey: vf.fetch.RequestKey, generation: vf.fetch.Generation,
+				ttl: vf.state.source.TTL, keyset: keyset,
+			}
+			return nil
+		})
+	}
+
+	go func() {
+		_ = g.Wait()
+		close(results)
+	}()
+
+	// Collect results and apply state transitions serially.
+	// On the success path, generation is re-checked atomically inside
+	// commitFetchResult (under f.mu) so stale results are discarded.
+	// On the error path, scheduleAt also checks generation under f.mu
+	// so that a concurrent AddOrUpdateKeyset supersedes the pending retry.
+	updates := sets.New[remotehttp.FetchKey]()
+	for r := range results {
+		if r.retryErr != nil {
+			f.scheduleAt(r.requestKey, r.generation, now.Add(r.retryDelay), r.retryAttempt+1)
 			continue
 		}
 
-		keyset, err := buildKeyset(fetch.RequestKey, requestURL, jwks)
-		if err != nil {
-			logger.Error("error adding jwks", "request_key", fetch.RequestKey, "jwks_uri", requestURL, "error", err)
-			next := nextRetryDelay(fetch.RetryAttempt)
-			f.scheduleAt(fetch.RequestKey, state.generation, now.Add(next), fetch.RetryAttempt+1)
+		if !f.commitFetchResult(r.requestKey, r.generation, r.keyset, now.Add(r.ttl)) {
 			continue
 		}
-
-		if !f.commitFetchResult(fetch.RequestKey, fetch.Generation, keyset, now.Add(state.source.TTL)) {
-			continue
-		}
-		updates.Insert(fetch.RequestKey)
+		updates.Insert(r.requestKey)
 	}
 
 	if updates.IsEmpty() {
@@ -520,7 +585,8 @@ func (f *Fetcher) scheduleAt(requestKey remotehttp.FetchKey, generation uint64, 
 }
 
 func (f *Fetcher) scheduleAtLocked(requestKey remotehttp.FetchKey, generation uint64, at time.Time, retryAttempt int) {
-	if _, ok := f.requests[requestKey]; !ok {
+	state, ok := f.requests[requestKey]
+	if !ok || state.generation != generation {
 		return
 	}
 

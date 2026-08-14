@@ -79,6 +79,7 @@ spec:
             port: 443
           jwksPath: /.well-known/jwks.json
   mcp:
+    prefixMode: Never
     targets:
     - name: everything
       static:

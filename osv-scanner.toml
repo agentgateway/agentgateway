@@ -1,0 +1,4 @@
+[[IgnoredVulns]]
+id = "RUSTSEC-2026-0189"
+ignoreUntil = 2027-01-20
+reason = "rmcp 0.10.0 is used only by legacy SSE tests; the affected Streamable HTTP server transport is neither exercised nor shipped"

@@ -26,6 +26,64 @@ fn eval_request(expr: &str, req: crate::http::Request) -> Result<Value, Error> {
 }
 
 #[test]
+fn custom_functions_eval_and_register_from_config() {
+	let config = crate::config::parse_config(
+		r#"
+config:
+  customFunctions: |
+    agwCustomHi() { "hi" }
+    agwCustomAdd(a, b) { a + b }
+    this.agwCustomMix(a, rest...) { this + a + rest[0] + rest[1] }
+    agwCustomIsGet() { request.method == "GET" }
+    agwCustomNestedIsGet() { agwCustomIsGet() }
+    agwCustomFromConfig(name) { "hello " + name }
+"#
+		.to_string(),
+		None,
+	);
+	if let Err(err) = config {
+		assert!(
+			err
+				.to_string()
+				.contains("custom CEL functions must be registered before CEL is used"),
+			"unexpected custom function registration error: {err}"
+		);
+		return;
+	}
+
+	assert_eq!(eval("agwCustomHi()").unwrap(), json!("hi"));
+	assert_eq!(eval("agwCustomAdd(2, 3)").unwrap(), json!(5));
+	assert_eq!(
+		eval(r#""a".agwCustomMix("b", "c", "d")"#).unwrap(),
+		json!("abcd")
+	);
+
+	let exp = Expression::new_strict("agwCustomNestedIsGet()").unwrap();
+	let mut cb = ContextBuilder::new();
+	cb.register_expression(&exp);
+	let mut req = ::http::Request::builder()
+		.method(Method::GET)
+		.body(Body::empty())
+		.unwrap();
+	assert!(cb.maybe_snapshot_request(&mut req, false).is_some());
+
+	let exec = Executor::new_request(&req);
+	assert_eq!(exec.eval(&exp).unwrap().json().unwrap(), json!(true));
+
+	assert_eq!(
+		eval(r#"agwCustomFromConfig("world")"#).unwrap(),
+		json!("hello world")
+	);
+
+	let err = register_custom_functions("agwCustomTooLate() { true }").unwrap_err();
+	assert!(
+		err
+			.to_string()
+			.contains("custom CEL functions must be registered before CEL is used")
+	);
+}
+
+#[test]
 fn test_permissive() {
 	let exec_serde = full_example_executor();
 	let exec = exec_serde.as_executor();
@@ -82,6 +140,9 @@ async fn log_only_request_body_records_without_buffering() {
 		.uri("http://example.com")
 		.body(Body::from("hello"))
 		.unwrap();
+	req
+		.extensions_mut()
+		.insert(crate::http::BufferLimit::new(5));
 
 	cb.maybe_buffer_request_body(&mut req).await;
 
@@ -115,6 +176,9 @@ async fn request_body_expression_buffers_before_log() {
 		.uri("http://example.com")
 		.body(Body::from("hello"))
 		.unwrap();
+	req
+		.extensions_mut()
+		.insert(crate::http::BufferLimit::new(5));
 
 	cb.maybe_buffer_request_body(&mut req).await;
 
@@ -130,6 +194,53 @@ async fn request_body_expression_buffers_before_log() {
 		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
 		bytes::Bytes::from_static(b"hello")
 	);
+}
+
+#[tokio::test]
+async fn request_body_expression_fails_when_body_exceeds_buffer_limit() {
+	let exp = Expression::new_strict("request.body").unwrap();
+	let mut cb = ContextBuilder::new();
+	cb.register_expression(&exp);
+	let mut req = ::http::Request::builder()
+		.method(Method::POST)
+		.uri("http://example.com")
+		.body(Body::from("hello"))
+		.unwrap();
+	req
+		.extensions_mut()
+		.insert(crate::http::BufferLimit::new(4));
+
+	cb.maybe_buffer_request_body(&mut req).await;
+
+	let buffered = req.extensions().get::<BufferedBody>().unwrap();
+	assert!(buffered.bytes().is_none());
+	assert!(Executor::new_request(&req).eval(&exp).is_err());
+	let sent = req.into_body().collect().await.unwrap().to_bytes();
+	assert_eq!(sent, bytes::Bytes::from_static(b"hello"));
+}
+
+#[tokio::test]
+async fn request_body_prefix_is_available_when_body_exceeds_buffer_limit() {
+	let exp = Expression::new_strict("request.bodyPrefix").unwrap();
+	let mut cb = ContextBuilder::new();
+	cb.register_expression(&exp);
+	let mut req = ::http::Request::builder()
+		.method(Method::POST)
+		.uri("http://example.com")
+		.body(Body::from("hello"))
+		.unwrap();
+	req
+		.extensions_mut()
+		.insert(crate::http::BufferLimit::new(4));
+
+	cb.maybe_buffer_request_body(&mut req).await;
+
+	assert_eq!(
+		helpers::value_as_byte_or_json(Executor::new_request(&req).eval(&exp).unwrap()).unwrap(),
+		bytes::Bytes::from_static(b"hell")
+	);
+	let sent = req.into_body().collect().await.unwrap().to_bytes();
+	assert_eq!(sent, bytes::Bytes::from_static(b"hello"));
 }
 
 #[tokio::test]
@@ -161,6 +272,39 @@ async fn log_only_response_body_records_without_buffering() {
 	assert_eq!(
 		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
 		bytes::Bytes::from_static(b"world")
+	);
+}
+
+#[tokio::test]
+async fn log_only_response_body_prefix_records_up_to_buffer_limit() {
+	let exp = Expression::new_strict("response.bodyPrefix").unwrap();
+	let mut cb = ContextBuilder::new();
+	cb.register_log_expression(&exp);
+	let mut resp = ::http::Response::builder()
+		.status(200)
+		.body(Body::from("world"))
+		.unwrap();
+	resp
+		.extensions_mut()
+		.insert(crate::http::BufferLimit::new(4));
+
+	cb.maybe_buffer_response_body(&mut resp).await;
+
+	assert!(resp.extensions().get::<BufferedBody>().is_none());
+	let snapshot = cb.maybe_snapshot_response(&mut resp).unwrap();
+	let body = std::mem::replace(resp.body_mut(), Body::empty());
+	let sent = body.collect().await.unwrap().to_bytes();
+	assert_eq!(sent, bytes::Bytes::from_static(b"world"));
+
+	let exec = Executor::new_logger(None, Some(&snapshot), None, None, None, None);
+	assert_eq!(
+		helpers::value_as_byte_or_json(exec.eval(&exp).unwrap()).unwrap(),
+		bytes::Bytes::from_static(b"worl")
+	);
+	assert!(
+		exec
+			.eval(&Expression::new_strict("response.body").unwrap())
+			.is_err()
 	);
 }
 

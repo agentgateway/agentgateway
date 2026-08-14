@@ -1,11 +1,12 @@
 import { Link, useLocation } from "@tanstack/react-router";
-import { Pencil, Plus, Route as RouteIcon, Save, Trash2 } from "lucide-react";
+import { Pencil, Plus, Route as RouteIcon, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   EnumSelector,
   type EnumSelectorOption,
 } from "../components/EnumSelector";
 import {
+  ConfirmDialog,
   Drawer,
   Dropdown,
   EmptyState,
@@ -17,7 +18,15 @@ import {
   Tooltip,
   YamlBlock,
 } from "../components/Primitives";
-import { useConfigDumpMode, useGatewayConfig, useUpdateConfig } from "../hooks";
+import { ConfigDiffSaveActions } from "../components/ConfigDiffDrawer";
+import { isDatabaseConfigResource } from "../config";
+import {
+  useConfigDumpMode,
+  useDeleteConfigResource,
+  useTrafficConfigData,
+  useUpdateConfig,
+  useUpsertConfigResource,
+} from "../hooks";
 import { useSchemaHelp, type SchemaHelp } from "../schemaHelp";
 import {
   backendSummary,
@@ -27,16 +36,22 @@ import {
   routeContexts,
   routeDisplayName,
   trafficStats,
+  type RouteContext,
   type RouteKind,
 } from "../traffic";
 import type {
+  GatewayConfig,
   TrafficListener,
   TrafficRoute,
   TrafficRouteBackend,
   TrafficTcpRoute,
   TrafficTcpRouteBackend,
 } from "../types";
-import type { RouteMatch as GeneratedRouteMatch } from "../gateway-config";
+import type {
+  LocalAttachedRoute,
+  LocalAttachedTCPRoute,
+  RouteMatch as GeneratedRouteMatch,
+} from "../gateway-config";
 import {
   ReadonlyModeBanner,
   TrafficDumpRoutesView,
@@ -47,6 +62,13 @@ const pathTypes = ["pathPrefix", "exact", "regex"] as const;
 type HttpMatch = NonNullable<TrafficRoute["matches"]>[number];
 type HeaderMatch = NonNullable<HttpMatch["headers"]>[number];
 type QueryMatch = NonNullable<HttpMatch["query"]>[number];
+type LocalAttachedGatewayRoute = LocalAttachedRoute | LocalAttachedTCPRoute;
+type GatewayRouteRow = {
+  kind: RouteKind;
+  route: LocalAttachedGatewayRoute;
+  routeIndex?: number;
+  resourceId?: string;
+};
 
 export function TrafficRoutesPage() {
   const mode = useConfigDumpMode();
@@ -83,9 +105,17 @@ export function TrafficRoutesPage() {
 
 function TrafficRoutesEditorPage() {
   const location = useLocation();
-  const config = useGatewayConfig();
+  const traffic = useTrafficConfigData();
+  const config = {
+    ...traffic.config,
+    data: traffic.data,
+    isLoading: traffic.isLoading,
+    isError: Boolean(traffic.error),
+    error: traffic.error,
+  };
   const update = useUpdateConfig();
   const help = useSchemaHelp();
+  const hasLegacyBinds = Boolean(config.data?.binds?.length);
   const routes = useMemo(() => routeContexts(config.data), [config.data]);
   const listeners = useMemo(
     () =>
@@ -107,6 +137,7 @@ function TrafficRoutesEditorPage() {
     routeIndex?: number;
     route: TrafficRoute | TrafficTcpRoute;
   } | null>(null);
+  const [deletingRoute, setDeletingRoute] = useState<RouteContext | null>(null);
   const [openedSearchListener, setOpenedSearchListener] = useState<
     string | null
   >(null);
@@ -185,28 +216,33 @@ function TrafficRoutesEditorPage() {
     writeTrafficRouteSearch(null, "replace");
   }
 
+  if (!config.isLoading && !config.isError && !hasLegacyBinds) {
+    return <GatewayRoutesEditorPage />;
+  }
+
   return (
     <div className="page-stack">
       <PageHeader
         title="Traffic Routes"
         description="Match incoming HTTP and TCP traffic and attach inline backends."
         actions={
-          <button
-            className="button primary"
-            type="button"
-            disabled={!listeners.length}
-            onClick={() => {
-              const first = listeners[0];
-              openAddRoute(
-                first.bindIndex,
-                first.listenerIndex,
-                first.listener,
-              );
-            }}
-          >
-            <Plus size={16} />
-            Add route
-          </button>
+          listeners.length ? (
+            <button
+              className="button primary"
+              type="button"
+              onClick={() => {
+                const first = listeners[0];
+                openAddRoute(
+                  first.bindIndex,
+                  first.listenerIndex,
+                  first.listener,
+                );
+              }}
+            >
+              <Plus size={16} />
+              Add route
+            </button>
+          ) : undefined
         }
       />
 
@@ -232,30 +268,40 @@ function TrafficRoutesEditorPage() {
           <StatusBanner state="loading" title="Loading traffic routes" />
         ) : config.isError ? (
           <StatusBanner state="bad" title="Configuration API unavailable">
-            {config.error.message}
+            {config.error?.message}
           </StatusBanner>
         ) : !routes.length ? (
           <EmptyState
             title="No traffic routes configured"
-            description="Add a route under an HTTP or TCP listener."
+            description={
+              hasLegacyBinds
+                ? "Add a route under an HTTP or TCP listener."
+                : "Use traffic gateways for new HTTP routing configuration."
+            }
             action={
-              <button
-                className="button primary"
-                type="button"
-                disabled={!listeners.length}
-                onClick={() => {
-                  const first = listeners[0];
-                  if (!first) return;
-                  openAddRoute(
-                    first.bindIndex,
-                    first.listenerIndex,
-                    first.listener,
-                  );
-                }}
-              >
-                <RouteIcon size={16} />
-                Add route
-              </button>
+              hasLegacyBinds ? (
+                <button
+                  className="button primary"
+                  type="button"
+                  onClick={() => {
+                    const first = listeners[0];
+                    if (!first) return;
+                    openAddRoute(
+                      first.bindIndex,
+                      first.listenerIndex,
+                      first.listener,
+                    );
+                  }}
+                >
+                  <RouteIcon size={16} />
+                  Add route
+                </button>
+              ) : (
+                <Link className="button primary" to="/traffic/gateways">
+                  <RouteIcon size={16} />
+                  Manage gateways
+                </Link>
+              )
             }
           />
         ) : (
@@ -285,7 +331,7 @@ function TrafficRoutesEditorPage() {
                         {context.kind.toUpperCase()}
                       </span>
                     </td>
-                    <td>{context.bind.port}</td>
+                    <td>{context.bind.port ?? "*"}</td>
                     <td>
                       <Link
                         className="table-link"
@@ -302,7 +348,7 @@ function TrafficRoutesEditorPage() {
                     </td>
                     <td>
                       {context.kind === "http"
-                        ? pathSummary(context.route)
+                        ? httpPathSummary(context.route)
                         : "TCP"}
                     </td>
                     <td>{backendListSummary(context.route.backends)}</td>
@@ -322,17 +368,8 @@ function TrafficRoutesEditorPage() {
                           className="icon-button danger"
                           type="button"
                           aria-label="Delete route"
-                          onClick={() =>
-                            update.mutate((next) => {
-                              const listener =
-                                next.binds?.[context.bindIndex]?.listeners?.[
-                                  context.listenerIndex
-                                ];
-                              if (!listener) return;
-                              const routes = routeArray(listener, context.kind);
-                              routes.splice(context.routeIndex, 1);
-                            })
-                          }
+                          disabled={update.isPending}
+                          onClick={() => setDeletingRoute(context)}
                         >
                           <Trash2 size={16} />
                         </button>
@@ -348,6 +385,7 @@ function TrafficRoutesEditorPage() {
 
       {editing ? (
         <RouteEditor
+          config={config.data}
           listeners={listeners}
           editing={editing}
           help={help}
@@ -371,13 +409,567 @@ function TrafficRoutesEditorPage() {
           }
         />
       ) : null}
+      {deletingRoute ? (
+        <ConfirmDialog
+          title="Delete route?"
+          destructive
+          confirmLabel="Delete route"
+          confirmDisabled={update.isPending}
+          onCancel={() => setDeletingRoute(null)}
+          onConfirm={() =>
+            update.mutate(
+              (next) => {
+                const listener =
+                  next.binds?.[deletingRoute.bindIndex]?.listeners?.[
+                    deletingRoute.listenerIndex
+                  ];
+                if (!listener) return;
+                const routes = routeArray(listener, deletingRoute.kind);
+                routes.splice(deletingRoute.routeIndex, 1);
+              },
+              { onSuccess: () => setDeletingRoute(null) },
+            )
+          }
+        >
+          <p>
+            Delete{" "}
+            <strong>
+              {routeDisplayName(deletingRoute.route, deletingRoute.routeIndex)}
+            </strong>
+            ? Traffic matching this route will no longer reach its backends.
+          </p>
+        </ConfirmDialog>
+      ) : null}
     </div>
   );
 }
 
+function GatewayRoutesEditorPage() {
+  const traffic = useTrafficConfigData();
+  const config = {
+    ...traffic.config,
+    data: traffic.data,
+    isLoading: traffic.isLoading,
+    isError: Boolean(traffic.error),
+    error: traffic.error,
+  };
+  const upsertResource = useUpsertConfigResource();
+  const deleteResource = useDeleteConfigResource();
+  const help = useSchemaHelp();
+  const routes: GatewayRouteRow[] = [
+    ...(config.data?.routes ?? []).map((route, routeIndex) => {
+      const database = traffic.resources?.find(
+        (resource) =>
+          resource.kind === "traffic.route" && resource.id === route.name,
+      );
+      return {
+        kind: "http" as const,
+        route,
+        routeIndex,
+        resourceId: database?.id ?? route.name ?? undefined,
+      };
+    }),
+    ...(config.data?.tcpRoutes ?? []).map((route, routeIndex) => {
+      const database = traffic.resources?.find(
+        (resource) =>
+          resource.kind === "traffic.tcpRoute" && resource.id === route.name,
+      );
+      return {
+        kind: "tcp" as const,
+        route,
+        routeIndex,
+        resourceId: database?.id ?? route.name ?? undefined,
+      };
+    }),
+  ];
+  const httpGatewayOptions = gatewayReferenceOptions(config.data, "http");
+  const tcpGatewayOptions = gatewayReferenceOptions(config.data, "tcp");
+  const hasGatewayOptions = Boolean(
+    httpGatewayOptions.length || tcpGatewayOptions.length,
+  );
+  const [editing, setEditing] = useState<{
+    kind: RouteKind;
+    routeIndex?: number;
+    resourceId?: string;
+    route: LocalAttachedGatewayRoute;
+  } | null>(null);
+  const saveError =
+    upsertResource.error?.message ?? deleteResource.error?.message ?? null;
+  const saved = upsertResource.isSuccess || deleteResource.isSuccess;
+
+  function openAddRoute(kind: RouteKind) {
+    const gatewayOptions =
+      kind === "http" ? httpGatewayOptions : tcpGatewayOptions;
+    setEditing({
+      kind,
+      route: {
+        gateways: gatewayOptions[0]?.value,
+        ...(makeRoute(kind) as LocalAttachedGatewayRoute),
+      },
+    });
+  }
+
+  function closeEditor() {
+    setEditing(null);
+  }
+
+  function databaseRoute(kind: RouteKind, resourceId: string | undefined) {
+    return Boolean(
+      resourceId &&
+        isDatabaseConfigResource(
+          traffic.resources,
+          kind === "http" ? "traffic.route" : "traffic.tcpRoute",
+          resourceId,
+        ),
+    );
+  }
+
+  return (
+    <div className="page-stack">
+      <PageHeader
+        title="Traffic Routes"
+        description="Attach HTTP and TCP routes to traffic gateways."
+        actions={
+          <button
+            className="button primary"
+            type="button"
+            disabled={!hasGatewayOptions}
+            onClick={() =>
+              openAddRoute(httpGatewayOptions.length ? "http" : "tcp")
+            }
+          >
+            <Plus size={16} />
+            Add route
+          </button>
+        }
+      />
+
+      {saveError ? (
+        <StatusBanner state="bad" title="Save failed">
+          {saveError}
+        </StatusBanner>
+      ) : null}
+      {saved ? <StatusBanner state="ok" title="Configuration saved" /> : null}
+
+      <Panel>
+        {config.isLoading ? (
+          <StatusBanner state="loading" title="Loading traffic routes" />
+        ) : config.isError ? (
+          <StatusBanner state="bad" title="Configuration API unavailable">
+            {config.error?.message}
+          </StatusBanner>
+        ) : !hasGatewayOptions ? (
+          <EmptyState
+            title="No traffic gateways configured"
+            description="Add a gateway before attaching routes."
+            action={
+              <Link className="button primary" to="/traffic/gateways">
+                <RouteIcon size={16} />
+                Manage gateways
+              </Link>
+            }
+          />
+        ) : !routes.length ? (
+          <EmptyState
+            title="No traffic routes configured"
+            description="Attach a route to a gateway."
+            action={
+              <button
+                className="button primary"
+                type="button"
+                onClick={() =>
+                  openAddRoute(httpGatewayOptions.length ? "http" : "tcp")
+                }
+              >
+                <RouteIcon size={16} />
+                Add route
+              </button>
+            }
+          />
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Kind</th>
+                  <th>Gateway</th>
+                  <th>Match</th>
+                  <th>Backends</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {routes.map(({ kind, route, routeIndex, resourceId }) => (
+                  <tr key={`${kind}-${resourceId ?? routeIndex}`}>
+                    <td className="strong">
+                      {routeDisplayName(route, routeIndex ?? 0)}
+                    </td>
+                    <td>
+                      <span className="badge">{kind.toUpperCase()}</span>
+                    </td>
+                    <td>
+                      {effectiveGatewayRouteRef(route, config.data, kind) ||
+                        "Unassigned"}
+                    </td>
+                    <td>{kind === "http" ? httpPathSummary(route) : "TCP"}</td>
+                    <td>{backendListSummary(route.backends)}</td>
+                    <td className="row-actions">
+                      <Tooltip
+                        content={
+                          resourceId
+                            ? "Edit route"
+                            : "Unnamed routes must be edited in raw configuration"
+                        }
+                      >
+                        <button
+                          className="icon-button"
+                          type="button"
+                          aria-label="Edit route"
+                          disabled={!resourceId}
+                          onClick={() =>
+                            setEditing({
+                              kind,
+                              routeIndex,
+                              resourceId,
+                              route: structuredClone(route),
+                            })
+                          }
+                        >
+                          <Pencil size={16} />
+                        </button>
+                      </Tooltip>
+                      <Tooltip
+                        content={
+                          !resourceId
+                            ? "Unnamed routes must be deleted in raw configuration"
+                            : traffic.hybrid && !databaseRoute(kind, resourceId)
+                              ? "File-owned routes cannot be deleted here"
+                              : "Delete route"
+                        }
+                      >
+                        <button
+                          className="icon-button danger"
+                          type="button"
+                          aria-label="Delete route"
+                          disabled={
+                            !resourceId ||
+                            (traffic.hybrid && !databaseRoute(kind, resourceId))
+                          }
+                          onClick={() => {
+                            if (!resourceId) return;
+                            deleteResource.mutate({
+                              kind:
+                                kind === "http"
+                                  ? "traffic.route"
+                                  : "traffic.tcpRoute",
+                              id: resourceId,
+                            });
+                          }}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </Tooltip>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+
+      {editing ? (
+        <GatewayRouteEditor
+          config={config.data}
+          editing={editing}
+          help={help}
+          saving={upsertResource.isPending || deleteResource.isPending}
+          onCancel={closeEditor}
+          databaseBacked={
+            traffic.hybrid &&
+            (!editing.resourceId ||
+              databaseRoute(editing.kind, editing.resourceId))
+          }
+          onSave={(nextEditing) => {
+            const name = nextEditing.route.name?.trim();
+            if (!name) return;
+            if (nextEditing.kind === "http") {
+              const { name: _name, ...route } =
+                nextEditing.route as LocalAttachedRoute;
+              upsertResource.mutate(
+                {
+                  kind: "traffic.route",
+                  value: {
+                    ...route,
+                    name,
+                  },
+                  previousId: nextEditing.resourceId,
+                },
+                { onSuccess: closeEditor },
+              );
+            } else {
+              const { name: _name, ...route } =
+                nextEditing.route as LocalAttachedTCPRoute;
+              upsertResource.mutate(
+                {
+                  kind: "traffic.tcpRoute",
+                  value: {
+                    ...route,
+                    name,
+                  },
+                  previousId: nextEditing.resourceId,
+                },
+                { onSuccess: closeEditor },
+              );
+            }
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function GatewayRouteEditor(props: {
+  config?: GatewayConfig;
+  editing: {
+    kind: RouteKind;
+    routeIndex?: number;
+    resourceId?: string;
+    route: LocalAttachedGatewayRoute;
+  };
+  help: SchemaHelp;
+  saving: boolean;
+  databaseBacked?: boolean;
+  onCancel: () => void;
+  onSave: (editing: {
+    kind: RouteKind;
+    routeIndex?: number;
+    resourceId?: string;
+    route: LocalAttachedGatewayRoute;
+  }) => void;
+}) {
+  const [kind, setKind] = useState<RouteKind>(props.editing.kind);
+  const [route, setRoute] = useState<LocalAttachedGatewayRoute>(
+    props.editing.route,
+  );
+  const gatewayOptions = gatewayReferenceOptions(props.config, kind);
+  const [gateway, setGateway] = useState(
+    effectiveGatewayRouteRef(props.editing.route, props.config, kind),
+  );
+  const [error, setError] = useState<string | null>(null);
+  const preview = cleanGatewayRoute(
+    {
+      ...route,
+      gateways: implicitDefaultRouteGateway(route, props.config, gateway, kind)
+        ? undefined
+        : gateway,
+    } as LocalAttachedGatewayRoute,
+    kind,
+  );
+
+  function save() {
+    if (!route.name?.trim()) {
+      setError("Enter a route name.");
+      return;
+    }
+    if (!gateway) {
+      setError("Select a gateway.");
+      return;
+    }
+    props.onSave({
+      kind,
+      routeIndex: props.editing.routeIndex,
+      resourceId: props.editing.resourceId,
+      route: preview,
+    });
+  }
+
+  return (
+    <Drawer
+      title={
+        props.editing.resourceId || typeof props.editing.routeIndex === "number"
+          ? "Edit route"
+          : "Add route"
+      }
+      onClose={props.onCancel}
+      footer={
+        <ConfigDiffSaveActions
+          config={props.config}
+          resourceDiff={
+            props.databaseBacked
+              ? {
+                  original: props.editing.resourceId ? props.editing.route : {},
+                  modified: preview,
+                }
+              : undefined
+          }
+          diffTitle="Route config diff"
+          saveLabel="Save route"
+          saving={props.saving}
+          saveDisabled={!route.name?.trim()}
+          onCancel={props.onCancel}
+          onSave={save}
+          beforeDiff={() => {
+            if (!route.name?.trim()) {
+              setError("Enter a route name.");
+              return false;
+            }
+            if (!gateway) {
+              setError("Select a gateway.");
+              return false;
+            }
+            return true;
+          }}
+          applyDiff={(next) => {
+            if (kind === "http") {
+              if (!Array.isArray(next.routes)) next.routes = [];
+              if (typeof props.editing.routeIndex === "number") {
+                next.routes[props.editing.routeIndex] =
+                  preview as LocalAttachedRoute;
+              } else {
+                next.routes.push(preview as LocalAttachedRoute);
+              }
+            } else {
+              if (!Array.isArray(next.tcpRoutes)) next.tcpRoutes = [];
+              if (typeof props.editing.routeIndex === "number") {
+                next.tcpRoutes[props.editing.routeIndex] =
+                  preview as LocalAttachedTCPRoute;
+              } else {
+                next.tcpRoutes.push(preview as LocalAttachedTCPRoute);
+              }
+            }
+          }}
+        />
+      }
+    >
+      {error ? <StatusBanner state="bad" title={error} /> : null}
+      <div className="route-editor-stack">
+        {!props.editing.resourceId &&
+        typeof props.editing.routeIndex !== "number" ? (
+          <FieldGroup label="Kind" tooltip="Route protocol family.">
+            <EnumSelector
+              ariaLabel="Route kind"
+              value={kind}
+              options={[
+                { value: "http", label: "HTTP" },
+                { value: "tcp", label: "TCP" },
+              ]}
+              onChange={(value) => {
+                const nextKind = value as RouteKind;
+                const nextOptions = gatewayReferenceOptions(
+                  props.config,
+                  nextKind,
+                );
+                setKind(nextKind);
+                setGateway(nextOptions[0]?.value ?? "");
+                setRoute(makeRoute(nextKind) as LocalAttachedGatewayRoute);
+                if (error) setError(null);
+              }}
+            />
+          </FieldGroup>
+        ) : null}
+        <FieldGroup
+          label="Gateway"
+          tooltip="Gateway or gateway listener that owns this route."
+        >
+          <Dropdown
+            ariaLabel="Gateway"
+            value={gateway}
+            options={gatewayOptions}
+            onChange={(value) => {
+              setGateway(value);
+              if (error) setError(null);
+            }}
+          />
+        </FieldGroup>
+
+        <div className="form-grid">
+          <Field
+            label="Name"
+            tooltip={
+              kind === "http"
+                ? props.help.field<TrafficRoute>("LocalRoute", "name")
+                : props.help.field<TrafficTcpRoute>("LocalTCPRoute", "name")
+            }
+          >
+            <input
+              value={route.name ?? ""}
+              onChange={(event) =>
+                setRoute({ ...route, name: event.target.value })
+              }
+              placeholder="api"
+            />
+          </Field>
+          <Field
+            label="Hostnames"
+            tooltip={
+              kind === "http"
+                ? props.help.field<TrafficRoute>(
+                    "LocalRoute",
+                    "hostnames",
+                    "Comma-separated hostnames. Wildcards are allowed.",
+                  )
+                : props.help.field<TrafficTcpRoute>(
+                    "LocalTCPRoute",
+                    "hostnames",
+                    "Comma-separated hostnames. Wildcards are allowed.",
+                  )
+            }
+          >
+            <input
+              value={(route.hostnames ?? []).join(", ")}
+              onChange={(event) =>
+                setRoute({ ...route, hostnames: splitList(event.target.value) })
+              }
+              placeholder="example.com, *.example.com"
+            />
+          </Field>
+        </div>
+
+        {kind === "http" ? (
+          <HttpMatchEditor
+            route={route as TrafficRoute}
+            help={props.help}
+            onChange={(nextRoute) => setRoute({ ...route, ...nextRoute })}
+          />
+        ) : null}
+
+        <RouteBackendsEditor
+          kind={kind}
+          help={props.help}
+          backends={
+            (route.backends ?? []) as Array<
+              TrafficRouteBackend | TrafficTcpRouteBackend
+            >
+          }
+          onChange={(backends) =>
+            setRoute({ ...route, backends: backends as never })
+          }
+        />
+
+        <TrafficPolicySection
+          title="Route policies"
+          schemaRoot={kind === "http" ? "FilterOrPolicy" : "TCPFilterOrPolicy"}
+          policies={
+            route.policies as Record<string, unknown> | null | undefined
+          }
+          onChange={(policies) => setRoute({ ...route, policies })}
+        />
+
+        <details open>
+          <summary>Resulting YAML</summary>
+          <YamlBlock value={preview} />
+        </details>
+      </div>
+    </Drawer>
+  );
+}
+
 function RouteEditor(props: {
+  config?: GatewayConfig;
   listeners: Array<{
-    bind: { port: number };
+    bind: { port?: number | null };
     bindIndex: number;
     listener: TrafficListener;
     listenerIndex: number;
@@ -408,6 +1000,8 @@ function RouteEditor(props: {
     props.editing.route,
   );
   const [error, setError] = useState<string | null>(null);
+  const draft = JSON.stringify({ listenerKey, kind, route });
+  const [initialDraft] = useState(() => draft);
   const selectedListener = props.listeners.find(
     (item) => `${item.bindIndex}:${item.listenerIndex}` === listenerKey,
   );
@@ -439,22 +1033,39 @@ function RouteEditor(props: {
           : "Add route"
       }
       onClose={props.onCancel}
-      footer={
-        <div className="button-row">
-          <button className="button" type="button" onClick={props.onCancel}>
-            Cancel
-          </button>
-          <button
-            className="button primary"
-            type="button"
-            disabled={props.saving}
-            onClick={save}
-          >
-            <Save size={16} />
-            Save route
-          </button>
-        </div>
-      }
+      dirty={draft !== initialDraft}
+      saving={props.saving}
+      footer={(requestClose) => (
+        <ConfigDiffSaveActions
+          config={props.config}
+          diffTitle="Route config diff"
+          saveLabel="Save route"
+          saving={props.saving}
+          onCancel={requestClose}
+          onSave={save}
+          beforeDiff={() => {
+            if (!selectedListener) {
+              setError("Select a listener.");
+              return false;
+            }
+            return true;
+          }}
+          applyDiff={(next) => {
+            const [bindIndex, listenerIndex] = listenerKey
+              .split(":")
+              .map(Number);
+            const listener =
+              next.binds?.[bindIndex]?.listeners?.[listenerIndex];
+            if (!listener) return;
+            const routes = routeArray(listener, effectiveKind);
+            if (typeof props.editing.routeIndex === "number") {
+              routes[props.editing.routeIndex] = preview as never;
+            } else {
+              routes.push(preview as never);
+            }
+          }}
+        />
+      )}
     >
       {error ? <StatusBanner state="bad" title={error} /> : null}
       <div className="route-editor-stack">
@@ -465,7 +1076,7 @@ function RouteEditor(props: {
               value={listenerKey}
               options={props.listeners.map((item) => ({
                 value: `${item.bindIndex}:${item.listenerIndex}`,
-                label: `:${item.bind.port} · ${listenerDisplayName(item.listener, item.listenerIndex)} · ${listenerRouteKind(item.listener).toUpperCase()}`,
+                label: `:${item.bind.port ?? "*"} · ${listenerDisplayName(item.listener, item.listenerIndex)} · ${listenerRouteKind(item.listener).toUpperCase()}`,
               }))}
               onChange={(value) => {
                 setListenerKey(value);
@@ -892,7 +1503,7 @@ type TrafficBackend = TrafficRouteBackend | TrafficTcpRouteBackend;
 type HostBackend = TrafficBackend & { host: string };
 type BackendReference = TrafficBackend & { backend: string };
 type ServiceBackend = TrafficBackend & {
-  service: { name: { namespace: string; hostname: string }; port: number };
+  service: { name: string; port: number };
 };
 type RouteGroupBackend = TrafficBackend & { routeGroup: string };
 
@@ -1145,18 +1756,22 @@ function BackendTargetFields(props: {
 
   if (props.targetKind === "service" && isServiceBackend(props.backend)) {
     const service = props.backend.service;
+    const serviceName = splitServiceName(service.name);
     return (
       <div className="route-backend-target-grid service">
         <Field label="Namespace">
           <input
-            value={service.name.namespace}
+            value={serviceName.namespace}
             onChange={(event) =>
               props.onChange(
                 cleanBackendCommon({
                   ...props.backend,
                   service: {
                     ...service,
-                    name: { ...service.name, namespace: event.target.value },
+                    name: formatServiceName(
+                      event.target.value,
+                      serviceName.hostname,
+                    ),
                   },
                 }),
               )
@@ -1166,14 +1781,17 @@ function BackendTargetFields(props: {
         </Field>
         <Field label="Hostname">
           <input
-            value={service.name.hostname}
+            value={serviceName.hostname}
             onChange={(event) =>
               props.onChange(
                 cleanBackendCommon({
                   ...props.backend,
                   service: {
                     ...service,
-                    name: { ...service.name, hostname: event.target.value },
+                    name: formatServiceName(
+                      serviceName.namespace,
+                      event.target.value,
+                    ),
                   },
                 }),
               )
@@ -1258,12 +1876,6 @@ function cleanRoute(route: TrafficRoute | TrafficTcpRoute, kind: RouteKind) {
   if (backends.length) next.backends = backends as never;
   else delete next.backends;
   if (!next.policies) delete next.policies;
-  if (kind === "http" && !("matches" in next)) {
-    return {
-      ...next,
-      matches: [{ path: { pathPrefix: "/" } }],
-    } as TrafficRoute;
-  }
   if (kind === "http" && "matches" in next && next.matches) {
     next.matches = next.matches.map(cleanHttpMatch);
   }
@@ -1312,7 +1924,7 @@ function makeBackend(
     return cleanBackendCommon({
       ...common,
       service: {
-        name: { namespace: "default", hostname: "" },
+        name: "default/",
         port: 80,
       },
     } as TrafficBackend);
@@ -1380,12 +1992,10 @@ function cleanBackendCommon<T extends TrafficBackend>(backend: T): T {
   if (isBackendReference(next)) next.backend = next.backend.trimStart();
   if (isRouteGroupBackend(next)) next.routeGroup = next.routeGroup.trimStart();
   if (isServiceBackend(next)) {
+    const name = splitServiceName(next.service.name);
     next.service = {
       ...next.service,
-      name: {
-        namespace: next.service.name.namespace.trim() || "default",
-        hostname: next.service.name.hostname.trimStart(),
-      },
+      name: formatServiceName(name.namespace, name.hostname),
       port: Number(next.service.port) || 80,
     };
   }
@@ -1401,19 +2011,19 @@ function backendIsConfigured(backend: TrafficBackend) {
     return Boolean(backend.backend.trim());
   if (kind === "routeGroup" && isRouteGroupBackend(backend))
     return Boolean(backend.routeGroup.trim());
-  if (kind === "service" && isServiceBackend(backend))
-    return Boolean(
-      backend.service.name.hostname.trim() && backend.service.port,
-    );
+  if (kind === "service" && isServiceBackend(backend)) {
+    const name = splitServiceName(backend.service.name);
+    return Boolean(name.hostname.trim() && backend.service.port);
+  }
   return true;
 }
 
 function isHostBackend(backend: TrafficBackend): backend is HostBackend {
   return Boolean(
     backend &&
-    typeof backend === "object" &&
-    "host" in backend &&
-    typeof backend.host === "string",
+      typeof backend === "object" &&
+      "host" in backend &&
+      typeof backend.host === "string",
   );
 }
 
@@ -1422,9 +2032,9 @@ function isBackendReference(
 ): backend is BackendReference {
   return Boolean(
     backend &&
-    typeof backend === "object" &&
-    "backend" in backend &&
-    typeof backend.backend === "string",
+      typeof backend === "object" &&
+      "backend" in backend &&
+      typeof backend.backend === "string",
   );
 }
 
@@ -1433,9 +2043,9 @@ function isRouteGroupBackend(
 ): backend is RouteGroupBackend {
   return Boolean(
     backend &&
-    typeof backend === "object" &&
-    "routeGroup" in backend &&
-    typeof backend.routeGroup === "string",
+      typeof backend === "object" &&
+      "routeGroup" in backend &&
+      typeof backend.routeGroup === "string",
   );
 }
 
@@ -1451,15 +2061,24 @@ function isServiceBackend(backend: TrafficBackend): backend is ServiceBackend {
   )
     return false;
   const name = service.name;
-  return Boolean(
-    name &&
-    typeof name === "object" &&
-    "namespace" in name &&
-    "hostname" in name &&
-    typeof name.namespace === "string" &&
-    typeof name.hostname === "string" &&
-    typeof service.port === "number",
-  );
+  return typeof name === "string" && typeof service.port === "number";
+}
+
+function splitServiceName(name: string): {
+  namespace: string;
+  hostname: string;
+} {
+  const [namespace, hostname] = name.includes("/")
+    ? name.split("/", 2)
+    : ["default", name];
+  return {
+    namespace: namespace.trim() || "default",
+    hostname: hostname.trimStart(),
+  };
+}
+
+function formatServiceName(namespace: string, hostname: string): string {
+  return `${namespace.trim() || "default"}/${hostname.trimStart()}`;
 }
 
 function cleanHttpMatch(match: HttpMatch): HttpMatch {
@@ -1482,6 +2101,14 @@ function backendListSummary(
 ) {
   if (!backends?.length) return "No backends";
   return backends.map(backendSummary).join(", ");
+}
+
+function httpPathSummary(
+  route: TrafficRoute | TrafficTcpRoute | LocalAttachedGatewayRoute,
+) {
+  const matches = (route as TrafficRoute).matches;
+  if (!matches?.length) return "/";
+  return pathSummary(route as TrafficRoute);
 }
 
 function listenerRouteKind(listener: TrafficListener): RouteKind {
@@ -1545,6 +2172,113 @@ function routeFromSearch(
 
 function routeSearchValue(context: ReturnType<typeof routeContexts>[number]) {
   return `${context.bindIndex}:${context.listenerIndex}:${context.kind}:${context.routeIndex}`;
+}
+
+function gatewayReferenceOptions(
+  config: GatewayConfig | null | undefined,
+  kind: RouteKind,
+) {
+  return Object.entries(config?.gateways ?? {}).flatMap(([name, gateway]) => {
+    const listeners = gateway.listeners ?? [];
+    if (!listeners.length) {
+      if (gatewayRouteKind(gateway) !== kind) return [];
+      return [
+        {
+          value: name,
+          label: name,
+          description: gateway.port ? `Port ${gateway.port}` : undefined,
+        },
+      ];
+    }
+    const compatibleListeners = listeners.filter(
+      (listener) => gatewayRouteKind(listener) === kind,
+    );
+    if (!compatibleListeners.length) return [];
+    return [
+      {
+        value: name,
+        label: `${name} (all ${kind.toUpperCase()} listeners)`,
+        description: gateway.port ? `Port ${gateway.port}` : undefined,
+      },
+      ...compatibleListeners.map((listener) => {
+        const listenerIndex = listeners.indexOf(listener);
+        const listenerName = listener.name ?? `listener${listenerIndex}`;
+        return {
+          value: `${name}/${listenerName}`,
+          label: `${name}/${listenerName}`,
+          description: listener.hostname ?? undefined,
+        };
+      }),
+    ];
+  });
+}
+
+function gatewayRouteKind(
+  value:
+    | NonNullable<GatewayConfig["gateways"]>[string]
+    | {
+        protocol?: "HTTP" | "HTTPS" | "TCP" | "TLS" | null;
+        tls?: unknown;
+      },
+): RouteKind {
+  const protocol = value.protocol ?? (value.tls ? "HTTPS" : "HTTP");
+  return protocol === "TCP" || protocol === "TLS" ? "tcp" : "http";
+}
+
+function gatewayRouteRef(route: Pick<LocalAttachedGatewayRoute, "gateways">) {
+  if (Array.isArray(route.gateways)) return route.gateways[0] ?? "";
+  return route.gateways ?? "";
+}
+
+function effectiveGatewayRouteRef(
+  route: Pick<LocalAttachedGatewayRoute, "gateways">,
+  config: GatewayConfig | null | undefined,
+  kind: RouteKind,
+) {
+  return (
+    gatewayRouteRef(route) ||
+    (config?.gateways?.default &&
+    gatewayHasRouteKind(config.gateways.default, kind)
+      ? "default"
+      : "")
+  );
+}
+
+function implicitDefaultRouteGateway(
+  route: Pick<LocalAttachedGatewayRoute, "gateways">,
+  config: GatewayConfig | null | undefined,
+  gateway: string,
+  kind: RouteKind,
+) {
+  const defaultGateway = config?.gateways?.default;
+  return (
+    !gatewayRouteRef(route) &&
+    gateway === "default" &&
+    defaultGateway &&
+    gatewayHasRouteKind(defaultGateway, kind)
+  );
+}
+
+function gatewayHasRouteKind(
+  gateway: NonNullable<GatewayConfig["gateways"]>[string],
+  kind: RouteKind,
+) {
+  const listeners = gateway.listeners ?? [];
+  if (!listeners.length) return gatewayRouteKind(gateway) === kind;
+  return listeners.some((listener) => gatewayRouteKind(listener) === kind);
+}
+
+function cleanGatewayRoute(
+  route: LocalAttachedGatewayRoute,
+  kind: RouteKind,
+): LocalAttachedGatewayRoute {
+  const next = cleanRoute(route, kind) as LocalAttachedGatewayRoute;
+  if (Array.isArray(next.gateways)) {
+    next.gateways = next.gateways.filter(Boolean);
+    if (next.gateways.length === 1) next.gateways = next.gateways[0];
+  }
+  if (!next.gateways) delete next.gateways;
+  return next;
 }
 
 function writeTrafficRouteSearch(

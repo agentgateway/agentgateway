@@ -45,16 +45,37 @@ func testExtMcpRequestDeniesForbiddenTool(t base.Test) {
 	// the retrying Send warms up the (otherwise cold) gRPC connection, mirroring the
 	// allowed/mutate cases. Without it, the first extmcp call in the suite can hang on
 	// connect until curl's timeout.
-	sendMCP(t, &testmatchers.HttpResponse{StatusCode: http.StatusBadRequest}, headers, body)
+	//
+	// A request-phase guardrail denial rides on HTTP 200: it is an application-level
+	// per-call refusal (JSON-RPC error in the body), not a transport failure. This
+	// matches the response-phase guardrail path and keeps MCP clients from tearing
+	// down the session on a non-2xx status.
+	sendMCP(t, &testmatchers.HttpResponse{StatusCode: http.StatusOK}, headers, body)
 	resp, raw, err := execCurlMCP(t, headers, body)
 	if err != nil {
 		t.Fatalf("tools/call: %v", err)
 	}
-	if resp.StatusCode != http.StatusBadRequest {
+	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("denied tools/call: status=%d body=%s", resp.StatusCode, raw)
 	}
 	if !strings.Contains(strings.ToLower(raw), "forbidden-tool") {
 		t.Fatalf("deny response should name the forbidden tool: %s", raw)
+	}
+	// Confirm the 200 carries a JSON-RPC error, not a success result.
+	// Guardrail rejections are plain application/json (not SSE), so fall back
+	// to parsing raw directly when SSE unwrapping finds no data frame.
+	var rpcResp struct {
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error,omitempty"`
+	}
+	payload, ok := FirstSSEDataPayload(raw)
+	if !ok {
+		payload = raw
+	}
+	_ = json.Unmarshal([]byte(payload), &rpcResp)
+	if rpcResp.Error == nil {
+		t.Fatalf("expected JSON-RPC error in deny response, got: %s", raw)
 	}
 }
 

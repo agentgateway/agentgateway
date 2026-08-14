@@ -5,9 +5,13 @@ use std::str::FromStr;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
+use crate::{apply, schema};
+
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Catalog {
+	/// Map of provider name to its supported models and pricing.
 	#[serde(default)]
 	pub providers: BTreeMap<String, Provider>,
 }
@@ -55,36 +59,47 @@ pub fn from_json(s: &str) -> anyhow::Result<Catalog> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Provider {
+	/// Map of model ID to its pricing rates and tiers.
 	#[serde(default)]
 	pub models: BTreeMap<String, Model>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[apply(schema!)]
+#[derive(PartialEq, Eq, Default)]
 pub struct Model {
+	/// Base pricing rates for this model.
 	#[serde(default, skip_serializing_if = "Rates::is_empty")]
 	pub rates: Rates,
+	/// Context-length pricing tiers that override the base rates.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub tiers: Vec<Tier>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[apply(schema!)]
+#[derive(PartialEq, Eq, Default)]
 pub struct Rates {
+	/// Cost per 1M input (prompt) tokens.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub input: Option<Money>,
+	/// Cost per 1M output (completion) tokens.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub output: Option<Money>,
+	/// Cost per 1M tokens read from cache.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub cache_read: Option<Money>,
+	/// Cost per 1M tokens written to cache.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub cache_write: Option<Money>,
+	/// Cost per 1M reasoning tokens. Falls back to the output rate if unset.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub reasoning: Option<Money>,
+	/// Cost per 1M input audio tokens. Falls back to the input rate if unset.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub input_audio: Option<Money>,
+	/// Cost per 1M output audio tokens. Falls back to the output rate if unset.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub output_audio: Option<Money>,
 }
@@ -108,16 +123,29 @@ impl Rates {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[apply(schema!)]
+#[derive(PartialEq, Eq)]
 pub struct Tier {
+	/// Context-token threshold above which this tier's rates apply.
 	pub context_over: u64,
+	/// Pricing rates for this tier, overlaid on the base model rates.
 	pub rates: Rates,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct Money(pub Decimal);
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for Money {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		"Money".into()
+	}
+
+	fn json_schema(schema_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		String::json_schema(schema_gen)
+	}
+}
 
 impl Money {
 	pub fn parse(s: &str) -> Result<Money, String> {

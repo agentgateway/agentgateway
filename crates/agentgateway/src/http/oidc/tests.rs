@@ -3,7 +3,6 @@ use std::time::Duration;
 
 use ::http::{Method, Request as HttpRequest, header};
 use base64::Engine as _;
-use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use jsonwebtoken::jwk::JwkSet;
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
 use secrecy::{ExposeSecret, SecretString};
@@ -16,8 +15,8 @@ use super::*;
 use crate::http::jwt;
 use crate::proxy::ProxyError;
 use crate::serdes::FileInlineOrRemote;
+use crate::test_helpers;
 use crate::test_helpers::proxymock::setup_proxy_test;
-use crate::{client, test_helpers};
 
 const TEST_PRIVATE_KEY_PEM: &str = "-----BEGIN PRIVATE KEY-----
 MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgltxBTVDLg7C6vE1T
@@ -37,18 +36,6 @@ struct TestIdTokenClaims<'a> {
 	exp: u64,
 	nonce: &'a str,
 	sub: &'a str,
-}
-
-fn test_client() -> client::Client {
-	client::Client::new(
-		&client::Config {
-			resolver_cfg: ResolverConfig::default(),
-			resolver_opts: ResolverOpts::default(),
-		},
-		None,
-		Default::default(),
-		None,
-	)
 }
 
 fn policy_client() -> crate::proxy::httpproxy::PolicyClient {
@@ -254,8 +241,17 @@ async fn compile_local_policy(
 	config: LocalOidcConfig,
 	policy_id: PolicyId,
 ) -> Result<OidcPolicy, Error> {
+	let resources = crate::resource_manager::ResourceFetcher::direct(crate::client::Client::new(
+		&crate::client::Config {
+			resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
+			resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+		},
+		None,
+		crate::BackendConfig::default(),
+		None,
+	));
 	config
-		.compile(test_client(), policy_id, &test_oidc_cookie_encoder())
+		.compile(&resources, policy_id, &test_oidc_cookie_encoder())
 		.await
 }
 

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use ::cel::Value;
 use ::cel::objects::{KeyRef, MapValue};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use vector_map::VecMap;
 
 use crate::cel::ContextBuilder;
@@ -42,6 +42,12 @@ impl McpAuthorizationSet {
 	pub fn new(rs: RuleSets) -> Self {
 		Self(rs)
 	}
+
+	/// Combine rule sets so both apply; see [`RuleSets::merge`].
+	pub fn merge(self, other: Self) -> Self {
+		Self(self.0.merge(other.0))
+	}
+
 	pub fn validate(&self, res: &ResourceType, cel: &CelExecWrapper) -> bool {
 		if !self.0.has_rules() {
 			return true;
@@ -57,9 +63,8 @@ impl McpAuthorizationSet {
 	}
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
+#[derive(Eq, PartialEq)]
 pub enum ResourceType {
 	/// The tool being accessed
 	Tool(ResourceId),
@@ -67,6 +72,8 @@ pub enum ResourceType {
 	Prompt(ResourceId),
 	/// The resource being accessed
 	Resource(ResourceId),
+	/// The task being accessed (SEP-2663); `name` is the task ID.
+	Task(ResourceId),
 }
 
 impl cel::DynamicType for ResourceType {
@@ -75,6 +82,7 @@ impl cel::DynamicType for ResourceType {
 			ResourceType::Tool(t) => ("tool", t),
 			ResourceType::Prompt(t) => ("prompt", t),
 			ResourceType::Resource(t) => ("resource", t),
+			ResourceType::Task(t) => ("task", t),
 		};
 		Value::Map(MapValue::Borrow(VecMap::from_iter([(
 			KeyRef::String(n.into()),
@@ -87,14 +95,14 @@ impl cel::DynamicType for ResourceType {
 			(ResourceType::Tool(t), "tool") => Some(t.materialize()),
 			(ResourceType::Prompt(t), "prompt") => Some(t.materialize()),
 			(ResourceType::Resource(t), "resource") => Some(t.materialize()),
+			(ResourceType::Task(t), "task") => Some(t.materialize()),
 			_ => None,
 		}
 	}
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, ::cel::DynamicType)]
-#[serde(rename_all = "camelCase")]
-#[cfg_attr(feature = "schema", derive(JsonSchema))]
+#[apply(schema!)]
+#[derive(Eq, PartialEq, ::cel::DynamicType)]
 pub struct ResourceId {
 	#[serde(default)]
 	/// The target of the resource
@@ -175,6 +183,38 @@ mod tests {
 			PolicySet::new(vec![], vec![], vec![]),
 		)]));
 		assert!(empty_rule_set.validate(&res, &CelExecWrapper::new(req_without_claims())));
+	}
+
+	#[test]
+	fn test_backend_policies_merge_composes_mcp_authorization() {
+		let with_authz = |authz: McpAuthorizationSet| crate::store::BackendPolicies {
+			mcp_authorization: Some(authz),
+			..Default::default()
+		};
+		let deny_all = || {
+			McpAuthorizationSet::new(RuleSets::from(vec![RuleSet::new(PolicySet::new(
+				vec![],
+				vec![Arc::new(cel::Expression::new_strict("true").unwrap())],
+				vec![],
+			))]))
+		};
+		let res = tool_resource("server", "increment");
+		let cel = CelExecWrapper::new(req_without_claims());
+
+		// Higher-precedence allow does not erase a base deny
+		let merged = with_authz(deny_all())
+			.merge(with_authz(authorization_set("true")))
+			.mcp_authorization
+			.unwrap();
+		assert!(!merged.validate(&res, &cel));
+
+		// A policy on only one side passes through
+		for merged in [
+			with_authz(deny_all()).merge(Default::default()),
+			crate::store::BackendPolicies::default().merge(with_authz(deny_all())),
+		] {
+			assert!(!merged.mcp_authorization.unwrap().validate(&res, &cel));
+		}
 	}
 
 	#[test]

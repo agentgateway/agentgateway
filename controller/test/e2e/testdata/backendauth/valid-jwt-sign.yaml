@@ -1,0 +1,48 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: route-backendauth-valid-jwt-sign
+  namespace: agentgateway-base
+spec:
+  parentRefs:
+    - name: gateway
+  hostnames:
+    - "valid-jwt-sign.example.com"
+  rules:
+    - backendRefs:
+        - name: backend
+          port: 80
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: jwt-sign-secret
+  namespace: agentgateway-base
+type: Opaque
+stringData:
+  signingKey: |
+    -----BEGIN PRIVATE KEY-----
+    MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg0LXKf6NEiyOsNdK/
+    hfGF0n9BjMruYI85lF6XCP5ukGehRANCAAQhNE/7eV7FklXXpqxHFNgKUbudzsDE
+    mvho95/6+KBFnO4P6nIufWypMhozVRCY16BhyM+9fM4nfPJxfWqlwE0M
+    -----END PRIVATE KEY-----
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: backendauth-valid-jwt-sign
+  namespace: agentgateway-base
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: route-backendauth-valid-jwt-sign
+  backend:
+    auth:
+      jwtSign:
+        signingKeyRef:
+          name: jwt-sign-secret
+        alg: ES256
+        claims:
+          iss: acct.user
+        ttl: 60s

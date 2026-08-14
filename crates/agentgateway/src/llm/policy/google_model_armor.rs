@@ -9,11 +9,11 @@ use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, warn};
 
-use crate::http::auth::{BackendAuth, GcpAuth};
+use crate::http::auth::{BackendAuthKind, GcpAuth};
 use crate::http::jwt::Claims;
 use crate::json;
 use crate::llm::RequestType;
-use crate::llm::policy::GoogleModelArmor;
+use crate::llm::policy::{GoogleModelArmor, with_default_timeout};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::types::agent::{Backend, BackendTrafficPolicy, ResourceName};
@@ -327,7 +327,7 @@ impl GoogleModelArmor {
 		pols.push(BackendTrafficPolicy::BackendTLS(
 			crate::http::backendtls::SYSTEM_TRUST.clone(),
 		));
-		pols.push(BackendTrafficPolicy::BackendAuth(BackendAuth::Gcp(
+		pols.push(BackendTrafficPolicy::backend_auth(BackendAuthKind::Gcp(
 			GcpAuth::default(),
 		)));
 		pols
@@ -371,12 +371,12 @@ async fn send_model_armor_request<T: Serialize>(
 
 	let mock_be = Backend::Dynamic(
 		ResourceName::new(strng::literal!("_google-model-armor"), strng::literal!("")),
-		(),
+		None,
 	);
 
 	let resp = client
 		.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::Guardrail)
-		.call_with_explicit_policies_list(req, mock_be, pols)
+		.call_with_explicit_policies_list(with_default_timeout(req), mock_be, pols)
 		.await?;
 
 	let resp: SanitizeResponse = json::from_response_body(resp).await?;

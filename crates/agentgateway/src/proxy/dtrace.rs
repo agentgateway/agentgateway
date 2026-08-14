@@ -348,6 +348,9 @@ pub enum MessageType {
 		kind: String,
 		details: PolicyEventDetails,
 	},
+	TraceSampling {
+		decision: String,
+	},
 	AuthorizationResult {
 		rules: Vec<AuthorizationRuleResult>,
 		result: AuthorizationResult,
@@ -366,17 +369,20 @@ pub enum MessageType {
 	LlmRequestDetected {
 		provider: String,
 		inputFormat: String,
-		nativeFormat: Option<String>,
+		upstreamRouteType: Option<String>,
 		requestModel: String,
 		streaming: bool,
 	},
 	LlmStreamingTranslation {
 		provider: String,
 		inputFormat: String,
-		nativeFormat: Option<String>,
+		upstreamRouteType: Option<String>,
 		streamFormat: String,
 	},
-	RequestFinished,
+	RequestFinished {
+		status: Option<u16>,
+		error: Option<String>,
+	},
 }
 
 impl MessageType {
@@ -397,7 +403,7 @@ impl MessageType {
 			| MessageType::LlmStreamingTranslation { .. }
 			| MessageType::Policy { .. }
 			| MessageType::PolicyEvent { .. }
-			| MessageType::RequestFinished => Severity::Info,
+			| MessageType::TraceSampling { .. } => Severity::Info,
 
 			MessageType::AuthorizationResult {
 				result: AuthorizationResult::Allow,
@@ -413,7 +419,8 @@ impl MessageType {
 				..
 			} => Severity::Error,
 			MessageType::Cel { result, .. } => cel_severity(result),
-			MessageType::BackendCallResult { status, error, .. } => {
+			MessageType::BackendCallResult { status, error, .. }
+			| MessageType::RequestFinished { status, error, .. } => {
 				if error.is_some() || status.is_some_and(|status| status >= 500) {
 					Severity::Error
 				} else if status.is_some_and(|status| status >= 400) {
@@ -484,9 +491,15 @@ pub struct TraceReceiver {
 }
 
 impl TraceReceiver {
-	#[cfg(test)]
 	pub async fn recv(&mut self) -> Option<Message> {
 		self.receiver.recv().await
+	}
+
+	#[cfg(test)]
+	pub(crate) fn closed_for_test() -> Self {
+		let (sender, receiver) = tokio::sync::mpsc::channel(1);
+		drop(sender);
+		Self { id: 0, receiver }
 	}
 }
 
@@ -631,8 +644,8 @@ impl DebugTracer {
 	pub fn request_started(&self) {
 		self.send(MessageType::RequestStarted)
 	}
-	pub fn request_completed(&self) {
-		self.send(MessageType::RequestFinished)
+	pub fn request_completed(&self, status: Option<u16>, error: Option<String>) {
+		self.send(MessageType::RequestFinished { status, error })
 	}
 	pub fn cel_eval(
 		&self,
@@ -711,6 +724,11 @@ impl DebugTracer {
 			},
 		)
 	}
+	pub fn trace_sampling(&self, decision: &str) {
+		self.send(MessageType::TraceSampling {
+			decision: decision.to_owned(),
+		})
+	}
 	pub fn authorization_result(
 		&self,
 		rules: Vec<AuthorizationRuleResult>,
@@ -748,14 +766,14 @@ impl DebugTracer {
 		&self,
 		provider: String,
 		input_format: String,
-		native_format: Option<String>,
+		upstream_route_type: Option<String>,
 		request_model: String,
 		streaming: bool,
 	) {
 		self.send(MessageType::LlmRequestDetected {
 			provider,
 			inputFormat: input_format,
-			nativeFormat: native_format,
+			upstreamRouteType: upstream_route_type,
 			requestModel: request_model,
 			streaming,
 		})
@@ -764,13 +782,13 @@ impl DebugTracer {
 		&self,
 		provider: String,
 		input_format: String,
-		native_format: Option<String>,
+		upstream_route_type: Option<String>,
 		stream_format: String,
 	) {
 		self.send(MessageType::LlmStreamingTranslation {
 			provider,
 			inputFormat: input_format,
-			nativeFormat: native_format,
+			upstreamRouteType: upstream_route_type,
 			streamFormat: stream_format,
 		})
 	}
@@ -821,9 +839,13 @@ mod tests {
 
 	#[tokio::test]
 	async fn cel_eval_emits_events_while_debug_trace_is_active() {
-		let mut trace_rx = track_expression(None);
+		// Scope the watcher to a unique path so concurrent tests can't consume its one-shot sender.
+		const PATH: &str = "/cel-eval-emits-events-probe";
+		let mut trace_rx = track_expression(Some(
+			Expression::new_strict(format!("request.path == '{PATH}'")).expect("filter compiles"),
+		));
 		let req = http::Request::builder()
-			.uri("http://example.com/test")
+			.uri(format!("http://example.com{PATH}"))
 			.body(Body::empty())
 			.expect("request should build");
 		let expr = Expression::new_strict("request.path").expect("expression should compile");
@@ -831,7 +853,7 @@ mod tests {
 		DebugTracer::maybe_scope(req, |req| async move {
 			let executor = Executor::new_request(&req);
 			let value = executor.eval(&expr).expect("expression should evaluate");
-			assert_eq!(value.as_str().unwrap(), "/test");
+			assert_eq!(value.as_str().unwrap(), PATH);
 		})
 		.await;
 
@@ -839,7 +861,7 @@ mod tests {
 			while let Some(msg) = trace_rx.recv().await {
 				if let MessageType::Cel { expr, result, .. } = msg.message {
 					assert_eq!(expr, "request.path");
-					assert_eq!(result, serde_json::json!("/test"));
+					assert_eq!(result, serde_json::json!(PATH));
 					return;
 				}
 			}

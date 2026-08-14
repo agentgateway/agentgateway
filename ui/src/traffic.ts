@@ -25,6 +25,9 @@ export interface RouteContext extends ListenerContext {
 
 export function trafficStats(config: GatewayConfig | undefined) {
   const binds = config?.binds ?? [];
+  const gateways = Object.values(config?.gateways ?? {});
+  const routes = config?.routes ?? [];
+  const topLevelTcpRoutes = config?.tcpRoutes ?? [];
   let listeners = 0;
   let httpRoutes = 0;
   let tcpRoutes = 0;
@@ -42,8 +45,17 @@ export function trafficStats(config: GatewayConfig | undefined) {
       for (const route of tcp) backends += route.backends?.length ?? 0;
     }
   }
+  for (const gateway of gateways) {
+    listeners += gateway.listeners?.length || 1;
+  }
+  httpRoutes += routes.length;
+  tcpRoutes += topLevelTcpRoutes.length;
+  for (const route of routes) backends += route.backends?.length ?? 0;
+  for (const route of topLevelTcpRoutes)
+    backends += route.backends?.length ?? 0;
   return {
     binds: binds.length,
+    gateways: gateways.length,
     listeners,
     httpRoutes,
     tcpRoutes,

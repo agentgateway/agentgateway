@@ -9,6 +9,7 @@ use std::str::FromStr;
 use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use sha1::{Digest, Sha1};
+use subtle::ConstantTimeEq;
 
 use crate::md5::APR1_ID;
 
@@ -71,13 +72,19 @@ fn parse_hash_entry(entry: &'_ str) -> Option<(Cow<'_, str>, Hash<'_>)> {
 	Hash::parse(hash_id).map(|hash| (Cow::Borrowed(username), hash))
 }
 
+/// Compares two hash encodings in constant time, so an attacker cannot learn how many
+/// leading bytes of the computed hash match the stored one through response timing.
+fn constant_time_eq(computed: &str, stored: &str) -> bool {
+	computed.as_bytes().ct_eq(stored.as_bytes()).into()
+}
+
 impl<'a> Hash<'a> {
 	pub fn check<S: AsRef<str>>(&self, password: S) -> bool {
 		let password = password.as_ref();
 		match self {
-			Hash::MD5(hash) => md5::md5_apr1_encode(password, &hash.salt).as_str() == hash.hash,
+			Hash::MD5(hash) => constant_time_eq(&md5::md5_apr1_encode(password, &hash.salt), &hash.hash),
 			Hash::BCrypt(hash) => bcrypt::verify(password, hash).unwrap_or(false),
-			Hash::SHA1(hash) => BASE64_STANDARD.encode(Sha1::digest(password)).as_str() == *hash,
+			Hash::SHA1(hash) => constant_time_eq(&BASE64_STANDARD.encode(Sha1::digest(password)), hash),
 			Hash::Crypt(hash) => pwhash::unix_crypt::verify(password, hash),
 		}
 	}
@@ -143,6 +150,8 @@ crypt_test:bGVh02xkuGli2";
 	fn sha1_verify_htpasswd() {
 		let htpasswd = Htpasswd::new(DATA);
 		assert!(htpasswd.check("sha1_test", "password"));
+		assert!(!htpasswd.check("sha1_test", "passwort"));
+		assert!(!htpasswd.check("sha1_test", ""));
 	}
 
 	#[test]

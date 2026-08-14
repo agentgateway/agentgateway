@@ -27,8 +27,9 @@ export async function refreshBaseCostsAndConfigure(updateConfig: {
   ) => Promise<unknown>;
 }) {
   const refreshed = await refreshBaseCosts();
-  await updateConfig.mutateAsync((next) =>
-    addBaseCostSource(next, refreshed.file),
-  );
+  if (refreshed.file) {
+    const file = refreshed.file;
+    await updateConfig.mutateAsync((next) => addBaseCostSource(next, file));
+  }
   return refreshed;
 }

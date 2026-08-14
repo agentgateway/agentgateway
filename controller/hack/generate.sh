@@ -26,6 +26,8 @@ readonly APPLY_CFG_DIR=api/applyconfiguration
 readonly CLIENT_GEN_DIR=pkg/client
 readonly AGENTGATEWAY_CRD_DIR=install/helm/agentgateway-crds/templates
 readonly AGENTGATEWAY_MANIFESTS_DIR=install/helm/agentgateway/templates
+readonly AGENTGATEWAY_CRD_MAX_DESC_LEN="${AGENTGATEWAY_CRD_MAX_DESC_LEN:-50000}"
+
 
 echo "Generating clientset at ${OUTPUT_PKG}/${CLIENTSET_PKG_NAME} for versions:" "${VERSIONS[@]}"
 
@@ -52,7 +54,7 @@ done
 
 # Generate CRDs with custom kubebuilder validation markers.
 (cd "${REPO_ROOT}" && go run ./controller/hack/crdgen \
-    --max-desc-len 50000 \
+    --max-desc-len "${AGENTGATEWAY_CRD_MAX_DESC_LEN}" \
     --output-dir "${ROOT_DIR}/${AGENTGATEWAY_CRD_DIR}" \
     --path "${APIS_PKG}/api/${VERSION}/agentgateway")
 

@@ -7,6 +7,7 @@ binds:
     address: "[::]:3000"
     protocol: http
     tunnelProtocol: direct
+    mode: standard
     listeners:
       ns/name/bind/3000/listener0:
         gatewayName: name
@@ -71,7 +72,7 @@ backends:
                 path: /mcp
               name: remote
           stateful: true
-          alwaysUsePrefix: false
+          prefixMode: conditional
           failureMode: failClosed
           sessionIdleTtl: 30m0s
 route_groups: []

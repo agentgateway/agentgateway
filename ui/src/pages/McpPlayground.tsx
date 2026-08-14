@@ -1,13 +1,14 @@
+import { Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import type { KeyboardEvent } from "react";
 import { Braces, Cable, Play, RotateCcw } from "lucide-react";
 import { sendMcpJsonRpc } from "../api/playgroundApi";
-import { applyPlaygroundCors, corsNeedsUpdate, currentOrigin } from "../cors";
-import { gatewayEndpoint } from "../gatewayUrls";
+import { corsNeedsUpdate, currentOrigin, playgroundCorsPolicy } from "../cors";
+import { mcpPlaygroundEndpoint } from "../gatewayUrls";
 import {
-  useGatewayConfig,
+  useMcpConfigData,
   useStoredStringState,
-  useUpdateConfig,
+  useUpsertPolicyResource,
 } from "../hooks";
 import {
   extractMcpTools,
@@ -48,13 +49,15 @@ const storageKeys = {
 };
 
 export function McpPlaygroundPage() {
-  const config = useGatewayConfig();
-  const updateConfig = useUpdateConfig();
-  const targets = useMemo(() => config.data?.mcp?.targets ?? [], [config.data]);
-  const derivedBaseUrl = gatewayEndpoint(
-    config.data?.mcp?.port ?? 3000,
-    "/mcp",
+  const mcpData = useMcpConfigData();
+  const effectiveConfig = mcpData.data;
+  const upsertPolicy = useUpsertPolicyResource();
+  const targets = useMemo(
+    () => effectiveConfig?.mcp?.targets ?? [],
+    [effectiveConfig],
   );
+  const mcpEndpoint = mcpPlaygroundEndpoint(effectiveConfig);
+  const derivedBaseUrl = mcpEndpoint.baseUrl;
   const baseUrl = derivedBaseUrl;
   const [initialized, setInitialized] = useState(false);
   const [sessionId, setSessionId] = useState("");
@@ -70,9 +73,17 @@ export function McpPlaygroundPage() {
   const [loading, setLoading] = useState<"initialize" | "call" | null>(null);
 
   const selectedTool = tools.find((tool) => tool.name === toolName);
-  const needsCors = config.data
-    ? corsNeedsUpdate(config.data.mcp?.policies?.cors, "mcp")
-    : false;
+  const needsCors =
+    effectiveConfig && !mcpEndpoint.sameOrigin
+      ? corsNeedsUpdate(effectiveConfig.mcp?.policies?.cors, "mcp")
+      : false;
+  const fileCorsOwned = Boolean(
+    mcpData.rawConfig.data?.mcp?.policies &&
+      Object.prototype.hasOwnProperty.call(
+        mcpData.rawConfig.data.mcp.policies,
+        "cors",
+      ),
+  );
 
   useEffect(() => {
     localStorage.removeItem("mcpPlaygroundArgs");
@@ -183,16 +194,29 @@ export function McpPlaygroundPage() {
           state="warn"
           title="Browser access is not allowed"
           action={
-            <button
-              className="button"
-              type="button"
-              disabled={updateConfig.isPending}
-              onClick={() =>
-                updateConfig.mutate((next) => applyPlaygroundCors(next, "mcp"))
-              }
-            >
-              Apply CORS
-            </button>
+            mcpData.hybrid && fileCorsOwned ? (
+              <Link className="button" to="/mcp/policies" hash="cors">
+                Configure CORS
+              </Link>
+            ) : (
+              <button
+                className="button"
+                type="button"
+                disabled={upsertPolicy.isPending}
+                onClick={() => {
+                  upsertPolicy.mutate({
+                    kind: "mcp.policy",
+                    id: "cors",
+                    value: playgroundCorsPolicy(
+                      effectiveConfig?.mcp?.policies?.cors,
+                      "mcp",
+                    ),
+                  });
+                }}
+              >
+                Apply CORS
+              </button>
+            )
           }
         >
           Add {currentOrigin()} to the MCP CORS policy and expose Mcp-Session-Id
@@ -252,7 +276,7 @@ export function McpPlaygroundPage() {
             <Field label="Bearer token">
               <input
                 value={bearerToken}
-                type="password"
+                type="text"
                 className="masked-secret-input"
                 autoComplete="off"
                 autoCorrect="off"
@@ -502,10 +526,10 @@ function submitOnModEnter(
 function schemaHasSimpleProperties(schema: unknown): schema is JsonSchema {
   return Boolean(
     schema &&
-    typeof schema === "object" &&
-    !Array.isArray(schema) &&
-    (schema as JsonSchema).properties &&
-    typeof (schema as JsonSchema).properties === "object",
+      typeof schema === "object" &&
+      !Array.isArray(schema) &&
+      (schema as JsonSchema).properties &&
+      typeof (schema as JsonSchema).properties === "object",
   );
 }
 

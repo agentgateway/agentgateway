@@ -33,15 +33,13 @@ func TestDependencies(t *testing.T) {
 		{
 			entrypoint: "cmd/agentgateway",
 			tag:        "agent",
-			denied: []string{
-				// Deps meant only for other components; if we import them, something may be wrong
-				`^testing$`,
-			},
+			denied:     []string{},
 			wantToDeny: []string{
 				`^github\.com/fatih/color`,
-				`^helm\.sh/helm/v3`,
+				`^helm\.sh/helm/v4`,
 				`^sigs\.k8s\.io/controller-runtime/pkg/client`,
 				`^github\.com/pmezard/go-difflib`,
+				`^testing$`,
 			},
 		},
 	}

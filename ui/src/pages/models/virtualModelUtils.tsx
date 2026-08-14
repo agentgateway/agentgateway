@@ -1,21 +1,31 @@
 import { providerLabel } from "../../config";
 import {
   isWildcardModelName,
+  resolvedProviderLabel,
   selectedConfiguredModelName,
   wildcardModelPrefix,
 } from "../../modelResolution";
-import type { LlmModel, LlmVirtualModel, ProviderName } from "../../types";
+import type {
+  LlmModel,
+  LlmProvider,
+  LlmVirtualModel,
+  ProviderName,
+} from "../../types";
 import { ProviderIcon } from "../../components/ProviderIcon";
 
-export function modelTargetOptions(models: LlmModel[]) {
-  return models.map((model) => ({
-    value: model.name,
-    label: model.name,
-    icon: (
-      <ProviderIcon provider={providerLabel(model.provider) as ProviderName} />
-    ),
-    searchText: `${model.name} ${providerLabel(model.provider)}`,
-  }));
+export function modelTargetOptions(
+  models: LlmModel[],
+  providers: LlmProvider[],
+) {
+  return models.map((model) => {
+    const provider = resolvedProviderLabel(model.provider, providers);
+    return {
+      value: model.name,
+      label: model.name,
+      icon: <ProviderIcon provider={provider as ProviderName} />,
+      searchText: `${model.name} ${provider} ${providerLabel(model.provider)}`,
+    };
+  });
 }
 
 export function defaultVirtualTargetModel(models: LlmModel[]) {

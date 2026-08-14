@@ -1,6 +1,13 @@
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { Check, Clipboard, Code2, KeyRound, Terminal } from "lucide-react";
+import {
+  Check,
+  Clipboard,
+  Code2,
+  GitBranch,
+  KeyRound,
+  Terminal,
+} from "lucide-react";
 import {
   Dropdown,
   Field,
@@ -10,10 +17,11 @@ import {
   StatusBanner,
 } from "../components/Primitives";
 import { CatalogModelSelector } from "../components/CatalogModelSelector";
-import { keyLabel, maskKey } from "../credentialDisplay";
-import { gatewayOrigin } from "../gatewayUrls";
-import { useGatewayConfig } from "../hooks";
-import { llmModelOptions, resolveLlmModelOption } from "../llmModelOptions";
+import { claudeSubscriptionWarning } from "../claudeSubscription";
+import { providerLabel } from "../config";
+import { hasKeyValue, keyLabel, maskKey } from "../credentialDisplay";
+import { llmGatewayOrigin } from "../gatewayUrls";
+import { useLlmConfigData } from "../hooks";
 import {
   isWildcardModelName,
   modelProviderLabel,
@@ -28,6 +36,7 @@ import codexIcon from "../assets/codex-color.svg";
 import curlIcon from "../assets/curl.svg";
 import cursorIcon from "../assets/cursor.svg";
 import githubCopilotIcon from "../assets/providers/copilot.svg";
+import gooseIcon from "../assets/goose.svg";
 import opencodeIcon from "../assets/opencode.svg";
 import windsurfIcon from "../assets/windsurf.svg";
 
@@ -41,6 +50,7 @@ type ClientRecipe = {
     | "curl"
     | "cursor"
     | "copilot"
+    | "goose"
     | "opencode"
     | "windsurf";
   provider?: ProviderName;
@@ -49,17 +59,50 @@ type ClientRecipe = {
   code: string;
 };
 
+type RequestModelOption =
+  | {
+      kind: "model";
+      name: string;
+      config: LlmModel;
+      icon: ReactNode;
+      searchText: string;
+    }
+  | { kind: "virtual"; name: string; icon: ReactNode; searchText: string };
+
 export function ClientSetupPage() {
-  const config = useGatewayConfig();
+  const {
+    config,
+    models,
+    virtualModels,
+    providers,
+    apiKeys,
+    isLoading: modelsLoading,
+    error: configDataError,
+  } = useLlmConfigData();
   const modelOptions = useMemo(
-    () => llmModelOptions(config.data?.llm),
-    [config.data],
+    () => [
+      ...models.map((item) => ({
+        kind: "model" as const,
+        name: item.name,
+        icon: (
+          <ProviderIcon
+            provider={modelProviderLabel(item, providers) as ProviderName}
+          />
+        ),
+        searchText: `${item.name} ${modelProviderLabel(item, providers)} ${providerLabel(item.provider)}`,
+        config: item,
+      })),
+      ...virtualModels.map((item) => ({
+        kind: "virtual" as const,
+        name: item.name,
+        icon: <GitBranch size={16} />,
+        searchText: `${item.name} virtual`,
+      })),
+    ],
+    [models, providers, virtualModels],
   );
-  const virtualKeys = useMemo(
-    () => config.data?.llm?.policies?.apiKey?.keys ?? [],
-    [config.data],
-  );
-  const derivedBaseUrl = gatewayOrigin(config.data?.llm?.port ?? 4000);
+  const rawVirtualKeys = useMemo(() => apiKeys.filter(hasKeyValue), [apiKeys]);
+  const derivedBaseUrl = llmGatewayOrigin(config.data);
   const [baseUrl, setBaseUrl] = useState(derivedBaseUrl);
   const [baseUrlTouched, setBaseUrlTouched] = useState(false);
   const [model, setModel] = useState("");
@@ -77,7 +120,7 @@ export function ClientSetupPage() {
   );
   const selectedModelConfig =
     selectedModelOption?.kind === "model"
-      ? selectedModelOption.model
+      ? selectedModelOption.config
       : undefined;
   const wildcardPrefix =
     selectedModelConfig && isWildcardModelName(selectedModelConfig.name)
@@ -91,23 +134,25 @@ export function ClientSetupPage() {
       )
     : "";
   const selectedCatalogProvider = selectedModelConfig
-    ? modelProviderLabel(selectedModelConfig, config.data?.llm?.providers ?? [])
+    ? modelProviderLabel(selectedModelConfig, providers)
     : null;
   const selectedVirtualKey =
     apiKeyMode === "saved"
-      ? (virtualKeys.find((item) => item.key === selectedKey) ?? virtualKeys[0])
+      ? (rawVirtualKeys.find((item) => item.key === selectedKey) ??
+        rawVirtualKeys[0])
       : undefined;
   const apiKey = selectedVirtualKey?.key ?? rawKey;
   const effectiveBaseUrl = baseUrlTouched ? baseUrl : derivedBaseUrl;
   const requestModel = clientSetupRequestModel(
     selectedModelOption,
+    selectedModel,
     specificModel,
-    config.data?.llm?.providers ?? [],
+    providers,
   );
   const recipes = clientRecipes({
     baseUrl: effectiveBaseUrl,
     model: requestModel || "model",
-    apiKey: apiKey || "agw_sk_...",
+    apiKey,
   });
   const activeRecipe =
     recipes.find((recipe) => recipe.id === selectedIntegration) ?? recipes[0];
@@ -116,16 +161,21 @@ export function ClientSetupPage() {
     <div className="page-stack">
       <PageHeader
         title="Client Setup"
-        description="Generate connection settings and snippets for OpenAI-compatible LLM clients."
+        description="Generate connection settings and snippets for LLM clients."
       />
-      {config.isError ? (
+      {configDataError ? (
         <StatusBanner state="bad" title="Configuration API unavailable">
-          {config.error.message}
+          {configDataError.message}
         </StatusBanner>
       ) : null}
-      {modelOptions.length === 0 && !config.isLoading ? (
+      {modelOptions.length === 0 && !modelsLoading ? (
         <StatusBanner state="warn" title="No models configured">
           Create an LLM model before wiring clients to the gateway.
+        </StatusBanner>
+      ) : null}
+      {claudeSubscriptionWarning(selectedModelConfig, providers) ? (
+        <StatusBanner state="warn" title="Claude subscription key detected">
+          {claudeSubscriptionWarning(selectedModelConfig, providers)}
         </StatusBanner>
       ) : null}
 
@@ -155,14 +205,13 @@ export function ClientSetupPage() {
               searchable
               options={modelOptions.map((item) => ({
                 value: item.name,
-                label: item.label,
+                label: item.name,
+                description:
+                  item.kind === "virtual" ? "Virtual model" : undefined,
                 icon: item.icon,
                 searchText: item.searchText,
               }))}
-              onChange={(value) => {
-                setModel(value);
-                setSpecificModel("");
-              }}
+              onChange={setModel}
             />
           </FieldGroup>
           {selectedModelConfig &&
@@ -196,7 +245,7 @@ export function ClientSetupPage() {
                   : "__raw__"
               }
               options={[
-                ...virtualKeys.map((item) => ({
+                ...rawVirtualKeys.map((item) => ({
                   value: item.key,
                   label: keyLabel(item),
                   icon: <KeyRound size={16} />,
@@ -217,7 +266,7 @@ export function ClientSetupPage() {
               }}
             />
           </FieldGroup>
-          {apiKeyMode === "raw" ? (
+          {apiKeyMode === "raw" || rawVirtualKeys.length === 0 ? (
             <Field label="Raw API key">
               <input
                 value={rawKey}
@@ -237,9 +286,7 @@ export function ClientSetupPage() {
             </div>
             <div>
               <span>Auth</span>
-              <code>
-                Authorization: Bearer {apiKey ? maskKey(apiKey) : "..."}
-              </code>
+              <code>{apiKey ? `Bearer ${maskKey(apiKey)}` : "None"}</code>
             </div>
           </div>
         </Panel>
@@ -256,19 +303,21 @@ export function ClientSetupPage() {
 }
 
 function clientSetupRequestModel(
-  option: ReturnType<typeof llmModelOptions>[number] | undefined,
+  option: RequestModelOption | undefined,
+  selectedModel: string,
   specificModel: string,
   providers: LlmProvider[],
 ) {
   if (!option) return "";
-  if (option.kind === "virtual")
-    return resolveLlmModelOption(option, specificModel, providers);
-  if (!option.model) return "";
-  if (!isWildcardModelName(option.model.name))
-    return resolveModelName(option.model, specificModel, providers);
-  const normalized = normalizedClientSpecificModel(option.model, specificModel);
-  if (normalized) return resolveModelName(option.model, normalized, providers);
-  const prefix = wildcardModelPrefix(option.model.name);
+  if (option.kind === "virtual") return selectedModel;
+  if (!isWildcardModelName(option.config.name))
+    return resolveModelName(option.config, specificModel, providers);
+  const normalized = normalizedClientSpecificModel(
+    option.config,
+    specificModel,
+  );
+  if (normalized) return resolveModelName(option.config, normalized, providers);
+  const prefix = wildcardModelPrefix(option.config.name);
   return prefix ? `${prefix}<model>` : "<model>";
 }
 
@@ -354,6 +403,20 @@ function clientRecipes(args: {
   const base = args.baseUrl.replace(/\/$/, "");
   const v1 = `${base}/v1`;
   const completions = `${v1}/chat/completions`;
+  const requiredApiKey = args.apiKey || "dummy_key";
+  const continuation = "\\";
+  const curlAuthorization = args.apiKey
+    ? `  -H ${JSON.stringify(`Authorization: Bearer ${args.apiKey}`)} ${continuation}\n`
+    : "";
+  const openCodeApiKey = args.apiKey
+    ? `,
+        "apiKey": "{env:AGENTGATEWAY_API_KEY}"`
+    : "";
+  const openCodeApiKeyExport = args.apiKey
+    ? `
+
+export AGENTGATEWAY_API_KEY=${JSON.stringify(args.apiKey)}  # Alternatively, type /connect to enter your API key.`
+    : "";
   return [
     {
       id: "curl",
@@ -362,9 +425,8 @@ function clientRecipes(args: {
         "Minimal raw HTTP request for debugging client connectivity.",
       icon: "curl",
       language: "bash",
-      code: `curl ${JSON.stringify(completions)} \\
-  -H "Authorization: Bearer ${args.apiKey}" \\
-  -H "Content-Type: application/json" \\
+      code: `curl ${JSON.stringify(completions)} ${continuation}
+${curlAuthorization}  -H "Content-Type: application/json" ${continuation}
   -d '{
     "model": "${args.model}",
     "messages": [
@@ -379,10 +441,10 @@ function clientRecipes(args: {
         "Use the gateway URL and key with Claude-compatible model routes when configured.",
       icon: "claude",
       language: "bash",
-      code: `export ANTHROPIC_AUTH_TOKEN="${args.apiKey}"
-export ANTHROPIC_BASE_URL="${base}"
+      code: `export ANTHROPIC_AUTH_TOKEN=${JSON.stringify(requiredApiKey)}
+export ANTHROPIC_BASE_URL=${JSON.stringify(base)}
 
-claude --model "${args.model}"`,
+claude --model ${JSON.stringify(args.model)}`,
     },
     {
       id: "claude-desktop",
@@ -412,7 +474,7 @@ claude --model "${args.model}"`,
       ],
       language: "text",
       code: `Gateway URL: ${base}
-API Key: ${args.apiKey}`,
+API Key: ${requiredApiKey}`,
     },
     {
       id: "codex",
@@ -421,7 +483,7 @@ API Key: ${args.apiKey}`,
         "Use OpenAI-compatible environment variables when running Codex against the gateway.",
       icon: "codex",
       language: "bash",
-      code: `export OPENAI_API_KEY='${args.apiKey}'
+      code: `export OPENAI_API_KEY=${JSON.stringify(requiredApiKey)}
 # If Codex has an existing login it can impact functionality. Better if it's logged out.
 # If you don't want to override your Codex configuration, you can set up a new dedicated configuration file.
 export CODEX_HOME=/tmp/codex-gateway-home && mkdir -p $CODEX_HOME # optional
@@ -457,8 +519,7 @@ cat > opencode.json <<'EOF'
       "npm": "@ai-sdk/openai-compatible",
       "name": "Agentgateway",
       "options": {
-        "baseURL": "${v1}",
-        "apiKey": "{env:AGENTGATEWAY_API_KEY}"
+        "baseURL": "${v1}"${openCodeApiKey}
       },
       "models": {
         "${args.model}": {
@@ -469,9 +530,40 @@ cat > opencode.json <<'EOF'
   }
 }
 EOF
-
-export AGENTGATEWAY_API_KEY='${args.apiKey}'  # Alternatively, type /connect to enter your API key.
+${openCodeApiKeyExport}
 opencode`,
+    },
+    {
+      id: "goose",
+      title: "Goose",
+      description:
+        "Point Goose's OpenAI provider at the gateway host and chat completions path.",
+      icon: "goose",
+      steps: [
+        <>
+          Run <code>goose configure</code> &gt;{" "}
+          <strong>Configure Providers</strong> &gt; <strong>OpenAI</strong>, or
+          export the variables below before starting a session.
+        </>,
+        <>
+          To persist the settings, add them to{" "}
+          <code>~/.config/goose/config.yaml</code>.
+        </>,
+        <>
+          <code>goose configure</code> cannot enter custom model names; set{" "}
+          <code>GOOSE_MODEL</code> in <code>config.yaml</code> for models
+          missing from the provider list.
+        </>,
+      ],
+      language: "bash",
+      code: `export GOOSE_PROVIDER=openai
+export GOOSE_MODEL=${JSON.stringify(args.model)}
+export OPENAI_HOST=${JSON.stringify(base)}
+export OPENAI_BASE_PATH=v1/chat/completions
+# Goose requires a non-empty key; the gateway holds the real provider credentials.
+export OPENAI_API_KEY=${JSON.stringify(requiredApiKey)}
+
+goose session`,
     },
     {
       id: "cursor",
@@ -494,7 +586,7 @@ opencode`,
       ],
       language: "text",
       code: `Override OpenAI Base URL: ${base}
-OpenAI API Key: ${args.apiKey}
+OpenAI API Key: ${requiredApiKey}
 Custom model: ${args.model}`,
     },
     {
@@ -551,7 +643,7 @@ Custom model: ${args.model}`,
       code: `import OpenAI from "openai";
 
 const client = new OpenAI({
-  apiKey: "${args.apiKey}",
+  apiKey: "${requiredApiKey}",
   baseURL: "${v1}",
 });
 
@@ -572,7 +664,7 @@ console.log(response.choices[0]?.message?.content);`,
       code: `from openai import OpenAI
 
 client = OpenAI(
-    api_key="${args.apiKey}",
+    api_key="${requiredApiKey}",
     base_url="${v1}",
 )
 
@@ -629,6 +721,13 @@ function ClientSetupIcon(props: { recipe: ClientRecipe; compact?: boolean }) {
     return (
       <span className={className}>
         <img src={githubCopilotIcon} alt="" aria-hidden="true" />
+      </span>
+    );
+  }
+  if (props.recipe.icon === "goose") {
+    return (
+      <span className={className}>
+        <img src={gooseIcon} alt="" aria-hidden="true" />
       </span>
     );
   }
@@ -728,7 +827,10 @@ const pythonRules: CodeRule[] = [
 const bashRules: CodeRule[] = [
   { className: "code-comment", pattern: /#.*/y },
   { className: "code-string", pattern: /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'/y },
-  { className: "code-keyword", pattern: /\b(?:curl|export|claude|codex)\b/y },
+  {
+    className: "code-keyword",
+    pattern: /\b(?:curl|export|claude|codex|goose)\b/y,
+  },
   { className: "code-flag", pattern: /--?[A-Za-z][\w-]*/y },
   { className: "code-number", pattern: /\b\d+(?:\.\d+)?\b/y },
 ];

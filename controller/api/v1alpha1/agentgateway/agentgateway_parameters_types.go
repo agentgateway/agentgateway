@@ -47,6 +47,9 @@ type AgentgatewayParametersList struct {
 	Items           []AgentgatewayParameters `json:"items"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!has(self.deployment) || !has(self.workload) || !has(self.workload.kind) || self.workload.kind == 'Deployment'",message="deployment overlays are only valid when workload.kind is Deployment or unset"
+// +kubebuilder:validation:XValidation:rule="!has(self.daemonSet) || (has(self.workload) && has(self.workload.kind) && self.workload.kind == 'DaemonSet')",message="daemonSet overlays are only valid when workload.kind is DaemonSet"
+// +kubebuilder:validation:XValidation:rule="!has(self.horizontalPodAutoscaler) || !has(self.workload) || !has(self.workload.kind) || self.workload.kind != 'DaemonSet'",message="horizontalPodAutoscaler is not valid when workload.kind is DaemonSet"
 type AgentgatewayParametersSpec struct {
 	AgentgatewayParametersConfigs  `json:",inline"`
 	AgentgatewayParametersOverlays `json:",inline"`
@@ -61,6 +64,30 @@ const (
 	AgentgatewayParametersLoggingText AgentgatewayParametersLoggingFormat = "text"
 )
 
+// AgentgatewayParametersWorkloadKind selects the Kubernetes workload kind used
+// for a managed Gateway data plane.
+// +k8s:enum
+type AgentgatewayParametersWorkloadKind string
+
+const (
+	// AgentgatewayParametersWorkloadDeployment uses a Deployment for the managed
+	// Gateway data plane.
+	AgentgatewayParametersWorkloadDeployment AgentgatewayParametersWorkloadKind = "Deployment"
+
+	// AgentgatewayParametersWorkloadDaemonSet uses a DaemonSet for the managed
+	// Gateway data plane.
+	AgentgatewayParametersWorkloadDaemonSet AgentgatewayParametersWorkloadKind = "DaemonSet"
+)
+
+// AgentgatewayParametersWorkload selects the Kubernetes workload kind used for
+// a managed Gateway data plane.
+type AgentgatewayParametersWorkload struct {
+	// Kind selects the Kubernetes workload kind. When unset, Deployment is used.
+	//
+	// +optional
+	Kind AgentgatewayParametersWorkloadKind `json:"kind,omitempty"`
+}
+
 type AgentgatewayParametersLogging struct {
 	// Logging level in standard `RUST_LOG` syntax, for example `info` (the
 	// default), or a comma-separated per-module setting such as
@@ -73,6 +100,12 @@ type AgentgatewayParametersLogging struct {
 }
 
 type AgentgatewayParametersConfigs struct {
+	// `workload` selects the Kubernetes workload kind for the managed Gateway
+	// data plane. If unset, Deployment is used.
+	//
+	// +optional
+	Workload *AgentgatewayParametersWorkload `json:"workload,omitempty"`
+
 	// Logging configuration. By default, all logs are set to
 	// `info` level.
 	// +optional
@@ -252,6 +285,11 @@ type AgentgatewayParametersOverlays struct {
 	// +optional
 	Deployment *KubernetesResourceOverlay `json:"deployment,omitempty"`
 
+	// Overrides for the generated
+	// `DaemonSet` resource.
+	// +optional
+	DaemonSet *KubernetesResourceOverlay `json:"daemonSet,omitempty"`
+
 	// Overrides for the generated `Service`
 	// resource.
 	// +optional
@@ -264,16 +302,16 @@ type AgentgatewayParametersOverlays struct {
 
 	// Creates a `PodDisruptionBudget` for the
 	// agentgateway proxy. If absent, no PDB is created. If present, a PDB is
-	// created with its selector automatically configured to target the
-	// agentgateway proxy `Deployment`. The `metadata` and `spec` fields from
-	// this overlay are applied to the generated PDB.
+	// created with its selector automatically configured to target the selected
+	// generated workload. The `metadata` and `spec` fields from this overlay are
+	// applied to the generated PDB.
 	// +optional
 	PodDisruptionBudget *KubernetesResourceOverlay `json:"podDisruptionBudget,omitempty"`
 
 	// Creates a `HorizontalPodAutoscaler`
-	// for the agentgateway proxy. If absent, no HPA is created. If present, an
-	// HPA is created with its `scaleTargetRef` automatically configured to
-	// target the agentgateway proxy `Deployment`. The `metadata` and `spec`
+	// for Deployment-backed agentgateway proxies. If absent, no HPA is created.
+	// If present, an HPA is created with its `scaleTargetRef` automatically
+	// configured to target the generated `Deployment`. The `metadata` and `spec`
 	// fields from this overlay are applied to the generated HPA.
 	// +optional
 	HorizontalPodAutoscaler *KubernetesResourceOverlay `json:"horizontalPodAutoscaler,omitempty"`

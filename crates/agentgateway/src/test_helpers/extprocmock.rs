@@ -86,6 +86,8 @@ pub fn response_header_response_with_dynamic_metadata(
 
 #[async_trait]
 pub trait Handler {
+	async fn on_open(&mut self, _metadata: &tonic::metadata::MetadataMap) {}
+
 	async fn on_request(&mut self, _request: &ProcessingRequest) {}
 
 	async fn handle_request_headers(
@@ -214,6 +216,7 @@ where
 		let (tx, rx) = mpsc::channel(32);
 
 		let mut handler = (self.handler.clone())();
+		handler.on_open(request.metadata()).await;
 
 		tokio::spawn(async move {
 			let mut request_stream = request.into_inner();

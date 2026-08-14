@@ -3,7 +3,6 @@ package translator
 import (
 	"fmt"
 	"maps"
-	"reflect"
 	"slices"
 	"time"
 
@@ -12,6 +11,7 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"istio.io/istio/pkg/config/schema/kind"
 	"istio.io/istio/pkg/util/hash"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
@@ -186,7 +186,7 @@ func equals(a any, b any) bool {
 	}
 	// We do NOT do gogo here. The reason is Kubernetes has hacked up almost-gogo types that do not allow Equals() calls
 
-	return reflect.DeepEqual(a, b)
+	return apiequality.Semantic.DeepEqual(a, b)
 }
 
 type Status any
