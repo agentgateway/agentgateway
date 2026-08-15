@@ -785,6 +785,10 @@ pub struct ProxyInputs {
 	pub admin: Option<management::admin::AdminService>,
 	pub mcp_state: mcp::App,
 	pub ca: Option<Arc<CaClient>>,
+	/// HAProxy-style `maxconn` for downstream connections, keyed by bind.
+	pub connection_limits: Arc<proxy::admission::AdmissionRegistry>,
+	/// In-flight request budget (HTTP/1 requests and HTTP/2 streams), keyed by bind.
+	pub request_limits: Arc<proxy::admission::AdmissionRegistry>,
 }
 
 impl ProxyInputs {
@@ -811,6 +815,8 @@ impl ProxyInputs {
 			admin: None,
 			mcp_state,
 			ca,
+			connection_limits: Default::default(),
+			request_limits: Default::default(),
 		}
 	}
 }

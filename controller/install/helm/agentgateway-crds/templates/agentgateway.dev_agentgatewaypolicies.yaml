@@ -6614,6 +6614,14 @@ spec:
                         x-kubernetes-validations:
                         - message: http2KeepaliveTimeout must be at least 1 second
                           rule: duration(self) >= duration('1s')
+                      http2MaxConcurrentStreams:
+                        description: |-
+                          HTTP/2 SETTINGS_MAX_CONCURRENT_STREAMS advertised to clients.
+                          Extra streams are refused by the protocol before a proxy task starts.
+                          Unset uses the hyper default (not a process-wide cap).
+                        format: int32
+                        minimum: 1
+                        type: integer
                       http2MaxHeaderSize:
                         anyOf:
                         - type: integer
@@ -6662,6 +6670,15 @@ spec:
                         - message: value must be at least 1 byte and fit within uint32
                           rule: (self >= 1 && self <= 4294967295) || self.size() >
                             0
+                      maxConcurrentRequests:
+                        description: |-
+                          Maximum number of in-flight HTTP requests (HTTP/1 and HTTP/2 streams)
+                          this gateway/port will actively process. Additional requests wait up to
+                          maxRequestWait, then are rejected with 503.
+                          Unset means unlimited.
+                        format: int32
+                        minimum: 1
+                        type: integer
                       maxConnectionDuration:
                         description: |-
                           Maximum time a connection is allowed to remain open.
@@ -6673,13 +6690,28 @@ spec:
                         x-kubernetes-validations:
                         - message: maxConnectionDuration must be at least 1 second
                           rule: duration(self) >= duration('1s')
+                      maxPendingRequests:
+                        description: |-
+                          How many requests may wait for an active slot. Defaults to maxConcurrentRequests.
+                          0 means reject immediately when at maxConcurrentRequests.
+                        format: int32
+                        minimum: 0
+                        type: integer
+                      maxRequestWait:
+                        description: |-
+                          How long a pending request waits for a free slot. Defaults to 10s.
+                          0 means do not wait.
+                        maxLength: 32
+                        pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                        type: string
                     type: object
                     x-kubernetes-validations:
                     - message: at least one of the fields in [http1HeaderCase http1IdleTimeout
                         http1MaxHeaders http2ConnectionWindowSize http2FrameSize http2KeepaliveInterval
-                        http2KeepaliveTimeout http2MaxHeaderSize http2WindowSize maxBufferSize
-                        maxConnectionDuration] must be set
-                      rule: '[has(self.http1HeaderCase),has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConnectionDuration)].filter(x,x==true).size()
+                        http2KeepaliveTimeout http2MaxConcurrentStreams http2MaxHeaderSize
+                        http2WindowSize maxBufferSize maxConcurrentRequests maxConnectionDuration
+                        maxPendingRequests maxRequestWait] must be set
+                      rule: '[has(self.http1HeaderCase),has(self.http1IdleTimeout),has(self.http1MaxHeaders),has(self.http2ConnectionWindowSize),has(self.http2FrameSize),has(self.http2KeepaliveInterval),has(self.http2KeepaliveTimeout),has(self.http2MaxConcurrentStreams),has(self.http2MaxHeaderSize),has(self.http2WindowSize),has(self.maxBufferSize),has(self.maxConcurrentRequests),has(self.maxConnectionDuration),has(self.maxPendingRequests),has(self.maxRequestWait)].filter(x,x==true).size()
                         >= 1'
                   metrics:
                     description: |-
@@ -6845,10 +6877,49 @@ spec:
                             - message: time must be at least 1 second
                               rule: duration(self) >= duration('1s')
                         type: object
+                      maxConnectionWait:
+                        description: |-
+                          How long a pending connection waits for a free slot. Defaults to 10s.
+                          0 means do not wait.
+                        maxLength: 32
+                        pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                        type: string
+                      maxConnections:
+                        description: |-
+                          Maximum number of concurrent downstream connections this gateway/port will
+                          actively process (TLS/HTTP). When at the cap the listener stops calling accept(),
+                          so additional clients wait in the kernel backlog rather than becoming tasks.
+                          Note that with a cap in place, idle connections are expensive: pair this with
+                          http2KeepaliveInterval or maxConnectionDuration so a client cannot hold a slot
+                          indefinitely without sending requests.
+                          Unset means unlimited.
+                        format: int32
+                        minimum: 1
+                        type: integer
+                      maxPendingConnections:
+                        description: |-
+                          How many connections may wait for an active slot. Defaults to maxConnections.
+                          0 means do not wait: close immediately when at maxConnections.
+                        format: int32
+                        minimum: 0
+                        type: integer
+                      stopAcceptingAtMemoryPercent:
+                        description: |-
+                          Pause accept() when the cgroup memory working set (usage minus reclaimable page
+                          cache, the same figure kubelet uses for OOM decisions) reaches this percent of the
+                          memory limit. Accepting resumes 10 points below the threshold. Typical: 75.
+                          Unset means disabled; an unreadable cgroup fails open.
+                        format: int32
+                        maximum: 100
+                        minimum: 1
+                        type: integer
                     type: object
                     x-kubernetes-validations:
-                    - message: at least one of the fields in [keepalive] must be set
-                      rule: '[has(self.keepalive)].filter(x,x==true).size() >= 1'
+                    - message: at least one of the fields in [keepalive maxConnectionWait
+                        maxConnections maxPendingConnections stopAcceptingAtMemoryPercent]
+                        must be set
+                      rule: '[has(self.keepalive),has(self.maxConnectionWait),has(self.maxConnections),has(self.maxPendingConnections),has(self.stopAcceptingAtMemoryPercent)].filter(x,x==true).size()
+                        >= 1'
                   tls:
                     description: Settings for managing incoming TLS connections.
                     properties:
