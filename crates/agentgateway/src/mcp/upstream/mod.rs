@@ -84,17 +84,30 @@ impl IncomingRequestContext {
 				auto.target = Some(authority);
 			}
 		}
+		// When the gateway is tracing, its own span (not the caller's) must parent the upstream
+		// request; a gateway that is not tracing must not break trace continuity it doesn't own.
+		let gateway_span = self
+			.ext
+			.get::<crate::telemetry::trc::TraceParent>()
+			.cloned();
 		for (k, v) in &self.headers {
 			// Remove headers we do not want to propagate to the backend
 			if k == http::header::CONTENT_ENCODING
 				|| k == http::header::CONTENT_LENGTH
 				|| k.as_str().eq_ignore_ascii_case(HEADER_SESSION_ID)
+				|| (gateway_span.is_some()
+					&& (k == http::x_headers::TRACEPARENT
+						|| k.as_str().eq_ignore_ascii_case("tracestate")
+						|| k.as_str().eq_ignore_ascii_case("baggage")))
 			{
 				continue;
 			}
 			if !req.headers().contains_key(k) {
 				req.headers_mut().insert(k.clone(), v.clone());
 			}
+		}
+		if let Some(tp) = gateway_span {
+			tp.insert_header(req);
 		}
 		let Some(authority) = self.authority.clone() else {
 			return Ok(());
@@ -105,9 +118,24 @@ impl IncomingRequestContext {
 		})
 	}
 	// SEP-414: copy W3C trace context into the message's `_meta` (un-prefixed keys, per spec).
-	// The only trace carrier for stdio upstreams, which have no request headers.
+	// The only trace carrier for stdio upstreams, which have no request headers. `traceparent`
+	// prefers the gateway's own span over the caller's, matching `apply()`; `tracestate`/`baggage`
+	// have no gateway equivalent and are always header-sourced.
 	fn stamp_trace_context(&self, meta: &mut rmcp::model::MetaObject) {
-		for key in ["traceparent", "tracestate", "baggage"] {
+		let traceparent = match self.ext.get::<crate::telemetry::trc::TraceParent>() {
+			Some(tp) => Some(format!("{tp:?}")),
+			None => self
+				.headers
+				.get("traceparent")
+				.and_then(|v| v.to_str().ok())
+				.map(str::to_string),
+		};
+		if let Some(value) = traceparent {
+			meta
+				.0
+				.insert("traceparent".to_string(), serde_json::Value::String(value));
+		}
+		for key in ["tracestate", "baggage"] {
 			let Some(value) = self.headers.get(key).and_then(|v| v.to_str().ok()) else {
 				continue;
 			};
@@ -723,6 +751,56 @@ mod tests {
 		assert_eq!(meta.get("baggage").unwrap(), "userId=42");
 		// Non-trace headers are not smuggled into `_meta`.
 		assert!(meta.get("authorization").is_none());
+	}
+
+	#[test]
+	fn apply_prefers_gateway_traceparent_extension_over_client_header() {
+		let client_traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+		let gateway_span = crate::telemetry::trc::TraceParent {
+			version: 0,
+			trace_id: 0x4bf92f3577b34da6a3ce929d0e0e4736,
+			span_id: 0x1111_2222_3333_4444,
+			flags: 1,
+		};
+		let mut ctx = ctx_with_headers(&[("traceparent", client_traceparent)]);
+		ctx.extensions_mut().insert(gateway_span.clone());
+		let mut req = empty_upstream_req();
+		ctx.apply(&mut req).unwrap();
+		assert_eq!(
+			req.headers().get("traceparent").unwrap(),
+			format!("{gateway_span:?}").as_str()
+		);
+	}
+
+	#[test]
+	fn apply_passes_through_client_traceparent_without_gateway_extension() {
+		let client_traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+		let ctx = ctx_with_headers(&[("traceparent", client_traceparent)]);
+		let mut req = empty_upstream_req();
+		ctx.apply(&mut req).unwrap();
+		assert_eq!(
+			req.headers().get("traceparent").unwrap(),
+			client_traceparent
+		);
+	}
+
+	#[test]
+	fn stamp_trace_context_prefers_gateway_traceparent_extension() {
+		let client_traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+		let gateway_span = crate::telemetry::trc::TraceParent {
+			version: 0,
+			trace_id: 0x4bf92f3577b34da6a3ce929d0e0e4736,
+			span_id: 0x1111_2222_3333_4444,
+			flags: 1,
+		};
+		let mut ctx = ctx_with_headers(&[("traceparent", client_traceparent)]);
+		ctx.extensions_mut().insert(gateway_span.clone());
+		let mut req = ping_request();
+		ctx.stamp_trace_context(&mut req.get_meta_mut().0);
+		assert_eq!(
+			req.get_meta().0.get("traceparent").unwrap(),
+			format!("{gateway_span:?}").as_str()
+		);
 	}
 
 	#[test]
