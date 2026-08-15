@@ -733,6 +733,9 @@ pub struct XDSConfig {
 	pub address: Option<String>,
 	pub auth: AuthSource,
 	pub ca_cert: RootCert,
+	/// Additional headers sent with every xDS request.
+	#[serde(skip)]
+	pub headers: Vec<(String, String)>,
 	pub namespace: Strng,
 	pub gateway: Strng,
 
