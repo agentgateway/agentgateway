@@ -975,6 +975,8 @@ mod tests {
 			ca: None,
 			spiffe: None,
 			mcp_state: crate::mcp::App::new(stores, encoder),
+			connection_limits: Default::default(),
+			request_limits: Default::default(),
 		})
 	}
 

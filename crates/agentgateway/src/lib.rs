@@ -825,6 +825,10 @@ pub struct ProxyInputs {
 	pub mcp_state: mcp::App,
 	pub ca: Option<Arc<CaClient>>,
 	pub spiffe: Option<Arc<control::spiffe::SpiffeClient>>,
+	/// Downstream connection admission limits, keyed by bind.
+	pub connection_limits: Arc<proxy::admission::AdmissionRegistry>,
+	/// In-flight request budget (HTTP/1 requests and HTTP/2 streams), keyed by bind.
+	pub request_limits: Arc<proxy::admission::AdmissionRegistry>,
 }
 
 impl ProxyInputs {
@@ -854,6 +858,8 @@ impl ProxyInputs {
 			mcp_state,
 			ca,
 			spiffe,
+			connection_limits: Default::default(),
+			request_limits: Default::default(),
 		}
 	}
 }

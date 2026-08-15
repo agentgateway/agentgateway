@@ -1,7 +1,19 @@
 use std::time::Duration;
 
 use frozen_collections::{FzHashSet, Len};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+/// Reject out-of-range percentages at parse time: a threshold above 100 can never fire, so
+/// accepting it would leave the operator believing the guard is armed when it is not.
+fn deserialize_percent<'de, D: Deserializer<'de>>(de: D) -> Result<Option<u8>, D::Error> {
+	let value = Option::<u8>::deserialize(de)?;
+	match value {
+		Some(p) if p > 100 => Err(serde::de::Error::custom(format!(
+			"percent must be between 1 and 100, got {p}"
+		))),
+		other => Ok(other),
+	}
+}
 
 use crate::telemetry::log::OrderedStringMap;
 use crate::types::agent::SimpleBackendReferenceWithPolicies;
@@ -75,6 +87,11 @@ pub struct HTTP {
 	/// Maximum size of HTTP/2 request headers.
 	#[serde(default)]
 	pub http2_max_header_size: Option<u32>,
+	/// HTTP/2 SETTINGS_MAX_CONCURRENT_STREAMS advertised to clients on this bind.
+	/// Extra streams are refused by the protocol (RST_STREAM) before a proxy task starts.
+	/// Unset = hyper default (not a process-wide cap).
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub http2_max_concurrent_streams: Option<u32>,
 	/// Interval between HTTP/2 keepalive pings.
 	#[serde(with = "serde_dur_option")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
@@ -93,6 +110,24 @@ pub struct HTTP {
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	#[serde(default)]
 	pub max_connection_duration: Option<Duration>,
+
+	/// Max in-flight HTTP requests (HTTP/1 and HTTP/2 streams) processed on this bind.
+	/// Extra requests wait up to `maxRequestWait`, then are rejected with 503.
+	/// Unset = unlimited.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub max_concurrent_requests: Option<u32>,
+	/// How many requests may wait for an active slot. Defaults to `maxConcurrentRequests`.
+	/// `0` means reject immediately when at `maxConcurrentRequests`.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub max_pending_requests: Option<u32>,
+	/// How long a pending request waits for a free slot. Defaults to 10s. `0` means do not wait.
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		with = "serde_dur_option"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub max_request_wait: Option<Duration>,
 }
 
 impl Default for HTTP {
@@ -110,9 +145,13 @@ impl Default for HTTP {
 			http2_max_header_size: None,
 
 			http2_keepalive_interval: None,
+			http2_max_concurrent_streams: None,
 			http2_keepalive_timeout: None,
 
 			max_connection_duration: None,
+			max_concurrent_requests: None,
+			max_pending_requests: None,
+			max_request_wait: None,
 		}
 	}
 }
@@ -160,7 +199,36 @@ impl Default for TLS {
 #[cfg_attr(feature = "schema", schemars(rename = "FrontendTCP"))]
 pub struct TCP {
 	/// TCP keepalive settings for downstream connections.
+	#[serde(default)]
 	pub keepalives: super::agent::KeepaliveConfig,
+	/// Max concurrent downstream connections processed on this bind.
+	/// When at cap the listener stops calling accept() (HAProxy maxconn): extra SYNs sit in
+	/// the kernel backlog instead of becoming tokio tasks / H2 sessions. Unset = unlimited.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub max_connections: Option<u32>,
+	/// How many connections may wait in-process for an active slot. Defaults to `maxConnections`.
+	/// `0` means do not wait: stop accept() when at `maxConnections`.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub max_pending_connections: Option<u32>,
+	/// How long a pending connection waits for a free slot. Defaults to 10s. `0` means do not wait.
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		with = "serde_dur_option"
+	)]
+	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
+	pub max_connection_wait: Option<Duration>,
+	/// Pause accept() when the cgroup memory working set (usage minus reclaimable page cache,
+	/// the same figure kubelet uses for OOM decisions) reaches this percent of the memory
+	/// limit, in the style of Envoy's overload manager. Typical: 75. Accepting resumes 10
+	/// points below the threshold. Unset = disabled; a cgroup that cannot be read fails open.
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		deserialize_with = "deserialize_percent"
+	)]
+	#[cfg_attr(feature = "schema", schemars(range(min = 1, max = 100)))]
+	pub stop_accepting_at_memory_percent: Option<u8>,
 }
 
 #[apply(schema_enum!)]

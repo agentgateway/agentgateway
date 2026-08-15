@@ -1,3 +1,5 @@
+pub mod admission;
+pub(crate) mod cgroup_memory;
 pub mod dtrace;
 mod gateway;
 pub mod httpproxy;
@@ -95,6 +97,7 @@ impl ProxyError {
 				ProxyResponseReason::RateLimit
 			},
 			ProxyError::GuardrailRejected { .. } => ProxyResponseReason::Guardrail,
+			ProxyError::RequestLimitExceeded => ProxyResponseReason::Overload,
 		}
 	}
 }
@@ -131,6 +134,8 @@ pub enum ProxyResponseReason {
 	ExtProc,
 	/// Rate limit exceeded
 	RateLimit,
+	/// Shed because the bind is at its in-flight request budget
+	Overload,
 	/// An LLM guardrail rejected the request
 	Guardrail,
 	/// MCP
@@ -221,6 +226,10 @@ pub enum ProxyError {
 		remaining: u64,
 		reset_seconds: u64,
 	},
+	/// The bind is at its in-flight request budget. Deliberately fieldless: this is produced on
+	/// the shedding path under overload, where a `String` per rejection is a real allocation cost.
+	#[error("request limit exceeded")]
+	RequestLimitExceeded,
 	#[error("rate limit failed")]
 	RateLimitFailed,
 	#[error("request rejected by {guardrail} guardrail")]
@@ -394,6 +403,7 @@ impl ProxyError {
 			ProxyError::Http(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::Body(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::ProcessingString(_) => StatusCode::SERVICE_UNAVAILABLE,
+			ProxyError::RequestLimitExceeded => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
 			// Rate limit service communication failure is a server error (500), not a rate limit (429).
 			// This matches Envoy's behavior (status_on_error defaults to 500).

@@ -9507,6 +9507,15 @@
           "minimum": 0,
           "default": null
         },
+        "http2MaxConcurrentStreams": {
+          "description": "HTTP/2 SETTINGS_MAX_CONCURRENT_STREAMS advertised to clients on this bind.\nExtra streams are refused by the protocol (RST_STREAM) before a proxy task starts.\nUnset = hyper default (not a process-wide cap).",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "http2KeepaliveInterval": {
           "description": "Interval between HTTP/2 keepalive pings.",
           "type": [
@@ -9530,6 +9539,31 @@
             "null"
           ],
           "default": null
+        },
+        "maxConcurrentRequests": {
+          "description": "Max in-flight HTTP requests (HTTP/1 and HTTP/2 streams) processed on this bind.\nExtra requests wait up to `maxRequestWait`, then are rejected with 503.\nUnset = unlimited.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "maxPendingRequests": {
+          "description": "How many requests may wait for an active slot. Defaults to `maxConcurrentRequests`.\n`0` means reject immediately when at `maxConcurrentRequests`.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "maxRequestWait": {
+          "description": "How long a pending request waits for a free slot. Defaults to 10s. `0` means do not wait.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
@@ -9623,13 +9657,51 @@
       "properties": {
         "keepalives": {
           "description": "TCP keepalive settings for downstream connections.",
-          "$ref": "#/$defs/KeepaliveConfig"
+          "$ref": "#/$defs/KeepaliveConfig",
+          "default": {
+            "enabled": true,
+            "time": "3m0s",
+            "interval": "3m0s",
+            "retries": 9
+          }
+        },
+        "maxConnections": {
+          "description": "Max concurrent downstream connections processed on this bind.\nWhen at cap the listener stops calling accept() (HAProxy maxconn): extra SYNs sit in\nthe kernel backlog instead of becoming tokio tasks / H2 sessions. Unset = unlimited.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "maxPendingConnections": {
+          "description": "How many connections may wait in-process for an active slot. Defaults to `maxConnections`.\n`0` means do not wait: stop accept() when at `maxConnections`.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "maxConnectionWait": {
+          "description": "How long a pending connection waits for a free slot. Defaults to 10s. `0` means do not wait.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "stopAcceptingAtMemoryPercent": {
+          "description": "Pause accept() when the cgroup memory working set (usage minus reclaimable page cache,\nthe same figure kubelet uses for OOM decisions) reaches this percent of the memory\nlimit, in the style of Envoy's overload manager. Typical: 75. Accepting resumes 10\npoints below the threshold. Unset = disabled; a cgroup that cannot be read fails open.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint8",
+          "minimum": 1,
+          "maximum": 100
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "keepalives"
-      ]
+      "additionalProperties": false
     },
     "NetworkAuthorization": {
       "description": "CEL authorization rules for downstream network connections.",

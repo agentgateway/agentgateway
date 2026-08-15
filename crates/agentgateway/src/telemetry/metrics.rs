@@ -147,6 +147,24 @@ pub struct ConnectLabels {
 	pub transport: DefaultedUnknown<RichStrng>,
 }
 
+/// Why a connection or request was shed by admission control. Without this an operator cannot
+/// tell a healthy gateway from one silently dropping half its traffic.
+#[derive(
+	Copy, Clone, Hash, Debug, PartialEq, Eq, prometheus_client::encoding::EncodeLabelValue,
+)]
+pub enum ShedReason {
+	/// At capacity with no room in the wait queue.
+	QueueFull,
+	/// Waited for a slot and gave up.
+	Timeout,
+}
+
+#[derive(Clone, Hash, Debug, PartialEq, Eq, EncodeLabelSet)]
+pub struct ShedLabels {
+	pub bind: DefaultedUnknown<RichStrng>,
+	pub reason: ShedReason,
+}
+
 #[derive(
 	Copy, Clone, Hash, Debug, PartialEq, Eq, prometheus_client::encoding::EncodeLabelValue, Default,
 )]
@@ -259,6 +277,9 @@ pub struct Metrics {
 	pub downstream_connection: TCPCounter,
 	pub tcp_downstream_rx_bytes: Family<TCPLabels, counter::Counter>,
 	pub tcp_downstream_tx_bytes: Family<TCPLabels, counter::Counter>,
+
+	pub downstream_connections_shed: Family<ShedLabels, counter::Counter>,
+	pub requests_shed: Family<ShedLabels, counter::Counter>,
 
 	pub upstream_connect_duration: Histogram<ConnectLabels>,
 	pub upstream_call_duration: Histogram<OutboundCallLabels>,
@@ -419,6 +440,16 @@ impl Metrics {
 				&mut registry,
 				"downstream_connections",
 				"The total number of downstream connections established",
+			),
+			downstream_connections_shed: build(
+				&mut registry,
+				"downstream_connections_shed",
+				"The total number of downstream connections dropped by the maxConnections limit",
+			),
+			requests_shed: build(
+				&mut registry,
+				"requests_shed",
+				"The total number of requests rejected by the in-flight request budget",
 			),
 
 			mcp_requests: build(

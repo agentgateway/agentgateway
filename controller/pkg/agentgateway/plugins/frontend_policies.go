@@ -315,6 +315,16 @@ func translateFrontendTCP(policy *agentgateway.AgentgatewayPolicy, name string) 
 			spec.Keepalives.Retries = castUint32(ka.Retries) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
 		}
 	}
+	if tcp.MaxConnections != nil {
+		spec.MaxConnections = castUint32(tcp.MaxConnections) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+	}
+	if tcp.MaxPendingConnections != nil {
+		spec.MaxPendingConnections = castUint32(tcp.MaxPendingConnections) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+	}
+	spec.MaxConnectionWait = durationToProto(tcp.MaxConnectionWait)
+	if tcp.StopAcceptingAtMemoryPercent != nil {
+		spec.StopAcceptingAtMemoryPercent = castUint32(tcp.StopAcceptingAtMemoryPercent) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+	}
 
 	tcpPolicy := &api.Policy{
 		Key:  name + frontendTcpPolicySuffix,
@@ -591,6 +601,16 @@ func translateFrontendHTTP(policy *agentgateway.AgentgatewayPolicy, name string)
 	spec.Http2KeepaliveInterval = durationToProto(http.HTTP2KeepaliveInterval)
 	spec.Http2KeepaliveTimeout = durationToProto(http.HTTP2KeepaliveTimeout)
 	spec.MaxConnectionDuration = durationToProto(http.MaxConnectionDuration)
+	if v := http.HTTP2MaxConcurrentStreams; v != nil {
+		spec.Http2MaxConcurrentStreams = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+	}
+	if v := http.MaxConcurrentRequests; v != nil {
+		spec.MaxConcurrentRequests = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+	}
+	if v := http.MaxPendingRequests; v != nil {
+		spec.MaxPendingRequests = castUint32(v) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+	}
+	spec.MaxRequestWait = durationToProto(http.MaxRequestWait)
 
 	httpPolicy := &api.Policy{
 		Key:  name + frontendHttpPolicySuffix,

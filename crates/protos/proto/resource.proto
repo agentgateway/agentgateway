@@ -748,6 +748,15 @@ message FrontendPolicySpec {
     optional uint32 http2_max_header_size = 10;
     // Controls HTTP/1 request header casing when encoding responses.
     HTTPHeaderCase http1_header_case = 11;
+    // SETTINGS_MAX_CONCURRENT_STREAMS advertised to HTTP/2 clients. Unset = hyper default.
+    optional uint32 http2_max_concurrent_streams = 12;
+    // Max in-flight HTTP requests (H1 + H2 streams) on this bind. Unset = unlimited.
+    optional uint32 max_concurrent_requests = 13;
+    // How many requests may wait for an active slot. Defaults to max_concurrent_requests.
+    // 0 means reject immediately when at max_concurrent_requests.
+    optional uint32 max_pending_requests = 14;
+    // How long a pending request waits for a free slot. Defaults to 10s.
+    google.protobuf.Duration max_request_wait = 15;
   }
   message TLS {
     // TLS handshake timeout
@@ -776,6 +785,17 @@ message FrontendPolicySpec {
   message TCP {
     // TCP keepalive configuration
     KeepaliveConfig keepalives = 1;
+    // Max concurrent downstream connections processed on this bind (before TLS/HTTP).
+    // Unset means unlimited. Extra clients wait up to max_connection_wait.
+    optional uint32 max_connections = 2;
+    // How many connections may wait for an active slot. Defaults to max_connections.
+    // 0 means close immediately when at max_connections.
+    optional uint32 max_pending_connections = 3;
+    // How long a pending connection waits for a free slot. Defaults to 10s.
+    google.protobuf.Duration max_connection_wait = 4;
+    // Pause accept() when cgroup memory.current >= this percent of memory.max.
+    // Unset = disabled.
+    optional uint32 stop_accepting_at_memory_percent = 5;
   }
 
   message NetworkAuthorization {

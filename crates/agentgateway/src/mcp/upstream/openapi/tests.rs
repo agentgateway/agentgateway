@@ -56,6 +56,8 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 		spiffe: None,
 
 		mcp_state: mcp::router::App::new(stores.clone(), encoder),
+		connection_limits: Default::default(),
+		request_limits: Default::default(),
 	});
 
 	let client = PolicyClient::new(pi.clone());
@@ -1840,6 +1842,8 @@ async fn test_call_tool_with_binary_body() {
 		ca: None,
 		spiffe: None,
 		mcp_state: mcp::router::App::new(stores.clone(), encoder),
+		connection_limits: Default::default(),
+		request_limits: Default::default(),
 	});
 
 	let client = PolicyClient::new(pi.clone());

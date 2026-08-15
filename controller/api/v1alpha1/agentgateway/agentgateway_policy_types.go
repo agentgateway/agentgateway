@@ -796,6 +796,29 @@ type FrontendHTTP struct {
 	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="maxConnectionDuration must be at least 1 second"
 	// +optional
 	MaxConnectionDuration *Duration `json:"maxConnectionDuration,omitempty"`
+
+	// HTTP/2 SETTINGS_MAX_CONCURRENT_STREAMS advertised to clients.
+	// Extra streams are refused by the protocol before a proxy task starts.
+	// Unset uses the hyper default (not a process-wide cap).
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	HTTP2MaxConcurrentStreams *int32 `json:"http2MaxConcurrentStreams,omitempty"`
+	// Maximum number of in-flight HTTP requests (HTTP/1 and HTTP/2 streams)
+	// this gateway/port will actively process. Additional requests wait up to
+	// maxRequestWait, then are rejected with 503.
+	// Unset means unlimited.
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	MaxConcurrentRequests *int32 `json:"maxConcurrentRequests,omitempty"`
+	// How many requests may wait for an active slot. Defaults to maxConcurrentRequests.
+	// 0 means reject immediately when at maxConcurrentRequests.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MaxPendingRequests *int32 `json:"maxPendingRequests,omitempty"`
+	// How long a pending request waits for a free slot. Defaults to 10s.
+	// 0 means do not wait.
+	// +optional
+	MaxRequestWait *Duration `json:"maxRequestWait,omitempty"`
 }
 
 // +kubebuilder:validation:AtLeastOneFieldSet
@@ -882,6 +905,33 @@ type FrontendTCP struct {
 	// Settings for enabling TCP keepalives on the connection.
 	// +optional
 	KeepAlive *Keepalive `json:"keepalive,omitempty"`
+	// Maximum number of concurrent downstream connections this gateway/port will
+	// actively process (TLS/HTTP). When at the cap the listener stops calling accept(),
+	// so additional clients wait in the kernel backlog rather than becoming tasks.
+	// Note that with a cap in place, idle connections are expensive: pair this with
+	// http2KeepaliveInterval or maxConnectionDuration so a client cannot hold a slot
+	// indefinitely without sending requests.
+	// Unset means unlimited.
+	// +kubebuilder:validation:Minimum=1
+	// +optional
+	MaxConnections *int32 `json:"maxConnections,omitempty"`
+	// How many connections may wait for an active slot. Defaults to maxConnections.
+	// 0 means do not wait: close immediately when at maxConnections.
+	// +kubebuilder:validation:Minimum=0
+	// +optional
+	MaxPendingConnections *int32 `json:"maxPendingConnections,omitempty"`
+	// How long a pending connection waits for a free slot. Defaults to 10s.
+	// 0 means do not wait.
+	// +optional
+	MaxConnectionWait *Duration `json:"maxConnectionWait,omitempty"`
+	// Pause accept() when the cgroup memory working set (usage minus reclaimable page
+	// cache, the same figure kubelet uses for OOM decisions) reaches this percent of the
+	// memory limit. Accepting resumes 10 points below the threshold. Typical: 75.
+	// Unset means disabled; an unreadable cgroup fails open.
+	// +kubebuilder:validation:Minimum=1
+	// +kubebuilder:validation:Maximum=100
+	// +optional
+	StopAcceptingAtMemoryPercent *int32 `json:"stopAcceptingAtMemoryPercent,omitempty"`
 }
 
 // TCP keepalive settings.

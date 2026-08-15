@@ -157,6 +157,8 @@ pub async fn run(
 		spiffe,
 
 		mcp_state: mcp::App::new(stores.clone(), config.session_encoder.clone()),
+		connection_limits: Default::default(),
+		request_limits: Default::default(),
 	};
 
 	let gw = proxy::Gateway::new(Arc::new(pi), drain_rx.clone());

@@ -3333,6 +3333,10 @@ fn frontend_policy_from_proto(
 			http2_keepalive_interval: h.http2_keepalive_interval.map(convert_duration),
 			http2_keepalive_timeout: h.http2_keepalive_timeout.map(convert_duration),
 			max_connection_duration: h.max_connection_duration.map(convert_duration),
+			http2_max_concurrent_streams: h.http2_max_concurrent_streams,
+			max_concurrent_requests: h.max_concurrent_requests,
+			max_pending_requests: h.max_pending_requests,
+			max_request_wait: h.max_request_wait.map(convert_duration),
 		}),
 		Some(fps::Kind::Tls(t)) => FrontendPolicy::TLS(frontend::TLS {
 			handshake_timeout: t
@@ -3354,6 +3358,19 @@ fn frontend_policy_from_proto(
 				.as_ref()
 				.map(types::agent::KeepaliveConfig::from)
 				.unwrap_or_default(),
+			max_connections: t.max_connections,
+			max_pending_connections: t.max_pending_connections,
+			max_connection_wait: t.max_connection_wait.map(convert_duration),
+			// Clamp rather than drop: silently turning an overload guard off because the value
+			// was mistyped is the worst possible failure mode.
+			stop_accepting_at_memory_percent: t.stop_accepting_at_memory_percent.and_then(|p| {
+				if p > 100 {
+					diagnostics.add_warning(format!(
+						"stopAcceptingAtMemoryPercent {p} is above 100; clamping to 100"
+					));
+				}
+				u8::try_from(p.min(100)).ok().filter(|p| *p > 0)
+			}),
 		}),
 		Some(fps::Kind::NetworkAuthorization(rbac)) => {
 			let mut allow_exprs = Vec::new();
