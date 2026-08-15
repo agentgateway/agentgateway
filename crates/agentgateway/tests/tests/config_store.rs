@@ -309,3 +309,95 @@ async fn wait_for_models(gateway: &AgentGateway, expected: &[&str]) -> anyhow::R
 		tokio::time::sleep(Duration::from_millis(50)).await;
 	}
 }
+
+#[tokio::test]
+async fn file_mode_api_key_policy_defaults_keys() -> anyhow::Result<()> {
+	let gateway = AgentGateway::new(file_config()).await?;
+	put_api_key_policy(&gateway, "strict").await?;
+	let keys = api_key_policy_keys(&gateway).await?;
+	anyhow::ensure!(keys == json!([]), "expected empty keys array, got: {keys}");
+	gateway.shutdown().await;
+
+	let gateway = AgentGateway::new(file_config_with_seeded_api_key()).await?;
+	put_api_key_policy(&gateway, "permissive").await?;
+	let keys = api_key_policy_keys(&gateway).await?;
+	anyhow::ensure!(
+		keys == json!([{"key": "seeded-test-key", "metadata": null}]),
+		"expected seeded key to survive update, got: {keys}"
+	);
+	gateway.shutdown().await;
+
+	Ok(())
+}
+
+fn file_config() -> String {
+	r#"
+config:
+  storage:
+    mode: file
+gateways:
+  default:
+    port: $PORT
+ui:
+  gateways: default
+llm:
+  gateways: default
+  models: []
+"#
+	.to_string()
+}
+
+fn file_config_with_seeded_api_key() -> String {
+	r#"
+config:
+  storage:
+    mode: file
+gateways:
+  default:
+    port: $PORT
+ui:
+  gateways: default
+llm:
+  gateways: default
+  models: []
+  policies:
+    apiKey:
+      mode: optional
+      keys:
+        - key: seeded-test-key
+          metadata: null
+"#
+	.to_string()
+}
+
+async fn put_api_key_policy(gateway: &AgentGateway, mode: &str) -> anyhow::Result<()> {
+	let response = gateway
+		.send_request_json_method(
+			Method::PUT,
+			"http://localhost/api/config/resources/llm.policy/apiKey",
+			json!({"value": {"mode": mode}}),
+		)
+		.await;
+	let status = response.status();
+	let body = response.into_body().collect().await?.to_bytes();
+	anyhow::ensure!(
+		status == StatusCode::OK,
+		"apiKey policy upsert failed ({status}): {}",
+		String::from_utf8_lossy(&body)
+	);
+	Ok(())
+}
+
+async fn api_key_policy_keys(gateway: &AgentGateway) -> anyhow::Result<Value> {
+	let response = gateway
+		.send_request(Method::GET, "http://localhost/api/config")
+		.await;
+	anyhow::ensure!(
+		response.status() == StatusCode::OK,
+		"config fetch failed: {}",
+		response.status()
+	);
+	let body = response.into_body().collect().await?.to_bytes();
+	let value: Value = serde_json::from_slice(&body)?;
+	Ok(value["llm"]["policies"]["apiKey"]["keys"].clone())
+}
