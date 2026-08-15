@@ -272,6 +272,7 @@ const (
 	ModelProviderHuggingface ModelProvider = "Huggingface"
 	ModelProviderMistral     ModelProvider = "Mistral"
 	ModelProviderOpenrouter  ModelProvider = "Openrouter"
+	ModelProviderOrcarouter  ModelProvider = "Orcarouter"
 	ModelProviderTogetherAI  ModelProvider = "TogetherAI"
 	ModelProviderXAI         ModelProvider = "XAI"
 	ModelProviderFireworks   ModelProvider = "Fireworks"

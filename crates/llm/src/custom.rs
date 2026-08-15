@@ -60,6 +60,7 @@ pub enum ProviderPreset {
 	Huggingface,
 	Mistral,
 	Openrouter,
+	Orcarouter,
 	Togetherai,
 	#[serde(rename = "xai")]
 	XAI,
@@ -79,6 +80,7 @@ impl ProviderPreset {
 			Self::Huggingface => "https://router.huggingface.co/v1",
 			Self::Mistral => "https://api.mistral.ai/v1",
 			Self::Openrouter => "https://openrouter.ai/api/v1",
+			Self::Orcarouter => "https://api.orcarouter.ai/v1",
 			Self::Togetherai => "https://api.together.xyz/v1",
 			Self::XAI => "https://api.x.ai/v1",
 			Self::Fireworks => "https://api.fireworks.ai/inference/v1",
@@ -148,6 +150,18 @@ impl ProviderPreset {
 					format(Responses, None),
 					format(Embeddings, None),
 					format(Rerank, None),
+				],
+			),
+			// OrcaRouter is an OpenAI-compatible meta-router. Its dynamic `auto`
+			// model serves chat, messages, responses, and embeddings, but rejects
+			// rerank, so it is intentionally omitted from this preset.
+			Self::Orcarouter => (
+				"orcarouter",
+				vec![
+					format(Completions, None),
+					format(Messages, None),
+					format(Responses, None),
+					format(Embeddings, None),
 				],
 			),
 			Self::Togetherai => (
@@ -310,5 +324,28 @@ mod tests {
 				.provider(None)
 				.supports(ProviderFormat::Responses)
 		);
+	}
+
+	#[test]
+	fn orcarouter_preset_supplies_endpoint_and_formats() {
+		assert_eq!(
+			serde_json::to_string(&ProviderPreset::Orcarouter).unwrap(),
+			"\"orcarouter\""
+		);
+		assert_eq!(
+			ProviderPreset::Orcarouter.base_url(),
+			"https://api.orcarouter.ai/v1"
+		);
+
+		let provider = ProviderPreset::Orcarouter.provider(None);
+		assert_eq!(
+			provider.provider_override.as_deref(),
+			Some("orcarouter")
+		);
+		assert!(provider.supports(ProviderFormat::Completions));
+		assert!(provider.supports(ProviderFormat::Messages));
+		assert!(provider.supports(ProviderFormat::Responses));
+		assert!(provider.supports(ProviderFormat::Embeddings));
+		assert!(!provider.supports(ProviderFormat::Rerank));
 	}
 }
