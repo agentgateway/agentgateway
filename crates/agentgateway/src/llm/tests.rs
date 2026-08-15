@@ -2292,6 +2292,333 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 	);
 }
 
+/// Decodes a buffered LLM response body per the Content-Encoding contract exercised by
+/// #3040: a response that declares `Content-Encoding` must actually decompress to that
+/// encoding, and a response with no `Content-Encoding` must be plain with no
+/// `Transfer-Encoding`. Also asserts the stale `Content-Length` the issue observed is gone,
+/// since the production tail always removes it so the wire recomputes it.
+async fn decode_response_body(resp: Response) -> Value {
+	let (parts, body) = resp.into_parts();
+	assert!(
+		parts.headers.get(::http::header::CONTENT_LENGTH).is_none(),
+		"stale Content-Length must be removed so the wire recomputes it"
+	);
+	let raw = body.collect().await.unwrap().to_bytes();
+	match parts.headers.typed_get::<ContentEncoding>() {
+		Some(ce) => {
+			let (recognized, decoded) = crate::http::compression::to_bytes_with_decompression(
+				axum_core::body::Body::from(raw.clone()),
+				Some(&ce),
+				8 * 1024 * 1024,
+			)
+			.await
+			.unwrap_or_else(|e| {
+				panic!(
+					"response declares Content-Encoding {ce:?} but the body does not actually \
+					 decompress as that encoding (this is the #3040 bug): {e}"
+				)
+			});
+			assert!(
+				recognized.is_some(),
+				"Content-Encoding {ce:?} did not resolve to a single supported encoding"
+			);
+			serde_json::from_slice(&decoded).expect("decompressed body must be valid JSON")
+		},
+		None => {
+			assert!(
+				parts
+					.headers
+					.get(::http::header::TRANSFER_ENCODING)
+					.is_none(),
+				"response has no Content-Encoding but still carries Transfer-Encoding"
+			);
+			serde_json::from_slice(&raw).expect("plain body must be valid JSON")
+		},
+	}
+}
+
+fn brotli_response(compressed: &Bytes) -> Response {
+	let mut resp = Response::new(Body::from(compressed.to_vec()));
+	resp.headers_mut().insert(
+		::http::header::CONTENT_TYPE,
+		"application/json".parse().unwrap(),
+	);
+	resp
+		.headers_mut()
+		.insert(::http::header::CONTENT_ENCODING, "br".parse().unwrap());
+	resp.headers_mut().insert(
+		::http::header::CONTENT_LENGTH,
+		compressed.len().to_string().parse().unwrap(),
+	);
+	resp
+}
+
+#[tokio::test]
+async fn buffered_response_reencodes_brotli_body_chat_translate_path() {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
+	let plaintext = fs::read(fixture_path("response/completions/basic.json")).expect("fixture");
+	let compressed = crate::http::compression::encode_body(&plaintext, "br")
+		.await
+		.expect("brotli encode");
+	let resp = brotli_response(&compressed);
+
+	let req = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Completions,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "gpt-3.5-turbo-0125".into(),
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: None,
+	};
+
+	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
+	let result = provider
+		.process_response(
+			client,
+			req,
+			LLMResponsePolicies::default(),
+			None,
+			AsyncLog::default(),
+			LogContentFields::default(),
+			None,
+			resp,
+		)
+		.await
+		.expect("buffered response should translate");
+
+	assert!(result.status().is_success());
+	let body = decode_response_body(result).await;
+	assert_eq!(
+		body["choices"][0]["message"]["content"],
+		json!(
+			"Sorry, I couldn't find the name of the LLM provider. Could you please provide more information or context?"
+		)
+	);
+}
+
+#[tokio::test]
+async fn buffered_response_reencodes_brotli_body_error_path() {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
+	let error_json = br#"{"error":{"message":"bad request","type":"invalid_request_error","param":null,"code":400}}"#;
+	let compressed = crate::http::compression::encode_body(error_json, "br")
+		.await
+		.expect("brotli encode");
+	let mut resp = brotli_response(&compressed);
+	*resp.status_mut() = ::http::StatusCode::BAD_REQUEST;
+
+	let req = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Messages,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "gpt-4o".into(),
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: None,
+	};
+
+	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
+	let result = provider
+		.process_response(
+			client,
+			req,
+			LLMResponsePolicies::default(),
+			None,
+			AsyncLog::default(),
+			LogContentFields::default(),
+			None,
+			resp,
+		)
+		.await
+		.expect("buffered error response should translate");
+
+	assert_eq!(result.status(), ::http::StatusCode::BAD_REQUEST);
+	let body = decode_response_body(result).await;
+	assert_eq!(body["type"], json!("error"));
+	assert_eq!(body["error"]["message"], json!("bad request"));
+}
+
+#[tokio::test]
+async fn buffered_response_reencodes_brotli_body_prompt_guard_mask_path() {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
+	let plaintext = fs::read(fixture_path("response/completions/basic.json")).expect("fixture");
+	let compressed = crate::http::compression::encode_body(&plaintext, "br")
+		.await
+		.expect("brotli encode");
+	let resp = brotli_response(&compressed);
+
+	let req = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Completions,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "gpt-3.5-turbo-0125".into(),
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: None,
+	};
+
+	let response_policies = LLMResponsePolicies {
+		prompt_guard: vec![policy::ResponseGuard {
+			rejection: policy::RequestRejection::default(),
+			kind: policy::ResponseGuardKind::Regex(policy::RegexRules {
+				action: policy::Action::Mask,
+				rules: vec![policy::RegexRule::Regex {
+					pattern: regex::Regex::new("LLM provider").unwrap(),
+				}],
+			}),
+		}],
+		..Default::default()
+	};
+
+	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
+	let result = provider
+		.process_response(
+			client,
+			req,
+			response_policies,
+			None,
+			AsyncLog::default(),
+			LogContentFields::default(),
+			None,
+			resp,
+		)
+		.await
+		.expect("masked buffered response should translate");
+
+	assert!(result.status().is_success());
+	let body = decode_response_body(result).await;
+	let content = body["choices"][0]["message"]["content"]
+		.as_str()
+		.expect("content must be a string");
+	assert!(
+		!content.contains("LLM provider"),
+		"response prompt guard should have masked the match, got: {content}"
+	);
+}
+
+#[tokio::test]
+async fn buffered_response_reencodes_brotli_body_messages_input_format() {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
+	let plaintext = fs::read(fixture_path("response/anthropic/basic.json")).expect("fixture");
+	let compressed = crate::http::compression::encode_body(&plaintext, "br")
+		.await
+		.expect("brotli encode");
+	let resp = brotli_response(&compressed);
+
+	let req = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Messages,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "claude-haiku-4-5-20251001".into(),
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: None,
+	};
+
+	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
+	let result = provider
+		.process_response(
+			client,
+			req,
+			LLMResponsePolicies::default(),
+			None,
+			AsyncLog::default(),
+			LogContentFields::default(),
+			None,
+			resp,
+		)
+		.await
+		.expect("buffered /v1/messages response should translate");
+
+	assert!(result.status().is_success());
+	let body = decode_response_body(result).await;
+	assert_eq!(
+		body["content"][0]["text"],
+		json!("Hi there! How are you doing today? Is there anything I can help you with?")
+	);
+}
+
+#[tokio::test]
+async fn buffered_response_reencodes_brotli_body_detect_input_format() {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
+	let plaintext = fs::read(fixture_path("response/completions/basic.json")).expect("fixture");
+	let compressed = crate::http::compression::encode_body(&plaintext, "br")
+		.await
+		.expect("brotli encode");
+	let resp = brotli_response(&compressed);
+
+	let req = LLMRequest {
+		input_tokens: None,
+		input_format: InputFormat::Detect,
+		cache_convention: CacheTokenConvention::pending(),
+		request_model: "gpt-3.5-turbo-0125".into(),
+		provider: Default::default(),
+		streaming: false,
+		params: Default::default(),
+		prompt: None,
+		provider_state: None,
+	};
+
+	let client = PolicyClient::new(setup_proxy_test("{}").unwrap().pi);
+	let result = provider
+		.process_response(
+			client,
+			req,
+			LLMResponsePolicies::default(),
+			None,
+			AsyncLog::default(),
+			LogContentFields::default(),
+			None,
+			resp,
+		)
+		.await
+		.expect("buffered Detect passthrough response should translate");
+
+	assert!(result.status().is_success());
+	let body = decode_response_body(result).await;
+	assert_eq!(
+		body["choices"][0]["message"]["content"],
+		json!(
+			"Sorry, I couldn't find the name of the LLM provider. Could you please provide more information or context?"
+		)
+	);
+}
+
 #[test]
 fn openai_completions_error_translates_to_messages_client() {
 	let provider = AIProvider::OpenAI(openai::Provider {
