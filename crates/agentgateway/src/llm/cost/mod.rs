@@ -930,6 +930,22 @@ mod tests {
 	}
 
 	#[test]
+	fn messages_conversion_cache_exclusive_input_stays_billable() {
+		// #3041: completions->messages wire conversion already subtracted cache out of
+		// input_tokens; InputExcludesCache must not subtract it a second time (500-300-200=0 bug).
+		let resp = LLMResponse {
+			input_tokens: Some(500),
+			cached_input_tokens: Some(300),
+			cache_creation_input_tokens: Some(200),
+			..Default::default()
+		};
+		let u = usage_for(CacheTokenConvention::InputExcludesCache, &resp, true, true);
+		assert_eq!(u.input, 500, "fresh input must not be double-subtracted");
+		assert_eq!(u.cache_read, 300);
+		assert_eq!(u.cache_write, 200);
+	}
+
+	#[test]
 	fn inclusive_convention_splits_cache_out_of_input() {
 		// Regression guard: OpenAI-style providers keep the subtract-once behavior.
 		let resp = LLMResponse {

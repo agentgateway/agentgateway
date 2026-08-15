@@ -231,16 +231,22 @@ impl AIProvider {
 	}
 }
 
-/// Classify how the upstream reports cached tokens, from the source wire format the
-/// gateway is about to parse — not the provider name, which can carry another
-/// provider's native semantics (e.g. Vertex serving Anthropic models).
+/// Classify how the upstream reports cached tokens. Requests re-served in Anthropic
+/// Messages shape always carry cache-exclusive usage (the wire conversion in
+/// `crates/llm` subtracts cache tokens out before this is read), regardless of the
+/// upstream provider. Otherwise classify from the upstream provider/wire format, which
+/// can carry another provider's native semantics (e.g. Vertex serving Anthropic models).
 fn cache_convention_for(
 	provider: &AIProvider,
 	provider_format: Option<custom::ProviderFormat>,
 	request_model: &str,
+	original_format: InputFormat,
 ) -> CacheTokenConvention {
 	use CacheTokenConvention::*;
 	use custom::ProviderFormat::{AnthropicTokenCount, Messages};
+	if original_format == InputFormat::Messages {
+		return InputExcludesCache;
+	}
 	match provider {
 		AIProvider::Anthropic(_) | AIProvider::Bedrock(_) => InputExcludesCache,
 		AIProvider::Copilot(_) if copilot::Provider::is_anthropic_model(Some(request_model)) => {
@@ -1945,8 +1951,12 @@ impl AIProvider {
 		if original_format == InputFormat::Detect {
 			types::detect::amend_request_info(&mut llm_info, parts.uri.path());
 		}
-		llm_info.cache_convention =
-			cache_convention_for(self, provider_format, &llm_info.request_model);
+		llm_info.cache_convention = cache_convention_for(
+			self,
+			provider_format,
+			&llm_info.request_model,
+			original_format,
+		);
 		if let Some(log) = log
 			&& log.cel.cel_context.needs_llm_prompt()
 			&& original_format.supports_prompt_guard()
