@@ -37,7 +37,7 @@ test('core pages render with mocked gateway data', async ({ page }) => {
 		if (path !== '/') {
 			await page.locator(`.nav-list a[href="${path}"]`).click();
 		}
-		await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+		await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
 		await expect(page.locator('body')).not.toContainText('Configuration API unavailable');
 	}
 });
