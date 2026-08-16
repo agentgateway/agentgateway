@@ -874,6 +874,7 @@ pub mod from_messages {
 			pending_usage: Option<responses::ResponseUsage>,
 			pending_stop_reason: Option<messages::StopReason>,
 			saw_tool_call: bool,
+			saw_refusal: bool,
 		}
 
 		fn push_event(
@@ -1205,6 +1206,7 @@ pub mod from_messages {
 		>(b, buffer_limit, move |evt| {
 			let mut events: Vec<(&'static str, messages::MessagesStreamEvent)> = Vec::new();
 			match evt {
+				SseJsonEvent::Eof | SseJsonEvent::Error => return events,
 				SseJsonEvent::Done => {
 					flush_message_end(
 						&mut state,
@@ -1333,8 +1335,39 @@ pub mod from_messages {
 							);
 						}
 					},
+					responses::ResponseStreamEvent::ResponseRefusalDelta(delta) => {
+						state.saw_refusal = true;
+						state.pending_stop_reason = Some(messages::StopReason::Refusal);
+						let key = (delta.output_index, delta.content_index);
+						let index = open_text_block(&mut state, &mut events, key);
+						if !delta.delta.is_empty() {
+							maybe_set_first_token(&mut state, &log);
+							if let Some(c) = completion.as_mut() {
+								c.push_str(&delta.delta);
+							}
+							push_event(
+								&mut events,
+								messages::MessagesStreamEvent::ContentBlockDelta {
+									index,
+									delta: messages::ContentBlockDelta::TextDelta {
+										text: delta.delta,
+									},
+								},
+							);
+						}
+					},
+					responses::ResponseStreamEvent::ResponseRefusalDone(done) => {
+						state.saw_refusal = true;
+						state.pending_stop_reason = Some(messages::StopReason::Refusal);
+						close_text_block(
+							&mut state,
+							&mut events,
+							(done.output_index, done.content_index),
+						);
+					},
 					responses::ResponseStreamEvent::ResponseContentPartDone(done) => {
 						if let responses::OutputContent::Refusal(refusal) = done.part {
+							state.saw_refusal = true;
 							state.pending_stop_reason = Some(messages::StopReason::Refusal);
 							let key = (done.output_index, done.content_index);
 							let index = open_text_block(&mut state, &mut events, key);
@@ -1413,6 +1446,8 @@ pub mod from_messages {
 						record_response_metadata(&mut state, &log, &completed.response);
 						state.pending_stop_reason = Some(if state.saw_tool_call {
 							messages::StopReason::ToolUse
+						} else if state.saw_refusal {
+							messages::StopReason::Refusal
 						} else {
 							messages::StopReason::EndTurn
 						});
@@ -1444,13 +1479,47 @@ pub mod from_messages {
 					responses::ResponseStreamEvent::ResponseFailed(failed) => {
 						record_response_metadata(&mut state, &log, &failed.response);
 						tracing::warn!(
-							"Responses stream failed during messages translation; upstream errors should use non-2xx error mapping"
+							"Responses stream failed during messages translation; emitting error event"
+						);
+						flush_message_end(
+							&mut state,
+							&mut events,
+							&log,
+							&mut completion,
+							&mut tool_calls,
+							true,
+						);
+						push_event(
+							&mut events,
+							messages::MessagesStreamEvent::Error {
+								error: messages::MessagesError {
+									r#type: "api_error".to_string(),
+									message: "responses stream failed".to_string(),
+								},
+							},
 						);
 					},
 					responses::ResponseStreamEvent::ResponseError(error) => {
 						tracing::warn!(
 							"Responses stream error during messages translation: {}",
 							error.message
+						);
+						flush_message_end(
+							&mut state,
+							&mut events,
+							&log,
+							&mut completion,
+							&mut tool_calls,
+							true,
+						);
+						push_event(
+							&mut events,
+							messages::MessagesStreamEvent::Error {
+								error: messages::MessagesError {
+									r#type: error.code.clone().unwrap_or_else(|| "api_error".to_string()),
+									message: error.message,
+								},
+							},
 						);
 					},
 					// Intermediate progress event; no block state change needed.

@@ -680,9 +680,9 @@ pub mod typed {
 		ResponseContentPartDoneEvent, ResponseCreatedEvent, ResponseErrorEvent, ResponseFailedEvent,
 		ResponseFunctionCallArgumentsDeltaEvent, ResponseFunctionCallArgumentsDoneEvent,
 		ResponseInProgressEvent, ResponseIncompleteEvent, ResponseOutputItemAddedEvent,
-		ResponseOutputItemDoneEvent, ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam,
-		ResponseUsage, Role, Status, TextResponseFormatConfiguration, Tool, ToolChoiceFunction,
-		ToolChoiceOptions, ToolChoiceParam,
+		ResponseOutputItemDoneEvent, ResponseRefusalDeltaEvent, ResponseRefusalDoneEvent,
+		ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam, ResponseUsage, Role, Status,
+		TextResponseFormatConfiguration, Tool, ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam,
 	};
 	use serde::{Deserialize, Serialize};
 
@@ -709,6 +709,12 @@ pub mod typed {
 		/// Emitted when text content is finalized.
 		#[serde(rename = "response.output_text.done")]
 		ResponseOutputTextDone(openai_responses::ResponseTextDoneEvent),
+		/// Emitted when there is a partial refusal text.
+		#[serde(rename = "response.refusal.delta")]
+		ResponseRefusalDelta(openai_responses::ResponseRefusalDeltaEvent),
+		/// Emitted when refusal text is finalized.
+		#[serde(rename = "response.refusal.done")]
+		ResponseRefusalDone(openai_responses::ResponseRefusalDoneEvent),
 		/// Emitted when there is a partial function-call arguments delta.
 		#[serde(rename = "response.function_call_arguments.delta")]
 		ResponseFunctionCallArgumentsDelta(openai_responses::ResponseFunctionCallArgumentsDeltaEvent),

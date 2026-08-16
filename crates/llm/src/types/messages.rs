@@ -891,6 +891,9 @@ pub mod typed {
 		},
 		MessageStop,
 		Ping,
+		Error {
+			error: MessagesError,
+		},
 	}
 
 	impl MessagesStreamEvent {
@@ -905,6 +908,7 @@ pub mod typed {
 				Self::MessageDelta { .. } => "message_delta",
 				Self::MessageStop => "message_stop",
 				Self::Ping => "ping",
+				Self::Error { .. } => "error",
 			}
 		}
 
