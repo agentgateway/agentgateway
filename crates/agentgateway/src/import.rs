@@ -23,6 +23,7 @@ pub struct ImportPlan {
 	pub providers: Vec<ImportedProvider>,
 	pub models: Vec<ImportedModel>,
 	pub routes: IndexMap<String, ImportedRoute>,
+	pub aliases: IndexMap<String, String>,
 	pub findings: Vec<ImportFinding>,
 }
 
@@ -141,6 +142,7 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 		providers,
 		models,
 		routes,
+		aliases,
 		findings,
 	} = plan;
 	let model_by_name: HashMap<_, _> = models
@@ -196,44 +198,27 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 		.collect::<Vec<_>>();
 
 	let mut virtual_models = Vec::new();
-	for (name, route) in routes {
+	for (name, route) in &routes {
 		if route.targets.is_empty() {
 			continue;
 		}
 		if let [target] = route.targets.as_slice()
-			&& direct_model_names.get(target) == Some(&name)
+			&& direct_model_names.get(target) == Some(name)
 		{
 			continue;
 		}
-		let routing = if route.fallback_groups.is_empty() {
-			let targets = route
-				.targets
-				.iter()
-				.map(|target| {
-					let weight = model_by_name.get(target.as_str()).map_or(1, |m| m.weight);
-					let target = direct_model_names.get(target).unwrap_or(target);
-					json!({"model": target, "weight": weight})
-				})
-				.collect::<Vec<_>>();
-			json!({"weighted": {"targets": targets}})
-		} else {
-			let mut targets = route
-				.targets
-				.iter()
-				.map(|target| {
-					let target = direct_model_names.get(target).unwrap_or(target);
-					json!({"model": target, "priority": 0})
-				})
-				.collect::<Vec<_>>();
-			for (priority, fallback_group) in route.fallback_groups.iter().enumerate() {
-				for fallback in fallback_group {
-					let fallback = direct_model_names.get(fallback).unwrap_or(fallback);
-					targets.push(json!({"model": fallback, "priority": priority + 1}));
-				}
-			}
-			json!({"failover": {"targets": targets}})
-		};
+		let routing = route_routing(route, &model_by_name, &direct_model_names);
 		virtual_models.push(json!({"name": name, "routing": routing}));
+	}
+	for (alias, target) in aliases {
+		let Some(route) = routes.get(&target) else {
+			continue;
+		};
+		if route.targets.is_empty() {
+			continue;
+		}
+		let routing = route_routing(route, &model_by_name, &direct_model_names);
+		virtual_models.push(json!({"name": alias, "routing": routing}));
 	}
 
 	let mut config = crate::types::local::default_standalone_config(&options.database_url);
@@ -269,6 +254,41 @@ fn emit(source: &str, plan: ImportPlan, options: &ImportOptions) -> anyhow::Resu
 		config,
 		findings,
 	})
+}
+
+fn route_routing(
+	route: &ImportedRoute,
+	model_by_name: &HashMap<&str, &ImportedModel>,
+	direct_model_names: &HashMap<String, String>,
+) -> Value {
+	if route.fallback_groups.is_empty() {
+		let targets = route
+			.targets
+			.iter()
+			.map(|target| {
+				let weight = model_by_name.get(target.as_str()).map_or(1, |m| m.weight);
+				let target = direct_model_names.get(target).unwrap_or(target);
+				json!({"model": target, "weight": weight})
+			})
+			.collect::<Vec<_>>();
+		json!({"weighted": {"targets": targets}})
+	} else {
+		let mut targets = route
+			.targets
+			.iter()
+			.map(|target| {
+				let target = direct_model_names.get(target).unwrap_or(target);
+				json!({"model": target, "priority": 0})
+			})
+			.collect::<Vec<_>>();
+		for (priority, fallback_group) in route.fallback_groups.iter().enumerate() {
+			for fallback in fallback_group {
+				let fallback = direct_model_names.get(fallback).unwrap_or(fallback);
+				targets.push(json!({"model": fallback, "priority": priority + 1}));
+			}
+		}
+		json!({"failover": {"targets": targets}})
+	}
 }
 
 struct LiteLlmImporter;
@@ -384,6 +404,9 @@ impl ConfigImporter for LiteLlmImporter {
 		if let Some((source_path, fallbacks)) = fallbacks {
 			apply_fallbacks(fallbacks, source_path, &mut plan);
 		}
+		if let Some(aliases) = config.router_settings.get("model_group_alias") {
+			apply_model_group_aliases(aliases, &mut plan);
+		}
 
 		if let Some(strategy) = config.router_settings.get("routing_strategy") {
 			let (status, message) = match strategy.as_str() {
@@ -410,7 +433,10 @@ impl ConfigImporter for LiteLlmImporter {
 			});
 		}
 		for setting in config.router_settings.keys() {
-			if matches!(setting.as_str(), "fallbacks" | "routing_strategy") {
+			if matches!(
+				setting.as_str(),
+				"fallbacks" | "routing_strategy" | "model_group_alias"
+			) {
 				continue;
 			}
 			plan.findings.push(ImportFinding {
@@ -1091,6 +1117,142 @@ fn apply_fallbacks(value: &Value, source_path: &str, plan: &mut ImportPlan) {
 	});
 }
 
+fn apply_model_group_aliases(value: &Value, plan: &mut ImportPlan) {
+	let source_path = "router_settings.model_group_alias";
+	let Some(entries) = value.as_object() else {
+		plan.findings.push(ImportFinding {
+			source_path: source_path.to_string(),
+			status: ImportStatus::Unsupported,
+			message: "Model group aliases must be a mapping".to_string(),
+		});
+		return;
+	};
+	let mut aliases = IndexMap::new();
+	let mut hidden = HashSet::new();
+	for (alias, value) in entries {
+		let alias_path = format!("{source_path}.{alias}");
+		match value {
+			Value::String(target) if !target.is_empty() => {
+				aliases.insert(alias.clone(), target.clone());
+			},
+			Value::String(_) => plan.findings.push(ImportFinding {
+				source_path: alias_path,
+				status: ImportStatus::Unsupported,
+				message: "Model group alias target must be a non-empty string and was not emitted"
+					.to_string(),
+			}),
+			Value::Object(fields) => {
+				for field in fields.keys() {
+					if matches!(field.as_str(), "model" | "hidden") {
+						continue;
+					}
+					plan.findings.push(ImportFinding {
+						source_path: format!("{alias_path}.{field}"),
+						status: ImportStatus::Manual,
+						message: "Unrecognized LiteLLM model group alias field was not emitted".to_string(),
+					});
+				}
+				let target = match fields.get("model") {
+					Some(Value::String(target)) if !target.is_empty() => Some(target.clone()),
+					_ => {
+						plan.findings.push(ImportFinding {
+							source_path: format!("{alias_path}.model"),
+							status: ImportStatus::Unsupported,
+							message: "Model group alias model must be a non-empty string and was not emitted"
+								.to_string(),
+						});
+						None
+					},
+				};
+				let skip = match fields.get("hidden") {
+					None | Some(Value::Bool(false)) => false,
+					Some(Value::Bool(true)) => {
+						plan.findings.push(ImportFinding {
+							source_path: format!("{alias_path}.hidden"),
+							status: ImportStatus::Manual,
+							message: "Hidden LiteLLM model group alias requires manual handling until virtual models can be omitted from discovery"
+								.to_string(),
+						});
+						true
+					},
+					Some(_) => {
+						plan.findings.push(ImportFinding {
+							source_path: format!("{alias_path}.hidden"),
+							status: ImportStatus::Manual,
+							message: "Model group alias hidden must be a boolean and the alias was not emitted"
+								.to_string(),
+						});
+						true
+					},
+				};
+				if let Some(target) = target {
+					aliases.insert(alias.clone(), target);
+					if skip {
+						hidden.insert(alias.clone());
+					}
+				}
+			},
+			_ => plan.findings.push(ImportFinding {
+				source_path: alias_path,
+				status: ImportStatus::Unsupported,
+				message: "Model group alias must be a string or object and was not emitted".to_string(),
+			}),
+		}
+	}
+
+	for (alias, target) in &aliases {
+		if hidden.contains(alias) {
+			continue;
+		}
+		let alias_path = format!("{source_path}.{alias}");
+		if !plan.routes.contains_key(target) {
+			let (status, message) = if aliases.contains_key(target) {
+				(
+					ImportStatus::Unsupported,
+					"Model group alias chains are not supported and the alias was not emitted".to_string(),
+				)
+			} else {
+				(
+					ImportStatus::Manual,
+					format!("Model group alias target {target:?} was not imported"),
+				)
+			};
+			plan.findings.push(ImportFinding {
+				source_path: alias_path,
+				status,
+				message,
+			});
+			continue;
+		}
+		if plan.routes.contains_key(alias) {
+			if alias == target {
+				plan.findings.push(ImportFinding {
+					source_path: alias_path,
+					status: ImportStatus::Exact,
+					message: format!(
+						"Model group alias {alias:?} already names this model group and was not duplicated"
+					),
+				});
+			} else {
+				plan.findings.push(ImportFinding {
+					source_path: alias_path,
+					status: ImportStatus::Unsupported,
+					message: format!(
+						"Model group alias {alias:?} conflicts with an imported model group and was not emitted"
+					),
+				});
+			}
+			continue;
+		}
+		plan.aliases.insert(alias.clone(), target.clone());
+		plan.findings.push(ImportFinding {
+			source_path: alias_path,
+			status: ImportStatus::Exact,
+			message: format!("Mapped LiteLLM model group alias to imported model group {target:?}"),
+		});
+	}
+}
+
 fn sanitize_name(name: &str) -> String {
 	let sanitized = name
 		.chars()
@@ -1171,6 +1333,11 @@ mod tests {
 	#[test]
 	fn imports_litellm_models_load_balancing_and_fallbacks() {
 		assert_litellm_golden("load-balancing-fallbacks");
+	}
+
+	#[test]
+	fn imports_litellm_model_group_aliases() {
+		assert_litellm_golden("model-group-alias");
 	}
 
 	#[test]
