@@ -763,6 +763,7 @@ mod responses {
 			&[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT, RESPONSES_TO_MESSAGES],
 		),
 		("tool", &[RESPONSES_TO_MESSAGES]),
+		("reasoning", &[RESPONSES_TO_MESSAGES]),
 		("custom-tool", &[RESPONSES_TO_RESPONSES]),
 		("truncated_tool_call", &[RESPONSES_TO_RESPONSES]),
 	];
@@ -1384,6 +1385,15 @@ async fn responses_to_messages_stream_translates_image() {
 	test_stream(
 		"responses-messages-streaming",
 		"response/responses/stream-image.json",
+	)
+	.await;
+}
+
+#[tokio::test]
+async fn responses_to_messages_stream_translates_refusal() {
+	test_stream(
+		"responses-messages-streaming",
+		"response/responses/stream-refusal.json",
 	)
 	.await;
 }
