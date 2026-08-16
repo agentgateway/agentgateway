@@ -126,6 +126,7 @@ impl ProviderPreset {
 				vec![
 					format(Completions, None),
 					format(Messages, Some("/anthropic/v1/messages")),
+					format(Responses, None),
 				],
 			),
 			Self::Groq => (
@@ -309,6 +310,22 @@ mod tests {
 			ProviderPreset::Ollama
 				.provider(None)
 				.supports(ProviderFormat::Responses)
+		);
+	}
+
+	#[test]
+	fn deepseek_preset_supports_responses() {
+		let provider = ProviderPreset::Deepseek.provider(None);
+		assert_eq!(
+			ProviderPreset::Deepseek.base_url(),
+			"https://api.deepseek.com/v1"
+		);
+		assert!(provider.supports(ProviderFormat::Responses));
+		// No override: resolves to <baseUrl>/responses.
+		assert_eq!(provider.path_for(ProviderFormat::Responses), None);
+		assert_eq!(
+			provider.path_for(ProviderFormat::Messages),
+			Some("/anthropic/v1/messages")
 		);
 	}
 }
