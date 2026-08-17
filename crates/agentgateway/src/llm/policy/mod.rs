@@ -1177,6 +1177,7 @@ impl Policy {
 		texts
 	}
 
+	#[cfg(test)]
 	fn request_texts(req: &mut dyn RequestType) -> Vec<String> {
 		Self::collect_texts(|f| req.visit_text_mut(&mut |_, text| f(text)))
 	}
