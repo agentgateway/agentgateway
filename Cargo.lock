@@ -277,10 +277,10 @@ dependencies = [
  "ipnet",
  "itertools 0.15.0",
  "jemalloc_pprof",
- "jsonwebtoken",
+ "jsonwebtoken 11.0.0",
  "lazy_static",
  "libc",
- "mediatype",
+ "mediatype 0.23.0",
  "mimalloc",
  "multer",
  "notify",
@@ -294,7 +294,7 @@ dependencies = [
  "opentelemetry-proto",
  "opentelemetry_sdk",
  "parking_lot",
- "pem",
+ "pem 4.0.0",
  "percent-encoding",
  "phonenumber",
  "pin-project-lite",
@@ -1581,7 +1581,7 @@ dependencies = [
  "macrotest",
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.3",
 ]
 
 [[package]]
@@ -3043,7 +3043,7 @@ dependencies = [
  "hex",
  "hmac 0.13.0",
  "http 1.5.0",
- "jsonwebtoken",
+ "jsonwebtoken 10.4.0",
  "p256",
  "reqwest 0.13.4",
  "rustc_version",
@@ -3231,7 +3231,7 @@ checksum = "78beb98ea9a8f76b4a38c5ca651db6aa84701f307b63b4e0d78342ad4219c7e4"
 dependencies = [
  "headers-core",
  "http 1.5.0",
- "mediatype",
+ "mediatype 0.21.0",
 ]
 
 [[package]]
@@ -4017,11 +4017,26 @@ version = "10.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eba32bfb4ffdeaca3e34431072faf01745c9b26d25504aa7a6cf5684334fc4fc"
 dependencies = [
+ "base64 0.22.1",
+ "getrandom 0.2.17",
+ "js-sys",
+ "serde",
+ "serde_json",
+ "signature",
+ "zeroize",
+]
+
+[[package]]
+name = "jsonwebtoken"
+version = "11.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "881733cbc631fc9e472e24447ce32a64bedf2da498d6d8570b08edc87de71f65"
+dependencies = [
  "aws-lc-rs",
  "base64 0.22.1",
  "getrandom 0.2.17",
  "js-sys",
- "pem",
+ "pem 3.0.6",
  "serde",
  "serde_json",
  "signature",
@@ -4308,6 +4323,12 @@ name = "mediatype"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "120fa187be19d9962f0926633453784691731018a2bf936ddb4e29101b79c4a7"
+
+[[package]]
+name = "mediatype"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0695a693e38d35838dd34bc3ab19911395f6837ccf55c7271189cfb12cb8b57f"
 
 [[package]]
 name = "memchr"
@@ -4912,6 +4933,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d30c53c26bc5b31a98cd02d20f25a7c8567146caf63ed593a9d87b2775291be"
 dependencies = [
  "base64 0.22.1",
+ "serde_core",
+]
+
+[[package]]
+name = "pem"
+version = "4.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d354a98a3d1251555de99e8fdd8afda05573c31b82f59063a7b0a29b5527f120"
+dependencies = [
+ "base64 0.23.1",
  "serde_core",
 ]
 
@@ -5834,7 +5865,7 @@ version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75e669e5202259b5314d1ea5397316ad400819437857b90861765f24c4cf80a2"
 dependencies = [
- "pem",
+ "pem 3.0.6",
  "ring",
  "rustls-pki-types",
  "time",
@@ -5848,7 +5879,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "091e7a8e7d86e6feb87a27ce8e2cba29d49eff9507afeebefab7eeb2ca667fb4"
 dependencies = [
  "aws-lc-rs",
- "pem",
+ "pem 3.0.6",
  "rustls-pki-types",
  "time",
  "x509-parser",
