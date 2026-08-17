@@ -1153,7 +1153,7 @@ impl Policy {
 	}
 
 	fn request_texts(req: &mut dyn RequestType) -> Vec<String> {
-		Self::collect_texts(|f| req.visit_text_mut(f))
+		Self::collect_texts(|f| req.visit_text_mut(&mut |_, text| f(text)))
 	}
 
 	fn response_texts(resp: &mut dyn ResponseType) -> Vec<String> {
