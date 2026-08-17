@@ -1511,6 +1511,10 @@ func translateRouteType(rt agentgateway.RouteType) api.BackendPolicySpec_Ai_Rout
 		return api.BackendPolicySpec_Ai_REALTIME
 	case agentgateway.RouteTypeRerank:
 		return api.BackendPolicySpec_Ai_RERANK
+	case agentgateway.RouteTypeGenerateContent:
+		return api.BackendPolicySpec_Ai_GENERATE_CONTENT
+	case agentgateway.RouteTypeGeminiCountTokens:
+		return api.BackendPolicySpec_Ai_GEMINI_COUNT_TOKENS
 	default:
 		// Default to completions if unknown type
 		return api.BackendPolicySpec_Ai_COMPLETIONS

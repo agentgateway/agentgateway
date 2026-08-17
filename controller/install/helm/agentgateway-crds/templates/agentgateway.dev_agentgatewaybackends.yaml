@@ -4081,6 +4081,8 @@ spec:
                                           - Completions
                                           - Detect
                                           - Embeddings
+                                          - GeminiCountTokens
+                                          - GenerateContent
                                           - Messages
                                           - Models
                                           - Passthrough
@@ -12781,6 +12783,8 @@ spec:
                           - Completions
                           - Detect
                           - Embeddings
+                          - GeminiCountTokens
+                          - GenerateContent
                           - Messages
                           - Models
                           - Passthrough

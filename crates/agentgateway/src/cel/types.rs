@@ -326,6 +326,9 @@ pub struct DestinationContext {
 	#[serde(default)]
 	/// The port of the downstream request destination at agentgateway.
 	pub port: u16,
+	/// The requested destination hostname, when known. For TLS connections this is the sniffed SNI.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub hostname: Option<Strng>,
 }
 
 #[apply(schema!)]
@@ -368,6 +371,7 @@ impl DestinationContext {
 		Self {
 			address: tcp.local_addr.ip(),
 			port: tcp.local_addr.port(),
+			hostname: None,
 		}
 	}
 }
@@ -675,6 +679,15 @@ impl<'a> Executor<'a> {
 		if let Some(f) = this.request.as_mut() {
 			f.end_time = Some(end_time);
 		}
+		this
+	}
+	pub fn new_tcp(
+		source_context: Option<&'a SourceContext>,
+		destination_context: &'a DestinationContext,
+	) -> Self {
+		let mut this = Self::new_empty();
+		this.source = ExtensionOrDirect::Direct(source_context);
+		this.destination = ExtensionOrDirect::Direct(Some(destination_context));
 		this
 	}
 	pub fn new_source(source_context: &'a SourceContext) -> Self {
@@ -2307,6 +2320,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 		destination: Some(DestinationContext {
 			address: "10.0.0.1".parse().unwrap(),
 			port: 8080,
+			hostname: Some("example.com".into()),
 		}),
 		jwt: Some(jwt::Claims {
 			inner: serde_json::Map::from_iter(vec![

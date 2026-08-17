@@ -220,6 +220,11 @@ impl Socket {
 		tls: TlsStream<Box<SocketType>>,
 		include_src_identity: bool,
 	) -> anyhow::Result<Self> {
+		// Nested TLS termination must not replace an identity authenticated by an
+		// outer layer, such as the Istio mTLS connection carrying HBONE.
+		let existing_src_identity = ext
+			.get::<TLSConnectionInfo>()
+			.and_then(|tls| tls.src_identity.clone());
 		let info = {
 			let server_name = match &tls {
 				TlsStream::Server(s) => {
@@ -230,11 +235,13 @@ impl Socket {
 			};
 			let (_, ssl) = tls.get_ref();
 			TLSConnectionInfo {
-				src_identity: if include_src_identity {
-					crate::transport::tls::identity_from_connection(ssl)
-				} else {
-					None
-				},
+				src_identity: existing_src_identity.or_else(|| {
+					if include_src_identity {
+						crate::transport::tls::identity_from_connection(ssl)
+					} else {
+						None
+					}
+				}),
 				negotiated_alpn: ssl.alpn_protocol().map(Alpn::from),
 				server_name,
 			}

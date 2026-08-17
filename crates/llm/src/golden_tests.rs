@@ -40,6 +40,7 @@ const BEDROCK_COHERE: &str = "bedrock-cohere";
 const BEDROCK_NOVA: &str = "bedrock-nova";
 const COHERE: &str = "cohere";
 const VERTEX_GEMINI: &str = "vertex-gemini";
+const GEMINI_NATIVE: &str = "gemini-native";
 
 mod requests {
 	use super::*;
@@ -97,6 +98,11 @@ mod requests {
 	}
 
 	fn apply_test_prompts<R: RequestType + Serialize>(r: &mut R) -> Result<Vec<u8>, AIError> {
+		apply_test_prompts_to(r);
+		serde_json::to_vec(r).map_err(AIError::RequestMarshal)
+	}
+
+	fn apply_test_prompts_to<R: RequestType + ?Sized>(r: &mut R) {
 		r.prepend_prompts(vec![
 			SimpleChatCompletionMessage {
 				role: strng::new("system"),
@@ -125,7 +131,6 @@ mod requests {
 				content: strng::new("append assistant prompt"),
 			},
 		]);
-		serde_json::to_vec(r).map_err(AIError::RequestMarshal)
 	}
 
 	const COMPLETION_REQUESTS: &[(&str, &[&str])] = &[
@@ -186,6 +191,17 @@ mod requests {
 	const RERANK_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[COHERE, BEDROCK, VERTEX]),
 		("passthrough-fields", &[COHERE, BEDROCK, VERTEX]),
+	];
+
+	/// Native Gemini inbound bodies, used for both the render snapshots and the fidelity assertions
+	/// in [`gemini_request_passthrough_is_lossless`].
+	const GEMINI_REQUESTS: &[&str] = &[
+		"text",
+		"tools",
+		"thinking",
+		"structured-output",
+		"image-inline",
+		"passthrough-fields",
 	];
 
 	#[test]
@@ -423,6 +439,68 @@ mod requests {
 	}
 
 	#[test]
+	fn gemini_native() {
+		// Native Gemini inbound: the "translation" is a re-serialize, so these snapshots exist to make
+		// any change to the wire body visible in review. `gemini_request_passthrough_is_lossless`
+		// asserts the fidelity property itself.
+		for name in GEMINI_REQUESTS {
+			let path = format!("requests/gemini/{name}.json");
+			test_request(GEMINI_NATIVE, &path, |i: &mut types::gemini::Request| {
+				serde_json::to_vec(&i.inner).map_err(AIError::RequestMarshal)
+			});
+		}
+
+		test_request(
+			GEMINI_NATIVE,
+			"requests/policies/gemini_with_system.json",
+			|i: &mut types::gemini::Request| {
+				apply_test_prompts_to(i);
+				serde_json::to_vec(&i.inner).map_err(AIError::RequestMarshal)
+			},
+		);
+	}
+
+	/// Parse + render must lose nothing on the native Gemini path. JSON key order is not preserved
+	/// (typed fields serialize in declaration order, then the `rest` flattens), so the assertion is
+	/// deep value equality plus byte-stability from the second pass onwards.
+	#[test]
+	fn gemini_request_passthrough_is_lossless() {
+		for name in GEMINI_REQUESTS {
+			let relative = format!("requests/gemini/{name}.json");
+			let input = fs::read_to_string(fixture_path(&relative)).expect("failed to read input file");
+			let expected: Value = serde_json::from_str(&input).expect("failed to parse input JSON");
+
+			let parsed: types::gemini::Request = serde_json::from_str(&input).expect("failed to parse");
+			let rendered = serde_json::to_vec(&parsed.inner).expect("failed to render");
+			let round_tripped: Value = serde_json::from_slice(&rendered).expect("rendered JSON");
+			assert_eq!(round_tripped, expected, "{name}: passthrough lost content");
+
+			let reparsed: types::gemini::Request =
+				serde_json::from_slice(&rendered).expect("failed to re-parse");
+			let rerendered = serde_json::to_vec(&reparsed.inner).expect("failed to re-render");
+			assert_eq!(
+				String::from_utf8_lossy(&rerendered),
+				String::from_utf8_lossy(&rendered),
+				"{name}: render is not byte-stable"
+			);
+		}
+	}
+
+	/// The only shape change the passthrough makes: `GenerationConfig`'s float fields are typed, so an
+	/// integer-valued JSON number comes back as a float. Both forms are valid proto3 JSON.
+	#[test]
+	fn gemini_request_normalizes_integer_valued_floats() {
+		let parsed: types::gemini::Request =
+			serde_json::from_value(json!({ "generationConfig": { "temperature": 1, "topK": 40 } }))
+				.expect("failed to parse");
+		let rendered = serde_json::to_vec(&parsed.inner).expect("failed to render");
+		assert_eq!(
+			String::from_utf8_lossy(&rendered),
+			r#"{"generationConfig":{"temperature":1.0,"topK":40}}"#
+		);
+	}
+
+	#[test]
 	fn get_messages() {
 		fn extract<R: RequestType + DeserializeOwned>(fixture: &str, provider: &str) {
 			let path = fixture_path(fixture);
@@ -462,6 +540,8 @@ mod requests {
 			"requests/responses/assistant-history.json",
 			"get-messages-responses",
 		);
+		extract::<types::gemini::Request>("requests/gemini/tools.json", "get-messages-gemini");
+		extract::<types::gemini::Request>("requests/gemini/image-inline.json", "get-messages-gemini");
 	}
 }
 
@@ -834,8 +914,52 @@ mod responses {
 			test_response(VERTEX_GEMINI_TO_COMPLETIONS, &path, |i| {
 				conversion::vertex_gemini::to_completions::translate_response(&i)
 			});
+			// The same responses served to a native Gemini client: body untouched, usage extracted.
+			test_response(GEMINI_NATIVE, &path, |i| {
+				serde_json::from_slice::<types::gemini::Response>(&i)
+					.map(|e| Box::new(e) as Box<dyn ResponseType>)
+					.map_err(AIError::ResponseParsing)
+			});
 		}
 	}
+
+	/// Parse + render must lose nothing on the native Gemini path. JSON key order is not preserved
+	/// (typed fields serialize in declaration order, then the `rest` flattens), so the assertion is
+	/// deep value equality plus byte-stability from the second pass onwards.
+	#[test]
+	fn gemini_response_passthrough_is_lossless() {
+		for name in ["basic", "tool", "reasoning"] {
+			let relative = format!("response/vertex-gemini/{name}.json");
+			let input = fs::read_to_string(fixture_path(&relative)).expect("failed to read input file");
+			let expected: Value = serde_json::from_str(&input).expect("failed to parse input JSON");
+
+			let parsed: types::gemini::Response = serde_json::from_str(&input).expect("failed to parse");
+			let rendered = ResponseType::serialize(&parsed).expect("failed to render");
+			let round_tripped: Value = serde_json::from_slice(&rendered).expect("rendered JSON");
+			assert_eq!(round_tripped, expected, "{name}: passthrough lost content");
+		}
+	}
+
+	/// The one documented exception to response fidelity: an empty `candidates` array is dropped,
+	/// which is what Google's own proto3 JSON encoder does with empty repeated fields (real blocked
+	/// responses omit the key entirely). Every other field of a blocked response survives.
+	#[test]
+	fn gemini_response_omits_empty_candidates_array() {
+		let input = fs::read_to_string(fixture_path("response/vertex-gemini/blocked.json"))
+			.expect("failed to read input file");
+		let mut expected: Value = serde_json::from_str(&input).expect("failed to parse input JSON");
+		assert_eq!(expected["candidates"], json!([]));
+		expected
+			.as_object_mut()
+			.expect("object")
+			.shift_remove("candidates");
+
+		let parsed: types::gemini::Response = serde_json::from_str(&input).expect("failed to parse");
+		let rendered = ResponseType::serialize(&parsed).expect("failed to render");
+		let round_tripped: Value = serde_json::from_slice(&rendered).expect("rendered JSON");
+		assert_eq!(round_tripped, expected);
+	}
+
 	#[test]
 	fn embeddings() {
 		for (path, provider) in EMBEDDING_RESPONSES {

@@ -6,7 +6,7 @@ use futures_util::StreamExt;
 use serde::Serialize;
 use tokio_util::codec::{BytesCodec, Decoder};
 
-use super::transform::parser as transform_parser;
+use super::transform::{TransformEvent, parser as transform_parser};
 
 /// Error type for EventStream decoding.
 ///
@@ -143,7 +143,10 @@ pub fn transform<O: Serialize>(
 	let decoder = EventStreamCodec::with_max_size(buffer_limit);
 	let encoder = BytesCodec::new();
 
-	transform_parser(b, decoder, encoder, move |o| {
+	transform_parser(b, decoder, encoder, move |event| {
+		let TransformEvent::Item(o) = event else {
+			return None;
+		};
 		let transformed = f(o)?;
 		let json_bytes = serde_json::to_vec(&transformed).ok()?;
 		Some(crate::parse::encode_sse_event("", Bytes::from(json_bytes)))
@@ -158,7 +161,10 @@ pub fn transform_multi<O: Serialize>(
 	let decoder = EventStreamCodec::with_max_size(buffer_limit);
 	let encoder = BytesCodec::new();
 
-	transform_parser(b, decoder, encoder, move |msg| {
+	transform_parser(b, decoder, encoder, move |event| {
+		let TransformEvent::Item(msg) = event else {
+			return Vec::new();
+		};
 		f(msg)
 			.into_iter()
 			.filter_map(|(event_name, event)| {

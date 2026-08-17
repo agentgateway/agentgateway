@@ -47,6 +47,8 @@ pub const LOCAL_LISTENER_NAME: &str = "llm";
 
 #[cfg(test)]
 mod anthropic_tests;
+#[cfg(test)]
+mod gemini_tests;
 
 #[cfg(test)]
 mod tests;
@@ -312,9 +314,11 @@ const CHAT_TRANSLATIONS: &[ChatTranslation] = {
 	&[
 		// Direct passthrough
 		chat(InputFormat::Responses, ChatFormat::OpenAIResponses),
-		// Quirk: normally we prefer direct passthrough. However, for Gemini, we can do a better job of
-		// the conversion than Google's OpenAI compatible endpoint, so we put this first. This will
-		// only actually be used for Vertex + Gemini models.
+		chat(InputFormat::Gemini, ChatFormat::VertexGemini),
+		// Quirk: normally we prefer direct passthrough. However, our conversion does a better job
+		// than Google's OpenAI compatible endpoint, so any provider that speaks native Gemini
+		// (Vertex or the Gemini API with a Gemini model, custom providers advertising
+		// generateContent) takes it in preference to the compat shim.
 		chat(InputFormat::Completions, ChatFormat::VertexGemini),
 		chat(InputFormat::Completions, ChatFormat::OpenAICompletions),
 		chat(InputFormat::Messages, ChatFormat::AnthropicMessages),
@@ -354,6 +358,10 @@ fn render_openai_completions(
 			apply_openai_moderation(&mut translated.moderation, ctx)?;
 			serde_json::to_vec(&translated).map_err(AIError::RequestMarshal)
 		},
+		// Missing: Gemini --> Completions (cross-provider translation is out of scope)
+		types::ChatRequest::Gemini(_) => Err(AIError::UnsupportedConversion(strng::literal!(
+			"gemini to completions"
+		))),
 	}
 }
 
@@ -393,6 +401,9 @@ fn render_anthropic_messages(req: types::ChatRequest) -> Result<Vec<u8>, AIError
 		types::ChatRequest::Responses(_) => Err(AIError::UnsupportedConversion(strng::literal!(
 			"responses to messages"
 		))),
+		types::ChatRequest::Gemini(_) => Err(AIError::UnsupportedConversion(strng::literal!(
+			"gemini to messages"
+		))),
 	}
 }
 
@@ -400,17 +411,18 @@ fn render_vertex_gemini(
 	req: types::ChatRequest,
 	ctx: &ChatRequestContext<'_>,
 ) -> Result<Vec<u8>, AIError> {
-	let AIProvider::Vertex(provider) = ctx.provider else {
-		return Err(AIError::UnsupportedConversion(strng::literal!(
-			"expected vertex provider"
-		)));
-	};
 	match req {
+		// Native Gemini inbound is a passthrough, so unlike the completions conversion it does
+		// not depend on Vertex specifics; the Gemini API provider renders through here too.
+		types::ChatRequest::Gemini(req) => serde_json::to_vec(&req).map_err(AIError::RequestMarshal),
 		types::ChatRequest::Completions(req) => {
-			conversion::vertex_gemini::from_completions::translate(&req, provider.model.as_deref())
+			// The conversion only needs the backend-pinned model, which every Gemini-speaking
+			// provider (Vertex, the Gemini API, custom) exposes the same way.
+			let override_model = ctx.provider.override_model();
+			conversion::vertex_gemini::from_completions::translate(&req, override_model.as_deref())
 		},
 		_ => Err(AIError::UnsupportedConversion(strng::literal!(
-			"vertex gemini only supports completions input"
+			"vertex gemini only supports completions or native gemini input"
 		))),
 	}
 }
@@ -440,6 +452,9 @@ fn render_bedrock_converse(
 			Some(ctx.headers),
 			ctx.prompt_caching,
 		),
+		types::ChatRequest::Gemini(_) => Err(AIError::UnsupportedConversion(strng::literal!(
+			"gemini to bedrock converse"
+		))),
 	}?;
 	let provider_state = if bedrock.tool_name_map.is_empty() {
 		None
@@ -469,7 +484,7 @@ impl ChatTranslation {
 				InputFormat::Responses => custom::ProviderFormat::Responses,
 				_ => unreachable!("chat translation selected for non-chat input"),
 			},
-			ChatFormat::VertexGemini => custom::ProviderFormat::Completions,
+			ChatFormat::VertexGemini => custom::ProviderFormat::GenerateContent,
 		}
 	}
 
@@ -561,6 +576,7 @@ impl ChatTranslation {
 				))),
 			},
 			ChatFormat::VertexGemini => match self.input {
+				InputFormat::Gemini => AIProvider::parse_response::<types::gemini::Response>(bytes),
 				InputFormat::Completions => {
 					conversion::vertex_gemini::to_completions::translate_response(bytes)
 				},
@@ -675,6 +691,14 @@ impl ChatTranslation {
 			},
 
 			ChatFormat::VertexGemini => match self.input {
+				InputFormat::Gemini => resp.map(|b| {
+					conversion::vertex_gemini::passthrough_stream(
+						b,
+						ctx.buffer_limit,
+						ctx.logger,
+						ctx.log_content,
+					)
+				}),
 				InputFormat::Completions => resp.map(|b| {
 					conversion::vertex_gemini::to_completions::translate_stream(
 						b,
@@ -764,6 +788,8 @@ impl ChatTranslation {
 			},
 
 			ChatFormat::VertexGemini => match format {
+				// Native Gemini clients expect the Google error shape; pass it through unchanged.
+				ChatErrorFormat::Google if self.input == InputFormat::Gemini => Ok(bytes.clone()),
 				ChatErrorFormat::Google => conversion::completions::translate_google_error(bytes),
 				_ => unsupported(),
 			},
@@ -857,7 +883,7 @@ impl AIProvider {
 				}
 				formats
 			},
-			AIProvider::Gemini(_) => vec![Completions, Embeddings],
+			AIProvider::Gemini(_) => vec![Completions, Embeddings, GeminiCountTokens],
 			AIProvider::Anthropic(_) => vec![Messages, AnthropicTokenCount],
 			AIProvider::Bedrock(p) => {
 				let mut formats = vec![Completions, Messages, Responses, Embeddings, Rerank];
@@ -872,6 +898,9 @@ impl AIProvider {
 				} else {
 					vec![Completions]
 				};
+				if p.is_gemini_model(request_model) {
+					formats.push(GeminiCountTokens);
+				}
 				formats.extend([Embeddings, Rerank]);
 				formats
 			},
@@ -903,7 +932,7 @@ impl AIProvider {
 			},
 			AIProvider::Azure(_) => vec![ChatFormat::OpenAIResponses, ChatFormat::OpenAICompletions],
 
-			AIProvider::Gemini(_) => vec![ChatFormat::OpenAICompletions],
+			AIProvider::Gemini(_) => vec![ChatFormat::VertexGemini, ChatFormat::OpenAICompletions],
 			AIProvider::Anthropic(_) => vec![ChatFormat::AnthropicMessages],
 			AIProvider::Bedrock(_) => vec![ChatFormat::BedrockConverse],
 
@@ -922,6 +951,7 @@ impl AIProvider {
 					custom::ProviderFormat::Completions => Some(ChatFormat::OpenAICompletions),
 					custom::ProviderFormat::Messages => Some(ChatFormat::AnthropicMessages),
 					custom::ProviderFormat::Responses => Some(ChatFormat::OpenAIResponses),
+					custom::ProviderFormat::GenerateContent => Some(ChatFormat::VertexGemini),
 					_ => None,
 				})
 				.collect(),
@@ -985,11 +1015,13 @@ impl AIProvider {
 			InputFormat::Embeddings => Embeddings,
 			InputFormat::Realtime => Realtime,
 			InputFormat::CountTokens => AnthropicTokenCount,
+			InputFormat::GeminiCountTokens => GeminiCountTokens,
 			InputFormat::Rerank => Rerank,
 			InputFormat::Detect
 			| InputFormat::Completions
 			| InputFormat::Messages
-			| InputFormat::Responses => return None,
+			| InputFormat::Responses
+			| InputFormat::Gemini => return None,
 		};
 		self
 			.supports_format(format, request_model)
@@ -1145,6 +1177,19 @@ impl AIProvider {
 			return Ok(());
 		}
 
+		// Native Gemini paths carry their own `?alt=sse` (see `native_gemini_path`) while the
+		// client's query is preserved alongside, so a client-sent `alt` would arrive upstream
+		// duplicated. countTokens is unary and never sets one, but Google honours `alt=sse` there
+		// too and answers with SSE framing that `CountTokensResponse` cannot parse — so drop the
+		// client's `alt` on both native routes (same gate as the render below). Stripping it here
+		// rather than at parse time keeps it intact on the paths above, which forward the client's
+		// URI untouched.
+		if route_type == RouteType::GeminiCountTokens
+			|| llm_request.is_some_and(|l| matches!(l.provider_state, Some(ProviderState::VertexGemini)))
+		{
+			strip_alt_query(req);
+		}
+
 		match self {
 			AIProvider::OpenAI(_) => http::modify_req(req, |req| {
 				http::modify_uri(req, |uri| {
@@ -1186,14 +1231,26 @@ impl AIProvider {
 				})?;
 				Ok(())
 			}),
-			AIProvider::Gemini(_) => http::modify_req(req, |req| {
-				http::modify_uri(req, |uri| {
-					let path = Self::with_path_prefix(gemini::path(route_type), path_prefix);
-					Self::set_path_and_query(uri, &path)?;
+			AIProvider::Gemini(_) => {
+				// Native Gemini renders (provider_state VertexGemini) go to the native
+				// generateContent endpoint, and countTokens is only ever native; everything else
+				// uses the OpenAI-compat shim.
+				let native = llm_request
+					.filter(|l| {
+						route_type == RouteType::GeminiCountTokens
+							|| matches!(l.provider_state, Some(ProviderState::VertexGemini))
+					})
+					.map(|l| gemini::native_gemini_path(route_type, l.request_model.as_str(), l.streaming));
+				http::modify_req(req, |req| {
+					http::modify_uri(req, |uri| {
+						let path = native.as_deref().unwrap_or(gemini::path(route_type));
+						let path = Self::with_path_prefix(path, path_prefix);
+						Self::set_path_and_query(uri, &path)?;
+						Ok(())
+					})?;
 					Ok(())
-				})?;
-				Ok(())
-			}),
+				})
+			},
 			AIProvider::Vertex(provider) => {
 				let request_model = llm_request.map(|l| l.request_model.as_str());
 				let streaming = llm_request.map(|l| l.streaming).unwrap_or(false);
@@ -1234,33 +1291,52 @@ impl AIProvider {
 				})?;
 				Ok(())
 			}),
-			AIProvider::Custom(provider) => http::modify_req(req, |req| {
-				http::modify_uri(req, |uri| {
-					if let Some(path) = provider.path_for_route(route_type) {
-						Self::set_path_and_query(uri, path)?;
-						return Ok(());
-					}
-					let path = match route_type {
-						RouteType::Messages | RouteType::AnthropicTokenCount => format!(
-							"{}{}",
-							path_prefix.map_or(anthropic::DEFAULT_BASE_PATH, |prefix| {
-								prefix.trim_end_matches('/')
-							}),
-							anthropic::path_suffix(route_type)
-						),
-						_ => format!(
-							"{}{}",
-							path_prefix.map_or(openai::DEFAULT_BASE_PATH, |prefix| {
-								prefix.trim_end_matches('/')
-							}),
-							openai::path_suffix(route_type)
-						),
-					};
-					Self::set_path_and_query(uri, &path)?;
+			AIProvider::Custom(provider) => {
+				// The native Gemini formats embed the model in the path and pick the method by
+				// streaming, which a static configured path cannot express, so their default is
+				// the canonical Gemini API shape. A configured path still wins verbatim below,
+				// which only suits single-model unary shims.
+				let native = llm_request
+					.filter(|_| {
+						matches!(
+							route_type,
+							RouteType::GenerateContent | RouteType::GeminiCountTokens
+						)
+					})
+					.map(|l| gemini::native_gemini_path(route_type, l.request_model.as_str(), l.streaming));
+				http::modify_req(req, |req| {
+					http::modify_uri(req, |uri| {
+						if let Some(path) = provider.path_for_route(route_type) {
+							Self::set_path_and_query(uri, path)?;
+							return Ok(());
+						}
+						if let Some(native) = native.as_deref() {
+							let path = Self::with_path_prefix(native, path_prefix);
+							Self::set_path_and_query(uri, &path)?;
+							return Ok(());
+						}
+						let path = match route_type {
+							RouteType::Messages | RouteType::AnthropicTokenCount => format!(
+								"{}{}",
+								path_prefix.map_or(anthropic::DEFAULT_BASE_PATH, |prefix| {
+									prefix.trim_end_matches('/')
+								}),
+								anthropic::path_suffix(route_type)
+							),
+							_ => format!(
+								"{}{}",
+								path_prefix.map_or(openai::DEFAULT_BASE_PATH, |prefix| {
+									prefix.trim_end_matches('/')
+								}),
+								openai::path_suffix(route_type)
+							),
+						};
+						Self::set_path_and_query(uri, &path)?;
+						Ok(())
+					})?;
 					Ok(())
-				})?;
-				Ok(())
-			}),
+				})
+			},
 		}
 	}
 
@@ -1356,6 +1432,35 @@ impl AIProvider {
 				} else {
 					Ok(())
 				}
+			},
+			AIProvider::Gemini(_)
+				if matches!(
+					route_type,
+					RouteType::GenerateContent | RouteType::GeminiCountTokens
+				) || llm_request
+					.is_some_and(|l| matches!(l.provider_state, Some(ProviderState::VertexGemini))) =>
+			{
+				http::modify_req(req, |req| {
+					if let Some(authz) = req.headers.typed_get::<headers::Authorization<Bearer>>() {
+						let explicit_authorization = req
+							.extensions
+							.get::<AppliedBackendAuthLocation>()
+							.is_some_and(|auth| auth.explicit);
+
+						// The native endpoints authenticate API keys via x-goog-api-key;
+						// `Authorization: Bearer` is reserved for OAuth access tokens there.
+						// Google API keys are uniformly "AIza"-prefixed, so relocate exactly
+						// those, keeping OAuth tokens (ya29., JWTs, ...) and explicitly
+						// configured Authorization intact.
+						if !explicit_authorization && authz.token().starts_with(gemini::API_KEY_PREFIX) {
+							req.headers.remove(http::header::AUTHORIZATION);
+							let mut api_key = HeaderValue::from_str(authz.token())?;
+							api_key.set_sensitive(true);
+							req.headers.insert("x-goog-api-key", api_key);
+						}
+					}
+					Ok(())
+				})
 			},
 			_ => Ok(()),
 		}
@@ -1455,6 +1560,45 @@ impl AIProvider {
 				log,
 				catalog,
 				types::ChatRequest::Messages,
+			)
+			.await
+	}
+
+	pub async fn process_gemini_request(
+		&self,
+		backend_info: &crate::http::auth::BackendInfo,
+		policies: Option<&Policy>,
+		req: Request,
+		tokenize: bool,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<RequestResult, AIError> {
+		// The Gemini wire body carries neither model nor a stream flag; both come from the
+		// URI: models/{model}:generateContent vs models/{model}:streamGenerateContent.
+		let streaming = req.uri().path().ends_with(":streamGenerateContent");
+		if streaming && !query_requests_sse(req.uri()) {
+			// Without alt=sse Google streams a JSON array, which we cannot parse incrementally.
+			// This can never succeed, so answer with a terminal client error rather than an
+			// AIError, which would surface as a retryable 503 and invite SDK retry storms.
+			return Ok(RequestResult::Rejected(google_invalid_argument(
+				"streamGenerateContent requires alt=sse; the JSON-array streaming variant is not supported",
+			)));
+		}
+		let (parts, mut req) = self
+			.read_gemini_body_and_default_model::<types::gemini::Request>(policies, req, log)
+			.await?;
+		req.streaming = streaming;
+		self.apply_model_alias(policies, &mut req);
+
+		self
+			.process_chat_request(
+				backend_info,
+				policies,
+				InputFormat::Gemini,
+				req,
+				parts,
+				tokenize,
+				log,
+				|req| types::ChatRequest::Gemini(req.inner),
 			)
 			.await
 	}
@@ -1600,6 +1744,37 @@ impl AIProvider {
 			.await
 	}
 
+	pub async fn process_gemini_count_tokens_request(
+		&self,
+		backend_info: &crate::http::auth::BackendInfo,
+		policies: Option<&Policy>,
+		req: Request,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<RequestResult, AIError> {
+		// Like generateContent, the model comes from the URI, not the body — except that Vertex
+		// countTokens does accept a body-level one, which stands in when the URI has none (an
+		// `endpoints/{id}:countTokens` path, say).
+		let (parts, mut req) = self
+			.read_gemini_body_and_default_model::<types::gemini::CountTokensRequest>(policies, req, log)
+			.await?;
+		self.apply_model_alias(policies, &mut req);
+
+		self
+			.process_non_chat_request(
+				backend_info,
+				policies,
+				InputFormat::GeminiCountTokens,
+				req,
+				parts,
+				false,
+				log,
+				|provider, req, _, request_model| {
+					provider.render_gemini_count_tokens_request(req, request_model)
+				},
+			)
+			.await
+	}
+
 	pub async fn process_detect_request(
 		&self,
 		backend_info: &crate::http::auth::BackendInfo,
@@ -1678,6 +1853,28 @@ impl AIProvider {
 			},
 			_ => Err(AIError::UnsupportedConversion(strng::literal!(
 				"count_tokens not supported for this provider"
+			))),
+		}
+	}
+
+	/// Native Gemini countTokens is passthrough, so the upstream must speak it natively; there is
+	/// no conversion from other providers' count-tokens endpoints.
+	fn render_gemini_count_tokens_request(
+		&self,
+		req: &types::gemini::CountTokensRequest,
+		request_model: &str,
+	) -> Result<Vec<u8>, AIError> {
+		match self {
+			AIProvider::Gemini(_) => serde_json::to_vec(req).map_err(AIError::RequestMarshal),
+			AIProvider::Vertex(p) if p.is_gemini_model(Some(request_model)) => {
+				serde_json::to_vec(req).map_err(AIError::RequestMarshal)
+			},
+			AIProvider::Custom(p) if p.supports(custom::ProviderFormat::GeminiCountTokens) => {
+				serde_json::to_vec(req).map_err(AIError::RequestMarshal)
+			},
+			_ => Err(AIError::UnsupportedConversion(strng::format!(
+				"from GeminiCountTokens to provider {}",
+				self.provider()
 			))),
 		}
 	}
@@ -1866,18 +2063,19 @@ impl AIProvider {
 		} else {
 			None
 		};
-		let provider_format = if original_format == InputFormat::Detect {
-			None
-		} else {
-			self
-				.non_chat_provider_format_for(original_format, request_model.as_deref())
-				.ok_or_else(|| {
-					AIError::UnsupportedConversion(strng::format!(
-						"from {original_format:?} to provider {}",
-						self.provider()
-					))
-				})?
-				.into()
+		// Detect is raw passthrough and keeps its client-facing route type upstream.
+		let provider_format = match original_format {
+			InputFormat::Detect => None,
+			_ => Some(
+				self
+					.non_chat_provider_format_for(original_format, request_model.as_deref())
+					.ok_or_else(|| {
+						AIError::UnsupportedConversion(strng::format!(
+							"from {original_format:?} to provider {}",
+							self.provider()
+						))
+					})?,
+			),
 		};
 		let prepared = self
 			.prepare_request(
@@ -1919,9 +2117,10 @@ impl AIProvider {
 		Ok(RequestResult::Success {
 			request: req,
 			llm_request: llm_info,
-			upstream_route_type: provider_format
-				.map(custom::ProviderFormat::route_type)
-				.unwrap_or(RouteType::Detect),
+			upstream_route_type: match provider_format {
+				Some(format) => format.route_type(),
+				None => RouteType::Detect,
+			},
 		})
 	}
 
@@ -1959,6 +2158,9 @@ impl AIProvider {
 		match req.input_format {
 			InputFormat::CountTokens => {
 				self.process_count_tokens_response(req, buffered, model_catalog, &log)
+			},
+			InputFormat::GeminiCountTokens => {
+				self.process_gemini_count_tokens_response(req, buffered, model_catalog, &log)
 			},
 			InputFormat::Embeddings => {
 				self.process_embeddings_buffered_response(req, buffered, model_catalog, &log)
@@ -2149,6 +2351,42 @@ impl AIProvider {
 		};
 
 		parts.headers.remove(header::CONTENT_LENGTH);
+		Ok(Self::finalize_response(
+			parts,
+			bytes.into(),
+			req,
+			LLMResponse {
+				count_tokens: Some(count),
+				..Default::default()
+			},
+			model_catalog,
+			log,
+		))
+	}
+
+	fn process_gemini_count_tokens_response(
+		&self,
+		req: LLMRequest,
+		buffered: BufferedResponse,
+		model_catalog: Option<&cost::ModelCatalog>,
+		log: &AsyncLog<llm::LLMInfo>,
+	) -> Result<Response, AIError> {
+		let BufferedResponse {
+			mut parts, bytes, ..
+		} = buffered;
+		parts.headers.remove(header::CONTENT_LENGTH);
+		if !parts.status.is_success() {
+			let body = self.process_error(&req, parts.status, &bytes)?;
+			return Ok(Self::finalize_response(
+				parts,
+				body.into(),
+				req,
+				LLMResponse::default(),
+				model_catalog,
+				log,
+			));
+		}
+		let (bytes, count) = types::gemini::CountTokensResponse::translate_response(bytes)?;
 		Ok(Self::finalize_response(
 			parts,
 			bytes.into(),
@@ -2479,6 +2717,35 @@ impl AIProvider {
 		hreq: Request,
 		log: &mut Option<&mut RequestLog>,
 	) -> Result<(Parts, T), AIError> {
+		self
+			.read_body_resolving_model(policies, hreq, log, false)
+			.await
+	}
+
+	/// Native Gemini bodies have no `model` of their own — the URI carries it — so the path (or a
+	/// backend pin) outranks anything a client puts in the body, which would otherwise defeat
+	/// virtual-model rewrites and path-based policy. The resolved model is still injected into the
+	/// body JSON before the operator's body mutations run, so a `transformations`/`overrides` entry
+	/// for `model` applies here exactly as it does on `/v1/chat/completions`; the Gemini request
+	/// types keep it off the wire.
+	async fn read_gemini_body_and_default_model<T: RequestType + DeserializeOwned>(
+		&self,
+		policies: Option<&Policy>,
+		hreq: Request,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<(Parts, T), AIError> {
+		self
+			.read_body_resolving_model(policies, hreq, log, true)
+			.await
+	}
+
+	async fn read_body_resolving_model<T: RequestType + DeserializeOwned>(
+		&self,
+		policies: Option<&Policy>,
+		hreq: Request,
+		log: &mut Option<&mut RequestLog>,
+		path_model_wins: bool,
+	) -> Result<(Parts, T), AIError> {
 		let buffer = http::buffer_limit(&hreq);
 		let (mut parts, body) = hreq.into_parts();
 		// Decode Content-Encoding (gzip/deflate/br/zstd) before parsing the body as
@@ -2515,7 +2782,7 @@ impl AIProvider {
 
 		let mut request: serde_json::Value =
 			serde_json::from_slice(bytes.as_ref()).map_err(AIError::RequestParsing)?;
-		self.set_provider_request_model(&parts, &mut request)?;
+		self.set_provider_request_model(&parts, &mut request, path_model_wins)?;
 		let mut request = if let Some(p) = policies {
 			p.apply_request_body_mutations(request, log)?
 		} else {
@@ -2531,6 +2798,7 @@ impl AIProvider {
 		&self,
 		parts: &Parts,
 		req: &mut serde_json::Value,
+		path_model_wins: bool,
 	) -> Result<(), AIError> {
 		let Some(obj) = req.as_object_mut() else {
 			return Err(AIError::MissingField("request must be an object".into()));
@@ -2540,7 +2808,7 @@ impl AIProvider {
 				"model".to_string(),
 				serde_json::Value::String(provider_model.to_string()),
 			);
-		} else if !matches!(obj.get("model"), Some(serde_json::Value::String(_)))
+		} else if (path_model_wins || !matches!(obj.get("model"), Some(serde_json::Value::String(_))))
 			&& let Some(path_model) = types::detect::extract_model_from_path(parts.uri.path())
 		{
 			obj.insert(
@@ -2602,6 +2870,11 @@ impl AIProvider {
 				// Passthrough; nothing needed
 				Ok(bytes.clone())
 			},
+			(_, InputFormat::GeminiCountTokens) => {
+				// Passthrough; only Google upstreams serve this route, so the error is already
+				// the Google shape the client expects.
+				Ok(bytes.clone())
+			},
 			(AIProvider::Bedrock(_), InputFormat::Embeddings) => {
 				conversion::bedrock::from_embeddings::translate_error(bytes)
 			},
@@ -2624,6 +2897,34 @@ impl AIProvider {
 			))),
 		}
 	}
+}
+
+fn query_requests_sse(uri: &::http::Uri) -> bool {
+	uri.query().is_some_and(|q| {
+		url::form_urlencoded::parse(q.as_bytes()).any(|(k, v)| k == "alt" && v == "sse")
+	})
+}
+
+/// Terminal 400 in the Google error shape, which the Gemini SDKs know how to parse.
+fn google_invalid_argument(message: &str) -> ::http::Response<Body> {
+	let body = serde_json::json!({
+		"error": {
+			"code": 400,
+			"message": message,
+			"status": "INVALID_ARGUMENT",
+		}
+	});
+	::http::Response::builder()
+		.status(::http::StatusCode::BAD_REQUEST)
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(body.to_string()))
+		.expect("failed to build gemini error response")
+}
+
+/// Remove `alt` from the request query, keeping any other parameters (e.g. `key`).
+fn strip_alt_query(req: &mut Request) {
+	// Removing a parameter from an already-valid URI cannot fail.
+	let _ = http::modify_query_parameters(req.uri_mut(), std::iter::empty::<(&str, &str)>(), ["alt"]);
 }
 
 fn bedrock_tool_name_map(req: &LLMRequest) -> Option<&conversion::bedrock::BedrockToolNameMap> {

@@ -1,0 +1,86 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/gemini/structured-output.json
+info:
+  contents:
+    - role: user
+      parts:
+        - text: List three planets.
+  generationConfig:
+    responseMimeType: application/json
+    responseSchema:
+      type: ARRAY
+      items:
+        type: OBJECT
+        properties:
+          name:
+            type: STRING
+          moons:
+            type: INTEGER
+          habitable:
+            type: BOOLEAN
+        required:
+          - name
+          - moons
+        propertyOrdering:
+          - name
+          - moons
+          - habitable
+---
+{
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "List three planets."
+          }
+        ]
+      }
+    ],
+    "generationConfig": {
+      "responseMimeType": "application/json",
+      "responseSchema": {
+        "type": "ARRAY",
+        "items": {
+          "type": "OBJECT",
+          "properties": {
+            "name": {
+              "type": "STRING"
+            },
+            "moons": {
+              "type": "INTEGER"
+            },
+            "habitable": {
+              "type": "BOOLEAN"
+            }
+          },
+          "required": [
+            "name",
+            "moons"
+          ],
+          "propertyOrdering": [
+            "name",
+            "moons",
+            "habitable"
+          ]
+        }
+      }
+    }
+  },
+  "parsed": {
+    "input_format": "Gemini",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "",
+    "provider": "gemini-native",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "List three planets."
+      }
+    ]
+  }
+}

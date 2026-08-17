@@ -11,6 +11,7 @@ import (
 	"istio.io/istio/pkg/config"
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
+	"istio.io/istio/pkg/util/sets"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -33,7 +34,7 @@ func AgwModelCollection(
 	models krt.Collection[*agentgateway.AgentgatewayModel],
 	inputs RouteContextInputs,
 	krtopts krtutil.KrtOptions,
-) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment]) {
+) (krt.Collection[agwir.AgwResource], krt.Collection[*plugins.RouteAttachment], krt.Collection[*utils.AncestorBackend]) {
 	modelStatus, modelResources := krt.NewStatusManyCollection(models, func(krtctx krt.HandlerContext, obj *agentgateway.AgentgatewayModel) (*agentgateway.AgentgatewayModelStatus, []agwir.AgwResource) {
 		ctx := inputs.WithCtx(krtctx)
 		rm := reports.NewReportMap()
@@ -52,7 +53,56 @@ func AgwModelCollection(
 	status.RegisterStatus(queue, modelStatus, GetStatus)
 
 	attachments := gatewayRouteAttachmentCollection(inputs, models, wellknown.AgentgatewayModelGVK, krtopts)
-	return modelResources, attachments
+	ancestors := krt.NewManyCollection(models, func(krtctx krt.HandlerContext, obj *agentgateway.AgentgatewayModel) []*utils.AncestorBackend {
+		return extractModelAncestorBackends(inputs.WithCtx(krtctx), obj)
+	}, krtopts.ToOptions("translator/ModelAncestorBackends")...)
+	return modelResources, attachments, ancestors
+}
+
+// extractModelAncestorBackends mirrors extractAncestorBackends for AgentgatewayModels, so
+// backends referenced only by a model (spec.custom.backendRef) still resolve to their
+// Gateways in the reference index.
+func extractModelAncestorBackends(ctx RouteContext, model *agentgateway.AgentgatewayModel) []*utils.AncestorBackend {
+	custom := model.Spec.Custom
+	if custom == nil || custom.BackendRef == nil {
+		return nil
+	}
+	source := utils.TypedNamespacedName{
+		NamespacedName: types.NamespacedName{
+			Namespace: model.Namespace,
+			Name:      model.Name,
+		},
+		Kind: wellknown.AgentgatewayModelGVK.Kind,
+	}
+	gateways := sets.Set[types.NamespacedName]{}
+	for _, parent := range FilteredReferences(extractModelParentReferenceInfo(ctx, model)) {
+		gateways.Insert(parent.ParentGateway)
+	}
+	kind := wellknown.ServiceKind
+	if custom.BackendRef.Kind != nil {
+		kind = *custom.BackendRef.Kind
+	}
+	backend := utils.TypedNamespacedName{
+		NamespacedName: types.NamespacedName{
+			// backendRef may target only namespace-local resources.
+			Namespace: model.Namespace,
+			Name:      custom.BackendRef.Name,
+		},
+		Kind: kind,
+	}
+	gtw := gateways.UnsortedList()
+	slices.SortFunc(gtw, func(a, b types.NamespacedName) int {
+		return strings.Compare(a.String(), b.String())
+	})
+	res := make([]*utils.AncestorBackend, 0, len(gtw))
+	for _, gw := range gtw {
+		res = append(res, &utils.AncestorBackend{
+			Gateway: gw,
+			Backend: backend,
+			Source:  source,
+		})
+	}
+	return res
 }
 
 // extractModelParentReferenceInfo resolves an HTTPRoute parent to that route's

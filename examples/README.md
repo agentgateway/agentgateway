@@ -27,6 +27,7 @@ This directory contains examples of how to use agentgateway. Each example is nam
 ### Traffic
 
 * [traffic-http](traffic-http/README.md): use agentgateway as a standard HTTP proxy.
+* [traffic-egress-proxy](traffic-egress-proxy/README.md): use agentgateway as an allowlisted CONNECT egress proxy with dynamic public backends and a fixed in-cluster route.
 * [traffic-a2a](traffic-a2a/README.md): proxy [A2A](https://a2aproject.github.io/A2A/) traffic.
 * [traffic-aws-agentcore](traffic-aws-agentcore/README.md): proxy AWS AgentCore traffic with JWT auth and user-id header forwarding.
 * [traffic-token-exchange](traffic-token-exchange/README.md): exchange inbound user credentials for per-upstream tokens — via `extAuthz` + CEL, the `backendAuth.oauth` RFC 8693 token-exchange grant, or the RFC 7523 JWT bearer grant.

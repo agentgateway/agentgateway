@@ -1261,7 +1261,7 @@ impl HTTPProxy {
 
 	fn detect_misdirected(
 		log: &RequestLog,
-		bind: &Bind,
+		bind: &BindSnapshot,
 		req: &Request,
 		selected_listener: &Listener,
 	) -> Result<(), ProxyError> {
@@ -1598,7 +1598,8 @@ pub async fn build_transport(
 		ApplicationTransport::Plaintext
 	};
 	if let Some(tun) = backend_tunnel {
-		let backend = super::resolve_simple_backend_with_policies(&tun.proxy, inputs)?;
+		let backend: BackendWithPolicies =
+			super::resolve_simple_backend_with_policies(&tun.proxy, inputs)?.into();
 		let pols = crate::proxy::tcpproxy::get_backend_policies(inputs, &backend, &tun.policies, None);
 		let call = TCPProxy::build_backend_call(&mut None, None, inputs, &backend.backend, pols, None)?;
 		let tunnel_backend_tls = call.backend_policies.backend_tls.clone();
@@ -1824,23 +1825,17 @@ fn target_from_request(req: &Request) -> Result<Target, ProxyError> {
 	Ok(Target::from((host, port)))
 }
 
-/// Evaluates a `Backend::Dynamic` target expression, if one is configured, in
-/// place of the default of reading the request's own :authority/URI. The CEL
-/// context includes any dynamic metadata a route policy (extProc, extAuthz)
-/// already attached to the request -- e.g. `extproc.workerPodIp` -- so the
-/// destination can come from that instead of requiring the policy to rewrite
-/// the request's authority for `target_from_request`/`connect_authority_target`
-/// to then read back. Returns `Ok(None)` when there's no expression, so the
-/// caller falls back to its own default.
-fn dynamic_backend_target_override(
-	req: &Request,
-	expr: &Option<Arc<crate::cel::Expression>>,
+/// Evaluates a `Backend::Dynamic` target expression using the caller's CEL
+/// context. Returns `Ok(None)` when there's no expression, so HTTP and TCP
+/// callers can apply their respective default target behavior.
+pub(super) fn dynamic_backend_target_override<'a>(
+	executor: &'a crate::cel::Executor<'a>,
+	expr: &'a Option<Arc<crate::cel::Expression>>,
 ) -> Result<Option<Target>, ProxyError> {
 	let Some(expr) = expr else {
 		return Ok(None);
 	};
-	let exec = crate::cel::Executor::new_request(req);
-	let value = exec.eval(expr).map_err(|e| {
+	let value = executor.eval(expr).map_err(|e| {
 		ProxyError::ProcessingString(format!("dynamic backend target expression eval: {e}"))
 	})?;
 	let json = value.json().map_err(|e| {
@@ -2236,7 +2231,8 @@ async fn make_backend_call(
 			);
 		},
 		Backend::Dynamic(_, expr) => {
-			let target = match dynamic_backend_target_override(&req, expr)? {
+			let executor = crate::cel::Executor::new_request(&req);
+			let target = match dynamic_backend_target_override(&executor, expr)? {
 				Some(target) => target,
 				None => target_from_request(&req)?,
 			};
@@ -2298,7 +2294,8 @@ async fn make_backend_call(
 	// could have been affected). This allows policies like `:authority` overrides (e.g., VPC
 	// endpoint routing) to take effect on the actual upstream connection target.
 	if let Backend::Dynamic(_, expr) = backend {
-		backend_call.target = match dynamic_backend_target_override(&req, expr)? {
+		let executor = crate::cel::Executor::new_request(&req);
+		backend_call.target = match dynamic_backend_target_override(&executor, expr)? {
 			Some(target) => target,
 			None => target_from_request(&req)?,
 		};
@@ -2335,6 +2332,8 @@ async fn make_backend_call(
 				| RouteType::Messages
 				| RouteType::Responses
 				| RouteType::AnthropicTokenCount
+				| RouteType::GenerateContent
+				| RouteType::GeminiCountTokens
 				| RouteType::Embeddings
 				| RouteType::Rerank
 				| RouteType::Detect => {
@@ -2399,6 +2398,25 @@ async fn make_backend_call(
 						))
 						.await
 						.map_err(ProxyError::AIRequest)?,
+						RouteType::GenerateContent => Box::pin(llm.provider.process_gemini_request(
+							&backend_info,
+							llm_request_policies.llm.as_deref(),
+							req,
+							llm.tokenize,
+							&mut log,
+						))
+						.await
+						.map_err(ProxyError::AIRequest)?,
+						RouteType::GeminiCountTokens => {
+							Box::pin(llm.provider.process_gemini_count_tokens_request(
+								&backend_info,
+								llm_request_policies.llm.as_deref(),
+								req,
+								&mut log,
+							))
+							.await
+							.map_err(ProxyError::AIRequest)?
+						},
 						RouteType::Detect => Box::pin(llm.provider.process_detect_request(
 							&backend_info,
 							llm_request_policies.llm.as_deref(),
@@ -2457,7 +2475,10 @@ async fn make_backend_call(
 
 					// Apply all policies (rate limits, prompt guards, enrichment)
 					// count_tokens skips policies (no tokens generated, no prompts to manipulate)
-					let response_policies = if route_type == RouteType::AnthropicTokenCount {
+					let response_policies = if matches!(
+						route_type,
+						RouteType::AnthropicTokenCount | RouteType::GeminiCountTokens
+					) {
 						LLMResponsePolicies::default()
 					} else {
 						Box::pin(
@@ -2754,7 +2775,8 @@ fn build_connect_backend_call(
 		},
 		Backend::Opaque(_, target) => Ok(BackendCall::from_shared(target.clone(), policies)),
 		Backend::Dynamic(_, expr) => {
-			let target = match dynamic_backend_target_override(req, expr)? {
+			let executor = crate::cel::Executor::new_request(req);
+			let target = match dynamic_backend_target_override(&executor, expr)? {
 				Some(target) => target,
 				None => connect_authority_target(req)?,
 			};
@@ -4362,19 +4384,21 @@ mod route_chain_tests {
 			.unwrap()
 	}
 
-	fn bind() -> Bind {
-		Bind {
-			key: proxymock::BIND_KEY,
-			address: "127.0.0.1:0".parse().unwrap(),
-			listeners: ListenerSet::from_list([Listener {
+	fn bind() -> BindSnapshot {
+		BindSnapshot {
+			bind: Arc::new(Bind {
+				key: proxymock::BIND_KEY,
+				address: "127.0.0.1:0".parse().unwrap(),
+				protocol: BindProtocol::http,
+				tunnel_protocol: Default::default(),
+				mode: Default::default(),
+			}),
+			listeners: Arc::new(ListenerSet::from_list([Listener {
 				key: proxymock::LISTENER_KEY,
 				name: Default::default(),
 				hostname: Default::default(),
 				protocol: ListenerProtocol::HTTP,
-			}]),
-			protocol: BindProtocol::http,
-			tunnel_protocol: Default::default(),
-			mode: Default::default(),
+			}])),
 		}
 	}
 

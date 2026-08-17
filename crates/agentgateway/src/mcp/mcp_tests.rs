@@ -1662,6 +1662,108 @@ fn mcp_json_post<'a>(
 		.json(body)
 }
 
+fn mcp_initialize_body() -> serde_json::Value {
+	serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {"name": "test-client", "version": "0.0.1"}
+		}
+	})
+}
+
+#[tokio::test]
+async fn dns_rebinding_protection_off_allows_non_localhost_origin() {
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy(&mock, true, false).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let resp = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.header("Origin", "http://evil.example")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(resp.status(), reqwest::StatusCode::OK);
+}
+
+#[tokio::test]
+async fn dns_rebinding_protection_rejects_non_localhost_origin() {
+	let mock = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_dns_rebinding_protection(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+
+	let forbidden = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.header("Origin", "http://evil.example")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(forbidden.status(), reqwest::StatusCode::FORBIDDEN);
+
+	let null_origin = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.header("Origin", "null")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(null_origin.status(), reqwest::StatusCode::FORBIDDEN);
+
+	// Well-known GETs normally bypass the MCP service and pass directly to the
+	// upstream. DNS rebinding validation must still run before that fast path.
+	let forbidden_well_known = client
+		.get(format!("http://{io}/.well-known/oauth-protected-resource"))
+		.header("Origin", "http://evil.example")
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(
+		forbidden_well_known.status(),
+		reqwest::StatusCode::FORBIDDEN
+	);
+
+	let allowed = mcp_json_post(&client, &url, &mcp_initialize_body())
+		.header("Origin", format!("http://127.0.0.1:{}", io.port()))
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(allowed.status(), reqwest::StatusCode::OK);
+}
+
+#[tokio::test]
+async fn dns_rebinding_protection_rejects_non_localhost_host() {
+	use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+	let mock = mock_streamable_http_server(true).await;
+	let t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend_dns_rebinding_protection(mock.addr, true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(mock.addr));
+	let io = t.serve_real_listener(BIND_KEY).await;
+
+	let mut stream = tokio::net::TcpStream::connect(io).await.unwrap();
+	let body = mcp_initialize_body().to_string();
+	let req = format!(
+		"POST /mcp HTTP/1.1\r\nHost: evil.example\r\nContent-Type: application/json\r\nAccept: application/json, text/event-stream\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+		body.len()
+	);
+	stream.write_all(req.as_bytes()).await.unwrap();
+	let mut buf = Vec::new();
+	stream.read_to_end(&mut buf).await.unwrap();
+	let text = String::from_utf8_lossy(&buf);
+	assert!(
+		text.starts_with("HTTP/1.1 403"),
+		"expected 403 for Host: evil.example, got: {text}"
+	);
+}
+
 #[tokio::test]
 async fn streamable_http_downstream_sse_frames_include_message_event() {
 	use wiremock::{Mock, ResponseTemplate};
@@ -1929,6 +2031,116 @@ async fn elicitation_roundtrip_completes_tool_call() {
 		&res.content[0].as_text().unwrap().text,
 		r#"{"confirm":"yes"}"#
 	);
+}
+
+// The traceparent forwarded to the MCP upstream must carry the gateway's own span id, not the
+// caller's, so the upstream's SERVER span nests under the gateway span like HTTP backends do.
+#[tokio::test]
+async fn mcp_upstream_traceparent_is_gateway_span() {
+	use wiremock::{Mock, ResponseTemplate};
+
+	use crate::types::agent::{
+		ListenerName, SimpleBackendReference, SimpleBackendReferenceWithPolicies, Target,
+		TracingConfig, TracingPolicy, TracingProtocol,
+	};
+
+	let upstream = wiremock::MockServer::start().await;
+	let upstream_frame = concat!(
+		"data: {\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{",
+		"\"protocolVersion\":\"2025-06-18\",",
+		"\"capabilities\":{\"tools\":{}},",
+		"\"serverInfo\":{\"name\":\"mock\",\"version\":\"0.0.1\"}",
+		"}}\n\n",
+	);
+	Mock::given(wiremock::matchers::method("POST"))
+		.respond_with(ResponseTemplate::new(200).set_body_raw(upstream_frame, "text/event-stream"))
+		.mount(&upstream)
+		.await;
+
+	let mut t = setup_proxy_test("{}")
+		.unwrap()
+		.with_mcp_backend(*upstream.address(), true, false)
+		.with_bind(simple_bind())
+		.with_route(basic_route(*upstream.address()));
+	// Tracing must be active for the gateway to create its own span. Exported spans are
+	// not inspected; the collector target is just the upstream mock.
+	t.with_policy(TargetedPolicy {
+		key: "frontend/tracing".into(),
+		name: None,
+		target: PolicyTarget::Gateway(ListenerName::default().into()),
+		inheritance: Default::default(),
+		policy: FrontendPolicy::Tracing(Arc::new(TracingPolicy {
+			config: TracingConfig {
+				target: SimpleBackendReferenceWithPolicies {
+					target: Arc::new(SimpleBackendReference::InlineBackend(Target::Address(
+						*upstream.address(),
+					))),
+					policies: vec![],
+				},
+				attributes: Default::default(),
+				resources: Default::default(),
+				remove: vec![],
+				random_sampling: None,
+				client_sampling: None,
+				filter: None,
+				path: "/v1/traces".to_string(),
+				protocol: TracingProtocol::Http,
+			},
+			fields: Default::default(),
+			tracer: once_cell::sync::OnceCell::new(),
+		}))
+		.into(),
+	});
+	let io = t.serve_real_listener(BIND_KEY).await;
+	let client = reqwest::Client::new();
+	let url = format!("http://{io}/mcp");
+	let initialize = serde_json::json!({
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "initialize",
+		"params": {
+			"protocolVersion": "2025-06-18",
+			"capabilities": {},
+			"clientInfo": {
+				"name": "test-client",
+				"version": "0.0.1"
+			}
+		}
+	});
+
+	let caller_trace_id = "4bf92f3577b34da6a3ce929d0e0e4736";
+	let response = mcp_json_post(&client, &url, &initialize)
+		.header(
+			"traceparent",
+			format!("00-{caller_trace_id}-00f067aa0ba902b7-01"),
+		)
+		.send()
+		.await
+		.unwrap();
+	assert_eq!(response.status(), reqwest::StatusCode::OK);
+
+	// The gateway's span id is `span.id` in the access log; the upstream must see exactly it.
+	let log = agent_core::telemetry::testing::eventually_find(&[
+		("mcp.method.name", "initialize"),
+		("trace.id", caller_trace_id),
+	])
+	.await
+	.unwrap();
+	let expected = format!(
+		"00-{caller_trace_id}-{}-01",
+		log["span.id"].as_str().unwrap()
+	);
+	// The mock also receives span exports; pick out the JSON-RPC initialize call.
+	let reqs = upstream.received_requests().await.unwrap();
+	let init = reqs
+		.iter()
+		.find(|r| {
+			serde_json::from_slice::<serde_json::Value>(&r.body)
+				.is_ok_and(|b| b["method"] == "initialize")
+		})
+		.expect("upstream initialize request");
+	let tp = init.headers.get("traceparent").unwrap().to_str().unwrap();
+	assert_eq!(tp, expected);
 }
 
 // Forwarded modern responses may come back as a single JSON object or as an SSE stream.
@@ -3683,6 +3895,7 @@ async fn setup_proxy_policies_with_target(
 			legacy_sse,
 			policies,
 			target_policies,
+			false,
 		)
 		.with_bind(simple_bind())
 		.with_route(basic_route(mock.addr));

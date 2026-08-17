@@ -511,6 +511,7 @@ pub mod from_messages {
 		>(b, buffer_limit, move |evt| {
 			let mut events: Vec<(&'static str, messages::MessagesStreamEvent)> = Vec::new();
 			match evt {
+				SseJsonEvent::Eof | SseJsonEvent::Error => return events,
 				SseJsonEvent::Done => {
 					flush_message_end(&mut state, &mut events, &log, true, log_content.tool_calls);
 					return events;

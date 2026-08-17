@@ -47,12 +47,22 @@ impl StateManager {
 		);
 		let resource_manager = crate::resource_manager::ResourceManager::new(client.clone())?;
 		let xds_client = if let Some(addr) = &xds.address {
+			let headers = xds
+				.headers
+				.iter()
+				.map(|(name, value)| {
+					Ok((
+						name.parse::<::http::header::HeaderName>()?,
+						value.parse::<::http::HeaderValue>()?,
+					))
+				})
+				.collect::<anyhow::Result<Vec<_>>>()?;
 			let connector = control::grpc_connector(
 				client.clone(),
 				addr.clone(),
 				xds.auth.clone(),
 				xds.ca_cert.clone(),
-				vec![],
+				headers,
 			)
 			.await?;
 			Some(

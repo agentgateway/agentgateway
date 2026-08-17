@@ -1674,6 +1674,10 @@ const (
 	BackendPolicySpec_Ai_REALTIME BackendPolicySpec_Ai_RouteType = 8
 	// Processes Cohere /v2/rerank format requests
 	BackendPolicySpec_Ai_RERANK BackendPolicySpec_Ai_RouteType = 10
+	// Processes Gemini models/{model}:generateContent and :streamGenerateContent format requests
+	BackendPolicySpec_Ai_GENERATE_CONTENT BackendPolicySpec_Ai_RouteType = 11
+	// Processes Gemini models/{model}:countTokens format requests
+	BackendPolicySpec_Ai_GEMINI_COUNT_TOKENS BackendPolicySpec_Ai_RouteType = 12
 )
 
 // Enum value maps for BackendPolicySpec_Ai_RouteType.
@@ -1690,6 +1694,8 @@ var (
 		7:  "EMBEDDINGS",
 		8:  "REALTIME",
 		10: "RERANK",
+		11: "GENERATE_CONTENT",
+		12: "GEMINI_COUNT_TOKENS",
 	}
 	BackendPolicySpec_Ai_RouteType_value = map[string]int32{
 		"UNSPECIFIED":           0,
@@ -1703,6 +1709,8 @@ var (
 		"EMBEDDINGS":            7,
 		"REALTIME":              8,
 		"RERANK":                10,
+		"GENERATE_CONTENT":      11,
+		"GEMINI_COUNT_TOKENS":   12,
 	}
 )
 
@@ -18249,7 +18257,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\xa8^\n" +
+	"\x04kind\"\xd7^\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -18272,7 +18280,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x0ebackend_tunnel\x18\x10 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.BackendTunnelH\x00R\rbackendTunnel\x12X\n" +
 	"\text_authz\x18\x11 \x01(\v29.agentgateway.dev.resource.TrafficPolicySpec.ExternalAuthH\x00R\bextAuthz\x12c\n" +
 	"\x0emcp_guardrails\x18\x12 \x01(\v2:.agentgateway.dev.resource.BackendPolicySpec.McpGuardrailsH\x00R\rmcpGuardrails\x12Y\n" +
-	"\rauthorization\x18\x13 \x01(\v21.agentgateway.dev.resource.TrafficPolicySpec.RBACH\x00R\rauthorization\x1a\xa6/\n" +
+	"\rauthorization\x18\x13 \x01(\v21.agentgateway.dev.resource.TrafficPolicySpec.RBACH\x00R\rauthorization\x1a\xd5/\n" +
 	"\x02Ai\x12^\n" +
 	"\fprompt_guard\x18\x01 \x01(\v2;.agentgateway.dev.resource.BackendPolicySpec.Ai.PromptGuardR\vpromptGuard\x12Y\n" +
 	"\bdefaults\x18\x02 \x03(\v2=.agentgateway.dev.resource.BackendPolicySpec.Ai.DefaultsEntryR\bdefaults\x12\\\n" +
@@ -18415,7 +18423,7 @@ const file_resource_proto_rawDesc = "" +
 	"\x12ACTION_UNSPECIFIED\x10\x00\x12\b\n" +
 	"\x04MASK\x10\x01\x12\n" +
 	"\n" +
-	"\x06REJECT\x10\x02\"\xb8\x01\n" +
+	"\x06REJECT\x10\x02\"\xe7\x01\n" +
 	"\tRouteType\x12\x0f\n" +
 	"\vUNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vCOMPLETIONS\x10\x01\x12\f\n" +
@@ -18432,7 +18440,9 @@ const file_resource_proto_rawDesc = "" +
 	"\bREALTIME\x10\b\x12\n" +
 	"\n" +
 	"\x06RERANK\x10\n" +
-	"\x1a\x05\n" +
+	"\x12\x14\n" +
+	"\x10GENERATE_CONTENT\x10\v\x12\x17\n" +
+	"\x13GEMINI_COUNT_TOKENS\x10\f\x1a\x05\n" +
 	"\x03A2a\x1a\x92\x02\n" +
 	"\x10InferenceRouting\x12T\n" +
 	"\x0fendpoint_picker\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\x0eendpointPicker\x12l\n" +

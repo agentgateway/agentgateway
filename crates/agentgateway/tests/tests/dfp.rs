@@ -37,20 +37,22 @@ fn setup_dfp_https() -> (TestBind, MemoryClient) {
 
 	let route = basic_named_route("/dynamic".into());
 
-	let bind = Bind {
-		key: BIND_KEY,
-		// not really used
-		address: "127.0.0.1:0".parse().unwrap(),
-		listeners: ListenerSet::from_list([Listener {
+	let bind = BindSnapshot::new(
+		Bind {
+			key: BIND_KEY,
+			// not really used
+			address: "127.0.0.1:0".parse().unwrap(),
+			protocol: BindProtocol::tls,
+			tunnel_protocol: Default::default(),
+			mode: Default::default(),
+		},
+		ListenerSet::from_list([Listener {
 			key: LISTENER_KEY,
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTPS(test_server_tls_config()),
 		}]),
-		protocol: BindProtocol::tls,
-		tunnel_protocol: Default::default(),
-		mode: Default::default(),
-	};
+	);
 
 	let t = setup_proxy_test("{}").unwrap();
 	let pi = t.inputs();

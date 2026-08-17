@@ -19,20 +19,22 @@ pub(in crate::tests) fn test_server_tls_config() -> agentgateway::types::agent::
 	.expect("test server tls config")
 }
 
-pub(in crate::tests) fn https_bind() -> Bind {
-	Bind {
-		key: BIND_KEY,
-		address: "127.0.0.1:0".parse().unwrap(),
-		listeners: ListenerSet::from_list([Listener {
+pub(in crate::tests) fn https_bind() -> BindSnapshot {
+	BindSnapshot::new(
+		Bind {
+			key: BIND_KEY,
+			address: "127.0.0.1:0".parse().unwrap(),
+			protocol: BindProtocol::tls,
+			tunnel_protocol: Default::default(),
+			mode: Default::default(),
+		},
+		ListenerSet::from_list([Listener {
 			key: LISTENER_KEY,
 			name: Default::default(),
 			hostname: strng::new("*.example.com"),
 			protocol: ListenerProtocol::HTTPS(test_server_tls_config()),
 		}]),
-		protocol: BindProtocol::tls,
-		tunnel_protocol: Default::default(),
-		mode: Default::default(),
-	}
+	)
 }
 
 async fn serve_https_http1_connection(

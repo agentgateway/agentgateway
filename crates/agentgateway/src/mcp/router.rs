@@ -40,6 +40,11 @@ impl App {
 		backend: &McpBackend,
 		req: &Request,
 	) -> Option<SimpleBackendReference> {
+		// Invalid well-known requests must not bypass the validation in `serve`
+		// through the direct upstream passthrough path.
+		if backend.dns_rebinding_protection && !mcp::dns_rebinding::is_localhost_request(req) {
+			return None;
+		}
 		if backend.targets.len() != 1 {
 			return None;
 		}
@@ -123,6 +128,12 @@ impl App {
 		req.extensions_mut().insert(logy);
 		let tracer = log.span_writer();
 		req.extensions_mut().insert(tracer);
+
+		if backend.dns_rebinding_protection
+			&& let Some(resp) = mcp::dns_rebinding::reject_non_localhost(&req)
+		{
+			return Ok(resp);
+		}
 
 		authorization_policies.register(log.cel.ctx());
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;

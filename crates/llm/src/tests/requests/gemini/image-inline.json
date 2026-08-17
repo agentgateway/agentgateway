@@ -1,0 +1,21 @@
+{
+  "contents": [
+    {
+      "role": "user",
+      "parts": [
+        { "text": "What is in these?" },
+        {
+          "inlineData": {
+            "mimeType": "image/png",
+            "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+          }
+        },
+        {
+          "fileData": { "mimeType": "video/mp4", "fileUri": "gs://bucket/clip.mp4" },
+          "videoMetadata": { "startOffset": "0s", "endOffset": "5s", "fps": 2 }
+        }
+      ]
+    }
+  ],
+  "generationConfig": { "responseModalities": ["TEXT"] }
+}

@@ -1457,6 +1457,10 @@ message BackendPolicySpec {
       REALTIME = 8;
       // Processes Cohere /v2/rerank format requests
       RERANK = 10;
+      // Processes Gemini models/{model}:generateContent and :streamGenerateContent format requests
+      GENERATE_CONTENT = 11;
+      // Processes Gemini models/{model}:countTokens format requests
+      GEMINI_COUNT_TOKENS = 12;
     }
 
     // Routes defines how to identify the type of LLM request to handle.

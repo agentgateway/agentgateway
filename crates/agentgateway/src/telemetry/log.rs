@@ -1414,6 +1414,15 @@ impl Drop for DropOnLog {
 				("route", route_identifier.route.as_deref().map(display)),
 				("endpoint", log.endpoint.display()),
 				("src.addr", Some(display(&log.tcp_info.peer_addr))),
+				(
+					"src.identity",
+					log
+						.tls_info
+						.as_ref()
+						.and_then(|tls| tls.src_identity.as_ref())
+						.and_then(|tls| tls.identity.as_ref())
+						.map(display),
+				),
 				("http.method", log.method.display()),
 				("http.host", log.host.display()),
 				("http.path", log.path.display()),

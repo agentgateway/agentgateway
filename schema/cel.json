@@ -908,6 +908,13 @@
           "minimum": 0,
           "maximum": 65535,
           "default": 0
+        },
+        "hostname": {
+          "description": "The requested destination hostname, when known. For TLS connections this is the sniffed SNI.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false

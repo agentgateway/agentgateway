@@ -19,6 +19,7 @@ use rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use rustls::server::danger::ClientCertVerifier;
 use rustls_pki_types::pem::{PemObject, SectionKind};
 use secrecy::SecretString;
+use serde::ser::SerializeStruct;
 use serde::{Serialize, Serializer};
 use serde_json::Value;
 
@@ -42,6 +43,7 @@ use crate::types::{agent, backend, frontend};
 use crate::{apply, *};
 
 #[apply(schema_ser_schema!)]
+#[derive(Eq, PartialEq)]
 pub struct Bind {
 	pub key: BindKey,
 	pub address: SocketAddr,
@@ -51,7 +53,6 @@ pub struct Bind {
 	/// `standard` (default) binds the `address`; `internal` does not bind a socket and is only
 	/// reachable via in-process routing (e.g. CONNECT tunnel re-entry by other listeners).
 	pub mode: BindMode,
-	pub listeners: ListenerSet,
 }
 
 impl Bind {
@@ -59,6 +60,53 @@ impl Bind {
 	/// it handles CONNECT re-entry for any destination port that no other bind matches by port.
 	pub fn is_wildcard(&self) -> bool {
 		self.mode == BindMode::Internal && self.address.port() == 0
+	}
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct BindSnapshot {
+	#[cfg_attr(feature = "schema", schemars(flatten))]
+	pub bind: Arc<Bind>,
+	pub listeners: Arc<ListenerSet>,
+}
+
+impl Serialize for BindSnapshot {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		let mut snapshot = serializer.serialize_struct("BindSnapshot", 6)?;
+		snapshot.serialize_field("key", &self.key)?;
+		snapshot.serialize_field("address", &self.address)?;
+		snapshot.serialize_field("protocol", &self.protocol)?;
+		snapshot.serialize_field("tunnelProtocol", &self.tunnel_protocol)?;
+		snapshot.serialize_field("mode", &self.mode)?;
+		snapshot.serialize_field("listeners", &self.listeners)?;
+		snapshot.end()
+	}
+}
+
+impl BindSnapshot {
+	pub fn new(bind: Bind, listeners: ListenerSet) -> Self {
+		Self {
+			bind: Arc::new(bind),
+			listeners: Arc::new(listeners),
+		}
+	}
+}
+
+impl std::ops::Deref for BindSnapshot {
+	type Target = Bind;
+
+	fn deref(&self) -> &Self::Target {
+		&self.bind
+	}
+}
+
+impl std::ops::DerefMut for BindSnapshot {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		Arc::make_mut(&mut self.bind)
 	}
 }
 
@@ -1038,7 +1086,11 @@ pub struct TCPRoute {
 pub struct TCPRouteBackendReference {
 	#[serde(default = "default_weight")]
 	pub weight: usize,
-	pub backend: SimpleBackendReference,
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "crate::types::local::LocalTCPBackend")
+	)]
+	pub backend: BackendReference,
 	// Inline policies ("filters") of the route backend
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	#[cfg_attr(feature = "schema", schemars(with = "Vec<serde_json::Value>"))]
@@ -1050,7 +1102,7 @@ pub struct TCPRouteBackendReference {
 pub struct TCPRouteBackend {
 	#[serde(default = "default_weight")]
 	pub weight: usize,
-	pub backend: SimpleBackendWithPolicies,
+	pub backend: BackendWithPolicies,
 	// Inline policies ("filters") of the route backend
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub inline_policies: Vec<BackendTrafficPolicy>,
@@ -1734,6 +1786,11 @@ pub struct McpBackend {
 	#[serde(with = "crate::serdes::serde_dur")]
 	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	pub session_idle_ttl: Duration,
+	/// When true, reject MCP requests whose Host/Origin is not localhost
+	/// (`localhost`, `127.0.0.1`, `[::1]`, with optional port). Off by default:
+	/// agentgateway is typically not a browser-facing localhost MCP server.
+	#[serde(default, skip_serializing_if = "crate::serdes::is_default")]
+	pub dns_rebinding_protection: bool,
 }
 
 impl McpBackend {
@@ -1831,7 +1888,7 @@ pub struct OpenAPITarget {
 	pub schema: Arc<OpenAPI>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[cfg_attr(
 	feature = "schema",

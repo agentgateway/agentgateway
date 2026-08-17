@@ -136,10 +136,12 @@ pub fn parse_config(
 		} else {
 			crate::control::RootCert::Default
 		};
+		let headers = parse_headers("XDS_HEADER_").ctx("invalid XDS_HEADER_*")?;
 		XDSConfig {
 			address,
 			auth,
 			ca_cert: xds_root_cert,
+			headers,
 			namespace: namespace.into(),
 			gateway: gateway.into(),
 			local_config,
@@ -1260,6 +1262,44 @@ config:
 
 		assert_eq!(config.storage.mode, ConfigStoreMode::File);
 		assert!(config.database.is_none());
+	}
+
+	#[test]
+	fn xds_headers_are_loaded_from_environment() {
+		let _env_lock = lock_env();
+		let _address = TempEnvVar::set("XDS_ADDRESS", "http://127.0.0.1:15010");
+		let _namespace = TempEnvVar::set("NAMESPACE", "default");
+		let _gateway = TempEnvVar::set("GATEWAY", "agentgateway");
+		let _revision = TempEnvVar::set("XDS_HEADER_X_ISTIO_REVISION", "canary");
+		let _tenant = TempEnvVar::set("XDS_HEADER_X_TENANT", "team-a");
+
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+
+		assert!(
+			config
+				.xds
+				.headers
+				.contains(&("x-istio-revision".to_string(), "canary".to_string()))
+		);
+		assert!(
+			config
+				.xds
+				.headers
+				.contains(&("x-tenant".to_string(), "team-a".to_string()))
+		);
+	}
+
+	#[test]
+	fn invalid_xds_header_is_rejected_during_startup() {
+		let _env_lock = lock_env();
+		let _header = TempEnvVar::set("XDS_HEADER_X_TENANT", "bad\nvalue");
+
+		let err = parse_config("{}".to_string(), None).expect_err("invalid header should fail");
+
+		assert!(
+			err.to_string().contains("invalid XDS_HEADER_*"),
+			"unexpected error: {err}"
+		);
 	}
 
 	#[test]

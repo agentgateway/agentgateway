@@ -5306,6 +5306,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
 |`binds[].listeners[].routes[].backends[].mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
 |`binds[].listeners[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].backends[].mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
 |`binds[].listeners[].routes[].backends[].ai`|object||
 |`binds[].listeners[].routes[].backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
 |`binds[].listeners[].routes[].backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
@@ -5343,7 +5344,7 @@
 |`binds[].listeners[].routes[].backends[].ai.provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`binds[].listeners[].routes[].backends[].ai.provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`binds[].listeners[].routes[].backends[].ai.provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
+|`binds[].listeners[].routes[].backends[].ai.provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
 |`binds[].listeners[].routes[].backends[].ai.provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`binds[].listeners[].routes[].backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
@@ -8656,7 +8657,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
@@ -15228,6 +15229,8 @@
 |`binds[].listeners[].tcpRoutes[].backends[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`binds[].listeners[].tcpRoutes[].backends[].service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].tcpRoutes[].backends[].host`|string|Hostname or IP address|
+|`binds[].listeners[].tcpRoutes[].backends[].dynamic`|object|Resolve the dial target from downstream TLS SNI and the original destination port.|
+|`binds[].listeners[].tcpRoutes[].backends[].dynamic.target`|string|CEL expression evaluated against TCP connection context to compute a<br>`host:port` dial target. Available fields include `source.*` and<br>`destination.*`; for TLS, `destination.hostname` is the sniffed SNI.|
 |`binds[].listeners[].tcpRoutes[].backends[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`binds[].listeners[].tcpRoutes[].backends[].weight`|integer|Relative weight for load balancing across TCP backends. Defaults to 1.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies`|object|Backend-level policies for TCP backends, such as TLS, authentication, and tunneling.|
@@ -23162,6 +23165,7 @@
 |`backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
 |`backends[].mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
 |`backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`backends[].mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
 |`backends[].ai`|object||
 |`backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
 |`backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
@@ -23199,7 +23203,7 @@
 |`backends[].ai.provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`backends[].ai.provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`backends[].ai.provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`backends[].ai.provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
+|`backends[].ai.provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
 |`backends[].ai.provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
@@ -26512,7 +26516,7 @@
 |`backends[].ai.groups[].providers[].provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`backends[].ai.groups[].providers[].provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`backends[].ai.groups[].providers[].provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
+|`backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
 |`backends[].ai.groups[].providers[].provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
@@ -38248,6 +38252,7 @@
 |`routeGroups[].routes[].backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
 |`routeGroups[].routes[].backends[].mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
 |`routeGroups[].routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].backends[].mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
 |`routeGroups[].routes[].backends[].ai`|object||
 |`routeGroups[].routes[].backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
 |`routeGroups[].routes[].backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
@@ -38285,7 +38290,7 @@
 |`routeGroups[].routes[].backends[].ai.provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`routeGroups[].routes[].backends[].ai.provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`routeGroups[].routes[].backends[].ai.provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
+|`routeGroups[].routes[].backends[].ai.provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
 |`routeGroups[].routes[].backends[].ai.provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`routeGroups[].routes[].backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`routeGroups[].routes[].backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
@@ -41598,7 +41603,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
@@ -55914,6 +55919,7 @@
 |`routes[].backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
 |`routes[].backends[].mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
 |`routes[].backends[].mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].backends[].mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
 |`routes[].backends[].ai`|object||
 |`routes[].backends[].ai.name`|string|Name identifying this provider, referenced by `llm.models[].provider`.|
 |`routes[].backends[].ai.provider`|object|The upstream LLM provider type and its configuration.<br>Exactly one of openAI, gemini, vertex, anthropic, bedrock, azure, copilot, or custom may be set.|
@@ -55951,7 +55957,7 @@
 |`routes[].backends[].ai.provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`routes[].backends[].ai.provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`routes[].backends[].ai.provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`routes[].backends[].ai.provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
+|`routes[].backends[].ai.provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
 |`routes[].backends[].ai.provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`routes[].backends[].ai.hostOverride`|string|Override the upstream host for this provider.|
 |`routes[].backends[].ai.pathOverride`|string|Override the upstream path for this provider.|
@@ -59264,7 +59270,7 @@
 |`routes[].backends[].ai.groups[].providers[].provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`routes[].backends[].ai.groups[].providers[].provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`routes[].backends[].ai.groups[].providers[].provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
+|`routes[].backends[].ai.groups[].providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
 |`routes[].backends[].ai.groups[].providers[].provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`routes[].backends[].ai.groups[].providers[].hostOverride`|string|Override the upstream host for this provider.|
 |`routes[].backends[].ai.groups[].providers[].pathOverride`|string|Override the upstream path for this provider.|
@@ -65837,6 +65843,8 @@
 |`tcpRoutes[].backends[].service.name`|string|Name of the target Service, as defined in the top-level `services` list.|
 |`tcpRoutes[].backends[].service.port`|integer|Port on the target Service to route to.|
 |`tcpRoutes[].backends[].host`|string|Hostname or IP address|
+|`tcpRoutes[].backends[].dynamic`|object|Resolve the dial target from downstream TLS SNI and the original destination port.|
+|`tcpRoutes[].backends[].dynamic.target`|string|CEL expression evaluated against TCP connection context to compute a<br>`host:port` dial target. Available fields include `source.*` and<br>`destination.*`; for TLS, `destination.hostname` is the sniffed SNI.|
 |`tcpRoutes[].backends[].backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
 |`tcpRoutes[].backends[].weight`|integer|Relative weight for load balancing across TCP backends. Defaults to 1.|
 |`tcpRoutes[].backends[].policies`|object|Backend-level policies for TCP backends, such as TLS, authentication, and tunneling.|
@@ -66155,7 +66163,7 @@
 |`llm.providers[].provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`llm.providers[].provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`llm.providers[].provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`llm.providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
+|`llm.providers[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
 |`llm.providers[].provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`llm.providers[].defaults`|object|defaults defines provider-level policy defaults. Model-level policy fields override these.|
 |`llm.providers[].defaults.defaults`|object|Request payload fields to set when not already present in the request.|
@@ -66858,7 +66866,7 @@
 |`llm.models[].provider.custom.model`|string|Model ID to send to the provider, overriding the model in the client request.|
 |`llm.models[].provider.custom.providerOverride`|string|Provider identity for cost-catalog lookup and telemetry. Built-in named providers<br>(cohere, mistral, ...) set this so their cost resolves under the right catalog key;<br>a bare custom provider may set it to match a catalog entry. Falls back to "custom".|
 |`llm.models[].provider.custom.formats`|[]object|Supported API payload formats and optional path overrides for this provider.|
-|`llm.models[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `realtime`, `rerank`.|
+|`llm.models[].provider.custom.formats[].type`|enum|Upstream API shape this custom provider says it accepts.<br>Possible values: `completions`, `messages`, `responses`, `embeddings`, `anthropicTokenCount`, `generateContent`, `geminiCountTokens`, `realtime`, `rerank`.|
 |`llm.models[].provider.custom.formats[].path`|string|Optional path override for this specific upstream format.|
 |`llm.models[].passthrough`|enum|passthrough controls how requests are handled.<br>By default, requests will be parsed and translated as needed.<br>With passthrough, they will be unmodified and optionally inspected (with `detect`).<br>In this mode, requests must be sent in the native format of the provider.<br>Possible values: `detect`, `opaque`.|
 |`llm.models[].authorization`|object|authorization configures HTTP authorization rules for requests to this model.|
@@ -73351,6 +73359,7 @@
 |`mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
 |`mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
 |`mcp.failureMode`|enum|Behavior when one or more MCP targets fail to initialize or fail during fanout.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`mcp.dnsRebindingProtection`|boolean|Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).<br>Off by default; see https://github.com/agentgateway/agentgateway/issues/1855.|
 |`mcp.policies`|object|Policies applied to MCP requests.|
 |`mcp.policies.requestHeaderModifier`|object|Modify request headers before forwarding.|
 |`mcp.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
