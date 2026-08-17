@@ -39,6 +39,9 @@ pub enum TokenError {
 
 	#[error("failed to strip validated credentials from the request: {0}")]
 	CredentialRemoval(String),
+
+	#[error("token introspection failed: {0}")]
+	IntrospectionFailed(String),
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -73,6 +76,9 @@ pub struct Jwt {
 	mode: Mode,
 	providers: Vec<Provider>,
 	location: AuthorizationLocation,
+	// RFC 7662 Token Introspection for opaque access tokens.
+	introspection: Option<std::sync::Arc<crate::http::introspection::IntrospectionConfig>>,
+	introspection_cache: Option<std::sync::Arc<crate::http::introspection::IntrospectionCache>>,
 }
 
 #[derive(Clone)]
@@ -93,11 +99,13 @@ impl serde::Serialize for Jwt {
 			mode: Mode,
 			providers: &'a Vec<Provider>,
 			location: &'a AuthorizationLocation,
+			introspection: bool,
 		}
 		Serde {
 			mode: self.mode,
 			providers: &self.providers,
 			location: &self.location,
+			introspection: self.introspection.is_some(),
 		}
 		.serialize(serializer)
 	}
@@ -344,6 +352,8 @@ impl LocalJwtConfig {
 			mode,
 			providers,
 			location: authorization_location,
+			introspection: None,
+			introspection_cache: None,
 		})
 	}
 }
@@ -469,7 +479,29 @@ impl Jwt {
 			mode,
 			providers,
 			location: authorization_location,
+			introspection: None,
+			introspection_cache: None,
 		}
+	}
+
+	/// Attach RFC 7662 Token Introspection configuration.
+	///
+	/// When set, tokens that cannot be parsed as JWTs will be introspected against
+	/// the configured endpoint instead of being rejected.
+	pub fn with_introspection(
+		mut self,
+		config: crate::http::introspection::IntrospectionConfig,
+	) -> Self {
+		let cache = if config.cache_duration.as_secs() > 0 {
+			Some(std::sync::Arc::new(
+				crate::http::introspection::IntrospectionCache::new(config.cache_duration),
+			))
+		} else {
+			None
+		};
+		self.introspection = Some(std::sync::Arc::new(config));
+		self.introspection_cache = cache;
+		self
 	}
 }
 
@@ -549,6 +581,7 @@ impl Jwt {
 		&self,
 		log: Option<&mut RequestLog>,
 		req: &mut Request,
+		client: Option<&crate::proxy::httpproxy::PolicyClient>,
 	) -> Result<(), TokenError> {
 		let Some(token) = self.location.extract(req) else {
 			// In strict mode, we require a token
@@ -570,6 +603,88 @@ impl Jwt {
 		};
 		let claims = match self.validate_claims(&token) {
 			Ok(claims) => claims,
+			Err(e)
+				if self.should_try_introspection(&e)
+					&& self.introspection.is_some()
+					&& client.is_some() =>
+			{
+				// JWT validation failed with a format error and introspection is configured.
+				// Attempt RFC 7662 introspection as a fallback.
+				let config = self.introspection.as_ref().unwrap();
+				let policy_client = client.unwrap();
+
+				// Determine endpoint (may need OIDC discovery)
+				let endpoint = match &config.endpoint {
+					Some(ep) => ep.clone(),
+					None => {
+						match crate::http::introspection::discover_introspection_endpoint(
+							policy_client,
+							&config.expected_issuer,
+						)
+						.await
+						{
+							Ok(Some(ep)) => ep,
+							Ok(None) => {
+								return Err(TokenError::IntrospectionFailed(
+									"introspection_endpoint not found in OIDC discovery".to_string(),
+								));
+							},
+							Err(e) => {
+								return Err(TokenError::IntrospectionFailed(e));
+							},
+						}
+					},
+				};
+
+				// Check cache first
+				if let Some(cache) = &self.introspection_cache {
+					if let Some(cached) = cache.get(&token).await {
+						tracing::debug!("introspection cache hit");
+						cached
+					} else {
+						// Cache miss: call introspection
+						let claims = match crate::http::introspection::introspect(
+							policy_client,
+							config,
+							&token,
+							&endpoint,
+						)
+						.await
+						{
+							Ok(claims) => claims,
+							Err(e) => match config.failure_mode {
+								crate::http::introspection::FailureMode::FailOpen => {
+									tracing::warn!("introspection failed ({e}), failing open");
+									return Ok(());
+								},
+								crate::http::introspection::FailureMode::FailClosed => {
+									return Err(TokenError::IntrospectionFailed(e.to_string()));
+								},
+							},
+						};
+
+						// Cache the result
+						cache.insert(&token, claims.clone()).await;
+						claims
+					}
+				} else {
+					// No cache: call introspection directly
+					match crate::http::introspection::introspect(policy_client, config, &token, &endpoint)
+						.await
+					{
+						Ok(claims) => claims,
+						Err(e) => match config.failure_mode {
+							crate::http::introspection::FailureMode::FailOpen => {
+								tracing::warn!("introspection failed ({e}), failing open");
+								return Ok(());
+							},
+							crate::http::introspection::FailureMode::FailClosed => {
+								return Err(TokenError::IntrospectionFailed(e.to_string()));
+							},
+						},
+					}
+				}
+			},
 			Err(e) if self.mode == Mode::Permissive => {
 				dtrace::pol_result!(
 					dtrace::Warn,
@@ -607,6 +722,24 @@ impl Jwt {
 		);
 		req.extensions_mut().insert(claims);
 		Ok(())
+	}
+
+	/// Determine whether to fall back to RFC 7662 introspection.
+	///
+	/// We only fallback when the token is structurally not a JWT:
+	/// - `InvalidHeader`: token cannot be decoded as JWT at all (opaque token)
+	/// - `MissingKeyId`: JWT header parsed but no kid (unusual, could be opaque)
+	///
+	/// We do NOT fallback when:
+	/// - `Invalid(e)`: JWT decoded but signature/claims failed validation
+	///   → this means it IS a JWT, just not valid for our providers
+	/// - `Missing`: no token at all → introspection cannot help
+	/// - `UnknownKeyId`: JWT has a kid but it's not in our key set
+	fn should_try_introspection(&self, error: &TokenError) -> bool {
+		matches!(
+			error,
+			TokenError::InvalidHeader(_) | TokenError::MissingKeyId
+		)
 	}
 
 	pub fn validate_claims(&self, token: &str) -> Result<Claims, TokenError> {

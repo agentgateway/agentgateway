@@ -1169,6 +1169,63 @@ type JWTAuthentication struct {
 	// When set, the gateway will serve the MCP OAuth metadata discovery endpoints.
 	// +optional
 	MCP *JWTMCPConfig `json:"mcp,omitempty"`
+
+	// RFC 7662 Token Introspection for opaque access tokens.
+	// When set, tokens that cannot be parsed as JWTs are introspected against
+	// the configured endpoint instead of being rejected.
+	// +optional
+	Introspection *TokenIntrospection `json:"introspection,omitempty"`
+}
+
+// TokenIntrospection configures RFC 7662 Token Introspection for opaque access tokens.
+// When the bearer token cannot be parsed as a JWT, the gateway POSTs it to the
+// configured introspection endpoint and uses the returned claims for authorization.
+// +kubebuilder:validation:XValidation:rule="has(self.url) || has(self.backendRef)",message="introspection requires either url or backendRef"
+type TokenIntrospection struct {
+	// Introspection endpoint URL per RFC 7662.
+	// If omitted, the URL is derived from the first provider's issuer via OIDC discovery
+	// (the `introspection_endpoint` field in the discovery document).
+	// +optional
+	URL *LongString `json:"url,omitempty"`
+
+	// Reference to a backend for the introspection request.
+	// Supported types: `Service` and `Backend`.
+	// Mutually exclusive with `url`.
+	// +optional
+	BackendRef *gwv1.BackendObjectReference `json:"backendRef,omitempty"`
+
+	// OAuth 2.0 client ID used to authenticate the introspection request
+	// per RFC 7662 Section 2.1.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=256
+	// +required
+	ClientID string `json:"clientId"`
+
+	// Reference to a Kubernetes Secret holding the OAuth client secret.
+	// The secret is sent as the password in HTTP Basic authentication to the
+	// introspection endpoint. If omitted, the client_id is sent as a public
+	// client (no secret).
+	// +optional
+	ClientSecretRef *LocalSecretKeyRef `json:"clientSecretRef,omitempty"`
+
+	// How long a successful introspection result is cached before re-validating.
+	// Must be at least 5s.
+	// +optional
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('5s')",message="cacheDuration must be at least 5s."
+	// +kubebuilder:default="30s"
+	CacheDuration *Duration `json:"cacheDuration,omitempty"`
+
+	// Timeout for the introspection HTTP request.
+	// +optional
+	// +kubebuilder:validation:XValidation:rule="duration(self) >= duration('1s')",message="timeout must be at least 1s."
+	// +kubebuilder:default="5s"
+	Timeout *Duration `json:"timeout,omitempty"`
+
+	// Controls behavior when the introspection endpoint is unreachable.
+	// `FailClosed` (default) rejects the request with 503.
+	// `FailOpen` allows the request through (use with caution).
+	// +optional
+	FailureMode FailureMode `json:"failureMode,omitempty"`
 }
 
 type JWTProvider struct {
@@ -2427,6 +2484,12 @@ type MCPAuthentication struct {
 	// override via `clientSecretRef.key`.
 	// +optional
 	ClientSecretRef *LocalSecretKeyRef `json:"clientSecretRef,omitempty"`
+
+	// RFC 7662 Token Introspection for opaque access tokens.
+	// When set, tokens that cannot be parsed as JWTs are introspected against
+	// the configured endpoint instead of being rejected.
+	// +optional
+	Introspection *TokenIntrospection `json:"introspection,omitempty"`
 }
 
 // +k8s:enum

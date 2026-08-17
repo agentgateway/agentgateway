@@ -14974,6 +14974,148 @@ spec:
                                 (!has(self.kind) || size(self.kind) == 0 || self.kind
                                 == ''Secret'') : (has(self.kind) && size(self.kind)
                                 > 0)'
+                          introspection:
+                            description: |-
+                              RFC 7662 Token Introspection for opaque access tokens.
+                              When set, tokens that cannot be parsed as JWTs are introspected against
+                              the configured endpoint instead of being rejected.
+                            properties:
+                              backendRef:
+                                description: |-
+                                  Reference to a backend for the introspection request.
+                                  Supported types: `Service` and `Backend`.
+                                  Mutually exclusive with `url`.
+                                properties:
+                                  group:
+                                    default: ""
+                                    description: Group of the referent, for example
+                                      `gateway.networking.k8s.io`. Empty selects the
+                                      core API group
+                                    maxLength: 253
+                                    pattern: ^$|^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                                    type: string
+                                  kind:
+                                    default: Service
+                                    description: Kubernetes resource kind of the referent,
+                                      for example `Service`. Defaults to `Service`
+                                    maxLength: 63
+                                    minLength: 1
+                                    pattern: ^[a-zA-Z]([-a-zA-Z0-9]*[a-zA-Z0-9])?$
+                                    type: string
+                                  name:
+                                    description: Name is the name of the referent.
+                                    maxLength: 253
+                                    minLength: 1
+                                    type: string
+                                  namespace:
+                                    description: Namespace of the referent. Defaults
+                                      to the local namespace. A cross-namespace reference
+                                      requires a ReferenceGrant in the referent namespace
+                                    maxLength: 63
+                                    minLength: 1
+                                    pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                                    type: string
+                                  port:
+                                    description: Destination port number. Required
+                                      when the referent is a Kubernetes `Service`
+                                    format: int32
+                                    maximum: 65535
+                                    minimum: 1
+                                    type: integer
+                                required:
+                                - name
+                                type: object
+                                x-kubernetes-validations:
+                                - message: Must have port for Service reference
+                                  rule: '(size(self.group) == 0 && self.kind == ''Service'')
+                                    ? has(self.port) : true'
+                              cacheDuration:
+                                default: 30s
+                                description: |-
+                                  How long a successful introspection result is cached before re-validating.
+                                  Must be at least 5s.
+                                maxLength: 32
+                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                type: string
+                                x-kubernetes-validations:
+                                - message: cacheDuration must be at least 5s.
+                                  rule: duration(self) >= duration('5s')
+                              clientId:
+                                description: |-
+                                  OAuth 2.0 client ID used to authenticate the introspection request
+                                  per RFC 7662 Section 2.1.
+                                maxLength: 256
+                                minLength: 1
+                                type: string
+                              clientSecretRef:
+                                description: |-
+                                  Reference to a Kubernetes Secret holding the OAuth client secret.
+                                  The secret is sent as the password in HTTP Basic authentication to the
+                                  introspection endpoint. If omitted, the client_id is sent as a public
+                                  client (no secret).
+                                properties:
+                                  group:
+                                    description: API group of the referenced credential;
+                                      empty selects the core API group
+                                    type: string
+                                  key:
+                                    description: Key in the referenced Secret. If
+                                      omitted, a location-specific default is used
+                                    maxLength: 253
+                                    minLength: 1
+                                    type: string
+                                  kind:
+                                    description: Kind of the referenced credential;
+                                      empty defaults to `Secret`
+                                    type: string
+                                  name:
+                                    description: Name of the referenced credential
+                                    maxLength: 253
+                                    minLength: 1
+                                    type: string
+                                required:
+                                - name
+                                type: object
+                                x-kubernetes-map-type: atomic
+                                x-kubernetes-validations:
+                                - message: custom credential refs must set both group
+                                    and kind
+                                  rule: '(!has(self.group) || size(self.group) ==
+                                    0) ? (!has(self.kind) || size(self.kind) == 0
+                                    || self.kind == ''Secret'') : (has(self.kind)
+                                    && size(self.kind) > 0)'
+                              failureMode:
+                                description: |-
+                                  Controls behavior when the introspection endpoint is unreachable.
+                                  `FailClosed` (default) rejects the request with 503.
+                                  `FailOpen` allows the request through (use with caution).
+                                enum:
+                                - FailClosed
+                                - FailOpen
+                                type: string
+                              timeout:
+                                default: 5s
+                                description: Timeout for the introspection HTTP request.
+                                maxLength: 32
+                                pattern: ^([0-9]{1,5}(h|m|s|ms)){1,4}$
+                                type: string
+                                x-kubernetes-validations:
+                                - message: timeout must be at least 1s.
+                                  rule: duration(self) >= duration('1s')
+                              url:
+                                description: |-
+                                  Introspection endpoint URL per RFC 7662.
+                                  If omitted, the URL is derived from the first provider's issuer via OIDC discovery
+                                  (the `introspection_endpoint` field in the discovery document).
+                                maxLength: 1024
+                                minLength: 1
+                                type: string
+                            required:
+                            - clientId
+                            type: object
+                            x-kubernetes-validations:
+                            - message: introspection requires either url or backendRef
+                              rule: has(self.url) || has(self.backendRef)
                           issuer:
                             description: |-
                               IdP that issued the JWT. This corresponds to the
