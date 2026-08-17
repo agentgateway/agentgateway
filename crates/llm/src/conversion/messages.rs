@@ -846,7 +846,10 @@ pub mod from_completions {
 				},
 				messages::MessagesStreamEvent::Ping => None,
 				messages::MessagesStreamEvent::Error { error } => {
-					tracing::warn!("Messages stream error during completions translation: {}", error.message);
+					tracing::warn!(
+						"Messages stream error during completions translation: {}",
+						error.message
+					);
 					None
 				},
 			}

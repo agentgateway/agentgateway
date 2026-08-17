@@ -152,9 +152,15 @@ mod requests {
 		("generation-config", &[VERTEX_GEMINI]),
 	];
 	const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES]),
+		(
+			"basic",
+			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES],
+		),
 		("system_message", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
-		("tools", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES]),
+		(
+			"tools",
+			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES],
+		),
 		("server_tools", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
 		("reasoning", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
 		("metadata", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
@@ -760,7 +766,11 @@ mod responses {
 	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[
 		(
 			"basic",
-			&[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT, RESPONSES_TO_MESSAGES],
+			&[
+				RESPONSES_TO_RESPONSES,
+				RESPONSES_TO_DETECT,
+				RESPONSES_TO_MESSAGES,
+			],
 		),
 		("tool", &[RESPONSES_TO_MESSAGES]),
 		("reasoning", &[RESPONSES_TO_MESSAGES]),

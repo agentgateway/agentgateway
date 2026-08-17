@@ -388,7 +388,7 @@ pub mod from_messages {
 			}
 		}
 		Ok(out)
-		}
+	}
 
 	fn translate_tool_choice(
 		choice: Option<messages::ToolChoice>,
@@ -1349,9 +1349,7 @@ pub mod from_messages {
 								&mut events,
 								messages::MessagesStreamEvent::ContentBlockDelta {
 									index,
-									delta: messages::ContentBlockDelta::TextDelta {
-										text: delta.delta,
-									},
+									delta: messages::ContentBlockDelta::TextDelta { text: delta.delta },
 								},
 							);
 						}
@@ -1516,7 +1514,10 @@ pub mod from_messages {
 							&mut events,
 							messages::MessagesStreamEvent::Error {
 								error: messages::MessagesError {
-									r#type: error.code.clone().unwrap_or_else(|| "api_error".to_string()),
+									r#type: error
+										.code
+										.clone()
+										.unwrap_or_else(|| "api_error".to_string()),
 									message: error.message,
 								},
 							},
