@@ -808,6 +808,40 @@ fn bedrock_masked_output_count_mismatch_rejects() {
 }
 
 #[test]
+fn bedrock_default_scope_skips_tool_texts_and_keeps_mask_aligned() {
+	let mut req: crate::llm::types::completions::Request =
+		serde_json::from_value(serde_json::json!({
+			"model": "gpt-4o",
+			"messages": [
+				{"role": "system", "content": "be helpful"},
+				{"role": "tool", "tool_call_id": "call_1", "content": "customer jane@example.com"},
+				{"role": "user", "content": "email jane@example.com please"}
+			]
+		}))
+		.unwrap();
+
+	let (sent, in_scope) = Policy::scoped_request_texts(&mut req, &default_content_scope());
+	assert_eq!(sent, vec!["be helpful", "email jane@example.com please"]);
+	assert_eq!(in_scope, vec![true, false, true]);
+
+	let outcome = Policy::bedrock_guardrail_outcome(
+		bedrock_intervened(
+			&["be helpful", "email {EMAIL} please"],
+			bedrock_anonymized_assessments(),
+		),
+		sent.len(),
+		&RequestRejection::default(),
+	)
+	.map_mask(|mask| RequestGuardMutation::Texts(mask.scatter(&in_scope)));
+	let (_, rejection) = Policy::apply_request_guard_outcome(outcome, &mut req).unwrap();
+	assert!(rejection.is_none());
+
+	let value = serde_json::to_value(req).unwrap();
+	assert_eq!(value["messages"][1]["content"], "customer jane@example.com");
+	assert_eq!(value["messages"][2]["content"], "email {EMAIL} please");
+}
+
+#[test]
 fn bedrock_response_mask_preserves_choice_metadata() {
 	let mut resp: crate::llm::types::completions::Response =
 		serde_json::from_value(serde_json::json!({
@@ -2704,7 +2738,7 @@ fn request_guard_scope_rejects_empty_list() {
 }
 
 #[test]
-fn prompt_guard_scope_only_on_regex() {
+fn prompt_guard_scope_support() {
 	// claiming tool coverage on a guard that only ever sees message text must not parse
 	let err = serde_json::from_value::<PromptGuard>(serde_json::json!({
 		"request": [{
@@ -2720,6 +2754,18 @@ fn prompt_guard_scope_only_on_regex() {
 		"request": [{
 			"openAIModeration": {},
 			"scope": ["messages", "systemPrompt"],
+		}]
+	}))
+	.unwrap();
+
+	serde_json::from_value::<PromptGuard>(serde_json::json!({
+		"request": [{
+			"bedrockGuardrails": {
+				"guardrailIdentifier": "gr-1",
+				"guardrailVersion": "1",
+				"region": "us-east-1",
+			},
+			"scope": ["messages", "toolOutput"],
 		}]
 	}))
 	.unwrap();

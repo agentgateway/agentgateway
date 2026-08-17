@@ -338,6 +338,22 @@ impl TextReplacements {
 		Self(texts.into_iter().map(Some).collect())
 	}
 
+	fn scatter(self, in_scope: &[bool]) -> Self {
+		let mut replacements = self.0.into_iter();
+		Self(
+			in_scope
+				.iter()
+				.map(|&keep| {
+					if keep {
+						replacements.next().flatten()
+					} else {
+						None
+					}
+				})
+				.collect(),
+		)
+	}
+
 	fn apply(self, visit_text: impl FnOnce(&mut dyn FnMut(&mut String))) {
 		let mut replacements = self.0.into_iter();
 		visit_text(&mut |text| {
@@ -926,7 +942,15 @@ impl Policy {
 				Self::evaluate_moderation(req, claims, client, m, &guard.rejection).await
 			},
 			RequestGuardKind::BedrockGuardrails(bg) => {
-				Self::evaluate_bedrock_guardrails_request(req, claims, client, bg, &guard.rejection).await
+				Self::evaluate_bedrock_guardrails_request(
+					req,
+					claims,
+					client,
+					bg,
+					&guard.rejection,
+					&guard.scope,
+				)
+				.await
 			},
 			RequestGuardKind::GoogleModelArmor(gma) => {
 				Self::evaluate_google_model_armor_request(req, claims, client, gma, &guard.rejection).await
@@ -959,8 +983,9 @@ impl Policy {
 		client: &PolicyClient,
 		guardrails: &BedrockGuardrails,
 		rejection: &RequestRejection,
+		guard_scope: &[ContentScope],
 	) -> anyhow::Result<GuardrailOutcome<RequestGuardMutation>> {
-		let content = Self::request_texts(req);
+		let (content, in_scope) = Self::scoped_request_texts(req, guard_scope);
 		if content.is_empty() {
 			return Ok(GuardrailOutcome::None);
 		}
@@ -975,7 +1000,7 @@ impl Policy {
 		.await?;
 		Ok(
 			Self::bedrock_guardrail_outcome(resp, sent_count, rejection)
-				.map_mask(RequestGuardMutation::Texts),
+				.map_mask(|mask| RequestGuardMutation::Texts(mask.scatter(&in_scope))),
 		)
 	}
 
@@ -1154,6 +1179,22 @@ impl Policy {
 
 	fn request_texts(req: &mut dyn RequestType) -> Vec<String> {
 		Self::collect_texts(|f| req.visit_text_mut(&mut |_, text| f(text)))
+	}
+
+	fn scoped_request_texts(
+		req: &mut dyn RequestType,
+		guard_scope: &[ContentScope],
+	) -> (Vec<String>, Vec<bool>) {
+		let mut texts = Vec::new();
+		let mut in_scope = Vec::new();
+		req.visit_text_mut(&mut |content_scope, text| {
+			let keep = guard_scope.contains(&content_scope);
+			in_scope.push(keep);
+			if keep {
+				texts.push(text.clone());
+			}
+		});
+		(texts, in_scope)
 	}
 
 	fn response_texts(resp: &mut dyn ResponseType) -> Vec<String> {
@@ -1604,7 +1645,10 @@ impl RequestGuard {
 	/// TODO not all guard types properly scan all scopes
 	/// avoids silently ignoring configured scopes
 	pub(crate) fn validate_scope(&self) -> Result<(), String> {
-		if matches!(self.kind, RequestGuardKind::Regex(_)) {
+		if matches!(
+			self.kind,
+			RequestGuardKind::Regex(_) | RequestGuardKind::BedrockGuardrails(_)
+		) {
 			return Ok(());
 		}
 		let default = default_content_scope();
@@ -1614,7 +1658,7 @@ impl RequestGuard {
 			return Ok(());
 		}
 		Err(format!(
-			"scope: only regex guards support a non-default scope; {} guards always inspect the default (systemPrompt + messages)",
+			"scope: only regex and bedrockGuardrails guards support a non-default scope; {} guards always inspect the default (systemPrompt + messages)",
 			self.kind.name(),
 		))
 	}

@@ -3353,12 +3353,12 @@ spec:
                               type: object
                           type: object
                           x-kubernetes-validations:
-                          - message: 'scope: only regex guards support a non-default
-                              scope; other guard kinds always inspect the default
-                              (SystemPrompt + Messages)'
-                            rule: '!has(self.scope) || has(self.regex) || (self.scope.size()
-                              == 2 && ''SystemPrompt'' in self.scope && ''Messages''
-                              in self.scope)'
+                          - message: 'scope: only regex and bedrockGuardrails guards
+                              support a non-default scope; other guard kinds always
+                              inspect the default (SystemPrompt + Messages)'
+                            rule: '!has(self.scope) || has(self.regex) || has(self.bedrockGuardrails)
+                              || (self.scope.size() == 2 && ''SystemPrompt'' in self.scope
+                              && ''Messages'' in self.scope)'
                           - message: exactly one of the fields in [regex webhook openAIModeration
                               bedrockGuardrails googleModelArmor] must be set
                             rule: '[has(self.regex),has(self.webhook),has(self.openAIModeration),has(self.bedrockGuardrails),has(self.googleModelArmor)].filter(x,x==true).size()

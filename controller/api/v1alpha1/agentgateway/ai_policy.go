@@ -244,7 +244,7 @@ type GoogleModelArmor struct {
 
 // Prompt guards to apply to requests sent by the client.
 // +kubebuilder:validation:ExactlyOneOf=regex;webhook;openAIModeration;bedrockGuardrails;googleModelArmor
-// +kubebuilder:validation:XValidation:rule="!has(self.scope) || has(self.regex) || (self.scope.size() == 2 && 'SystemPrompt' in self.scope && 'Messages' in self.scope)",message="scope: only regex guards support a non-default scope; other guard kinds always inspect the default (SystemPrompt + Messages)"
+// +kubebuilder:validation:XValidation:rule="!has(self.scope) || has(self.regex) || has(self.bedrockGuardrails) || (self.scope.size() == 2 && 'SystemPrompt' in self.scope && 'Messages' in self.scope)",message="scope: only regex and bedrockGuardrails guards support a non-default scope; other guard kinds always inspect the default (SystemPrompt + Messages)"
 type PromptguardRequest struct {
 	// Custom response message to return to the client. If not specified, defaults to
 	// `The request was rejected due to inappropriate content`.
