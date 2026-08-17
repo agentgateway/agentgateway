@@ -26,22 +26,6 @@ Like the local configuration, these map into the same shared IR.
 
 Unlike the local configuration, the XDS translation will not do things like fetching from URLs/files, etc, and is optimized around being simple and efficient rather than easy for humans.
 
-### Custom xDS request headers
-
-Additional headers can be attached to every request to the xDS control plane with
-environment variables prefixed by `XDS_HEADER_`. The suffix is converted to
-lowercase and underscores are replaced with hyphens. For example:
-
-```shell
-XDS_HEADER_X_ISTIO_REVISION=canary
-XDS_HEADER_X_TENANT=team-a
-```
-
-These variables add the `x-istio-revision: canary` and `x-tenant: team-a`
-headers to xDS requests. Invalid header names or values cause startup to fail.
-Headers supplied by the configured xDS authentication mechanism take precedence
-over custom headers with the same name.
-
 A critical design philosophy for the APIs is to maintain a nearly direct mapping of user facing APIs to XDS to IR.
 This simplifies operations (its easy to understand the configuration when it closely maps to the APIs the human created), but also importantly performance.
 Additionally, the control plane is greatly simplified as most of the translations are trivial mechanical operations rather than complex joins.
