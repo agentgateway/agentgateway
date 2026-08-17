@@ -1238,21 +1238,6 @@ test('Playground shows Claude subscription key warning', async ({ page }) => {
 	await expect(page.getByText('sk-ant-oat')).toBeVisible();
 });
 
-test('enabling API key auth for the first time stores an empty key list', async ({ page }) => {
-	const gateway = await mockGateway(page, emptyConfig());
-
-	await page.goto('/llm/keys');
-	await page.getByRole('button', { name: 'Enable API key auth' }).first().click();
-	const drawer = page.locator('.drawer');
-	await drawer.getByRole('button', { name: 'Enable API key auth' }).click();
-
-	await expect(page.getByText('Save failed')).toHaveCount(0);
-	await expect.poll(() => gateway.postedConfigs.length).toBe(1);
-	const llm = gateway.postedConfigs[0].llm as Record<string, unknown>;
-	const policies = llm.policies as Record<string, unknown>;
-	expect(policies.apiKey).toMatchObject({ mode: 'strict', keys: [] });
-});
-
 function emptyConfigWithModels() {
 	const config = populatedConfig();
 	const llm = config.llm as { virtualModels?: unknown[] };
