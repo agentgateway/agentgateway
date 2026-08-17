@@ -23,11 +23,11 @@ use itertools::Itertools;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::types::{
-	vertex_gemini as vg, ContentScope, OutputMessage, OutputMessagePart, ResponseType,
+	ContentScope, OutputMessage, OutputMessagePart, ResponseType, vertex_gemini as vg,
 };
 use crate::{
-	logged_response_parsing, webhook, AIError, InputFormat, LLMRequest, LLMRequestParams,
-	LLMResponse, RequestType, SimpleChatCompletionMessage,
+	AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, RequestType,
+	SimpleChatCompletionMessage, logged_response_parsing, webhook,
 };
 
 /// Minimal inbound `generateContent` body; see the module docs for why only read fields
