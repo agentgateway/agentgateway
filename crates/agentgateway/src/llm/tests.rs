@@ -58,7 +58,7 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 	});
 	assert_eq!(
 		vertex
-			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"))
+			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"), None)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
@@ -66,14 +66,14 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 	// Vertex with a non-Gemini model has no Gemini-input translation.
 	assert!(
 		vertex
-			.chat_translation(InputFormat::Gemini, Some("claude-sonnet-4-5"))
+			.chat_translation(InputFormat::Gemini, Some("claude-sonnet-4-5"), None)
 			.is_err()
 	);
 
 	let gemini = AIProvider::Gemini(gemini::Provider { model: None });
 	assert_eq!(
 		gemini
-			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"))
+			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"), None)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
@@ -82,7 +82,7 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 	// OpenAI-compat shim, matching Vertex with a Gemini model.
 	assert_eq!(
 		gemini
-			.chat_translation(InputFormat::Completions, Some("gemini-2.5-flash"))
+			.chat_translation(InputFormat::Completions, Some("gemini-2.5-flash"), None)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
@@ -92,7 +92,7 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 	for input in [InputFormat::Messages, InputFormat::Responses] {
 		assert_eq!(
 			gemini
-				.chat_translation(input, Some("gemini-2.5-flash"))
+				.chat_translation(input, Some("gemini-2.5-flash"), None)
 				.unwrap()
 				.output,
 			ChatFormat::OpenAICompletions
@@ -103,7 +103,8 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 #[test]
 fn gemini_inbound_to_non_gemini_upstream_is_unsupported() {
 	let anthropic = AIProvider::Anthropic(anthropic::Provider { model: None });
-	let Err(err) = anthropic.chat_translation(InputFormat::Gemini, Some("claude-opus-4")) else {
+	let Err(err) = anthropic.chat_translation(InputFormat::Gemini, Some("claude-opus-4"), None)
+	else {
 		panic!("expected unsupported conversion");
 	};
 	assert!(matches!(err, AIError::UnsupportedConversion(_)));
@@ -115,7 +116,8 @@ fn gemini_inbound_to_non_gemini_upstream_is_unsupported() {
 		model: None,
 		region: None,
 	});
-	let Err(err) = vertex.chat_translation(InputFormat::Gemini, Some("claude-sonnet-4-5")) else {
+	let Err(err) = vertex.chat_translation(InputFormat::Gemini, Some("claude-sonnet-4-5"), None)
+	else {
 		panic!("expected unsupported conversion");
 	};
 	let msg = err.to_string();
@@ -129,7 +131,7 @@ fn custom_provider_generate_content_advertises_the_native_chat_format() {
 	// Native Gemini input takes the direct passthrough.
 	assert_eq!(
 		provider
-			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"))
+			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"), None)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
@@ -138,7 +140,7 @@ fn custom_provider_generate_content_advertises_the_native_chat_format() {
 	// Vertex with a Gemini model (the CHAT_TRANSLATIONS quirk).
 	assert_eq!(
 		provider
-			.chat_translation(InputFormat::Completions, Some("gemini-2.5-flash"))
+			.chat_translation(InputFormat::Completions, Some("gemini-2.5-flash"), None)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
@@ -148,7 +150,7 @@ fn custom_provider_generate_content_advertises_the_native_chat_format() {
 	let undeclared = custom_provider(custom::ProviderFormat::Completions);
 	assert!(
 		undeclared
-			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"))
+			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"), None)
 			.is_err()
 	);
 }
@@ -173,7 +175,14 @@ async fn custom_provider_completions_inbound_renders_native_gemini() {
 		llm_request,
 		upstream_route_type,
 	} = provider
-		.process_completions_request(&openai_test_backend_info(), None, req, false, &mut None)
+		.process_completions_request(
+			&openai_test_backend_info(),
+			None,
+			req,
+			false,
+			&mut None,
+			None,
+		)
 		.await
 		.expect("completions request should process")
 	else {
@@ -238,7 +247,7 @@ fn gemini_render_is_passthrough_with_unknown_fields() {
 		region: None,
 	});
 	let translation = provider
-		.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"))
+		.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"), None)
 		.unwrap();
 
 	let raw = json!({
@@ -303,7 +312,7 @@ fn gemini_error_passes_google_shape_through() {
 		region: None,
 	});
 	let translation = provider
-		.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"))
+		.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"), None)
 		.unwrap();
 	assert!(matches!(
 		provider.chat_error_format(translation, Some("gemini-2.5-flash")),
@@ -1134,7 +1143,7 @@ async fn gemini_generate_content_forwards_unknown_top_level_fields() {
 		llm_request,
 		..
 	} = provider
-		.process_gemini_request(&vertex_backend_info(), None, req, false, &mut None)
+		.process_gemini_request(&vertex_backend_info(), None, req, false, &mut None, None)
 		.await
 		.expect("generateContent request should process")
 	else {
@@ -1172,6 +1181,7 @@ async fn gemini_stream_without_alt_sse_is_rejected_with_google_shaped_400() {
 				gemini_generate_content_request(uri),
 				false,
 				&mut None,
+				None,
 			)
 			.await
 			.expect("the non-SSE streaming variant is a client error, not a gateway failure")

@@ -1571,6 +1571,7 @@ impl AIProvider {
 		req: Request,
 		tokenize: bool,
 		log: &mut Option<&mut RequestLog>,
+		catalog: agent_llm::model_catalog::Catalog<'_>,
 	) -> Result<RequestResult, AIError> {
 		// The Gemini wire body carries neither model nor a stream flag; both come from the
 		// URI: models/{model}:generateContent vs models/{model}:streamGenerateContent.
@@ -1598,6 +1599,7 @@ impl AIProvider {
 				parts,
 				tokenize,
 				log,
+				catalog,
 				|req| types::ChatRequest::Gemini(req.inner),
 			)
 			.await
@@ -2368,7 +2370,7 @@ impl AIProvider {
 		&self,
 		req: LLMRequest,
 		buffered: BufferedResponse,
-		model_catalog: Option<&cost::ModelCatalog>,
+		model_catalog: Option<&catalog::ModelCatalog>,
 		log: &AsyncLog<llm::LLMInfo>,
 	) -> Result<Response, AIError> {
 		let BufferedResponse {
@@ -2376,7 +2378,12 @@ impl AIProvider {
 		} = buffered;
 		parts.headers.remove(header::CONTENT_LENGTH);
 		if !parts.status.is_success() {
-			let body = self.process_error(&req, parts.status, &bytes)?;
+			let body = self.process_error(
+				&req,
+				parts.status,
+				&bytes,
+				model_catalog.map(|c| c.as_handle()),
+			)?;
 			return Ok(Self::finalize_response(
 				parts,
 				body.into(),

@@ -380,6 +380,7 @@ async fn process_and_setup(
 			generate_content_body(uri),
 			false,
 			&mut None,
+			None,
 		)
 		.await
 		.expect("generateContent request should process")
@@ -418,6 +419,7 @@ async fn generate_content_keeps_its_route_type_upstream() {
 				generate_content_body("https://example.com/v1beta/models/gemini-2.5-flash:generateContent"),
 				false,
 				&mut None,
+				None,
 			)
 			.await
 			.expect("generateContent request should process")
@@ -455,6 +457,7 @@ async fn completions_inbound_to_the_gemini_provider_renders_native() {
 			req,
 			false,
 			&mut None,
+			None,
 		)
 		.await
 		.expect("completions request should process")
@@ -606,7 +609,7 @@ async fn a_traversal_model_in_the_client_path_is_rejected_before_a_path_is_built
 				"the client's percent-encoding reaches model extraction undecoded"
 			);
 			let err = provider
-				.process_gemini_request(&backend_info(host), None, request, false, &mut None)
+				.process_gemini_request(&backend_info(host), None, request, false, &mut None, None)
 				.await
 				.expect_err("a traversal model must not resolve to an upstream request");
 			// The model is dropped at extraction and the Gemini body carries none, so the request
@@ -803,6 +806,7 @@ async fn a_client_body_model_never_outranks_the_path() {
 			),
 			false,
 			&mut None,
+			None,
 		)
 		.await
 		.expect("generateContent request should process")
@@ -886,7 +890,7 @@ fn a_client_alt_query_is_stripped_from_count_tokens() {
 
 fn native_translation() -> &'static crate::llm::ChatTranslation {
 	vertex_provider(None, None)
-		.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"))
+		.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"), None)
 		.expect("gemini inbound on a gemini upstream")
 }
 
@@ -1017,6 +1021,7 @@ async fn gemini_inbound_requires_a_gemini_upstream() {
 				generate_content_body("https://example.com/v1beta/models/gemini-2.5-flash:generateContent"),
 				false,
 				&mut None,
+				None,
 			)
 			.await
 			.expect_err("Gemini inbound must not reach a non-Gemini upstream");

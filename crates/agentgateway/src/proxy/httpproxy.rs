@@ -2404,6 +2404,7 @@ async fn make_backend_call(
 							req,
 							llm.tokenize,
 							&mut log,
+							Some(inputs.model_catalog.as_handle()),
 						))
 						.await
 						.map_err(ProxyError::AIRequest)?,
