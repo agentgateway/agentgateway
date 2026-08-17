@@ -1139,6 +1139,17 @@ func (this *TrafficPolicySpec_JWT_MCP) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for TrafficPolicySpec_JWT_Introspection
+func (this *TrafficPolicySpec_JWT_Introspection) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for TrafficPolicySpec_JWT_Introspection
+func (this *TrafficPolicySpec_JWT_Introspection) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for TrafficPolicySpec_BasicAuthentication
 func (this *TrafficPolicySpec_BasicAuthentication) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)

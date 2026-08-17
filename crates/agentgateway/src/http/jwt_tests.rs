@@ -259,6 +259,8 @@ pub fn test_ed25519_jwt_validation() {
 		providers: vec![provider],
 		location: bearer_location(),
 		preserve_token: false,
+		introspection: None,
+		introspection_cache: None,
 	};
 	let now = std::time::SystemTime::now()
 		.duration_since(std::time::UNIX_EPOCH)
@@ -349,6 +351,8 @@ fn setup_test_jwt_with_required_claims(
 			providers: vec![provider],
 			location: bearer_location(),
 			preserve_token: false,
+			introspection: None,
+			introspection_cache: None,
 		},
 		kid,
 		issuer,
@@ -376,6 +380,20 @@ MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgltxBTVDLg7C6vE1T
 	};
 	let key = jsonwebtoken::EncodingKey::from_ec_pem(TEST_PRIVATE_KEY_PEM.as_bytes()).unwrap();
 	jsonwebtoken::encode(&header, &payload, &key).unwrap()
+}
+
+fn build_unsigned_token(kid: &str, iss: &str, aud: &str, exp: u64) -> String {
+	build_unsigned_token_with_payload(kid, json!({ "iss": iss, "aud": aud, "exp": exp }))
+}
+
+fn build_unsigned_token_with_payload(kid: &str, payload: serde_json::Value) -> String {
+	use base64::Engine as _;
+	use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+	let header = json!({ "alg": "ES256", "kid": kid });
+	let h = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&header).unwrap());
+	let p = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&payload).unwrap());
+	let s = URL_SAFE_NO_PAD.encode(b"sig");
+	format!("{h}.{p}.{s}")
 }
 
 #[test]
@@ -489,6 +507,8 @@ pub async fn test_apply_strict_missing_token() {
 		providers: vec![],
 		location: bearer_location(),
 		preserve_token: false,
+		introspection: None,
+		introspection_cache: None,
 	};
 
 	// Minimal Request without Authorization header
@@ -497,7 +517,7 @@ pub async fn test_apply_strict_missing_token() {
 	// Minimal RequestLog
 	let mut req_log = make_min_req_log();
 
-	let res = jwt.apply(Some(&mut req_log), &mut req).await;
+	let res = jwt.apply(Some(&mut req_log), &mut req, None).await;
 	assert!(matches!(res, Err(super::TokenError::Missing)));
 }
 
@@ -510,10 +530,12 @@ pub async fn test_apply_permissive_no_token_ok() {
 		providers: base.providers.clone(),
 		location: bearer_location(),
 		preserve_token: false,
+		introspection: None,
+		introspection_cache: None,
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let mut log = make_min_req_log();
-	let res = jwt.apply(Some(&mut log), &mut req).await;
+	let res = jwt.apply(Some(&mut log), &mut req, None).await;
 	assert!(res.is_ok());
 	assert!(req.extensions().get::<super::Claims>().is_none());
 }
@@ -527,6 +549,8 @@ pub async fn test_apply_permissive_invalid_token_ok_and_keeps_header() {
 		providers: base.providers.clone(),
 		location: bearer_location(),
 		preserve_token: false,
+		introspection: None,
+		introspection_cache: None,
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	req.headers_mut().insert(
@@ -534,7 +558,7 @@ pub async fn test_apply_permissive_invalid_token_ok_and_keeps_header() {
 		crate::http::HeaderValue::from_static("Bearer invalid-token"),
 	);
 	let mut log = make_min_req_log();
-	let res = jwt.apply(Some(&mut log), &mut req).await;
+	let res = jwt.apply(Some(&mut log), &mut req, None).await;
 	assert!(res.is_ok());
 	// Header should remain present on failure in permissive mode
 	assert!(
@@ -557,6 +581,8 @@ pub async fn test_apply_permissive_valid_token_inserts_claims_and_removes_header
 		providers: base.providers.clone(),
 		location: bearer_location(),
 		preserve_token: false,
+		introspection: None,
+		introspection_cache: None,
 	};
 	let now = SystemTime::now()
 		.duration_since(UNIX_EPOCH)
@@ -569,7 +595,7 @@ pub async fn test_apply_permissive_valid_token_inserts_claims_and_removes_header
 		crate::http::HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
 	);
 	let mut log = make_min_req_log();
-	let res = jwt.apply(Some(&mut log), &mut req).await;
+	let res = jwt.apply(Some(&mut log), &mut req, None).await;
 	assert!(res.is_ok());
 	assert!(
 		req
@@ -589,10 +615,12 @@ pub async fn test_apply_optional_no_token_ok() {
 		providers: base.providers.clone(),
 		location: bearer_location(),
 		preserve_token: false,
+		introspection: None,
+		introspection_cache: None,
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	let mut log = make_min_req_log();
-	let res = jwt.apply(Some(&mut log), &mut req).await;
+	let res = jwt.apply(Some(&mut log), &mut req, None).await;
 	assert!(res.is_ok());
 	assert!(req.extensions().get::<super::Claims>().is_none());
 }
@@ -606,6 +634,8 @@ pub async fn test_apply_optional_invalid_token_err() {
 		providers: base.providers.clone(),
 		location: bearer_location(),
 		preserve_token: false,
+		introspection: None,
+		introspection_cache: None,
 	};
 	let mut req = crate::http::Request::new(crate::http::Body::empty());
 	req.headers_mut().insert(
@@ -613,7 +643,7 @@ pub async fn test_apply_optional_invalid_token_err() {
 		crate::http::HeaderValue::from_static("Bearer invalid-token"),
 	);
 	let mut log = make_min_req_log();
-	let res = jwt.apply(Some(&mut log), &mut req).await;
+	let res = jwt.apply(Some(&mut log), &mut req, None).await;
 	assert!(matches!(res, Err(TokenError::InvalidHeader(_))));
 }
 
@@ -632,6 +662,8 @@ pub async fn test_apply_optional_valid_token_respects_preserve_token() {
 			providers: base.providers.clone(),
 			location: bearer_location(),
 			preserve_token,
+			introspection: None,
+			introspection_cache: None,
 		};
 		let mut req = crate::http::Request::new(crate::http::Body::empty());
 		req.headers_mut().insert(
@@ -639,7 +671,7 @@ pub async fn test_apply_optional_valid_token_respects_preserve_token() {
 			crate::http::HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
 		);
 		let mut log = make_min_req_log();
-		let res = jwt.apply(Some(&mut log), &mut req).await;
+		let res = jwt.apply(Some(&mut log), &mut req, None).await;
 		assert!(res.is_ok());
 		assert_eq!(
 			req
@@ -650,6 +682,41 @@ pub async fn test_apply_optional_valid_token_respects_preserve_token() {
 		);
 		assert!(req.extensions().get::<super::Claims>().is_some());
 	}
+}
+
+// Optional mode: valid token attaches claims and removes the Authorization header
+#[tokio::test]
+pub async fn test_apply_optional_valid_token_inserts_claims_and_removes_header() {
+	use std::time::{SystemTime, UNIX_EPOCH};
+	let (base, kid, issuer, allowed_aud) = setup_test_jwt();
+	let jwt = Jwt {
+		mode: Mode::Optional,
+		providers: base.providers.clone(),
+		location: bearer_location(),
+		preserve_token: false,
+		introspection: None,
+		introspection_cache: None,
+	};
+	let now = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.unwrap()
+		.as_secs();
+	let token = build_signed_token(kid, issuer, allowed_aud, now + 600);
+	let mut req = crate::http::Request::new(crate::http::Body::empty());
+	req.headers_mut().insert(
+		crate::http::header::AUTHORIZATION,
+		crate::http::HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+	);
+	let mut log = make_min_req_log();
+	let res = jwt.apply(Some(&mut log), &mut req, None).await;
+	assert!(res.is_ok());
+	assert!(
+		req
+			.headers()
+			.get(crate::http::header::AUTHORIZATION)
+			.is_none()
+	);
+	assert!(req.extensions().get::<super::Claims>().is_some());
 }
 
 #[tokio::test]
@@ -664,6 +731,8 @@ pub async fn test_apply_query_parameter_token_inserts_claims_and_removes_query_p
 			name: "token".into(),
 		},
 		preserve_token: false,
+		introspection: None,
+		introspection_cache: None,
 	};
 	let now = SystemTime::now()
 		.duration_since(UNIX_EPOCH)
@@ -675,7 +744,7 @@ pub async fn test_apply_query_parameter_token_inserts_claims_and_removes_query_p
 		.parse()
 		.unwrap();
 	let mut log = make_min_req_log();
-	let res = jwt.apply(Some(&mut log), &mut req).await;
+	let res = jwt.apply(Some(&mut log), &mut req, None).await;
 	assert!(res.is_ok());
 	assert_eq!(req.uri().to_string(), "http://example.com/?keep=yes");
 	assert!(req.extensions().get::<super::Claims>().is_some());
@@ -783,6 +852,8 @@ fn setup_test_multi_jwt() -> (Jwt, ProviderInfo, ProviderInfo) {
 			providers: vec![provider1, provider2],
 			location: bearer_location(),
 			preserve_token: false,
+			introspection: None,
+			introspection_cache: None,
 		},
 		(kid1, issuer1, aud1),
 		(kid2, issuer2, aud2),
@@ -844,6 +915,8 @@ pub fn test_empty_required_claims_accepts_token_without_exp() {
 		providers: vec![provider],
 		location: bearer_location(),
 		preserve_token: false,
+		introspection: None,
+		introspection_cache: None,
 	};
 
 	let token = build_signed_token_with_payload(
@@ -897,6 +970,8 @@ pub fn test_default_required_claims_rejects_token_without_exp() {
 		providers: vec![provider],
 		location: bearer_location(),
 		preserve_token: false,
+		introspection: None,
+		introspection_cache: None,
 	};
 
 	let token = build_signed_token_with_payload(
@@ -948,6 +1023,8 @@ pub fn test_empty_required_claims_still_rejects_expired_tokens() {
 		providers: vec![provider],
 		location: bearer_location(),
 		preserve_token: false,
+		introspection: None,
+		introspection_cache: None,
 	};
 
 	let token = build_signed_token_with_payload(
@@ -999,6 +1076,8 @@ pub fn test_required_claims_with_nbf_rejects_missing_nbf() {
 		providers: vec![provider],
 		location: bearer_location(),
 		preserve_token: false,
+		introspection: None,
+		introspection_cache: None,
 	};
 
 	// Token with exp but without nbf should be rejected when nbf is required

@@ -586,12 +586,36 @@ fn mcp_authentication_from_proto(
 		},
 	};
 
-	let jwt_validator = http::jwt::Jwt::from_providers(
+	let mut jwt_validator = http::jwt::Jwt::from_providers(
 		jwt_provider.into_iter().collect(),
 		mode.into(),
 		http::auth::AuthorizationLocation::bearer_header(),
 		false,
 	);
+
+	// RFC 7662 Token Introspection configuration
+	if let Some(intro) = &m.introspection {
+		let endpoint = if intro.url.is_empty() {
+			None
+		} else {
+			Some(intro.url.clone())
+		};
+		let failure_mode = match intro.failure_mode {
+			1 => http::introspection::FailureMode::FailOpen,
+			_ => http::introspection::FailureMode::FailClosed,
+		};
+		let config = http::introspection::IntrospectionConfig {
+			endpoint,
+			client_id: intro.client_id.clone(),
+			client_secret: intro.client_secret.clone().map(secrecy::SecretString::from),
+			cache_duration: std::time::Duration::from_secs(intro.cache_duration_seconds as u64),
+			timeout: std::time::Duration::from_secs(intro.timeout_seconds.max(1) as u64),
+			failure_mode,
+			expected_issuer: m.issuer.clone(),
+			expected_audiences: m.audiences.clone(),
+		};
+		jwt_validator = jwt_validator.with_introspection(config);
+	}
 	Ok(build_mcp_authentication(
 		m.issuer.clone(),
 		m.audiences.clone(),
@@ -2663,6 +2687,38 @@ fn traffic_policy_from_proto(
 				)?,
 				jwt.preserve_token,
 			);
+			// RFC 7662 Token Introspection configuration
+			let jwt_auth = match &jwt.introspection {
+				Some(intro) => {
+					let endpoint = if intro.url.is_empty() {
+						None
+					} else {
+						Some(intro.url.clone())
+					};
+					let failure_mode = match intro.failure_mode {
+						1 => http::introspection::FailureMode::FailOpen,
+						_ => http::introspection::FailureMode::FailClosed,
+					};
+					// Use first provider's issuer/audiences as expected values
+					let (expected_issuer, expected_audiences) = jwt
+						.providers
+						.first()
+						.map(|p| (p.issuer.clone(), p.audiences.clone()))
+						.unwrap_or_default();
+					let config = http::introspection::IntrospectionConfig {
+						endpoint,
+						client_id: intro.client_id.clone(),
+						client_secret: intro.client_secret.clone().map(secrecy::SecretString::from),
+						cache_duration: std::time::Duration::from_secs(intro.cache_duration_seconds as u64),
+						timeout: std::time::Duration::from_secs(intro.timeout_seconds.max(1) as u64),
+						failure_mode,
+						expected_issuer,
+						expected_audiences,
+					};
+					jwt_auth.with_introspection(config)
+				},
+				None => jwt_auth,
+			};
 			let mcp = match &jwt.mcp {
 				Some(mcp) => {
 					if jwt.providers.len() != 1 {
@@ -4758,7 +4814,7 @@ mod tests {
 		] {
 			let mut request = ::http::Request::new(crate::http::Body::empty());
 			assert!(matches!(
-				validator.apply(None, &mut request).await,
+				validator.apply(None, &mut request, None).await,
 				Err(TokenError::Missing)
 			));
 			request.headers_mut().insert(
@@ -4768,7 +4824,7 @@ mod tests {
 					.unwrap(),
 			);
 			assert!(matches!(
-				validator.apply(None, &mut request).await,
+				validator.apply(None, &mut request, None).await,
 				Err(TokenError::UnknownKeyId(kid)) if kid == "kid"
 			));
 		}
