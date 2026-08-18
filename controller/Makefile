@@ -740,6 +740,34 @@ benchmark-clean: ## Remove the llm-d-benchmark clone/CLI managed by `make benchm
 benchmark-gke-cleanup: ## Delete one GKE campaign's resources and scale its GPU pool to zero
 	../benchmarking/inference/cleanup-gke-campaign.sh
 
+.PHONY: benchmark-gke-all
+benchmark-gke-all: ## Run the complete three-treatment optimized-baseline GKE campaign
+	../benchmarking/inference/run-gke-campaign.sh
+
+.PHONY: benchmark-gke-plan
+benchmark-gke-plan: ## Validate prerequisites and show the desired GKE infrastructure
+	../benchmarking/inference/provisioning/gke/provision.sh plan
+
+.PHONY: benchmark-gke-provision
+benchmark-gke-provision: ## Create or verify the GKE benchmark infrastructure
+	../benchmarking/inference/provisioning/gke/provision.sh apply
+
+.PHONY: benchmark-gke-verify
+benchmark-gke-verify: ## Verify the existing GKE benchmark infrastructure
+	../benchmarking/inference/provisioning/gke/verify.sh
+
+.PHONY: benchmark-gke-gpu-up
+benchmark-gke-gpu-up: ## Scale the GKE GPU pool to its configured target
+	../benchmarking/inference/provisioning/gke/scale-gpu.sh up
+
+.PHONY: benchmark-gke-gpu-down
+benchmark-gke-gpu-down: ## Scale the GKE GPU pool to zero
+	../benchmarking/inference/provisioning/gke/scale-gpu.sh down
+
+.PHONY: benchmark-gke-destroy
+benchmark-gke-destroy: ## Delete idle provisioner-owned GKE infrastructure
+	BENCHMARK_GKE_ALLOW_DESTROY=true ../benchmarking/inference/provisioning/gke/destroy.sh
+
 BENCHMARK_REPORT_VENV := ../benchmarking/inference/.venv
 BENCHMARK_REPORT_REQUIREMENTS := ../benchmarking/inference/reporting/requirements.txt
 BENCHMARK_REPORT_STAMP := $(BENCHMARK_REPORT_VENV)/.requirements.stamp

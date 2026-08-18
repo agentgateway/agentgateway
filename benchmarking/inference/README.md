@@ -10,6 +10,8 @@ documents remain available in each treatment's evidence bundle.
 ```text
 benchmarking/inference/
   run-benchmark.sh
+  provisioning/
+    gke/                  # gcloud-based GKE infrastructure lifecycle
   suites/
     llm-d-benchmark/
       scenarios/
@@ -160,6 +162,176 @@ service
 agentgateway-standalone
 agentgateway-gateway
 ```
+
+### One-command GKE campaign
+
+`benchmark-gke-all` runs the standard optimized-baseline campaign from
+infrastructure validation through report generation:
+
+```bash
+export BENCHMARK_GKE_PROJECT=your-gcp-project
+
+# Set this only when the cluster intentionally uses the Compute Engine default
+# service account instead of the provisioner's dedicated-account default.
+export BENCHMARK_GKE_NODE_SERVICE_ACCOUNT=default
+
+# This is unnecessary when the configured Secret already exists.
+export HF_TOKEN=hf_your_token
+
+make -C controller benchmark-gke-all
+```
+
+Unless explicitly overridden, the target:
+
+1. Generates a timestamped `BENCHMARK_CAMPAIGN_ID`.
+2. Runs the GKE plan and idempotent provision/verification target.
+3. Uses the existing configured Hugging Face Secret, or creates it from
+   `HF_TOKEN` without placing the token in a command argument.
+4. Scales the GPU pool to eight `a3-highgpu-2g` nodes and verifies 16 H100s.
+5. Runs `service`, `agentgateway-standalone`, and `agentgateway-gateway`.
+6. Reacquires GPU capacity before each treatment because `after-load` releases
+   it after traffic generation.
+7. Generates Markdown, PNG, and CSV reports for both Service comparisons.
+8. Runs `benchmark-gke-cleanup` on success, failure, or interruption.
+
+The default `BENCHMARK_GKE_CLUSTER_LIFECYCLE=retain` keeps the GKE cluster and
+CPU pools for later campaigns. The finalizer still removes campaign resources
+and returns the GPU pool to zero. The command logs the generated campaign
+identifier and these output directories:
+
+```text
+benchmarking/inference/results/llm-d-benchmark/<campaign-id>/
+benchmarking/inference/results/llm-d-benchmark/<campaign-id>/generated/
+  service-vs-agentgateway-standalone/
+  service-vs-agentgateway-gateway/
+```
+
+Set `BENCHMARK_CAMPAIGN_ID` before invoking the target when a stable identifier
+is required.
+
+For an ephemeral CI environment, request cluster destruction explicitly:
+
+```bash
+BENCHMARK_GKE_PROJECT=your-gcp-project \
+BENCHMARK_GKE_CLUSTER_LIFECYCLE=destroy \
+make -C controller benchmark-gke-all
+```
+
+The `destroy` lifecycle arms the finalizer before provisioning so a partial
+provisioning failure is covered. After campaign cleanup succeeds, it deletes
+the provisioner-owned cluster and all node pools and verifies that the cluster
+is absent. It fails the job rather than deleting the cluster when PVC, PV,
+Filestore, LoadBalancer, or namespace cleanup cannot be verified. Shared
+project APIs, IAM, service accounts, networks, and subnetworks are retained.
+
+The one-command workflow is appropriate for manual runs and self-hosted CI
+with a sufficiently long job timeout. The sequential-job CI design described
+below remains preferable when the platform has a six-hour per-job limit.
+
+### Equivalent manual GKE campaign
+
+The following example provisions or verifies the persistent infrastructure,
+creates the shared Hugging Face Secret, runs all three treatments, generates
+both reports, and runs the campaign finalizer on success, failure, or
+interruption. Run it from the repository root with Bash. The Google Cloud
+identity and node service-account IAM prerequisites described in
+[GKE benchmark provisioning](provisioning/gke/README.md) must already be
+satisfied.
+
+```bash
+set -euo pipefail
+
+export BENCHMARK_GKE_PROJECT=your-gcp-project
+export BENCHMARK_GKE_LOCATION=us-central1-a
+export BENCHMARK_GKE_CLUSTER=agentgateway-benchmark
+export BENCHMARK_KUBE_CONTEXT="gke_${BENCHMARK_GKE_PROJECT}_${BENCHMARK_GKE_LOCATION}_${BENCHMARK_GKE_CLUSTER}"
+export BENCHMARK_GKE_CPU_NODEPOOL=default-pool
+export BENCHMARK_GKE_HARNESS_NODEPOOL=bench-cpu
+export BENCHMARK_GKE_GPU_NODEPOOL=gpu-h100
+export BENCHMARK_GKE_GPU_MACHINE_TYPE=a3-highgpu-2g
+export BENCHMARK_GKE_GPU_ACCELERATOR_TYPE=nvidia-h100-80gb
+export BENCHMARK_GKE_GPU_ACCELERATORS_PER_NODE=2
+export BENCHMARK_GKE_GPU_TARGET_NODES=8
+
+# Use the dedicated account by default. Set this to "default" only when the
+# cluster was intentionally provisioned with the Compute Engine default
+# service account.
+export BENCHMARK_GKE_NODE_SERVICE_ACCOUNT="agentgateway-benchmark-nodes@${BENCHMARK_GKE_PROJECT}.iam.gserviceaccount.com"
+
+export BENCHMARK_CLUSTER_PROVIDER=gke
+export BENCHMARK_ACCELERATOR_TYPE=gpu
+export BENCHMARK_ACCELERATOR_MODEL=h100
+export BENCHMARK_BACKEND_TYPE=vllm
+export BENCHMARK_SCENARIO=optimized-baseline
+export BENCHMARK_ROUTING_POLICY=optimized-baseline
+export BENCHMARK_REFERENCE_PROFILE=optimized-baseline-qwen3-32b-h100-v0.9
+export BENCHMARK_WORKLOAD_VARIANT=upstream
+export BENCHMARK_REPLICAS=8
+export BENCHMARK_TENSOR_PARALLELISM=2
+export BENCHMARK_ENDPOINT_PATH=internal
+export BENCHMARK_MODEL_STORAGE_PROFILE=high-throughput-shared
+export BENCHMARK_WORKLOAD_STORAGE_PROFILE=shared
+export BENCHMARK_GPU_RELEASE_POLICY=after-load
+export BENCHMARK_REPETITION=1
+export BENCHMARK_CAMPAIGN_ID="optimized-baseline-qwen3-32b-h100-$(date -u +%Y%m%d-%H%M%S)"
+
+export BENCHMARK_SECRET_NAMESPACE=benchmark-secrets
+export BENCHMARK_HF_SECRET_NAME=llm-d-hf-token
+test -n "${HF_TOKEN:?HF_TOKEN must be set}"
+
+make -C controller benchmark-gke-plan
+make -C controller benchmark-gke-provision
+
+kubectl --context "${BENCHMARK_KUBE_CONTEXT}" \
+  create namespace "${BENCHMARK_SECRET_NAMESPACE}" \
+  --dry-run=client -o yaml |
+kubectl --context "${BENCHMARK_KUBE_CONTEXT}" apply -f -
+
+printf 'HF_TOKEN=%s\n' "${HF_TOKEN}" |
+kubectl --context "${BENCHMARK_KUBE_CONTEXT}" \
+  --namespace "${BENCHMARK_SECRET_NAMESPACE}" \
+  create secret generic "${BENCHMARK_HF_SECRET_NAME}" \
+  --from-env-file=/dev/stdin --dry-run=client -o yaml |
+kubectl --context "${BENCHMARK_KUBE_CONTEXT}" apply -f -
+
+finalize_campaign() {
+  local campaign_status=$?
+  local cleanup_status=0
+  trap - EXIT
+  make -C controller benchmark-gke-cleanup || cleanup_status=$?
+  if (( campaign_status != 0 )); then
+    exit "${campaign_status}"
+  fi
+  exit "${cleanup_status}"
+}
+trap finalize_campaign EXIT
+
+for treatment in service agentgateway-standalone agentgateway-gateway; do
+  # after-load returns this pool to zero while CPU-side collection and
+  # reporting finish, so every subsequent treatment must reacquire it.
+  make -C controller benchmark-gke-gpu-up
+  BENCHMARK_TREATMENT="${treatment}" make -C controller benchmark
+done
+
+export BENCHMARK_CAMPAIGN_DIR="../benchmarking/inference/results/llm-d-benchmark/${BENCHMARK_CAMPAIGN_ID}"
+export BENCHMARK_COMPARISONS="service:agentgateway-standalone service:agentgateway-gateway"
+export BENCHMARK_REPORT_FORMATS=markdown,png,csv
+make -C controller benchmark-report
+```
+
+The native campaign evidence and generated reports are written to:
+
+```text
+benchmarking/inference/results/llm-d-benchmark/<campaign-id>/
+benchmarking/inference/results/llm-d-benchmark/<campaign-id>/generated/
+  service-vs-agentgateway-standalone/
+  service-vs-agentgateway-gateway/
+```
+
+The finalizer deliberately runs after report generation. The `after-load`
+policy has already released the GPU nodes, while keeping the campaign lock
+until reporting finishes prevents another campaign from changing the shared
+cluster during result validation.
 
 For three repetitions, rotate treatment order to reduce cluster drift:
 
@@ -335,6 +507,10 @@ links.
 Provider-specific storage profiles use provider-prefixed low-level variables.
 For example, the GKE high-throughput shared model profile resolves to
 `premium-rwx`, while the shared harness profile resolves to `standard-rwx`.
+GKE hardware inputs are provider-prefixed as well. The provisioning defaults
+are `a3-highgpu-2g`, two `nvidia-h100-80gb` accelerators per node, and eight
+target nodes; see [GKE benchmark provisioning](provisioning/gke/README.md) for
+the complete contract.
 
 List local and upstream scenarios with:
 
@@ -351,6 +527,20 @@ make -C controller benchmark-clean
 This does not delete a Kubernetes cluster or a retained treatment.
 
 ## GKE campaign cleanup
+
+The GKE cluster and node pools can be created independently with the
+non-interactive `gcloud` provisioning layer:
+
+```bash
+BENCHMARK_GKE_PROJECT=<project> make -C controller benchmark-gke-plan
+BENCHMARK_GKE_PROJECT=<project> make -C controller benchmark-gke-provision
+BENCHMARK_GKE_PROJECT=<project> make -C controller benchmark-gke-gpu-up
+```
+
+The benchmark runner never provisions infrastructure implicitly. This keeps
+cluster IAM and lifecycle failures separate from workload retries. The GPU
+pool is created at zero nodes and scale-up rolls back to zero if its configured
+readiness deadline expires.
 
 GKE benchmark namespaces are labeled with their owning campaign. The wrapper
 also acquires a cluster-wide campaign lock, so a different campaign cannot use
@@ -370,7 +560,24 @@ concurrency:
   cancel-in-progress: false
 
 steps:
-  # Authentication, cluster credentials, scale-up, and benchmark steps go here.
+  # Authenticate to Google Cloud without placing service-account keys in the
+  # repository, then reconcile the persistent infrastructure.
+  - name: Provision GKE benchmark infrastructure
+    env:
+      BENCHMARK_GKE_PROJECT: ${{ vars.BENCHMARK_GKE_PROJECT }}
+      BENCHMARK_GKE_LOCATION: ${{ vars.BENCHMARK_GKE_LOCATION }}
+      BENCHMARK_GKE_CLUSTER: ${{ vars.BENCHMARK_GKE_CLUSTER }}
+    run: make -C controller benchmark-gke-provision
+
+  - name: Acquire GPU capacity
+    env:
+      BENCHMARK_GKE_PROJECT: ${{ vars.BENCHMARK_GKE_PROJECT }}
+      BENCHMARK_GKE_LOCATION: ${{ vars.BENCHMARK_GKE_LOCATION }}
+      BENCHMARK_GKE_CLUSTER: ${{ vars.BENCHMARK_GKE_CLUSTER }}
+      BENCHMARK_GKE_GPU_NODEPOOL: ${{ vars.BENCHMARK_GKE_GPU_NODEPOOL }}
+    run: make -C controller benchmark-gke-gpu-up
+
+  # The treatment step follows. Keep the finalizer unconditional.
 
   - name: Finalize GKE benchmark campaign
     if: ${{ always() }}
