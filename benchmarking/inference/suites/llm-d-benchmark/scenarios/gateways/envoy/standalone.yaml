@@ -1,0 +1,7 @@
+scenario:
+  - name: envoy-standalone
+    gateway:
+      className: epponly
+    router:
+      proxy:
+        proxyType: envoy

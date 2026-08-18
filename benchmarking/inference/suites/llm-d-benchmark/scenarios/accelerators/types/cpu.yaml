@@ -1,0 +1,23 @@
+scenario:
+  - name: cpu
+    affinity:
+      enabled: true
+      nodeSelector:
+        kubernetes.io/os: linux
+    accelerator:
+      count: 0
+    model:
+      maxModelLen: 1024
+      gpuMemoryUtilization: 0
+    decode:
+      replicas: 1
+      parallelism:
+        tensor: 1
+        data: 1
+        dataLocal: 1
+        workers: 1
+      resources:
+        limits: {memory: 8Gi, cpu: "4"}
+        requests: {memory: 4Gi, cpu: "2"}
+      accelerator:
+        count: 0

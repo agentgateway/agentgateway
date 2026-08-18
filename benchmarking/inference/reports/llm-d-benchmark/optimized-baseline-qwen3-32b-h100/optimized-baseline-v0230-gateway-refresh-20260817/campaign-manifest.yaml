@@ -1,0 +1,135 @@
+schema_version: 1
+campaign_id: optimized-baseline-v0230-gateway-refresh-20260817
+suite: llm-d-benchmark
+identity:
+  scenario: optimized-baseline
+  cluster_provider: gke
+  accelerator_type: gpu
+  accelerator_model: h100
+  backend_type: vllm
+  model: Qwen/Qwen3-32B
+  replicas: 8
+  tensor_parallelism: 2
+  routing_policy: optimized-baseline
+  workload_variant: upstream
+  harness: inference-perf
+  workload: upstream-optimized-baseline.yaml
+  workload_sha256: b2ad162508976d18ed7ef21a8a0f8ed0431c92039e9c9b0ee43a2452882e63f7
+  scenario_source_sha256: 4ae7851be32a23cfd2272fe30d40032541261921e0cb18226537fa1cffb8246e
+  shared_config_sha256: d6a29f6eaa1360c24ad91c9f94bb914d33d28ec0ee6b146b11ba77f88ebcd2b4
+  llm_d_benchmark_ref: main
+  reference_profile: optimized-baseline-qwen3-32b-h100-v0.9
+  endpoint_path: internal
+  storage:
+    model:
+      profile: high-throughput-shared
+      strategy: filestore
+      class: premium-rwx
+      size: 2560Gi
+    workload:
+      profile: shared
+      class: standard-rwx
+      size: 100Gi
+  runtime_metrics:
+    enabled: true
+    interval_seconds: 5
+    gke_monitoring: auto
+  result_collection:
+    fast_collect: true
+  gpu_release:
+    policy: after-load
+    node_pool: gpu-h100
+treatments:
+  service:
+    repetitions:
+      '1':
+        config_sha256: df9d8e0b527a6f1b88fdeedf6c0d34a5ba7c925ee69834493b3fefa223e46158
+        gateway:
+          implementation: none
+          mode: none
+          image: not-applicable
+          agentgateway_version: not-applicable
+        storage:
+          model:
+            profile: high-throughput-shared
+            strategy: filestore
+            class: premium-rwx
+            size: 2560Gi
+          workload:
+            profile: shared
+            class: standard-rwx
+            size: 100Gi
+        router_chart_version: v0.9.0
+        router_chart_digest: not-applicable
+        standalone_invariant_sha256: not-applicable
+        runtime_metrics:
+          enabled: true
+          interval_seconds: 5
+          gke_monitoring: auto
+        result_collection:
+          fast_collect: true
+        gpu_release:
+          policy: after-load
+          node_pool: gpu-h100
+  agentgateway-standalone:
+    repetitions:
+      '1':
+        config_sha256: a3b689e6b16f29c395bc32784ca4cd24a1f3ea25e061921fc1905ee29250864c
+        gateway:
+          implementation: agentgateway
+          mode: standalone
+          image: cr.agentgateway.dev/agentgateway:v1.4.1
+          agentgateway_version: v1.4.1
+        storage:
+          model:
+            profile: high-throughput-shared
+            strategy: filestore
+            class: premium-rwx
+            size: 2560Gi
+          workload:
+            profile: shared
+            class: standard-rwx
+            size: 100Gi
+        router_chart_version: v0.9.0
+        router_chart_digest: sha256:8150c84045d59e6e91991daf810322140e116d5e02d244d96cbfc2b3000825cd
+        standalone_invariant_sha256: d27aa3658a2688014b3e7d88d84a9e22264b1b9eda9d1b60838bfa740d5886ee
+        runtime_metrics:
+          enabled: true
+          interval_seconds: 5
+          gke_monitoring: auto
+        result_collection:
+          fast_collect: true
+        gpu_release:
+          policy: after-load
+          node_pool: gpu-h100
+  agentgateway-gateway:
+    repetitions:
+      '1':
+        config_sha256: 63ee4f0ab209f078f7c81e60cf94ab6a1bb7bcf47a3632c48e6d9b817c4f0c6c
+        gateway:
+          implementation: agentgateway
+          mode: gateway
+          image: cr.agentgateway.dev/agentgateway:v1.4.1
+          agentgateway_version: v1.4.1
+        storage:
+          model:
+            profile: high-throughput-shared
+            strategy: filestore
+            class: premium-rwx
+            size: 2560Gi
+          workload:
+            profile: shared
+            class: standard-rwx
+            size: 100Gi
+        router_chart_version: v0.9.0
+        router_chart_digest: not-applicable
+        standalone_invariant_sha256: not-applicable
+        runtime_metrics:
+          enabled: true
+          interval_seconds: 5
+          gke_monitoring: auto
+        result_collection:
+          fast_collect: true
+        gpu_release:
+          policy: after-load
+          node_pool: gpu-h100

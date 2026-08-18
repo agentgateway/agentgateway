@@ -1,0 +1,46 @@
+# GKE H100 settings from the earlier agentgateway + llm-d benchmark. Two TP=2
+# replicas need four GPUs and shared model storage across the two GPU nodes.
+scenario:
+  - name: gke-gpu
+    # after-load release removes every GPU node before llm-d-benchmark's
+    # teardown command re-renders this scenario. Keep teardown independent of
+    # live accelerator auto-detection by declaring the GKE NVIDIA resource.
+    accelerator:
+      profile: nvidia
+      resource: nvidia.com/gpu
+    affinity:
+      enabled: true
+      nodeSelector:
+        cloud.google.com/gke-accelerator: nvidia-h100-80gb
+
+    decode:
+      acceleratorType:
+        labelKey: cloud.google.com/gke-accelerator
+        labelValue: nvidia-h100-80gb
+      vllm:
+        customCommand: |
+          export LD_LIBRARY_PATH=$(find / -name libcuda.so.1 -printf '%h\n' 2>/dev/null | sed ':a; N; $!ba; s/\n/:/g'):${LD_LIBRARY_PATH}
+          export LIBRARY_PATH=$(find / -name libcuda.so.1 -printf '%h\n' 2>/dev/null | head -1):${LIBRARY_PATH}
+          vllm serve /model-cache/$MODEL_PATH \
+          --host 0.0.0.0 \
+          --served-model-name $MODEL_NAME \
+          --port $VLLM_METRICS_PORT \
+          --block-size $VLLM_BLOCK_SIZE \
+          --max-model-len $VLLM_MAX_MODEL_LEN \
+          --tensor-parallel-size $TP_SIZE \
+          --gpu-memory-utilization $VLLM_ACCELERATOR_MEM_UTIL \
+          --no-enable-log-requests \
+          --disable-uvicorn-access-log
+
+    storage:
+      modelPvc:
+        accessModes:
+          - ReadWriteMany
+        storageClassName: standard-rwx
+        size: 1Ti
+      workloadPvc:
+        accessModes:
+          - ReadWriteMany
+        storageClassName: standard-rwx
+        # Basic HDD Filestore's standard-rwx class has a 100Gi minimum.
+        size: 100Gi

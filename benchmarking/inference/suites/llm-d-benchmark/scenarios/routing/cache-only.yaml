@@ -1,0 +1,21 @@
+# Ablation of the upstream optimized policy. The affinity filter receives the
+# approximate prefix-cache signal, while maxTTFTPenaltyMs=0 makes it always
+# honor cache stickiness and removes the in-flight-load gate from this treatment.
+scenario:
+  - name: cache-only
+    router:
+      epp:
+        pluginsConfigFile: cache-only-plugins.yaml
+        pluginsCustomConfig:
+          cache-only-plugins.yaml: |
+            apiVersion: llm-d.ai/v1alpha1
+            kind: EndpointPickerConfig
+            plugins:
+            - type: approx-prefix-cache-producer
+            - type: prefix-cache-affinity-filter
+              parameters:
+                maxTTFTPenaltyMs: 0
+            schedulingProfiles:
+            - name: default
+              plugins:
+              - pluginRef: prefix-cache-affinity-filter

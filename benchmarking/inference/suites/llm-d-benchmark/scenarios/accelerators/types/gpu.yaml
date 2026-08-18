@@ -1,0 +1,31 @@
+scenario:
+  - name: gpu
+    # Each tensor-parallel worker can read the full checkpoint before retaining
+    # its shard. Concurrent replicas therefore multiply storage traffic. The
+    # two-hour probe avoids restarting vLLM during a slow Filestore cold load.
+    modelservice:
+      uriProtocol: pvc
+    model:
+      maxModelLen: 8192
+      # vLLM needs headroom beyond its persistent weights, KV cache, and CUDA
+      # graphs for temporary allocations during startup and request sampling.
+      # 0.95 can OOM while vLLM 0.26 warms up Qwen3-32B on an 80 GiB H100.
+      gpuMemoryUtilization: 0.90
+    vllmCommon:
+      shmMemory: 20Gi
+    decode:
+      replicas: 2
+      probes:
+        startup:
+          failureThreshold: 240
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+      parallelism:
+        tensor: 2
+        data: 1
+        dataLocal: 1
+        workers: 1
+      resources:
+        limits: {memory: 100Gi, cpu: "32"}
+        requests: {memory: 100Gi, cpu: "32"}

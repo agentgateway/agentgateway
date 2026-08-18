@@ -1,0 +1,6 @@
+scenario:
+  - name: h100
+    affinity:
+      enabled: true
+      nodeSelector:
+        cloud.google.com/gke-accelerator: nvidia-h100-80gb

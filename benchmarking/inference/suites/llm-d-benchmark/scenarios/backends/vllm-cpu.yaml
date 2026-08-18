@@ -1,0 +1,10 @@
+scenario:
+  - name: vllm-cpu
+    images:
+      vllm:
+        repository: public.ecr.aws/q9t5s3a7/vllm-cpu-release-repo
+        tag: v0.12.0
+    vllmCommon:
+      shmMemory: 2Gi
+      flags:
+        enforceEager: false

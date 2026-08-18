@@ -1,0 +1,22 @@
+# Settings shared by all treatments and execution modes.
+scenario:
+  - name: common
+    monitoring:
+      installPrometheusCrds: true
+
+    fma:
+      enabled: false
+
+    modelservice:
+      enabled: true
+      uriProtocol: hf
+
+    control:
+      waitTimeout: 20
+
+    harness:
+      name: inference-perf
+      experimentProfile: sanity_random.yaml
+      resources:
+        cpu: "1"
+        memory: 2Gi

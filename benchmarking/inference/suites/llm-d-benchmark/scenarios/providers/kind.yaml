@@ -1,0 +1,14 @@
+# Kind's built-in local-path provisioner exposes the "standard" class.
+scenario:
+  - name: kind
+    storage:
+      modelPvc:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: standard
+        size: 80Gi
+      workloadPvc:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: standard
+        size: 3Gi

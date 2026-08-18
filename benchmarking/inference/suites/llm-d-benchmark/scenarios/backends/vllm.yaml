@@ -1,0 +1,16 @@
+scenario:
+  - name: vllm
+    images:
+      vllm:
+        # Keep the model server aligned with the upstream optimized-baseline
+        # GPU/vLLM component used by the published reproduction.
+        repository: docker.io/vllm/vllm-openai
+        tag: v0.27.1
+    vllmCommon:
+      flags:
+        disableLogRequests: true
+        disableUvicornAccessLog: true
+    decode:
+      vllm:
+        additionalFlags:
+          - --disable-uvicorn-access-log

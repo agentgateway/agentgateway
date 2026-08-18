@@ -1,0 +1,78 @@
+# Deterministic load-signal ablation. It retains the upstream rate ladder and
+# 7,200-input/1,000-output token cost, uses evenly spaced arrivals, and makes
+# every prompt independent so prefix affinity has no useful signal. The wrapper
+# defaults this variant to a 120-second request timeout.
+load:
+  type: constant
+  interval: 30.0
+  base_seed: 42
+  stages:
+    - rate: 15
+      duration: 50
+    - rate: 3
+      duration: 20
+    - rate: 10
+      duration: 20
+    - rate: 15
+      duration: 20
+    - rate: 20
+      duration: 38
+    - rate: 22
+      duration: 34
+    - rate: 25
+      duration: 30
+    - rate: 30
+      duration: 25
+    - rate: 35
+      duration: 21
+    - rate: 40
+      duration: 38
+    - rate: 43
+      duration: 36
+    - rate: 46
+      duration: 33
+    - rate: 49
+      duration: 30
+    - rate: 52
+      duration: 29
+    - rate: 55
+      duration: 27
+    - rate: 57
+      duration: 26
+    - rate: 60
+      duration: 25
+  request_timeout: 120
+api:
+  type: completion
+  streaming: true
+server:
+  type: vllm
+  model_name: REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_MODEL
+  base_url: REPLACE_ENV_LLMDBENCH_HARNESS_STACK_ENDPOINT_URL
+  ignore_eos: true
+tokenizer:
+  pretrained_model_name_or_path: REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_MODEL
+data:
+  type: random
+  input_distribution:
+    type: normal
+    min: 7200
+    max: 7200
+    mean: 7200
+    std_dev: 0
+    total_count: 20000
+  output_distribution:
+    type: normal
+    min: 1000
+    max: 1000
+    mean: 1000
+    std_dev: 0
+    total_count: 20000
+report:
+  request_lifecycle:
+    summary: true
+    per_stage: true
+    per_request: false
+storage:
+  local_storage:
+    path: /workspace

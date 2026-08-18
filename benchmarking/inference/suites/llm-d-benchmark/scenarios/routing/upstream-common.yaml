@@ -1,0 +1,27 @@
+# Both arms need enough context for the upstream workload's 7,200 input and
+# 1,000 requested output tokens. Keeping this separate from EPP policy overlays
+# ensures the plain-Service baseline receives the same backend constraint.
+scenario:
+  - name: upstream-common
+    model:
+      maxModelLen: 16000
+    harness:
+      # inference-perf materializes the approximately 17,000-request upstream
+      # ladder in memory. It also builds the full per-request JSON document in
+      # memory during report generation. The generic harness is OOM-killed
+      # before the early stages, and 32 GiB is insufficient for the final
+      # report even though the summarized reports fit. A 64 GiB limit is also
+      # insufficient once fast proxy treatments complete more requests; the
+      # final document has been observed above 61 GiB immediately before the
+      # container is OOM-killed. 80 GiB preserves useful headroom while still
+      # fitting beside the EPP and required system pods on the 119 GiB harness
+      # node used by the published H100 profile.
+      # The 300-second request timeout also makes the full ladder plus
+      # per-request report generation exceed llm-d-benchmark's generic
+      # 3,600-second pod wait. Keep the larger deadline scoped to this heavy
+      # upstream workload; it matches the timeout used by upstream's other
+      # heavy inference-perf scenarios.
+      waitTimeout: 5400
+      resources:
+        cpu: "8"
+        memory: 80Gi

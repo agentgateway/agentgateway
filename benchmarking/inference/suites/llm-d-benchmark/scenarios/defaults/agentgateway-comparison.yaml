@@ -1,0 +1,8 @@
+# The wrapper's default comparison is decode-only so its plain-Service baseline
+# and inference-gateway treatment use the same backend topology. Upstream guide
+# scenarios keep their own prefill/decode semantics instead.
+scenario:
+  - name: agentgateway-comparison
+    prefill:
+      enabled: false
+      replicas: 0

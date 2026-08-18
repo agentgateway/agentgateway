@@ -1,0 +1,19 @@
+# Ablation of the upstream optimized policy. Unique prompts make cache affinity
+# irrelevant, and this plugin stack intentionally exposes only in-flight token
+# load to the scheduling decision.
+scenario:
+  - name: load-only
+    router:
+      epp:
+        pluginsConfigFile: load-only-plugins.yaml
+        pluginsCustomConfig:
+          load-only-plugins.yaml: |
+            apiVersion: llm-d.ai/v1alpha1
+            kind: EndpointPickerConfig
+            plugins:
+            - type: inflight-load-producer
+            - type: token-load-scorer
+            schedulingProfiles:
+            - name: default
+              plugins:
+              - pluginRef: token-load-scorer

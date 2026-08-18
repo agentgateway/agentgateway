@@ -712,14 +712,51 @@ kind-load: kind-load-testbox
 
 # Set to the same cluster used by kind-create so we don't spin up a second one.
 BENCHMARK_LLM_D_BENCHMARK_DIR ?=
+BENCHMARK_CLUSTER_PROVIDER ?= kind
+BENCHMARK_SUITE ?= llm-d-benchmark
+BENCHMARK_REPETITION ?= 1
 
 .PHONY: benchmark
-benchmark: kind-create ## Run the agentgateway vs plain-Service benchmark (optional: BENCHMARK_LLM_D_BENCHMARK_DIR to use an existing clone)
-	CLUSTER_NAME=$(CLUSTER_NAME) LLM_D_BENCHMARK_DIR=$(BENCHMARK_LLM_D_BENCHMARK_DIR) ../benchmarking/run-benchmark.sh
+benchmark: CLUSTER_NAME = agentgateway-benchmark
+benchmark: ## Run one inference benchmark treatment in a shared campaign
+	@case "$(BENCHMARK_CLUSTER_PROVIDER)" in kind|gke) ;; *) echo "unsupported BENCHMARK_CLUSTER_PROVIDER=$(BENCHMARK_CLUSTER_PROVIDER)" >&2; exit 2;; esac
+	@test -n "$(BENCHMARK_TREATMENT)" || { echo "BENCHMARK_TREATMENT is required" >&2; exit 2; }
+	@test -n "$(BENCHMARK_CAMPAIGN_ID)" || { echo "BENCHMARK_CAMPAIGN_ID is required" >&2; exit 2; }
+	@if [ "$(BENCHMARK_CLUSTER_PROVIDER)" = kind ]; then $(MAKE) kind-create CLUSTER_NAME="$(CLUSTER_NAME)"; fi
+	CLUSTER_NAME=$(CLUSTER_NAME) \
+	  BENCHMARK_SUITE=$(BENCHMARK_SUITE) \
+	  BENCHMARK_TREATMENT=$(BENCHMARK_TREATMENT) \
+	  BENCHMARK_CAMPAIGN_ID=$(BENCHMARK_CAMPAIGN_ID) \
+	  BENCHMARK_REPETITION=$(BENCHMARK_REPETITION) \
+	  BENCHMARK_CLUSTER_PROVIDER=$(BENCHMARK_CLUSTER_PROVIDER) \
+	  LLM_D_BENCHMARK_DIR=$(BENCHMARK_LLM_D_BENCHMARK_DIR) \
+	  ../benchmarking/inference/run-benchmark.sh
 
 .PHONY: benchmark-clean
 benchmark-clean: ## Remove the llm-d-benchmark clone/CLI managed by `make benchmark` (leaves the kind cluster alone)
-	LLM_D_BENCHMARK_DIR=$(BENCHMARK_LLM_D_BENCHMARK_DIR) ../benchmarking/run-benchmark.sh --clean
+	LLM_D_BENCHMARK_DIR=$(BENCHMARK_LLM_D_BENCHMARK_DIR) ../benchmarking/inference/run-benchmark.sh --clean
+
+.PHONY: benchmark-gke-cleanup
+benchmark-gke-cleanup: ## Delete one GKE campaign's resources and scale its GPU pool to zero
+	../benchmarking/inference/cleanup-gke-campaign.sh
+
+BENCHMARK_REPORT_VENV := ../benchmarking/inference/.venv
+BENCHMARK_REPORT_REQUIREMENTS := ../benchmarking/inference/reporting/requirements.txt
+BENCHMARK_REPORT_STAMP := $(BENCHMARK_REPORT_VENV)/.requirements.stamp
+BENCHMARK_REPORT_FORMATS ?= markdown,png,csv
+
+$(BENCHMARK_REPORT_STAMP): $(BENCHMARK_REPORT_REQUIREMENTS)
+	@test -x $(BENCHMARK_REPORT_VENV)/bin/python || python3 -m venv $(BENCHMARK_REPORT_VENV)
+	PIP_DISABLE_PIP_VERSION_CHECK=1 $(BENCHMARK_REPORT_VENV)/bin/python -m pip install --no-input -r $(BENCHMARK_REPORT_REQUIREMENTS)
+	@touch $(BENCHMARK_REPORT_STAMP)
+
+.PHONY: benchmark-report
+benchmark-report: $(BENCHMARK_REPORT_STAMP) ## Generate reports (BENCHMARK_CAMPAIGN_DIR and BENCHMARK_COMPARISONS required)
+	@test -n "$(BENCHMARK_CAMPAIGN_DIR)" || { echo "BENCHMARK_CAMPAIGN_DIR is required" >&2; exit 2; }
+	@test -n "$(BENCHMARK_COMPARISONS)" || { echo "BENCHMARK_COMPARISONS is required" >&2; exit 2; }
+	@set --; for comparison in $(BENCHMARK_COMPARISONS); do set -- "$$@" --comparison "$$comparison"; done; \
+	  $(BENCHMARK_REPORT_VENV)/bin/python ../benchmarking/inference/reporting/generate.py \
+	    --campaign "$(BENCHMARK_CAMPAIGN_DIR)" --formats "$(BENCHMARK_REPORT_FORMATS)" "$$@"
 
 #----------------------------------------------------------------------------------
 # Targets for running Agent Gateway conformance tests

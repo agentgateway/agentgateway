@@ -1,0 +1,21 @@
+schema_version: 1
+campaign_id: optimized-baseline-v0230-gateway-refresh-20260817
+execution_model: independent-treatment-runs
+treatments:
+  service:
+    status: complete
+    harness_start: "2026-08-17T16:46:26+00:00"
+    harness_stop: "2026-08-17T18:10:01+00:00"
+  agentgateway-standalone:
+    status: complete
+    harness_start: "2026-08-17T21:10:17+00:00"
+    harness_stop: "2026-08-17T22:09:12+00:00"
+  agentgateway-gateway:
+    status: complete
+    harness_start: "2026-08-18T14:45:27+00:00"
+    harness_stop: "2026-08-18T15:45:43+00:00"
+shared_identity:
+  workload_sha256: b2ad162508976d18ed7ef21a8a0f8ed0431c92039e9c9b0ee43a2452882e63f7
+  scenario_source_sha256: 4ae7851be32a23cfd2272fe30d40032541261921e0cb18226537fa1cffb8246e
+  shared_config_sha256: d6a29f6eaa1360c24ad91c9f94bb914d33d28ec0ee6b146b11ba77f88ebcd2b4
+  inference_perf_revision: e28d9a0bf5cefa743910b73057b3b686f0a94b98

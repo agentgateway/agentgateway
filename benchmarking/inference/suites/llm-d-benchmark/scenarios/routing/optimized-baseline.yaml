@@ -1,0 +1,21 @@
+# Matches the current llm-d optimized-baseline guide: approximate prefix-cache
+# affinity narrows the candidate set and token load selects within that set.
+scenario:
+  - name: optimized-baseline
+    router:
+      epp:
+        pluginsConfigFile: optimized-baseline-plugins.yaml
+        pluginsCustomConfig:
+          optimized-baseline-plugins.yaml: |
+            apiVersion: llm-d.ai/v1alpha1
+            kind: EndpointPickerConfig
+            plugins:
+            - type: approx-prefix-cache-producer
+            - type: inflight-load-producer
+            - type: prefix-cache-affinity-filter
+            - type: token-load-scorer
+            schedulingProfiles:
+            - name: default
+              plugins:
+              - pluginRef: prefix-cache-affinity-filter
+              - pluginRef: token-load-scorer
