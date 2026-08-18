@@ -7,11 +7,13 @@ tokens, or provider credentials to Intune.
 
 ## Provide a Claude Desktop credential helper
 
-Claude Desktop gateway API key and subscription-passthrough modes require an
-organization-owned credential helper. A helper is an executable installed on
-the managed endpoint. Claude Desktop runs it with no arguments whenever it
-needs an inference credential and sets `CLAUDE_HELPER_CONTEXT` to describe why
-it is running.
+Use a static agentgateway client key only for a limited pilot. The exported
+Claude Desktop policy contains the key, so assign it only to the pilot group
+and rotate or revoke it after testing. For a production gateway API key rollout
+or subscription-passthrough mode, use an organization-owned credential helper.
+A helper is an executable installed on the managed endpoint. Claude Desktop
+runs it with no arguments whenever it needs an inference credential and sets
+`CLAUDE_HELPER_CONTEXT` to describe why it is running.
 
 The helper must:
 
