@@ -40,6 +40,14 @@ pub fn parse_config(
 	let nested: NestedRawConfig = serdes::yamlviajson::from_str(&contents).ctx("invalid config")?;
 	let raw = nested.config.unwrap_or_default();
 	cel::register_custom_functions(&raw.custom_functions).ctx("invalid config.customFunctions")?;
+	let sensitive_headers = raw
+		.sensitive_headers
+		.iter()
+		.map(|name| {
+			::http::HeaderName::from_str(name)
+				.map_err(|e| anyhow::anyhow!("invalid sensitive header '{name}': {e}"))
+		})
+		.collect::<anyhow::Result<Vec<_>>>()?;
 
 	let ipv6_enabled = parse::<bool>("IPV6_ENABLED")?
 		.or(raw.enable_ipv6)
@@ -577,6 +585,7 @@ pub fn parse_config(
 		},
 		database,
 		storage,
+		sensitive_headers,
 		session_encoder,
 		oidc_cookie_encoder,
 			hbone: Arc::new(agent_hbone::Config {
@@ -1128,6 +1137,46 @@ mod tests {
 
 		// Test missing env var
 		assert_eq!(parse_otlp_headers("NONEXISTENT_VAR").unwrap(), None);
+	}
+
+	#[test]
+	fn sensitive_headers_are_validated_and_normalized() {
+		let config = parse_config(
+			r#"
+config:
+  sensitiveHeaders:
+  - X-API-Token
+  - authorization
+"#
+			.to_string(),
+			None,
+		)
+		.expect("sensitive headers should parse");
+
+		assert_eq!(config.sensitive_headers.len(), 2);
+		assert_eq!(config.sensitive_headers[0].as_str(), "x-api-token");
+		assert_eq!(config.sensitive_headers[1].as_str(), "authorization");
+	}
+
+	#[test]
+	fn invalid_sensitive_header_is_rejected() {
+		let error = parse_config(
+			r#"
+config:
+  sensitiveHeaders:
+  - "invalid header"
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("invalid sensitive header should fail");
+
+		assert!(
+			error
+				.to_string()
+				.contains("invalid sensitive header 'invalid header'"),
+			"unexpected error: {error}"
+		);
 	}
 
 	#[test]

@@ -383,11 +383,12 @@ impl Transformation {
 impl crate::store::RequestPolicyTrait for Transformation {
 	async fn apply(
 		&self,
-		_client: &crate::proxy::httpproxy::PolicyClient,
+		client: &crate::proxy::httpproxy::PolicyClient,
 		_log: &mut crate::telemetry::log::RequestLog,
 		req: &mut crate::http::Request,
 	) -> Result<crate::http::PolicyResponse, crate::proxy::ProxyResponse> {
 		self.apply_request(req);
+		crate::http::mark_sensitive_headers(req, &client.inputs.cfg.sensitive_headers);
 		Ok(crate::http::PolicyResponse::default())
 	}
 
@@ -412,11 +413,12 @@ impl crate::store::RequestPolicyTrait for Transformation {
 impl store::BackendPolicyTrait for Transformation {
 	async fn apply(
 		&self,
-		_client: &PolicyClient,
+		client: &PolicyClient,
 		_log: &mut Option<&mut RequestLog>,
 		req: &mut Request,
 	) -> Result<PolicyResponse, ProxyResponse> {
 		self.apply_request(req);
+		crate::http::mark_sensitive_headers(req, &client.inputs.cfg.sensitive_headers);
 		Ok(crate::http::PolicyResponse::default())
 	}
 }

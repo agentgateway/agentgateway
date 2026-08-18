@@ -59,6 +59,7 @@
 |`config.session.key`|string|The AES-256-GCM session protection key to be used for session tokens.<br>If not set, sessions will not be encrypted.<br>For example, generated via `openssl rand -hex 32`.|
 |`config.mcp`|object|MCP gateway settings.|
 |`config.mcp.sessionTtl`|string|Time to live for MCP sessions before they are closed automatically. Defaults to 30 minutes.|
+|`config.sensitiveHeaders`|[]string|Additional request headers whose values should be redacted from trace and debug output.|
 |`config.customFunctions`|string|Custom CEL functions available to all CEL expressions. These can define re-usable snippets that<br>can be used in any expressions.<br>Configure as a block string containing one or more definitions, for example:<br>`customFunctions: |`<br>`  isInternal() { request.headers["x-env"] == "internal" }`<br>`  this.joined(prefix, parts...) { prefix + this + parts.join("") }`|
 |`config.connectionTerminationDeadline`|string|Maximum time to wait for connections to close gracefully during shutdown.|
 |`config.connectionMinTerminationDeadline`|string|Minimum time to allow for graceful connection termination. Defaults to zero.|

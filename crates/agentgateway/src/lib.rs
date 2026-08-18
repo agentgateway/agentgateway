@@ -15,6 +15,7 @@ use indexmap::IndexMap;
 pub use schemars::JsonSchema;
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
+use serde_with::serde_as;
 pub use serdes::*;
 
 use crate::store::Stores;
@@ -204,6 +205,10 @@ pub struct RawConfig {
 
 	/// MCP gateway settings.
 	mcp: Option<RawMcpConfig>,
+
+	/// Additional request headers whose values should be redacted from trace and debug output.
+	#[serde(default)]
+	sensitive_headers: Vec<String>,
 
 	/// Custom CEL functions available to all CEL expressions. These can define re-usable snippets that
 	/// can be used in any expressions.
@@ -597,6 +602,7 @@ impl schemars::JsonSchema for StringBoolFloat {
 	}
 }
 
+#[serde_as]
 #[derive(serde::Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Config {
@@ -626,6 +632,8 @@ pub struct Config {
 	pub logging: crate::telemetry::log::Config,
 	pub database: Option<telemetry::log_store::Config>,
 	pub storage: StorageConfig,
+	#[serde_as(as = "Vec<serde_with::DisplayFromStr>")]
+	pub sensitive_headers: Vec<::http::HeaderName>,
 
 	pub dns: client::Config,
 	pub proxy_metadata: ProxyMetadata,
