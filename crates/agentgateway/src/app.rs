@@ -95,6 +95,7 @@ pub async fn run(
 	let model_catalog = crate::llm::cost::ModelCatalog::new(model_catalog_sources).await?;
 
 	let (xds_tx, xds_rx) = tokio::sync::watch::channel(());
+	let config_reload_status = Arc::new(state_manager::ConfigReloadStatus::default());
 	let state_mgr = state_manager::StateManager::new(
 		config.clone(),
 		control_client.clone(),
@@ -102,6 +103,7 @@ pub async fn run(
 		xds_tx,
 		config_resource_store.clone(),
 		model_catalog.clone(),
+		config_reload_status.clone(),
 	)
 	.await?;
 	let stores = state_mgr.stores();
@@ -127,6 +129,7 @@ pub async fn run(
 		shutdown.trigger(),
 		drain_rx.clone(),
 		data_plane_handle.clone(),
+		config_reload_status,
 	)
 	.await
 	.context("admin server starts")?;

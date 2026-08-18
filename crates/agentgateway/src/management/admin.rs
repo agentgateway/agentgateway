@@ -79,6 +79,7 @@ struct AdminState {
 	shutdown_trigger: signal::ShutdownTrigger,
 	#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 	dataplane_handle: Handle,
+	config_reload_status: Arc<crate::state_manager::ConfigReloadStatus>,
 }
 
 pub struct Service {
@@ -130,6 +131,7 @@ impl Service {
 		shutdown_trigger: signal::ShutdownTrigger,
 		drain_rx: DrainWatcher,
 		dataplane_handle: Handle,
+		config_reload_status: Arc<crate::state_manager::ConfigReloadStatus>,
 	) -> anyhow::Result<Self> {
 		let state = Arc::new(AdminState {
 			config,
@@ -139,6 +141,7 @@ impl Service {
 			resource_manager,
 			shutdown_trigger,
 			dataplane_handle,
+			config_reload_status,
 		});
 		let service = AdminService {
 			router: admin_router(state.clone()),
@@ -200,6 +203,7 @@ fn admin_router(state: Arc<AdminState>) -> Router {
 			state.model_catalog.clone(),
 			state.config_resource_store.clone(),
 			state.resource_manager.clone(),
+			state.config_reload_status.clone(),
 		))
 	} else {
 		router.route("/", get(handle_dashboard))

@@ -3,6 +3,8 @@ use std::time::Duration;
 
 use agent_core::prelude::*;
 use agent_core::readiness;
+use arc_swap::ArcSwapOption;
+use chrono::{DateTime, Utc};
 
 use crate::client::Client;
 use crate::store::Stores;
@@ -11,6 +13,51 @@ use crate::types::discovery::SelfIdentitySource;
 use crate::types::proto::agent::Resource as ADPResource;
 use crate::types::proto::workload::Address as XdsAddress;
 use crate::{ConfigSource, ConfigStoreMode, client, config_store, control, store};
+
+#[derive(Debug)]
+pub struct AppliedConfig {
+	pub content: String,
+	pub applied_at: DateTime<Utc>,
+}
+
+#[derive(Debug)]
+pub struct ReloadError {
+	pub message: String,
+	pub occurred_at: DateTime<Utc>,
+}
+
+/// Tracks the outcome of the local config reload pipeline so API consumers can distinguish
+/// the currently-applied config from a rejected on-disk edit.
+#[derive(Debug, Default)]
+pub struct ConfigReloadStatus {
+	applied: ArcSwapOption<AppliedConfig>,
+	last_error: ArcSwapOption<ReloadError>,
+}
+
+impl ConfigReloadStatus {
+	fn record_applied(&self, content: String) {
+		self.applied.store(Some(Arc::new(AppliedConfig {
+			content,
+			applied_at: Utc::now(),
+		})));
+		self.last_error.store(None);
+	}
+
+	fn record_error(&self, message: String) {
+		self.last_error.store(Some(Arc::new(ReloadError {
+			message,
+			occurred_at: Utc::now(),
+		})));
+	}
+
+	pub fn applied(&self) -> Option<Arc<AppliedConfig>> {
+		self.applied.load_full()
+	}
+
+	pub fn last_error(&self) -> Option<Arc<ReloadError>> {
+		self.last_error.load_full()
+	}
+}
 
 #[derive(serde::Serialize)]
 pub struct StateManager {
@@ -38,6 +85,7 @@ impl StateManager {
 		awaiting_ready: tokio::sync::watch::Sender<()>,
 		config_resource_store: Option<config_store::ConfigResourceStore>,
 		model_catalog: Arc<crate::llm::cost::ModelCatalog>,
+		reload_status: Arc<ConfigReloadStatus>,
 	) -> anyhow::Result<Self> {
 		let xds = &config.xds;
 		let stores = Stores::new_with_dynamic_ca_cert_cache(
@@ -95,6 +143,7 @@ impl StateManager {
 					port: None,
 				},
 				metrics: config_metrics,
+				reload_status,
 			};
 			Box::pin(local_client.run()).await?;
 		}
@@ -133,6 +182,7 @@ pub struct LocalClient {
 	pub resource_manager: crate::resource_manager::ResourceManager,
 	pub gateway: ListenerTarget,
 	pub metrics: Arc<agent_xds::Metrics>,
+	pub reload_status: Arc<ConfigReloadStatus>,
 }
 
 impl LocalClient {
@@ -279,6 +329,8 @@ impl LocalClient {
 				.sync_local(config.services, config.workloads, prev.discovery)?;
 		let next_binds = bind_result?;
 
+		self.reload_status.record_applied(config_content);
+
 		Ok(PreviousState {
 			binds: next_binds,
 			discovery: next_discovery,
@@ -305,6 +357,7 @@ impl LocalClient {
 			Err(e) => {
 				self.metrics.config_synchronized.set(0);
 				error!("Failed to reload config: {}", e);
+				self.reload_status.record_error(e.to_string());
 				prev
 			},
 		}
@@ -617,6 +670,7 @@ frontendPolicies:
 			resource_manager,
 			gateway: config.gateway(),
 			metrics,
+			reload_status: Arc::new(ConfigReloadStatus::default()),
 		};
 
 		local_client.run().await.unwrap();

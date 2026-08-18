@@ -37,6 +37,7 @@ struct App {
 	config_resource_store: Option<ConfigResourceStore>,
 	resource_manager: crate::resource_manager::ResourceManager,
 	model_catalog: Arc<ModelCatalog>,
+	reload_status: Arc<crate::state_manager::ConfigReloadStatus>,
 }
 
 impl App {
@@ -84,6 +85,7 @@ pub fn router(
 	model_catalog: Arc<ModelCatalog>,
 	config_resource_store: Option<ConfigResourceStore>,
 	resource_manager: crate::resource_manager::ResourceManager,
+	reload_status: Arc<crate::state_manager::ConfigReloadStatus>,
 ) -> Router {
 	let ui_service = tower::service_fn(move |req| serve_ui_asset(req, &ASSETS_DIR));
 	Router::new()
@@ -91,6 +93,7 @@ pub fn router(
 		.route("/api/runtime", get(get_runtime))
 		.route("/api/config", get(get_config).post(write_config))
 		.route("/api/config/effective", get(get_effective_config))
+		.route("/api/config/status", get(get_config_status))
 		.route("/api/config/resources", get(list_config_resources))
 		.route(
 			"/api/config/resources/{kind}",
@@ -116,6 +119,7 @@ pub fn router(
 			config_resource_store,
 			resource_manager,
 			model_catalog,
+			reload_status,
 		})
 }
 
@@ -293,7 +297,7 @@ async fn get_config(State(app): State<App>) -> Result<Json<Value>, ErrorResponse
 }
 
 async fn get_effective_config(State(app): State<App>) -> Result<Json<Value>, ErrorResponse> {
-	let base = app.cfg()?.read_to_string().await?;
+	let base = current_config_content(&app).await?;
 	let config = if app.state.storage.mode == ConfigStoreMode::Hybrid {
 		let resources = app
 			.config_resource_store()?
@@ -306,6 +310,36 @@ async fn get_effective_config(State(app): State<App>) -> Result<Json<Value>, Err
 	};
 	let value = yamlviajson::from_str(&config).map_err(ErrorResponse::Anyhow)?;
 	Ok(Json(value))
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ConfigReloadStatusResponse {
+	applied_at: Option<chrono::DateTime<Utc>>,
+	last_error: Option<ConfigReloadErrorResponse>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ConfigReloadErrorResponse {
+	message: String,
+	occurred_at: chrono::DateTime<Utc>,
+}
+
+async fn get_config_status(State(app): State<App>) -> Json<ConfigReloadStatusResponse> {
+	Json(ConfigReloadStatusResponse {
+		applied_at: app
+			.reload_status
+			.applied()
+			.map(|applied| applied.applied_at),
+		last_error: app
+			.reload_status
+			.last_error()
+			.map(|error| ConfigReloadErrorResponse {
+				message: error.message.clone(),
+				occurred_at: error.occurred_at,
+			}),
+	})
 }
 
 async fn write_config(
@@ -388,8 +422,21 @@ async fn list_stored_config_resources(
 	Ok(ConfigResourcesResponse { resources }.into())
 }
 
+/// The config content currently in effect: the last successfully-applied reload when one
+/// exists, falling back to a fresh disk read for xds mode or before the first reload completes.
+async fn current_config_content(app: &App) -> Result<String, ErrorResponse> {
+	match app.reload_status.applied() {
+		Some(applied) => Ok(applied.content.clone()),
+		None => app
+			.cfg()?
+			.read_to_string()
+			.await
+			.map_err(ErrorResponse::Anyhow),
+	}
+}
+
 async fn read_file_config(app: &App) -> Result<Value, ErrorResponse> {
-	let config = app.cfg()?.read_to_string().await?;
+	let config = current_config_content(app).await?;
 	yamlviajson::from_str(&config).map_err(ErrorResponse::Anyhow)
 }
 
@@ -914,6 +961,7 @@ mod tests {
 			resource_manager: crate::resource_manager::ResourceManager::new(client)
 				.expect("resource manager"),
 			model_catalog: Arc::new(crate::llm::cost::ModelCatalog::default()),
+			reload_status: Arc::new(crate::state_manager::ConfigReloadStatus::default()),
 		}
 	}
 
