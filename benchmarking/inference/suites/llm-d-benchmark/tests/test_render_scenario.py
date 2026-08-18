@@ -48,8 +48,6 @@ class RenderScenarioTest(unittest.TestCase):
                 "h100",
                 "--backend-type",
                 "vllm",
-                "--harness",
-                "inference-perf",
                 "--router-chart-version",
                 "v0.9.0",
                 "--model",

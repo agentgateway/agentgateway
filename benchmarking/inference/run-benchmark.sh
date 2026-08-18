@@ -15,7 +15,7 @@
 # BENCHMARK_REPETITION (positive campaign repetition; default: 1),
 # BENCHMARK_ACCELERATOR_TYPE and BENCHMARK_BACKEND_TYPE (default together to
 # sim and inference-sim), BENCHMARK_ACCELERATOR_MODEL (default: auto),
-# BENCHMARK_HARNESS (inference-perf or guidellm; default: inference-perf),
+# BENCHMARK_HARNESS (must be inference-perf; default: inference-perf),
 # BENCHMARK_ROUTER_CHART_VERSION (immutable standalone chart; default: v0.9.0),
 # BENCHMARK_ROUTING_POLICY (default, optimized-baseline, cache-only, or
 # load-only; default: default),
@@ -157,10 +157,6 @@ resolve_workload() {
     WORKLOAD="${BENCHMARK_WORKLOAD}"
     return
   else
-    if [[ "${BENCHMARK_HARNESS}" == "guidellm" ]]; then
-      WORKLOAD="sanity_random.yaml"
-      return
-    fi
     case "${BENCHMARK_ROUTING_POLICY}" in
       optimized-baseline|cache-only)
         WORKLOAD_FILE_PATH="${SUITE_DIR}/workloads/${BENCHMARK_WORKLOAD_VARIANT}-optimized-baseline.yaml.in"
@@ -517,14 +513,9 @@ validate_configuration() {
     *) log "unsupported BENCHMARK_WORKLOAD_VARIANT: ${BENCHMARK_WORKLOAD_VARIANT}"; return 2 ;;
   esac
   case "${BENCHMARK_HARNESS}" in
-    inference-perf|guidellm) ;;
-    *) log "unsupported BENCHMARK_HARNESS: ${BENCHMARK_HARNESS}"; return 2 ;;
+    inference-perf) ;;
+    *) log "unsupported BENCHMARK_HARNESS=${BENCHMARK_HARNESS}; only inference-perf is implemented"; return 2 ;;
   esac
-  if [[ "${BENCHMARK_HARNESS}" != "inference-perf" && \
-      "${BENCHMARK_ROUTING_POLICY}" != "default" ]]; then
-    log "BENCHMARK_ROUTING_POLICY=${BENCHMARK_ROUTING_POLICY} requires BENCHMARK_HARNESS=inference-perf"
-    return 2
-  fi
   if [[ ! "${BENCHMARK_ROUTER_CHART_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     log "BENCHMARK_ROUTER_CHART_VERSION must be an immutable vMAJOR.MINOR.PATCH release"
     return 2
@@ -631,11 +622,6 @@ validate_configuration() {
   if [[ "${GPU_RELEASE_POLICY}" != "never" && \
       "${BENCHMARK_CLUSTER_PROVIDER}/${BENCHMARK_ACCELERATOR_TYPE}" != "gke/gpu" ]]; then
     log "BENCHMARK_GPU_RELEASE_POLICY=${GPU_RELEASE_POLICY} requires a GKE GPU benchmark"
-    return 2
-  fi
-  if [[ "${GPU_RELEASE_POLICY}" == "after-load" && \
-      "${BENCHMARK_HARNESS}" != "inference-perf" ]]; then
-    log "BENCHMARK_GPU_RELEASE_POLICY=after-load requires BENCHMARK_HARNESS=inference-perf"
     return 2
   fi
   if [[ "${GPU_RELEASE_POLICY}" != "never" && -z "${GKE_GPU_NODEPOOL}" ]]; then
@@ -1031,7 +1017,6 @@ render_scenario() {
     --routing-policy "${BENCHMARK_ROUTING_POLICY}"
     --gateway-image "${AGW_IMAGE}"
     --agentgateway-version "${AGW_VERSION}"
-    --harness "${BENCHMARK_HARNESS}"
     --router-chart-version "${BENCHMARK_ROUTER_CHART_VERSION}"
     --workload "${WORKLOAD}"
     --accelerator-type "${BENCHMARK_ACCELERATOR_TYPE}"
@@ -2071,36 +2056,6 @@ print(stage)
 PY
 }
 
-prepare_guidellm_reports() {
-  # This helper is invoked after every successful harness run. Skipping the
-  # GuideLLM-only conversion must return success; a bare `return` here would
-  # preserve the failed conditional's status and make an inference-perf run
-  # fail after its results were already collected.
-  [[ "${BENCHMARK_HARNESS}" == "guidellm" ]] || return 0
-  local -a results=()
-  while IFS= read -r result; do
-    results+=("${result}")
-  done < <(
-    find "$(workspace_dir)" -type f -path '*/results/guidellm-*/results.json' \
-      -print | sort
-  )
-  if (( ${#results[@]} != 1 )); then
-    log "expected one GuideLLM results.json, found ${#results[@]}"
-    return 1
-  fi
-  local source_dir template
-  source_dir="$(dirname "${results[0]}")"
-  template="${source_dir}/benchmark_report_v0.2,_results.json.yaml"
-  [[ -f "${template}" ]] || {
-    log "missing GuideLLM point-0 Benchmark Report: ${template}"
-    return 1
-  }
-  "${LLM_D_BENCHMARK_DIR}/.venv/bin/python" \
-    "${AGTW_BENCHMARKING_DIR}/scripts/export-guidellm-reports.py" \
-    --results "${results[0]}" --template "${template}" \
-    --output-dir "${source_dir}"
-}
-
 # llm-d-benchmark writes reports below its per-invocation temporary workspace.
 # Persist enriched copies in a self-contained Prism bundle instead of publishing
 # paths back into that temporary tree. Prism reads the v0.2 standardized stack
@@ -2325,36 +2280,26 @@ write_prism_supporting_artifacts() {
   cp "${SPEC_DIR}/scenario.yaml" "${artifact_dir}/benchmark-scenario.yaml"
   cp "${source_dir}/config.yaml" "${artifact_dir}/config.yaml"
   cp "${source_dir}/run_metadata.yaml" "${artifact_dir}/run_metadata.yaml"
-  cp "${source_dir}/stdout.log" "${artifact_dir}/${BENCHMARK_HARNESS}-stdout.log"
-  cp "${source_dir}/stderr.log" "${artifact_dir}/${BENCHMARK_HARNESS}-stderr.log"
-  if [[ "${BENCHMARK_HARNESS}" == "inference-perf" ]]; then
-    [[ -f "${source_dir}/summary_lifecycle_metrics.json" ]] || {
-      log "missing inference-perf summary: ${source_dir}/summary_lifecycle_metrics.json"
+  cp "${source_dir}/stdout.log" "${artifact_dir}/inference-perf-stdout.log"
+  cp "${source_dir}/stderr.log" "${artifact_dir}/inference-perf-stderr.log"
+  [[ -f "${source_dir}/summary_lifecycle_metrics.json" ]] || {
+    log "missing inference-perf summary: ${source_dir}/summary_lifecycle_metrics.json"
+    return 1
+  }
+  cp "${source_dir}/summary_lifecycle_metrics.json" \
+    "${artifact_dir}/summary_lifecycle_metrics.json"
+  if [[ "${BENCHMARK_WORKLOAD_VARIANT}" == "upstream" ]]; then
+    local per_request_source="${source_dir}/per_request_lifecycle_metrics.json"
+    local per_request_archive="${artifact_dir}/per_request_lifecycle_metrics.json.gz"
+    [[ -s "${per_request_source}" ]] || {
+      log "missing or empty upstream per-request evidence: ${per_request_source}"
       return 1
     }
-    cp "${source_dir}/summary_lifecycle_metrics.json" \
-      "${artifact_dir}/summary_lifecycle_metrics.json"
-    if [[ "${BENCHMARK_WORKLOAD_VARIANT}" == "upstream" ]]; then
-      local per_request_source="${source_dir}/per_request_lifecycle_metrics.json"
-      local per_request_archive="${artifact_dir}/per_request_lifecycle_metrics.json.gz"
-      [[ -s "${per_request_source}" ]] || {
-        log "missing or empty upstream per-request evidence: ${per_request_source}"
-        return 1
-      }
-      # The upstream Qwen3-32B sweep can produce a 15+ GiB JSON document.
-      # Preserve every request losslessly, but compress it so three-treatment
-      # campaigns and their CI artifacts do not require tens of GiB each.
-      gzip -c "${per_request_source}" > "${per_request_archive}"
-      gzip -t "${per_request_archive}"
-    fi
-  else
-    [[ -f "${source_dir}/results.json" ]] || {
-      log "missing GuideLLM result: ${source_dir}/results.json"
-      return 1
-    }
-    cp "${source_dir}/results.json" "${artifact_dir}/guidellm-results.json"
-    [[ ! -f "${source_dir}/summary.txt" ]] || \
-      cp "${source_dir}/summary.txt" "${artifact_dir}/guidellm-summary.txt"
+    # The upstream Qwen3-32B sweep can produce a 15+ GiB JSON document.
+    # Preserve every request losslessly, but compress it so three-treatment
+    # campaigns and their CI artifacts do not require tens of GiB each.
+    gzip -c "${per_request_source}" > "${per_request_archive}"
+    gzip -t "${per_request_archive}"
   fi
   if [[ -f "${SPEC_DIR}/standalone-invariant.yaml" ]]; then
     cp "${SPEC_DIR}/standalone-invariant.yaml" \
@@ -2764,8 +2709,6 @@ PY
     log "runtime metrics collection failed"
     return "${metrics_status}"
   fi
-  prepare_guidellm_reports
-
   log "writing standardized benchmark reports and native evidence"
   local hardware_model
   hardware_model="$(detect_hardware_model)"
@@ -2785,15 +2728,9 @@ PY
     local report_name
     report_name="$(basename "${report}")"
     local point output_report
-    if [[ "${BENCHMARK_HARNESS}" == "inference-perf" ]]; then
-      [[ "${report_name}" =~ ^benchmark_report_v0\.2,_stage_[0-9]+_lifecycle_metrics\.json\.yaml$ ]] || continue
-      point="$(report_stage "${report}")"
-      output_report="${staging_artifact_dir}/benchmark_report_v0.2,_${TREATMENT_ID}_stage_${point}_lifecycle_metrics.json.yaml"
-    else
-      [[ "${report_name}" =~ ^benchmark_report_v0\.2,_guidellm_run_([0-9]+)\.yaml$ ]] || continue
-      point="${BASH_REMATCH[1]}"
-      output_report="${staging_artifact_dir}/benchmark_report_v0.2,_${TREATMENT_ID}_guidellm_run_${point}.yaml"
-    fi
+    [[ "${report_name}" =~ ^benchmark_report_v0\.2,_stage_[0-9]+_lifecycle_metrics\.json\.yaml$ ]] || continue
+    point="$(report_stage "${report}")"
+    output_report="${staging_artifact_dir}/benchmark_report_v0.2,_${TREATMENT_ID}_stage_${point}_lifecycle_metrics.json.yaml"
     if [[ -e "${output_report}" ]]; then
       log "multiple ${TREATMENT_ID} reports claim ${BENCHMARK_HARNESS} point ${point}"
       return 1

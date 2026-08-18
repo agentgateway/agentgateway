@@ -153,7 +153,6 @@ def parser() -> argparse.ArgumentParser:
     )
     result.add_argument("--gateway-image", default="")
     result.add_argument("--agentgateway-version", default="")
-    result.add_argument("--harness", choices=("inference-perf", "guidellm"), required=True)
     result.add_argument("--router-chart-version", required=True)
     result.add_argument("--workload", required=True)
     result.add_argument("--accelerator-type", required=True)
@@ -201,7 +200,7 @@ def main() -> None:
     method = scenario.setdefault("modelservice", {})
     method["enabled"] = True
     harness = common.setdefault("harness", {})
-    harness["name"] = args.harness
+    harness["name"] = "inference-perf"
     harness["experimentProfile"] = args.workload
     # Both standalone proxy treatments must use the same immutable router
     # chart. Keeping the pin in the rendered scenario makes the comparison

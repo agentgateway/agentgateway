@@ -495,7 +495,7 @@ links.
 | `BENCHMARK_CLUSTER_PROVIDER` | `kind` |
 | `BENCHMARK_ACCELERATOR_TYPE` / `BENCHMARK_BACKEND_TYPE` | `sim` / `inference-sim` |
 | `BENCHMARK_ROUTER_MODE` | Derived from treatment |
-| `BENCHMARK_HARNESS` | `inference-perf` |
+| `BENCHMARK_HARNESS` | `inference-perf` (only supported value) |
 | `BENCHMARK_WORKLOAD_VARIANT` | `upstream` |
 | `BENCHMARK_RUNTIME_METRICS` | `true` |
 | `BENCHMARK_GKE_MONITORING` | `auto` |
@@ -503,6 +503,11 @@ links.
 | `BENCHMARK_GPU_RELEASE_POLICY` | `never` |
 | `BENCHMARK_GKE_GPU_NODEPOOL` | `gpu-h100` |
 | `BENCHMARK_MODEL_CACHE_POLICY` | `ephemeral` |
+
+Inference-perf is the only implemented harness. GuideLLM should be added only
+with complete campaign defaults, report ingestion, GPU release behavior,
+documentation, and end-to-end coverage; selecting it currently fails before
+any benchmark resources are changed.
 
 Provider-specific storage profiles use provider-prefixed low-level variables.
 For example, the GKE high-throughput shared model profile resolves to

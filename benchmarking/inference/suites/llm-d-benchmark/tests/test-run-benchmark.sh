@@ -173,21 +173,15 @@ BENCHMARK_ROUTING_POLICY=load-only bash -c '
 
 echo "routing workload tests passed"
 
-BENCHMARK_HARNESS=guidellm bash -c '
-  source "$1"
-  resolve_workload
-  [[ "$WORKLOAD" == sanity_random.yaml ]]
-  [[ -z "$WORKLOAD_FILE_PATH" ]]
-' _ "${RUNNER}"
+if harness_error="$(BENCHMARK_TREATMENT=service \
+    BENCHMARK_CAMPAIGN_ID=test-campaign BENCHMARK_HARNESS=guidellm \
+    bash -c 'source "$1"; validate_configuration' _ "${RUNNER}" 2>&1)"; then
+  echo "GuideLLM was unexpectedly accepted" >&2
+  exit 1
+fi
+grep -q 'only inference-perf is implemented' <<<"${harness_error}"
 
-echo "GuideLLM workload tests passed"
-
-BENCHMARK_HARNESS=inference-perf bash -c '
-  source "$1"
-  prepare_guidellm_reports
-' _ "${RUNNER}"
-
-echo "non-GuideLLM report preparation skip test passed"
+echo "unsupported harness test passed"
 
 BENCHMARK_RUNTIME_METRICS=false \
 BENCHMARK_GKE_MONITORING=off \
