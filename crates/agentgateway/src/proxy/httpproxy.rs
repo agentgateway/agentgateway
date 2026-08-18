@@ -2537,6 +2537,13 @@ async fn make_backend_call(
 			l.request_processing_duration = Some(l.request_processing_start.elapsed());
 		}
 	});
+	let _upstream_span: Box<log::SpanWriteOnDrop> = Box::new(
+		log
+			.as_ref()
+			.map(|l| l.span_writer())
+			.unwrap_or_default()
+			.start_client(call.target.to_string()),
+	);
 	let resp = upstream.call(call).await;
 	let outbound_end = Instant::now();
 	log.add(|l| {

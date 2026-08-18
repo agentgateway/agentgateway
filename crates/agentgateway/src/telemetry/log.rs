@@ -2114,7 +2114,13 @@ pub struct SpanWriter {
 impl SpanWriter {
 	pub fn start(&self, name: impl Into<Cow<'static, str>>) -> SpanWriteOnDrop {
 		match &self.inner {
-			Some(i) => i.start(name),
+			Some(i) => i.start(name, SpanKind::Server),
+			None => SpanWriteOnDrop::default(),
+		}
+	}
+	pub fn start_client(&self, name: impl Into<Cow<'static, str>>) -> SpanWriteOnDrop {
+		match &self.inner {
+			Some(i) => i.start(name, SpanKind::Client),
 			None => SpanWriteOnDrop::default(),
 		}
 	}
@@ -2127,12 +2133,12 @@ pub struct SpanWriterInner {
 }
 
 impl SpanWriterInner {
-	pub fn start(&self, name: impl Into<Cow<'static, str>>) -> SpanWriteOnDrop {
+	fn start(&self, name: impl Into<Cow<'static, str>>, kind: SpanKind) -> SpanWriteOnDrop {
 		// Create a unique child span ID for this recorded span.
 		let child = self.parent.new_span();
-
 		SpanWriteOnDrop {
 			name: Some(name.into()),
+			kind,
 			start_time: Some(SystemTime::now()),
 			inner: self.inner.clone(),
 			parent: Some(self.parent.clone()),
@@ -2141,13 +2147,25 @@ impl SpanWriterInner {
 	}
 }
 
-#[derive(Default)]
 pub struct SpanWriteOnDrop {
 	name: Option<Cow<'static, str>>,
+	kind: SpanKind,
 	start_time: Option<SystemTime>,
 	inner: Arc<Mutex<Vec<BufferedSpan>>>,
 	parent: Option<trc::TraceParent>,
 	span: Option<trc::TraceParent>,
+}
+impl Default for SpanWriteOnDrop {
+	fn default() -> Self {
+		Self {
+			name: None,
+			kind: SpanKind::Server,
+			start_time: None,
+			inner: Arc::default(),
+			parent: None,
+			span: None,
+		}
+	}
 }
 impl SpanWriteOnDrop {
 	pub fn rename_span(&mut self, name: impl Into<Cow<'static, str>>) {
@@ -2169,7 +2187,7 @@ impl Drop for SpanWriteOnDrop {
 		if let Ok(mut spans) = self.inner.lock() {
 			spans.push(BufferedSpan {
 				name,
-				span_kind: SpanKind::Server,
+				span_kind: self.kind.clone(),
 				start_time: self.start_time.unwrap_or(end_time),
 				end_time,
 				attributes: Vec::new(),
@@ -2325,6 +2343,30 @@ mod tests {
 		assert_eq!(child.parent_span_id, outgoing.span_id.into());
 		assert_eq!(child.span_context.trace_id(), outgoing.trace_id.into());
 		assert!(child.parent_span_is_remote);
+	}
+
+	#[test]
+	fn span_writer_start_client_flushes_span_as_client_kind() {
+		let (tracer, exporter) = test_tracer();
+		let mut request = test_request_log();
+		request.tracer = Some(tracer.clone());
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		request.outgoing_span = Some(outgoing.clone());
+		{
+			let _span = request
+				.span_writer()
+				.start_client("bedrock-runtime.eu-central-1.amazonaws.com:443");
+		}
+		drop(DropOnLog::from(request));
+		let _ = tracer.provider.force_flush();
+		let spans = exporter.finished_spans();
+		let child = spans
+			.iter()
+			.find(|span| span.name.as_ref() == "bedrock-runtime.eu-central-1.amazonaws.com:443")
+			.expect("client span should be exported");
+		assert_eq!(child.span_kind, SpanKind::Client);
+		assert_eq!(child.parent_span_id, outgoing.span_id.into());
 	}
 
 	#[test]
