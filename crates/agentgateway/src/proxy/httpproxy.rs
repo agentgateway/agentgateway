@@ -301,6 +301,7 @@ async fn apply_request_policies(
 		.await?;
 
 	// Mirror is handled separately
+	crate::http::mark_sensitive_headers(req, &c.inputs.cfg.sensitive_headers);
 	Ok(route_retry)
 }
 
@@ -400,6 +401,7 @@ async fn apply_backend_policies(
 		rp.a2a_type = a2a_type;
 	}
 
+	crate::http::mark_sensitive_headers(req, &client.inputs.cfg.sensitive_headers);
 	Ok(())
 }
 
@@ -482,6 +484,7 @@ async fn apply_gateway_policies(
 		)
 		.await?;
 
+	crate::http::mark_sensitive_headers(req, &client.inputs.cfg.sensitive_headers);
 	Ok(())
 }
 

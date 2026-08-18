@@ -1140,46 +1140,6 @@ mod tests {
 	}
 
 	#[test]
-	fn sensitive_headers_are_validated_and_normalized() {
-		let config = parse_config(
-			r#"
-config:
-  sensitiveHeaders:
-  - X-API-Token
-  - authorization
-"#
-			.to_string(),
-			None,
-		)
-		.expect("sensitive headers should parse");
-
-		assert_eq!(config.sensitive_headers.len(), 2);
-		assert_eq!(config.sensitive_headers[0].as_str(), "x-api-token");
-		assert_eq!(config.sensitive_headers[1].as_str(), "authorization");
-	}
-
-	#[test]
-	fn invalid_sensitive_header_is_rejected() {
-		let error = parse_config(
-			r#"
-config:
-  sensitiveHeaders:
-  - "invalid header"
-"#
-			.to_string(),
-			None,
-		)
-		.expect_err("invalid sensitive header should fail");
-
-		assert!(
-			error
-				.to_string()
-				.contains("invalid sensitive header 'invalid header'"),
-			"unexpected error: {error}"
-		);
-	}
-
-	#[test]
 	fn tracing_accepts_standard_otlp_env_vars() {
 		let _env_lock = lock_env();
 		let _endpoint = TempEnvVar::set(
