@@ -20,6 +20,28 @@ def display_name(name: str) -> str:
     return names.get(name, name.replace("-", " "))
 
 
+def agentgateway_mode_note(name: str) -> str | None:
+    notes = {
+        "agentgateway-standalone": (
+            "**agentgateway mode:** In standalone request scheduler mode, "
+            "agentgateway runs as a sidecar proxy with the EPP and communicates "
+            "with it over localhost, without a full Gateway API stack. "
+            "[Learn more about standalone inference routing]"
+            "(https://agentgateway.dev/docs/standalone/latest/inference/"
+            "#standalone-request-scheduler-mode)."
+        ),
+        "agentgateway-gateway": (
+            "**agentgateway mode:** In Kubernetes Gateway API mode, agentgateway "
+            "is the Gateway data plane; an HTTPRoute targets an InferencePool, "
+            "whose EPP selects the model-server endpoint. "
+            "[Learn more about Kubernetes inference routing]"
+            "(https://agentgateway.dev/docs/kubernetes/latest/llm/inference/"
+            "inference-routing/)."
+        ),
+    }
+    return notes.get(name)
+
+
 def percent_delta(candidate: float, baseline: float) -> str:
     if not math.isfinite(candidate) or not math.isfinite(baseline) or baseline == 0:
         return "n/a"
@@ -31,6 +53,80 @@ def fmt(value: float, digits: int = 2) -> str:
     if not math.isfinite(value):
         return "n/a"
     return f"{value:,.{digits}f}"
+
+
+def itl_interpretation(
+    baseline: TreatmentResults,
+    candidate: TreatmentResults,
+    baseline_peak: float,
+    candidate_peak: float,
+) -> list[str]:
+    """Explain a lower Service ITL without presenting it as overall latency."""
+    if baseline.name != "service":
+        return []
+
+    baseline_top = baseline.stages[-1]
+    candidate_top = candidate.stages[-1]
+    compared_values = (
+        baseline_top.itl_p50_seconds,
+        candidate_top.itl_p50_seconds,
+    )
+    if not all(math.isfinite(value) for value in compared_values):
+        return []
+    if baseline_top.itl_p50_seconds >= candidate_top.itl_p50_seconds:
+        return []
+
+    b_name = display_name(baseline.name)
+    c_name = display_name(candidate.name)
+    lines = [
+        "## Interpreting ITL",
+        "",
+        f"At rate {baseline_top.requested_qps:g}, {b_name} has a lower p50 ITL "
+        f"({fmt(baseline_top.itl_p50_seconds * 1000, 1)} ms) than {c_name} "
+        f"({fmt(candidate_top.itl_p50_seconds * 1000, 1)} ms). ITL measures token "
+        "cadence only after the first response token; time waiting to enter prefill "
+        "or decode appears in TTFT instead. Lower ITL therefore does not by itself "
+        "mean better overall inference latency.",
+        "",
+    ]
+
+    tradeoff_values = (
+        baseline_top.ttft_p50_seconds,
+        candidate_top.ttft_p50_seconds,
+        baseline_peak,
+        candidate_peak,
+    )
+    if (
+        all(math.isfinite(value) for value in tradeoff_values)
+        and candidate_top.ttft_p50_seconds < baseline_top.ttft_p50_seconds
+        and candidate_peak > baseline_peak
+    ):
+        tradeoff = (
+            f"Here, {b_name} peaks at {fmt(baseline_peak, 0)} output tokens/s and "
+            f"has {fmt(baseline_top.ttft_p50_seconds, 1)} s TTFT p50, while "
+            f"{c_name} reaches {fmt(candidate_peak, 0)} output tokens/s with "
+            f"{fmt(candidate_top.ttft_p50_seconds, 1)} s TTFT p50. This is "
+            "consistent with the Service queueing longer while the routed treatment "
+            "keeps more work decoding; vLLM continuous batching can trade higher "
+            "per-stream ITL for greater throughput and lower TTFT."
+        )
+        baseline_low = baseline.stages[0]
+        candidate_low = candidate.stages[0]
+        low_values = (baseline_low.itl_p50_seconds, candidate_low.itl_p50_seconds)
+        if (
+            all(math.isfinite(value) and value > 0 for value in low_values)
+            and 0.9
+            <= candidate_low.itl_p50_seconds / baseline_low.itl_p50_seconds
+            <= 1.1
+        ):
+            tradeoff += (
+                f" At {baseline_low.requested_qps:g} QPS, ITL is "
+                f"{fmt(baseline_low.itl_p50_seconds * 1000, 1)} ms versus "
+                f"{fmt(candidate_low.itl_p50_seconds * 1000, 1)} ms, indicating "
+                "that the larger high-load gap is not a fixed proxy penalty."
+            )
+        lines.extend([tradeoff, ""])
+    return lines
 
 
 def write_csv(path: Path, baseline: TreatmentResults, candidate: TreatmentResults) -> None:
@@ -112,6 +208,15 @@ def write_markdown(
         else f"Comparing {c_name} to {b_name}"
     )
     delta_heading = "Δ% vs k8s" if baseline.name == "service" else f"Δ% vs {b_name}"
+    comparison_description = (
+        f"Graphs below compare {c_name} routing to a stock Kubernetes Service "
+        f"that round-robins requests across the same {identity['replicas']} "
+        f"{backend} pods (no EPP, no scoring). Tables abbreviate this baseline "
+        "as `k8s service (RR)`, where RR means round-robin."
+        if baseline.name == "service"
+        else f"Graphs below compare {c_name} to {b_name} across the same "
+        f"{identity['replicas']} {backend} pods."
+    )
 
     lines = [
         "# Benchmark Report",
@@ -131,10 +236,11 @@ def write_markdown(
         "",
         f"## {comparison_title}",
         "",
-        f"Graphs below compare {c_name} to {b_name} across the same "
-        f"{identity['replicas']} {backend} pods.",
-        "",
     ]
+    mode_note = agentgateway_mode_note(candidate.name)
+    if mode_note:
+        lines.extend([mode_note, ""])
+    lines.extend([comparison_description, ""])
     if include_images:
         lines.extend(
             [
@@ -185,6 +291,18 @@ def write_markdown(
             "out and are excluded from successful-request latency distributions. "
             "Failure counts and rates are retained in `metrics.csv`.",
             "",
+        ]
+    )
+    lines.extend(
+        itl_interpretation(
+            baseline,
+            candidate,
+            baseline_peak,
+            candidate_peak,
+        )
+    )
+    lines.extend(
+        [
             "## Configuration",
             "",
             f"- Campaign: `{manifest['campaign_id']}`",

@@ -78,7 +78,12 @@ def all_failed_report(stage: int, rate: float) -> dict:
 
 
 class GenerateReportTest(unittest.TestCase):
-    def create_campaign(self, root: Path, candidate_rate: float = 10) -> Path:
+    def create_campaign(
+        self,
+        root: Path,
+        candidate_rate: float = 10,
+        candidate_multiplier: float = 1.5,
+    ) -> Path:
         campaign = root / "campaign"
         manifest = {
             "schema_version": 1,
@@ -107,7 +112,7 @@ class GenerateReportTest(unittest.TestCase):
         )
         for treatment, multiplier, measured_rate in (
             ("service", 1.0, 10),
-            ("agentgateway-standalone", 1.5, candidate_rate),
+            ("agentgateway-standalone", candidate_multiplier, candidate_rate),
         ):
             repetition = campaign / "runs" / treatment / "repetition-1"
             repetition.mkdir(parents=True)
@@ -172,6 +177,27 @@ class GenerateReportTest(unittest.TestCase):
             self.assertNotIn("Agentgateway", markdown)
             self.assertIn("<details>", markdown)
             self.assertIn("| Rate | k8s service (RR) Output", markdown)
+            self.assertIn(
+                "a stock Kubernetes Service that round-robins requests",
+                markdown,
+            )
+            self.assertIn("(no EPP, no scoring)", markdown)
+            self.assertIn("where RR means round-robin", markdown)
+            self.assertIn("**agentgateway mode:**", markdown)
+            self.assertIn("standalone request scheduler mode", markdown)
+            self.assertIn(
+                "https://agentgateway.dev/docs/standalone/latest/inference/",
+                markdown,
+            )
+            self.assertIn("## Interpreting ITL", markdown)
+            self.assertIn(
+                "ITL measures token cadence only after the first response token",
+                markdown,
+            )
+            self.assertIn(
+                "Lower ITL therefore does not by itself mean better overall inference latency",
+                markdown,
+            )
             with (report_dir / "metrics.csv").open(encoding="utf-8") as stream:
                 columns = next(csv.reader(stream))
             self.assertIn("input_tokens_per_second", columns)
@@ -186,13 +212,20 @@ class GenerateReportTest(unittest.TestCase):
 
     def test_uses_report_display_names(self) -> None:
         sys.path.insert(0, str(REPORTING))
-        from common.rendering import display_name
+        from common.rendering import agentgateway_mode_note, display_name
 
         self.assertEqual(
             display_name("agentgateway-standalone"), "agentgateway standalone"
         )
         self.assertEqual(
             display_name("agentgateway-gateway"), "agentgateway on Kubernetes"
+        )
+        gateway_note = agentgateway_mode_note("agentgateway-gateway")
+        self.assertIsNotNone(gateway_note)
+        self.assertIn("Kubernetes Gateway API mode", gateway_note)
+        self.assertIn(
+            "https://agentgateway.dev/docs/kubernetes/latest/llm/inference/",
+            gateway_note,
         )
 
     def test_rejects_mismatched_qps_ladders(self) -> None:
@@ -212,6 +245,31 @@ class GenerateReportTest(unittest.TestCase):
             )
             self.assertNotEqual(completed.returncode, 0)
             self.assertIn("QPS ladders differ", completed.stderr)
+
+    def test_omits_itl_explanation_when_service_itl_is_not_lower(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            campaign = self.create_campaign(root, candidate_multiplier=0.5)
+            output = root / "published"
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(GENERATOR),
+                    "--campaign",
+                    str(campaign),
+                    "--comparison",
+                    "service:agentgateway-standalone",
+                    "--output",
+                    str(output),
+                    "--formats",
+                    "markdown",
+                ],
+                check=True,
+            )
+            markdown = (
+                output / "service-vs-agentgateway-standalone" / "README.md"
+            ).read_text(encoding="utf-8")
+            self.assertNotIn("## Interpreting ITL", markdown)
 
     def test_represents_all_failed_stage_without_fabricated_latency(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
