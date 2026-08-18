@@ -744,15 +744,14 @@ async fn llm_custom_provider_messages_to_responses_accepts_cache_control() {
 	assert_eq!(requests.len(), 1);
 	let upstream_body: Value =
 		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
-	assert_eq!(
+	assert!(
 		upstream_body["input"]
 			.as_array()
 			.expect("Responses input should be an array")
 			.iter()
 			.filter_map(|item| item.get("content"))
 			.flat_map(|content| content.as_array().into_iter().flatten())
-			.any(|part| part.get("prompt_cache_breakpoint").is_some()),
-		true
+			.any(|part| part.get("prompt_cache_breakpoint").is_some())
 	);
 }
 
