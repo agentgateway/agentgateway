@@ -804,6 +804,14 @@ func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthenti
 		}
 	}
 
+	if jwt.Introspection != nil {
+		intro, err := translateTokenIntrospection(ctx, jwt.Introspection, policy)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		p.Introspection = intro
+	}
+
 	jwtPolicy := &api.Policy{
 		Key:  basePolicyName + jwtPolicySuffix,
 		Name: TypedResourceFromName(wellknown.AgentgatewayPolicyGVK.Kind, policy),

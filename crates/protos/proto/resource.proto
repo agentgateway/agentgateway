@@ -1056,6 +1056,28 @@ message TrafficPolicySpec {
       optional string client_secret = 4;
     }
 
+    // RFC 7662 Token Introspection configuration for opaque access tokens.
+    // When set, tokens that cannot be parsed as JWTs are validated by POSTing
+    // them to the configured introspection endpoint.
+    message Introspection {
+      // Introspection endpoint URL. Empty means derive from the first provider's
+      // issuer via OIDC discovery (the `introspection_endpoint` field).
+      string url = 1;
+      // OAuth 2.0 client ID used to authenticate the introspection request (RFC 7662 §2.1).
+      string client_id = 2;
+      // OAuth 2.0 client secret for confidential client authentication.
+      // Sent as the password in HTTP Basic authentication to the introspection endpoint.
+      optional string client_secret = 3;
+      // How long a successful introspection result is cached, in seconds. 0 = no caching.
+      int64 cache_duration_seconds = 4;
+      // Timeout for the introspection HTTP request, in seconds.
+      int64 timeout_seconds = 5;
+      // Controls behavior when the introspection endpoint is unreachable.
+      // 0 = FAIL_CLOSED (default): reject with 503.
+      // 1 = FAIL_OPEN: allow the request through.
+      int32 failure_mode = 6;
+    }
+
     // Validation mode for JWT authentication
     enum Mode {
       // Default mode - if a token exists, validate it
@@ -1071,6 +1093,8 @@ message TrafficPolicySpec {
     repeated JWTProvider providers = 2;
     MCP mcp = 3;
     AuthorizationLocation authorization_location = 4;
+    // RFC 7662 Token Introspection for opaque access tokens.
+    Introspection introspection = 5;
   }
 
   // Basic authentication configuration using htpasswd file
@@ -1610,6 +1634,8 @@ message BackendPolicySpec {
     // OAuth client secret injected into proxied token requests for confidential clients
     // (used by the ENTRA provider).
     optional string client_secret = 10;
+    // RFC 7662 Token Introspection for opaque access tokens.
+    TrafficPolicySpec.JWT.Introspection introspection = 11;
   }
 
   // McpGuardrails is a backend-phase policy for MCP traffic: an ordered chain of

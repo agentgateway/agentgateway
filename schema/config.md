@@ -514,6 +514,17 @@
 |`binds[].listeners[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`binds[].listeners[].routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection`|object|RFC 7662 Token Introspection configuration for opaque access tokens.<br>When set, tokens that cannot be parsed as JWTs are introspected against<br>the configured endpoint.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.clientId`|string|OAuth 2.0 client ID for authenticating the introspection request.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.clientSecret`|string|OAuth 2.0 client secret for confidential client authentication.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.cacheDuration.secs`|integer||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.cacheDuration.nanos`|integer||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.timeout.secs`|integer||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.timeout.nanos`|integer||
+|`binds[].listeners[].routes[].policies.mcpAuthentication.introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`binds[].listeners[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
@@ -18377,6 +18388,17 @@
 |`policies[].policy.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`policies[].policy.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`policies[].policy.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`policies[].policy.mcpAuthentication.introspection`|object|RFC 7662 Token Introspection configuration for opaque access tokens.<br>When set, tokens that cannot be parsed as JWTs are introspected against<br>the configured endpoint.|
+|`policies[].policy.mcpAuthentication.introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery.|
+|`policies[].policy.mcpAuthentication.introspection.clientId`|string|OAuth 2.0 client ID for authenticating the introspection request.|
+|`policies[].policy.mcpAuthentication.introspection.clientSecret`|string|OAuth 2.0 client secret for confidential client authentication.|
+|`policies[].policy.mcpAuthentication.introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`policies[].policy.mcpAuthentication.introspection.cacheDuration.secs`|integer||
+|`policies[].policy.mcpAuthentication.introspection.cacheDuration.nanos`|integer||
+|`policies[].policy.mcpAuthentication.introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`policies[].policy.mcpAuthentication.introspection.timeout.secs`|integer||
+|`policies[].policy.mcpAuthentication.introspection.timeout.nanos`|integer||
+|`policies[].policy.mcpAuthentication.introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`policies[].policy.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`policies[].policy.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
@@ -33460,6 +33482,17 @@
 |`routeGroups[].routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`routeGroups[].routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`routeGroups[].routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection`|object|RFC 7662 Token Introspection configuration for opaque access tokens.<br>When set, tokens that cannot be parsed as JWTs are introspected against<br>the configured endpoint.|
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery.|
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.clientId`|string|OAuth 2.0 client ID for authenticating the introspection request.|
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.clientSecret`|string|OAuth 2.0 client secret for confidential client authentication.|
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.cacheDuration.secs`|integer||
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.cacheDuration.nanos`|integer||
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.timeout.secs`|integer||
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.timeout.nanos`|integer||
+|`routeGroups[].routes[].policies.mcpAuthentication.introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routeGroups[].routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routeGroups[].routes[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
@@ -51127,6 +51160,17 @@
 |`routes[].policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`routes[].policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`routes[].policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`routes[].policies.mcpAuthentication.introspection`|object|RFC 7662 Token Introspection configuration for opaque access tokens.<br>When set, tokens that cannot be parsed as JWTs are introspected against<br>the configured endpoint.|
+|`routes[].policies.mcpAuthentication.introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery.|
+|`routes[].policies.mcpAuthentication.introspection.clientId`|string|OAuth 2.0 client ID for authenticating the introspection request.|
+|`routes[].policies.mcpAuthentication.introspection.clientSecret`|string|OAuth 2.0 client secret for confidential client authentication.|
+|`routes[].policies.mcpAuthentication.introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`routes[].policies.mcpAuthentication.introspection.cacheDuration.secs`|integer||
+|`routes[].policies.mcpAuthentication.introspection.cacheDuration.nanos`|integer||
+|`routes[].policies.mcpAuthentication.introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`routes[].policies.mcpAuthentication.introspection.timeout.secs`|integer||
+|`routes[].policies.mcpAuthentication.introspection.timeout.nanos`|integer||
+|`routes[].policies.mcpAuthentication.introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`routes[].policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`routes[].policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|
@@ -73732,6 +73776,17 @@
 |`mcp.policies.mcpAuthentication.jwtValidationOptions.requiredClaims`|[]string|Claims that must be present in the token before validation.<br>Only "exp", "nbf", "aud", "iss", "sub" are enforced; others<br>(including "iat" and "jti") are ignored.<br>Defaults to ["exp"]. Use an empty list to add no claim requirements beyond<br>those implied by the configured issuer and audiences.|
 |`mcp.policies.mcpAuthentication.clientId`|string|OAuth client ID advertised to MCP clients when needed.|
 |`mcp.policies.mcpAuthentication.clientSecret`|string|OAuth client secret injected into proxied token requests for confidential clients.<br>Currently used by the `entra` provider, whose Web-platform app registrations require a<br>client secret at the token endpoint.|
+|`mcp.policies.mcpAuthentication.introspection`|object|RFC 7662 Token Introspection configuration for opaque access tokens.<br>When set, tokens that cannot be parsed as JWTs are introspected against<br>the configured endpoint.|
+|`mcp.policies.mcpAuthentication.introspection.url`|string|Introspection endpoint URL. If omitted, derived from issuer's OIDC discovery.|
+|`mcp.policies.mcpAuthentication.introspection.clientId`|string|OAuth 2.0 client ID for authenticating the introspection request.|
+|`mcp.policies.mcpAuthentication.introspection.clientSecret`|string|OAuth 2.0 client secret for confidential client authentication.|
+|`mcp.policies.mcpAuthentication.introspection.cacheDuration`|object|Cache duration for introspection results. Default: 30s.|
+|`mcp.policies.mcpAuthentication.introspection.cacheDuration.secs`|integer||
+|`mcp.policies.mcpAuthentication.introspection.cacheDuration.nanos`|integer||
+|`mcp.policies.mcpAuthentication.introspection.timeout`|object|HTTP request timeout. Default: 5s.|
+|`mcp.policies.mcpAuthentication.introspection.timeout.secs`|integer||
+|`mcp.policies.mcpAuthentication.introspection.timeout.nanos`|integer||
+|`mcp.policies.mcpAuthentication.introspection.failureMode`|enum|Failure mode when introspection endpoint is unreachable. Default: FailClosed.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.a2a`|object|Mark this traffic as A2A to enable A2A processing and telemetry.|
 |`mcp.policies.ai`|object|Mark this as LLM traffic to enable LLM processing.|
 |`mcp.policies.ai.promptGuard`|object|Prompt and response guardrails to apply to LLM traffic.|

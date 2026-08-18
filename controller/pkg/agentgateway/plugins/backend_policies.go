@@ -664,6 +664,14 @@ func translateMCPAuthenticationSpec(
 		}
 	}
 
+	if authnPolicy.Introspection != nil {
+		intro, err := translateTokenIntrospection(ctx, authnPolicy.Introspection, policy)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		mcpAuthn.Introspection = intro
+	}
+
 	return mcpAuthn, errors.Join(errs...)
 }
 
@@ -680,6 +688,44 @@ func translateJWTMCPConfig(mcp *agentgateway.JWTMCPConfig) (*api.TrafficPolicySp
 		},
 		ClientId: mcp.ClientID,
 	}, nil
+}
+
+func translateTokenIntrospection(ctx PolicyCtx, intro *agentgateway.TokenIntrospection, policy types.NamespacedName) (*api.TrafficPolicySpec_JWT_Introspection, error) {
+	p := &api.TrafficPolicySpec_JWT_Introspection{
+		ClientId: intro.ClientID,
+	}
+
+	if intro.URL != nil {
+		p.Url = string(*intro.URL)
+	}
+
+	// Resolve client secret from Secret reference
+	if intro.ClientSecretRef != nil {
+		data, key, err := ctx.ResolveCredentialKeyRef(*intro.ClientSecretRef, policy.Namespace, "clientSecret")
+		if err != nil {
+			return nil, fmt.Errorf("introspection.clientSecretRef: %w", err)
+		}
+		secret := string(data[key])
+		p.ClientSecret = &secret
+	}
+
+	// Convert durations
+	if intro.CacheDuration != nil {
+		p.CacheDurationSeconds = int64(intro.CacheDuration.Duration.Seconds())
+	}
+	if intro.Timeout != nil {
+		p.TimeoutSeconds = int64(intro.Timeout.Duration.Seconds())
+	}
+
+	// Convert failure mode
+	switch intro.FailureMode {
+	case agentgateway.FailOpen:
+		p.FailureMode = 1
+	default:
+		p.FailureMode = 0 // FAIL_CLOSED
+	}
+
+	return p, nil
 }
 
 func translateMcpIDP(provider *agentgateway.McpIDP) api.BackendPolicySpec_McpAuthentication_McpIDP {
