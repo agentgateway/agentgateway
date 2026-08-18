@@ -1,4 +1,9 @@
-"""Deterministic plots for inference comparison reports."""
+"""Deterministic plots for inference comparison reports.
+
+Keep this publication renderer local until inference-perf supports custom
+series names, requested-rate axes, and percentile plots:
+https://github.com/kubernetes-sigs/inference-perf/issues/741
+"""
 
 from __future__ import annotations
 

@@ -56,6 +56,9 @@ def read_stage(path: Path) -> StageMetrics:
 
     return StageMetrics(
         stage=int(nested(document, "scenario", "load", "standardized", "stage")),
+        # Preserve the configured rate for comparable treatment ladders until
+        # inference-perf exposes requested-versus-achieved axis selection:
+        # https://github.com/kubernetes-sigs/inference-perf/issues/741
         requested_qps=number(
             document, "scenario", "load", "standardized", "rate_qps"
         ),
