@@ -1475,6 +1475,14 @@ impl Drop for DropOnLog {
 						.map(display),
 				),
 				(
+					"a2a.context.id",
+					log
+						.a2a_response
+						.as_ref()
+						.and_then(|r| r.context_id.as_ref())
+						.map(display),
+				),
+				(
 					"mcp.method.name",
 					mcp
 						.as_ref()
@@ -2688,6 +2696,7 @@ mod tests {
 			error_code: Some(-32602),
 			result_kind: Some(strng::literal!("task")),
 			task_state: Some(strng::literal!("failed")),
+			context_id: Some(strng::literal!("ctx-123")),
 		});
 
 		drop(DropOnLog::from(log));
@@ -2704,6 +2713,7 @@ mod tests {
 			"a2a.response.error_code",
 			"a2a.result.kind",
 			"a2a.task.state",
+			"a2a.context.id",
 		] {
 			assert!(has(expected), "expected {expected} span attribute");
 		}

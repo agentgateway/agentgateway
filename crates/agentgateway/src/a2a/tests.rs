@@ -395,6 +395,7 @@ async fn test_apply_to_response_records_success_call_telemetry() {
 		"id": "1",
 		"result": {
 			"kind": "task",
+			"contextId": "ctx",
 			"status": { "state": "completed" }
 		}
 	});
@@ -420,6 +421,7 @@ async fn test_apply_to_response_records_success_call_telemetry() {
 		info.task_state.as_ref().map(|s| s.as_str()),
 		Some("completed")
 	);
+	assert_eq!(info.context_id.as_ref().map(|s| s.as_str()), Some("ctx"));
 	assert_eq!(http::read_resp_body(resp).await.unwrap(), raw);
 }
 
@@ -717,4 +719,80 @@ async fn test_apply_to_response_avoids_partial_path_segment_match() {
 		json["supportedInterfaces"][1]["url"],
 		"http://gateway/public/weather/internal/weather-v2/jsonrpc"
 	);
+}
+
+#[tokio::test]
+async fn test_apply_to_response_records_v1_nested_task_telemetry() {
+	// A2A v1.0 shape: the `oneof payload` puts the Task under `result.task`, with no
+	// `kind` discriminator.
+	let payload = json!({
+		"jsonrpc": "2.0",
+		"id": "1",
+		"result": {
+			"task": {
+				"id": "abc",
+				"contextId": "ctx",
+				"status": { "state": "completed" }
+			}
+		}
+	});
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(serde_json::to_vec(&payload).unwrap()))
+		.unwrap();
+
+	let info = apply_to_response(
+		Some(&A2aPolicy {}),
+		RequestType::Call(Strng::from("SendMessage")),
+		&mut resp,
+	)
+	.await
+	.unwrap()
+	.expect("v1.0 nested task response should produce telemetry");
+
+	assert_eq!(info.outcome, ResponseOutcome::Success);
+	assert_eq!(info.result_kind.as_ref().map(|s| s.as_str()), Some("task"));
+	assert_eq!(
+		info.task_state.as_ref().map(|s| s.as_str()),
+		Some("completed")
+	);
+	assert_eq!(info.context_id.as_ref().map(|s| s.as_str()), Some("ctx"));
+}
+
+#[tokio::test]
+async fn test_apply_to_response_records_v1_nested_message_telemetry() {
+	// A2A v1.0 shape: the other `oneof payload` arm puts a Message under
+	// `result.message`. A Message carries `contextId` but has no status.
+	let payload = json!({
+		"jsonrpc": "2.0",
+		"id": "1",
+		"result": {
+			"message": {
+				"messageId": "msg-1",
+				"contextId": "ctx",
+				"role": "ROLE_AGENT"
+			}
+		}
+	});
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(serde_json::to_vec(&payload).unwrap()))
+		.unwrap();
+
+	let info = apply_to_response(
+		Some(&A2aPolicy {}),
+		RequestType::Call(Strng::from("SendMessage")),
+		&mut resp,
+	)
+	.await
+	.unwrap()
+	.expect("v1.0 nested message response should produce telemetry");
+
+	assert_eq!(info.outcome, ResponseOutcome::Success);
+	assert_eq!(
+		info.result_kind.as_ref().map(|s| s.as_str()),
+		Some("message")
+	);
+	assert_eq!(info.task_state, None);
+	assert_eq!(info.context_id.as_ref().map(|s| s.as_str()), Some("ctx"));
 }

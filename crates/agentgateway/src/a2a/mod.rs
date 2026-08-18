@@ -71,6 +71,7 @@ pub struct ResponseInfo {
 	pub error_code: Option<i64>,
 	pub result_kind: Option<Strng>,
 	pub task_state: Option<Strng>,
+	pub context_id: Option<Strng>,
 }
 
 impl ResponseInfo {
@@ -87,13 +88,39 @@ impl ResponseInfo {
 		let error_code = error
 			.and_then(|e| e.get("code"))
 			.and_then(serde_json::Value::as_i64);
+		// A2A v0.3 puts the Task/Message fields directly on `result`, discriminated by
+		// `kind`. A2A v1.0 models the response as `oneof payload { Task task = 1;
+		// Message message = 2; }`, so the payload is nested under `result.task` or
+		// `result.message` and carries no `kind` field. Prefer the flat v0.3 shape and
+		// fall back to the nested v1.0 shape so both spec generations populate.
+		let payload = |name: &str| result.and_then(|r| r.get(name)).filter(|v| !v.is_null());
+		let task = payload("task");
+		let message = payload("message");
 		let result_kind = result
 			.and_then(|r| r.get("kind"))
 			.and_then(serde_json::Value::as_str)
-			.map(Strng::from);
+			.map(Strng::from)
+			// v1.0: the populated `oneof` arm names the kind.
+			.or_else(|| task.map(|_| Strng::from("task")))
+			.or_else(|| message.map(|_| Strng::from("message")));
 		let task_state = result
 			.and_then(|r| r.get("status"))
 			.and_then(|status| status.get("state"))
+			.and_then(serde_json::Value::as_str)
+			.or_else(|| {
+				// v1.0: result.task.status.state. A Message has no status.
+				task
+					.and_then(|t| t.get("status"))
+					.and_then(|status| status.get("state"))
+					.and_then(serde_json::Value::as_str)
+			})
+			.map(Strng::from);
+		// context_id ties multiple turns of a conversation together. Both Task and
+		// Message carry it, so check the flat v0.3 location and then either v1.0 arm.
+		let context_id = result
+			.and_then(|r| r.get("contextId"))
+			.or_else(|| task.and_then(|t| t.get("contextId")))
+			.or_else(|| message.and_then(|m| m.get("contextId")))
 			.and_then(serde_json::Value::as_str)
 			.map(Strng::from);
 		Self {
@@ -101,6 +128,7 @@ impl ResponseInfo {
 			error_code,
 			result_kind,
 			task_state,
+			context_id,
 		}
 	}
 }
