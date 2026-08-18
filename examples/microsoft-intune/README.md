@@ -1,9 +1,56 @@
-# Microsoft Intune client verification
+# Microsoft Intune client management examples
 
 These example scripts let Microsoft Intune verify that managed Codex and
 Claude Desktop clients use an approved agentgateway address. Each script can
 check either client or both clients without returning configuration contents,
 tokens, or provider credentials to Intune.
+
+## Provide a Claude Desktop credential helper
+
+Claude Desktop gateway API key and subscription-passthrough modes require an
+organization-owned credential helper. A helper is an executable installed on
+the managed endpoint. Claude Desktop runs it with no arguments whenever it
+needs an inference credential and sets `CLAUDE_HELPER_CONTEXT` to describe why
+it is running.
+
+The helper must:
+
+- run as the signed-in user and retrieve that user's assigned gateway key or
+  subscription token from Keychain, Credential Manager, or an internal secret
+  broker;
+- return exit code `0` and write only a bare token, or the supported JSON
+  object, to standard output;
+- write only nonsecret diagnostics to standard error; and
+- return a nonzero exit code instead of waiting for user input when a
+  noninteractive lookup or refresh cannot complete.
+
+Claude Desktop caches the result for `inferenceCredentialHelperTtlSec` seconds
+and re-runs the helper when necessary. The default TTL is 3600 seconds. The
+`CLAUDE_HELPER_CONTEXT` value can be `interactive`, `mid-session-refresh`,
+`scheduled-task`, `setup-test`, or `background`. Only the `interactive`
+context should start an authentication flow that requires user input.
+
+These examples do not include a universal credential helper executable. A
+secure implementation must integrate with the organization's credential
+provisioning system or secret broker. A script that embeds a shared key or
+reads one from an ordinary plaintext file defeats the purpose of the helper.
+
+Use this deployment checklist:
+
+1. Build or obtain a signed helper that implements the [Claude Desktop
+   credential-helper
+   contract](https://claude.com/docs/third-party/claude-desktop/credential-helper).
+2. Deploy it with Intune to a fixed absolute path that the user cannot modify.
+3. Provision each user's or device's credential separately through secure
+   storage or broker authorization. Do not include it in the helper, Intune
+   script, or Claude Desktop profile.
+4. Set `inferenceCredentialKind` to `helper-script` and set
+   `inferenceCredentialHelper` to the absolute executable path.
+5. Run the helper as the intended user with
+   `CLAUDE_HELPER_CONTEXT=setup-test`. Confirm a successful exit without
+   printing or recording its standard output.
+6. Use Claude Desktop **Test connection**, then send an inference request and
+   confirm it in the agentgateway access log.
 
 The scripts check:
 
