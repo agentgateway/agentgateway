@@ -973,6 +973,8 @@ mod tests {
 			upstream: client,
 			ca: None,
 			mcp_state: crate::mcp::App::new(stores, encoder),
+			connection_limits: Default::default(),
+			request_limits: Default::default(),
 		})
 	}
 

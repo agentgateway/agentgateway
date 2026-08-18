@@ -3,6 +3,7 @@ use std::convert::Infallible;
 use std::error::Error as StdError;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::time::{Duration, Instant};
 
 use agent_core::drain::{DrainUpgrader, DrainWatcher};
@@ -13,9 +14,12 @@ use anyhow::anyhow;
 use bytes::Bytes;
 use futures::pin_mut;
 use futures_util::FutureExt;
+use futures_util::future::{self, Either};
 use http::StatusCode;
 use hyper_util::rt::TokioIo;
 use hyper_util::server::conn::auto;
+use prometheus_client::metrics::counter;
+use prometheus_client::metrics::family::Family;
 use rand::RngExt;
 use tokio::net::TcpStream;
 use tokio::sync::watch;
@@ -23,9 +27,9 @@ use tokio::task::{AbortHandle, JoinSet};
 use tokio_stream::StreamExt;
 use tracing::{Instrument, debug, error, event, info, info_span, warn};
 
-use crate::proxy::{ProxyError, WaypointService, dtrace};
+use crate::proxy::{ProxyError, WaypointService, admission, dtrace};
 use crate::store::{BindEvent, BindListeners, FrontendPolices};
-use crate::telemetry::metrics::TCPLabels;
+use crate::telemetry::metrics::{ShedLabels, ShedReason, TCPLabels};
 use crate::transport::BufferLimit;
 use crate::transport::stream::{
 	ConnectHeaders, Extension, LoggingMode, Socket, TCPConnectionInfo, TLSConnectionInfo,
@@ -44,6 +48,44 @@ mod tests;
 #[cfg(test)]
 #[path = "locality_test.rs"]
 mod locality_tests;
+
+/// Shed counters resolved up front.
+///
+/// Looking a metric up per rejection would take a registry lock on exactly the path that is
+/// already saturated, so both label sets are materialised once and only incremented later.
+#[derive(Clone)]
+struct ShedCounters {
+	queue_full: counter::Counter,
+	timeout: counter::Counter,
+}
+
+impl ShedCounters {
+	fn new(family: &Family<ShedLabels, counter::Counter>, bind: &BindKey) -> Self {
+		let for_reason = |reason| {
+			family
+				.get_or_create(&ShedLabels {
+					bind: Some(bind).into(),
+					reason,
+				})
+				.clone()
+		};
+		Self {
+			queue_full: for_reason(ShedReason::QueueFull),
+			timeout: for_reason(ShedReason::Timeout),
+		}
+	}
+
+	fn record(&self, reason: admission::LimitError) {
+		match reason {
+			admission::LimitError::QueueFull => self.queue_full.inc(),
+			admission::LimitError::Timeout => self.timeout.inc(),
+		};
+	}
+
+	fn record_queue_full(&self) {
+		self.queue_full.inc();
+	}
+}
 
 #[derive(Debug, Clone, PartialEq)]
 
@@ -304,6 +346,17 @@ impl Gateway {
 			let (mut upgrader, weak) = drain.into_weak();
 			let (inner_trigger, inner_drain) = drain::new();
 			drop(inner_drain);
+			// Resolved once per bind: the registry takes a global lock, so it must stay off the
+			// per-connection path.
+			let limiter = pi.connection_limits.limiter(&name);
+			// Last threshold seen by an accepted connection. Zero means the feature is off, which
+			// keeps the accept loop free of policy lookups for gateways that do not use it.
+			let memory_threshold = Arc::new(AtomicU8::new(0));
+			let shed = Arc::new(ShedCounters::new(
+				&pi.metrics.downstream_connections_shed,
+				&name,
+			));
+			let warned_idle = AtomicBool::new(false);
 			let handle_stream = |stream: TcpStream, upgrader: &DrainUpgrader| {
 				let Ok(mut stream) = Socket::from_tcp(stream) else {
 					// Can fail if they immediately disconnected; not much we can do.
@@ -317,7 +370,38 @@ impl Gateway {
 				let mut force_shutdown = force_shutdown.clone();
 				let name = name.clone();
 				let bind_config = bind_config.clone();
+				let policies = Self::frontend_policies_for_bind(&name, &pi);
+				let tcp_limits = admission::Limits::from_tcp(policies.tcp.as_ref());
+				Self::refresh_memory_threshold(&memory_threshold, policies.tcp.as_ref());
+				if tcp_limits.is_some() {
+					Self::warn_if_idle_unbounded(&warned_idle, &policies);
+				}
+				// Reserve the slot *before* spawning. A flood of accept() otherwise drains the
+				// backlog long before any spawned task increments the counter, so the cap would
+				// never bound sockets or HTTP/2 sessions.
+				let Some(slot) = limiter.admit(tcp_limits).into_slot() else {
+					shed.record_queue_full();
+					debug!(
+						bind = ?name,
+						src.addr = %stream.tcp().peer_addr,
+						"downstream connection dropped: connection limit"
+					);
+					return;
+				};
+				let shed = shed.clone();
 				tokio::spawn(telemetry::connection_scope(async move {
+					let _permit = match slot.resolve().await {
+						Ok(permit) => permit,
+						Err(reason) => {
+							shed.record(reason);
+							debug!(
+								bind = ?name,
+								%reason,
+								"downstream connection dropped: connection limit"
+							);
+							return;
+						},
+					};
 					let bind = bind_config.borrow().clone();
 					debug!(bind=?name, "connection started");
 					tokio::select! {
@@ -339,7 +423,15 @@ impl Gateway {
 			// NOTE: Do not use `Ok(...) = listener.accept()` as a select! pattern.
 			// If accept() returns Err, select! permanently disables that branch,
 			// hanging the loop. Match on the full Result instead.
+			let mut memory_paused = false;
 			let drain_mode = loop {
+				tokio::select! {
+					biased;
+					res = &mut wait => {
+						break res;
+					}
+					_ = Self::wait_for_accept_capacity(&limiter, &memory_threshold, &mut memory_paused) => {}
+				}
 				tokio::select! {
 					res = listener.accept() => match res {
 						Ok((stream, _peer)) => {
@@ -388,6 +480,13 @@ impl Gateway {
 			backoff = BACKOFF_INITIAL;
 			loop {
 				tokio::select! {
+					biased;
+					_ = &mut drained_for_minimum => {
+						return;
+					}
+					_ = Self::wait_for_accept_capacity(&limiter, &memory_threshold, &mut memory_paused) => {}
+				}
+				tokio::select! {
 					res = listener.accept() => match res {
 						Ok((stream, _peer)) => {
 							backoff = BACKOFF_INITIAL;
@@ -435,6 +534,8 @@ impl Gateway {
 		drain: DrainWatcher,
 	) {
 		let policies = Self::frontend_policies_for_bind(&bind_name, &inputs);
+		// The `maxConnections` slot is already held by the caller: the accept loop takes it
+		// before spawning, and re-entrant paths take it via `admit_reentrant`.
 
 		let peer_addr = raw_stream.tcp().peer_addr;
 		event!(
@@ -593,7 +694,10 @@ impl Gateway {
 		}
 	}
 
-	fn frontend_policies_for_bind(bind_name: &BindKey, inputs: &Arc<ProxyInputs>) -> FrontendPolices {
+	pub(crate) fn frontend_policies_for_bind(
+		bind_name: &BindKey,
+		inputs: &Arc<ProxyInputs>,
+	) -> FrontendPolices {
 		{
 			let binds = inputs.stores.read_binds();
 			let gateway = binds
@@ -602,6 +706,107 @@ impl Gateway {
 				.unwrap_or_else(|| inputs.cfg.gateway_ref());
 			binds.frontend_policies(gateway)
 		}
+	}
+
+	/// A capped bind makes idle connections expensive: a client that finishes the HTTP/2
+	/// preface and never opens a stream holds its slot until something else closes it, so a
+	/// handful of them can exhaust a small cap. Warn once when nothing bounds idle time.
+	fn warn_if_idle_unbounded(warned: &AtomicBool, policies: &FrontendPolices) {
+		if warned.load(Ordering::Relaxed) {
+			return;
+		}
+		let bounded = policies
+			.http
+			.as_ref()
+			.is_some_and(|h| h.http2_keepalive_interval.is_some() || h.max_connection_duration.is_some());
+		if bounded || warned.swap(true, Ordering::Relaxed) {
+			return;
+		}
+		warn!(
+			"maxConnections is set without http2KeepaliveInterval or maxConnectionDuration; \
+			 idle HTTP/2 connections can hold connection slots indefinitely"
+		);
+	}
+
+	/// Publish the memory threshold for the accept loop and start sampling on first use.
+	fn refresh_memory_threshold(slot: &AtomicU8, tcp: Option<&frontend::TCP>) {
+		let threshold = tcp
+			.and_then(|t| t.stop_accepting_at_memory_percent)
+			.unwrap_or(0);
+		if slot.swap(threshold, Ordering::Relaxed) == threshold {
+			return;
+		}
+		if threshold > 0 {
+			super::cgroup_memory::ensure_sampler();
+		}
+	}
+
+	/// Resume accepting at this much below the configured threshold. Without hysteresis the
+	/// listener would flap once per connection while hovering on the limit.
+	const MEMORY_RESUME_MARGIN: u8 = 10;
+	/// How long to stay parked while memory is over the threshold. Only reached once the
+	/// feature is enabled and the gateway is actually overloaded.
+	const MEMORY_RECHECK: Duration = Duration::from_millis(50);
+
+	/// Park the accept loop while the bind is at `maxConnections` or over its memory watermark.
+	///
+	/// Returns immediately (one relaxed load each) when neither feature is configured.
+	async fn wait_for_accept_capacity(
+		limiter: &Arc<admission::Limiter>,
+		memory_threshold: &AtomicU8,
+		memory_paused: &mut bool,
+	) {
+		loop {
+			let threshold = memory_threshold.load(Ordering::Relaxed);
+			if threshold > 0 {
+				let used = super::cgroup_memory::working_set_percent();
+				let resume_at = threshold.saturating_sub(Self::MEMORY_RESUME_MARGIN);
+				let over = if *memory_paused {
+					used >= resume_at
+				} else {
+					used >= threshold
+				};
+				if over {
+					if !*memory_paused {
+						*memory_paused = true;
+						warn!(
+							%used,
+							%threshold,
+							"pausing accept: cgroup memory working set over watermark"
+						);
+					}
+					tokio::time::sleep(Self::MEMORY_RECHECK).await;
+					continue;
+				}
+				if *memory_paused {
+					*memory_paused = false;
+					info!(%used, "resuming accept: cgroup memory back under watermark");
+				}
+			}
+
+			if !limiter.at_capacity() {
+				return;
+			}
+			limiter.wait_for_capacity().await;
+		}
+	}
+
+	/// Take a `maxConnections` slot for a bind that is entered outside the accept loop:
+	/// CONNECT re-entry and HBONE streams both open a fresh downstream against a *different*
+	/// bind, so without this they would bypass that bind's cap entirely.
+	///
+	/// `None` means the bind is at capacity and the caller must drop the connection.
+	async fn admit_reentrant(
+		inputs: &Arc<ProxyInputs>,
+		bind_name: &BindKey,
+	) -> Option<admission::Permit> {
+		let policies = Self::frontend_policies_for_bind(bind_name, inputs);
+		let limits = admission::Limits::from_tcp(policies.tcp.as_ref());
+		if limits.is_none() {
+			return Some(admission::Permit::Unlimited);
+		}
+		let limiter = inputs.connection_limits.limiter(bind_name);
+		limiter.admit(limits).into_slot()?.resolve().await.ok()
 	}
 
 	pub async fn handle_tunnel(
@@ -818,6 +1023,10 @@ impl Gateway {
 						let mut downstream = Socket::from_upgraded(connection, target_address, downstream);
 						downstream.ext_mut().insert(ConnectHeaders(connect_headers));
 						downstream.ext_mut().insert(BufferLimit::new(buffer));
+						let Some(_permit) = Self::admit_reentrant(&inputs, &bind.key).await else {
+							debug!(bind = ?bind.key, "connect tunnel dropped: connection limit");
+							return;
+						};
 						Self::proxy_bind(bind.key.clone(), bind.protocol, downstream, inputs, drain).await;
 					});
 
@@ -940,22 +1149,67 @@ impl Gateway {
 			.as_ref()
 			.and_then(|h| h.max_connection_duration);
 		let drain_proxy = proxy.clone();
+		// Resolved once per connection: the registry lock and the policy lookup must not run per
+		// request. `None` limits keep the whole budget path down to one atomic load.
+		let request_limits = admission::Limits::from_http(policies.http.as_ref());
+		let request_limiter = proxy.inputs.request_limits.limiter(&proxy.bind_name);
+		// Only materialise shed counters when a budget exists; otherwise this would add two
+		// metric-registry lookups to every connection that never sheds anything.
+		let request_shed = request_limits
+			.map(|_| ShedCounters::new(&proxy.inputs.metrics.requests_shed, &proxy.bind_name));
 
 		let serve = server.serve_connection_with_upgrades(
 			TokioIo::new(stream),
 			hyper::service::service_fn(move |mut req| {
 				let proxy = proxy.clone();
 				let connection = connection.clone();
+				let limiter = request_limiter.clone();
 				req.extensions_mut().insert(BufferLimit::new(buffer));
+				let is_grpc = crate::http::is_grpc_request(&req);
+
+				let Some(slot) = limiter.admit(request_limits).into_slot() else {
+					// Hot path under HTTP/2 storms: never log at warn (that itself OOMs) and
+					// never build the 17KiB proxy future.
+					if let Some(shed) = &request_shed {
+						shed.record_queue_full();
+					}
+					debug!(bind = %proxy.bind_name, "request rejected: request limit");
+					return Either::Left(future::ready(Ok(
+						ProxyError::RequestLimitExceeded.into_response_with_grpc(is_grpc),
+					)));
+				};
+
 				let req = req.map(crate::http::Body::new);
-				telemetry::request_scope(
-					// This is the per-request HTTP flow future. It is the baseline task state
-					// multiplied by concurrent in-flight requests on this connection.
-					dtrace::DebugTracer::maybe_scope(req, |req| async move {
-						proxy.proxy(connection, req).map(Ok::<_, Infallible>).await
-					})
-					.assert_size::<{ 17 * 1024 }>(),
-				)
+				// Only the queued path can shed later, so the happy path clones nothing.
+				let request_shed = match &slot {
+					admission::Slot::Queued(_) => request_shed.clone(),
+					admission::Slot::Held(_) => None,
+				};
+				// Boxing here would put the ~17KiB request future on the heap once per request,
+				// so the two outcomes are unified with `Either` instead.
+				Either::Right(async move {
+					let _permit = match slot.resolve().await {
+						Ok(permit) => permit,
+						Err(reason) => {
+							if let Some(shed) = &request_shed {
+								shed.record(reason);
+							}
+							debug!(
+								bind = %proxy.bind_name,
+								%reason,
+								"request rejected: request limit"
+							);
+							return Ok(ProxyError::RequestLimitExceeded.into_response_with_grpc(is_grpc));
+						},
+					};
+					telemetry::request_scope(
+						dtrace::DebugTracer::maybe_scope(req, |req| async move {
+							proxy.proxy(connection, req).map(Ok::<_, Infallible>).await
+						})
+						.assert_size::<{ 17 * 1024 }>(),
+					)
+					.await
+				})
 			}),
 		);
 		let (connection_drain_tx, connection_drain_rx) = drain::new();
@@ -1568,6 +1822,10 @@ impl Gateway {
 			drain_tx: None,
 		};
 
+		let Some(_permit) = Self::admit_reentrant(&pi, &bind.key).await else {
+			debug!(bind = ?bind.key, "hbone stream dropped: connection limit");
+			return;
+		};
 		Self::proxy_bind(
 			bind.key.clone(),
 			bind.protocol,
@@ -1606,6 +1864,10 @@ pub fn auto_server(c: Option<&frontend::HTTP>) -> auto::Builder<::hyper_util::rt
 		http2_keepalive_interval,
 		http2_keepalive_timeout,
 		max_connection_duration: _,
+		http2_max_concurrent_streams,
+		max_concurrent_requests: _,
+		max_pending_requests: _,
+		max_request_wait: _,
 	} = c.unwrap_or(&def);
 
 	if let Some(m) = http1_max_headers {
@@ -1637,6 +1899,9 @@ pub fn auto_server(c: Option<&frontend::HTTP>) -> auto::Builder<::hyper_util::rt
 	}
 	if let Some(m) = http2_max_header_size {
 		b.http2().max_header_list_size(*m);
+	}
+	if let Some(m) = http2_max_concurrent_streams {
+		b.http2().max_concurrent_streams(*m);
 	}
 
 	b

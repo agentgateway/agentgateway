@@ -30,6 +30,7 @@ use crate::http::{Body, Response};
 use crate::llm::{AIBackend, AIProvider, NamedAIProvider, catalog};
 use crate::mcp::FailureMode;
 use crate::proxy::Gateway;
+use crate::proxy::admission;
 use crate::proxy::request_builder::RequestBuilder;
 use crate::store::Stores;
 use crate::transport::stream::{Socket, TCPConnectionInfo};
@@ -1260,6 +1261,8 @@ impl TestBind {
 
 		let pi = self.pi.clone();
 		let drain_rx = self.drain_rx.clone();
+		// Mirrors the production accept loop: one limiter per bind, reserved before spawn.
+		let limiter = pi.connection_limits.limiter(&bind_name);
 
 		tokio::spawn(async move {
 			info!("starting real listener on {}...", addr);
@@ -1274,15 +1277,20 @@ impl TestBind {
 				info!("accepted connection from {}", peer_addr);
 
 				let socket = Socket::from_tcp(tcp_stream).unwrap();
-
-				let bind = Gateway::proxy_bind(
-					bind_name.clone(),
-					BindProtocol::http,
-					socket,
-					pi.clone(),
-					drain_rx.clone(),
-				);
-				tokio::spawn(bind);
+				let policies = Gateway::frontend_policies_for_bind(&bind_name, &pi);
+				let limits = admission::Limits::from_tcp(policies.tcp.as_ref());
+				let Some(slot) = limiter.admit(limits).into_slot() else {
+					continue;
+				};
+				let bind_name = bind_name.clone();
+				let pi = pi.clone();
+				let drain_rx = drain_rx.clone();
+				tokio::spawn(async move {
+					let Ok(_permit) = slot.resolve().await else {
+						return;
+					};
+					Gateway::proxy_bind(bind_name, BindProtocol::http, socket, pi, drain_rx).await;
+				});
 			}
 			info!("finished real listener...");
 		});
@@ -1316,6 +1324,8 @@ pub fn setup_proxy_test_with_config(config: crate::Config) -> TestBind {
 		ca: None,
 
 		mcp_state: mcp::App::new(stores.clone(), encoder),
+		connection_limits: Default::default(),
+		request_limits: Default::default(),
 	});
 	TestBind {
 		pi,
