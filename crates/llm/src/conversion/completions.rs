@@ -280,6 +280,7 @@ pub mod from_messages {
 			sent_message_start: bool,
 			sent_message_stop: bool,
 			sent_first_token: bool,
+			last_token_at: Option<Instant>,
 			next_block_index: usize,
 			text_block_index: Option<usize>,
 			tool_block_indices: HashMap<u32, usize>,
@@ -395,13 +396,19 @@ pub mod from_messages {
 		}
 
 		fn maybe_set_first_token(state: &mut StreamState, log: &StreamingUsageGuard) {
-			if state.sent_first_token {
+			let now = Instant::now();
+			if !state.sent_first_token {
+				state.sent_first_token = true;
+				state.last_token_at = Some(now);
+				log.update(|r| {
+					r.response.first_token = Some(now);
+				});
 				return;
 			}
-			state.sent_first_token = true;
-			log.update(|r| {
-				r.response.first_token = Some(Instant::now());
-			});
+			if let Some(prev) = state.last_token_at.replace(now) {
+				let gap = now.duration_since(prev);
+				log.update(|r| r.response.inter_chunk_latencies.record(gap));
+			}
 		}
 
 		fn flush_message_end(
@@ -1195,6 +1202,7 @@ pub fn passthrough_stream(
 	resp.map(|b| {
 		let mut seen_provider = false;
 		let mut saw_token = false;
+		let mut last_token_at: Option<Instant> = None;
 		parse::sse::json_passthrough::<types::completions::typed::StreamResponse>(
 			b,
 			buffer_limit,
@@ -1231,11 +1239,16 @@ pub fn passthrough_stream(
 								}
 							}
 						}
+						let now = Instant::now();
 						if !saw_token {
 							saw_token = true;
+							last_token_at = Some(now);
 							log.update(|r| {
-								r.response.first_token = Some(Instant::now());
+								r.response.first_token = Some(now);
 							});
+						} else if let Some(prev) = last_token_at.replace(now) {
+							let gap = now.duration_since(prev);
+							log.update(|r| r.response.inter_chunk_latencies.record(gap));
 						}
 						if !seen_provider {
 							seen_provider = true;

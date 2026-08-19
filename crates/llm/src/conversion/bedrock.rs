@@ -1060,6 +1060,7 @@ pub mod from_completions {
 		// This is static for all chunks!
 		let created = chrono::Utc::now().timestamp() as u32;
 		let mut saw_token = false;
+		let mut last_token_at: Option<Instant> = None;
 		// Track tool call JSON buffers by content block index
 		let mut tool_calls: HashMap<i32, String> = HashMap::new();
 		// Bedrock indexes every content block, while OpenAI indexes only tool calls.
@@ -1127,11 +1128,16 @@ pub mod from_completions {
 					}
 				},
 				bedrock::ConverseStreamOutput::ContentBlockDelta(d) => {
+					let now = Instant::now();
 					if !saw_token {
 						saw_token = true;
+						last_token_at = Some(now);
 						log.update(|r| {
-							r.response.first_token = Some(Instant::now());
+							r.response.first_token = Some(now);
 						});
+					} else if let Some(prev) = last_token_at.replace(now) {
+						let gap = now.duration_since(prev);
+						log.update(|r| r.response.inter_chunk_latencies.record(gap));
 					}
 
 					let delta = d.delta.map(|delta| {
@@ -1825,6 +1831,7 @@ pub mod from_messages {
 		tool_name_map: Option<super::BedrockToolNameMap>,
 	) -> Body {
 		let mut saw_token = false;
+		let mut last_token_at: Option<Instant> = None;
 		let mut seen_blocks: HashSet<i32> = HashSet::new();
 		let mut pending_stop_reason: Option<bedrock::StopReason> = None;
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
@@ -1952,11 +1959,16 @@ pub mod from_messages {
 					}
 
 					if let Some(d) = delta.delta {
+						let now = Instant::now();
 						if !saw_token {
 							saw_token = true;
+							last_token_at = Some(now);
 							log.update(|r| {
-								r.response.first_token = Some(Instant::now());
+								r.response.first_token = Some(now);
 							});
+						} else if let Some(prev) = last_token_at.replace(now) {
+							let gap = now.duration_since(prev);
+							log.update(|r| r.response.inter_chunk_latencies.record(gap));
 						}
 
 						let anthropic_delta = match d {
@@ -2846,6 +2858,7 @@ pub mod from_responses {
 		tool_name_map: Option<super::BedrockToolNameMap>,
 	) -> Body {
 		let mut saw_token = false;
+		let mut last_token_at: Option<Instant> = None;
 		let mut pending_stop_reason: Option<bedrock::StopReason> = None;
 		let mut pending_usage: Option<bedrock::TokenUsage> = None;
 		let mut seen_blocks: HashSet<i32> = HashSet::new();
@@ -2987,11 +3000,16 @@ pub mod from_responses {
 				bedrock::ConverseStreamOutput::ContentBlockDelta(delta) => {
 					let mut out: Vec<(&'static str, ResponseStreamEvent)> = Vec::new();
 
+					let now = Instant::now();
 					if !saw_token {
 						saw_token = true;
+						last_token_at = Some(now);
 						log.update(|r| {
-							r.response.first_token = Some(Instant::now());
+							r.response.first_token = Some(now);
 						});
+					} else if let Some(prev) = last_token_at.replace(now) {
+						let gap = now.duration_since(prev);
+						log.update(|r| r.response.inter_chunk_latencies.record(gap));
 					}
 
 					if let Some(d) = delta.delta {

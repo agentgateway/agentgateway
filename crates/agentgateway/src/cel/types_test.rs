@@ -87,6 +87,7 @@ fn build_test_request() -> crate::http::Request {
 		provider_total_tokens: Some(150),
 		service_tier: None,
 		first_token: None,
+		inter_chunk_latencies: crate::llm::TokenGapSummary::default(),
 		time_to_first_token: Some(chrono::Duration::milliseconds(123).into()),
 		time_per_output_token: Some(chrono::Duration::milliseconds(7).into()),
 		count_tokens: None,

@@ -1394,6 +1394,7 @@ pub mod to_completions {
 	) -> Body {
 		let mut state = StreamState::new();
 		let mut saw_token = false;
+		let mut last_token_at: Option<Instant> = None;
 		let mut completion = log_content.completion.then(String::new);
 		let mut tool_calls: Option<LoggedToolCalls> = log_content.tool_calls.then(HashMap::new);
 		let body = parse::sse::json_transform_multi::<
@@ -1412,9 +1413,14 @@ pub mod to_completions {
 				| parse::sse::SseJsonEvent::Error => return vec![],
 			};
 
+			let now = Instant::now();
 			if !saw_token {
 				saw_token = true;
-				log.update(|r| r.response.first_token = Some(Instant::now()));
+				last_token_at = Some(now);
+				log.update(|r| r.response.first_token = Some(now));
+			} else if let Some(prev) = last_token_at.replace(now) {
+				let gap = now.duration_since(prev);
+				log.update(|r| r.response.inter_chunk_latencies.record(gap));
 			}
 			if let Some(m) = &chunk.model_version {
 				log.update(|r| {

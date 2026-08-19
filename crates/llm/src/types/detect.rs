@@ -598,6 +598,8 @@ impl ResponseType for Response {
 			output_messages: None,
 			// TODO: we could probably derive this
 			first_token: None,
+			last_token_at: None,
+			inter_chunk_latencies: crate::TokenGapSummary::default(),
 		}
 	}
 
