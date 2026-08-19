@@ -31,6 +31,9 @@ final check from the client and correlate it with the agentgateway access log.
 Before uploading a script to Intune, edit the configuration block at the top.
 
 - Set the expected Codex URL, including `/v1`.
+- Keep `EXPECTED_CODEX_ENV_KEY` set to the name of the environment variable
+  declared by the managed Codex TOML. The default is
+  `AGENTGATEWAY_API_KEY`. The scripts check the variable name, not its value.
 - Set the expected Claude Desktop URL, including the route prefix configured
   for Claude Desktop, such as `/claude`.
 - Enable the clients that Intune requires on the target group. Disable a client
@@ -45,8 +48,8 @@ Before uploading a script to Intune, edit the configuration block at the top.
   field for platform scripts, edit the `LOG_FILE` default before upload when
   the organization requires a different managed path.
 
-Do not add an LLM provider key, bearer token, or another secret to either
-script.
+Do not add a gateway client key, LLM provider key, bearer token, or another
+secret to either script.
 
 ## Deploy on macOS
 
@@ -112,12 +115,14 @@ The discovery scripts check only the durable managed client configuration.
 They do not test network reachability, because a temporary Gateway or network
 outage must not make every managed device noncompliant. The Claude Desktop
 scripts require both the `gateway` inference provider and the exact approved
-Gateway URL.
+Gateway URL. The Codex scripts also require the approved `env_key` declaration
+but do not read or report the environment variable's value.
 
 Before uploading a discovery script, replace its example URL with the approved
 address. Include `/v1` for Codex and the configured route prefix, such as
-`/claude`, for Claude Desktop. Keep the expected URL aligned with the managed
-configuration policy.
+`/claude`, for Claude Desktop. If the organization uses a different Codex
+credential variable, also change `EXPECTED_CODEX_ENV_KEY`. Keep these values
+aligned with the managed configuration policy.
 
 ### Configure custom compliance on macOS
 
@@ -292,3 +297,19 @@ prompt. Correlate the request by time in the agentgateway access log:
 Confirm the expected hostname, route, authenticated identity when configured,
 upstream provider, and successful status. Agentgateway logs must not contain
 the bearer token or upstream provider credential.
+
+For Codex, first verify the gateway key independently from the same user
+context. The variable must contain the gateway client key, not the OpenAI
+provider key.
+
+```sh
+curl --fail-with-body \
+  --header "Authorization: Bearer $AGENTGATEWAY_API_KEY" \
+  "https://llm.example.com/v1/models?client_version=intune-verification"
+```
+
+If this request succeeds but Codex returns HTTP 401, confirm that Codex loads
+the managed TOML, that `AGENTGATEWAY_API_KEY` is available to the Codex
+process, and that the application was fully restarted. The operational and
+compliance scripts intentionally do not inspect the secret value, so only an
+authenticated request verifies credential delivery.

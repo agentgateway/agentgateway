@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Edit this value before uploading the script to Microsoft Intune.
+# Edit these values before uploading the script to Microsoft Intune.
 EXPECTED_CODEX_BASE_URL=${EXPECTED_CODEX_BASE_URL:-"https://llm.example.com/v1"}
+EXPECTED_CODEX_ENV_KEY=${EXPECTED_CODEX_ENV_KEY:-"AGENTGATEWAY_API_KEY"}
 
 # Override only when testing the script with a temporary managed-preferences
 # directory. Intune-managed devices use the default system directory.
@@ -49,7 +50,9 @@ if [ -n "$managed_config" ] && \
   printf '%s\n' "$managed_config" | \
     grep -Fq "base_url = \"$EXPECTED_CODEX_BASE_URL\"" && \
   printf '%s\n' "$managed_config" | \
-    grep -Eq '^[[:space:]]*wire_api[[:space:]]*=[[:space:]]*"responses"[[:space:]]*$'; then
+    grep -Eq '^[[:space:]]*wire_api[[:space:]]*=[[:space:]]*"responses"[[:space:]]*$' && \
+  printf '%s\n' "$managed_config" | \
+    grep -Eq "^[[:space:]]*env_key[[:space:]]*=[[:space:]]*\"$EXPECTED_CODEX_ENV_KEY\"[[:space:]]*$"; then
   configured=true
 fi
 

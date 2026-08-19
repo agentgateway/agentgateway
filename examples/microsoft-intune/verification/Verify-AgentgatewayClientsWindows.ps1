@@ -1,5 +1,6 @@
 # Edit these values before uploading the script to Microsoft Intune.
 $ExpectedCodexBaseUrl = "https://llm.example.com/v1"
+$ExpectedCodexEnvKey = "AGENTGATEWAY_API_KEY"
 $ExpectedClaudeGatewayUrl = "https://llm.example.com/claude"
 $VerifyCodex = $true
 $VerifyClaudeDesktop = $true
@@ -47,11 +48,22 @@ function Test-CodexConfiguration {
     $sectionMatches = $configuration.Contains('[model_providers.agentgateway]')
     $urlMatches = $configuration.Contains("base_url = `"$ExpectedCodexBaseUrl`"")
     $wireApiMatches = $configuration -match '(?m)^\s*wire_api\s*=\s*"responses"\s*$'
+    $envKeyPattern = '(?m)^\s*env_key\s*=\s*"' +
+        [regex]::Escape($ExpectedCodexEnvKey) + '"\s*$'
+    $envKeyMatches = $configuration -match $envKeyPattern
 
-    if ($providerMatches -and $sectionMatches -and $urlMatches -and $wireApiMatches) {
-        Write-Pass "Codex managed configuration uses the approved agentgateway URL."
+    $configurationMatches = @(
+        $providerMatches,
+        $sectionMatches,
+        $urlMatches,
+        $wireApiMatches,
+        $envKeyMatches
+    ) -notcontains $false
+
+    if ($configurationMatches) {
+        Write-Pass "Codex managed configuration uses the approved agentgateway URL and credential variable."
     } else {
-        Write-Failure "Codex managed configuration does not match the approved provider, URL, and wire API."
+        Write-Failure "Codex managed configuration does not match the approved provider, URL, wire API, and credential variable."
     }
 }
 

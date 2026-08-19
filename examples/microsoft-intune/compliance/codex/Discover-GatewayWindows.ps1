@@ -1,5 +1,6 @@
-# Edit this value before uploading the script to Microsoft Intune.
+# Edit these values before uploading the script to Microsoft Intune.
 $ExpectedCodexBaseUrl = "https://llm.example.com/v1"
+$ExpectedCodexEnvKey = "AGENTGATEWAY_API_KEY"
 
 $configured = $false
 $path = Join-Path $env:USERPROFILE ".codex\managed_config.toml"
@@ -11,11 +12,15 @@ if (Test-Path -LiteralPath $path -PathType Leaf) {
         $sectionMatches = $configuration.Contains('[model_providers.agentgateway]')
         $urlMatches = $configuration.Contains("base_url = `"$ExpectedCodexBaseUrl`"")
         $wireApiMatches = $configuration -match '(?m)^\s*wire_api\s*=\s*"responses"\s*$'
+        $envKeyPattern = '(?m)^\s*env_key\s*=\s*"' +
+            [regex]::Escape($ExpectedCodexEnvKey) + '"\s*$'
+        $envKeyMatches = $configuration -match $envKeyPattern
         $configured = @(
             $providerMatches,
             $sectionMatches,
             $urlMatches,
-            $wireApiMatches
+            $wireApiMatches,
+            $envKeyMatches
         ) -notcontains $false
     } catch {
         Write-Error "Unable to read the Codex managed configuration."

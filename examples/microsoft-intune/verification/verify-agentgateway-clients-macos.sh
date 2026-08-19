@@ -2,6 +2,7 @@
 
 # Edit these values before uploading the script to Microsoft Intune.
 EXPECTED_CODEX_BASE_URL=${EXPECTED_CODEX_BASE_URL:-"https://llm.example.com/v1"}
+EXPECTED_CODEX_ENV_KEY=${EXPECTED_CODEX_ENV_KEY:-"AGENTGATEWAY_API_KEY"}
 EXPECTED_CLAUDE_GATEWAY_URL=${EXPECTED_CLAUDE_GATEWAY_URL:-"https://llm.example.com/claude"}
 VERIFY_CODEX=${VERIFY_CODEX:-true}
 VERIFY_CLAUDE_DESKTOP=${VERIFY_CLAUDE_DESKTOP:-true}
@@ -125,10 +126,12 @@ verify_codex() {
     printf '%s\n' "$managed_config" | \
       grep -Fq "base_url = \"$EXPECTED_CODEX_BASE_URL\"" && \
     printf '%s\n' "$managed_config" | \
-      grep -Eq '^[[:space:]]*wire_api[[:space:]]*=[[:space:]]*"responses"[[:space:]]*$'; then
-    pass "Codex managed configuration uses the approved agentgateway URL."
+      grep -Eq '^[[:space:]]*wire_api[[:space:]]*=[[:space:]]*"responses"[[:space:]]*$' && \
+    printf '%s\n' "$managed_config" | \
+      grep -Eq "^[[:space:]]*env_key[[:space:]]*=[[:space:]]*\"$EXPECTED_CODEX_ENV_KEY\"[[:space:]]*$"; then
+    pass "Codex managed configuration uses the approved agentgateway URL and credential variable."
   else
-    fail "Codex managed configuration does not match the approved provider, URL, and wire API."
+    fail "Codex managed configuration does not match the approved provider, URL, wire API, and credential variable."
   fi
 }
 
