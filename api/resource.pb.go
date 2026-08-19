@@ -1659,6 +1659,9 @@ const (
 	// Tool call results fed back to the model.
 	BackendPolicySpec_Ai_CONTENT_SCOPE_TOOL_OUTPUT BackendPolicySpec_Ai_ContentScope = 3
 	// Tool call arguments produced by the model.
+	// In APIs that send tool arguments as opaque JSON, such as Completions, the arguments are
+	// masked as a single string, meaning a prompt guard has the potential to rewrite the
+	// arguments into invalid JSON.
 	BackendPolicySpec_Ai_CONTENT_SCOPE_TOOL_INPUT BackendPolicySpec_Ai_ContentScope = 4
 )
 

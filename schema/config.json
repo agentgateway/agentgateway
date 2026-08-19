@@ -4981,7 +4981,7 @@
           "const": "toolOutput"
         },
         {
-          "description": "Tool call arguments.",
+          "description": "Tool call arguments.\n\nIn APIs that send tool arguments as opaque JSON, such as Completions, the arguments are masked as a single string,\nmeaning a prompt guard has the potential to rewrite the arguments into invalid JSON.",
           "type": "string",
           "const": "toolInput"
         }

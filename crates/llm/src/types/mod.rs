@@ -62,6 +62,9 @@ pub enum ContentScope {
 	/// Tool call results.
 	ToolOutput,
 	/// Tool call arguments.
+	///
+	/// In APIs that send tool arguments as opaque JSON, such as Completions, the arguments are masked as a single string,
+	/// meaning a prompt guard has the potential to rewrite the arguments into invalid JSON.
 	ToolInput,
 }
 

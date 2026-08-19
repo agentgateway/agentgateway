@@ -254,6 +254,9 @@ type PromptguardRequest struct {
 	// Which parts of the request this guard inspects. When unset, defaults to
 	// `SystemPrompt` and `Messages`. Tool call inputs and outputs are not
 	// inspected unless `ToolInput`/`ToolOutput` are listed explicitly.
+	// In APIs that send tool arguments as opaque JSON, such as Completions, the
+	// arguments are masked as a single string, meaning a prompt guard has the
+	// potential to rewrite the arguments into invalid JSON.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=4
 	// +listType=set
