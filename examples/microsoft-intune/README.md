@@ -133,9 +133,20 @@ configuration policy.
 5. Assign the policy to the same pilot group as the application and managed
    configuration policies.
 
-The macOS script prints only `true` or `false`, as required for this single
-Boolean rule, and returns exit code `0` for either discovered value. A nonzero
-exit code is reserved for a script execution error.
+Each macOS script returns one JSON object on a single line. For example:
+
+```json
+{"CodexGatewayConfigured":true}
+```
+
+```json
+{"ClaudeDesktopGatewayConfigured":true}
+```
+
+The setting name is case-sensitive and must match the corresponding
+`SettingName` in `compliance.json`. The value is a JSON Boolean, not a quoted
+string. Each script returns exit code `0` for either discovered value. A
+nonzero exit code is reserved for a script execution error.
 
 ### Configure custom compliance on Windows
 
@@ -152,7 +163,7 @@ exit code is reserved for a script execution error.
 5. Assign the policy to the same pilot group as the application and managed
    configuration policies.
 
-Each Windows script returns one compressed JSON object. For example:
+Each Windows script also returns one compressed JSON object. For example:
 
 ```json
 {"CodexGatewayConfigured":true}

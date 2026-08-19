@@ -46,7 +46,8 @@ if [ "$managed_provider" = "gateway" ] && \
   configured=true
 fi
 
-# Custom compliance consumes this value. Do not print diagnostic messages or
-# return a nonzero exit code merely because the discovered value is false.
-printf '%s\n' "$configured"
+# Custom compliance consumes this JSON object. Do not print diagnostic
+# messages or return a nonzero exit code merely because the discovered value
+# is false.
+printf '{"ClaudeDesktopGatewayConfigured":%s}\n' "$configured"
 exit 0

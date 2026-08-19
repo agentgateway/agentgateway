@@ -9,7 +9,12 @@ MANAGED_PREFERENCES_DIRECTORY=${MANAGED_PREFERENCES_DIRECTORY:-"/Library/Managed
 
 encoded_config=""
 managed_config=""
-managed_user=$(id -un) || exit 1
+managed_user=$(stat -f '%Su' /dev/console 2>/dev/null)
+case "$managed_user" in
+  ""|root|loginwindow)
+    managed_user=$(id -un 2>/dev/null) || exit 1
+    ;;
+esac
 
 for preference_file in \
   "$MANAGED_PREFERENCES_DIRECTORY/$managed_user/com.openai.codex.plist" \
@@ -48,7 +53,8 @@ if [ -n "$managed_config" ] && \
   configured=true
 fi
 
-# Custom compliance consumes this value. Do not print diagnostic messages or
-# return a nonzero exit code merely because the discovered value is false.
-printf '%s\n' "$configured"
+# Custom compliance consumes this JSON object. Do not print diagnostic
+# messages or return a nonzero exit code merely because the discovered value
+# is false.
+printf '{"CodexGatewayConfigured":%s}\n' "$configured"
 exit 0
