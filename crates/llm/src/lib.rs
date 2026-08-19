@@ -15,6 +15,7 @@ pub mod conversion;
 pub mod copilot;
 pub mod custom;
 pub mod gemini;
+pub mod model_catalog;
 pub mod openai;
 pub mod parse;
 pub mod tokenizer;
@@ -227,6 +228,19 @@ pub enum ChatFormat {
 	AnthropicMessages,
 	BedrockConverse,
 	VertexGemini,
+}
+
+impl ChatFormat {
+	pub fn tag(&self) -> &'static str {
+		use crate::model_catalog::tags;
+		match self {
+			ChatFormat::OpenAICompletions => tags::OPENAI_COMPLETIONS,
+			ChatFormat::OpenAIResponses => tags::OPENAI_RESPONSES,
+			ChatFormat::AnthropicMessages => tags::ANTHROPIC_MESSAGES,
+			ChatFormat::BedrockConverse => tags::BEDROCK_CONVERSE,
+			ChatFormat::VertexGemini => tags::VERTEX_GEMINI,
+		}
+	}
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

@@ -33,14 +33,17 @@ fn vertex_gemini_uses_native_completions_and_compat_fallbacks() {
 
 	assert_eq!(
 		provider
-			.chat_translation(InputFormat::Completions, model)
+			.chat_translation(InputFormat::Completions, model, None)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
 	);
 	for input in [InputFormat::Messages, InputFormat::Responses] {
 		assert_eq!(
-			provider.chat_translation(input, model).unwrap().output,
+			provider
+				.chat_translation(input, model, None)
+				.unwrap()
+				.output,
 			ChatFormat::OpenAICompletions
 		);
 	}
@@ -55,7 +58,7 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 	});
 	assert_eq!(
 		vertex
-			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"))
+			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"), None)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
@@ -63,14 +66,14 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 	// Vertex with a non-Gemini model has no Gemini-input translation.
 	assert!(
 		vertex
-			.chat_translation(InputFormat::Gemini, Some("claude-sonnet-4-5"))
+			.chat_translation(InputFormat::Gemini, Some("claude-sonnet-4-5"), None)
 			.is_err()
 	);
 
 	let gemini = AIProvider::Gemini(gemini::Provider { model: None });
 	assert_eq!(
 		gemini
-			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"))
+			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"), None)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
@@ -79,7 +82,7 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 	// OpenAI-compat shim, matching Vertex with a Gemini model.
 	assert_eq!(
 		gemini
-			.chat_translation(InputFormat::Completions, Some("gemini-2.5-flash"))
+			.chat_translation(InputFormat::Completions, Some("gemini-2.5-flash"), None)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
@@ -89,7 +92,7 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 	for input in [InputFormat::Messages, InputFormat::Responses] {
 		assert_eq!(
 			gemini
-				.chat_translation(input, Some("gemini-2.5-flash"))
+				.chat_translation(input, Some("gemini-2.5-flash"), None)
 				.unwrap()
 				.output,
 			ChatFormat::OpenAICompletions
@@ -100,7 +103,8 @@ fn gemini_inbound_selects_native_translation_only_for_gemini_upstreams() {
 #[test]
 fn gemini_inbound_to_non_gemini_upstream_is_unsupported() {
 	let anthropic = AIProvider::Anthropic(anthropic::Provider { model: None });
-	let Err(err) = anthropic.chat_translation(InputFormat::Gemini, Some("claude-opus-4")) else {
+	let Err(err) = anthropic.chat_translation(InputFormat::Gemini, Some("claude-opus-4"), None)
+	else {
 		panic!("expected unsupported conversion");
 	};
 	assert!(matches!(err, AIError::UnsupportedConversion(_)));
@@ -112,7 +116,8 @@ fn gemini_inbound_to_non_gemini_upstream_is_unsupported() {
 		model: None,
 		region: None,
 	});
-	let Err(err) = vertex.chat_translation(InputFormat::Gemini, Some("claude-sonnet-4-5")) else {
+	let Err(err) = vertex.chat_translation(InputFormat::Gemini, Some("claude-sonnet-4-5"), None)
+	else {
 		panic!("expected unsupported conversion");
 	};
 	let msg = err.to_string();
@@ -126,7 +131,7 @@ fn custom_provider_generate_content_advertises_the_native_chat_format() {
 	// Native Gemini input takes the direct passthrough.
 	assert_eq!(
 		provider
-			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"))
+			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"), None)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
@@ -135,7 +140,7 @@ fn custom_provider_generate_content_advertises_the_native_chat_format() {
 	// Vertex with a Gemini model (the CHAT_TRANSLATIONS quirk).
 	assert_eq!(
 		provider
-			.chat_translation(InputFormat::Completions, Some("gemini-2.5-flash"))
+			.chat_translation(InputFormat::Completions, Some("gemini-2.5-flash"), None)
 			.unwrap()
 			.output,
 		ChatFormat::VertexGemini
@@ -145,7 +150,7 @@ fn custom_provider_generate_content_advertises_the_native_chat_format() {
 	let undeclared = custom_provider(custom::ProviderFormat::Completions);
 	assert!(
 		undeclared
-			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"))
+			.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"), None)
 			.is_err()
 	);
 }
@@ -170,7 +175,14 @@ async fn custom_provider_completions_inbound_renders_native_gemini() {
 		llm_request,
 		upstream_route_type,
 	} = provider
-		.process_completions_request(&openai_test_backend_info(), None, req, false, &mut None)
+		.process_completions_request(
+			&openai_test_backend_info(),
+			None,
+			req,
+			false,
+			&mut None,
+			None,
+		)
 		.await
 		.expect("completions request should process")
 	else {
@@ -235,7 +247,7 @@ fn gemini_render_is_passthrough_with_unknown_fields() {
 		region: None,
 	});
 	let translation = provider
-		.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"))
+		.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"), None)
 		.unwrap();
 
 	let raw = json!({
@@ -300,7 +312,7 @@ fn gemini_error_passes_google_shape_through() {
 		region: None,
 	});
 	let translation = provider
-		.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"))
+		.chat_translation(InputFormat::Gemini, Some("gemini-2.5-flash"), None)
 		.unwrap();
 	assert!(matches!(
 		provider.chat_error_format(translation, Some("gemini-2.5-flash")),
@@ -563,7 +575,7 @@ async fn openai_inline_moderation_injected_for_completions() {
 		upstream_route_type,
 		..
 	} = provider
-		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.process_completions_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -610,7 +622,7 @@ async fn openai_inline_moderation_overrides_client_value_for_completions() {
 	let RequestResult::Success {
 		request: forwarded, ..
 	} = provider
-		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.process_completions_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -660,7 +672,7 @@ async fn openai_client_moderation_passthrough_without_config() {
 	let RequestResult::Success {
 		request: forwarded, ..
 	} = provider
-		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.process_completions_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -714,7 +726,7 @@ async fn openai_inline_moderation_injected_for_responses() {
 		upstream_route_type,
 		..
 	} = provider
-		.process_responses_request(&backend_info, None, req, false, &mut None)
+		.process_responses_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("OpenAI responses request should process")
 	else {
@@ -757,7 +769,7 @@ async fn openai_inline_moderation_injected_after_messages_translation() {
 		upstream_route_type,
 		..
 	} = provider
-		.process_messages_request(&backend_info, None, req, false, &mut None)
+		.process_messages_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("Anthropic messages request should translate to OpenAI completions")
 	else {
@@ -853,7 +865,7 @@ async fn openai_provider_normalizes_max_tokens_before_forwarding() {
 		llm_request,
 		..
 	} = provider
-		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.process_completions_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -911,7 +923,7 @@ async fn openai_provider_normalizes_max_tokens_after_model_alias() {
 		llm_request,
 		..
 	} = provider
-		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None)
+		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -963,7 +975,7 @@ async fn openai_provider_preserves_max_tokens_for_non_gpt_models() {
 		llm_request,
 		..
 	} = provider
-		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.process_completions_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("OpenAI-compatible completions request should process")
 	else {
@@ -1131,7 +1143,7 @@ async fn gemini_generate_content_forwards_unknown_top_level_fields() {
 		llm_request,
 		..
 	} = provider
-		.process_gemini_request(&vertex_backend_info(), None, req, false, &mut None)
+		.process_gemini_request(&vertex_backend_info(), None, req, false, &mut None, None)
 		.await
 		.expect("generateContent request should process")
 	else {
@@ -1169,6 +1181,7 @@ async fn gemini_stream_without_alt_sse_is_rejected_with_google_shaped_400() {
 				gemini_generate_content_request(uri),
 				false,
 				&mut None,
+				None,
 			)
 			.await
 			.expect("the non-SSE streaming variant is a client error, not a gateway failure")
@@ -1352,7 +1365,6 @@ fn gemini_count_tokens_response_reports_total_tokens() {
 	let buffered = BufferedResponse {
 		parts: ::http::Response::new(()).into_parts().0,
 		bytes: bytes::Bytes::from_static(body),
-		encoding: None,
 	};
 
 	let log = AsyncLog::<llm::LLMInfo>::default();
@@ -1401,7 +1413,7 @@ async fn vertex_anthropic_messages_prepares_vertex_body() {
 		upstream_route_type,
 		..
 	} = provider
-		.process_messages_request(&backend_info, None, req, false, &mut None)
+		.process_messages_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("Vertex Anthropic messages request should process")
 	else {
@@ -1467,7 +1479,7 @@ async fn provider_model_is_set_before_llm_transformations() {
 		llm_request,
 		..
 	} = provider
-		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None)
+		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -1502,7 +1514,7 @@ async fn messages_to_completions_final_transformation() {
 			upstream_route_type,
 			..
 		} = provider
-			.process_messages_request(&backend_info, policy, req, false, &mut None)
+			.process_messages_request(&backend_info, policy, req, false, &mut None, None)
 			.await
 			.expect("Anthropic messages request should translate to OpenAI completions")
 		else {
@@ -1730,7 +1742,7 @@ async fn bedrock_transformed_provider_model_is_used_for_upstream_path() {
 		llm_request,
 		upstream_route_type,
 	} = provider
-		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None)
+		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None, None)
 		.await
 		.expect("Bedrock completions request should process")
 	else {
@@ -1790,7 +1802,7 @@ async fn bedrock_provider_model_overrides_client_model() {
 		llm_request,
 		upstream_route_type,
 	} = provider
-		.process_completions_request(&backend_info, None, req, false, &mut None)
+		.process_completions_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("Bedrock completions request should process")
 	else {
@@ -1858,7 +1870,7 @@ async fn llm_transformations_can_set_missing_model() {
 		llm_request,
 		..
 	} = provider
-		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None)
+		.process_completions_request(&backend_info, Some(&policy), req, false, &mut None, None)
 		.await
 		.expect("OpenAI completions request should process")
 	else {
@@ -1904,7 +1916,7 @@ async fn copilot_anthropic_model_uses_messages_route() {
 		llm_request,
 		upstream_route_type,
 	} = provider
-		.process_messages_request(&backend_info, None, req, false, &mut None)
+		.process_messages_request(&backend_info, None, req, false, &mut None, None)
 		.await
 		.expect("Copilot Anthropic messages request should process")
 	else {
@@ -2292,6 +2304,83 @@ async fn process_response_routes_streaming_error_to_buffered_path() {
 	);
 }
 
+#[tokio::test]
+async fn upstream_encoding_is_applied_after_messages_response_translation() {
+	use crate::proxy::httpproxy::PolicyClient;
+	use crate::test_helpers::proxymock::setup_proxy_test;
+
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
+	let mut req = llm_request_with_tokens(None);
+	req.input_format = InputFormat::Messages;
+	req.request_model = "gpt-4o".into();
+	req.streaming = false;
+	let upstream_body = br#"{"id":"chatcmpl-1","object":"chat.completion","created":0,"model":"gpt-4o","choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"Hello!"}}],"usage":{"prompt_tokens":3,"completion_tokens":2,"total_tokens":5}}"#;
+	let compressed = crate::http::compression::encode_body(upstream_body, "br")
+		.await
+		.unwrap();
+	let upstream = ::http::Response::builder()
+		.header(::http::header::CONTENT_ENCODING, "br")
+		.header(::http::header::CONTENT_LENGTH, compressed.len())
+		.body(Body::from(compressed))
+		.unwrap();
+
+	let response = provider
+		.process_response(
+			PolicyClient::new(setup_proxy_test("{}").unwrap().pi),
+			req,
+			LLMResponsePolicies::default(),
+			None,
+			AsyncLog::default(),
+			llm::LogContentFields::default(),
+			None,
+			upstream,
+		)
+		.await
+		.unwrap();
+
+	// Keep the response plain while later response policies can still replace its body.
+	assert!(
+		!response
+			.headers()
+			.contains_key(::http::header::CONTENT_ENCODING)
+	);
+	assert!(
+		response
+			.extensions()
+			.get::<crate::cel::BufferedBody>()
+			.is_none()
+	);
+	let (parts, body) = response.into_parts();
+	let mut body: Value = serde_json::from_slice(&body.collect().await.unwrap().to_bytes()).unwrap();
+	assert_eq!(body["type"], "message");
+	assert_eq!(body["content"][0]["text"], "Hello!");
+	// Stand in for a later response-body policy mutation.
+	body["policy_applied"] = true.into();
+	let mut response = Response::from_parts(parts, Body::from(serde_json::to_vec(&body).unwrap()));
+
+	encode_deferred_response(&mut response);
+	assert_eq!(response.headers()[::http::header::CONTENT_ENCODING], "br");
+	assert!(
+		!response
+			.headers()
+			.contains_key(::http::header::CONTENT_LENGTH)
+	);
+	let content_encoding = response.headers().typed_get::<ContentEncoding>();
+	let (_, body) = crate::http::compression::to_bytes_with_decompression(
+		response.into_body(),
+		content_encoding.as_ref(),
+		1024 * 1024,
+	)
+	.await
+	.unwrap();
+	let body: Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(body["type"], "message");
+	assert_eq!(body["policy_applied"], true);
+}
+
 #[test]
 fn openai_completions_error_translates_to_messages_client() {
 	let provider = AIProvider::OpenAI(openai::Provider {
@@ -2306,7 +2395,7 @@ fn openai_completions_error_translates_to_messages_client() {
 		br#"{"error":{"message":"bad request","type":"invalid_request_error","param":null,"code":400}}"#,
 	);
 	let translated = provider
-		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error)
+		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error, None)
 		.expect("OpenAI error should translate to messages error");
 	let body: Value = serde_json::from_slice(&translated).expect("translated error should be JSON");
 
@@ -2326,7 +2415,7 @@ fn custom_messages_error_translates_to_completions_client() {
 		br#"{"type":"error","error":{"type":"invalid_request_error","message":"bad request"}}"#,
 	);
 	let translated = provider
-		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error)
+		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error, None)
 		.expect("Anthropic error should translate to completions error");
 	let body: Value = serde_json::from_slice(&translated).expect("translated error should be JSON");
 
@@ -2351,7 +2440,7 @@ fn foundry_claude_messages_error_uses_anthropic_shape() {
 		br#"{"type":"error","error":{"type":"invalid_request_error","message":"bad request"}}"#,
 	);
 	let translated = provider
-		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error)
+		.process_error(&req, ::http::StatusCode::BAD_REQUEST, &error, None)
 		.expect("Foundry Claude messages error should stay Anthropic-shaped");
 	let body: Value = serde_json::from_slice(&translated).expect("translated error should be JSON");
 

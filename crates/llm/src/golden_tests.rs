@@ -41,6 +41,7 @@ const BEDROCK_NOVA: &str = "bedrock-nova";
 const COHERE: &str = "cohere";
 const VERTEX_GEMINI: &str = "vertex-gemini";
 const GEMINI_NATIVE: &str = "gemini-native";
+const RESPONSES: &str = "responses";
 
 mod requests {
 	use super::*;
@@ -151,9 +152,15 @@ mod requests {
 		("generation-config", &[VERTEX_GEMINI]),
 	];
 	const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
+		(
+			"basic",
+			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES],
+		),
 		("system_message", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
-		("tools", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
+		(
+			"tools",
+			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES],
+		),
 		("server_tools", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
 		("reasoning", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
 		("metadata", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
@@ -165,6 +172,7 @@ mod requests {
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
 		("reasoning_replay", &[BEDROCK]),
 		("tool_history_without_tools", &[BEDROCK]),
+		("responses_agent_subset", &[RESPONSES]),
 	];
 	const RESPONSES_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[BEDROCK, GEMINI]),
@@ -261,6 +269,9 @@ mod requests {
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::messages::Request| {
 						let body = serde_json::to_vec(i).map_err(AIError::RequestMarshal)?;
 						vertex.prepare_anthropic_message_body(body)
+					}),
+					RESPONSES => test_request(RESPONSES, &path, |i| {
+						conversion::responses::from_messages::translate(i)
 					}),
 					other => panic!("unsupported provider in MESSAGES_REQUESTS: {other}"),
 				}
@@ -696,6 +707,7 @@ mod responses {
 	const BEDROCK_TO_DETECT: &str = "bedrock-detect";
 	const RESPONSES_TO_RESPONSES: &str = "responses-responses";
 	const RESPONSES_TO_DETECT: &str = "responses-detect";
+	const RESPONSES_TO_MESSAGES: &str = "responses-messages";
 	const VERTEX_GEMINI_TO_COMPLETIONS: &str = "vertex-gemini-completions";
 
 	const ALL_BEDROCK: &[&str] = &[
@@ -752,7 +764,16 @@ mod responses {
 		),
 	];
 	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[
-		("basic", &[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT]),
+		(
+			"basic",
+			&[
+				RESPONSES_TO_RESPONSES,
+				RESPONSES_TO_DETECT,
+				RESPONSES_TO_MESSAGES,
+			],
+		),
+		("tool", &[RESPONSES_TO_MESSAGES]),
+		("reasoning", &[RESPONSES_TO_MESSAGES]),
 		("custom-tool", &[RESPONSES_TO_RESPONSES]),
 		("truncated_tool_call", &[RESPONSES_TO_RESPONSES]),
 	];
@@ -903,6 +924,9 @@ mod responses {
 							serde_json::from_slice::<types::detect::Response>(&bytes)
 								.unwrap_or_else(|_| types::detect::Response::new_raw(bytes)),
 						))
+					}),
+					RESPONSES_TO_MESSAGES => test_response(provider, &path, |i| {
+						conversion::responses::from_messages::translate_response(&i)
 					}),
 					other => panic!("unsupported provider in RESPONSES_RESPONSES: {other}"),
 				}
@@ -1323,4 +1347,197 @@ data: {"type":"message_stop"}
 			None
 		);
 	}
+}
+
+async fn test_stream(provider: &str, relative_path: &str) {
+	let input_path = fixture_path(relative_path);
+	let provider_bytes = fs::read(&input_path).expect("failed to read stream input file");
+	let input_str = String::from_utf8_lossy(&provider_bytes).to_string();
+
+	let output = conversion::responses::from_messages::translate_stream(
+		axum_core::body::Body::from(provider_bytes),
+		1024 * 1024,
+		StreamingUsageGuard::default(),
+		crate::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		},
+	)
+	.collect()
+	.await
+	.unwrap()
+	.to_bytes();
+	let output_str = String::from_utf8_lossy(&output).to_string();
+	let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
+
+	insta::with_settings!({
+		info => &input_str,
+		description => input_path.to_string_lossy().to_string(),
+		omit_expression => true,
+		prepend_module_to_snapshot => false,
+		snapshot_path => snapshot_path,
+	}, {
+		insta::assert_snapshot!(snapshot_name, output_str);
+	});
+}
+
+#[tokio::test]
+async fn responses_to_messages_stream_translates_text_tool_and_usage() {
+	test_stream(
+		"responses-messages-streaming",
+		"response/responses/stream.json",
+	)
+	.await;
+}
+
+#[tokio::test]
+async fn responses_to_messages_stream_translates_image() {
+	test_stream(
+		"responses-messages-streaming",
+		"response/responses/stream-image.json",
+	)
+	.await;
+}
+
+#[tokio::test]
+async fn responses_to_messages_stream_translates_refusal() {
+	test_stream(
+		"responses-messages-streaming",
+		"response/responses/stream-refusal.json",
+	)
+	.await;
+}
+
+#[test]
+fn messages_to_responses_rejects_unsupported_features() {
+	let path = "requests/messages/reasoning_replay.json";
+	let input_str = fs::read_to_string(fixture_path(path)).expect("failed to read fixture");
+	let input: types::messages::Request =
+		serde_json::from_str(&input_str).expect("failed to parse fixture");
+	let err = conversion::responses::from_messages::translate(&input).unwrap_err();
+	assert!(
+		matches!(err, AIError::UnsupportedConversion(_)),
+		"expected UnsupportedConversion for {path}, got {err:?}"
+	);
+}
+
+#[test]
+fn messages_to_responses_accepts_and_drops_unrepresentable_fields() {
+	let input: types::messages::Request = serde_json::from_value(json!({
+		"model": "claude-sonnet-4-20250514",
+		"max_tokens": 1024,
+		"stop_sequences": ["</end>", "\n\nHuman:"],
+		"top_k": 40,
+		"messages": [{
+			"role": "user",
+			"content": [{"type": "text", "text": "hello"}]
+		}]
+	}))
+	.expect("failed to parse request");
+	let body = conversion::responses::from_messages::translate(&input)
+		.expect("stop_sequences/top_k should be accepted and dropped");
+	let body: Value = serde_json::from_slice(&body).expect("translated request should be JSON");
+	assert!(body.get("stop").is_none());
+	assert!(body.get("top_k").is_none());
+	assert_eq!(body["input"][0]["content"][0]["text"], "hello");
+}
+
+#[test]
+fn messages_to_responses_maps_tool_result_is_error_to_incomplete() {
+	let input_str = fs::read_to_string(fixture_path("requests/messages/tool_result_error.json"))
+		.expect("failed to read fixture");
+	let input: types::messages::Request =
+		serde_json::from_str(&input_str).expect("failed to parse fixture");
+	let body = conversion::responses::from_messages::translate(&input)
+		.expect("tool_result is_error should be mapped, not rejected");
+	let body: Value = serde_json::from_slice(&body).expect("translated request should be JSON");
+	let call_outputs = body["input"]
+		.as_array()
+		.expect("input should be an array")
+		.iter()
+		.filter(|item| item["type"] == "function_call_output")
+		.collect::<Vec<_>>();
+	assert_eq!(
+		call_outputs.len(),
+		1,
+		"expected one function_call_output: {body}"
+	);
+	assert_eq!(call_outputs[0]["call_id"], "toolu_01");
+	assert_eq!(call_outputs[0]["status"], "incomplete");
+}
+
+#[test]
+fn messages_to_responses_rejects_malformed_image_source() {
+	let error_sources = [
+		// base64 missing media_type
+		json!({"type": "base64", "data": "aGVsbG8="}),
+		// base64 missing data
+		json!({"type": "base64", "media_type": "image/png"}),
+		// url missing url
+		json!({"type": "url"}),
+		// file missing file_id
+		json!({"type": "file"}),
+		// unknown source type
+		json!({"type": "unknown_source"}),
+	];
+	for (i, source) in error_sources.iter().enumerate() {
+		let input: types::messages::Request = serde_json::from_value(json!({
+			"model": "claude-sonnet-4-20250514",
+			"max_tokens": 1024,
+			"messages": [{
+				"role": "user",
+				"content": [{"type": "image", "source": source}]
+			}]
+		}))
+		.expect("failed to parse request");
+		let err = conversion::responses::from_messages::translate(&input).unwrap_err();
+		assert!(
+			matches!(err, AIError::UnsupportedConversion(_)),
+			"expected UnsupportedConversion for error source #{i} ({source}), got {err:?}"
+		);
+	}
+}
+
+#[test]
+fn messages_to_responses_maps_anthropic_runtime_features() {
+	let input: types::messages::Request = serde_json::from_value(json!({
+		"model": "claude-sonnet-4-20250514",
+		"max_tokens": 1024,
+		"context_management": {
+			"edits": [{"type": "clear_thinking_20251015", "keep": "all"}]
+		},
+		"thinking": {"type": "enabled", "budget_tokens": 2048},
+		"system": [
+			{"type": "text", "text": "stable instructions"},
+			{
+				"type": "text",
+				"text": "cached instructions",
+				"cache_control": {"type": "ephemeral"}
+			}
+		],
+		"messages": [{
+			"role": "user",
+			"content": [{
+				"type": "text",
+				"text": "hello",
+				"cache_control": {"type": "ephemeral"}
+			}]
+		}]
+	}))
+	.expect("failed to parse request");
+	let body = conversion::responses::from_messages::translate(&input)
+		.expect("runtime features should translate");
+	let body: Value = serde_json::from_slice(&body).expect("translated request should be JSON");
+
+	assert!(body.get("context_management").is_none());
+	assert_eq!(body["reasoning"]["effort"], "high");
+	assert_eq!(body["input"][0]["role"], "system");
+	assert_eq!(
+		body["input"][0]["content"][1]["prompt_cache_breakpoint"]["mode"],
+		"explicit"
+	);
+	assert_eq!(
+		body["input"][1]["content"][0]["prompt_cache_breakpoint"]["mode"],
+		"explicit"
+	);
 }

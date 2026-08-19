@@ -301,6 +301,7 @@ async fn apply_request_policies(
 		.await?;
 
 	// Mirror is handled separately
+	crate::http::mark_sensitive_headers(req, &c.inputs.cfg.sensitive_headers);
 	Ok(route_retry)
 }
 
@@ -391,7 +392,7 @@ async fn apply_backend_policies(
 		}
 		if matches!(
 			a2a_type,
-			a2a::RequestType::Call(_) | a2a::RequestType::AgentCard(_, _)
+			a2a::RequestType::Call(_) | a2a::RequestType::AgentCard(_, _, _)
 		) {
 			log.add(|l| {
 				l.backend_protocol = Some(cel::BackendProtocol::a2a);
@@ -400,6 +401,7 @@ async fn apply_backend_policies(
 		rp.a2a_type = a2a_type;
 	}
 
+	crate::http::mark_sensitive_headers(req, &client.inputs.cfg.sensitive_headers);
 	Ok(())
 }
 
@@ -482,6 +484,7 @@ async fn apply_gateway_policies(
 		)
 		.await?;
 
+	crate::http::mark_sensitive_headers(req, &client.inputs.cfg.sensitive_headers);
 	Ok(())
 }
 
@@ -681,6 +684,9 @@ impl HTTPProxy {
 				ProxyResponse::DirectResponse(dr) => *dr,
 			},
 		};
+		// LLM buffering deliberately leaves decoded bodies plain so response policies can safely read
+		// and replace them. Restore the upstream-selected encoding only after every such policy ran.
+		llm::encode_deferred_response(&mut resp);
 		if let Some(log) = log.as_mut() {
 			dtrace::snapshot!(Response, "final response", log, &resp);
 		}
@@ -732,7 +738,7 @@ impl HTTPProxy {
 			ctx.bind = Some(bind_name.clone());
 		});
 
-		sensitive_headers(&mut req);
+		crate::http::mark_sensitive_headers(&mut req, &self.inputs.cfg.sensitive_headers);
 		normalize_uri(log.tls_info.as_ref(), &mut req)
 			.map_err(ProxyError::Processing)
 			.snapshot_on_err(log, &mut req)?;
@@ -2348,6 +2354,7 @@ async fn make_backend_call(
 							req,
 							llm.tokenize,
 							&mut log,
+							Some(inputs.model_catalog.as_handle()),
 						))
 						.await
 						.map_err(ProxyError::AIRequest)?,
@@ -2357,6 +2364,7 @@ async fn make_backend_call(
 							req,
 							llm.tokenize,
 							&mut log,
+							Some(inputs.model_catalog.as_handle()),
 						))
 						.await
 						.map_err(ProxyError::AIRequest)?,
@@ -2366,6 +2374,7 @@ async fn make_backend_call(
 							req,
 							llm.tokenize,
 							&mut log,
+							Some(inputs.model_catalog.as_handle()),
 						))
 						.await
 						.map_err(ProxyError::AIRequest)?,
@@ -2401,6 +2410,7 @@ async fn make_backend_call(
 							req,
 							llm.tokenize,
 							&mut log,
+							Some(inputs.model_catalog.as_handle()),
 						))
 						.await
 						.map_err(ProxyError::AIRequest)?,
@@ -3229,6 +3239,26 @@ mod tests {
 	use crate::types::local::LocalAIBackend;
 	use crate::{http, llm};
 
+	#[test]
+	fn configured_request_headers_are_marked_sensitive_at_ingress() {
+		let mut request = ::http::Request::builder()
+			.uri("https://example.com")
+			.header("authorization", "Bearer built-in-secret")
+			.header("my-mcp-token", "configured-secret")
+			.header("x-visible", "visible-value")
+			.body(http::Body::empty())
+			.unwrap();
+
+		crate::http::mark_sensitive_headers(
+			&mut request,
+			&[::http::HeaderName::from_static("my-mcp-token")],
+		);
+
+		assert!(request.headers()["authorization"].is_sensitive());
+		assert!(request.headers()["my-mcp-token"].is_sensitive());
+		assert!(!request.headers()["x-visible"].is_sensitive());
+	}
+
 	fn retry_policy(codes: &[u16], condition: Option<&str>) -> crate::http::retry::Policy {
 		crate::http::retry::Policy {
 			attempts: std::num::NonZeroU8::new(2).unwrap(),
@@ -3876,14 +3906,6 @@ fn get_upgrade_type(headers: &HeaderMap) -> Option<HeaderValue> {
 		}
 	} else {
 		None
-	}
-}
-
-fn sensitive_headers(req: &mut Request) {
-	for (name, value) in req.headers_mut() {
-		if name == http::header::AUTHORIZATION {
-			value.set_sensitive(true)
-		}
 	}
 }
 

@@ -126,6 +126,7 @@ impl ProviderPreset {
 				vec![
 					format(Completions, None),
 					format(Messages, Some("/anthropic/v1/messages")),
+					format(Responses, None),
 				],
 			),
 			Self::Groq => (

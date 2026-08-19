@@ -567,9 +567,9 @@ function upsertFileConfigResource(
 		const section = ensureRecord(config, sectionName);
 		const policies = ensureRecord(section, 'policies');
 		const policyId = previousId;
-		const existingKeys =
-			kind === 'llm.policy' && policyId === 'apiKey' ? record(policies.apiKey).keys : undefined;
-		if (existingKeys !== undefined) value.keys = existingKeys;
+		if (kind === 'llm.policy' && policyId === 'apiKey') {
+			value.keys = record(policies.apiKey).keys ?? [];
+		}
 		policies[policyId] = value;
 		return;
 	}

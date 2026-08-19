@@ -36,7 +36,7 @@ use value_bag::visit::Visit;
 use crate::cel::{ContextBuilder, Expression, LLMContext};
 use crate::http::{Request, health};
 use crate::llm::InputFormat;
-use crate::llm::cost::{CostLookupStatus, ModelCatalog};
+use crate::llm::catalog::{CostLookupStatus, ModelCatalog};
 use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{
@@ -1414,6 +1414,15 @@ impl Drop for DropOnLog {
 				("route", route_identifier.route.as_deref().map(display)),
 				("endpoint", log.endpoint.display()),
 				("src.addr", Some(display(&log.tcp_info.peer_addr))),
+				(
+					"src.identity",
+					log
+						.tls_info
+						.as_ref()
+						.and_then(|tls| tls.src_identity.as_ref())
+						.and_then(|tls| tls.identity.as_ref())
+						.map(display),
+				),
 				("http.method", log.method.display()),
 				("http.host", log.host.display()),
 				("http.path", log.path.display()),
@@ -1463,6 +1472,14 @@ impl Drop for DropOnLog {
 						.a2a_response
 						.as_ref()
 						.and_then(|r| r.task_state.as_ref())
+						.map(display),
+				),
+				(
+					"a2a.context.id",
+					log
+						.a2a_response
+						.as_ref()
+						.and_then(|r| r.context_id.as_ref())
 						.map(display),
 				),
 				(
@@ -2679,6 +2696,7 @@ mod tests {
 			error_code: Some(-32602),
 			result_kind: Some(strng::literal!("task")),
 			task_state: Some(strng::literal!("failed")),
+			context_id: Some(strng::literal!("ctx-123")),
 		});
 
 		drop(DropOnLog::from(log));
@@ -2695,6 +2713,7 @@ mod tests {
 			"a2a.response.error_code",
 			"a2a.result.kind",
 			"a2a.task.state",
+			"a2a.context.id",
 		] {
 			assert!(has(expected), "expected {expected} span attribute");
 		}

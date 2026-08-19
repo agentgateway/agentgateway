@@ -40,7 +40,7 @@ env:
   CI: true
   RUST_VERSION: "1.97.0"
   CARGO_BUILD_WARNINGS: deny
-  GO_VERSION: "1.26.6"
+  GO_VERSION: "1.27.0"
   REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/agentgateway
   CONTROLLER_REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/controller
   VEX_FILE: .github/vex/openvex.json
@@ -122,8 +122,6 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         tags: ${{ env.REGISTRY_IMAGE }}
         outputs: type=image,push-by-digest=true,name-canonical=true,push=true
-        cache-from: type=registry,ref=${{ env.REGISTRY_IMAGE }}:buildcache
-        cache-to: type=registry,ref=${{ env.REGISTRY_IMAGE }}:buildcache,mode=max
 
     - name: Export digest
       run: |
@@ -279,8 +277,6 @@ jobs:
         labels: ${{ steps.meta.outputs.labels }}
         tags: ${{ env.CONTROLLER_REGISTRY_IMAGE }}
         outputs: type=image,push-by-digest=true,name-canonical=true,push=true
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
 
     - name: Export digest
       run: |

@@ -1,0 +1,25 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/responses/stream-refusal.json
+info: "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":1,\"response\":{\"created_at\":123,\"id\":\"\",\"model\":\"gpt-4.1-mini\",\"object\":\"response\",\"output\":[],\"status\":\"in_progress\"}}\n\nevent: response.output_item.added\ndata: {\"type\":\"response.output_item.added\",\"sequence_number\":2,\"output_index\":0,\"item\":{\"type\":\"message\",\"content\":[],\"id\":\"\",\"role\":\"assistant\",\"status\":\"in_progress\"}}\n\nevent: response.refusal.delta\ndata: {\"type\":\"response.refusal.delta\",\"sequence_number\":3,\"item_id\":\"\",\"output_index\":0,\"content_index\":0,\"delta\":\"I can\"}\n\nevent: response.refusal.delta\ndata: {\"type\":\"response.refusal.delta\",\"sequence_number\":4,\"item_id\":\"\",\"output_index\":0,\"content_index\":0,\"delta\":\"not help with that.\"}\n\nevent: response.refusal.done\ndata: {\"type\":\"response.refusal.done\",\"sequence_number\":5,\"item_id\":\"\",\"output_index\":0,\"content_index\":0,\"refusal\":\"I cannot help with that.\"}\n\nevent: response.output_item.done\ndata: {\"type\":\"response.output_item.done\",\"sequence_number\":6,\"output_index\":0,\"item\":{\"type\":\"message\",\"content\":[{\"type\":\"refusal\",\"refusal\":\"I cannot help with that.\"}],\"id\":\"\",\"role\":\"assistant\",\"status\":\"completed\"}}\n\nevent: response.completed\ndata: {\"type\":\"response.completed\",\"sequence_number\":7,\"response\":{\"created_at\":123,\"id\":\"\",\"model\":\"gpt-4.1-mini\",\"object\":\"response\",\"output\":[],\"status\":\"completed\",\"usage\":{\"input_tokens\":5,\"output_tokens\":3,\"total_tokens\":8,\"input_tokens_details\":{\"cached_tokens\":0},\"output_tokens_details\":{\"reasoning_tokens\":0}}}}\n\ndata: [DONE]\n\n"
+---
+event: message_start
+data: {"type":"message_start","message":{"id":"","type":"message","role":"assistant","content":[],"model":"gpt-4.1-mini","stop_reason":null,"stop_sequence":null,"usage":{"input_tokens":0,"output_tokens":0}}}
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"I can"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"not help with that."}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"refusal","stop_sequence":null},"usage":{"input_tokens":5,"output_tokens":3}}
+
+event: message_stop
+data: {"type":"message_stop"}

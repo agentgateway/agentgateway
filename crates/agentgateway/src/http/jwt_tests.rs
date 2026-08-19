@@ -704,7 +704,7 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	RequestLog::new(
 		cel,
 		metrics,
-		crate::llm::cost::ModelCatalog::empty(),
+		crate::llm::catalog::ModelCatalog::empty(),
 		start,
 		tcp_info,
 	)

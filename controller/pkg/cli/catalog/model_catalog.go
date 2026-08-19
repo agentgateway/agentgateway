@@ -1,4 +1,4 @@
-package costs
+package catalog
 
 import (
 	"encoding/json"
@@ -29,12 +29,13 @@ type Provider struct {
 }
 
 type Model struct {
-	Rates Rates  `json:"rates,omitzero"`
-	Tiers []Tier `json:"tiers,omitempty"`
+	Rates Rates    `json:"rates,omitzero"`
+	Tiers []Tier   `json:"tiers,omitempty"`
+	Tags  []string `json:"tags,omitempty"`
 }
 
 func (m Model) IsZero() bool {
-	return m.Rates.IsZero() && len(m.Tiers) == 0
+	return m.Rates.IsZero() && len(m.Tiers) == 0 && len(m.Tags) == 0
 }
 
 type Rates struct {

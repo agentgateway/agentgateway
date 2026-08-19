@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use antlr4rust::common_token_stream::CommonTokenStream;
 use antlr4rust::error_listener::ErrorListener;
+use antlr4rust::error_strategy::{DefaultErrorStrategy, ErrorStrategy};
 use antlr4rust::errors::ANTLRError;
 use antlr4rust::parser::ParserNodeType;
 use antlr4rust::parser_rule_context::ParserRuleContext;
@@ -15,7 +16,7 @@ use antlr4rust::recognizer::Recognizer;
 use antlr4rust::token::{CommonToken, Token};
 use antlr4rust::token_factory::TokenFactory;
 use antlr4rust::tree::{ParseTree, ParseTreeListener, ParseTreeVisitorCompat, VisitChildren};
-use antlr4rust::{InputStream, Parser as AntlrParser};
+use antlr4rust::{InputStream, Parser as AntlrParser, tid};
 
 use crate::common::ast;
 use crate::common::ast::{
@@ -105,6 +106,7 @@ pub struct Parser {
 	helper: ParserHelper,
 	errors: Vec<ParseError>,
 	max_recursion_depth: u16,
+	error_recovery_limit: u32,
 	enable_optional_syntax: bool,
 }
 
@@ -117,12 +119,21 @@ impl Parser {
 			helper: ParserHelper::default(),
 			errors: Vec::default(),
 			max_recursion_depth: 48,
+			error_recovery_limit: 30,
 			enable_optional_syntax: false,
 		}
 	}
 
 	pub fn max_recursion_depth(mut self, max: u16) -> Self {
 		self.max_recursion_depth = if max == u16::MAX { max } else { max + 1 };
+		self
+	}
+
+	/// Sets the maximum number of error recovery attempts the parser will make
+	/// before aborting the parse. Once the limit is reached, the parser reports
+	/// `error recovery attempt limit exceeded` and returns.
+	pub fn error_recovery_limit(mut self, limit: u32) -> Self {
+		self.error_recovery_limit = limit;
 		self
 	}
 
@@ -212,6 +223,9 @@ impl Parser {
 			max: self.max_recursion_depth,
 			depth: 0,
 		}));
+		prsr.set_error_strategy(Box::new(RecoveryLimitErrorStrategy::<
+			r#gen::CELParserContextType,
+		>::new(self.error_recovery_limit)));
 		let r = match prsr.start() {
 			Ok(t) => Ok(self.visit(t.deref())),
 			Err(e) => Err(ParseError {
@@ -411,6 +425,93 @@ impl<'a> ParseTreeListener<'a, CELParserContextType> for RecursionListener {
 		_ctx: &<CELParserContextType as ParserNodeType>::Type,
 	) -> Result<(), ANTLRError> {
 		Ok(())
+	}
+}
+
+#[derive(Debug)]
+struct RecoveryLimitExceeded {
+	limit: u32,
+}
+
+impl Display for RecoveryLimitExceeded {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "error recovery attempt limit exceeded: {}", self.limit)
+	}
+}
+
+impl Error for RecoveryLimitExceeded {}
+
+/// Error strategy that wraps [`DefaultErrorStrategy`] and aborts parsing when
+/// the number of recovery attempts exceeds a configurable limit. Modelled on
+/// cel-go's `recoveryLimitErrorStrategy`.
+struct RecoveryLimitErrorStrategy<'input, Ctx: ParserNodeType<'input>> {
+	inner: DefaultErrorStrategy<'input, Ctx>,
+	limit: u32,
+	attempts: u32,
+}
+
+tid! { impl<'i, Ctx> TidAble<'i> for RecoveryLimitErrorStrategy<'i, Ctx> where Ctx: ParserNodeType<'i> }
+
+impl<'input, Ctx: ParserNodeType<'input>> RecoveryLimitErrorStrategy<'input, Ctx> {
+	fn new(limit: u32) -> Self {
+		Self {
+			inner: DefaultErrorStrategy::new(),
+			limit,
+			attempts: 0,
+		}
+	}
+
+	#[allow(clippy::result_large_err)]
+	fn check_attempts<T>(&mut self, recognizer: &mut T) -> Result<(), ANTLRError>
+	where
+		T: AntlrParser<'input, Node = Ctx, TF = Ctx::TF>,
+	{
+		if self.attempts >= self.limit {
+			let msg = format!("error recovery attempt limit exceeded: {}", self.limit);
+			recognizer.notify_error_listeners(msg, None, None);
+			return Err(ANTLRError::FallThrough(Arc::new(RecoveryLimitExceeded {
+				limit: self.limit,
+			})));
+		}
+		self.attempts += 1;
+		Ok(())
+	}
+}
+
+impl<'input, T: AntlrParser<'input>> ErrorStrategy<'input, T>
+	for RecoveryLimitErrorStrategy<'input, T::Node>
+{
+	fn reset(&mut self, recognizer: &mut T) {
+		self.inner.reset(recognizer)
+	}
+
+	fn recover_inline(
+		&mut self,
+		recognizer: &mut T,
+	) -> Result<<T::TF as TokenFactory<'input>>::Tok, ANTLRError> {
+		self.check_attempts(recognizer)?;
+		self.inner.recover_inline(recognizer)
+	}
+
+	fn recover(&mut self, recognizer: &mut T, e: &ANTLRError) -> Result<(), ANTLRError> {
+		self.check_attempts(recognizer)?;
+		self.inner.recover(recognizer, e)
+	}
+
+	fn sync(&mut self, recognizer: &mut T) -> Result<(), ANTLRError> {
+		self.inner.sync(recognizer)
+	}
+
+	fn in_error_recovery_mode(&mut self, recognizer: &mut T) -> bool {
+		self.inner.in_error_recovery_mode(recognizer)
+	}
+
+	fn report_error(&mut self, recognizer: &mut T, e: &ANTLRError) {
+		self.inner.report_error(recognizer, e)
+	}
+
+	fn report_match(&mut self, recognizer: &mut T) {
+		self.inner.report_match(recognizer)
 	}
 }
 
@@ -1170,6 +1271,47 @@ mod tests {
 				.max_recursion_depth(0)
 				.parse("(1 + 1)")
 				.is_err()
+		);
+	}
+
+	#[test]
+	fn recovery_limit_bails_out() {
+		let expression = "a ? b ((?))";
+		let err = Parser::new()
+			.error_recovery_limit(4)
+			.parse(expression)
+			.expect_err("expression should fail to parse");
+
+		let rendered = format!("{err}");
+		assert!(
+			rendered.contains("error recovery attempt limit exceeded: 4"),
+			"expected recovery limit error, got: {rendered}"
+		);
+	}
+
+	#[test]
+	fn recovery_limit_hit_by_pathological_nested_negation() {
+		let expression = "!!(!!!!!!(!!!!(((((!!(!!(!!!!((!!(!!!!!!(!!!!(((((!!(!!(!!!!((1";
+		let err = Parser::new()
+			.error_recovery_limit(30)
+			.parse(expression)
+			.expect_err("expression should fail to parse");
+
+		let rendered = format!("{err}");
+		assert!(
+			rendered.contains("error recovery attempt limit exceeded: 30"),
+			"expected recovery limit error, got: {rendered}"
+		);
+	}
+
+	#[test]
+	fn recovery_limit_permits_healthy_parses() {
+		// Well-formed expressions never invoke recovery, so a tiny limit is fine.
+		assert!(
+			Parser::new()
+				.error_recovery_limit(0)
+				.parse("1 + 2 * 3")
+				.is_ok()
 		);
 	}
 

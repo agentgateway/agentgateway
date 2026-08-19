@@ -5,8 +5,8 @@ use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, bail};
 use arc_swap::ArcSwap;
-pub use catalog::{Breakdown, Catalog};
-use catalog::{Catalog as CatalogData, Rates, Usage};
+pub use model::{Breakdown, Catalog};
+use model::{Catalog as CatalogData, Rates, Usage};
 use prometheus_client::encoding::EncodeLabelValue;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
@@ -16,7 +16,7 @@ use tracing::{debug, error, info, warn};
 use super::{CacheTokenConvention, LLMInfo, LLMResponse};
 use crate::{ModelCatalogSource, apply, schema};
 
-mod catalog;
+mod model;
 pub mod refresh;
 
 const TRACE_POLICY_KIND: &str = "llm_cost";
@@ -176,8 +176,23 @@ impl ModelCatalog {
 	}
 }
 
+impl ModelCatalog {
+	/// Borrow as the cross-crate catalog handle threaded through the request path.
+	pub fn as_handle(&self) -> &dyn agent_llm::model_catalog::ModelCatalogHandle {
+		self
+	}
+}
+
+impl agent_llm::model_catalog::ModelCatalogHandle for ModelCatalog {
+	fn get_model_tags(&self, model_id: &str) -> Option<Arc<std::collections::BTreeSet<String>>> {
+		self.state.load().snapshot.get_model_tags(model_id)
+	}
+}
+
 pub struct CatalogSnapshot {
 	catalog: Option<CatalogData>,
+	/// Precomputed `model_id -> tags` (merged across providers) for O(1) attribute lookups.
+	model_tags: std::collections::HashMap<String, Arc<std::collections::BTreeSet<String>>>,
 }
 
 impl fmt::Debug for CatalogSnapshot {
@@ -191,20 +206,35 @@ impl fmt::Debug for CatalogSnapshot {
 impl CatalogSnapshot {
 	#[cfg(test)]
 	pub fn parse(json: &str) -> anyhow::Result<Self> {
-		Ok(Self::from_catalogs([catalog::from_json(json)?]))
+		Ok(Self::from_catalogs([model::from_json(json)?]))
+	}
+
+	fn get_model_tags(&self, model_id: &str) -> Option<Arc<std::collections::BTreeSet<String>>> {
+		self.model_tags.get(model_id).cloned()
 	}
 
 	fn from_catalogs(catalogs: impl IntoIterator<Item = CatalogData>) -> Self {
 		let merged = catalogs
 			.into_iter()
 			.fold(CatalogData::default(), CatalogData::override_with);
+		let model_tags = merged
+			.providers
+			.values()
+			.flat_map(|p| p.models.iter())
+			.filter(|(_, m)| !m.tags.is_empty())
+			.map(|(id, m)| (id.clone(), Arc::new(m.tags.clone())))
+			.collect();
 		CatalogSnapshot {
 			catalog: Some(merged),
+			model_tags,
 		}
 	}
 
 	fn empty() -> Self {
-		CatalogSnapshot { catalog: None }
+		CatalogSnapshot {
+			catalog: None,
+			model_tags: std::collections::HashMap::new(),
+		}
 	}
 
 	fn list_models(&self) -> ModelCatalogModels {
@@ -387,7 +417,7 @@ pub struct CostRates {
 
 impl From<&Rates> for CostRates {
 	fn from(r: &Rates) -> Self {
-		let f = |m: &Option<catalog::Money>| m.as_ref().and_then(|m| m.0.to_f64());
+		let f = |m: &Option<model::Money>| m.as_ref().and_then(|m| m.0.to_f64());
 		CostRates {
 			input: f(&r.input),
 			output: f(&r.output),
@@ -538,12 +568,12 @@ async fn load_sources(sources: &[ModelCatalogSource]) -> anyhow::Result<LoadedCa
 						return Err(e).context("reading model catalog");
 					},
 				};
-				let catalog = catalog::from_json(&json)
+				let catalog = model::from_json(&json)
 					.with_context(|| format!("invalid model catalog at {}", file.display()))?;
 				catalogs.push(catalog);
 			},
 			ModelCatalogSource::Inline { inline } => {
-				let catalog = catalog::from_json(inline).context("invalid inline model catalog")?;
+				let catalog = model::from_json(inline).context("invalid inline model catalog")?;
 				catalogs.push(catalog);
 			},
 			ModelCatalogSource::InlineCatalog { inline } => {
@@ -783,6 +813,22 @@ mod tests {
 			let p = self.project(provider, model, resp, convention);
 			(p.cost.and_then(|c| c.total().to_f64()), p.status)
 		}
+	}
+
+	#[test]
+	fn snapshot_reads_model_tags_from_the_catalog() {
+		let json = r#"{"providers":{"openai":{"models":{
+			"gpt-oss-120b":{"tags":["preview"]},
+			"gpt-4o":{"rates":{"input":"3.00"}}
+		}}}}"#;
+		let snapshot = CatalogSnapshot::parse(json).unwrap();
+		let tags = snapshot
+			.get_model_tags("gpt-oss-120b")
+			.expect("tags present");
+		assert!(tags.contains("preview"));
+		// A model with rates but no tags has no entry.
+		assert!(snapshot.get_model_tags("gpt-4o").is_none());
+		assert!(snapshot.get_model_tags("unknown.model").is_none());
 	}
 
 	#[test]
@@ -1073,8 +1119,8 @@ mod tests {
 
 	#[test]
 	fn later_layer_overrides_earlier() {
-		let base = catalog::from_json(&test_catalog("1")).unwrap();
-		let overlay = catalog::from_json(&test_catalog("9")).unwrap();
+		let base = model::from_json(&test_catalog("1")).unwrap();
+		let overlay = model::from_json(&test_catalog("9")).unwrap();
 		let snap = CatalogSnapshot::from_catalogs([base, overlay]);
 		let resp = LLMResponse {
 			input_tokens: Some(1_000_000),

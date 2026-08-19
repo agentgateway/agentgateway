@@ -1524,19 +1524,19 @@ pub struct LLMContext {
 	/// The realized USD cost of the request from the model cost catalog.
 	/// Unset when the model could not be priced.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub cost: Option<llm::cost::Breakdown>,
+	pub cost: Option<llm::catalog::Breakdown>,
 	/// Effective model catalog rates in USD per 1M tokens after tier selection.
 	/// Unset when the model could not be priced.
 	#[dynamic(rename = "costRates")]
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub cost_rates: Option<llm::cost::CostRates>,
+	pub cost_rates: Option<llm::catalog::CostRates>,
 	#[serde(skip)]
 	#[dynamic(skip)]
-	pub cost_status: Option<llm::cost::CostLookupStatus>,
+	pub cost_status: Option<llm::catalog::CostLookupStatus>,
 }
 
 impl LLMContext {
-	pub fn from_llm_info(value: LLMInfo, model_catalog: Option<&llm::cost::ModelCatalog>) -> Self {
+	pub fn from_llm_info(value: LLMInfo, model_catalog: Option<&llm::catalog::ModelCatalog>) -> Self {
 		let legacy_token_semantics = *LEGACY_LLM_USAGE_TOKEN_SEMANTICS;
 		let projection = model_catalog.map(|catalog| catalog.project(&value));
 		let normalized_input_tokens = value.normalized_input_tokens();

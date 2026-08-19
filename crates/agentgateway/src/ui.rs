@@ -24,7 +24,7 @@ use crate::config_store::{
 	ConfigResource, ConfigResourceError, ConfigResourceKind, ConfigResourceStore,
 	ConfigResourceUpsertRequest, ConfigResourcesResponse, PreparedResource,
 };
-use crate::llm::cost::ModelCatalog;
+use crate::llm::catalog::ModelCatalog;
 use crate::{Config, ConfigSource, ConfigStoreMode, yamlviajson};
 
 const BASE_COSTS_FILE: &str = "base-costs.json";
@@ -658,7 +658,7 @@ async fn refresh_base_costs(State(app): State<App>) -> Result<Json<Value>, Error
 		}
 	});
 	if configured_file.is_none() && app.state.storage.mode == ConfigStoreMode::Hybrid {
-		let refreshed = crate::llm::cost::refresh::fetch_models_dev_base_catalog().await?;
+		let refreshed = crate::llm::catalog::refresh::fetch_models_dev_base_catalog().await?;
 		let resources = app
 			.config_resource_store()?
 			.list(None)
@@ -709,7 +709,7 @@ async fn refresh_base_costs(State(app): State<App>) -> Result<Json<Value>, Error
 		dir.join(BASE_COSTS_FILE)
 	};
 
-	let refreshed = crate::llm::cost::refresh::refresh_models_dev_base_catalog(
+	let refreshed = crate::llm::catalog::refresh::refresh_models_dev_base_catalog(
 		&base_costs_file,
 		configured_file.map(|_| app.model_catalog.as_ref()),
 	)
@@ -730,7 +730,7 @@ async fn refresh_base_costs(State(app): State<App>) -> Result<Json<Value>, Error
 
 async fn cost_models(
 	State(app): State<App>,
-) -> Result<Json<crate::llm::cost::ModelCatalogModels>, ErrorResponse> {
+) -> Result<Json<crate::llm::catalog::ModelCatalogModels>, ErrorResponse> {
 	Ok(Json(app.model_catalog.list_models()))
 }
 
@@ -913,7 +913,7 @@ mod tests {
 			config_resource_store: None,
 			resource_manager: crate::resource_manager::ResourceManager::new(client)
 				.expect("resource manager"),
-			model_catalog: Arc::new(crate::llm::cost::ModelCatalog::default()),
+			model_catalog: Arc::new(crate::llm::catalog::ModelCatalog::default()),
 		}
 	}
 

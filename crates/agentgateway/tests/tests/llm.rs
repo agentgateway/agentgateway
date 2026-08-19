@@ -1,5 +1,6 @@
 use agentgateway::llm::{AIProvider, custom, gemini, openai};
 use agentgateway::test_helpers::ratelimitmock;
+use agentgateway::types::agent::TrafficPolicy;
 use tokio::sync::mpsc;
 use url::Position;
 
@@ -588,8 +589,12 @@ fn setup_custom_llm_provider_backend_mock_with_formats(
 			backend_name,
 			SimpleBackendReference::InlineBackend(Target::Address(*mock.address())),
 			formats,
-		))
-		.with_route(basic_named_route(strng::format!("/{backend_name}")));
+		));
+	let mut route = basic_named_route(strng::format!("/{backend_name}"));
+	route.inline_policies.push(TrafficPolicy::AI(
+		agentgateway::llm::model_router::default_route_types(),
+	));
+	let t = t.with_route(route);
 	let io = t.serve_http(BIND_KEY);
 	(mock, t, io)
 }
@@ -651,6 +656,103 @@ async fn llm_custom_provider_uses_upstream_route_fallback() {
 		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
 	assert_eq!(upstream_body["system"], "You are a helpful assistant.");
 	assert_eq!(upstream_body["messages"][0]["role"], "user");
+}
+
+#[tokio::test]
+async fn llm_custom_provider_messages_to_responses_for_responses_only_backend() {
+	let mock = body_mock(include_bytes!(
+		"../../../llm/src/tests/response/responses/basic.json"
+	))
+	.await;
+	let (mock, _bind, io) =
+		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Responses]);
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/messages",
+		include_bytes!("../../../llm/src/tests/requests/messages/basic.json"),
+	)
+	.await;
+	let status = res.status();
+	let body = read_body_raw(res.into_body()).await;
+	assert_eq!(
+		status,
+		200,
+		"unexpected response body: {}",
+		String::from_utf8_lossy(&body)
+	);
+	let response_body: Value = serde_json::from_slice(&body).expect("response is JSON");
+	assert_eq!(response_body["type"], "message");
+	assert_eq!(response_body["content"][0]["type"], "text");
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(
+		&requests[0].url[Position::BeforePath..Position::AfterPath],
+		"/v1/responses"
+	);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
+	assert_eq!(upstream_body["model"], "claude-sonnet-4-20250514");
+	assert_eq!(upstream_body["input"][0]["type"], "message");
+	assert_eq!(upstream_body["input"][0]["role"], "user");
+	assert_eq!(
+		upstream_body["input"][0]["content"][0]["type"],
+		"input_text"
+	);
+	assert_eq!(
+		upstream_body["input"][0]["content"][0]["text"],
+		"Hello, world"
+	);
+}
+
+#[tokio::test]
+async fn llm_custom_provider_messages_to_responses_accepts_cache_control() {
+	let mock = body_mock(include_bytes!(
+		"../../../llm/src/tests/response/responses/basic.json"
+	))
+	.await;
+	let (mock, _bind, io) =
+		setup_custom_llm_provider_backend_mock(mock, vec![custom::ProviderFormat::Responses]);
+
+	let res = send_request_body(
+		io,
+		Method::POST,
+		"http://lo/v1/messages",
+		include_bytes!("../../../llm/src/tests/requests/messages/cache_control_responses.json"),
+	)
+	.await;
+	let status = res.status();
+	let body = read_body_raw(res.into_body()).await;
+	assert_eq!(
+		status,
+		200,
+		"unexpected response body: {}",
+		String::from_utf8_lossy(&body)
+	);
+	let response_body: Value = serde_json::from_slice(&body).expect("response is JSON");
+	assert_eq!(response_body["type"], "message");
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	let upstream_body: Value =
+		serde_json::from_slice(&requests[0].body).expect("upstream request should be JSON");
+	assert!(
+		upstream_body["input"]
+			.as_array()
+			.expect("Responses input should be an array")
+			.iter()
+			.filter_map(|item| item.get("content"))
+			.flat_map(|content| content.as_array().into_iter().flatten())
+			.any(|part| part.get("prompt_cache_breakpoint").is_some())
+	);
 }
 
 #[tokio::test]

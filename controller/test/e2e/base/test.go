@@ -14,6 +14,7 @@ import (
 	"istio.io/istio/pkg/config/crd"
 	"istio.io/istio/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
@@ -76,11 +77,24 @@ func (s Test) E2EClusterContext() *cluster.Context {
 	return s.TestInstallation.ClusterContext
 }
 
+func (s Test) AgentgatewayBackendGVK() schema.GroupVersionKind {
+	return agentgatewayBackendGVK
+}
+
+func (s Test) AgentgatewayParametersGVK() schema.GroupVersionKind {
+	return agentgatewayParametersGVK
+}
+
+func (s Test) AgentgatewayPolicyGVK() schema.GroupVersionKind {
+	return agentgatewayPolicyGVK
+}
+
 // Run creates a Go subtest that carries the same e2e installation and helper state.
 // Prefer this over t.T.Run when nested tests need Apply, Send, or shared clients.
 func (s *Test) Run(name string, f func(t Test)) bool {
 	s.T.Helper()
 	return s.T.Run(name, func(t *testing.T) {
+		ConfigureTest(t)
 		child := *s
 		child.T = t
 		f(child)

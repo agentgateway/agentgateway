@@ -845,6 +845,13 @@ pub mod from_completions {
 					None
 				},
 				messages::MessagesStreamEvent::Ping => None,
+				messages::MessagesStreamEvent::Error { error } => {
+					tracing::warn!(
+						"Messages stream error during completions translation: {}",
+						error.message
+					);
+					None
+				},
 			}
 		});
 
@@ -1049,6 +1056,7 @@ pub fn passthrough_stream(
 			},
 			messages::MessagesStreamEvent::ContentBlockStop { .. }
 			| messages::MessagesStreamEvent::Ping => {},
+			messages::MessagesStreamEvent::Error { .. } => {},
 		}
 	})
 }

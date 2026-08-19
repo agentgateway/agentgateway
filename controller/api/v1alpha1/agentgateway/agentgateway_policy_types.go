@@ -1687,11 +1687,17 @@ type CrossAppAccessAuth struct {
 	// +optional
 	Resources []string `json:"resources,omitempty"`
 
-	// Scopes sent to the token endpoint.
+	// Scopes requested when obtaining the ID-JAG from the identity provider.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=64
 	// +optional
 	Scopes []string `json:"scopes,omitempty"`
+
+	// Scopes requested when exchanging the ID-JAG for an access token.
+	// When omitted, defaults to Scopes. Set to an empty list to omit scope.
+	// +kubebuilder:validation:MaxItems=64
+	// +optional
+	AccessTokenScopes *[]string `json:"accessTokenScopes,omitempty"`
 
 	// Subject token sent to the identity provider. Defaults to an OpenID Connect
 	// ID token read from the Authorization Bearer header.
@@ -2136,7 +2142,9 @@ type AzureAuth struct {
 	// +optional
 	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
 
-	// Managed identity authentication settings.
+	// Managed identity authentication settings. Leave this object empty to use
+	// the system-assigned identity. To use a user-assigned identity, set one of
+	// `clientId`, `objectId`, or `resourceId`.
 	//
 	// +optional
 	ManagedIdentity *AzureManagedIdentity `json:"managedIdentity,omitempty"`
@@ -2149,13 +2157,26 @@ type AzureAuth struct {
 	WorkloadIdentity *AzureWorkloadIdentity `json:"workloadIdentity,omitempty"`
 }
 
+// AzureManagedIdentity configures authentication with an Azure managed
+// identity. Leave all identifiers unset to use the system-assigned identity.
+// To use a user-assigned identity, set one identifier.
+//
+// +kubebuilder:validation:AtMostOneOf=clientId;objectId;resourceId
 type AzureManagedIdentity struct {
-	// +required
-	ClientID string `json:"clientId"`
-	// +required
-	ObjectID string `json:"objectId"`
-	// +required
-	ResourceID string `json:"resourceId"`
+	// Client ID of the user-assigned managed identity.
+	//
+	// +optional
+	ClientID string `json:"clientId,omitempty"`
+
+	// Object ID of the user-assigned managed identity.
+	//
+	// +optional
+	ObjectID string `json:"objectId,omitempty"`
+
+	// Resource ID of the user-assigned managed identity.
+	//
+	// +optional
+	ResourceID string `json:"resourceId,omitempty"`
 }
 
 // AzureWorkloadIdentity configures Azure Workload Identity authentication.

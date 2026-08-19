@@ -320,6 +320,14 @@
             }
           ]
         },
+        "sensitiveHeaders": {
+          "description": "Additional request headers whose values should be redacted from trace and debug output.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
         "customFunctions": {
           "description": "Custom CEL functions available to all CEL expressions. These can define re-usable snippets that\ncan be used in any expressions.\nConfigure as a block string containing one or more definitions, for example:\n`customFunctions: |`\n`  isInternal() { request.headers[\"x-env\"] == \"internal\" }`\n`  this.joined(prefix, parts...) { prefix + this + parts.join(\"\") }`",
           "type": "string",
@@ -549,6 +557,14 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/Tier"
+          }
+        },
+        "tags": {
+          "description": "Freeform capability/routing tags for this model.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
           }
         }
       },
@@ -4035,8 +4051,18 @@
           }
         },
         "scopes": {
-          "description": "`scope` values for the requested token, sent space-delimited.",
+          "description": "`scope` values requested when obtaining the ID-JAG from the identity provider, sent\nspace-delimited.",
           "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "accessTokenScopes": {
+          "description": "`scope` values requested when exchanging the ID-JAG for an access token. When unset,\ninherits `scopes`. When empty, omits `scope`.",
+          "type": [
+            "array",
+            "null"
+          ],
           "items": {
             "type": "string"
           }

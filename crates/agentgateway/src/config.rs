@@ -40,6 +40,14 @@ pub fn parse_config(
 	let nested: NestedRawConfig = serdes::yamlviajson::from_str(&contents).ctx("invalid config")?;
 	let raw = nested.config.unwrap_or_default();
 	cel::register_custom_functions(&raw.custom_functions).ctx("invalid config.customFunctions")?;
+	let sensitive_headers = raw
+		.sensitive_headers
+		.iter()
+		.map(|name| {
+			::http::HeaderName::from_str(name)
+				.map_err(|e| anyhow::anyhow!("invalid sensitive header '{name}': {e}"))
+		})
+		.collect::<anyhow::Result<Vec<_>>>()?;
 
 	let ipv6_enabled = parse::<bool>("IPV6_ENABLED")?
 		.or(raw.enable_ipv6)
@@ -577,6 +585,7 @@ pub fn parse_config(
 		},
 		database,
 		storage,
+		sensitive_headers,
 		session_encoder,
 		oidc_cookie_encoder,
 			hbone: Arc::new(agent_hbone::Config {

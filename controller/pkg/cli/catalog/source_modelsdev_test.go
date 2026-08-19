@@ -1,4 +1,4 @@
-package costs
+package catalog
 
 import (
 	"encoding/json"
@@ -127,7 +127,7 @@ func TestTransformMatchesGoldenCatalog(t *testing.T) {
 		"agentgateway",
 		"src",
 		"llm",
-		"cost",
+		"catalog",
 		"testdata",
 		"model_catalog.golden.json",
 	))

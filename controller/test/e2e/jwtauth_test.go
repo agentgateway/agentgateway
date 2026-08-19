@@ -8,13 +8,13 @@ import (
 	"strings"
 	"testing"
 
-	"istio.io/istio/pkg/test/util/retry"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
+	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/requestutils/curl"
 	"github.com/agentgateway/agentgateway/controller/test/e2e/base"
+	"github.com/agentgateway/agentgateway/controller/test/e2e/testutils/assertions"
 )
 
 //
@@ -65,16 +65,8 @@ func testJwtAuthInvalidInlineJwks(t base.Test) {
 
 	t.HTTPRouteAccepted("route-invalid-jwks", base.Namespace)
 
-	retry.UntilSuccessOrFail(t, func() error {
-		policy := &agentgateway.AgentgatewayPolicy{}
-		if err := t.TestInstallation.ClusterContext.ControllerClient.Get(
-			t.Ctx,
-			types.NamespacedName{Name: "route-invalid-inline-jwks-policy", Namespace: base.Namespace},
-			policy,
-		); err != nil {
-			return err
-		}
-		for _, ancestor := range policy.Status.Ancestors {
+	assertions.EventuallyAgwPolicyStatus(t, "route-invalid-inline-jwks-policy", base.Namespace, func(status gwv1.PolicyStatus) error {
+		for _, ancestor := range status.Ancestors {
 			for _, condition := range ancestor.Conditions {
 				if condition.Type == string(agentgateway.PolicyConditionAccepted) &&
 					condition.Status == metav1.ConditionTrue &&
@@ -84,7 +76,7 @@ func testJwtAuthInvalidInlineJwks(t base.Test) {
 				}
 			}
 		}
-		return fmt.Errorf("policy status does not report the invalid inline JWKS as PartiallyValid: %+v", policy.Status)
+		return fmt.Errorf("policy status does not report the invalid inline JWKS as PartiallyValid: %+v", status)
 	})
 	assertJwtResponse(t, "invalidjwksroute.com", "", http.StatusUnauthorized)
 

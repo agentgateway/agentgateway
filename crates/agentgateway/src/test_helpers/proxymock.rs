@@ -27,7 +27,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::http::backendtls::BackendTLS;
 use crate::http::{Body, Response};
-use crate::llm::{AIBackend, AIProvider, NamedAIProvider, cost};
+use crate::llm::{AIBackend, AIProvider, NamedAIProvider, catalog};
 use crate::mcp::FailureMode;
 use crate::proxy::Gateway;
 use crate::proxy::request_builder::RequestBuilder;
@@ -1310,7 +1310,7 @@ pub fn setup_proxy_test_with_config(config: crate::Config) -> TestBind {
 			metrics::sub_registry(&mut Registry::default()),
 			Default::default(),
 		)),
-		model_catalog: cost::ModelCatalog::empty(),
+		model_catalog: catalog::ModelCatalog::empty(),
 		admin: None,
 		upstream: client.clone(),
 		ca: None,
