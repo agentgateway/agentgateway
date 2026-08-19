@@ -63,6 +63,51 @@ impl McpAuthorizationSet {
 	}
 }
 
+// ResourceIdentity extracts the ResourceType and ID from
+// a type containing that info, such as a request parameter struct.
+pub trait ResourceIdentity {
+	const KIND: &'static str;
+	fn to_resource_type(&self, service: impl Into<String>) -> ResourceType;
+	/// Point the access log at this request's identity.
+	fn record(&self, log: &mut crate::mcp::MCPInfo, service: impl Into<String>) {
+		log.set_resource_type(&self.to_resource_type(service));
+	}
+}
+
+macro_rules! resource_identity {
+	($($ty:ty => ($kind:literal, $variant:ident, $field:ident),)+) => {$(
+		impl ResourceIdentity for $ty {
+			const KIND: &'static str = $kind;
+			fn to_resource_type(&self, service: impl Into<String>) -> ResourceType {
+				ResourceType::$variant(ResourceId::new(service.into(), self.$field.to_string()))
+			}
+		}
+	)+};
+}
+
+resource_identity! {
+	rmcp::model::GetPromptRequestParams => ("prompt", Prompt, name),
+	rmcp::model::ReadResourceRequestParams => ("resource", Resource, uri),
+	rmcp::model::SubscribeRequestParams => ("resource", Resource, uri),
+	rmcp::model::UnsubscribeRequestParams => ("resource", Resource, uri),
+	rmcp::model::GetTaskParams => ("task", Task, task_id),
+	rmcp::model::UpdateTaskParams => ("task", Task, task_id),
+	rmcp::model::CancelTaskParams => ("task", Task, task_id),
+}
+
+// Outside the macro: tool calls also carry arguments, which `set_resource_type`
+// preserves as-is, so recording must recapture them.
+impl ResourceIdentity for rmcp::model::CallToolRequestParams {
+	const KIND: &'static str = "tool";
+	fn to_resource_type(&self, service: impl Into<String>) -> ResourceType {
+		ResourceType::Tool(ResourceId::new(service.into(), self.name.to_string()))
+	}
+	fn record(&self, log: &mut crate::mcp::MCPInfo, service: impl Into<String>) {
+		log.set_resource_type(&self.to_resource_type(service));
+		log.capture_call_arguments(self.arguments.clone());
+	}
+}
+
 #[apply(schema!)]
 #[derive(Eq, PartialEq)]
 pub enum ResourceType {
@@ -74,6 +119,17 @@ pub enum ResourceType {
 	Resource(ResourceId),
 	/// The task being accessed (SEP-2663); `name` is the task ID.
 	Task(ResourceId),
+}
+
+impl ResourceType {
+	pub fn id(self) -> ResourceId {
+		match self {
+			ResourceType::Tool(id)
+			| ResourceType::Prompt(id)
+			| ResourceType::Resource(id)
+			| ResourceType::Task(id) => id,
+		}
+	}
 }
 
 impl cel::DynamicType for ResourceType {

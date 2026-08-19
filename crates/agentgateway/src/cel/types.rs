@@ -2405,6 +2405,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 			prompt: None,
 			resource: None,
 			task: None,
+			original_resource: None,
 			error: None,
 		}),
 		backend: Some(BackendContext {

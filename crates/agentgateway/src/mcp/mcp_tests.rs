@@ -6417,6 +6417,52 @@ mod guardrails_test_support {
 			.find_map(|c| c.as_text().map(|t| t.text.clone()))
 			.expect("echo returned text")
 	}
+
+	pub fn tool_name(req: &protos::ext_mcp::McpRequest) -> String {
+		req
+			.mcp_request
+			.as_deref()
+			.and_then(|b| serde_json::from_slice::<serde_json::Value>(b).ok())
+			.and_then(|v| v.get("name").and_then(|n| n.as_str()).map(str::to_owned))
+			.unwrap_or_default()
+	}
+
+	pub fn methods_full(methods: &[&str]) -> HashMap<String, guardrails::Phase> {
+		methods
+			.iter()
+			.map(|m| (m.to_string(), guardrails::Phase::Full))
+			.collect()
+	}
+
+	/// Pass-through processor that records every request-phase method it sees.
+	pub async fn recording_mock() -> (
+		crate::test_helpers::MockInstance,
+		Arc<std::sync::Mutex<Vec<String>>>,
+	) {
+		use crate::test_helpers::extmcpmock::{closure_mock, pass_request, pass_response};
+		let seen: Arc<std::sync::Mutex<Vec<String>>> = Arc::new(std::sync::Mutex::new(Vec::new()));
+		let seen_req = seen.clone();
+		let mock = closure_mock(
+			move |req| {
+				seen_req.lock().unwrap().push(req.method.clone());
+				pass_request()
+			},
+			|_| pass_response(),
+		)
+		.spawn()
+		.await;
+		(mock, seen)
+	}
+
+	pub fn assert_saw(seen: &std::sync::Mutex<Vec<String>>, methods: &[&str]) {
+		let seen = seen.lock().unwrap();
+		for m in methods {
+			assert!(
+				seen.iter().any(|s| s == m),
+				"processor saw {m}, got: {seen:?}"
+			);
+		}
+	}
 }
 
 // ============================== mcpGuardrails tests ===============================
@@ -6630,6 +6676,153 @@ async fn mcp_guardrails_mutated_request_reaches_upstream() {
 	// Mutated numbers keep their JSON form: integers don't become 10.0.
 	assert!(text.contains("\"limit\":10,"), "got: {text}");
 	assert!(text.contains("\"ratio\":2.5"), "got: {text}");
+}
+
+// extmcp rewrites an approved tool to one that is rejected by
+// the McpAuthorization policy and gets denied
+#[tokio::test]
+async fn mcp_guardrails_retarget_authz_sees_executed_tool() {
+	use crate::test_helpers::extmcpmock::{
+		closure_mock, mutated_request_json, pass_request, pass_response,
+	};
+
+	let extmcp_mock = closure_mock(
+		|req| {
+			if req.method == "tools/call" && guardrails_test_support::tool_name(req) == "echo" {
+				mutated_request_json(serde_json::json!({"name": "increment", "arguments": {}}))
+			} else {
+				pass_request()
+			}
+		},
+		|_| pass_response(),
+	)
+	.spawn()
+	.await;
+
+	let deny_increment = McpAuthorization::new(RuleSet::new(PolicySet::new(
+		vec![],
+		vec![Arc::new(
+			cel::Expression::new_strict(r#"mcp.tool.name == "increment""#).unwrap(),
+		)],
+		vec![],
+	)));
+
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![
+			BackendTrafficPolicy::McpAuthorization(deny_increment),
+			guardrails_test_support::policy(extmcp_mock.address),
+		],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+
+	let err = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("echo").with_arguments(serde_json::Map::new()),
+		)
+		.await
+		.expect_err("call retargeted to a denied tool should be blocked");
+	let rmcp::ServiceError::McpError(e) = &err else {
+		panic!("expected McpError, got {err:?}");
+	};
+	assert_eq!(e.code.0, -32602, "authz denial maps to INVALID_PARAMS");
+
+	let value = client
+		.call_tool(
+			rmcp::model::CallToolRequestParams::new("get_value").with_arguments(serde_json::Map::new()),
+		)
+		.await
+		.expect("non-denied tools still work");
+	assert_eq!(guardrails_test_support::echo_text(&value), "0");
+}
+
+#[tokio::test]
+#[allow(deprecated)]
+async fn mcp_guardrails_request_phase_covers_subscriptions() {
+	const METHODS: &[&str] = &["resources/subscribe", "resources/unsubscribe"];
+	let (extmcp_mock, seen) = guardrails_test_support::recording_mock().await;
+	let mock = mock_streamable_http_server(true).await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		true,
+		false,
+		vec![guardrails_test_support::policy_with(
+			extmcp_mock.address,
+			guardrails::FailureMode::FailClosed,
+			guardrails_test_support::methods_full(METHODS),
+			HashMap::new(),
+		)],
+	)
+	.await;
+	let client = mcp_streamable_client(io).await;
+
+	client
+		.subscribe(rmcp::model::SubscribeRequestParams::new("memo://insights"))
+		.await
+		.expect("subscribe should pass through");
+	client
+		.unsubscribe(rmcp::model::UnsubscribeRequestParams::new(
+			"memo://insights",
+		))
+		.await
+		.expect("unsubscribe should pass through");
+
+	guardrails_test_support::assert_saw(&seen, METHODS);
+}
+
+#[tokio::test]
+async fn mcp_guardrails_request_phase_covers_tasks() {
+	const METHODS: &[&str] = &["tools/call", "tasks/get", "tasks/cancel"];
+	let (extmcp_mock, seen) = guardrails_test_support::recording_mock().await;
+	let mock = mock_task_streamable_http_server().await;
+	let (_bind, io) = setup_proxy_policies(
+		&mock,
+		false,
+		false,
+		vec![guardrails_test_support::policy_with(
+			extmcp_mock.address,
+			guardrails::FailureMode::FailClosed,
+			guardrails_test_support::methods_full(METHODS),
+			HashMap::new(),
+		)],
+	)
+	.await;
+
+	let create = modern_request(
+		io,
+		1,
+		"tools/call",
+		"slow_job",
+		serde_json::json!({"_meta": task_meta(), "name": "slow_job", "arguments": {}}),
+	)
+	.await;
+	assert_eq!(create["result"]["taskId"], "task-abc");
+
+	let get = modern_request(
+		io,
+		2,
+		"tasks/get",
+		"task-abc",
+		serde_json::json!({"taskId": "task-abc"}),
+	)
+	.await;
+	assert_eq!(get["result"]["status"], "completed");
+
+	let cancel = modern_request(
+		io,
+		3,
+		"tasks/cancel",
+		"task-abc",
+		serde_json::json!({"taskId": "task-abc"}),
+	)
+	.await;
+	assert_eq!(cancel["result"]["resultType"], "complete");
+
+	guardrails_test_support::assert_saw(&seen, METHODS);
 }
 
 #[tokio::test]

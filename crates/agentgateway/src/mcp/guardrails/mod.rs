@@ -346,11 +346,11 @@ processors:
 
 	#[test]
 	fn warns_on_request_phase_for_unsupported_methods() {
-		// A catchall request phase matches subscribe/unsubscribe/complete, none of
-		// which run the request hook.
+		// A catchall request phase matches completion/complete, which doesn't run
+		// the request hook.
 		let warnings = ext_with_methods(&[("*", Phase::Full)]).load_warnings();
-		assert_eq!(warnings.len(), 3, "{warnings:?}");
-		assert!(warnings[0].contains("resources/subscribe"));
+		assert_eq!(warnings.len(), 1, "{warnings:?}");
+		assert!(warnings[0].contains("completion/complete"));
 
 		// Response-only and supported-method configs are clean.
 		assert!(
