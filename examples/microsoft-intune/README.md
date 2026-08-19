@@ -126,8 +126,11 @@ configuration policy.
    different device groups require different clients.
 2. Go to **Endpoint security > Device compliance > Scripts > Add > macOS** and
    upload the discovery script.
-3. Set **Run this script using the logged on credentials** to **Yes**. Enable
-   signature enforcement when the organization signs scripts.
+3. The script resolves the signed-in console user and reads both per-user and
+   machine managed preferences, so it supports either the default system
+   context or logged-in-user context. If Intune displays an execution-context
+   setting, either context is supported. Enable signature enforcement when the
+   organization signs scripts.
 4. Create a macOS compliance policy, add **Custom Compliance**, select the
    discovery script, and upload the matching `compliance.json`.
 5. Assign the policy to the same pilot group as the application and managed
