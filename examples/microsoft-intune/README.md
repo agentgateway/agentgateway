@@ -36,6 +36,11 @@ Before uploading a script to Intune, edit the configuration block at the top.
   `AGENTGATEWAY_API_KEY`. The scripts check the variable name, not its value.
 - Set the expected Claude Desktop URL, including the route prefix configured
   for Claude Desktop, such as `/claude`.
+- Set the expected Claude Desktop credential kind. The examples default to
+  `static` and verify that a managed key is present without reporting it. For
+  Entra ID, set the kind to `interactive` and also set the expected OIDC flow
+  (`browser` or `broker`), issuer, and client ID. Interactive verification
+  requires an ID token and rejects a leftover static key.
 - Enable the clients that Intune requires on the target group. Disable a client
   when that client is not required.
 - Keep the installation check enabled when the approved package uses one of
@@ -114,15 +119,21 @@ matching rule JSON.
 The discovery scripts check only the durable managed client configuration.
 They do not test network reachability, because a temporary Gateway or network
 outage must not make every managed device noncompliant. The Claude Desktop
-scripts require both the `gateway` inference provider and the exact approved
-Gateway URL. The Codex scripts also require the approved `env_key` declaration
-but do not read or report the environment variable's value.
+scripts require the `gateway` inference provider, exact approved Gateway URL,
+and selected credential model. For Entra ID, they also require the approved
+sign-in flow, issuer, client ID, and ID-token setting, and report noncompliance
+if the old static key remains. The Codex scripts also require the approved
+`env_key` declaration but do not read or report the environment variable's
+value.
 
 Before uploading a discovery script, replace its example URL with the approved
 address. Include `/v1` for Codex and the configured route prefix, such as
 `/claude`, for Claude Desktop. If the organization uses a different Codex
 credential variable, also change `EXPECTED_CODEX_ENV_KEY`. Keep these values
-aligned with the managed configuration policy.
+aligned with the managed configuration policy. For Entra ID, set
+`EXPECTED_CLAUDE_CREDENTIAL_KIND` to `interactive` and populate the expected
+OIDC flow, issuer, and client ID. Leave the OIDC values empty for the default
+static-key example.
 
 ### Configure custom compliance on macOS
 

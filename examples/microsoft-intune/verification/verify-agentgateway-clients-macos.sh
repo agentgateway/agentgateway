@@ -4,6 +4,10 @@
 EXPECTED_CODEX_BASE_URL=${EXPECTED_CODEX_BASE_URL:-"https://llm.example.com/v1"}
 EXPECTED_CODEX_ENV_KEY=${EXPECTED_CODEX_ENV_KEY:-"AGENTGATEWAY_API_KEY"}
 EXPECTED_CLAUDE_GATEWAY_URL=${EXPECTED_CLAUDE_GATEWAY_URL:-"https://llm.example.com/claude"}
+EXPECTED_CLAUDE_CREDENTIAL_KIND=${EXPECTED_CLAUDE_CREDENTIAL_KIND:-"static"}
+EXPECTED_CLAUDE_OIDC_AUTH_FLOW=${EXPECTED_CLAUDE_OIDC_AUTH_FLOW:-""}
+EXPECTED_CLAUDE_OIDC_ISSUER=${EXPECTED_CLAUDE_OIDC_ISSUER:-""}
+EXPECTED_CLAUDE_OIDC_CLIENT_ID=${EXPECTED_CLAUDE_OIDC_CLIENT_ID:-""}
 VERIFY_CODEX=${VERIFY_CODEX:-true}
 VERIFY_CLAUDE_DESKTOP=${VERIFY_CLAUDE_DESKTOP:-true}
 VERIFY_INSTALLATION=${VERIFY_INSTALLATION:-true}
@@ -146,6 +150,7 @@ verify_claude_desktop() {
   fi
 
   managed_gateway_url=""
+  selected_preference_file=""
   managed_user=$(get_managed_user)
 
   for preference_file in \
@@ -156,6 +161,7 @@ verify_claude_desktop() {
       managed_gateway_url=$(plutil -extract inferenceGatewayBaseUrl raw \
         -expect string "$preference_file" 2>/dev/null)
       if [ -n "$managed_gateway_url" ]; then
+        selected_preference_file=$preference_file
         break
       fi
     fi
@@ -173,11 +179,72 @@ verify_claude_desktop() {
     return
   fi
 
-  if [ "$managed_gateway_url" = "$EXPECTED_CLAUDE_GATEWAY_URL" ]; then
-    pass "Claude Desktop managed configuration uses the approved agentgateway URL."
-  else
+  if [ "$managed_gateway_url" != "$EXPECTED_CLAUDE_GATEWAY_URL" ]; then
     fail "Claude Desktop managed configuration does not contain the approved agentgateway URL."
+    return
   fi
+
+  if [ -n "$selected_preference_file" ]; then
+    managed_credential_kind=$(plutil -extract inferenceCredentialKind raw \
+      -expect string "$selected_preference_file" 2>/dev/null)
+    managed_oidc_auth_flow=$(plutil -extract inferenceGatewayOidcAuthFlow raw \
+      -expect string "$selected_preference_file" 2>/dev/null)
+    managed_oidc=$(plutil -extract inferenceGatewayOidc raw \
+      -expect string "$selected_preference_file" 2>/dev/null)
+    managed_api_key=$(plutil -extract inferenceGatewayApiKey raw \
+      -expect string "$selected_preference_file" 2>/dev/null)
+  else
+    managed_credential_kind=$(defaults read com.anthropic.claudefordesktop \
+      inferenceCredentialKind 2>/dev/null)
+    managed_oidc_auth_flow=$(defaults read com.anthropic.claudefordesktop \
+      inferenceGatewayOidcAuthFlow 2>/dev/null)
+    managed_oidc=$(defaults read com.anthropic.claudefordesktop \
+      inferenceGatewayOidc 2>/dev/null)
+    managed_api_key=$(defaults read com.anthropic.claudefordesktop \
+      inferenceGatewayApiKey 2>/dev/null)
+  fi
+
+  if [ "$managed_credential_kind" != "$EXPECTED_CLAUDE_CREDENTIAL_KIND" ]; then
+    fail "Claude Desktop does not use the approved credential kind."
+    return
+  fi
+
+  case "$EXPECTED_CLAUDE_CREDENTIAL_KIND" in
+    static)
+      if [ -z "$managed_api_key" ]; then
+        fail "Claude Desktop static gateway credential is missing."
+        return
+      fi
+      ;;
+    interactive)
+      if [ -z "$EXPECTED_CLAUDE_OIDC_AUTH_FLOW" ] || \
+        [ -z "$EXPECTED_CLAUDE_OIDC_ISSUER" ] || \
+        [ -z "$EXPECTED_CLAUDE_OIDC_CLIENT_ID" ]; then
+        fail "Claude Desktop interactive verification settings are incomplete."
+        return
+      fi
+      if [ "$managed_oidc_auth_flow" != "$EXPECTED_CLAUDE_OIDC_AUTH_FLOW" ]; then
+        fail "Claude Desktop does not use the approved OIDC sign-in flow."
+        return
+      fi
+      compact_oidc=$(printf '%s' "$managed_oidc" | tr -d '[:space:]')
+      if ! printf '%s' "$compact_oidc" | \
+          grep -Fq "\"issuer\":\"$EXPECTED_CLAUDE_OIDC_ISSUER\"" || \
+        ! printf '%s' "$compact_oidc" | \
+          grep -Fq "\"clientId\":\"$EXPECTED_CLAUDE_OIDC_CLIENT_ID\"" || \
+        ! printf '%s' "$compact_oidc" | \
+          grep -Fq '"bearerTokenType":"id_token"'; then
+        fail "Claude Desktop OIDC settings do not match the approved issuer, client ID, and token type."
+        return
+      fi
+      if [ -n "$managed_api_key" ]; then
+        fail "Claude Desktop interactive configuration still contains a static gateway credential."
+        return
+      fi
+      ;;
+  esac
+
+  pass "Claude Desktop managed configuration uses the approved agentgateway URL and authentication settings."
 }
 
 verify_reachability() {

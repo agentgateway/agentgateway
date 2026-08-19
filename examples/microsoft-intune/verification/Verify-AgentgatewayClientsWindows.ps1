@@ -2,6 +2,10 @@
 $ExpectedCodexBaseUrl = "https://llm.example.com/v1"
 $ExpectedCodexEnvKey = "AGENTGATEWAY_API_KEY"
 $ExpectedClaudeGatewayUrl = "https://llm.example.com/claude"
+$ExpectedClaudeCredentialKind = "static"
+$ExpectedClaudeOidcAuthFlow = ""
+$ExpectedClaudeOidcIssuer = ""
+$ExpectedClaudeOidcClientId = ""
 $VerifyCodex = $true
 $VerifyClaudeDesktop = $true
 $VerifyInstallation = $true
@@ -90,15 +94,51 @@ function Test-ClaudeDesktopConfiguration {
     }
 
     $policy = Get-ItemProperty -LiteralPath $policyPath
-    $urlMatches = $policy.PSObject.Properties |
-        Where-Object { $_.Name -notlike 'PS*' } |
-        Where-Object { [string]$_.Value -like "*$ExpectedClaudeGatewayUrl*" }
-
-    if ($urlMatches) {
-        Write-Pass "Claude Desktop managed configuration uses the approved agentgateway URL."
-    } else {
+    if ($policy.inferenceGatewayBaseUrl -ne $ExpectedClaudeGatewayUrl) {
         Write-Failure "Claude Desktop machine policy does not contain the approved agentgateway URL."
+        return
     }
+
+    if ($policy.inferenceCredentialKind -ne $ExpectedClaudeCredentialKind) {
+        Write-Failure "Claude Desktop does not use the approved credential kind."
+        return
+    }
+
+    if ($ExpectedClaudeCredentialKind -eq "static") {
+        if ([string]::IsNullOrWhiteSpace([string]$policy.inferenceGatewayApiKey)) {
+            Write-Failure "Claude Desktop static gateway credential is missing."
+            return
+        }
+    } elseif ($ExpectedClaudeCredentialKind -eq "interactive") {
+        if ([string]::IsNullOrWhiteSpace($ExpectedClaudeOidcAuthFlow) -or
+            [string]::IsNullOrWhiteSpace($ExpectedClaudeOidcIssuer) -or
+            [string]::IsNullOrWhiteSpace($ExpectedClaudeOidcClientId)) {
+            Write-Failure "Claude Desktop interactive verification settings are incomplete."
+            return
+        }
+        if ($policy.inferenceGatewayOidcAuthFlow -ne $ExpectedClaudeOidcAuthFlow) {
+            Write-Failure "Claude Desktop does not use the approved OIDC sign-in flow."
+            return
+        }
+        try {
+            $oidc = $policy.inferenceGatewayOidc | ConvertFrom-Json
+        } catch {
+            Write-Failure "Claude Desktop OIDC settings are not valid JSON."
+            return
+        }
+        if ($oidc.issuer -ne $ExpectedClaudeOidcIssuer -or
+            $oidc.clientId -ne $ExpectedClaudeOidcClientId -or
+            $oidc.bearerTokenType -ne "id_token") {
+            Write-Failure "Claude Desktop OIDC settings do not match the approved issuer, client ID, and token type."
+            return
+        }
+        if (-not [string]::IsNullOrWhiteSpace([string]$policy.inferenceGatewayApiKey)) {
+            Write-Failure "Claude Desktop interactive configuration still contains a static gateway credential."
+            return
+        }
+    }
+
+    Write-Pass "Claude Desktop managed configuration uses the approved agentgateway URL and authentication settings."
 }
 
 function Test-AgentgatewayReachability {
