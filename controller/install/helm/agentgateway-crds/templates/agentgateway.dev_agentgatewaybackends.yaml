@@ -4281,9 +4281,7 @@ spec:
                                             description: |-
                                               Managed identity authentication settings. Leave this object empty to use
                                               the system-assigned identity. To use a user-assigned identity, set one of
-                                              `clientId`, `objectId`, or `resourceId`. For compatibility, when multiple
-                                              identifiers are set, client ID takes precedence over object ID, which takes
-                                              precedence over resource ID.
+                                              `clientId`, `objectId`, or `resourceId`.
                                             properties:
                                               clientId:
                                                 description: Client ID of the user-assigned
@@ -4298,6 +4296,12 @@ spec:
                                                   managed identity.
                                                 type: string
                                             type: object
+                                            x-kubernetes-validations:
+                                            - message: at most one of the fields in
+                                                [clientId objectId resourceId] may
+                                                be set
+                                              rule: '[has(self.clientId),has(self.objectId),has(self.resourceId)].filter(x,x==true).size()
+                                                <= 1'
                                           secretRef:
                                             description: |-
                                               Credential source for Azure credentials, defaulting to a Kubernetes
@@ -7559,9 +7563,7 @@ spec:
                                           description: |-
                                             Managed identity authentication settings. Leave this object empty to use
                                             the system-assigned identity. To use a user-assigned identity, set one of
-                                            `clientId`, `objectId`, or `resourceId`. For compatibility, when multiple
-                                            identifiers are set, client ID takes precedence over object ID, which takes
-                                            precedence over resource ID.
+                                            `clientId`, `objectId`, or `resourceId`.
                                           properties:
                                             clientId:
                                               description: Client ID of the user-assigned
@@ -7576,6 +7578,12 @@ spec:
                                                 managed identity.
                                               type: string
                                           type: object
+                                          x-kubernetes-validations:
+                                          - message: at most one of the fields in
+                                              [clientId objectId resourceId] may be
+                                              set
+                                            rule: '[has(self.clientId),has(self.objectId),has(self.resourceId)].filter(x,x==true).size()
+                                              <= 1'
                                         secretRef:
                                           description: |-
                                             Credential source for Azure credentials, defaulting to a Kubernetes
@@ -13002,9 +13010,7 @@ spec:
                             description: |-
                               Managed identity authentication settings. Leave this object empty to use
                               the system-assigned identity. To use a user-assigned identity, set one of
-                              `clientId`, `objectId`, or `resourceId`. For compatibility, when multiple
-                              identifiers are set, client ID takes precedence over object ID, which takes
-                              precedence over resource ID.
+                              `clientId`, `objectId`, or `resourceId`.
                             properties:
                               clientId:
                                 description: Client ID of the user-assigned managed
@@ -13019,6 +13025,11 @@ spec:
                                   identity.
                                 type: string
                             type: object
+                            x-kubernetes-validations:
+                            - message: at most one of the fields in [clientId objectId
+                                resourceId] may be set
+                              rule: '[has(self.clientId),has(self.objectId),has(self.resourceId)].filter(x,x==true).size()
+                                <= 1'
                           secretRef:
                             description: |-
                               Credential source for Azure credentials, defaulting to a Kubernetes

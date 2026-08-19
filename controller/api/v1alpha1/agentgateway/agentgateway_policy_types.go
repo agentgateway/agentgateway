@@ -2144,9 +2144,7 @@ type AzureAuth struct {
 
 	// Managed identity authentication settings. Leave this object empty to use
 	// the system-assigned identity. To use a user-assigned identity, set one of
-	// `clientId`, `objectId`, or `resourceId`. For compatibility, when multiple
-	// identifiers are set, client ID takes precedence over object ID, which takes
-	// precedence over resource ID.
+	// `clientId`, `objectId`, or `resourceId`.
 	//
 	// +optional
 	ManagedIdentity *AzureManagedIdentity `json:"managedIdentity,omitempty"`
@@ -2161,9 +2159,9 @@ type AzureAuth struct {
 
 // AzureManagedIdentity configures authentication with an Azure managed
 // identity. Leave all identifiers unset to use the system-assigned identity.
-// To use a user-assigned identity, set one identifier. For compatibility, when
-// multiple identifiers are set, client ID takes precedence over object ID,
-// which takes precedence over resource ID.
+// To use a user-assigned identity, set one identifier.
+//
+// +kubebuilder:validation:AtMostOneOf=clientId;objectId;resourceId
 type AzureManagedIdentity struct {
 	// Client ID of the user-assigned managed identity.
 	//
