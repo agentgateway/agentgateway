@@ -13,10 +13,12 @@ The scripts check:
 - whether the managed device can reach that address and receive an HTTP
   response.
 
-On macOS, the Codex verifier checks both user-specific and device-level managed
-preferences, including `/Library/Managed Preferences/com.openai.codex.plist`.
-It then falls back to the effective user preference domain. This supports an
-Intune preference profile assigned through either management scope.
+On macOS, the verifier resolves the signed-in console user and checks both
+user-specific and device-level managed preferences for Codex and Claude
+Desktop. It then falls back to the effective user preference domain. This
+supports an Intune preference profile assigned through either management
+scope, including a per-user Claude Desktop profile under `/Library/Managed
+Preferences/USERNAME/com.anthropic.claudefordesktop.plist`.
 
 Any HTTP response proves DNS, transport, and listener reachability. A `401` or
 `403` response is therefore a successful connectivity check when agentgateway

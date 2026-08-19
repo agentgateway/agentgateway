@@ -58,6 +58,16 @@ is_enabled() {
   [ "$1" = "true" ]
 }
 
+get_managed_user() {
+  managed_user=$(stat -f '%Su' /dev/console 2>/dev/null)
+  case "$managed_user" in
+    ""|root|loginwindow)
+      managed_user=$(id -un 2>/dev/null)
+      ;;
+  esac
+  printf '%s\n' "$managed_user"
+}
+
 initialize_log
 
 verify_codex() {
@@ -75,7 +85,7 @@ verify_codex() {
   fi
 
   encoded_config=""
-  managed_user=$(id -un)
+  managed_user=$(get_managed_user)
 
   for preference_file in \
     "$MANAGED_PREFERENCES_DIRECTORY/$managed_user/com.openai.codex.plist" \
@@ -132,14 +142,35 @@ verify_claude_desktop() {
     fi
   fi
 
-  managed_preferences=$(defaults read com.anthropic.claudefordesktop 2>/dev/null)
-  if [ -z "$managed_preferences" ]; then
-    fail "Claude Desktop managed preferences are missing."
+  managed_gateway_url=""
+  managed_user=$(get_managed_user)
+
+  for preference_file in \
+    "$MANAGED_PREFERENCES_DIRECTORY/$managed_user/com.anthropic.claudefordesktop.plist" \
+    "$MANAGED_PREFERENCES_DIRECTORY/com.anthropic.claudefordesktop.plist"
+  do
+    if [ -r "$preference_file" ]; then
+      managed_gateway_url=$(plutil -extract inferenceGatewayBaseUrl raw \
+        -expect string "$preference_file" 2>/dev/null)
+      if [ -n "$managed_gateway_url" ]; then
+        break
+      fi
+    fi
+  done
+
+  # Fall back to the effective preference domain for profiles that expose
+  # their managed values only through the effective preference search path.
+  if [ -z "$managed_gateway_url" ]; then
+    managed_gateway_url=$(defaults read com.anthropic.claudefordesktop \
+      inferenceGatewayBaseUrl 2>/dev/null)
+  fi
+
+  if [ -z "$managed_gateway_url" ]; then
+    fail "Claude Desktop managed Gateway URL is missing."
     return
   fi
 
-  if printf '%s\n' "$managed_preferences" | \
-      grep -Fq "$EXPECTED_CLAUDE_GATEWAY_URL"; then
+  if [ "$managed_gateway_url" = "$EXPECTED_CLAUDE_GATEWAY_URL" ]; then
     pass "Claude Desktop managed configuration uses the approved agentgateway URL."
   else
     fail "Claude Desktop managed configuration does not contain the approved agentgateway URL."

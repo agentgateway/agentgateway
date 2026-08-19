@@ -9,7 +9,12 @@ MANAGED_PREFERENCES_DIRECTORY=${MANAGED_PREFERENCES_DIRECTORY:-"/Library/Managed
 
 managed_provider=""
 managed_gateway_url=""
-managed_user=$(id -un) || exit 1
+managed_user=$(stat -f '%Su' /dev/console 2>/dev/null)
+case "$managed_user" in
+  ""|root|loginwindow)
+    managed_user=$(id -un 2>/dev/null) || exit 1
+    ;;
+esac
 
 for preference_file in \
   "$MANAGED_PREFERENCES_DIRECTORY/$managed_user/com.anthropic.claudefordesktop.plist" \
