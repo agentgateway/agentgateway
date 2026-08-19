@@ -3413,18 +3413,25 @@ spec:
                         description: Azure authentication method for the backend.
                         properties:
                           managedIdentity:
-                            description: Managed identity authentication settings.
+                            description: |-
+                              Managed identity authentication settings. Leave this object empty to use
+                              the system-assigned identity. To use a user-assigned identity, set one of
+                              `clientId`, `objectId`, or `resourceId`. For compatibility, when multiple
+                              identifiers are set, client ID takes precedence over object ID, which takes
+                              precedence over resource ID.
                             properties:
                               clientId:
+                                description: Client ID of the user-assigned managed
+                                  identity.
                                 type: string
                               objectId:
+                                description: Object ID of the user-assigned managed
+                                  identity.
                                 type: string
                               resourceId:
+                                description: Resource ID of the user-assigned managed
+                                  identity.
                                 type: string
-                            required:
-                            - clientId
-                            - objectId
-                            - resourceId
                             type: object
                           secretRef:
                             description: |-

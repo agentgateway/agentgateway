@@ -1610,28 +1610,28 @@ func buildAwsAuthPolicy(ctx PolicyCtx, auth *agentgateway.AwsAuth, namespace str
 }
 
 func buildAzureAuthPolicy(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace string) (*api.BackendAuthPolicy, error) {
-	var errs []error
 	if auth.SecretRef != nil {
-		return buildAzureClientSecret(ctx, auth, namespace, errs)
+		return buildAzureClientSecret(ctx, auth, namespace)
 	}
 
 	if auth.ManagedIdentity != nil {
-		uaid := &api.AzureManagedIdentityCredential_UserAssignedIdentity{}
+		managedIdentity := &api.AzureManagedIdentityCredential{}
+		userAssigned := &api.AzureManagedIdentityCredential_UserAssignedIdentity{}
 		if auth.ManagedIdentity.ClientID != "" {
-			uaid.Id = &api.AzureManagedIdentityCredential_UserAssignedIdentity_ClientId{
+			userAssigned.Id = &api.AzureManagedIdentityCredential_UserAssignedIdentity_ClientId{
 				ClientId: auth.ManagedIdentity.ClientID,
 			}
 		} else if auth.ManagedIdentity.ObjectID != "" {
-			uaid.Id = &api.AzureManagedIdentityCredential_UserAssignedIdentity_ObjectId{
+			userAssigned.Id = &api.AzureManagedIdentityCredential_UserAssignedIdentity_ObjectId{
 				ObjectId: auth.ManagedIdentity.ObjectID,
 			}
 		} else if auth.ManagedIdentity.ResourceID != "" {
-			uaid.Id = &api.AzureManagedIdentityCredential_UserAssignedIdentity_ResourceId{
+			userAssigned.Id = &api.AzureManagedIdentityCredential_UserAssignedIdentity_ResourceId{
 				ResourceId: auth.ManagedIdentity.ResourceID,
 			}
-		} else {
-			errs = append(errs, errors.New("no valid User Assigned Identity identifier provided"))
-			return nil, errors.Join(errs...)
+		}
+		if userAssigned.Id != nil {
+			managedIdentity.UserAssignedIdentity = userAssigned
 		}
 		return &api.BackendAuthPolicy{
 			Kind: &api.BackendAuthPolicy_Azure{
@@ -1639,9 +1639,7 @@ func buildAzureAuthPolicy(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace
 					Kind: &api.Azure_ExplicitConfig{
 						ExplicitConfig: &api.AzureExplicitConfig{
 							CredentialSource: &api.AzureExplicitConfig_ManagedIdentityCredential{
-								ManagedIdentityCredential: &api.AzureManagedIdentityCredential{
-									UserAssignedIdentity: uaid,
-								},
+								ManagedIdentityCredential: managedIdentity,
 							},
 						},
 					},
@@ -1678,7 +1676,8 @@ func buildAzureAuthPolicy(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace
 	}, nil
 }
 
-func buildAzureClientSecret(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace string, errs []error) (*api.BackendAuthPolicy, error) {
+func buildAzureClientSecret(ctx PolicyCtx, auth *agentgateway.AzureAuth, namespace string) (*api.BackendAuthPolicy, error) {
+	var errs []error
 	var clientID, tenantID, clientSecret string
 	data, err := ctx.ResolveCredentialRef(*auth.SecretRef, namespace)
 	if err != nil {
