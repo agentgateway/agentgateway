@@ -558,7 +558,6 @@ impl ExtAuthz {
 		let resp = grpc_client.check(authz_req).await;
 		drop(scope);
 
-		trace!("check response: {:?}", resp);
 		let cr = match resp {
 			Ok(response) => response,
 			Err(e) => {
