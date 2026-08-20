@@ -112,7 +112,7 @@ pub struct GenAILabelsTokenUsage {
 
 #[derive(Clone, Hash, Default, Debug, PartialEq, Eq, EncodeLabelSet)]
 pub struct CostCatalogLookupLabels {
-	pub status: crate::llm::cost::CostLookupStatus,
+	pub status: crate::llm::catalog::CostLookupStatus,
 
 	#[prometheus(flatten)]
 	pub common: EncodeArc<GenAILabels>,

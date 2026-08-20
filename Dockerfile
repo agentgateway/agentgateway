@@ -65,7 +65,7 @@ COPY Makefile Cargo.toml Cargo.lock ./
 COPY .cargo ./.cargo
 COPY crates ./crates
 COPY tools ./tools
-COPY --from=node /app/out ./ui/out
+COPY --from=node /app/dist ./ui/dist
 
 RUN \
     --mount=type=cache,id=cargo,target=/usr/local/cargo/registry \

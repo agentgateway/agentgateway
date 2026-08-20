@@ -81,6 +81,7 @@ metadata:
     app.kubernetes.io/managed-by: Helm
 spec:
   replicas: 1
+  revisionHistoryLimit: 3
   selector:
     matchLabels:
       app.kubernetes.io/name: agentgateway-standalone
@@ -179,3 +180,7 @@ spec:
           key: dedicated
           operator: Equal
           value: agentgateway
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "3"

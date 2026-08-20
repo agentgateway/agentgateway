@@ -957,6 +957,10 @@ type RouteParentReference struct {
 	ParentSection   gwv1.SectionName
 	Accepted        bool
 	ParentGateway   types.NamespacedName
+	// Model-serving metadata populated when an AgentgatewayModel attaches to an
+	// HTTPRoute rule. The existing model conversion still uses the resolved
+	// Gateway listeners, while this key links it to the translated route backend.
+	ModelRouterKey string
 }
 
 // FilteredReferences filters out references that are not accepted by the Parent.

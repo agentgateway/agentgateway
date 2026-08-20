@@ -219,11 +219,6 @@ impl OAuthTokenExchangeAuth {
 			if self.audiences.is_empty() {
 				return Err("requested_token_type id-jag requires at least one audience".into());
 			}
-			if self.subject_token.token_type == OAuthTokenType::AccessToken {
-				warn!(
-					"oauth token exchange requested_token_type id-jag is configured with an access_token subject; the ID-JAG draft expects an ID token subject"
-				);
-			}
 		}
 
 		if matches!(

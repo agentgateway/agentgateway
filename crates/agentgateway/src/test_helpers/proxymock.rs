@@ -27,7 +27,7 @@ use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::http::backendtls::BackendTLS;
 use crate::http::{Body, Response};
-use crate::llm::{AIBackend, AIProvider, NamedAIProvider, cost};
+use crate::llm::{AIBackend, AIProvider, NamedAIProvider, catalog};
 use crate::mcp::FailureMode;
 use crate::proxy::Gateway;
 use crate::proxy::request_builder::RequestBuilder;
@@ -37,11 +37,11 @@ use crate::transport::stream::{Socket, TCPConnectionInfo};
 use crate::transport::tls;
 use crate::types::agent::{
 	Backend, BackendReference, BackendTarget, BackendTrafficPolicy, BackendWithPolicies, Bind,
-	BindKey, BindProtocol, FrontendPolicy, Listener, ListenerProtocol, ListenerSet, ListenerTarget,
-	McpBackend, McpTarget, McpTargetSpec, PathMatch, PolicyInheritance, PolicyPhase, PolicyTarget,
-	ResourceName, Route, RouteBackendReference, RouteMatch, RouteName, SimpleBackendReference,
-	SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute, TCPRouteBackendReference, Target,
-	TargetedPolicy,
+	BindKey, BindProtocol, BindSnapshot, FrontendPolicy, Listener, ListenerProtocol, ListenerSet,
+	ListenerTarget, McpBackend, McpTarget, McpTargetSpec, PathMatch, PolicyInheritance, PolicyPhase,
+	PolicyTarget, ResourceName, Route, RouteBackendReference, RouteMatch, RouteName,
+	SimpleBackendReference, SseTargetSpec, StreamableHTTPTargetSpec, TCPRoute,
+	TCPRouteBackendReference, Target, TargetedPolicy,
 };
 use crate::types::loadbalancer::EndpointSet;
 use crate::types::local::LocalNamedAIProvider;
@@ -283,7 +283,7 @@ pub fn basic_named_tcp_route(target: Strng) -> TCPRoute {
 		hostnames: Default::default(),
 		backends: vec![TCPRouteBackendReference {
 			weight: 1,
-			backend: SimpleBackendReference::Backend(target),
+			backend: BackendReference::Backend(target),
 			inline_policies: Default::default(),
 		}],
 	}
@@ -292,28 +292,35 @@ pub fn basic_named_tcp_route(target: Strng) -> TCPRoute {
 pub const BIND_KEY: Strng = strng::literal!("bind");
 pub const LISTENER_KEY: Strng = strng::literal!("listener");
 
-pub fn simple_bind() -> Bind {
-	Bind {
-		key: BIND_KEY,
-		// not really used
-		address: "127.0.0.1:0".parse().unwrap(),
-		listeners: ListenerSet::from_list([Listener {
+pub fn simple_bind() -> BindSnapshot {
+	BindSnapshot {
+		bind: Arc::new(Bind {
+			key: BIND_KEY,
+			// not really used
+			address: "127.0.0.1:0".parse().unwrap(),
+			protocol: BindProtocol::http,
+			tunnel_protocol: Default::default(),
+			mode: Default::default(),
+		}),
+		listeners: Arc::new(ListenerSet::from_list([Listener {
 			key: LISTENER_KEY,
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTP,
-		}]),
-		protocol: BindProtocol::http,
-		tunnel_protocol: Default::default(),
-		mode: Default::default(),
+		}])),
 	}
 }
 
-pub fn waypoint_bind(protocol: ListenerProtocol) -> Bind {
-	Bind {
-		key: BIND_KEY,
-		address: "127.0.0.1:15008".parse().unwrap(),
-		listeners: ListenerSet::from_list([Listener {
+pub fn waypoint_bind(protocol: ListenerProtocol) -> BindSnapshot {
+	BindSnapshot {
+		bind: Arc::new(Bind {
+			key: BIND_KEY,
+			address: "127.0.0.1:15008".parse().unwrap(),
+			protocol: BindProtocol::http,
+			tunnel_protocol: Default::default(),
+			mode: Default::default(),
+		}),
+		listeners: Arc::new(ListenerSet::from_list([Listener {
 			key: LISTENER_KEY,
 			name: crate::types::agent::ListenerName {
 				gateway_name: strng::literal!("default"),
@@ -323,27 +330,26 @@ pub fn waypoint_bind(protocol: ListenerProtocol) -> Bind {
 			},
 			hostname: Default::default(),
 			protocol,
-		}]),
-		protocol: BindProtocol::http,
-		tunnel_protocol: Default::default(),
-		mode: Default::default(),
+		}])),
 	}
 }
 
-pub fn simple_tcp_bind() -> Bind {
-	Bind {
-		key: BIND_KEY,
-		// not really used
-		address: "127.0.0.1:0".parse().unwrap(),
-		listeners: ListenerSet::from_list([Listener {
+pub fn simple_tcp_bind() -> BindSnapshot {
+	BindSnapshot {
+		bind: Arc::new(Bind {
+			key: BIND_KEY,
+			// not really used
+			address: "127.0.0.1:0".parse().unwrap(),
+			protocol: BindProtocol::tcp,
+			tunnel_protocol: Default::default(),
+			mode: Default::default(),
+		}),
+		listeners: Arc::new(ListenerSet::from_list([Listener {
 			key: LISTENER_KEY,
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::TCP,
-		}]),
-		protocol: BindProtocol::tcp,
-		tunnel_protocol: Default::default(),
-		mode: Default::default(),
+		}])),
 	}
 }
 
@@ -465,9 +471,13 @@ impl tower::Service<Uri> for MemoryConnector {
 }
 
 impl TestBind {
-	pub fn with_bind(self, bind: Bind) -> Self {
+	pub fn with_bind(self, snapshot: BindSnapshot) -> Self {
 		let mut binds = self.pi.stores.binds.write();
-		binds.insert_bind(bind);
+		let bind_key = snapshot.key.clone();
+		for listener in snapshot.listeners.iter() {
+			binds.insert_listener(listener.clone(), bind_key.clone());
+		}
+		binds.insert_bind(Arc::unwrap_or_clone(snapshot.bind));
 		drop(binds);
 		self
 	}
@@ -699,7 +709,16 @@ impl TestBind {
 		legacy_sse: bool,
 		policies: Vec<BackendTrafficPolicy>,
 	) -> Self {
-		self.with_mcp_backend_and_target_policies(b, stateful, legacy_sse, policies, vec![])
+		self.with_mcp_backend_and_target_policies(b, stateful, legacy_sse, policies, vec![], false)
+	}
+
+	pub fn with_mcp_backend_dns_rebinding_protection(
+		self,
+		b: SocketAddr,
+		stateful: bool,
+		legacy_sse: bool,
+	) -> Self {
+		self.with_mcp_backend_and_target_policies(b, stateful, legacy_sse, vec![], vec![], true)
 	}
 
 	// Like `with_mcp_backend_policies`, but also attaches `target_policies` to the
@@ -713,6 +732,7 @@ impl TestBind {
 		legacy_sse: bool,
 		policies: Vec<BackendTrafficPolicy>,
 		target_policies: Vec<BackendTrafficPolicy>,
+		dns_rebinding_protection: bool,
 	) -> Self {
 		let opb = Backend::Opaque(
 			ResourceName::new(strng::format!("basic-{}", b), "".into()),
@@ -740,6 +760,7 @@ impl TestBind {
 				prefix_mode: Default::default(),
 				failure_mode: FailureMode::FailClosed,
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				dns_rebinding_protection,
 			},
 		);
 		{
@@ -768,7 +789,24 @@ impl TestBind {
 		servers: Vec<(&str, SocketAddr, bool)>,
 		stateful: bool,
 	) -> Self {
-		self.with_multiplex_mcp_backend_policies(name, servers, stateful, vec![])
+		self.with_multiplex_mcp_backend_failure_mode(name, servers, stateful, FailureMode::FailClosed)
+	}
+
+	pub fn with_multiplex_mcp_backend_failure_mode(
+		self,
+		name: &str,
+		servers: Vec<(&str, SocketAddr, bool)>,
+		stateful: bool,
+		failure_mode: FailureMode,
+	) -> Self {
+		self.with_multiplex_mcp_backend_options(
+			name,
+			servers,
+			stateful,
+			vec![],
+			Default::default(),
+			failure_mode,
+		)
 	}
 
 	pub fn with_multiplex_mcp_backend_policies(
@@ -795,6 +833,25 @@ impl TestBind {
 		policies: Vec<BackendTrafficPolicy>,
 		prefix_mode: crate::types::agent::McpPrefixMode,
 	) -> Self {
+		self.with_multiplex_mcp_backend_options(
+			name,
+			servers,
+			stateful,
+			policies,
+			prefix_mode,
+			FailureMode::FailClosed,
+		)
+	}
+
+	fn with_multiplex_mcp_backend_options(
+		self,
+		name: &str,
+		servers: Vec<(&str, SocketAddr, bool)>,
+		stateful: bool,
+		policies: Vec<BackendTrafficPolicy>,
+		prefix_mode: crate::types::agent::McpPrefixMode,
+		failure_mode: FailureMode,
+	) -> Self {
 		let b = Backend::MCP(
 			ResourceName::new(name.into(), "".into()),
 			McpBackend {
@@ -820,8 +877,9 @@ impl TestBind {
 					.collect_vec(),
 				stateful,
 				prefix_mode,
-				failure_mode: FailureMode::FailClosed,
+				failure_mode,
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				dns_rebinding_protection: false,
 			},
 		);
 		{
@@ -1311,7 +1369,7 @@ pub fn setup_proxy_test_with_config_and_spiffe(
 			metrics::sub_registry(&mut Registry::default()),
 			Default::default(),
 		)),
-		model_catalog: cost::ModelCatalog::empty(),
+		model_catalog: catalog::ModelCatalog::empty(),
 		admin: None,
 		upstream: client.clone(),
 		ca: None,

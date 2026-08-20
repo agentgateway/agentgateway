@@ -200,8 +200,7 @@ pub mod from_completions {
 			for tool_call in tool_calls {
 				match tool_call {
 					completions::MessageToolCalls::Function(call) => {
-						let input = serde_json::from_str::<serde_json::Value>(&call.function.arguments)
-							.unwrap_or_else(|_| serde_json::Value::String(call.function.arguments.clone()));
+						let input = crate::conversion::tool_arguments_to_input(&call.function.arguments);
 						out.push(messages::ContentBlock::ToolUse {
 							id: call.id.clone(),
 							name: call.function.name.clone(),
@@ -210,8 +209,7 @@ pub mod from_completions {
 						});
 					},
 					completions::MessageToolCalls::Custom(call) => {
-						let input = serde_json::from_str::<serde_json::Value>(&call.custom_tool.input)
-							.unwrap_or_else(|_| serde_json::Value::String(call.custom_tool.input.clone()));
+						let input = crate::conversion::tool_arguments_to_input(&call.custom_tool.input);
 						out.push(messages::ContentBlock::ToolUse {
 							id: call.id.clone(),
 							name: call.custom_tool.name.clone(),
@@ -574,14 +572,25 @@ pub mod from_completions {
 		log: StreamingUsageGuard,
 		log_content: crate::LogContentFields,
 	) -> Body {
+		/// An ongoing `tool_use` block. `emitted_arguments` tracks whether we have put any argument
+		/// text on the wire yet, so `content_block_stop` can synthesize `{}` when Anthropic
+		/// streamed nothing at all.
+		struct OngoingToolCall {
+			tool_index: u32,
+			emitted_arguments: bool,
+		}
+
 		let mut message_id = None;
 		let mut model = String::new();
+		// Anthropic states the role once in `message_start`, but the OpenAI chunk has no top-level
+		// role field — it belongs on `choices[].delta`, so hold it until there is a chunk for it.
+		let mut pending_role = None;
 		let mut service_tier = None;
 		let created = chrono::Utc::now().timestamp() as u32;
 		// let mut finish_reason = None;
 		let mut saw_token = false;
 		let mut next_tool_index = 0u32;
-		let mut tool_index_map: HashMap<usize, u32> = HashMap::new();
+		let mut ongoing_tool_calls: HashMap<usize, OngoingToolCall> = HashMap::new();
 		let mut completion = log_content.completion.then(String::new);
 		let mut tool_calls = super::StreamingToolCalls::new(log_content.tool_calls);
 
@@ -590,7 +599,11 @@ pub mod from_completions {
 			messages::MessagesStreamEvent,
 			completions::StreamResponse,
 		>(b, buffer_limit, move |f| {
-			let mk = |choices: Vec<completions::ChatChoiceStream>, usage: Option<completions::Usage>| {
+			let mut mk = |mut choices: Vec<completions::ChatChoiceStream>,
+			              usage: Option<completions::Usage>| {
+				if let Some(first) = choices.first_mut() {
+					first.delta.role = pending_role.take();
+				}
 				Some(completions::StreamResponse {
 					id: message_id.clone().unwrap_or_else(|| "unknown".to_string()),
 					model: model.clone(),
@@ -609,6 +622,11 @@ pub mod from_completions {
 			match f {
 				messages::MessagesStreamEvent::MessageStart { message } => {
 					message_id = Some(message.id);
+					pending_role = Some(match message.role {
+						messages::Role::Assistant => completions::Role::Assistant,
+						messages::Role::User => completions::Role::User,
+						messages::Role::System => completions::Role::System,
+					});
 					model = message.model.clone();
 					service_tier = message.usage.service_tier.clone();
 					log.update(|r| {
@@ -637,8 +655,15 @@ pub mod from_completions {
 					} => {
 						let tool_index = next_tool_index;
 						next_tool_index += 1;
-						tool_index_map.insert(index, tool_index);
 						tool_calls.start(index, id.as_str(), name.as_str(), &input);
+						// `input` is always `{}` here: the payload arrives as `input_json_delta`s.
+						ongoing_tool_calls.insert(
+							index,
+							OngoingToolCall {
+								tool_index,
+								emitted_arguments: false,
+							},
+						);
 
 						let choice = completions::ChatChoiceStream {
 							index: 0,
@@ -682,18 +707,21 @@ pub mod from_completions {
 						},
 						messages::ContentBlockDelta::InputJsonDelta { partial_json } => {
 							tool_calls.append_arguments(index, &partial_json);
-							if let Some(&tool_index) = tool_index_map.get(&index) {
-								dr.tool_calls = Some(vec![completions::ChatCompletionMessageToolCallChunk {
-									index: tool_index,
-									id: None,
-									r#type: None,
-									function: Some(completions::FunctionCallStream {
-										name: None,
-										arguments: Some(partial_json),
-									}),
-								}]);
-							} else {
-								emit_chunk = false;
+							match ongoing_tool_calls.get_mut(&index) {
+								Some(_) if partial_json.is_empty() => emit_chunk = false,
+								Some(ongoing) => {
+									ongoing.emitted_arguments = true;
+									dr.tool_calls = Some(vec![completions::ChatCompletionMessageToolCallChunk {
+										index: ongoing.tool_index,
+										id: None,
+										r#type: None,
+										function: Some(completions::FunctionCallStream {
+											name: None,
+											arguments: Some(partial_json),
+										}),
+									}]);
+								},
+								None => emit_chunk = false,
 							}
 						},
 						messages::ContentBlockDelta::SignatureDelta { .. }
@@ -720,6 +748,9 @@ pub mod from_completions {
 						.as_ref()
 						.and_then(crate::types::serialize_str);
 					log.update(|r| {
+						if let Some(inp) = usage.input_tokens {
+							r.response.input_tokens = Some(inp as u64);
+						}
 						if let Some(crt) = usage.cache_read_input_tokens {
 							r.response.cached_input_tokens = Some(crt as u64);
 						}
@@ -776,8 +807,31 @@ pub mod from_completions {
 					)
 				},
 				messages::MessagesStreamEvent::ContentBlockStop { index } => {
-					tool_index_map.remove(&index);
-					None
+					match ongoing_tool_calls.remove(&index) {
+						Some(ongoing) if !ongoing.emitted_arguments => {
+							// If no arguments were emitted for a tool call, send a synthetic `{}`
+							// for compatibility.
+							let choice = completions::ChatChoiceStream {
+								index: 0,
+								logprobs: None,
+								delta: completions::StreamResponseDelta {
+									tool_calls: Some(vec![completions::ChatCompletionMessageToolCallChunk {
+										index: ongoing.tool_index,
+										id: None,
+										r#type: None,
+										function: Some(completions::FunctionCallStream {
+											name: None,
+											arguments: Some("{}".to_string()),
+										}),
+									}]),
+									..Default::default()
+								},
+								finish_reason: None,
+							};
+							mk(vec![choice], None)
+						},
+						_ => None,
+					}
 				},
 				messages::MessagesStreamEvent::MessageStop => {
 					log.update(|r| {
@@ -791,6 +845,13 @@ pub mod from_completions {
 					None
 				},
 				messages::MessagesStreamEvent::Ping => None,
+				messages::MessagesStreamEvent::Error { error } => {
+					tracing::warn!(
+						"Messages stream error during completions translation: {}",
+						error.message
+					);
+					None
+				},
 			}
 		});
 
@@ -963,6 +1024,9 @@ pub fn passthrough_stream(
 					.as_ref()
 					.and_then(crate::types::serialize_str);
 				log.update(|r| {
+					if let Some(inp) = usage.input_tokens {
+						r.response.input_tokens = Some(inp as u64);
+					}
 					if let Some(o) = usage.output_tokens {
 						r.response.output_tokens = Some(o as u64);
 					}
@@ -992,6 +1056,7 @@ pub fn passthrough_stream(
 			},
 			messages::MessagesStreamEvent::ContentBlockStop { .. }
 			| messages::MessagesStreamEvent::Ping => {},
+			messages::MessagesStreamEvent::Error { .. } => {},
 		}
 	})
 }

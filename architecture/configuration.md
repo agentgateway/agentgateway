@@ -50,4 +50,4 @@ For policies, similar philosophies are applied.
 Policies are generally applied to a Gateway/Listener/HTTPRoute/HTTPRouteRule, with merging semantics (some types apply to Backend instead, though).
 A naive approach would have the control plane flatten these down to the lowest type (HTTPRouteRule) which has the fanout problem.
 In agentgateway, the control plane will instead send all of the policies as-is with a reference to where they apply.
-The precedence/merging of policies is handled at runtime. 
+The precedence/merging of policies is handled at runtime.

@@ -190,6 +190,31 @@ pub async fn encode_body(body: &[u8], encoding: &str) -> Result<Bytes, axum_core
 		.map_err(Into::into)
 }
 
+/// Compress a body as it is sent instead of buffering it again.
+///
+/// Buffered LLM responses use this at the final response boundary: policies need plaintext while
+/// evaluating and replacing `response.body`, but the selected upstream encoding must be restored
+/// after those policies have finished.
+pub fn encode_body_stream(
+	body: axum_core::body::Body,
+	encoding: &str,
+) -> Result<axum_core::body::Body, Error> {
+	let byte_stream = TryStreamExt::map_err(body.into_data_stream(), std::io::Error::other);
+	let stream_reader = BufReader::new(StreamReader::new(byte_stream));
+
+	let encoder: Box<dyn AsyncRead + Unpin + Send> = match encoding {
+		GZIP => Box::new(GzipEncoder::new(stream_reader)),
+		DEFLATE => Box::new(ZlibEncoder::new(stream_reader)),
+		BR => Box::new(BrotliEncoder::new(stream_reader)),
+		ZSTD => Box::new(ZstdEncoder::new(stream_reader)),
+		_ => return Err(Error::UnsupportedEncoding),
+	};
+
+	Ok(axum_core::body::Body::from_stream(ReaderStream::new(
+		encoder,
+	)))
+}
+
 async fn decode_body<B>(body: B, encoding: &str, limit: usize) -> Result<Bytes, Error>
 where
 	B: Body<Data = Bytes> + Send + Unpin + 'static,

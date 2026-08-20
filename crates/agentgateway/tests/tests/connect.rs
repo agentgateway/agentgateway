@@ -496,19 +496,21 @@ async fn connect_tunnel_terminates_outer_tls() {
 
 		// OUTER bind: HTTPS Static cert + tunnelProtocol Connect. The fix terminates
 		// this outer TLS before serving CONNECT.
-		let outer = Bind {
-			key: strng::literal!("outer"),
-			address: "127.0.0.1:15011".parse().unwrap(),
-			listeners: ListenerSet::from_list([Listener {
-				key: LISTENER_KEY,
+		let outer = BindSnapshot::new(
+			Bind {
+				key: strng::literal!("outer"),
+				address: "127.0.0.1:15011".parse().unwrap(),
+				protocol: BindProtocol::tls,
+				tunnel_protocol: TunnelProtocol::Connect,
+				mode: Default::default(),
+			},
+			ListenerSet::from_list([Listener {
+				key: strng::literal!("outer-listener"),
 				name: Default::default(),
 				hostname: strng::new("*.example.com"),
 				protocol: ListenerProtocol::HTTPS(test_server_tls_config()),
 			}]),
-			protocol: BindProtocol::tls,
-			tunnel_protocol: TunnelProtocol::Connect,
-			mode: Default::default(),
-		};
+		);
 
 		// INNER plain bind, re-entered by the CONNECT authority port.
 		let mut inner = simple_bind();
@@ -1008,19 +1010,21 @@ async fn connect_tunnel_dynamic_ca_obo_dynamic_backend() {
 	outer.address = "127.0.0.1:15010".parse().unwrap();
 	outer.tunnel_protocol = TunnelProtocol::Connect;
 	// Inner bind terminates TLS with the dynamic CA (empty hostname = match any SNI).
-	let inner = Bind {
-		key: BIND_KEY,
-		address: "0.0.0.0:18082".parse().unwrap(),
-		listeners: ListenerSet::from_list([Listener {
+	let inner = BindSnapshot::new(
+		Bind {
+			key: BIND_KEY,
+			address: "0.0.0.0:18082".parse().unwrap(),
+			protocol: BindProtocol::tls,
+			tunnel_protocol: Default::default(),
+			mode: Default::default(),
+		},
+		ListenerSet::from_list([Listener {
 			key: LISTENER_KEY,
 			name: Default::default(),
 			hostname: Default::default(),
 			protocol: ListenerProtocol::HTTPS(tls_config),
 		}]),
-		protocol: BindProtocol::tls,
-		tunnel_protocol: Default::default(),
-		mode: Default::default(),
-	};
+	);
 
 	// `dynamic: {}` backend: the upstream is resolved from the decrypted request's
 	// Host/authority (DFP), proven on direct requests by `dfp_uses_host_port`.

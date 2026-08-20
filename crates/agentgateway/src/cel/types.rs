@@ -326,6 +326,9 @@ pub struct DestinationContext {
 	#[serde(default)]
 	/// The port of the downstream request destination at agentgateway.
 	pub port: u16,
+	/// The requested destination hostname, when known. For TLS connections this is the sniffed SNI.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub hostname: Option<Strng>,
 }
 
 #[apply(schema!)]
@@ -368,6 +371,7 @@ impl DestinationContext {
 		Self {
 			address: tcp.local_addr.ip(),
 			port: tcp.local_addr.port(),
+			hostname: None,
 		}
 	}
 }
@@ -675,6 +679,15 @@ impl<'a> Executor<'a> {
 		if let Some(f) = this.request.as_mut() {
 			f.end_time = Some(end_time);
 		}
+		this
+	}
+	pub fn new_tcp(
+		source_context: Option<&'a SourceContext>,
+		destination_context: &'a DestinationContext,
+	) -> Self {
+		let mut this = Self::new_empty();
+		this.source = ExtensionOrDirect::Direct(source_context);
+		this.destination = ExtensionOrDirect::Direct(Some(destination_context));
 		this
 	}
 	pub fn new_source(source_context: &'a SourceContext) -> Self {
@@ -1511,19 +1524,19 @@ pub struct LLMContext {
 	/// The realized USD cost of the request from the model cost catalog.
 	/// Unset when the model could not be priced.
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub cost: Option<llm::cost::Breakdown>,
+	pub cost: Option<llm::catalog::Breakdown>,
 	/// Effective model catalog rates in USD per 1M tokens after tier selection.
 	/// Unset when the model could not be priced.
 	#[dynamic(rename = "costRates")]
 	#[serde(skip_serializing_if = "Option::is_none")]
-	pub cost_rates: Option<llm::cost::CostRates>,
+	pub cost_rates: Option<llm::catalog::CostRates>,
 	#[serde(skip)]
 	#[dynamic(skip)]
-	pub cost_status: Option<llm::cost::CostLookupStatus>,
+	pub cost_status: Option<llm::catalog::CostLookupStatus>,
 }
 
 impl LLMContext {
-	pub fn from_llm_info(value: LLMInfo, model_catalog: Option<&llm::cost::ModelCatalog>) -> Self {
+	pub fn from_llm_info(value: LLMInfo, model_catalog: Option<&llm::catalog::ModelCatalog>) -> Self {
 		let legacy_token_semantics = *LEGACY_LLM_USAGE_TOKEN_SEMANTICS;
 		let projection = model_catalog.map(|catalog| catalog.project(&value));
 		let normalized_input_tokens = value.normalized_input_tokens();
@@ -2308,6 +2321,7 @@ pub fn full_example_executor() -> ExecutorSerde {
 		destination: Some(DestinationContext {
 			address: "10.0.0.1".parse().unwrap(),
 			port: 8080,
+			hostname: Some("example.com".into()),
 		}),
 		jwt: Some(jwt::Claims {
 			inner: serde_json::Map::from_iter(vec![

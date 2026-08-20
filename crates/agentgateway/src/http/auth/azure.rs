@@ -461,3 +461,32 @@ pub(super) async fn get_token(
 	trace!("attached Azure token (scope: {})", scopes[0]);
 	Ok(hv)
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn existing_user_assigned_managed_identity_parses() {
+		serde_json::from_str::<AzureAuthCredentialSource>(
+			r#"{"managedIdentity":{"userAssignedIdentity":{"clientId":"cid"}}}"#,
+		)
+		.expect("the existing managed identity shape must remain supported");
+	}
+
+	#[tokio::test]
+	async fn empty_managed_identity_builds_sdk_credential() {
+		let credential_source =
+			serde_json::from_str(r#"{"managedIdentity":{}}"#).expect("managed identity should parse");
+		let auth = AzureAuth::ExplicitConfig {
+			credential_source,
+			cached_cred: Default::default(),
+		};
+		let config = crate::config::parse_config("{}".to_string(), None).expect("config");
+		let client = crate::client::Client::new(&config.dns, None, Default::default(), None);
+
+		build_credential(&client, &auth)
+			.await
+			.expect("system-assigned managed identity should build");
+	}
+}

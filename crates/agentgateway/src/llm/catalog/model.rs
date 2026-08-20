@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::str::FromStr;
 
@@ -37,11 +37,21 @@ impl Catalog {
 
 	pub fn override_with(mut self, overlay: Catalog) -> Catalog {
 		for (pid, op) in overlay.providers {
-			match self.providers.get_mut(&pid) {
-				Some(base) => base.models.extend(op.models),
-				None => {
-					self.providers.insert(pid, op);
-				},
+			let base = self.providers.entry(pid).or_default();
+			for (mid, om) in op.models {
+				// Deep-merge per model so an overlay adding only tags keeps the base's costs.
+				let merged = match base.models.remove(&mid) {
+					Some(mut bm) => {
+						bm.rates = bm.rates.overlay(&om.rates);
+						if !om.tiers.is_empty() {
+							bm.tiers = om.tiers;
+						}
+						bm.tags.extend(om.tags);
+						bm
+					},
+					None => om,
+				};
+				base.models.insert(mid, merged);
 			}
 		}
 		self
@@ -76,6 +86,9 @@ pub struct Model {
 	/// Context-length pricing tiers that override the base rates.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub tiers: Vec<Tier>,
+	/// Freeform capability/routing tags for this model.
+	#[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+	pub tags: BTreeSet<String>,
 }
 
 #[apply(schema!)]
@@ -291,7 +304,11 @@ mod tests {
 	}
 
 	fn entry(rates: Rates, tiers: Vec<Tier>) -> Model {
-		Model { rates, tiers }
+		Model {
+			rates,
+			tiers,
+			..Default::default()
+		}
 	}
 
 	fn tier(context_over: u64, rates: Rates) -> Tier {
@@ -355,6 +372,22 @@ mod tests {
 	}
 
 	#[test]
+	fn override_with_deep_merges_and_keeps_costs() {
+		// A later overlay that only adds a tag must not wipe the base model's rates.
+		let base = from_json(
+			r#"{"providers":{"openai":{"models":{"m":{"rates":{"input":"3","output":"6"}}}}}}"#,
+		)
+		.unwrap();
+		let overlay =
+			from_json(r#"{"providers":{"openai":{"models":{"m":{"tags":["preview"]}}}}}"#).unwrap();
+		let merged = base.override_with(overlay);
+		let model = merged.resolve("openai", "m").expect("model survives");
+		assert_eq!(model.rates.input, Some(m("3")), "base cost preserved");
+		assert_eq!(model.rates.output, Some(m("6")));
+		assert!(model.tags.contains("preview"), "overlay tag applied");
+	}
+
+	#[test]
 	fn resolve_is_provider_scoped() {
 		let catalog =
 			from_json(r#"{"providers":{"openai":{"models":{"shared":{"rates":{"input":"5"}}}}}}"#)
@@ -411,7 +444,7 @@ mod tests {
 	}
 
 	#[test]
-	fn override_replaces_whole_entry_and_keeps_siblings() {
+	fn override_merges_fields_and_keeps_siblings() {
 		let base: Catalog = serde_json::from_str(
 			r#"{"providers":{"openai":{"models":{
 					"gpt-5":{"rates":{"input":"1.25","output":"10"}},
@@ -425,10 +458,11 @@ mod tests {
 		.unwrap();
 		let merged = base.override_with(overlay);
 		let gpt5 = &merged.providers["openai"].models["gpt-5"];
-		assert_eq!(gpt5.rates.output, Some(m("8")));
+		assert_eq!(gpt5.rates.output, Some(m("8")), "overlay field wins");
 		assert_eq!(
-			gpt5.rates.input, None,
-			"whole-entry replace drops base fields"
+			gpt5.rates.input,
+			Some(m("1.25")),
+			"base field kept where overlay is absent"
 		);
 		assert_eq!(
 			merged.providers["openai"].models["gpt-4o"].rates.input,

@@ -213,6 +213,13 @@ pub struct UrlRewrite {
 #[derive(Debug, Clone)]
 pub struct OriginalUrl(pub Uri);
 
+/// AppliedUrlRewrite records the path-rewrite configuration that produced the current URI.
+#[derive(Debug, Clone)]
+pub struct AppliedUrlRewrite {
+	pub path: Option<PathRedirect>,
+	pub path_match: PathMatch,
+}
+
 /// AutoHostname is an HTTP Extension that signals that auto-hostname rewrite should be used.
 #[derive(Debug, Clone)]
 pub struct AutoHostname {
@@ -242,6 +249,10 @@ impl UrlRewrite {
 		let UrlRewrite { authority, path } = self;
 		let orig = req.uri().clone();
 		req.extensions_mut().insert(OriginalUrl(orig));
+		req.extensions_mut().insert(AppliedUrlRewrite {
+			path: path.clone(),
+			path_match: path_match.clone(),
+		});
 		let scheme = req.uri().scheme().cloned().unwrap_or(Scheme::HTTP);
 
 		let new_authority = rewrite_host(authority, req.uri(), Some(&scheme), &scheme)?;

@@ -1,0 +1,91 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/responses/tool.json
+info:
+  id: resp_tool
+  object: response
+  created_at: 123
+  status: completed
+  model: gpt-4.1-mini
+  service_tier: default
+  output:
+    - type: message
+      id: msg_text
+      role: assistant
+      status: completed
+      content:
+        - type: output_text
+          text: I will check that.
+          annotations: []
+    - type: function_call
+      id: fc_1
+      call_id: call_weather
+      name: get_weather
+      arguments: "{\"location\":\"San Francisco\"}"
+      status: completed
+  usage:
+    input_tokens: 30
+    input_tokens_details:
+      cached_tokens: 4
+      cache_write_tokens: 6
+    output_tokens: 5
+    output_tokens_details:
+      reasoning_tokens: 0
+    total_tokens: 35
+---
+{
+  "response": {
+    "id": "[id]",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "I will check that."
+      },
+      {
+        "type": "tool_use",
+        "id": "call_weather",
+        "name": "get_weather",
+        "input": {
+          "location": "San Francisco"
+        }
+      }
+    ],
+    "model": "gpt-4.1-mini",
+    "stop_reason": "tool_use",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 20,
+      "output_tokens": 5,
+      "cache_creation_input_tokens": 6,
+      "cache_read_input_tokens": 4,
+      "service_tier": "default"
+    }
+  },
+  "parsed": {
+    "input_tokens": 20,
+    "output_tokens": 5,
+    "total_tokens": 25,
+    "cache_creation_input_tokens": 6,
+    "cached_input_tokens": 4,
+    "service_tier": "default",
+    "provider_model": "gpt-4.1-mini",
+    "output_messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_call",
+            "id": "call_weather",
+            "name": "get_weather",
+            "arguments": {
+              "location": "San Francisco"
+            }
+          }
+        ],
+        "finish_reason": "tool_use"
+      }
+    ]
+  }
+}

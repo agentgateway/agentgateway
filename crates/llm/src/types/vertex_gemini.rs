@@ -32,6 +32,8 @@ pub struct GenerateContentRequest {
 	pub cached_content: Option<String>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub labels: Option<serde_json::Map<String, serde_json::Value>>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -69,7 +71,11 @@ pub struct TextPart {
 	pub text: String,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub thought: Option<bool>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		alias = "thought_signature"
+	)]
 	pub thought_signature: Option<String>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
@@ -78,10 +84,15 @@ pub struct TextPart {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FunctionCallPart {
+	#[serde(alias = "function_call")]
 	pub function_call: FunctionCall,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub thought: Option<bool>,
-	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[serde(
+		default,
+		skip_serializing_if = "Option::is_none",
+		alias = "thought_signature"
+	)]
 	pub thought_signature: Option<String>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
@@ -90,6 +101,7 @@ pub struct FunctionCallPart {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FunctionResponsePart {
+	#[serde(alias = "function_response")]
 	pub function_response: FunctionResponse,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
@@ -98,6 +110,7 @@ pub struct FunctionResponsePart {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InlineDataPart {
+	#[serde(alias = "inline_data")]
 	pub inline_data: Blob,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
@@ -106,6 +119,7 @@ pub struct InlineDataPart {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileDataPart {
+	#[serde(alias = "file_data")]
 	pub file_data: FileData,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
@@ -114,6 +128,7 @@ pub struct FileDataPart {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutableCodePart {
+	#[serde(alias = "executable_code")]
 	pub executable_code: serde_json::Value,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
@@ -122,6 +137,7 @@ pub struct ExecutableCodePart {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CodeExecutionResultPart {
+	#[serde(alias = "code_execution_result")]
 	pub code_execution_result: serde_json::Value,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
@@ -155,6 +171,7 @@ pub struct FunctionResponse {
 #[serde(rename_all = "camelCase")]
 pub struct Blob {
 	// Field order matters: Vertex returns 400 if `mimeType` comes after `data`.
+	#[serde(alias = "mime_type")]
 	pub mime_type: String,
 	pub data: String,
 	#[serde(flatten, default)]
@@ -166,8 +183,9 @@ pub struct Blob {
 pub struct FileData {
 	// Field order matters: `mimeType` must precede `fileUri` in serialised JSON.
 	// `mime_type` is optional; Vertex resolves it server-side for Files API URLs.
-	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[serde(default, skip_serializing_if = "Option::is_none", alias = "mime_type")]
 	pub mime_type: Option<String>,
+	#[serde(alias = "file_uri")]
 	pub file_uri: String,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
@@ -175,11 +193,14 @@ pub struct FileData {
 
 // ---------- Tools and tool config ----------
 
+/// Built-in tools (`googleSearch`, `codeExecution`, `urlContext`, ...) ride in `rest`.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Tool {
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub function_declarations: Vec<FunctionDeclaration>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -189,6 +210,8 @@ pub struct FunctionDeclaration {
 	pub description: Option<String>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub parameters: Option<serde_json::Value>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -196,6 +219,8 @@ pub struct FunctionDeclaration {
 pub struct ToolConfig {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub function_calling_config: Option<FunctionCallingConfig>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -206,6 +231,8 @@ pub struct FunctionCallingConfig {
 	pub mode: Option<String>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub allowed_function_names: Vec<String>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
 }
 
 // ---------- GenerationConfig and thinking ----------
@@ -237,6 +264,8 @@ pub struct GenerationConfig {
 	pub response_schema: Option<serde_json::Value>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub thinking_config: Option<ThinkingConfig>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
@@ -250,6 +279,8 @@ pub struct ThinkingConfig {
 	pub thinking_budget: Option<i32>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub include_thoughts: Option<bool>,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -257,6 +288,8 @@ pub struct ThinkingConfig {
 pub struct SafetySetting {
 	pub category: String,
 	pub threshold: String,
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
 }
 
 // ---------- Response ----------
@@ -316,6 +349,24 @@ pub struct UsageMetadata {
 	pub thoughts_token_count: Option<u64>,
 	#[serde(flatten, default)]
 	pub rest: serde_json::Value,
+}
+
+impl UsageMetadata {
+	/// Prompt, completion, and total token counts (total falls back to prompt + completion
+	/// when absent).
+	///
+	/// Gemini reports thinking tokens in `thoughtsTokenCount`, disjoint from
+	/// `candidatesTokenCount` (`total = prompt + candidates + thoughts`), while every other
+	/// provider includes reasoning in its output count — and Google bills thoughts at the
+	/// output rate. Normalize to the common convention: completion includes thoughts, with
+	/// `thoughtsTokenCount` still reported separately as the reasoning breakdown.
+	pub fn counts(&self) -> (u64, u64, u64) {
+		let prompt = self.prompt_token_count.unwrap_or(0);
+		let completion =
+			self.candidates_token_count.unwrap_or(0) + self.thoughts_token_count.unwrap_or(0);
+		let total = self.total_token_count.unwrap_or(prompt + completion);
+		(prompt, completion, total)
+	}
 }
 
 #[cfg(test)]
@@ -553,7 +604,9 @@ mod tests {
 			function_calling_config: Some(FunctionCallingConfig {
 				mode: Some("ANY".into()),
 				allowed_function_names: vec!["get_weather".into()],
+				rest: Default::default(),
 			}),
+			rest: Default::default(),
 		};
 		let s = serde_json::to_string(&cfg).unwrap();
 		assert!(s.contains("\"functionCallingConfig\""));

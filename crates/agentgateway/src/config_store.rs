@@ -565,12 +565,13 @@ fn upsert_file_map_resource(
 			.get("apiKey")
 			.and_then(|policy| policy.get("keys"))
 			.cloned();
-		if let Some(keys) = existing_keys {
-			value
-				.as_object_mut()
-				.ok_or_else(|| anyhow::anyhow!("llm.policy/apiKey must be an object"))?
-				.insert("keys".to_string(), keys);
-		}
+		value
+			.as_object_mut()
+			.ok_or_else(|| anyhow::anyhow!("llm.policy/apiKey must be an object"))?
+			.insert(
+				"keys".to_string(),
+				existing_keys.unwrap_or_else(|| Value::Array(Vec::new())),
+			);
 	}
 	// A gateway's resource ID is the key in the YAML map, not a field in its value.
 	if prepared.kind == ConfigResourceKind::TrafficGateway {

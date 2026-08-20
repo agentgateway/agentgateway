@@ -71,6 +71,11 @@ spec:
         request:
           - response:
               message: "regex rejected on request"
+            scope:
+              - SystemPrompt
+              - Messages
+              - ToolOutput
+              - ToolInput
             regex:
               builtins:
                 - CreditCard
@@ -149,6 +154,11 @@ output:
                 - builtin: CREDIT_CARD
               rejection:
                 body: cmVnZXggcmVqZWN0ZWQgb24gcmVxdWVzdA==
+              scope:
+              - CONTENT_SCOPE_SYSTEM_PROMPT
+              - CONTENT_SCOPE_MESSAGES
+              - CONTENT_SCOPE_TOOL_OUTPUT
+              - CONTENT_SCOPE_TOOL_INPUT
             - openaiModeration:
                 inlinePolicies:
                 - backendTls:

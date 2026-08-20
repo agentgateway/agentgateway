@@ -690,16 +690,23 @@ mod tests {
 		);
 	}
 
-	/// A `tls: spiffe` HTTPS listener bound to `*.example.com`, mirroring `gateway_test::https_bind`
-	/// but sourcing its serving identity from SPIFFE.
-	fn spiffe_https_bind() -> types::agent::Bind {
+	/// A `tls: spiffe` HTTPS listener bound to `*.example.com`, mirroring `proxymock::simple_bind`
+	/// but serving HTTPS and sourcing its serving identity from SPIFFE.
+	fn spiffe_https_bind() -> types::agent::BindSnapshot {
 		use crate::test_helpers::proxymock::{BIND_KEY, LISTENER_KEY};
-		use crate::types::agent::{Bind, BindProtocol, Listener, ListenerProtocol, ListenerSet};
+		use crate::types::agent::{
+			Bind, BindProtocol, BindSnapshot, Listener, ListenerProtocol, ListenerSet,
+		};
 
-		Bind {
-			key: BIND_KEY,
-			address: "127.0.0.1:0".parse().unwrap(),
-			listeners: ListenerSet::from_list([Listener {
+		BindSnapshot {
+			bind: Arc::new(Bind {
+				key: BIND_KEY,
+				address: "127.0.0.1:0".parse().unwrap(),
+				protocol: BindProtocol::tls,
+				tunnel_protocol: Default::default(),
+				mode: Default::default(),
+			}),
+			listeners: Arc::new(ListenerSet::from_list([Listener {
 				key: LISTENER_KEY,
 				name: Default::default(),
 				hostname: strng::new("*.example.com"),
@@ -707,10 +714,7 @@ mod tests {
 					b"h2".to_vec(),
 					b"http/1.1".to_vec(),
 				])),
-			}]),
-			protocol: BindProtocol::tls,
-			tunnel_protocol: Default::default(),
-			mode: Default::default(),
+			}])),
 		}
 	}
 

@@ -39,6 +39,14 @@ pub use agent_http::{
 };
 pub use recordbody::{RecordedBody, RecordedBodyHandle};
 
+pub(crate) fn mark_sensitive_headers(req: &mut Request, configured: &[HeaderName]) {
+	for (name, value) in req.headers_mut() {
+		if name == header::AUTHORIZATION || configured.contains(name) {
+			value.set_sensitive(true)
+		}
+	}
+}
+
 pub(crate) fn iter_request_cookies<'a>(
 	req: &'a Request,
 ) -> impl Iterator<Item = cookie::Cookie<'a>> + 'a {

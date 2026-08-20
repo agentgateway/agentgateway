@@ -74,6 +74,14 @@ impl Client {
 		let message = ClientJsonRpcMessage::notification(req);
 		self.send_message(message, ctx).await
 	}
+
+	pub async fn send_client_message(
+		&self,
+		message: ClientJsonRpcMessage,
+		ctx: &IncomingRequestContext,
+	) -> Result<StreamableHttpPostResponse, ClientError> {
+		self.send_message(message, ctx).await
+	}
 	async fn send_message(
 		&self,
 		message: ClientJsonRpcMessage,

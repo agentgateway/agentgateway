@@ -11,6 +11,123 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
+func TestModelServingRuleGuards(t *testing.T) {
+	valid := func() gwv1.HTTPRouteRule {
+		name := gwv1.SectionName("models")
+		pathType := gwv1.PathMatchPathPrefix
+		path := "/tenant1"
+		group := gwv1.Group(wellknown.AgentgatewayModelGVK.Group)
+		kind := gwv1.Kind(wellknown.AgentgatewayModelGVK.Kind)
+		return gwv1.HTTPRouteRule{
+			Name:    &name,
+			Matches: []gwv1.HTTPRouteMatch{{Path: &gwv1.HTTPPathMatch{Type: &pathType, Value: &path}}},
+			BackendRefs: []gwv1.HTTPBackendRef{{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{
+				Group: &group, Kind: &kind, Name: "*",
+			}}}},
+		}
+	}
+	tests := []struct {
+		name    string
+		mutate  func(*gwv1.HTTPRouteRule)
+		wantErr string
+		absent  bool
+		wantKey string
+	}{
+		{name: "valid"},
+		{name: "unnamed rule", mutate: func(r *gwv1.HTTPRouteRule) { r.Name = nil }, wantKey: "/llm:router:httproute:default:tenant1:0"},
+		{name: "ordinary route", mutate: func(r *gwv1.HTTPRouteRule) { r.BackendRefs = nil }, absent: true},
+		{name: "multiple matches", mutate: func(r *gwv1.HTTPRouteRule) { r.Matches = append(r.Matches, r.Matches[0]) }},
+		{name: "exact path", mutate: func(r *gwv1.HTTPRouteRule) { pathType := gwv1.PathMatchExact; r.Matches[0].Path.Type = &pathType }, wantErr: "must use PathPrefix"},
+		{name: "mixed backend", mutate: func(r *gwv1.HTTPRouteRule) { r.BackendRefs = append(r.BackendRefs, gwv1.HTTPBackendRef{}) }, wantErr: "exactly one AgentgatewayModel backendRef"},
+		{name: "named model", mutate: func(r *gwv1.HTTPRouteRule) { r.BackendRefs[0].Name = "gpt-5-mini" }, wantErr: `name must be "*"`},
+		{name: "cross namespace", mutate: func(r *gwv1.HTTPRouteRule) {
+			namespace := gwv1.Namespace("other")
+			r.BackendRefs[0].Namespace = &namespace
+		}, wantErr: "must use the route namespace"},
+		{name: "port", mutate: func(r *gwv1.HTTPRouteRule) { port := gwv1.PortNumber(8080); r.BackendRefs[0].Port = &port }, wantErr: "must not specify port"},
+		{name: "weight", mutate: func(r *gwv1.HTTPRouteRule) { weight := int32(2); r.BackendRefs[0].Weight = &weight }, wantErr: "weight must be 1"},
+		{name: "backend filter", mutate: func(r *gwv1.HTTPRouteRule) {
+			r.BackendRefs[0].Filters = []gwv1.HTTPRouteFilter{{Type: gwv1.HTTPRouteFilterRequestHeaderModifier}}
+		}, wantErr: "must not have filters"},
+		{name: "filter", mutate: func(r *gwv1.HTTPRouteRule) {
+			r.Filters = []gwv1.HTTPRouteFilter{{Type: gwv1.HTTPRouteFilterRequestHeaderModifier}}
+		}},
+		{name: "URL rewrite", mutate: func(r *gwv1.HTTPRouteRule) {
+			r.Filters = []gwv1.HTTPRouteFilter{{Type: gwv1.HTTPRouteFilterURLRewrite}}
+		}, wantErr: "does not support URLRewrite or RequestRedirect"},
+		{name: "request redirect", mutate: func(r *gwv1.HTTPRouteRule) {
+			r.Filters = []gwv1.HTTPRouteFilter{{Type: gwv1.HTTPRouteFilterRequestRedirect}}
+		}, wantErr: "does not support URLRewrite or RequestRedirect"},
+		{name: "timeouts", mutate: func(r *gwv1.HTTPRouteRule) { r.Timeouts = &gwv1.HTTPRouteTimeouts{} }},
+		{name: "retry", mutate: func(r *gwv1.HTTPRouteRule) { r.Retry = &gwv1.HTTPRouteRetry{} }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule := valid()
+			if tt.mutate != nil {
+				tt.mutate(&rule)
+			}
+			key, optedIn, err := modelServingRuleRouterKey("default", "tenant1", 0, rule)
+			if tt.wantErr == "" && err != nil {
+				t.Fatal(err)
+			}
+			if tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)) {
+				t.Fatalf("error = %v, want %q", err, tt.wantErr)
+			}
+			if optedIn == tt.absent {
+				t.Fatalf("optedIn = %t, want %t", optedIn, !tt.absent)
+			}
+			wantKey := tt.wantKey
+			if wantKey == "" {
+				wantKey = "/llm:router:httproute:default:tenant1:models"
+			}
+			if err == nil && !tt.absent && key != wantKey {
+				t.Fatalf("key = %q, want %q", key, wantKey)
+			}
+		})
+	}
+}
+
+func TestModelParentRuleIndex(t *testing.T) {
+	models := gwv1.SectionName("models")
+	other := gwv1.SectionName("other")
+	rules := []gwv1.HTTPRouteRule{{Name: &models}, {Name: &other}}
+
+	if got, err := modelParentRuleIndex(rules[:1], nil); err != nil || got != 0 {
+		t.Fatalf("single rule index = %d, err = %v", got, err)
+	}
+	if _, err := modelParentRuleIndex(rules, nil); err == nil || !strings.Contains(err.Error(), "exactly one rule") {
+		t.Fatalf("multiple rules error = %v", err)
+	}
+	if got, err := modelParentRuleIndex(rules, &other); err != nil || got != 1 {
+		t.Fatalf("named rule index = %d, err = %v", got, err)
+	}
+}
+
+func TestModelServingRuleMatchesRoot(t *testing.T) {
+	prefix := gwv1.PathMatchPathPrefix
+	exact := gwv1.PathMatchExact
+	root := "/"
+	tenant := "/tenant1"
+	for _, tt := range []struct {
+		name string
+		rule gwv1.HTTPRouteRule
+		want bool
+	}{
+		{name: "default match", rule: gwv1.HTTPRouteRule{}, want: true},
+		{name: "missing path", rule: gwv1.HTTPRouteRule{Matches: []gwv1.HTTPRouteMatch{{}}}, want: true},
+		{name: "root prefix", rule: gwv1.HTTPRouteRule{Matches: []gwv1.HTTPRouteMatch{{Path: &gwv1.HTTPPathMatch{Type: &prefix, Value: &root}}}}, want: true},
+		{name: "root exact", rule: gwv1.HTTPRouteRule{Matches: []gwv1.HTTPRouteMatch{{Path: &gwv1.HTTPPathMatch{Type: &exact, Value: &root}}}}},
+		{name: "tenant prefix", rule: gwv1.HTTPRouteRule{Matches: []gwv1.HTTPRouteMatch{{Path: &gwv1.HTTPPathMatch{Type: &prefix, Value: &tenant}}}}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := modelServingRuleMatchesRoot(tt.rule); got != tt.want {
+				t.Fatalf("got %t, want %t", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestModelReferenceIgnoresListenerHostname(t *testing.T) {
 	parent := &ParentInfo{
 		AllowedKinds: []gwv1.RouteGroupKind{toRouteKind(wellknown.AgentgatewayModelGVK)},

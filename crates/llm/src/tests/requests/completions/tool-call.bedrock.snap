@@ -14,10 +14,19 @@ info:
           function:
             name: get_weather
             arguments: "{\"format\":\"celsius\",\"location\":\"Columbus, OH\"}"
+        - id: call_5rQmXtLpZ9wKvNbJhGyDsFcE
+          type: function
+          function:
+            name: get_time
+            arguments: ""
     - role: tool
       tool_call_id: call_iMGPsr4Xx1u0G5sOzFsTCbQU
       name: get_weather
       content: "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+    - role: tool
+      tool_call_id: call_5rQmXtLpZ9wKvNbJhGyDsFcE
+      name: get_time
+      content: "{ \"time\": \"2026-08-12T12:00:00Z\" }"
 ---
 {
   "request": {
@@ -42,6 +51,13 @@ info:
                 "location": "Columbus, OH"
               }
             }
+          },
+          {
+            "toolUse": {
+              "toolUseId": "call_5rQmXtLpZ9wKvNbJhGyDsFcE",
+              "name": "get_time",
+              "input": {}
+            }
           }
         ]
       },
@@ -54,6 +70,17 @@ info:
               "content": [
                 {
                   "text": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+                }
+              ],
+              "status": null
+            }
+          },
+          {
+            "toolResult": {
+              "toolUseId": "call_5rQmXtLpZ9wKvNbJhGyDsFcE",
+              "content": [
+                {
+                  "text": "{ \"time\": \"2026-08-12T12:00:00Z\" }"
                 }
               ],
               "status": null
@@ -100,6 +127,10 @@ info:
       {
         "role": "tool",
         "content": "{ \"temperature\": 15, \"condition\": \"Cloudy\" }"
+      },
+      {
+        "role": "tool",
+        "content": "{ \"time\": \"2026-08-12T12:00:00Z\" }"
       }
     ]
   }

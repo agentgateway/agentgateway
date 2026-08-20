@@ -24,7 +24,7 @@ use crate::config_store::{
 	ConfigResource, ConfigResourceError, ConfigResourceKind, ConfigResourceStore,
 	ConfigResourceUpsertRequest, ConfigResourcesResponse, PreparedResource,
 };
-use crate::llm::cost::ModelCatalog;
+use crate::llm::catalog::ModelCatalog;
 use crate::{Config, ConfigSource, ConfigStoreMode, yamlviajson};
 
 const BASE_COSTS_FILE: &str = "base-costs.json";
@@ -49,6 +49,16 @@ impl App {
 			.ok_or(ErrorResponse::String("local config not setup".to_string()))
 	}
 
+	fn ensure_writable(&self) -> Result<(), ErrorResponse> {
+		if self.state.storage.mode == ConfigStoreMode::ReadOnly {
+			return Err(ErrorResponse::Status(
+				StatusCode::FORBIDDEN,
+				"UI is configured as read-only".to_string(),
+			));
+		}
+		Ok(())
+	}
+
 	fn config_resource_store(&self) -> Result<ConfigResourceStore, ErrorResponse> {
 		if self.state.storage.mode != ConfigStoreMode::Hybrid {
 			return Err(ErrorResponse::Status(
@@ -64,7 +74,7 @@ impl App {
 }
 
 #[cfg(feature = "ui")]
-static ASSETS_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/../../ui/out");
+static ASSETS_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/../../ui/dist");
 
 #[cfg(not(feature = "ui"))]
 static ASSETS_DIR: Dir<'static> = Dir::new("", &[]);
@@ -302,6 +312,7 @@ async fn write_config(
 	State(app): State<App>,
 	Json(config_json): Json<Value>,
 ) -> Result<Json<Value>, ErrorResponse> {
+	app.ensure_writable()?;
 	persist_file_config(&app, &config_json).await?;
 	Ok(Json(
 		serde_json::json!({"status": "success", "message": "Configuration written successfully"}),
@@ -387,6 +398,7 @@ async fn upsert_config_resources_by_kind(
 	Path(kind): Path<String>,
 	Json(request): Json<ConfigResourceUpsertRequest>,
 ) -> Result<Json<UiConfigResourcesResponse>, ErrorResponse> {
+	app.ensure_writable()?;
 	let kind = kind
 		.parse::<ConfigResourceKind>()
 		.map_err(resource_api_error)?;
@@ -435,6 +447,7 @@ async fn update_config_resource(
 	Path((kind, id)): Path<(String, String)>,
 	Json(mut resource): Json<crate::config_store::ConfigResourceUpsert>,
 ) -> Result<Json<UiConfigResourcesResponse>, ErrorResponse> {
+	app.ensure_writable()?;
 	let kind = kind
 		.parse::<ConfigResourceKind>()
 		.map_err(resource_api_error)?;
@@ -566,6 +579,7 @@ async fn delete_config_resource(
 	State(app): State<App>,
 	Path((kind, id)): Path<(String, String)>,
 ) -> Result<Json<Value>, ErrorResponse> {
+	app.ensure_writable()?;
 	let kind = kind
 		.parse::<ConfigResourceKind>()
 		.map_err(resource_api_error)?;
@@ -635,6 +649,7 @@ fn resource_api_error(err: impl Into<anyhow::Error>) -> ErrorResponse {
 }
 
 async fn refresh_base_costs(State(app): State<App>) -> Result<Json<Value>, ErrorResponse> {
+	app.ensure_writable()?;
 	let configured_file = app.state.model_catalog.sources.iter().find_map(|source| {
 		if let crate::ModelCatalogSource::File { file } = source {
 			Some(file)
@@ -643,7 +658,7 @@ async fn refresh_base_costs(State(app): State<App>) -> Result<Json<Value>, Error
 		}
 	});
 	if configured_file.is_none() && app.state.storage.mode == ConfigStoreMode::Hybrid {
-		let refreshed = crate::llm::cost::refresh::fetch_models_dev_base_catalog().await?;
+		let refreshed = crate::llm::catalog::refresh::fetch_models_dev_base_catalog().await?;
 		let resources = app
 			.config_resource_store()?
 			.list(None)
@@ -694,7 +709,7 @@ async fn refresh_base_costs(State(app): State<App>) -> Result<Json<Value>, Error
 		dir.join(BASE_COSTS_FILE)
 	};
 
-	let refreshed = crate::llm::cost::refresh::refresh_models_dev_base_catalog(
+	let refreshed = crate::llm::catalog::refresh::refresh_models_dev_base_catalog(
 		&base_costs_file,
 		configured_file.map(|_| app.model_catalog.as_ref()),
 	)
@@ -715,7 +730,7 @@ async fn refresh_base_costs(State(app): State<App>) -> Result<Json<Value>, Error
 
 async fn cost_models(
 	State(app): State<App>,
-) -> Result<Json<crate::llm::cost::ModelCatalogModels>, ErrorResponse> {
+) -> Result<Json<crate::llm::catalog::ModelCatalogModels>, ErrorResponse> {
 	Ok(Json(app.model_catalog.list_models()))
 }
 
@@ -871,4 +886,50 @@ async fn tail_logs(
 	});
 
 	Ok(Sse::new(ReceiverStream::new(rx)))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::client::{self, Client};
+
+	fn test_app(read_only: bool) -> App {
+		let mut config =
+			crate::config::parse_config("{}".to_string(), None).expect("parse default config");
+		if read_only {
+			config.storage.mode = ConfigStoreMode::ReadOnly;
+		}
+		let client = Client::new(
+			&client::Config {
+				resolver_cfg: hickory_resolver::config::ResolverConfig::default(),
+				resolver_opts: hickory_resolver::config::ResolverOpts::default(),
+			},
+			None,
+			crate::BackendConfig::default(),
+			None,
+		);
+		App {
+			state: Arc::new(config),
+			config_resource_store: None,
+			resource_manager: crate::resource_manager::ResourceManager::new(client)
+				.expect("resource manager"),
+			model_catalog: Arc::new(crate::llm::catalog::ModelCatalog::default()),
+		}
+	}
+
+	#[tokio::test]
+	async fn ensure_writable_blocks_when_read_only() {
+		let app = test_app(true);
+		let response = app
+			.ensure_writable()
+			.expect_err("should be forbidden")
+			.into_response();
+		assert_eq!(response.status(), StatusCode::FORBIDDEN);
+	}
+
+	#[tokio::test]
+	async fn ensure_writable_allows_when_not_read_only() {
+		let app = test_app(false);
+		assert!(app.ensure_writable().is_ok());
+	}
 }

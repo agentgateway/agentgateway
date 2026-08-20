@@ -331,6 +331,14 @@
             }
           ]
         },
+        "sensitiveHeaders": {
+          "description": "Additional request headers whose values should be redacted from trace and debug output.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
         "customFunctions": {
           "description": "Custom CEL functions available to all CEL expressions. These can define re-usable snippets that\ncan be used in any expressions.\nConfigure as a block string containing one or more definitions, for example:\n`customFunctions: |`\n`  isInternal() { request.headers[\"x-env\"] == \"internal\" }`\n`  this.joined(prefix, parts...) { prefix + this + parts.join(\"\") }`",
           "type": "string",
@@ -561,6 +569,14 @@
           "items": {
             "$ref": "#/$defs/Tier"
           }
+        },
+        "tags": {
+          "description": "Freeform capability/routing tags for this model.",
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false
@@ -715,6 +731,11 @@
           "description": "Read a file baseline and store UI-managed overlay resources in the configured database.",
           "type": "string",
           "const": "hybrid"
+        },
+        {
+          "description": "Disallow write operations to the config from the UI",
+          "type": "string",
+          "const": "readOnly"
         }
       ]
     },
@@ -4086,8 +4107,18 @@
           }
         },
         "scopes": {
-          "description": "`scope` values for the requested token, sent space-delimited.",
+          "description": "`scope` values requested when obtaining the ID-JAG from the identity provider, sent\nspace-delimited.",
           "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "accessTokenScopes": {
+          "description": "`scope` values requested when exchanging the ID-JAG for an access token. When unset,\ninherits `scopes`. When empty, omits `scope`.",
+          "type": [
+            "array",
+            "null"
+          ],
           "items": {
             "type": "string"
           }
@@ -4220,6 +4251,10 @@
               "prefix": "Bearer "
             }
           }
+        },
+        "tokenType": {
+          "description": "RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.",
+          "type": "string"
         }
       },
       "additionalProperties": false
@@ -4705,11 +4740,11 @@
       ]
     },
     "JWTValidationOptions": {
-      "description": "JWT validation options controlling which claims must be present in a token.\n\nThe `required_claims` set specifies which RFC 7519 registered claims must\nexist in the token payload before validation proceeds. Only the following\nvalues are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered\nclaims such as `iat` and `jti` are **not** enforced by the underlying\n`jsonwebtoken` library and will be silently ignored.\n\nThis only enforces **presence**. Standard claims like `exp` and `nbf`\nhave their values validated independently (e.g., expiry is always checked\nwhen the `exp` claim is present, regardless of this setting).\n\nDefaults to `[\"exp\"]`.",
+      "description": "JWT validation options controlling which claims must be present in a token.\n\nThe `required_claims` set specifies which RFC 7519 registered claims must\nexist in the token payload before validation proceeds. Only the following\nvalues are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered\nclaims such as `iat` and `jti` are **not** enforced by the underlying\n`jsonwebtoken` library and will be silently ignored.\n\nThis only enforces **presence**. A configured issuer and non-empty audience\nlist independently require `iss` and `aud`, respectively. Standard claims\nlike `exp` and `nbf` have their values validated independently (e.g., expiry\nis always checked when the `exp` claim is present, regardless of this setting).\n\nDefaults to `[\"exp\"]`.",
       "type": "object",
       "properties": {
         "requiredClaims": {
-          "description": "Claims that must be present in the token before validation.\nOnly \"exp\", \"nbf\", \"aud\", \"iss\", \"sub\" are enforced; others\n(including \"iat\" and \"jti\") are ignored.\nDefaults to [\"exp\"]. Use an empty list to require no claims.",
+          "description": "Claims that must be present in the token before validation.\nOnly \"exp\", \"nbf\", \"aud\", \"iss\", \"sub\" are enforced; others\n(including \"iat\" and \"jti\") are ignored.\nDefaults to [\"exp\"]. Use an empty list to add no claim requirements beyond\nthose implied by the configured issuer and audiences.",
           "type": "array",
           "uniqueItems": true,
           "items": {
@@ -4863,6 +4898,18 @@
             "body": "The request was rejected due to inappropriate content",
             "status": 403
           }
+        },
+        "scope": {
+          "description": "Which parts of the request this guard inspects.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContentScope"
+          },
+          "minItems": 1,
+          "default": [
+            "systemPrompt",
+            "messages"
+          ]
         }
       },
       "unevaluatedProperties": false,
@@ -4970,6 +5017,31 @@
         }
       },
       "additionalProperties": false
+    },
+    "ContentScope": {
+      "description": "A category of request content that a prompt guard can inspect.",
+      "oneOf": [
+        {
+          "description": "The system/developer prompt.",
+          "type": "string",
+          "const": "systemPrompt"
+        },
+        {
+          "description": "Regular user/assistant message text.",
+          "type": "string",
+          "const": "messages"
+        },
+        {
+          "description": "Tool call results.",
+          "type": "string",
+          "const": "toolOutput"
+        },
+        {
+          "description": "Tool call arguments.\n\nIn APIs that send tool arguments as opaque JSON, such as Completions, the arguments are masked as a single string,\nmeaning a prompt guard has the potential to rewrite the arguments into invalid JSON.",
+          "type": "string",
+          "const": "toolInput"
+        }
+      ]
     },
     "RegexRules": {
       "type": "object",
@@ -5511,6 +5583,16 @@
           "const": "anthropicTokenCount"
         },
         {
+          "description": "Gemini models/{model}:generateContent and models/{model}:streamGenerateContent",
+          "type": "string",
+          "const": "generateContent"
+        },
+        {
+          "description": "Gemini models/{model}:countTokens",
+          "type": "string",
+          "const": "geminiCountTokens"
+        },
+        {
           "description": "Cohere /v2/rerank (document reranking)",
           "type": "string",
           "const": "rerank"
@@ -5999,11 +6081,11 @@
               }
             },
             "issuer": {
-              "description": "Expected token issuer, matched against the JWT `iss` claim.",
+              "description": "Expected token issuer. The JWT `iss` claim is required and must match.",
               "type": "string"
             },
             "audiences": {
-              "description": "Accepted token audiences, matched against the JWT `aud` claim when set.",
+              "description": "Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.",
               "type": [
                 "array",
                 "null"
@@ -6052,11 +6134,11 @@
       "type": "object",
       "properties": {
         "issuer": {
-          "description": "Expected token issuer, matched against the JWT `iss` claim.",
+          "description": "Expected token issuer. The JWT `iss` claim is required and must match.",
           "type": "string"
         },
         "audiences": {
-          "description": "Accepted token audiences, matched against the JWT `aud` claim when set.",
+          "description": "Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.",
           "type": [
             "array",
             "null"
@@ -7613,6 +7695,10 @@
               "type": "null"
             }
           ]
+        },
+        "dnsRebindingProtection": {
+          "description": "Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).\nOff by default; see https://github.com/agentgateway/agentgateway/issues/1855.",
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -8424,6 +8510,8 @@
         "responses",
         "embeddings",
         "anthropicTokenCount",
+        "generateContent",
+        "geminiCountTokens",
         "realtime",
         "rerank"
       ]
@@ -8940,12 +9028,37 @@
           "type": "object",
           "properties": {
             "host": {
-              "description": "Hostname or IP address",
               "type": "string"
             }
           },
           "required": [
             "host"
+          ]
+        },
+        {
+          "description": "Resolve the dial target from downstream TLS SNI and the original destination port.",
+          "type": "object",
+          "properties": {
+            "dynamic": {
+              "type": "object",
+              "properties": {
+                "target": {
+                  "description": "CEL expression evaluated against TCP connection context to compute a\n`host:port` dial target. Available fields include `source.*` and\n`destination.*`; for TLS, `destination.hostname` is the sniffed SNI.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Expression"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "dynamic"
           ]
         },
         {
@@ -9166,6 +9279,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/NetworkAuthorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "networkExtAuthz": {
+          "description": "HTTP external authorization performed once for each downstream network connection.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExtAuthz"
             },
             {
               "type": "null"
@@ -11766,6 +11891,10 @@
               "type": "null"
             }
           ]
+        },
+        "dnsRebindingProtection": {
+          "description": "Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).\nOff by default; see https://github.com/agentgateway/agentgateway/issues/1855.",
+          "type": "boolean"
         },
         "policies": {
           "description": "Policies applied to MCP requests.",

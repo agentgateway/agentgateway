@@ -66,6 +66,18 @@ pub fn default_route_types() -> Arc<llm::Policy> {
 			),
 			(strng::new(":rawPredict"), llm::RouteType::Messages),
 			(strng::new(":streamRawPredict"), llm::RouteType::Messages),
+			(
+				strng::new(":generateContent"),
+				llm::RouteType::GenerateContent,
+			),
+			(
+				strng::new(":streamGenerateContent"),
+				llm::RouteType::GenerateContent,
+			),
+			(
+				strng::new(":countTokens"),
+				llm::RouteType::GeminiCountTokens,
+			),
 			(strng::new("/v1/responses"), llm::RouteType::Responses),
 			(strng::new("/v1/images/generations"), llm::RouteType::Detect),
 			(strng::new("/v1/images/edits"), llm::RouteType::Detect),
@@ -546,17 +558,20 @@ fn rewrite_uri_model(req: &mut Request, target: &str) -> RouterResult<()> {
 
 fn rewrite_path_model(path: &str, target: &str) -> Option<String> {
 	if path.ends_with(":streamRawPredict") || path.ends_with(":rawPredict") {
-		// Vertex: .../publishers/{publisher}/models/{model}:{rawPredict|streamRawPredict}
-		// Preserve the publisher from the path; only rewrite the model id. Matching only
-		// `publishers/anthropic` incorrectly dropped virtual-model rewrites for other publishers.
-		let (prefix, rest) = path.split_once("/publishers/")?;
-		let (publisher, after_publisher) = rest.split_once("/models/")?;
-		if publisher.is_empty() {
-			return None;
+		return rewrite_publishers_path_model(path, target);
+	}
+	if path.ends_with(":generateContent")
+		|| path.ends_with(":streamGenerateContent")
+		|| path.ends_with(":countTokens")
+	{
+		if path.contains("/publishers/") {
+			return rewrite_publishers_path_model(path, target);
 		}
-		let (_, suffix) = after_publisher.split_once(':')?;
+		// Gemini API: /v1beta/models/{model}:{suffix}
+		let (prefix, rest) = path.split_once("/models/")?;
+		let (_, suffix) = rest.split_once(':')?;
 		return Some(format!(
-			"{prefix}/publishers/{publisher}/models/{}:{suffix}",
+			"{prefix}/models/{}:{suffix}",
 			encode_model_path_segment(target)
 		));
 	}
@@ -576,6 +591,22 @@ fn rewrite_path_model(path: &str, target: &str) -> Option<String> {
 		}
 	}
 	None
+}
+
+fn rewrite_publishers_path_model(path: &str, target: &str) -> Option<String> {
+	// Vertex: .../publishers/{publisher}/models/{model}:{suffix}
+	// Preserve the publisher from the path; only rewrite the model id. Matching only
+	// `publishers/anthropic` incorrectly dropped virtual-model rewrites for other publishers.
+	let (prefix, rest) = path.split_once("/publishers/")?;
+	let (publisher, after_publisher) = rest.split_once("/models/")?;
+	if publisher.is_empty() {
+		return None;
+	}
+	let (_, suffix) = after_publisher.split_once(':')?;
+	Some(format!(
+		"{prefix}/publishers/{publisher}/models/{}:{suffix}",
+		encode_model_path_segment(target)
+	))
 }
 
 fn encode_model_path_segment(model: &str) -> String {
@@ -854,6 +885,117 @@ mod tests {
 	}
 
 	#[test]
+	fn rewrite_path_model_rewrites_vertex_gemini_paths() {
+		assert_eq!(
+			rewrite_path_model(
+				"/v1/projects/p/locations/global/publishers/google/models/virtual:generateContent",
+				"gemini-2.5-flash",
+			)
+			.as_deref(),
+			Some(
+				"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:generateContent"
+			)
+		);
+		assert_eq!(
+			rewrite_path_model(
+				"/v1/projects/p/locations/global/publishers/google/models/virtual:streamGenerateContent",
+				"gemini-2.5-flash",
+			)
+			.as_deref(),
+			Some(
+				"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:streamGenerateContent"
+			)
+		);
+		assert_eq!(
+			rewrite_path_model(
+				"/v1/projects/p/locations/global/publishers/google/models/virtual:countTokens",
+				"gemini-2.5-flash",
+			)
+			.as_deref(),
+			Some("/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:countTokens")
+		);
+	}
+
+	#[test]
+	fn rewrite_path_model_rewrites_bare_gemini_api_paths() {
+		assert_eq!(
+			rewrite_path_model("/v1beta/models/virtual:generateContent", "gemini-2.5-pro").as_deref(),
+			Some("/v1beta/models/gemini-2.5-pro:generateContent")
+		);
+		assert_eq!(
+			rewrite_path_model(
+				"/v1beta/models/virtual:streamGenerateContent",
+				"gemini-2.5-pro"
+			)
+			.as_deref(),
+			Some("/v1beta/models/gemini-2.5-pro:streamGenerateContent")
+		);
+		assert_eq!(
+			rewrite_path_model("/v1beta/models/virtual:countTokens", "gemini-2.5-pro").as_deref(),
+			Some("/v1beta/models/gemini-2.5-pro:countTokens")
+		);
+	}
+
+	#[test]
+	fn rewrite_path_model_encodes_slashes_in_gemini_targets() {
+		// Vertex tuned/global endpoints are addressed by resource name, which must stay in a single
+		// path segment.
+		assert_eq!(
+			rewrite_path_model("/v1beta/models/virtual:generateContent", "tunedModels/abc").as_deref(),
+			Some("/v1beta/models/tunedModels%2Fabc:generateContent")
+		);
+		assert_eq!(
+			rewrite_path_model(
+				"/v1/projects/p/locations/global/publishers/google/models/virtual:generateContent",
+				"tunedModels/abc",
+			)
+			.as_deref(),
+			Some(
+				"/v1/projects/p/locations/global/publishers/google/models/tunedModels%2Fabc:generateContent"
+			)
+		);
+	}
+
+	#[test]
+	fn rewrite_path_model_ignores_gemini_shaped_paths_it_cannot_parse() {
+		// No `/models/` segment, and a publisher path missing its publisher: rewriting would
+		// fabricate a path, so both must no-op and leave the client's URI alone.
+		assert_eq!(
+			rewrite_path_model(
+				"/v1beta/tunedModels/virtual:generateContent",
+				"gemini-2.5-flash"
+			),
+			None
+		);
+		assert_eq!(
+			rewrite_path_model(
+				"/v1/projects/p/locations/global/publishers//models/virtual:countTokens",
+				"gemini-2.5-flash",
+			),
+			None
+		);
+		assert_eq!(
+			rewrite_path_model("/v1beta/models/virtual:embedContent", "gemini-2.5-flash"),
+			None
+		);
+	}
+
+	#[test]
+	fn rewrite_uri_model_preserves_alt_sse_on_gemini_streams() {
+		// The streaming route is only SSE because of `?alt=sse`; a virtual-model rewrite that
+		// dropped it would flip the upstream to the JSON-array variant.
+		let mut req = ::http::Request::builder()
+			.uri("http://example.com/v1beta/models/virtual:streamGenerateContent?alt=sse&key=abc")
+			.body(http::Body::empty())
+			.unwrap();
+		rewrite_uri_model(&mut req, "gemini-2.5-flash").expect("URI rewrites");
+		assert_eq!(
+			req.uri().to_string(),
+			"http://example.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key=abc"
+		);
+	}
+
+	#[test]
 	fn rewrite_uri_model_preserves_query() {
 		let mut req = ::http::Request::builder()
 			.uri("http://example.com/model/virtual/converse?trace=true")
@@ -915,6 +1057,127 @@ mod tests {
 				.await
 				.expect("decompressed request body"),
 			Bytes::from_static(body)
+		);
+	}
+
+	#[tokio::test]
+	async fn requested_model_reads_gemini_paths_without_touching_the_body() {
+		// The Gemini body carries no `model`, so the router has to take it from the path — and must
+		// leave the body untouched, since it is what reaches the upstream verbatim.
+		let body = br#"{"contents":[{"role":"user","parts":[{"text":"hi"}]}]}"#;
+		for uri in [
+			"http://example.com/v1beta/models/gemini-2.5-flash:generateContent",
+			"http://example.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse",
+			"http://example.com/v1beta/models/gemini-2.5-flash:countTokens",
+			"http://example.com/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:generateContent",
+		] {
+			let mut req = ::http::Request::builder()
+				.uri(uri)
+				.body(http::Body::from(body.as_slice()))
+				.unwrap();
+
+			let requested = requested_model(&mut req)
+				.await
+				.expect("the model rides the Gemini path");
+			assert_eq!(requested.model, "gemini-2.5-flash", "{uri}");
+			assert!(matches!(requested.location, RequestedModelLocation::Path));
+			assert_eq!(
+				http::read_body_with_limit(req.into_body(), 1024)
+					.await
+					.expect("request body"),
+				Bytes::from_static(body),
+				"{uri}"
+			);
+		}
+	}
+
+	#[test]
+	fn default_routes_resolve_gemini_suffixes() {
+		let policy = default_route_types();
+		assert_eq!(
+			policy.resolve_route("/v1beta/models/gemini-2.5-flash:generateContent"),
+			llm::RouteType::GenerateContent
+		);
+		assert_eq!(
+			policy.resolve_route("/v1beta/models/gemini-2.5-flash:streamGenerateContent"),
+			llm::RouteType::GenerateContent
+		);
+		assert_eq!(
+			policy.resolve_route("/v1beta/models/gemini-2.5-flash:countTokens"),
+			llm::RouteType::GeminiCountTokens
+		);
+		assert_eq!(
+			policy.resolve_route(
+				"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-pro:generateContent"
+			),
+			llm::RouteType::GenerateContent
+		);
+	}
+
+	#[test]
+	fn default_routes_resolve_gemini_stream_ignoring_query() {
+		// The dispatcher matches on `uri.path()`, so the `?alt=sse` the Gemini SDKs append to the
+		// streaming endpoint never reaches the suffix matcher.
+		let uri: ::http::Uri = "/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse"
+			.parse()
+			.expect("valid uri");
+		assert_eq!(
+			default_route_types().resolve_route(uri.path()),
+			llm::RouteType::GenerateContent
+		);
+	}
+
+	#[test]
+	fn stream_generate_content_does_not_match_generate_content() {
+		// `:generateContent` is not a suffix of `:streamGenerateContent`, so the two entries are
+		// independent even before longest-suffix-first ordering applies. Point them at different
+		// route types so a mis-resolution would be visible.
+		let policy = llm::Policy {
+			routes: [
+				(strng::new(":generateContent"), llm::RouteType::Passthrough),
+				(
+					strng::new(":streamGenerateContent"),
+					llm::RouteType::GenerateContent,
+				),
+			]
+			.into_iter()
+			.collect(),
+			..Default::default()
+		};
+		assert_eq!(
+			policy.resolve_route("/v1beta/models/gemini-2.5-flash:streamGenerateContent"),
+			llm::RouteType::GenerateContent
+		);
+		assert_eq!(
+			policy.resolve_route("/v1beta/models/gemini-2.5-flash:generateContent"),
+			llm::RouteType::Passthrough
+		);
+	}
+
+	#[test]
+	fn default_routes_preserve_existing_suffixes() {
+		let policy = default_route_types();
+		assert_eq!(
+			policy.resolve_route("/v1/projects/p/locations/us/publishers/anthropic/models/m:rawPredict"),
+			llm::RouteType::Messages
+		);
+		assert_eq!(
+			policy.resolve_route(
+				"/v1/projects/p/locations/us/publishers/anthropic/models/m:streamRawPredict"
+			),
+			llm::RouteType::Messages
+		);
+		assert_eq!(
+			policy.resolve_route("/v1/messages"),
+			llm::RouteType::Messages
+		);
+		assert_eq!(
+			policy.resolve_route("/v1/chat/completions"),
+			llm::RouteType::Completions
+		);
+		assert_eq!(
+			policy.resolve_route("/v1/anything/else"),
+			llm::RouteType::Passthrough
 		);
 	}
 }

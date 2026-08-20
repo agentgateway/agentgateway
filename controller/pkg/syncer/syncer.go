@@ -491,9 +491,10 @@ func (s *Syncer) buildAgwResources(
 	baseAgwRoutes, routeAttachments, ancestorBackends := translator.AgwRouteCollection(s.statusCollections, s.agwCollections.HTTPRoutes, s.agwCollections.GRPCRoutes, s.agwCollections.TCPRoutes, s.agwCollections.TLSRoutes, routeInputs, krtopts)
 	routeCollections := []krt.Collection[agwir.AgwResource]{baseAgwRoutes}
 	if s.agwCollections.Settings.EnableAgentgatewayModels {
-		modelResources, modelAttachments := translator.AgwModelCollection(s.statusCollections, s.agwCollections.Models, routeInputs, krtopts)
+		modelResources, modelAttachments, modelAncestors := translator.AgwModelCollection(s.statusCollections, s.agwCollections.Models, routeInputs, krtopts)
 		routeAttachments = krt.JoinCollection([]krt.Collection[*plugins.RouteAttachment]{routeAttachments, modelAttachments}, krtopts.ToOptions("translator/RouteAttachmentsWithModels")...)
 		routeCollections = append(routeCollections, modelResources)
+		ancestorBackends = krt.JoinCollection([]krt.Collection[*utils.AncestorBackend]{ancestorBackends, modelAncestors}, krtopts.ToOptions("translator/AncestorBackendsWithModels")...)
 	}
 	if s.agwPlugins.AddResourceExtension != nil {
 		if s.agwPlugins.AddResourceExtension.Routes != nil {

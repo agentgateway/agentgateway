@@ -74,7 +74,7 @@ struct AdminState {
 	stores: crate::store::Stores,
 	resource_manager: crate::resource_manager::ResourceManager,
 	config: Arc<Config>,
-	model_catalog: Arc<crate::llm::cost::ModelCatalog>,
+	model_catalog: Arc<crate::llm::catalog::ModelCatalog>,
 	config_resource_store: Option<crate::config_store::ConfigResourceStore>,
 	shutdown_trigger: signal::ShutdownTrigger,
 	#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
@@ -123,7 +123,7 @@ impl Service {
 	#[allow(clippy::too_many_arguments)]
 	pub async fn new(
 		config: Arc<Config>,
-		model_catalog: Arc<crate::llm::cost::ModelCatalog>,
+		model_catalog: Arc<crate::llm::catalog::ModelCatalog>,
 		config_resource_store: Option<crate::config_store::ConfigResourceStore>,
 		stores: crate::store::Stores,
 		resource_manager: crate::resource_manager::ResourceManager,

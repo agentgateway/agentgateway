@@ -8,6 +8,8 @@ import (
 
 	"istio.io/istio/pkg/test/util/retry"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -44,12 +46,8 @@ func TestAgwPolicyClearStaleStatus(tt *testing.T) {
 func addAncestorStatus(t base.Test, policyName, policyNamespace, gwName, controllerName string) {
 	t.Helper()
 	retry.UntilSuccessOrFail(t, func() error {
-		policy := &agentgateway.AgentgatewayPolicy{}
-		if err := t.TestInstallation.ClusterContext.ControllerClient.Get(
-			t.Ctx,
-			types.NamespacedName{Name: policyName, Namespace: policyNamespace},
-			policy,
-		); err != nil {
+		policy, status, err := getAgwPolicyStatus(t, policyName, policyNamespace)
+		if err != nil {
 			return err
 		}
 
@@ -67,7 +65,10 @@ func addAncestorStatus(t base.Test, policyName, policyNamespace, gwName, control
 			},
 		}
 
-		policy.Status.Ancestors = append(policy.Status.Ancestors, fakeStatus)
+		status.Ancestors = append(status.Ancestors, fakeStatus)
+		if err := setAgwPolicyAncestors(policy, status.Ancestors); err != nil {
+			return err
+		}
 		return t.TestInstallation.ClusterContext.ControllerClient.Status().Update(t.Ctx, policy)
 	})
 }
@@ -75,17 +76,13 @@ func addAncestorStatus(t base.Test, policyName, policyNamespace, gwName, control
 func assertAncestorStatuses(t base.Test, ancestorName string, expectedControllers map[string]bool) {
 	t.Helper()
 	retry.UntilSuccessOrFail(t, func() error {
-		policy := &agentgateway.AgentgatewayPolicy{}
-		if err := t.TestInstallation.ClusterContext.ControllerClient.Get(
-			t.Ctx,
-			types.NamespacedName{Name: "example-policy", Namespace: base.Namespace},
-			policy,
-		); err != nil {
+		_, status, err := getAgwPolicyStatus(t, "example-policy", base.Namespace)
+		if err != nil {
 			return err
 		}
 
 		foundControllers := make(map[string]bool)
-		for _, ancestor := range policy.Status.Ancestors {
+		for _, ancestor := range status.Ancestors {
 			if string(ancestor.AncestorRef.Name) == ancestorName {
 				foundControllers[string(ancestor.ControllerName)] = true
 			}
@@ -99,4 +96,50 @@ func assertAncestorStatuses(t base.Test, ancestorName string, expectedController
 		}
 		return nil
 	})
+}
+
+func getAgwPolicyStatus(t base.Test, name, namespace string) (*unstructured.Unstructured, gwv1.PolicyStatus, error) {
+	t.Helper()
+	gvk := t.AgentgatewayPolicyGVK()
+	policy := &unstructured.Unstructured{}
+	policy.SetGroupVersionKind(gvk)
+	if err := t.TestInstallation.ClusterContext.ControllerClient.Get(
+		t.Ctx,
+		types.NamespacedName{Name: name, Namespace: namespace},
+		policy,
+	); err != nil {
+		return nil, gwv1.PolicyStatus{}, fmt.Errorf("get %s %s/%s: %w", gvk.Kind, namespace, name, err)
+	}
+
+	statusData, found, err := unstructured.NestedMap(policy.Object, "status")
+	if err != nil {
+		return nil, gwv1.PolicyStatus{}, fmt.Errorf("read %s %s/%s status: %w", gvk.Kind, namespace, name, err)
+	}
+	if !found {
+		return nil, gwv1.PolicyStatus{}, fmt.Errorf("%s %s/%s status is not set", gvk.Kind, namespace, name)
+	}
+	var status gwv1.PolicyStatus
+	if err := runtime.DefaultUnstructuredConverter.FromUnstructured(statusData, &status); err != nil {
+		return nil, gwv1.PolicyStatus{}, fmt.Errorf("decode %s %s/%s status: %w", gvk.Kind, namespace, name, err)
+	}
+	return policy, status, nil
+}
+
+func setAgwPolicyAncestors(policy *unstructured.Unstructured, ancestors []gwv1.PolicyAncestorStatus) error {
+	kind := policy.GetKind()
+	statusData, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&gwv1.PolicyStatus{Ancestors: ancestors})
+	if err != nil {
+		return fmt.Errorf("encode %s ancestors: %w", kind, err)
+	}
+	ancestorData, found, err := unstructured.NestedSlice(statusData, "ancestors")
+	if err != nil {
+		return fmt.Errorf("read encoded %s ancestors: %w", kind, err)
+	}
+	if !found {
+		return fmt.Errorf("encoded %s status has no ancestors", kind)
+	}
+	if err := unstructured.SetNestedSlice(policy.Object, ancestorData, "status", "ancestors"); err != nil {
+		return fmt.Errorf("set %s ancestors: %w", kind, err)
+	}
+	return nil
 }

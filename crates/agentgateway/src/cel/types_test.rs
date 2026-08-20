@@ -289,7 +289,7 @@ fn llm_cost_is_exposed_to_cel_as_floats() {
 
 	let mut req = build_test_request();
 	// The exact Decimal breakdown is projected to f64 lazily, per field, on CEL access.
-	req.extensions_mut().get_mut::<LLMContext>().unwrap().cost = Some(llm::cost::Breakdown {
+	req.extensions_mut().get_mut::<LLMContext>().unwrap().cost = Some(llm::catalog::Breakdown {
 		input: dec("0.5"),
 		output: dec("0.025"),
 		cache_read: dec("0"),

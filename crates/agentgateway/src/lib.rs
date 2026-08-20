@@ -15,6 +15,7 @@ use indexmap::IndexMap;
 pub use schemars::JsonSchema;
 use serde::de::Visitor;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
+use serde_with::serde_as;
 pub use serdes::*;
 
 use crate::store::Stores;
@@ -207,6 +208,10 @@ pub struct RawConfig {
 
 	/// MCP gateway settings.
 	mcp: Option<RawMcpConfig>,
+
+	/// Additional request headers whose values should be redacted from trace and debug output.
+	#[serde(default)]
+	sensitive_headers: Vec<String>,
 
 	/// Custom CEL functions available to all CEL expressions. These can define re-usable snippets that
 	/// can be used in any expressions.
@@ -434,6 +439,8 @@ pub enum ConfigStoreMode {
 	File,
 	/// Read a file baseline and store UI-managed overlay resources in the configured database.
 	Hybrid,
+	/// Disallow write operations to the config from the UI
+	ReadOnly,
 }
 
 #[apply(schema_de!)]
@@ -604,6 +611,7 @@ impl schemars::JsonSchema for StringBoolFloat {
 	}
 }
 
+#[serde_as]
 #[derive(serde::Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Config {
@@ -635,6 +643,8 @@ pub struct Config {
 	pub logging: crate::telemetry::log::Config,
 	pub database: Option<telemetry::log_store::Config>,
 	pub storage: StorageConfig,
+	#[serde_as(as = "Vec<serde_with::DisplayFromStr>")]
+	pub sensitive_headers: Vec<::http::HeaderName>,
 
 	pub dns: client::Config,
 	pub proxy_metadata: ProxyMetadata,
@@ -679,7 +689,7 @@ pub enum ModelCatalogSource {
 	},
 	InlineCatalog {
 		/// Model cost catalog provided inline as structured data.
-		inline: llm::cost::Catalog,
+		inline: llm::catalog::Catalog,
 	},
 }
 
@@ -742,6 +752,9 @@ pub struct XDSConfig {
 	pub address: Option<String>,
 	pub auth: AuthSource,
 	pub ca_cert: RootCert,
+	/// Additional headers sent with every xDS request.
+	#[serde(serialize_with = "crate::serdes::ser_sensitive_header_vec")]
+	pub headers: Vec<(String, String)>,
 	pub namespace: Strng,
 	pub gateway: Strng,
 
@@ -789,7 +802,7 @@ pub struct ProxyInputs {
 	pub upstream: client::Client,
 
 	pub metrics: Arc<metrics::Metrics>,
-	pub model_catalog: Arc<llm::cost::ModelCatalog>,
+	pub model_catalog: Arc<llm::catalog::ModelCatalog>,
 
 	pub admin: Option<management::admin::AdminService>,
 	pub mcp_state: mcp::App,
@@ -810,7 +823,7 @@ impl ProxyInputs {
 		upstream: client::Client,
 		metrics: Arc<metrics::Metrics>,
 		mcp_state: mcp::App,
-		model_catalog: Option<llm::cost::ModelCatalog>,
+		model_catalog: Option<llm::catalog::ModelCatalog>,
 		ca: Option<Arc<CaClient>>,
 		spiffe: Option<Arc<control::spiffe::SpiffeClient>>,
 	) -> Self {

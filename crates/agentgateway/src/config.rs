@@ -40,6 +40,14 @@ pub fn parse_config(
 	let nested: NestedRawConfig = serdes::yamlviajson::from_str(&contents).ctx("invalid config")?;
 	let raw = nested.config.unwrap_or_default();
 	cel::register_custom_functions(&raw.custom_functions).ctx("invalid config.customFunctions")?;
+	let sensitive_headers = raw
+		.sensitive_headers
+		.iter()
+		.map(|name| {
+			::http::HeaderName::from_str(name)
+				.map_err(|e| anyhow::anyhow!("invalid sensitive header '{name}': {e}"))
+		})
+		.collect::<anyhow::Result<Vec<_>>>()?;
 
 	let ipv6_enabled = parse::<bool>("IPV6_ENABLED")?
 		.or(raw.enable_ipv6)
@@ -136,10 +144,12 @@ pub fn parse_config(
 		} else {
 			crate::control::RootCert::Default
 		};
+		let headers = parse_headers("XDS_HEADER_").ctx("invalid XDS_HEADER_*")?;
 		XDSConfig {
 			address,
 			auth,
 			ca_cert: xds_root_cert,
+			headers,
 			namespace: namespace.into(),
 			gateway: gateway.into(),
 			local_config,
@@ -375,9 +385,12 @@ pub fn parse_config(
 		anyhow::bail!("config.logging.database.maxConnections must be greater than zero");
 	}
 	let logging_database = explicit_logging_database.or_else(|| database.clone());
-	let storage = StorageConfig {
-		mode: raw.storage.clone().unwrap_or_default().mode,
+
+	let mut storage_mode = raw.storage.clone().unwrap_or_default().mode;
+	if parse::<bool>("UI_READ_ONLY")?.unwrap_or(false) {
+		storage_mode = ConfigStoreMode::ReadOnly;
 	};
+	let storage = StorageConfig { mode: storage_mode };
 	if storage.mode == ConfigStoreMode::Hybrid && database.is_none() {
 		anyhow::bail!("config.storage.mode=hybrid requires config.database.url");
 	}
@@ -579,6 +592,7 @@ pub fn parse_config(
 		},
 		database,
 		storage,
+		sensitive_headers,
 		session_encoder,
 		oidc_cookie_encoder,
 			hbone: Arc::new(agent_hbone::Config {
@@ -1264,6 +1278,44 @@ config:
 
 		assert_eq!(config.storage.mode, ConfigStoreMode::File);
 		assert!(config.database.is_none());
+	}
+
+	#[test]
+	fn xds_headers_are_loaded_from_environment() {
+		let _env_lock = lock_env();
+		let _address = TempEnvVar::set("XDS_ADDRESS", "http://127.0.0.1:15010");
+		let _namespace = TempEnvVar::set("NAMESPACE", "default");
+		let _gateway = TempEnvVar::set("GATEWAY", "agentgateway");
+		let _revision = TempEnvVar::set("XDS_HEADER_X_ISTIO_REVISION", "canary");
+		let _tenant = TempEnvVar::set("XDS_HEADER_X_TENANT", "team-a");
+
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+
+		assert!(
+			config
+				.xds
+				.headers
+				.contains(&("x-istio-revision".to_string(), "canary".to_string()))
+		);
+		assert!(
+			config
+				.xds
+				.headers
+				.contains(&("x-tenant".to_string(), "team-a".to_string()))
+		);
+	}
+
+	#[test]
+	fn invalid_xds_header_is_rejected_during_startup() {
+		let _env_lock = lock_env();
+		let _header = TempEnvVar::set("XDS_HEADER_X_TENANT", "bad\nvalue");
+
+		let err = parse_config("{}".to_string(), None).expect_err("invalid header should fail");
+
+		assert!(
+			err.to_string().contains("invalid XDS_HEADER_*"),
+			"unexpected error: {err}"
+		);
 	}
 
 	#[test]

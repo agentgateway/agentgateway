@@ -48,7 +48,7 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 			metrics::sub_registry(&mut Registry::default()),
 			Default::default(),
 		)),
-		model_catalog: crate::llm::cost::ModelCatalog::empty(),
+		model_catalog: crate::llm::catalog::ModelCatalog::empty(),
 		admin: None,
 		upstream: client.clone(),
 		ca: None,
@@ -1557,6 +1557,7 @@ async fn test_openapi_from_url() {
 		stateful_mode: McpStatefulMode::Stateful,
 		prefix_mode: None,
 		failure_mode: None,
+		dns_rebinding_protection: false,
 	});
 
 	// Convert to runtime backends
@@ -1831,7 +1832,7 @@ async fn test_call_tool_with_binary_body() {
 			agent_core::metrics::sub_registry(&mut prometheus_client::registry::Registry::default()),
 			Default::default(),
 		)),
-		model_catalog: crate::llm::cost::ModelCatalog::empty(),
+		model_catalog: crate::llm::catalog::ModelCatalog::empty(),
 		admin: None,
 		upstream: client.clone(),
 		ca: None,
