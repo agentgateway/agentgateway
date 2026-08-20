@@ -2489,7 +2489,7 @@ type BackendTunnelMode string
 const (
 	// Auto uses CONNECT for TLS and non-HTTP transports, and absolute-form requests for plaintext HTTP.
 	BackendTunnelModeAuto BackendTunnelMode = "Auto"
-	// Connect always uses CONNECT. HTTP policies on the proxy backend do not run on tunneled requests.
+	// Connect uses CONNECT for all transports, including plaintext HTTP.
 	BackendTunnelModeConnect BackendTunnelMode = "Connect"
 )
 
@@ -2501,8 +2501,7 @@ type BackendTunnel struct {
 	// +optional
 	PolicyBackendEndpoint `json:",inline"`
 
-	// How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
-	// do not run on tunneled requests; HTTP policies on the destination backend still run.
+	// How requests are sent through the proxy.
 	// Defaults to `Auto`.
 	// +kubebuilder:default=Auto
 	// +optional

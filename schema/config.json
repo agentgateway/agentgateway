@@ -4497,7 +4497,7 @@
           "$ref": "#/$defs/SimpleLocalBackendSerde"
         },
         "mode": {
-          "description": "How requests are sent through the proxy. In `connect` mode, HTTP policies on the proxy backend\ndo not run on tunneled requests; HTTP policies on the destination backend still run.",
+          "description": "How requests are sent through the proxy.",
           "$ref": "#/$defs/TunnelMode",
           "default": "auto"
         },
@@ -4526,7 +4526,7 @@
           "const": "auto"
         },
         {
-          "description": "Always use CONNECT. HTTP policies on the proxy backend do not run on tunneled requests.",
+          "description": "Use CONNECT for all transports, including plaintext HTTP.",
           "type": "string",
           "const": "connect"
         }
@@ -10410,6 +10410,31 @@
           },
           "required": [
             "host"
+          ]
+        },
+        {
+          "description": "Resolve the dial target from request metadata using a CEL expression.",
+          "type": "object",
+          "properties": {
+            "dynamic": {
+              "type": "object",
+              "properties": {
+                "target": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Expression"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "dynamic"
           ]
         },
         {

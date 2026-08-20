@@ -1376,8 +1376,7 @@ spec:
                                                             mode:
                                                               default: Auto
                                                               description: |-
-                                                                How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
-                                                                do not run on tunneled requests; HTTP policies on the destination backend still run.
+                                                                How requests are sent through the proxy.
                                                                 Defaults to `Auto`.
                                                               enum:
                                                               - Auto
@@ -1914,8 +1913,7 @@ spec:
                                                             mode:
                                                               default: Auto
                                                               description: |-
-                                                                How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
-                                                                do not run on tunneled requests; HTTP policies on the destination backend still run.
+                                                                How requests are sent through the proxy.
                                                                 Defaults to `Auto`.
                                                               enum:
                                                               - Auto
@@ -2471,8 +2469,7 @@ spec:
                                                             mode:
                                                               default: Auto
                                                               description: |-
-                                                                How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
-                                                                do not run on tunneled requests; HTTP policies on the destination backend still run.
+                                                                How requests are sent through the proxy.
                                                                 Defaults to `Auto`.
                                                               enum:
                                                               - Auto
@@ -3438,8 +3435,7 @@ spec:
                                                             mode:
                                                               default: Auto
                                                               description: |-
-                                                                How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
-                                                                do not run on tunneled requests; HTTP policies on the destination backend still run.
+                                                                How requests are sent through the proxy.
                                                                 Defaults to `Auto`.
                                                               enum:
                                                               - Auto
@@ -3976,8 +3972,7 @@ spec:
                                                             mode:
                                                               default: Auto
                                                               description: |-
-                                                                How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
-                                                                do not run on tunneled requests; HTTP policies on the destination backend still run.
+                                                                How requests are sent through the proxy.
                                                                 Defaults to `Auto`.
                                                               enum:
                                                               - Auto
@@ -6897,8 +6892,7 @@ spec:
                                       mode:
                                         default: Auto
                                         description: |-
-                                          How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
-                                          do not run on tunneled requests; HTTP policies on the destination backend still run.
+                                          How requests are sent through the proxy.
                                           Defaults to `Auto`.
                                         enum:
                                         - Auto
@@ -9834,8 +9828,7 @@ spec:
                                     mode:
                                       default: Auto
                                       description: |-
-                                        How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
-                                        do not run on tunneled requests; HTTP policies on the destination backend still run.
+                                        How requests are sent through the proxy.
                                         Defaults to `Auto`.
                                       enum:
                                       - Auto
@@ -10708,8 +10701,7 @@ spec:
                                             mode:
                                               default: Auto
                                               description: |-
-                                                How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
-                                                do not run on tunneled requests; HTTP policies on the destination backend still run.
+                                                How requests are sent through the proxy.
                                                 Defaults to `Auto`.
                                               enum:
                                               - Auto
@@ -11167,8 +11159,7 @@ spec:
                                             mode:
                                               default: Auto
                                               description: |-
-                                                How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
-                                                do not run on tunneled requests; HTTP policies on the destination backend still run.
+                                                How requests are sent through the proxy.
                                                 Defaults to `Auto`.
                                               enum:
                                               - Auto
@@ -11648,8 +11639,7 @@ spec:
                                             mode:
                                               default: Auto
                                               description: |-
-                                                How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
-                                                do not run on tunneled requests; HTTP policies on the destination backend still run.
+                                                How requests are sent through the proxy.
                                                 Defaults to `Auto`.
                                               enum:
                                               - Auto
@@ -12489,8 +12479,7 @@ spec:
                                             mode:
                                               default: Auto
                                               description: |-
-                                                How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
-                                                do not run on tunneled requests; HTTP policies on the destination backend still run.
+                                                How requests are sent through the proxy.
                                                 Defaults to `Auto`.
                                               enum:
                                               - Auto
@@ -12948,8 +12937,7 @@ spec:
                                             mode:
                                               default: Auto
                                               description: |-
-                                                How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
-                                                do not run on tunneled requests; HTTP policies on the destination backend still run.
+                                                How requests are sent through the proxy.
                                                 Defaults to `Auto`.
                                               enum:
                                               - Auto
@@ -16296,8 +16284,7 @@ spec:
                       mode:
                         default: Auto
                         description: |-
-                          How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
-                          do not run on tunneled requests; HTTP policies on the destination backend still run.
+                          How requests are sent through the proxy.
                           Defaults to `Auto`.
                         enum:
                         - Auto

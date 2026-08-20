@@ -2104,7 +2104,7 @@ type BackendPolicySpec_BackendTunnel_Mode int32
 const (
 	// Use CONNECT for TLS and non-HTTP transports, and absolute-form requests for plaintext HTTP.
 	BackendPolicySpec_BackendTunnel_AUTO BackendPolicySpec_BackendTunnel_Mode = 0
-	// Always use CONNECT. HTTP policies on the proxy backend do not run on tunneled requests.
+	// Use CONNECT for all transports, including plaintext HTTP.
 	BackendPolicySpec_BackendTunnel_CONNECT BackendPolicySpec_BackendTunnel_Mode = 1
 )
 

@@ -69,7 +69,7 @@ pub enum TunnelMode {
 	/// Use CONNECT for TLS and non-HTTP transports, and absolute-form requests for plaintext HTTP.
 	#[default]
 	Auto,
-	/// Always use CONNECT. HTTP policies on the proxy backend do not run on tunneled requests.
+	/// Use CONNECT for all transports, including plaintext HTTP.
 	Connect,
 }
 
@@ -77,8 +77,7 @@ pub enum TunnelMode {
 pub struct Tunnel {
 	/// Proxy backend used to tunnel the connection.
 	pub proxy: Arc<SimpleBackendReference>,
-	/// How requests are sent through the proxy. In `connect` mode, HTTP policies on the proxy backend
-	/// do not run on tunneled requests; HTTP policies on the destination backend still run.
+	/// How requests are sent through the proxy.
 	#[serde(default)]
 	pub mode: TunnelMode,
 	/// Policies to connect to the proxy backend

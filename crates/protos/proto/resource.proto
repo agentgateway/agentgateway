@@ -1590,7 +1590,7 @@ message BackendPolicySpec {
     enum Mode {
       // Use CONNECT for TLS and non-HTTP transports, and absolute-form requests for plaintext HTTP.
       AUTO = 0;
-      // Always use CONNECT. HTTP policies on the proxy backend do not run on tunneled requests.
+      // Use CONNECT for all transports, including plaintext HTTP.
       CONNECT = 1;
     }
     BackendReference proxy = 1;
