@@ -190,7 +190,7 @@ impl TCPProxy {
 			port: self.target_address.port(),
 			hostname: sni.as_deref().map(strng::new),
 		};
-		let backend_call = Self::build_backend_call(
+		let mut backend_call = Self::build_backend_call(
 			&mut Some(log),
 			Some(&destination),
 			&inputs,
@@ -198,6 +198,14 @@ impl TCPProxy {
 			backend_policies,
 			hbone_source,
 		)?;
+		if let Some(tunnel) = backend_call.backend_policies.tunnel.clone() {
+			backend_call.set_tunnel_proxy(resolve_tunnel_backend_call(
+				&mut Some(log),
+				Some(&destination),
+				&inputs,
+				&tunnel,
+			)?);
+		}
 
 		let bi = selected_backend.backend.backend.backend_info();
 		log.endpoint = Some(backend_call.target.clone());
@@ -321,6 +329,17 @@ impl TCPProxy {
 		};
 		tokio::time::timeout(to, handshake).await?
 	}
+}
+
+fn resolve_tunnel_backend_call(
+	log: &mut Option<&mut RequestLog>,
+	destination: Option<&crate::cel::DestinationContext>,
+	inputs: &ProxyInputs,
+	tunnel: &crate::types::backend::Tunnel,
+) -> Result<BackendCall, ProxyError> {
+	let backend = super::resolve_tunnel_backend(&tunnel.proxy, inputs)?;
+	let policies = get_backend_policies(inputs, &backend, &tunnel.policies, None);
+	TCPProxy::build_backend_call(log, destination, inputs, &backend.backend, policies, None)
 }
 
 fn select_best_route(
@@ -490,7 +509,7 @@ mod tests {
 
 	use crate::llm::catalog::ModelCatalog;
 	use crate::store::{BackendPolicies, Stores};
-	use crate::types::agent::{BackendReference, ListenerProtocol};
+	use crate::types::agent::{BackendReference, ListenerProtocol, SimpleBackendReference};
 	use crate::types::discovery::gatewayaddress::Destination;
 	use crate::types::discovery::{
 		GatewayAddress, NamespacedHostname, NetworkAddress, Service, WaypointIdentity,
@@ -1067,6 +1086,62 @@ mod tests {
 		assert!(matches!(
 			result.target,
 			super::Target::Hostname(host, 8443) if host.as_str() == "mirror.example.com"
+		));
+	}
+
+	#[test]
+	fn test_named_dynamic_tunnel_backend_uses_tcp_context_and_rejects_internal() {
+		let inputs = make_proxy_inputs();
+		let target = crate::cel::Expression::new_strict(
+			r#"destination.hostname + ":" + string(destination.port)"#,
+		)
+		.unwrap();
+		let backend = super::Backend::Dynamic(
+			crate::types::agent::ResourceName::new(strng::new("proxy"), strng::new("ns")),
+			Some(Arc::new(target)),
+		);
+		let backend_name = backend.name();
+		inputs
+			.stores
+			.binds
+			.write()
+			.insert_backend(backend_name.clone(), backend.into());
+		let mut tunnel = crate::types::backend::Tunnel {
+			proxy: Arc::new(SimpleBackendReference::Backend(backend_name)),
+			mode: crate::types::backend::TunnelMode::Auto,
+			policies: vec![],
+		};
+		let destination = crate::cel::DestinationContext {
+			address: "127.0.0.1".parse().unwrap(),
+			port: 443,
+			hostname: Some(strng::new("pypi.org")),
+		};
+		let result =
+			super::resolve_tunnel_backend_call(&mut None, Some(&destination), &inputs, &tunnel).unwrap();
+		assert!(matches!(
+			result.target,
+			super::Target::Hostname(host, 443) if host.as_str() == "pypi.org"
+		));
+
+		let backend = super::Backend::Internal(
+			crate::types::agent::ResourceName::new(strng::new("internal"), strng::new("ns")),
+			crate::types::local::InternalBackend::Forward,
+		);
+		let backend_name = backend.name();
+		inputs
+			.stores
+			.binds
+			.write()
+			.insert_backend(backend_name.clone(), backend.into());
+		tunnel.proxy = Arc::new(SimpleBackendReference::Backend(backend_name));
+		let error =
+			match super::resolve_tunnel_backend_call(&mut None, Some(&destination), &inputs, &tunnel) {
+				Ok(_) => panic!("internal tunnel backend must be rejected"),
+				Err(error) => error,
+			};
+		assert!(matches!(
+			error,
+			crate::proxy::ProxyError::InvalidBackendType
 		));
 	}
 

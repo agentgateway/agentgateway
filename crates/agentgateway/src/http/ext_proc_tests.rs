@@ -1975,6 +1975,7 @@ mod dynamic_backend_target {
 				loop {
 					let mut chunk = [0; 1024];
 					let n = downstream.read(&mut chunk).await.unwrap();
+					assert!(n > 0, "CONNECT request unexpectedly closed");
 					request.extend_from_slice(&chunk[..n]);
 					if request.windows(4).any(|w| w == b"\r\n\r\n") {
 						break;

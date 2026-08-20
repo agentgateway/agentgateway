@@ -46,11 +46,8 @@ pub async fn handshake(
 			let recvd = &buf[..pos];
 			if recvd.starts_with(b"HTTP/1.1 200") || recvd.starts_with(b"HTTP/1.0 200") {
 				let conn = conn.keep_after(end);
-				// The proxy's ALPN does not describe the protocol inside the tunnel.
-				if let Some(mut tls) = ext.get::<TLSConnectionInfo>().cloned() {
-					tls.negotiated_alpn = None;
-					ext.insert(tls);
-				}
+				// The proxy's TLS metadata does not describe the connection inside the tunnel.
+				ext.remove::<TLSConnectionInfo>();
 				return Ok(Socket::from_rewind(ext, metrics, conn));
 			} else if recvd.starts_with(b"HTTP/1.1 407") || recvd.starts_with(b"HTTP/1.0 407") {
 				return Err(anyhow::anyhow!("tunnel required auth"));
@@ -119,9 +116,7 @@ mod tests {
 		let mut tunneled = handshake(client, "dest:443", None)
 			.await
 			.expect("handshake should succeed");
-		let tls = tunneled.must_ext::<TLSConnectionInfo>();
-		assert_eq!(tls.server_name.as_deref(), Some("proxy.example"));
-		assert_eq!(tls.negotiated_alpn, None);
+		assert!(tunneled.ext::<TLSConnectionInfo>().is_none());
 		let mut first_bytes = [0; 5];
 		tunneled
 			.read_exact(&mut first_bytes)

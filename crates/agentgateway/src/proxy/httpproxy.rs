@@ -1678,7 +1678,7 @@ pub async fn build_transport(
 		// we never set it.
 		let transport = Box::pin(build_transport(
 			inputs,
-			&call,
+			call,
 			hbone_source,
 			tunnel_backend_tls,
 			None,
@@ -1929,18 +1929,7 @@ fn resolve_tunnel_backend_call(
 	tunnel: &backend::Tunnel,
 	req: &Request,
 ) -> Result<BackendCall, ProxyError> {
-	let reference = match tunnel.proxy.as_ref() {
-		SimpleBackendReference::Service { name, port } => BackendReference::Service {
-			name: name.clone(),
-			port: *port,
-		},
-		SimpleBackendReference::Backend(name) => BackendReference::Backend(name.clone()),
-		SimpleBackendReference::InlineBackend(target) => {
-			BackendReference::InlineBackend(target.clone())
-		},
-		SimpleBackendReference::Invalid => BackendReference::Invalid,
-	};
-	let backend = super::resolve_backend(&reference, inputs)?;
+	let backend = super::resolve_tunnel_backend(&tunnel.proxy, inputs)?;
 	let policies =
 		crate::proxy::tcpproxy::get_backend_policies(inputs, &backend, &tunnel.policies, None);
 	if let Backend::Dynamic(_, expr) = &backend.backend {
@@ -2402,9 +2391,7 @@ async fn make_backend_call(
 		};
 	}
 	if let Some(tunnel) = backend_call.backend_policies.tunnel.clone() {
-		backend_call.tunnel_proxy = Some(Box::new(resolve_tunnel_backend_call(
-			&inputs, &tunnel, &req,
-		)?));
+		backend_call.set_tunnel_proxy(resolve_tunnel_backend_call(&inputs, &tunnel, &req)?);
 	}
 
 	log.add(|l| {
@@ -4197,6 +4184,10 @@ impl BackendCall {
 			backend_policies,
 			tunnel_proxy: None,
 		}
+	}
+
+	pub(super) fn set_tunnel_proxy(&mut self, call: BackendCall) {
+		self.tunnel_proxy = Some(Box::new(call));
 	}
 
 	pub(crate) fn network_gateway(&self) -> Option<&(GatewayAddress, Vec<Identity>)> {
