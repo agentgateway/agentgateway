@@ -1,0 +1,137 @@
+name: Controller build cache
+description: Set up Go and optional Rust toolchains and restore source-aware controller build caches
+
+inputs:
+  rust-version:
+    description: Rust toolchain version
+    required: false
+    default: ""
+  go-version:
+    description: Go toolchain version
+    required: true
+  go-cache-name:
+    description: Namespace for the Go build cache
+    required: false
+    default: controller-e2e
+  save:
+    description: Save missing caches after a successful job
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+  - name: Check runner info
+    if: ${{ inputs.rust-version != '' }}
+    shell: bash
+    run: |
+      cat /sys/fs/cgroup/cpu.stat || true
+      cat /proc/pressure/cpu || true
+      lscpu || true
+      openssl speed -seconds 1 -bytes 256 sha256 || true
+
+  - name: Set tools path
+    shell: bash
+    run: echo "$GITHUB_WORKSPACE/tools" >> "$GITHUB_PATH"
+
+  - name: Set up Rust build cache
+    if: ${{ inputs.rust-version != '' }}
+    uses: ./.github/actions/rust-build-cache
+    with:
+      rust-version: ${{ inputs.rust-version }}
+      cache-key: controller-e2e
+      save: ${{ inputs.save }}
+
+  - name: Install Go
+    uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+    with:
+      go-version: ${{ inputs.go-version }}
+      # setup-go's immutable dependency-only key can leave GOCACHE stale forever.
+      cache: false
+
+  - name: Set Go cache keys
+    id: go-cache-keys
+    shell: bash
+    run: |
+      # Hash only module metadata so README/source-only changes retain the same
+      # dependency cache generation. Git object hashes are content-based and do
+      # not depend on checkout mtimes.
+      dependency_generation="$(
+        git ls-files --stage -- \
+          ':(glob)**/go.mod' ':(glob)**/go.sum' |
+          git hash-object --stdin
+      )"
+
+      {
+        echo "build=$(go env GOCACHE)"
+        echo "modules=$(go env GOMODCACHE)"
+        echo "dependencies=$dependency_generation"
+        # The controller imports the local api/ module, so both trees are inputs.
+        echo "source=$(git rev-parse HEAD:controller)-$(git rev-parse HEAD:api)"
+      } >> "$GITHUB_OUTPUT"
+
+      echo "Go version: $(go env GOVERSION)"
+      echo "Dependency generation: $dependency_generation"
+      echo "Controller/API trees: $(git rev-parse HEAD:controller)-$(git rev-parse HEAD:api)"
+
+  # These are mutually exclusive access modes for the same caches. actions/cache
+  # has no save-if input: the combined action always registers a post-job save on
+  # a miss. Main uses that form so the cache is saved after the build populates it.
+  # PR and conformance jobs use actions/cache/restore, which can read main's cache
+  # but never writes a branch-specific cache. Only one step in each pair will run.
+  - name: Restore writable Go module cache
+    if: ${{ inputs.save == 'true' }}
+    id: go-module-cache-write
+    uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+    with:
+      path: ${{ steps.go-cache-keys.outputs.modules }}
+      key: go-mod-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-${{ steps.go-cache-keys.outputs.dependencies }}
+      restore-keys: |
+        go-mod-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-
+
+  - name: Restore read-only Go module cache
+    if: ${{ inputs.save != 'true' }}
+    id: go-module-cache-read
+    uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+    with:
+      path: ${{ steps.go-cache-keys.outputs.modules }}
+      key: go-mod-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-${{ steps.go-cache-keys.outputs.dependencies }}
+      restore-keys: |
+        go-mod-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-
+
+  - name: Restore writable Go build cache
+    if: ${{ inputs.save == 'true' }}
+    id: go-build-cache-write
+    uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+    with:
+      path: ${{ steps.go-cache-keys.outputs.build }}
+      key: go-build-${{ inputs.go-cache-name }}-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-${{ steps.go-cache-keys.outputs.dependencies }}-${{ steps.go-cache-keys.outputs.source }}
+      restore-keys: |
+        go-build-${{ inputs.go-cache-name }}-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-${{ steps.go-cache-keys.outputs.dependencies }}-
+        go-build-${{ inputs.go-cache-name }}-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-
+
+  - name: Restore read-only Go build cache
+    if: ${{ inputs.save != 'true' }}
+    id: go-build-cache-read
+    uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+    with:
+      path: ${{ steps.go-cache-keys.outputs.build }}
+      key: go-build-${{ inputs.go-cache-name }}-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-${{ steps.go-cache-keys.outputs.dependencies }}-${{ steps.go-cache-keys.outputs.source }}
+      restore-keys: |
+        go-build-${{ inputs.go-cache-name }}-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-${{ steps.go-cache-keys.outputs.dependencies }}-
+        go-build-${{ inputs.go-cache-name }}-v0-${{ runner.os }}-${{ runner.arch }}-${{ inputs.go-version }}-
+
+  - name: Show Go cache results
+    shell: bash
+    env:
+      MODULE_HIT_WRITE: ${{ steps.go-module-cache-write.outputs.cache-hit }}
+      MODULE_HIT_READ: ${{ steps.go-module-cache-read.outputs.cache-hit }}
+      BUILD_HIT_WRITE: ${{ steps.go-build-cache-write.outputs.cache-hit }}
+      BUILD_HIT_READ: ${{ steps.go-build-cache-read.outputs.cache-hit }}
+    run: |
+      module_hit="${MODULE_HIT_WRITE:-$MODULE_HIT_READ}"
+      build_hit="${BUILD_HIT_WRITE:-$BUILD_HIT_READ}"
+
+      echo "Module exact hit: $module_hit"
+      echo "Build exact hit: $build_hit"
+      du -sh "${{ steps.go-cache-keys.outputs.modules }}" "${{ steps.go-cache-keys.outputs.build }}" 2>/dev/null || true

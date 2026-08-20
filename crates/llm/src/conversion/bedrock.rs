@@ -338,9 +338,43 @@ pub mod from_embeddings {
 
 		let model = provider.model.as_deref().unwrap_or(&typed.model);
 
-		// Bedrock has two embedding model families with incompatible APIs:
-		// Cohere accepts batched text arrays; Titan accepts a single string.
-		if model.contains("cohere") {
+		// Bedrock has three embedding model families with incompatible APIs:
+		// Cohere accepts batched text arrays; Titan and Nova accept a single string.
+		if model.contains("nova") {
+			// Nova only accepts a single string per InvokeModel; array input is rejected.
+			let input = match &typed.input {
+				types::embeddings::typed::EmbeddingInput::String(s) => s.to_string(),
+				types::embeddings::typed::EmbeddingInput::Array(_) => {
+					return Err(AIError::RequestParsing(serde::de::Error::custom(
+						"Nova requires a single string input",
+					)));
+				},
+			};
+			let bedrock_req = types::bedrock::NovaEmbeddingRequest {
+				task_type: types::bedrock::NovaEmbeddingTaskType::SingleEmbedding,
+				single_embedding_params: types::bedrock::NovaSingleEmbeddingParams {
+					embedding_purpose: req
+						.rest
+						.get("embedding_purpose")
+						.and_then(|v| v.as_str())
+						.unwrap_or("GENERIC_INDEX")
+						.to_string(),
+					// Nova calls OpenAI's `dimensions` parameter `embeddingDimension`.
+					// https://docs.aws.amazon.com/nova/latest/userguide/embeddings-schema.html
+					embedding_dimension: typed.dimensions,
+					text: types::bedrock::NovaEmbeddingText {
+						truncation_mode: req
+							.rest
+							.get("truncation_mode")
+							.and_then(|v| v.as_str())
+							.unwrap_or("END")
+							.to_string(),
+						value: input,
+					},
+				},
+			};
+			serde_json::to_vec(&bedrock_req).map_err(AIError::RequestMarshal)
+		} else if model.contains("cohere") {
 			let input = typed.input.as_strings();
 
 			let bedrock_req = types::bedrock::CohereEmbeddingRequest {
@@ -398,7 +432,41 @@ pub mod from_embeddings {
 		headers: &http::HeaderMap,
 		model: &str,
 	) -> Result<Box<dyn ResponseType>, AIError> {
-		if model.contains("cohere") {
+		if model.contains("nova") {
+			let resp: types::bedrock::NovaEmbeddingResponse =
+				serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
+
+			// Like Cohere, Nova doesn't include token counts in the JSON body;
+			// Bedrock surfaces them via response headers instead.
+			let prompt_tokens = headers
+				.get("x-amzn-bedrock-input-token-count")
+				.and_then(|v| v.to_str().ok())
+				.and_then(|v| v.parse::<u64>().ok())
+				.unwrap_or(0);
+
+			let typed_resp = types::embeddings::typed::Response {
+				object: "list".to_string(),
+				data: resp
+					.embeddings
+					.into_iter()
+					.enumerate()
+					.map(|(i, e)| types::embeddings::typed::Embedding {
+						object: "embedding".to_string(),
+						embedding: e.embedding,
+						index: i as u32,
+					})
+					.collect(),
+				model: model.to_string(),
+				usage: types::embeddings::typed::Usage {
+					prompt_tokens: prompt_tokens as u32,
+					total_tokens: prompt_tokens as u32,
+				},
+			};
+			// Convert the normalized internal typed response back to the passthrough-preserving OpenAI format
+			let openai_resp = json::convert::<_, types::embeddings::Response>(&typed_resp)
+				.map_err(AIError::ResponseParsing)?;
+			Ok(Box::new(openai_resp))
+		} else if model.contains("cohere") {
 			let resp: types::bedrock::CohereEmbeddingResponse =
 				serde_json::from_slice(bytes).map_err(logged_response_parsing(bytes))?;
 
@@ -994,6 +1062,9 @@ pub mod from_completions {
 		let mut saw_token = false;
 		// Track tool call JSON buffers by content block index
 		let mut tool_calls: HashMap<i32, String> = HashMap::new();
+		// Bedrock indexes every content block, while OpenAI indexes only tool calls.
+		let mut next_tool_index = 0u32;
+		let mut tool_index_map: HashMap<i32, u32> = HashMap::new();
 		let mut logged_tool_calls =
 			crate::conversion::messages::StreamingToolCalls::new(log_content.tool_calls);
 		let mut completion = log_content.completion.then(String::new);
@@ -1020,6 +1091,9 @@ pub mod from_completions {
 					// Track tool call starts for streaming
 					if let Some(bedrock::ContentBlockStart::ToolUse(tu)) = start.start {
 						tool_calls.insert(start.content_block_index, String::new());
+						let tool_index = next_tool_index;
+						next_tool_index += 1;
+						tool_index_map.insert(start.content_block_index, tool_index);
 						let name = super::restore_tool_name(tool_name_map.as_ref(), &tu.name);
 						logged_tool_calls.start(
 							start.content_block_index as usize,
@@ -1030,7 +1104,7 @@ pub mod from_completions {
 						// Emit the start of a tool call
 						let d = completions::StreamResponseDelta {
 							tool_calls: Some(vec![completions::ChatCompletionMessageToolCallChunk {
-								index: start.content_block_index as u32,
+								index: tool_index,
 								id: Some(tu.tool_use_id),
 								r#type: Some(completions::FunctionType::Function),
 								function: Some(completions::FunctionCallStream {
@@ -1098,10 +1172,13 @@ pub mod from_completions {
 							bedrock::ContentBlockDelta::ToolUse(tu) => {
 								logged_tool_calls.append_arguments(d.content_block_index as usize, &tu.input);
 								// Accumulate tool call JSON and emit deltas
-								if let Some(json_buffer) = tool_calls.get_mut(&d.content_block_index) {
+								if let (Some(json_buffer), Some(&tool_index)) = (
+									tool_calls.get_mut(&d.content_block_index),
+									tool_index_map.get(&d.content_block_index),
+								) {
 									json_buffer.push_str(&tu.input);
 									dr.tool_calls = Some(vec![completions::ChatCompletionMessageToolCallChunk {
-										index: d.content_block_index as u32,
+										index: tool_index,
 										id: None, // Only sent in the first chunk
 										r#type: None,
 										function: Some(completions::FunctionCallStream {
@@ -1130,6 +1207,7 @@ pub mod from_completions {
 				bedrock::ConverseStreamOutput::ContentBlockStop(stop) => {
 					// Clean up tool call tracking for this content block
 					tool_calls.remove(&stop.content_block_index);
+					tool_index_map.remove(&stop.content_block_index);
 					None
 				},
 				bedrock::ConverseStreamOutput::MessageStart(start) => {

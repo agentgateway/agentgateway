@@ -453,7 +453,43 @@ func AgwRouteCollection(
 			route := obj.Spec
 			return ctx, func(yield func(AgwRoute, *reporter.RouteCondition) bool) {
 				for n, r := range route.Rules {
-					res, err := ConvertHTTPRouteToAgw(ctx, r, obj, n)
+					routerKey, modelServing, modelServingErr := modelServingRuleRouterKey(obj.Namespace, obj.Name, n, r)
+					if modelServing && modelServingErr == nil && modelServingRuleMatchesRoot(r) {
+						if conflicts := rootModelRouteDirectListenerConflicts(ctx, obj); len(conflicts) > 0 {
+							yield(AgwRoute{}, &reporter.RouteCondition{
+								Type:    gwv1.RouteConditionResolvedRefs,
+								Status:  metav1.ConditionFalse,
+								Reason:  "ModelRoutingConflict",
+								Message: rootModelRouteConflictMessage(conflicts),
+							})
+							return
+						}
+					}
+					conversionRule := r
+					if modelServing {
+						// AgentgatewayModel is a selector, not a conventional backend.
+						conversionRule.BackendRefs = nil
+					}
+					res, err := ConvertHTTPRouteToAgw(ctx, conversionRule, obj, n)
+					if modelServingErr != nil {
+						err = &reporter.RouteCondition{
+							Type:    gwv1.RouteConditionResolvedRefs,
+							Status:  metav1.ConditionFalse,
+							Reason:  gwv1.RouteReasonInvalidKind,
+							Message: modelServingErr.Error(),
+						}
+					}
+					if res != nil && modelServing && modelServingErr == nil {
+						res.Backends = []*api.RouteBackend{{
+							Backend: backendRef(routerKey),
+							Weight:  1,
+						}}
+						res.TrafficPolicies = append(res.TrafficPolicies, &api.TrafficPolicySpec{
+							Kind: &api.TrafficPolicySpec_UrlRewrite{UrlRewrite: &api.UrlRewrite{
+								Path: &api.UrlRewrite_Prefix{Prefix: ""},
+							}},
+						})
+					}
 					if !yield(AgwRoute{Route: res}, err) {
 						return
 					}
@@ -467,6 +503,26 @@ func AgwRouteCollection(
 		},
 	)
 	status.RegisterStatus(queue, httpRouteStatus, GetStatus)
+	modelRouters := krt.NewManyCollection(httpRoutes, func(_ krt.HandlerContext, obj agwir.AgwResource) []agwir.AgwResource {
+		route := obj.Resource.GetRoute()
+		if route == nil || len(route.Backends) != 1 {
+			return nil
+		}
+		routerKey := route.Backends[0].GetBackend().GetBackend()
+		if !strings.HasPrefix(routerKey, "/llm:router:httproute:") {
+			return nil
+		}
+		return []agwir.AgwResource{{
+			Gateway: obj.Gateway,
+			Resource: &api.Resource{Kind: &api.Resource_Backend{Backend: &api.Backend{
+				Key:  route.Key,
+				Name: &api.ResourceName{Name: route.Name.GetName(), Namespace: route.Name.GetNamespace()},
+				Kind: &api.Backend_ModelRouter{ModelRouter: &api.ModelRouterBackend{
+					RouterKey: routerKey,
+				}},
+			}}},
+		}}
+	}, krtopts.ToOptions("translator/ModelRouters")...)
 	delegatedHTTPRoutes, delegatedHTTPAncestors := buildDelegatedHTTPRoutes(httpRouteCol, httpRouteGroupBindings, inputs, krtopts)
 
 	grpcRouteStatus, grpcRoutes := createRouteCollectionGeneric(grpcRouteCol, inputs, krtopts, "translator/GRPCRoutes",
@@ -523,6 +579,7 @@ func AgwRouteCollection(
 	routes := krt.JoinCollection(
 		[]krt.Collection[agwir.AgwResource]{
 			httpRoutes,
+			modelRouters,
 			delegatedHTTPRoutes,
 			grpcRoutes,
 			tcpRoutes,
@@ -1082,7 +1139,7 @@ func extractAncestorBackends[T controllers.Object, RT, BT any](ctx RouteContext,
 	for _, r := range rules {
 		for _, b := range extract(r) {
 			ref, refNs, refName := GetBackendRef(b)
-			if ref == wellknown.HTTPRouteGVK.GroupKind() {
+			if ref == wellknown.HTTPRouteGVK.GroupKind() || ref == wellknown.AgentgatewayModelGVK.GroupKind() {
 				continue
 			}
 			be := utils.TypedNamespacedName{

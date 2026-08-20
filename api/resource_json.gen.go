@@ -160,6 +160,17 @@ func (this *Backend) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for ModelRouterBackend
+func (this *ModelRouterBackend) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for ModelRouterBackend
+func (this *ModelRouterBackend) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for GuardrailBackend
 func (this *GuardrailBackend) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
@@ -1018,6 +1029,17 @@ func (this *TrafficPolicySpec_LocalRateLimit) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for TrafficPolicySpec_LocalRateLimit_Rule
+func (this *TrafficPolicySpec_LocalRateLimit_Rule) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for TrafficPolicySpec_LocalRateLimit_Rule
+func (this *TrafficPolicySpec_LocalRateLimit_Rule) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for TrafficPolicySpec_ExternalAuth
 func (this *TrafficPolicySpec_ExternalAuth) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
@@ -1865,6 +1887,17 @@ func (this *BackendReference_Service) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 
+// MarshalJSON is a custom marshaler for BackendReference_Inline
+func (this *BackendReference_Inline) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for BackendReference_Inline
+func (this *BackendReference_Inline) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
 // MarshalJSON is a custom marshaler for Alpn
 func (this *Alpn) MarshalJSON() ([]byte, error) {
 	str, err := ResourceMarshaler.MarshalToString(this)
@@ -1961,6 +1994,17 @@ func (this *CrossAppAccessAuth) MarshalJSON() ([]byte, error) {
 
 // UnmarshalJSON is a custom unmarshaler for CrossAppAccessAuth
 func (this *CrossAppAccessAuth) UnmarshalJSON(b []byte) error {
+	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
+}
+
+// MarshalJSON is a custom marshaler for CrossAppAccessAuth_ScopeOverride
+func (this *CrossAppAccessAuth_ScopeOverride) MarshalJSON() ([]byte, error) {
+	str, err := ResourceMarshaler.MarshalToString(this)
+	return []byte(str), err
+}
+
+// UnmarshalJSON is a custom unmarshaler for CrossAppAccessAuth_ScopeOverride
+func (this *CrossAppAccessAuth_ScopeOverride) UnmarshalJSON(b []byte) error {
 	return ResourceUnmarshaler.Unmarshal(bytes.NewReader(b), this)
 }
 

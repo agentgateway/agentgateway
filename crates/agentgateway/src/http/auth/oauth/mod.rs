@@ -66,8 +66,9 @@ pub struct OAuthTokenExchangeAuth {
 	/// `resource` parameters with the target service URIs.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	resources: Vec<String>,
-	/// `requested_token_type` parameter. Under token exchange, unset defaults to
-	/// access_token because this policy forwards bearer access tokens.
+	/// `requested_token_type` parameter. When unset it is omitted from the request
+	/// (RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)
+	/// reject an explicit access_token value paired with a custom `subject_token_type`.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
 	requested_token_type: Option<OAuthTokenType>,
@@ -218,11 +219,6 @@ impl OAuthTokenExchangeAuth {
 			if self.audiences.is_empty() {
 				return Err("requested_token_type id-jag requires at least one audience".into());
 			}
-			if self.subject_token.token_type == OAuthTokenType::AccessToken {
-				warn!(
-					"oauth token exchange requested_token_type id-jag is configured with an access_token subject; the ID-JAG draft expects an ID token subject"
-				);
-			}
 		}
 
 		if matches!(
@@ -249,6 +245,8 @@ impl OAuthTokenExchangeAuth {
 		use proto::o_auth_token_exchange::GrantType;
 
 		let target = resolve_simple_reference(t.token_endpoint.as_ref());
+		let policies =
+			crate::types::agent_xds::backend_policies_from_proto(&t.inline_policies, diagnostics)?;
 		let path = t.token_endpoint_path.unwrap_or_default();
 
 		let grant_type = match GrantType::try_from(t.grant_type) {
@@ -304,9 +302,7 @@ impl OAuthTokenExchangeAuth {
 		let auth = Self {
 			target: SimpleBackendReferenceWithPolicies {
 				target: Arc::new(target),
-				// Inline connection policies are not supported from xDS;
-				// the backend resource carries its own policies there.
-				policies: Vec::new(),
+				policies,
 			},
 			path,
 			grant_type,
@@ -328,7 +324,7 @@ impl OAuthTokenExchangeAuth {
 
 	fn requested_token_type_param(&self) -> Option<OAuthTokenType> {
 		match self.grant_type {
-			OAuthGrantType::TokenExchange => Some(self.requested_token_type.clone().unwrap_or_default()),
+			OAuthGrantType::TokenExchange => self.requested_token_type.clone(),
 			OAuthGrantType::JwtBearer => None,
 		}
 	}

@@ -182,6 +182,9 @@ pub fn get_messages_helper(
 }
 
 impl RequestType for Request {
+	fn body_is_json(&self) -> bool {
+		true
+	}
 	fn model(&mut self) -> &mut Option<String> {
 		&mut self.model
 	}
@@ -888,6 +891,9 @@ pub mod typed {
 		},
 		MessageStop,
 		Ping,
+		Error {
+			error: MessagesError,
+		},
 	}
 
 	impl MessagesStreamEvent {
@@ -902,6 +908,7 @@ pub mod typed {
 				Self::MessageDelta { .. } => "message_delta",
 				Self::MessageStop => "message_stop",
 				Self::Ping => "ping",
+				Self::Error { .. } => "error",
 			}
 		}
 

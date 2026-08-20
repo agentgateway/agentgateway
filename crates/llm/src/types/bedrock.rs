@@ -673,6 +673,47 @@ pub struct CohereEmbeddingResponse {
 	pub texts: Vec<String>,
 }
 
+// ---- Amazon Nova Multimodal Embeddings (amazon.nova-*-multimodal-embeddings-*) ----
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum NovaEmbeddingTaskType {
+	SingleEmbedding,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct NovaEmbeddingRequest {
+	pub task_type: NovaEmbeddingTaskType,
+	pub single_embedding_params: NovaSingleEmbeddingParams,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct NovaSingleEmbeddingParams {
+	pub embedding_purpose: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub embedding_dimension: Option<u32>,
+	pub text: NovaEmbeddingText,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct NovaEmbeddingText {
+	pub truncation_mode: String,
+	pub value: String,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct NovaEmbeddingResponse {
+	pub embeddings: Vec<NovaEmbeddingResult>,
+}
+
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct NovaEmbeddingResult {
+	pub embedding: Vec<f32>,
+}
+
 // ---- Bedrock Rerank (bedrock-agent-runtime Rerank API) ----
 
 #[derive(Debug, Clone, serde::Serialize)]

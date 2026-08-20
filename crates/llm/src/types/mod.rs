@@ -3,6 +3,7 @@ pub mod completions;
 pub mod count_tokens;
 pub mod detect;
 pub mod embeddings;
+pub mod gemini;
 pub mod messages;
 pub mod rerank;
 pub mod responses;
@@ -19,6 +20,8 @@ pub enum ChatRequest {
 	Completions(completions::Request),
 	Messages(messages::Request),
 	Responses(responses::Request),
+	/// Native Gemini generateContent/streamGenerateContent body
+	Gemini(gemini::GenerateContentRequest),
 }
 
 pub(crate) fn thinking_budget_for_reasoning_effort(
@@ -55,6 +58,7 @@ pub trait RequestType: Send + Sync {
 	fn supports_model(&self) -> bool {
 		true
 	}
+	fn body_is_json(&self) -> bool;
 	fn model(&mut self) -> &mut Option<String>;
 	fn prepend_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>);
 	fn append_prompts(&mut self, prompts: Vec<SimpleChatCompletionMessage>);

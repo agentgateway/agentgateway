@@ -80,7 +80,10 @@ impl Provider {
 			// Model listing is a Mantle-native route.
 			RT::Models => BedrockEndpoint::Mantle,
 			// Passthrough/detect stay on Runtime; we cannot reason about the wire format.
-			RT::Detect | RT::Passthrough => BedrockEndpoint::Runtime,
+			// Gemini-native routes are never served by Bedrock; default them to Runtime too.
+			RT::Detect | RT::Passthrough | RT::GenerateContent | RT::GeminiCountTokens => {
+				BedrockEndpoint::Runtime
+			},
 			// Chat routes all resolve identically, from the preference + catalog tags.
 			RT::Completions | RT::Messages | RT::Responses => self.chat_endpoint(model_id, catalog),
 		}
@@ -172,7 +175,6 @@ impl Provider {
 			};
 		}
 
-		let model = self.model.as_deref().unwrap_or(model);
 		const MODEL_SEGMENT: &percent_encoding::AsciiSet =
 			&percent_encoding::CONTROLS.add(b'/').add(b'%');
 		let model = percent_encoding::utf8_percent_encode(model, MODEL_SEGMENT);

@@ -29,6 +29,72 @@ pub trait Provider {
 	const NAME: Strng;
 }
 
+/// A model id is interpolated into a single-segment slot of an upstream path
+/// (`.../models/{model}:generateContent`), so a `/` in one is either a resource-style name
+/// (`models/x`, `tunedModels/x`, a Bedrock inference-profile ARN) or an attempt to choose the
+/// upstream path. Deciding that here keeps extraction and every path builder on the same answer.
+pub mod model_path {
+	/// One path segment: not a separator, not a dot segment, and nothing that changes meaning when
+	/// the URL we build is parsed again upstream.
+	pub fn is_safe_segment(segment: &str) -> bool {
+		!segment.is_empty()
+			&& segment != "."
+			&& segment != ".."
+			&& !segment.contains([
+				'/', '\\', '%', '?', '#', '<', '>', '"', '`', '{', '}', '|', '^',
+			]) && !segment.chars().any(|c| c.is_control() || c.is_whitespace())
+	}
+
+	pub fn is_safe_resource_name(model: &str) -> bool {
+		!model.is_empty() && model.split('/').all(is_safe_segment)
+	}
+
+	#[cfg(test)]
+	mod tests {
+		use super::*;
+
+		#[test]
+		fn safe_names_are_accepted() {
+			for model in [
+				"gemini-2.5-flash",
+				"gemini@001",
+				"claude-3-5-sonnet-20241022-v2:0",
+				"models/gemini-2.5-flash",
+				"tunedModels/abc",
+				"publishers/google/models/gemini-2.5-flash",
+				"arn:aws:bedrock:us-east-1:1234:application-inference-profile/my-profile",
+			] {
+				assert!(is_safe_resource_name(model), "{model}");
+			}
+		}
+
+		#[test]
+		fn unsafe_names_are_rejected() {
+			for model in [
+				"",
+				" ",
+				"..",
+				".",
+				"gemini-2.5-flash/../../locations/global/endpoints/openapi/chat/completions",
+				"gemini-2.5-flash/..",
+				"/gemini-2.5-flash",
+				"gemini-2.5-flash/",
+				"gemini//flash",
+				"gemini-2.5-flash%2F..",
+				"gemini\\..\\..",
+				"gemini 2.5 flash",
+				"gemini\n",
+				// A query or fragment would re-shape the path we build, dropping the `:method` suffix.
+				"gemini-2.5-flash?alt=sse",
+				"gemini-2.5-flash#frag",
+				"gemini-2.5-flash<x",
+			] {
+				assert!(!is_safe_resource_name(model), "{model}");
+			}
+		}
+	}
+}
+
 pub mod json {
 	use serde::Serialize;
 	use serde::de::DeserializeOwned;
@@ -103,6 +169,10 @@ pub enum RouteType {
 	Realtime,
 	/// Anthropic /v1/messages/count_tokens
 	AnthropicTokenCount,
+	/// Gemini models/{model}:generateContent and models/{model}:streamGenerateContent
+	GenerateContent,
+	/// Gemini models/{model}:countTokens
+	GeminiCountTokens,
 	/// Cohere /v2/rerank (document reranking)
 	Rerank,
 }
@@ -114,16 +184,24 @@ pub enum InputFormat {
 	Responses,
 	Embeddings,
 	Realtime,
+	/// Anthropic-shaped /v1/messages/count_tokens body
 	CountTokens,
 	Detect,
 	Rerank,
+	/// Native Gemini generateContent body
+	Gemini,
+	/// Native Gemini countTokens body
+	GeminiCountTokens,
 }
 
 impl InputFormat {
 	pub fn is_chat(&self) -> bool {
 		matches!(
 			self,
-			InputFormat::Completions | InputFormat::Messages | InputFormat::Responses
+			InputFormat::Completions
+				| InputFormat::Messages
+				| InputFormat::Responses
+				| InputFormat::Gemini
 		)
 	}
 
@@ -132,9 +210,11 @@ impl InputFormat {
 			InputFormat::Completions => true,
 			InputFormat::Messages => true,
 			InputFormat::Responses => true,
+			InputFormat::Gemini => true,
 			InputFormat::Realtime => false,
 			InputFormat::Embeddings => false,
 			InputFormat::CountTokens => false,
+			InputFormat::GeminiCountTokens => false,
 			InputFormat::Detect => false,
 			InputFormat::Rerank => false,
 		}
@@ -198,6 +278,22 @@ impl CacheTokenConvention {
 	pub fn pending() -> Self {
 		Self::InputIncludesCache
 	}
+
+	/// Normalize a provider-reported input token count so it always includes
+	/// tokens read from and written to cache.
+	pub fn include_cache_tokens(
+		self,
+		input_tokens: u64,
+		cached_input_tokens: Option<u64>,
+		cache_creation_input_tokens: Option<u64>,
+	) -> u64 {
+		match self {
+			Self::InputIncludesCache => input_tokens,
+			Self::InputExcludesCache => input_tokens
+				.saturating_add(cached_input_tokens.unwrap_or_default())
+				.saturating_add(cache_creation_input_tokens.unwrap_or_default()),
+		}
+	}
 }
 
 #[derive(Default, Clone, Debug, serde::Serialize, serde::Deserialize, ::cel::DynamicType)]
@@ -246,10 +342,28 @@ impl LLMInfo {
 	pub fn input_tokens(&self) -> Option<u64> {
 		self.response.input_tokens.or(self.request.input_tokens)
 	}
+
+	/// Return a cache-inclusive input token count with consistent semantics across providers.
+	/// Falls back to the request-side tokenizer when the response has no usage count.
+	pub fn normalized_input_tokens(&self) -> Option<u64> {
+		self
+			.response
+			.input_tokens
+			.map(|input_tokens| {
+				self.request.cache_convention.include_cache_tokens(
+					input_tokens,
+					self.response.cached_input_tokens,
+					self.response.cache_creation_input_tokens,
+				)
+			})
+			.or(self.request.input_tokens)
+	}
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct LLMResponse {
+	/// Provider-reported input tokens. Whether this includes cache tokens is described by the
+	/// corresponding request's [`CacheTokenConvention`].
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub input_tokens: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -387,6 +501,8 @@ pub enum AIError {
 	ResponseMarshal(serde_json::Error),
 	#[error("unsupported content encoding: {0}")]
 	UnsupportedEncoding(Strng),
+	#[error("failed to decode response: {0}")]
+	ResponseDecoding(axum_core::Error),
 	#[error("failed to encode response: {0}")]
 	Encoding(axum_core::Error),
 	#[error("error computing tokens")]

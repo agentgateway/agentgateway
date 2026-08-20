@@ -191,6 +191,29 @@ impl ExtAuthz {
 		self
 	}
 
+	pub async fn check_network(
+		&self,
+		client: PolicyClient,
+		source: crate::cel::SourceContext,
+		destination: crate::cel::DestinationContext,
+	) -> Result<(), ProxyError> {
+		debug_assert!(matches!(self.protocol, Protocol::Http { .. }));
+		let mut req = ::http::Request::builder()
+			.uri("/")
+			.body(http::Body::empty())
+			.map_err(|e| ProxyError::Processing(e.into()))?;
+		req.extensions_mut().insert(source);
+		req.extensions_mut().insert(destination);
+
+		let response = self.check_http(client, &mut req).await?;
+		match response.direct_response {
+			Some(response) => Err(ProxyError::ExternalAuthorizationFailed(Some(
+				response.status(),
+			))),
+			None => Ok(()),
+		}
+	}
+
 	fn cache_key(&self, req: &Request) -> Result<CacheKey, CacheMissReason> {
 		let Some(cache) = &self.cache else {
 			return Err(CacheMissReason::Disabled);

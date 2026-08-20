@@ -1,0 +1,64 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+
+# Handle CONNECT requests on port 3000
+binds:
+- port: 3000
+  tunnelProtocol: connect
+  listeners: []
+
+# Accept any `CONNECT *:443` requests
+gateways:
+  secure:
+    port: 443
+    listeners:
+    # Terminate HTTPS for the LLM hostname
+    - name: llm
+      hostname: llm.example.com
+      protocol: HTTPS
+      tls:
+        cert: examples/mcp-tls/certs/cert.pem
+        key: examples/mcp-tls/certs/key.pem
+    # Terminate HTTPS for a regular HTTP route
+    - name: direct-response
+      hostname: static.example.com
+      protocol: HTTPS
+      tls:
+        cert: examples/mcp-tls/certs/cert.pem
+        key: examples/mcp-tls/certs/key.pem
+    # Inspect all other SNI without terminating TLS
+    - name: public-egress
+      hostname: "*"
+      protocol: TLS
+
+# Allow only the listed TLS hostnames
+tcpRoutes:
+- name: public-egress-allowlist
+  gateways: secure/public-egress
+  hostnames:
+  - pypi.org
+  - files.pythonhosted.org
+  - api.github.com
+  - github.com
+  - raw.githubusercontent.com
+  - objects.githubusercontent.com
+  backends:
+  # Send it to the hostname from SNI on the original destination port
+  - dynamic: {}
+
+# Return a static response without contacting a backend
+routes:
+- name: static-response
+  gateways: secure/direct-response
+  policies:
+    directResponse:
+      status: 200
+      body: hello from agentgateway
+
+# Attach the generated LLM routes to the LLM hostname
+llm:
+  gateways: secure/llm
+  models:
+  - name: smart
+    provider: openAI
+    params:
+      model: gpt-5.5

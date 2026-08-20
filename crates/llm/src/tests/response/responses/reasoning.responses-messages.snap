@@ -1,0 +1,100 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/responses/reasoning.json
+info:
+  id: resp_0fd43e1b46691ead0069a89a2144808199a06ce29faf5798da
+  object: response
+  created_at: 1772657185
+  status: completed
+  background: false
+  billing:
+    payer: developer
+  completed_at: 1772657185
+  error: ~
+  frequency_penalty: 0
+  incomplete_details: ~
+  instructions: ~
+  max_output_tokens: 1024
+  max_tool_calls: ~
+  model: qwen3-8b
+  output:
+    - id: rs_0fd43e1b46691ead0069a89a21ea1c8199ae1962065e1d3995
+      type: reasoning
+      summary: []
+      content:
+        - type: reasoning_text
+          text: The user asked for a short greeting. Keep it simple.
+      encrypted_content: ~
+      status: ~
+    - id: msg_0fd43e1b46691ead0069a89a21ea1c8199ae1962065e1d3995
+      type: message
+      status: completed
+      content:
+        - type: output_text
+          annotations: []
+          logprobs: []
+          text: Hello! How can I assist you today?
+      role: assistant
+  parallel_tool_calls: true
+  presence_penalty: 0
+  previous_response_id: ~
+  prompt_cache_key: ~
+  prompt_cache_retention: ~
+  reasoning:
+    effort: ~
+    summary: ~
+  safety_identifier: ~
+  service_tier: default
+  store: true
+  temperature: 1
+  text:
+    format:
+      type: text
+  tool_choice: none
+  tools: []
+  top_logprobs: ~
+  top_p: 1
+  truncation: disabled
+  usage:
+    input_tokens: 18
+    input_tokens_details:
+      cached_tokens: 0
+      input_tokens_per_turn: []
+      cached_tokens_per_turn: []
+    output_tokens: 5
+    output_tokens_details:
+      reasoning_tokens: 8
+      tool_output_tokens: 0
+      output_tokens_per_turn: []
+      tool_output_tokens_per_turn: []
+    total_tokens: 23
+  user: ~
+---
+{
+  "response": {
+    "id": "[id]",
+    "type": "message",
+    "role": "assistant",
+    "content": [
+      {
+        "type": "text",
+        "text": "Hello! How can I assist you today?"
+      }
+    ],
+    "model": "qwen3-8b",
+    "stop_reason": "end_turn",
+    "stop_sequence": null,
+    "usage": {
+      "input_tokens": 18,
+      "output_tokens": 5,
+      "service_tier": "default"
+    }
+  },
+  "parsed": {
+    "input_tokens": 18,
+    "output_tokens": 5,
+    "total_tokens": 23,
+    "service_tier": "default",
+    "provider_model": "qwen3-8b"
+  }
+}

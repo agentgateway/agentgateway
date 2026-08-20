@@ -688,6 +688,8 @@ fn convert_route_type(proto_rt: i32, diagnostics: &mut Diagnostics) -> llm::Rout
 		Ok(ProtoRT::Embeddings) => llm::RouteType::Embeddings,
 		Ok(ProtoRT::Realtime) => llm::RouteType::Realtime,
 		Ok(ProtoRT::Rerank) => llm::RouteType::Rerank,
+		Ok(ProtoRT::GenerateContent) => llm::RouteType::GenerateContent,
+		Ok(ProtoRT::GeminiCountTokens) => llm::RouteType::GeminiCountTokens,
 		Err(_) => {
 			diagnostics.add_warning(format!(
 				"unknown proto RouteType value {}, defaulting to Completions",
@@ -740,6 +742,7 @@ fn convert_mcp_guardrails(
 			_ => crate::mcp::guardrails::FailureMode::FailClosed,
 		};
 		let target = Arc::new(resolve_simple_reference(r.target.as_ref()));
+		let policies = backend_policies_from_proto(&r.inline_policies, diagnostics)?;
 		let metadata = r
 			.metadata
 			.iter()
@@ -765,10 +768,7 @@ fn convert_mcp_guardrails(
 			),
 		};
 		Ok(crate::mcp::guardrails::Remote {
-			target: SimpleBackendReferenceWithPolicies {
-				target,
-				policies: Vec::new(),
-			},
+			target: SimpleBackendReferenceWithPolicies { target, policies },
 			failure_mode,
 			metadata,
 			request_headers,
@@ -1073,6 +1073,23 @@ fn convert_backend_ai_policy(
 						let ve = permissive_cel_expression_arc(
 							diagnostics,
 							format!("backend.ai.transformations.{k}"),
+							v,
+						);
+						Ok::<_, ProtoError>((k.to_owned(), ve))
+					})
+					.collect::<Result<_, _>>()?,
+			)
+		},
+		final_transformations: if ai.final_transformations.is_empty() {
+			None
+		} else {
+			Some(
+				ai.final_transformations
+					.iter()
+					.map(|(k, v)| {
+						let ve = permissive_cel_expression_arc(
+							diagnostics,
+							format!("backend.ai.final_transformations.{k}"),
 							v,
 						);
 						Ok::<_, ProtoError>((k.to_owned(), ve))
@@ -1424,7 +1441,6 @@ impl Bind {
 		Ok(Self {
 			key: s.key.clone().into(),
 			address,
-			listeners: Default::default(),
 			protocol: match proto::agent::bind::Protocol::try_from(s.protocol)? {
 				proto::agent::bind::Protocol::Http => BindProtocol::http,
 				proto::agent::bind::Protocol::Tcp => BindProtocol::tcp,
@@ -1501,7 +1517,7 @@ impl TCPRoute {
 				.iter()
 				.map(|b| TCPRouteBackendReference {
 					weight: b.weight as usize,
-					backend: resolve_simple_reference(b.backend.as_ref()),
+					backend: resolve_reference(b.backend.as_ref()),
 					inline_policies: Vec::new(),
 				})
 				.collect::<Vec<_>>(),
@@ -1695,6 +1711,7 @@ impl ModelRoute {
 			ModelRoute {
 				key: strng::new(&s.key),
 				name,
+				router_key: strng::new(&s.router_key),
 				kind,
 			},
 			strng::new(&s.listener_key),
@@ -1772,7 +1789,8 @@ pub(crate) fn backend_with_policies_from_proto(
 			};
 			Backend::Opaque(name.into(), target)
 		},
-		Some(backend::Kind::Dynamic(_)) => Backend::Dynamic(name.into(), ()),
+		// xDS-driven dynamic backends don't support a CEL target expression yet.
+		Some(backend::Kind::Dynamic(_)) => Backend::Dynamic(name.into(), None),
 		Some(backend::Kind::Aws(a)) => {
 			let aws_config = match &a.service {
 				Some(proto::agent::aws_backend::Service::AgentCore(ac)) => {
@@ -1994,11 +2012,18 @@ pub(crate) fn backend_with_policies_from_proto(
 					proto::agent::mcp_backend::FailureMode::FailClosed => FailureMode::FailClosed,
 				},
 				session_idle_ttl: crate::mcp::DEFAULT_SESSION_IDLE_TTL,
+				dns_rebinding_protection: false,
 			},
 		),
 		Some(backend::Kind::Guardrail(_)) => {
 			diagnostics.add_warning("guardrail backends are not yet implemented and will be ignored");
 			Backend::Invalid
+		},
+		Some(backend::Kind::ModelRouter(_)) => {
+			return Err(ProtoError::Generic(
+				"model router backend must be dispatched through Store::insert_xds_model_router"
+					.to_string(),
+			));
 		},
 		None => {
 			return Err(ProtoError::Generic("unknown backend".to_string()));
@@ -2240,6 +2265,7 @@ fn backend_policy_from_proto(
 		}),
 		Some(bps::Kind::BackendTunnel(bt)) => BackendTrafficPolicy::Tunnel(backend::Tunnel {
 			proxy: Arc::new(resolve_simple_reference(bt.proxy.as_ref())),
+			policies: backend_policies_from_proto(&bt.inline_policies, diagnostics)?,
 		}),
 		Some(bps::Kind::BackendTls(btls)) => {
 			let mode = bps::backend_tls::VerificationMode::try_from(btls.verification)?;
@@ -2460,28 +2486,47 @@ fn traffic_policy_from_proto(
 			duration: permissive_cel_expression_arc(diagnostics, "delay.duration", &d.duration),
 		}),
 		Some(tps::Kind::LocalRateLimit(lrl)) => {
-			let t = tps::local_rate_limit::Type::try_from(lrl.r#type)?;
-			let spec = http::localratelimit::RateLimitSpec {
-				max_tokens: lrl.max_tokens,
-				tokens_per_fill: lrl.tokens_per_fill,
-				fill_interval: lrl
-					.fill_interval
-					.ok_or(ProtoError::MissingRequiredField)?
-					.try_into()?,
-				limit_type: match t {
-					tps::local_rate_limit::Type::Request => http::localratelimit::RateLimitType::Requests,
-					tps::local_rate_limit::Type::Token => http::localratelimit::RateLimitType::Tokens,
-				},
+			let convert = |max_tokens: u64,
+			               tokens_per_fill: u64,
+			               fill_interval: Option<prost_types::Duration>,
+			               limit_type: i32| {
+				let t = tps::local_rate_limit::Type::try_from(limit_type)?;
+				http::localratelimit::RateLimitSpec {
+					max_tokens,
+					tokens_per_fill,
+					fill_interval: fill_interval
+						.ok_or(ProtoError::MissingRequiredField)?
+						.try_into()?,
+					limit_type: match t {
+						tps::local_rate_limit::Type::Request => http::localratelimit::RateLimitType::Requests,
+						tps::local_rate_limit::Type::Token => http::localratelimit::RateLimitType::Tokens,
+					},
+				}
+				.try_into()
+				.map_err(|e| ProtoError::Generic(format!("invalid rate limit: {e}")))
 			};
-			// Yes, its single with a vec, because we originally supported multiple rate limit policies before
-			// we added the generic multiple support.
-			// If we end up adding "Multiple and execute all" to RequestPolicy, we could translate to that;
-			// until this, this is a single policy with multiple rules.
-			TrafficPolicy::LocalRateLimit(RequestPolicy::single(vec![
-				spec
-					.try_into()
-					.map_err(|e| ProtoError::Generic(format!("invalid rate limit: {e}")))?,
-			]))
+			let rules = if lrl.rules.is_empty() {
+				vec![convert(
+					lrl.max_tokens,
+					lrl.tokens_per_fill,
+					lrl.fill_interval,
+					lrl.r#type,
+				)?]
+			} else {
+				lrl
+					.rules
+					.iter()
+					.map(|rule| {
+						convert(
+							rule.max_tokens,
+							rule.tokens_per_fill,
+							rule.fill_interval,
+							rule.r#type,
+						)
+					})
+					.collect::<Result<_, _>>()?
+			};
+			TrafficPolicy::LocalRateLimit(RequestPolicy::single(rules))
 		},
 		Some(tps::Kind::ExtAuthz(ea)) => TrafficPolicy::ExtAuthz(RequestPolicy::single(
 			external_auth_from_proto(ea, diagnostics)?,
@@ -2625,6 +2670,7 @@ fn traffic_policy_from_proto(
 				)
 				.collect::<Result<Vec<_>, _>>()?;
 			let target = resolve_simple_reference(rrl.target.as_ref());
+			let policies = backend_policies_from_proto(&rrl.inline_policies, diagnostics)?;
 			let failure_mode = match tps::remote_rate_limit::FailureMode::try_from(rrl.failure_mode) {
 				Ok(tps::remote_rate_limit::FailureMode::FailOpen) => {
 					http::remoteratelimit::FailureMode::FailOpen
@@ -2637,8 +2683,7 @@ fn traffic_policy_from_proto(
 					domain: rrl.domain.clone(),
 					target: SimpleBackendReferenceWithPolicies {
 						target: Arc::new(target),
-						// Not supported inline from xDS
-						policies: Vec::new(),
+						policies,
 					},
 					descriptors: Arc::new(http::remoteratelimit::DescriptorSet(descriptors)),
 					failure_mode,
@@ -2654,6 +2699,7 @@ fn traffic_policy_from_proto(
 		},
 		Some(tps::Kind::ExtProc(ep)) => {
 			let target = resolve_simple_reference(ep.target.as_ref());
+			let policies = backend_policies_from_proto(&ep.inline_policies, diagnostics)?;
 			let failure_mode = match tps::ext_proc::FailureMode::try_from(ep.failure_mode) {
 				Ok(tps::ext_proc::FailureMode::FailOpen) => http::ext_proc::FailureMode::FailOpen,
 				_ => http::ext_proc::FailureMode::FailClosed,
@@ -2696,8 +2742,7 @@ fn traffic_policy_from_proto(
 			TrafficPolicy::ExtProc(RequestPolicy::single(http::ext_proc::ExtProc {
 				target: SimpleBackendReferenceWithPolicies {
 					target: Arc::new(target),
-					// Not supported inline from xDS
-					policies: Vec::new(),
+					policies,
 				},
 				failure_mode,
 				request_attributes: to_cel_attrs(
@@ -2955,6 +3000,16 @@ fn traffic_policy_from_proto(
 	})
 }
 
+pub(crate) fn backend_policies_from_proto(
+	policies: &[proto::agent::BackendPolicySpec],
+	diagnostics: &mut Diagnostics,
+) -> Result<Vec<BackendTrafficPolicy>, ProtoError> {
+	policies
+		.iter()
+		.map(|policy| backend_policy_from_proto(policy, diagnostics))
+		.collect()
+}
+
 fn external_auth_from_proto(
 	ea: &proto::agent::traffic_policy_spec::ExternalAuth,
 	diagnostics: &mut Diagnostics,
@@ -3081,11 +3136,12 @@ fn external_auth_from_proto(
 		.as_ref()
 		.map(|cache| crate::http::ext_authz::cache_store(cache.max_entries))
 		.unwrap_or_else(crate::http::ext_authz::default_cache_store);
+	let policies = backend_policies_from_proto(&ea.inline_policies, diagnostics)?;
 	Ok(http::ext_authz::ExtAuthz {
 		protocol,
 		target: SimpleBackendReferenceWithPolicies {
 			target: Arc::new(target),
-			policies: Vec::new(),
+			policies,
 		},
 		failure_mode,
 		include_request_headers: ea
@@ -3414,7 +3470,7 @@ fn frontend_policy_from_proto(
 		},
 		Some(fps::Kind::Tracing(t)) => {
 			// Convert protobuf to TracingConfig
-			let tracing_config = tracing_config_from_proto(t, diagnostics);
+			let tracing_config = tracing_config_from_proto(t, diagnostics)?;
 
 			// Prepare LoggingFields with the CEL attributes from TracingConfig
 			let logging_fields = Arc::new(crate::telemetry::log::LoggingFields {
@@ -3457,8 +3513,9 @@ fn frontend_policy_from_proto(
 fn tracing_config_from_proto(
 	t: &proto::agent::frontend_policy_spec::Tracing,
 	diagnostics: &mut Diagnostics,
-) -> types::agent::TracingConfig {
+) -> Result<types::agent::TracingConfig, ProtoError> {
 	let provider_backend = resolve_simple_reference(t.provider_backend.as_ref());
+	let policies = backend_policies_from_proto(&t.inline_policies, diagnostics)?;
 
 	let attributes: OrderedStringMap<Arc<cel::Expression>> = t
 		.attributes
@@ -3515,11 +3572,10 @@ fn tracing_config_from_proto(
 			_ => types::agent::TracingProtocol::Http,
 		};
 
-	types::agent::TracingConfig {
+	Ok(types::agent::TracingConfig {
 		target: SimpleBackendReferenceWithPolicies {
 			target: Arc::new(provider_backend),
-			// Not supported inline from xDS
-			policies: Vec::new(),
+			policies,
 		},
 		attributes,
 		resources,
@@ -3529,7 +3585,7 @@ fn tracing_config_from_proto(
 		filter,
 		path,
 		protocol,
-	}
+	})
 }
 
 impl From<&proto::agent::KeepaliveConfig> for KeepaliveConfig {
@@ -3847,6 +3903,15 @@ pub(crate) fn resolve_simple_reference(
 		Some(proto::agent::backend_reference::Kind::Backend(name)) => {
 			SimpleBackendReference::Backend(name.into())
 		},
+		Some(proto::agent::backend_reference::Kind::Inline(inline)) => {
+			let Ok(port) = u16::try_from(inline.port) else {
+				return SimpleBackendReference::Invalid;
+			};
+			if inline.hostname.is_empty() || port == 0 {
+				return SimpleBackendReference::Invalid;
+			}
+			SimpleBackendReference::InlineBackend(Target::from((inline.hostname.as_str(), port)))
+		},
 	}
 }
 
@@ -4009,6 +4074,15 @@ fn resolve_reference(target: Option<&proto::agent::BackendReference>) -> Backend
 		Some(proto::agent::backend_reference::Kind::Backend(name)) => {
 			BackendReference::Backend(name.into())
 		},
+		Some(proto::agent::backend_reference::Kind::Inline(inline)) => {
+			let Ok(port) = u16::try_from(inline.port) else {
+				return BackendReference::Invalid;
+			};
+			if inline.hostname.is_empty() || port == 0 {
+				return BackendReference::Invalid;
+			}
+			BackendReference::InlineBackend(Target::from((inline.hostname.as_str(), port)))
+		},
 	}
 }
 
@@ -4045,6 +4119,49 @@ mod tests {
 	use super::*;
 	use crate::store::RequestPolicyTrait;
 	use crate::types::proto::agent::backend_policy_spec::Ai;
+
+	#[test]
+	fn inline_backend_reference_validates_target() {
+		let ip = proto::agent::BackendReference {
+			kind: Some(proto::agent::backend_reference::Kind::Inline(
+				proto::agent::backend_reference::Inline {
+					hostname: "127.0.0.1".to_string(),
+					port: 443,
+				},
+			)),
+			..Default::default()
+		};
+		assert!(matches!(
+			resolve_simple_reference(Some(&ip)),
+			SimpleBackendReference::InlineBackend(Target::Address(address))
+				if address == "127.0.0.1:443".parse().unwrap()
+		));
+		assert!(matches!(
+			resolve_reference(Some(&ip)),
+			BackendReference::InlineBackend(Target::Address(address))
+				if address == "127.0.0.1:443".parse().unwrap()
+		));
+
+		for port in [0, u16::MAX as u32 + 1] {
+			let invalid = proto::agent::BackendReference {
+				kind: Some(proto::agent::backend_reference::Kind::Inline(
+					proto::agent::backend_reference::Inline {
+						hostname: "example.com".to_string(),
+						port,
+					},
+				)),
+				..Default::default()
+			};
+			assert!(matches!(
+				resolve_simple_reference(Some(&invalid)),
+				SimpleBackendReference::Invalid
+			));
+			assert!(matches!(
+				resolve_reference(Some(&invalid)),
+				BackendReference::Invalid
+			));
+		}
+	}
 
 	fn jwt_sign_from_proto_for_test(
 		jwt_sign: proto::agent::JwtSign,
@@ -4290,6 +4407,26 @@ mod tests {
 						nanos: 0,
 					}),
 					r#type: proto::agent::traffic_policy_spec::local_rate_limit::Type::Token as i32,
+					rules: vec![
+						proto::agent::traffic_policy_spec::local_rate_limit::Rule {
+							max_tokens: 10,
+							tokens_per_fill: 10,
+							fill_interval: Some(prost_types::Duration {
+								seconds: 1,
+								nanos: 0,
+							}),
+							r#type: proto::agent::traffic_policy_spec::local_rate_limit::Type::Token as i32,
+						},
+						proto::agent::traffic_policy_spec::local_rate_limit::Rule {
+							max_tokens: 5,
+							tokens_per_fill: 5,
+							fill_interval: Some(prost_types::Duration {
+								seconds: 60,
+								nanos: 0,
+							}),
+							r#type: proto::agent::traffic_policy_spec::local_rate_limit::Type::Request as i32,
+						},
+					],
 				},
 			)
 		};
@@ -4317,6 +4454,7 @@ mod tests {
 			panic!("expected conditional local rate limit policy");
 		};
 		assert_eq!(policies.iter().count(), 2);
+		assert!(policies.iter().all(|policy| policy.pol.len() == 2));
 		Ok(())
 	}
 
@@ -4596,6 +4734,9 @@ mod tests {
 				)]
 				.into_iter()
 				.collect(),
+				final_transformations: vec![("max_tokens".to_string(), "80".to_string())]
+					.into_iter()
+					.collect(),
 				prompt_guard: None,
 				prompts: None,
 				model_aliases: Default::default(),
@@ -4607,6 +4748,14 @@ mod tests {
 					),
 					("/v1/messages".to_string(), RouteType::Messages as i32),
 					("/v1/detect".to_string(), RouteType::Detect as i32),
+					(
+						"/v1beta/models".to_string(),
+						RouteType::GenerateContent as i32,
+					),
+					(
+						"/v1beta/models:countTokens".to_string(),
+						RouteType::GeminiCountTokens as i32,
+					),
 				]
 				.into_iter()
 				.collect(),
@@ -4625,6 +4774,11 @@ mod tests {
 				.transformations
 				.as_ref()
 				.expect("transformation_policy should be set");
+
+			let post_transformation_policy = ai_policy
+				.final_transformations
+				.as_ref()
+				.expect("final_transformations should be set");
 
 			// Verify defaults have correct types and values
 			let temp_val = defaults.get("temperature").unwrap();
@@ -4652,9 +4806,10 @@ mod tests {
 			assert!(array_val.is_array(), "array_value should be an array");
 			assert_eq!(array_val, &json!([1, 2, 3]));
 			assert!(transformation_policy.get("system").is_some());
+			assert!(post_transformation_policy.get("max_tokens").is_some());
 
 			// Verify routes conversion
-			assert_eq!(ai_policy.routes.len(), 3);
+			assert_eq!(ai_policy.routes.len(), 5);
 			assert_eq!(
 				ai_policy.routes.get("/v1/chat/completions"),
 				Some(&llm::RouteType::Completions)
@@ -4666,6 +4821,14 @@ mod tests {
 			assert_eq!(
 				ai_policy.routes.get("/v1/detect"),
 				Some(&llm::RouteType::Detect)
+			);
+			assert_eq!(
+				ai_policy.routes.get("/v1beta/models"),
+				Some(&llm::RouteType::GenerateContent)
+			);
+			assert_eq!(
+				ai_policy.routes.get("/v1beta/models:countTokens"),
+				Some(&llm::RouteType::GeminiCountTokens)
 			);
 		} else {
 			panic!("Expected AI policy variant");
@@ -4878,6 +5041,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/gpt-5-mini".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			router_key: String::new(),
 			created: 1_704_067_200,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "gpt-5-mini".to_string(),
@@ -4938,6 +5102,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/gpt-5-mini".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			router_key: String::new(),
 			created: 0,
 			r#match: None,
 			kind: Some(Kind::ConcreteModel(ConcreteModel::default())),
@@ -4961,6 +5126,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/fast".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			router_key: String::new(),
 			created: 1_704_153_600,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "fast".to_string(),
@@ -5010,6 +5176,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/smart".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			router_key: String::new(),
 			created: 0,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "smart".to_string(),
@@ -5056,6 +5223,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/smart".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			router_key: String::new(),
 			created: 0,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "smart".to_string(),
@@ -5097,6 +5265,7 @@ mod tests {
 		let proto_route = proto::agent::ModelRoute {
 			key: "default/resilient".to_string(),
 			listener_key: "default/gw.http".to_string(),
+			router_key: String::new(),
 			created: 0,
 			r#match: Some(proto::agent::model_route::Match {
 				model: "resilient".to_string(),

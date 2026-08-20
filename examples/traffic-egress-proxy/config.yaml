@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+
+# Handle CONNECT requests on port 3000
+binds:
+- port: 3000
+  tunnelProtocol: connect
+  listeners: []
+
+# Accept any `CONNECT *:443` requests
+gateways:
+  secure:
+    port: 443
+    listeners:
+    # Inspect SNI without terminating TLS
+    - name: public-egress
+      hostname: "*"
+      protocol: TLS
+
+# Allow only the listed TLS hostnames
+tcpRoutes:
+- name: public-egress-allowlist
+  gateways: secure/public-egress
+  hostnames:
+  - pypi.org
+  - files.pythonhosted.org
+  - api.github.com
+  - github.com
+  - raw.githubusercontent.com
+  - objects.githubusercontent.com
+  backends:
+  # Send it to the hostname from SNI on the original destination port
+  - dynamic: {}

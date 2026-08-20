@@ -19,6 +19,7 @@ spec:
         - entries:
           - name: user-agent
             expression: foolen_{{request.headers["user-agent"]}}
+          limitOverride: '{{not valid CEL}}'
 ---
 apiVersion: v1
 kind: Service
@@ -52,6 +53,7 @@ output:
           - entries:
             - key: user-agent
               value: foolen_{{request.headers["user-agent"]}}
+            limitOverride: '{{not valid CEL}}'
           domain: api-gateway
           target:
             port: 4444
@@ -74,8 +76,9 @@ status:
         namespace: default
       conditions:
       - lastTransitionTime: fake
-        message: 'rate limit descriptor entry "user-agent" is not a valid CEL expression:
-          foolen_{{request.headers["user-agent"]}}'
+        message: |-
+          rate limit descriptor entry "user-agent" is not a valid CEL expression: foolen_{{request.headers["user-agent"]}}
+          rate limit descriptor limit override is not a valid CEL expression: {{not valid CEL}}
         reason: PartiallyValid
         status: "True"
         type: Accepted

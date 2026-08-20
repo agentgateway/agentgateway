@@ -219,7 +219,9 @@ fn selected_ai_provider(normalized: &NormalizedLocalConfig) -> Arc<NamedAIProvid
 	let Backend::AI(_, ai) = &backend.backend else {
 		panic!("expected generated AI backend");
 	};
-	let (provider, _handle) = ai.select_provider().expect("expected selected provider");
+	let (provider, _handle) = ai
+		.select_provider(None)
+		.expect("expected selected provider");
 	provider
 }
 
@@ -261,7 +263,7 @@ binds:
 		.backends
 		.iter()
 		.find_map(|backend| match &backend.backend {
-			Backend::Dynamic(name, ()) => Some(name),
+			Backend::Dynamic(name, _) => Some(name),
 			_ => None,
 		})
 		.expect("normalized dynamic backend");
@@ -271,6 +273,34 @@ binds:
 	);
 }
 
+#[tokio::test]
+async fn test_local_dynamic_backend_target_expression_normalizes() {
+	let normalized = normalize_test_yaml(
+		r#"
+binds:
+- port: 1080
+  listeners:
+  - routes:
+    - backends:
+      - dynamic:
+          target: extproc.workerTarget
+"#,
+	)
+	.await
+	.expect("dynamic backend with a target expression should normalize");
+
+	let expr = normalized
+		.backends
+		.iter()
+		.find_map(|backend| match &backend.backend {
+			Backend::Dynamic(_, expr) => Some(expr.clone()),
+			_ => None,
+		})
+		.expect("normalized dynamic backend")
+		.expect("target expression should be set");
+	assert_eq!(expr.original_expression, "extproc.workerTarget");
+}
+
 #[test]
 fn test_local_backend_policies_reject_unknown_fields() {
 	// serde(flatten) disables deny_unknown_fields on the outer struct, but the
@@ -278,15 +308,6 @@ fn test_local_backend_policies_reject_unknown_fields() {
 	let err =
 		crate::serdes::yamlviajson::from_str::<super::LocalBackendPolicies>("mcpAuthorizatoin: {}")
 			.unwrap_err();
-	assert!(err.to_string().contains("unknown field"), "{err}");
-}
-
-#[test]
-fn test_local_route_backend_policies_reject_unknown_fields() {
-	let err = crate::serdes::yamlviajson::from_str::<super::LocalRouteBackendPolicies>(
-		"mcpAuthorizatoin: {}",
-	)
-	.unwrap_err();
 	assert!(err.to_string().contains("unknown field"), "{err}");
 }
 
@@ -1414,29 +1435,6 @@ binds:
 	normalize_test_config(input)
 		.await
 		.expect("service backends should allow inference routing");
-}
-
-#[tokio::test]
-async fn test_session_affinity_requires_service_backend() {
-	let input = r#"
-binds:
-- port: 3000
-  listeners:
-  - routes:
-    - backends:
-      - host: 127.0.0.1:8000
-        policies:
-          sessionAffinity:
-            source: request.headers["x-session-id"]
-"#;
-
-	let err = normalize_test_config(input).await.unwrap_err();
-	assert!(
-		err
-			.to_string()
-			.contains("sessionAffinity is only supported on service route backends"),
-		"unexpected error: {err}"
-	);
 }
 
 #[tokio::test]

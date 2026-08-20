@@ -29,6 +29,10 @@ impl RawInputItem {
 		Self(serde_json::to_value(item).expect("responses input item should serialize"))
 	}
 
+	pub(crate) fn from_value(item: Value) -> Self {
+		Self(item)
+	}
+
 	fn from_user_text(text: String) -> Self {
 		Self::from_typed(InputItem::from(InputMessage {
 			content: vec![InputContent::InputText(InputTextContent {
@@ -350,6 +354,9 @@ impl Request {
 }
 
 impl RequestType for Request {
+	fn body_is_json(&self) -> bool {
+		true
+	}
 	fn model(&mut self) -> &mut Option<String> {
 		&mut self.model
 	}
@@ -464,13 +471,11 @@ impl RequestType for Request {
 }
 
 fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {
-	let mut content = Vec::new();
-
-	for item in &resp.output {
-		if let OutputItem::FunctionCall(_) = item {
-			content.extend(output_item_tool_call_part(item));
-		}
-	}
+	let content: Vec<_> = resp
+		.output
+		.iter()
+		.filter_map(output_item_tool_call_part)
+		.collect();
 
 	if content.is_empty() {
 		return None;
@@ -484,17 +489,28 @@ fn extract_output_messages(resp: &Response) -> Option<Vec<OutputMessage>> {
 }
 
 pub(crate) fn output_item_tool_call_part(item: &OutputItem) -> Option<OutputMessagePart> {
-	let OutputItem::FunctionCall(call) = item else {
-		return None;
-	};
-	let arguments = match serde_json::from_str(&call.arguments) {
-		Ok(arguments) => arguments,
-		Err(_) if call.arguments.trim().is_empty() => serde_json::Value::Object(Default::default()),
-		Err(_) => serde_json::Value::String(call.arguments.clone()),
+	let (id, name, arguments) = match item {
+		OutputItem::FunctionCall(call) => {
+			let arguments = match serde_json::from_str(&call.arguments) {
+				Ok(arguments) => arguments,
+				Err(_) if call.arguments.trim().is_empty() => serde_json::Value::Object(Default::default()),
+				Err(_) => serde_json::Value::String(call.arguments.clone()),
+			};
+			(&call.call_id, &call.name, arguments)
+		},
+		OutputItem::CustomToolCall(call) => {
+			let arguments = match serde_json::from_str(&call.input) {
+				Ok(arguments) => arguments,
+				Err(_) if call.input.trim().is_empty() => serde_json::Value::Object(Default::default()),
+				Err(_) => serde_json::Value::String(call.input.clone()),
+			};
+			(&call.call_id, &call.name, arguments)
+		},
+		_ => return None,
 	};
 	Some(OutputMessagePart::ToolCall {
-		id: strng::new(&call.call_id),
-		name: strng::new(&call.name),
+		id: strng::new(id),
+		name: strng::new(name),
 		arguments,
 	})
 }
@@ -633,7 +649,17 @@ impl ResponseType for Response {
 			if let OutputItem::Message(msg) = o {
 				for c in &mut msg.content {
 					if let Content::OutputText(t) = c {
+						if t.annotations.is_empty() && t.logprobs.is_none() {
+							f(&mut t.text);
+							continue;
+						}
+						// offset-based metadata cannot survive a text rewrite
+						let original = t.text.clone();
 						f(&mut t.text);
+						if t.text != original {
+							t.annotations.clear();
+							t.logprobs = None;
+						}
 					}
 				}
 			}
@@ -650,11 +676,12 @@ pub mod typed {
 		IncompleteDetails, InputContent, InputItem, InputMessage, InputParam, InputRole,
 		InputTextContent, InputTokenDetails, Item, MessageItem, OutputContent, OutputItem,
 		OutputMessage, OutputMessageContent, OutputStatus, OutputTextContent, OutputTokenDetails,
-		ReasoningEffort, Response, ResponseCompletedEvent, ResponseContentPartAddedEvent,
+		Reasoning, ReasoningEffort, Response, ResponseCompletedEvent, ResponseContentPartAddedEvent,
 		ResponseContentPartDoneEvent, ResponseCreatedEvent, ResponseErrorEvent, ResponseFailedEvent,
 		ResponseFunctionCallArgumentsDeltaEvent, ResponseFunctionCallArgumentsDoneEvent,
-		ResponseIncompleteEvent, ResponseOutputItemAddedEvent, ResponseOutputItemDoneEvent,
-		ResponseTextDeltaEvent, ResponseTextParam, ResponseUsage, Role, Status,
+		ResponseInProgressEvent, ResponseIncompleteEvent, ResponseOutputItemAddedEvent,
+		ResponseOutputItemDoneEvent, ResponseRefusalDeltaEvent, ResponseRefusalDoneEvent,
+		ResponseTextDeltaEvent, ResponseTextDoneEvent, ResponseTextParam, ResponseUsage, Role, Status,
 		TextResponseFormatConfiguration, Tool, ToolChoiceFunction, ToolChoiceOptions, ToolChoiceParam,
 	};
 	use serde::{Deserialize, Serialize};
@@ -667,6 +694,9 @@ pub mod typed {
 		/// An event that is emitted when a response is created.
 		#[serde(rename = "response.created")]
 		ResponseCreated(openai_responses::ResponseCreatedEvent),
+		/// Emitted when a response is in progress (intermediate progress event).
+		#[serde(rename = "response.in_progress")]
+		ResponseInProgress(openai_responses::ResponseInProgressEvent),
 		/// Emitted when a new output item is added.
 		#[serde(rename = "response.output_item.added")]
 		ResponseOutputItemAdded(openai_responses::ResponseOutputItemAddedEvent),
@@ -676,6 +706,15 @@ pub mod typed {
 		/// Emitted when there is an additional text delta.
 		#[serde(rename = "response.output_text.delta")]
 		ResponseOutputTextDelta(openai_responses::ResponseTextDeltaEvent),
+		/// Emitted when text content is finalized.
+		#[serde(rename = "response.output_text.done")]
+		ResponseOutputTextDone(openai_responses::ResponseTextDoneEvent),
+		/// Emitted when there is a partial refusal text.
+		#[serde(rename = "response.refusal.delta")]
+		ResponseRefusalDelta(openai_responses::ResponseRefusalDeltaEvent),
+		/// Emitted when refusal text is finalized.
+		#[serde(rename = "response.refusal.done")]
+		ResponseRefusalDone(openai_responses::ResponseRefusalDoneEvent),
 		/// Emitted when there is a partial function-call arguments delta.
 		#[serde(rename = "response.function_call_arguments.delta")]
 		ResponseFunctionCallArgumentsDelta(openai_responses::ResponseFunctionCallArgumentsDeltaEvent),

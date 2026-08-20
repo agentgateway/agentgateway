@@ -1,0 +1,122 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/gemini/text.json
+info:
+  contents:
+    - role: user
+      parts:
+        - text: Who won the 2018 world cup?
+    - role: model
+      parts:
+        - text: France.
+    - role: user
+      parts:
+        - text: And the runner up?
+  systemInstruction:
+    parts:
+      - text: Answer in one sentence.
+  generationConfig:
+    temperature: 0.7
+    topP: 0.95
+    topK: 40
+    maxOutputTokens: 1024
+    stopSequences:
+      - END
+    candidateCount: 1
+    seed: 42
+  safetySettings:
+    - category: HARM_CATEGORY_DANGEROUS_CONTENT
+      threshold: BLOCK_ONLY_HIGH
+  cachedContent: projects/p/locations/global/cachedContents/123
+  labels:
+    team: search
+---
+{
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Who won the 2018 world cup?"
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "text": "France."
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "And the runner up?"
+          }
+        ]
+      }
+    ],
+    "systemInstruction": {
+      "parts": [
+        {
+          "text": "Answer in one sentence."
+        }
+      ]
+    },
+    "generationConfig": {
+      "temperature": 0.7,
+      "topP": 0.95,
+      "seed": 42,
+      "maxOutputTokens": 1024,
+      "topK": 40,
+      "stopSequences": [
+        "END"
+      ],
+      "candidateCount": 1
+    },
+    "safetySettings": [
+      {
+        "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+        "threshold": "BLOCK_ONLY_HIGH"
+      }
+    ],
+    "cachedContent": "projects/p/locations/global/cachedContents/123",
+    "labels": {
+      "team": "search"
+    }
+  },
+  "parsed": {
+    "input_format": "Gemini",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "",
+    "provider": "gemini-native",
+    "streaming": false,
+    "params": {
+      "temperature": 0.699999988079071,
+      "top_p": 0.949999988079071,
+      "seed": 42,
+      "max_tokens": 1024
+    },
+    "prompt": [
+      {
+        "role": "system",
+        "content": "Answer in one sentence."
+      },
+      {
+        "role": "user",
+        "content": "Who won the 2018 world cup?"
+      },
+      {
+        "role": "assistant",
+        "content": "France."
+      },
+      {
+        "role": "user",
+        "content": "And the runner up?"
+      }
+    ]
+  }
+}

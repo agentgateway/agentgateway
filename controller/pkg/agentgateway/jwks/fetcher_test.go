@@ -455,6 +455,21 @@ func TestMakeFetchClientRejectsInvalidProxyURL(t *testing.T) {
 	assert.Contains(t, err.Error(), "error parsing proxy URL")
 }
 
+func TestFetchClientBlocksMetadataAddressAtDialTime(t *testing.T) {
+	client, err := makeFetchClient(nil, "", nil)
+	require.NoError(t, err)
+
+	request, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://169.254.169.254/latest/meta-data", nil)
+	require.NoError(t, err)
+
+	resp, err := client.Do(request)
+	require.Error(t, err)
+	if resp != nil {
+		defer resp.Body.Close()
+	}
+	assert.ErrorContains(t, err, "connection blocked")
+}
+
 func TestProxyURLAffectsFetchKey(t *testing.T) {
 	a := remotehttp.FetchTarget{URL: "https://example.com/jwks"}
 	b := remotehttp.FetchTarget{URL: "https://example.com/jwks", ProxyURL: "http://proxy:8080"}

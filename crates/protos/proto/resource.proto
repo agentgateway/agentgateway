@@ -188,8 +188,14 @@ message Backend {
     AwsBackend aws = 8;
     // Not yet implemented. Reserved for a future release.
     GuardrailBackend guardrail = 9;
+    ModelRouterBackend model_router = 10;
   }
   repeated BackendPolicySpec inline_policies = 7;
+}
+
+// Internal LLM model router materialized for an explicitly opted-in HTTPRoute rule.
+message ModelRouterBackend {
+  string router_key = 1;
 }
 
 // GuardrailBackend is a typed backend for AI guardrail provider integrations.
@@ -827,6 +833,8 @@ message FrontendPolicySpec {
     BackendReference provider_backend = 1;
     repeated TracingAttribute attributes = 2;
     repeated TracingAttribute resources = 3;
+    // Inline backend policies (e.g. TLS, auth) for the tracing backend.
+    repeated BackendPolicySpec inline_policies = 10;
 
     // remove is a list of attribute keys to remove from emitted spans.
     // This is applied before `attributes` are evaluated/added, so it can drop defaults
@@ -953,16 +961,26 @@ message TrafficPolicySpec {
       string value = 2; // CEL expr
     }
     FailureMode failure_mode = 4;
+    // Inline backend policies (e.g. TLS, auth) for the remote rate limit backend.
+    repeated BackendPolicySpec inline_policies = 5;
   }
   message LocalRateLimit {
     enum Type {
       REQUEST = 0;
       TOKEN = 1;
     }
+    message Rule {
+      uint64 max_tokens = 1;
+      uint64 tokens_per_fill = 2;
+      google.protobuf.Duration fill_interval = 3;
+      Type type = 4;
+    }
+    // The singular fields contain the first rule for compatibility with older data planes.
     uint64 max_tokens = 1;
     uint64 tokens_per_fill = 2;
     google.protobuf.Duration fill_interval = 3;
     Type type = 4;
+    repeated Rule rules = 5;
   }
   message ExternalAuth {
     enum FailureMode {
@@ -1002,6 +1020,8 @@ message TrafficPolicySpec {
     repeated string include_request_headers = 6;
     BodyOptions include_request_body = 7;
     Cache cache = 8;
+    // Inline backend policies (e.g. TLS, auth) for the external authorization backend.
+    repeated BackendPolicySpec inline_policies = 9;
     reserved "timeout";
   }
   message RBAC {
@@ -1170,6 +1190,8 @@ message TrafficPolicySpec {
     }
     map<string, NamespacedMetadataContext> metadata_context = 5;
     ProcessingOptions processing_options = 6;
+    // Inline backend policies (e.g. TLS, auth) for the external processor backend.
+    repeated BackendPolicySpec inline_policies = 7;
   }
   enum PolicyPhase {
     ROUTE = 0;
@@ -1401,6 +1423,10 @@ message BackendPolicySpec {
     // CEL transformation expressions to evaluate and set in the LLM request.
     // Expressions are evaluated against the current request body and behave like overrides.
     map<string, string> transformations = 8;
+    // CEL transformation expressions to evaluate and set in the LLM request.
+    // Expressions are evaluated against the current request body and behave like overrides.
+    // This happens after conversion (converting an api interface to another like messages->chat completions)
+    map<string, string> final_transformations = 9;
     PromptEnrichment prompts = 4;
     // Model aliases - map from alias name to actual model name
     map<string, string> model_aliases = 5;
@@ -1431,6 +1457,10 @@ message BackendPolicySpec {
       REALTIME = 8;
       // Processes Cohere /v2/rerank format requests
       RERANK = 10;
+      // Processes Gemini models/{model}:generateContent and :streamGenerateContent format requests
+      GENERATE_CONTENT = 11;
+      // Processes Gemini models/{model}:countTokens format requests
+      GEMINI_COUNT_TOKENS = 12;
     }
 
     // Routes defines how to identify the type of LLM request to handle.
@@ -1528,6 +1558,8 @@ message BackendPolicySpec {
   }
   message BackendTunnel {
     BackendReference proxy = 1;
+    // Inline backend policies (e.g. TLS, auth) for the tunnel proxy backend.
+    repeated BackendPolicySpec inline_policies = 2;
   }
   message BackendTCP {
     KeepaliveConfig keepalive = 1;
@@ -1616,6 +1648,8 @@ message BackendPolicySpec {
       // Header names never forwarded to the policy server, even if they appear
       // in `allowed_request_headers`. Case-insensitive.
       repeated string disallowed_request_headers = 5;
+      // Inline backend policies (e.g. TLS, auth) for the policy server.
+      repeated BackendPolicySpec inline_policies = 6;
     }
 
     // Processor is a single policy processor. Today only `remote` is defined.
@@ -1883,10 +1917,15 @@ message BackendReference {
     string namespace = 1;
     string hostname = 2;
   }
+  message Inline {
+    string hostname = 1;
+    uint32 port = 2;
+  }
   oneof kind {
     Service service = 1;
     // A Backend object. The format is "<backend key>"
     string backend = 2;
+    Inline inline = 4;
   }
   // Port, used only with 'service' type
   uint32 port = 3;
@@ -1987,6 +2026,8 @@ message OAuthTokenExchange {
   BackendReference token_endpoint = 1;
   // Token endpoint path on the backend that must start with "/" (defaults to "/")
   optional string token_endpoint_path = 7;
+  // Inline backend policies (e.g. TLS, auth) for the token endpoint.
+  repeated BackendPolicySpec inline_policies = 15;
 
   // ----- Grant and incoming tokens -----
   // Selects which RFC the request follows. Defaults to TOKEN_EXCHANGE (RFC 8693)
@@ -2041,6 +2082,10 @@ message OAuthTokenExchange {
 
 // Cross App Access / ID-JAG backend authentication.
 message CrossAppAccessAuth {
+  message ScopeOverride {
+    repeated string values = 1;
+  }
+
   message Endpoint {
     // Authorization server token endpoint.
     BackendReference token_endpoint = 1;
@@ -2048,11 +2093,15 @@ message CrossAppAccessAuth {
     optional string token_endpoint_path = 2;
     // Client authentication used when calling this token endpoint.
     OAuthClientAuth client_auth = 3;
+    // Inline backend policies (e.g. TLS, auth) for the token endpoint.
+    repeated BackendPolicySpec inline_policies = 4;
   }
 
   message SubjectToken {
     // Where to read the subject token. Defaults to the Authorization Bearer header.
     AuthorizationLocation source = 1;
+    // RFC 8693 subject token type URI. Empty defaults to id_token.
+    string token_type = 2;
   }
 
   // User identity provider authorization server, used for the RFC 8693 ID-JAG exchange.
@@ -2063,13 +2112,15 @@ message CrossAppAccessAuth {
   string audience = 3;
   // resource parameters naming the protected resource APIs.
   repeated string resources = 4;
-  // scope values for the requested token.
+  // Scope values requested when obtaining the ID-JAG from the identity provider.
   repeated string scopes = 5;
   // Response cache configuration. When unset uses InMemory cache with defaults.
   OAuthTokenExchange.TokenCache cache = 6;
-  // Subject token sent to the identity provider. Its type is fixed to an
-  // OpenID Connect ID token until other subject token types are supported.
+  // Subject token sent to the identity provider. Defaults to an OpenID Connect ID token.
   SubjectToken subject_token = 7;
+  // Scope values requested when exchanging the ID-JAG for an access token.
+  // When unset, inherits scopes. When present and empty, omits scope.
+  ScopeOverride access_token_scopes = 8;
 }
 
 message ModelRoute {
@@ -2162,4 +2213,8 @@ message ModelRoute {
 
   // Authorization rules that clients must satisfy to use a concrete model.
   TrafficPolicySpec.RBAC authorization = 8;
+
+  // Internal LLM router backend populated by this model. Empty uses the
+  // legacy listener-scoped implicit model route.
+  string router_key = 9;
 }

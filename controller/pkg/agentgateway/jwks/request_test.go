@@ -60,7 +60,7 @@ func TestResolveEndpoint(t *testing.T) {
 				gatewayJWTPolicy(serviceRemote),
 				testCAConfigMap(),
 				attachedBackendPolicy(gwv1.Group(""), gwv1.Kind("Service"), "dummy-idp", &agentgateway.BackendTLS{
-					CACertificateRefs: []corev1.LocalObjectReference{{Name: "ca"}},
+					CACertificateRefs: []agentgateway.LocalCACertificateRef{{Name: "ca"}},
 					Sni:               ptr.Of(agentgateway.SNI("test.testns")),
 					AlpnProtocols:     new([]agentgateway.TinyString{"test1", "test2"}),
 				}),
@@ -84,7 +84,7 @@ func TestResolveEndpoint(t *testing.T) {
 					gwv1.Kind(wellknown.AgentgatewayBackendGVK.Kind),
 					"dummy-idp",
 					&agentgateway.BackendTLS{
-						CACertificateRefs: []corev1.LocalObjectReference{{Name: "ca"}},
+						CACertificateRefs: []agentgateway.LocalCACertificateRef{{Name: "ca"}},
 						Sni:               ptr.Of(agentgateway.SNI("test.testns")),
 						AlpnProtocols:     new([]agentgateway.TinyString{"test1", "test2"}),
 					},
@@ -214,9 +214,12 @@ func staticBackend(name, host string, port int32, tlsPolicy *agentgateway.Backen
 }
 
 func remoteProvider(path string, backendRef gwv1.BackendObjectReference) agentgateway.RemoteJWKS {
+	jwksPath := agentgateway.LongString(path)
 	return agentgateway.RemoteJWKS{
-		JwksPath:   path,
-		BackendRef: backendRef,
+		JwksPath: &jwksPath,
+		PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
+			BackendRef: &backendRef,
+		},
 	}
 }
 

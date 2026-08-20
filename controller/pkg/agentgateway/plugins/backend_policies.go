@@ -7,10 +7,8 @@ import (
 	"strings"
 
 	jsonpb "google.golang.org/protobuf/encoding/protojson"
-	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/structpb"
 	"istio.io/istio/pkg/config"
-	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/maps"
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
@@ -21,6 +19,7 @@ import (
 
 	"github.com/agentgateway/agentgateway/api"
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/cacert"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/jwks"
 	"github.com/agentgateway/agentgateway/controller/pkg/utils/kubeutils"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
@@ -239,7 +238,7 @@ func translateBackendMCPGuardrails(ctx PolicyCtx, policy *agentgateway.Agentgate
 			// ExactlyOneOf guards this at admission; skip defensively.
 			continue
 		}
-		be, err := BuildBackendRef(ctx, p.Remote.BackendRef, policy.Namespace)
+		be, inlinePolicies, _, err := buildPolicyBackendEndpoint(ctx, p.Remote.PolicyBackendEndpoint, policy.Namespace)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("failed to build mcpGuardrails: %v", err))
 		}
@@ -255,6 +254,7 @@ func translateBackendMCPGuardrails(ctx PolicyCtx, policy *agentgateway.Agentgate
 			Kind: &api.BackendPolicySpec_McpGuardrails_Processor_Remote{
 				Remote: &api.BackendPolicySpec_McpGuardrails_Remote{
 					Target:                   be,
+					InlinePolicies:           inlinePolicies,
 					FailureMode:              mcpGuardrailsFailureMode(p.Remote.FailureMode),
 					Metadata:                 metadata,
 					AllowedRequestHeaders:    slices.Map(p.Remote.AllowedRequestHeaders, headerName),
@@ -305,10 +305,7 @@ func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy) (*api
 
 	var evictionProto *api.BackendPolicySpec_Eviction
 	if healthPolicy.Eviction != nil {
-		var duration *durationpb.Duration
-		if healthPolicy.Eviction.Duration != nil {
-			duration = durationpb.New(healthPolicy.Eviction.Duration.Duration)
-		}
+		duration := durationToProto(healthPolicy.Eviction.Duration)
 
 		// Convert 0–100 integer scores into 0.0–1.0 doubles for proto
 		var healthThreshold *float64
@@ -424,20 +421,19 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 		}
 	}
 
-	// Build CA bundle from referenced ConfigMaps, if provided
-	// If we were using mTLS, we may be overriding the previously set p.Root -- this is intended
+	// Explicit CA refs take precedence over mTLS CA material.
 	if len(tls.CACertificateRefs) > 0 {
 		var sb strings.Builder
 		for _, ref := range tls.CACertificateRefs {
-			nn := types.NamespacedName{Namespace: policy.Namespace, Name: ref.Name}
-			cfgmap := krt.FetchOne(ctx.Krt, ctx.Collections.ConfigMaps, krt.FilterObjectName(nn))
-			if cfgmap == nil {
-				errs = append(errs, fmt.Errorf("ConfigMap %s not found", nn))
-				continue
-			}
-			pem, err := GetCACertFromConfigMap(ptr.Flatten(cfgmap))
+			pem, err := cacert.Resolve(
+				ctx.Krt,
+				ctx.Collections.ConfigMaps,
+				ctx.Collections.Secrets,
+				policy.Namespace,
+				ref,
+			)
 			if err != nil {
-				errs = append(errs, fmt.Errorf("error extracting CA cert from ConfigMap %s: %w", nn, err))
+				errs = append(errs, err)
 				continue
 			}
 			if sb.Len() > 0 {
@@ -445,8 +441,7 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 			}
 			sb.WriteString(pem)
 		}
-		// If we have a root set here, set it
-		// This may send an empty root, so that we trust nothing rather than system certs.
+		// An explicit but invalid source trusts nothing rather than system certs.
 		p.Root = []byte(sb.String())
 	}
 
@@ -490,7 +485,9 @@ func translateBackendTLS(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy)
 
 func translateBackendHTTP(policy *agentgateway.AgentgatewayPolicy) *api.Policy {
 	http := policy.Spec.Backend.HTTP
-	p := &api.BackendPolicySpec_BackendHTTP{}
+	p := &api.BackendPolicySpec_BackendHTTP{
+		RequestTimeout: durationToProto(http.RequestTimeout),
+	}
 	if v := http.Version; v != nil {
 		switch *v {
 		case agentgateway.HTTPVersion1:
@@ -498,9 +495,6 @@ func translateBackendHTTP(policy *agentgateway.AgentgatewayPolicy) *api.Policy {
 		case agentgateway.HTTPVersion2:
 			p.Version = api.BackendPolicySpec_BackendHTTP_HTTP2
 		}
-	}
-	if rt := http.RequestTimeout; rt != nil {
-		p.RequestTimeout = durationpb.New(rt.Duration)
 	}
 	tp := &api.Policy{
 		Key:  policy.Namespace + "/" + policy.Name + backendHttpPolicySuffix,
@@ -523,7 +517,7 @@ func translateBackendHTTP(policy *agentgateway.AgentgatewayPolicy) *api.Policy {
 func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
 	tunnel := policy.Spec.Backend.Tunnel
 
-	proxy, err := BuildBackendRef(ctx, tunnel.BackendRef, policy.Namespace)
+	proxy, inlinePolicies, _, err := buildPolicyBackendEndpoint(ctx, tunnel.PolicyBackendEndpoint, policy.Namespace)
 
 	tunnelPolicy := &api.Policy{
 		Key:  policy.Namespace + "/" + policy.Name + backendTunnelPolicySuffix,
@@ -532,7 +526,8 @@ func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPoli
 			Backend: &api.BackendPolicySpec{
 				Kind: &api.BackendPolicySpec_BackendTunnel_{
 					BackendTunnel: &api.BackendPolicySpec_BackendTunnel{
-						Proxy: proxy,
+						Proxy:          proxy,
+						InlinePolicies: inlinePolicies,
 					},
 				},
 			},
@@ -780,6 +775,18 @@ func translateBackendAI(ctx PolicyCtx, agwPolicy *agentgateway.AgentgatewayPolic
 
 		// Still set it so it wipes out the value on error, mirroring the header value.
 		translatedAIPolicy.Transformations[xfm.Field] = string(xfm.Expression)
+	}
+	for _, xfm := range aiSpec.FinalTransformations {
+		if translatedAIPolicy.FinalTransformations == nil {
+			translatedAIPolicy.FinalTransformations = make(map[string]string)
+		}
+
+		if !isCEL(xfm.Expression) {
+			errs = append(errs, fmt.Errorf("transformation %q is not a valid CEL expression: %v", xfm.Field, xfm.Expression))
+		}
+
+		// Still set it so it wipes out the value on error, mirroring the header value.
+		translatedAIPolicy.FinalTransformations[xfm.Field] = string(xfm.Expression)
 	}
 
 	if aiSpec.PromptGuard != nil {
@@ -1041,7 +1048,11 @@ func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, n
 		if err := validateExtractionAuthorizationLocation(auth.SubjectToken.Source, "crossAppAccess subjectToken source"); err != nil {
 			errs = append(errs, err)
 		}
+		if auth.SubjectToken.TokenType != nil {
+			errs = append(errs, validateOAuthTokenType(*auth.SubjectToken.TokenType, "crossAppAccess subjectToken tokenType"))
+		}
 	}
+	cache := translateOAuthTokenCache(auth.Cache)
 
 	return &api.CrossAppAccessAuth{
 		IdentityProvider:            identityProvider,
@@ -1049,18 +1060,30 @@ func BuildCrossAppAccess(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, n
 		Audience:                    auth.Audience,
 		Resources:                   auth.Resources,
 		Scopes:                      auth.Scopes,
+		AccessTokenScopes:           translateCrossAppAccessScopes(auth.AccessTokenScopes),
 		SubjectToken:                translateCrossAppAccessSubjectToken(auth.SubjectToken),
-		Cache:                       translateOAuthTokenCache(auth.Cache),
+		Cache:                       cache,
 	}, errors.Join(errs...)
+}
+
+func translateCrossAppAccessScopes(scopes *[]string) *api.CrossAppAccessAuth_ScopeOverride {
+	if scopes == nil {
+		return nil
+	}
+	return &api.CrossAppAccessAuth_ScopeOverride{Values: *scopes}
 }
 
 func translateCrossAppAccessSubjectToken(spec *agentgateway.CrossAppAccessSubjectToken) *api.CrossAppAccessAuth_SubjectToken {
 	if spec == nil {
 		return nil
 	}
-	return &api.CrossAppAccessAuth_SubjectToken{
+	res := &api.CrossAppAccessAuth_SubjectToken{
 		Source: translateAuthorizationExtractionLocation(spec.Source),
 	}
+	if spec.TokenType != nil {
+		res.TokenType = translateOAuthTokenType(*spec.TokenType)
+	}
+	return res
 }
 
 func buildCrossAppAccessPolicy(ctx PolicyCtx, auth *agentgateway.CrossAppAccessAuth, namespace string) (*api.BackendAuthPolicy, error) {
@@ -1075,23 +1098,29 @@ func buildCrossAppAccessPolicy(ctx PolicyCtx, auth *agentgateway.CrossAppAccessA
 func buildCrossAppAccessEndpoint(ctx PolicyCtx, endpoint *agentgateway.CrossAppAccessEndpoint, namespace, field string) (*api.CrossAppAccessAuth_Endpoint, error) {
 	var errs []error
 
-	tokenEndpoint, err := BuildBackendRef(ctx, endpoint.BackendRef, namespace)
+	tokenEndpoint, inlinePolicies, parsedURL, err := buildPolicyBackendEndpoint(ctx, endpoint.PolicyBackendEndpoint, namespace)
 	if err != nil {
 		errs = append(errs, err)
+	}
+	tokenEndpointPath := endpoint.Path
+	if tokenEndpointPath == nil && parsedURL != nil && parsedURL.EscapedPath() != "" {
+		path := parsedURL.EscapedPath()
+		tokenEndpointPath = &path
 	}
 	clientAuth, err := buildOAuthClientAuth(ctx, &endpoint.ClientAuth, namespace)
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	if endpoint.Path != nil && !strings.HasPrefix(*endpoint.Path, "/") {
-		errs = append(errs, fmt.Errorf("%s.path %q must start with /", field, *endpoint.Path))
+	if tokenEndpointPath != nil && !strings.HasPrefix(*tokenEndpointPath, "/") {
+		errs = append(errs, fmt.Errorf("%s.path %q must start with /", field, *tokenEndpointPath))
 	}
 
 	return &api.CrossAppAccessAuth_Endpoint{
 		TokenEndpoint:     tokenEndpoint,
-		TokenEndpointPath: endpoint.Path,
+		TokenEndpointPath: tokenEndpointPath,
 		ClientAuth:        clientAuth,
+		InlinePolicies:    inlinePolicies,
 	}, errors.Join(errs...)
 }
 
@@ -1102,12 +1131,19 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 	}
 
 	var errs []error
+	var inlinePolicies []*api.BackendPolicySpec
+	tokenEndpointPath := auth.Path
 
 	if tokenEndpoint == nil {
 		var err error
-		tokenEndpoint, err = BuildBackendRef(ctx, auth.BackendRef, namespace)
+		var parsedURL *url.URL
+		tokenEndpoint, inlinePolicies, parsedURL, err = buildPolicyBackendEndpoint(ctx, auth.PolicyBackendEndpoint, namespace)
 		if err != nil {
 			errs = append(errs, err)
+		}
+		if tokenEndpointPath == nil && parsedURL != nil && parsedURL.EscapedPath() != "" {
+			path := parsedURL.EscapedPath()
+			tokenEndpointPath = &path
 		}
 	}
 
@@ -1124,6 +1160,7 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 	if err != nil {
 		errs = append(errs, err)
 	}
+	cache := translateOAuthTokenCache(auth.Cache)
 
 	if auth.SubjectToken != nil {
 		if err := validateExtractionAuthorizationLocation(auth.SubjectToken.Source, "oauth subjectToken source"); err != nil {
@@ -1144,7 +1181,8 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 
 	oauth := &api.OAuthTokenExchange{
 		TokenEndpoint:         tokenEndpoint,
-		TokenEndpointPath:     auth.Path,
+		TokenEndpointPath:     tokenEndpointPath,
+		InlinePolicies:        inlinePolicies,
 		GrantType:             translateOAuthGrantType(auth.GrantType),
 		SubjectToken:          translateOAuthTokenSpec(auth.SubjectToken),
 		ActorToken:            translateOAuthActorToken(auth.ActorToken),
@@ -1155,10 +1193,10 @@ func BuildOAuthTokenExchange(ctx PolicyCtx, auth *agentgateway.OAuthTokenExchang
 		AdditionalParams:      additionalParams,
 		ClientAuth:            clientAuth,
 		AuthorizationLocation: translateAuthorizationLocation(auth.Location),
-		Cache:                 translateOAuthTokenCache(auth.Cache),
+		Cache:                 cache,
 	}
-	if auth.Path != nil && !strings.HasPrefix(*auth.Path, "/") {
-		errs = append(errs, fmt.Errorf("oauthTokenExchange.path %q must start with /", *auth.Path))
+	if tokenEndpointPath != nil && !strings.HasPrefix(*tokenEndpointPath, "/") {
+		errs = append(errs, fmt.Errorf("oauthTokenExchange.path %q must start with /", *tokenEndpointPath))
 	}
 	if oauth.GrantType == api.OAuthTokenExchange_JWT_BEARER {
 		if oauth.ActorToken != nil {
@@ -1402,9 +1440,7 @@ func translateOAuthTokenCache(cache *agentgateway.OAuthTokenCache) *api.OAuthTok
 		res.InMemory = &api.OAuthTokenExchange_TokenCache_InMemory{
 			MaxEntries: cache.InMemory.MaxEntries,
 		}
-		if cache.InMemory.DefaultTTL != nil {
-			res.InMemory.DefaultTtl = durationpb.New(cache.InMemory.DefaultTTL.Duration)
-		}
+		res.InMemory.DefaultTtl = durationToProto(cache.InMemory.DefaultTTL)
 	}
 	return res
 }
@@ -1483,6 +1519,10 @@ func translateRouteType(rt agentgateway.RouteType) api.BackendPolicySpec_Ai_Rout
 		return api.BackendPolicySpec_Ai_REALTIME
 	case agentgateway.RouteTypeRerank:
 		return api.BackendPolicySpec_Ai_RERANK
+	case agentgateway.RouteTypeGenerateContent:
+		return api.BackendPolicySpec_Ai_GENERATE_CONTENT
+	case agentgateway.RouteTypeGeminiCountTokens:
+		return api.BackendPolicySpec_Ai_GEMINI_COUNT_TOKENS
 	default:
 		// Default to completions if unknown type
 		return api.BackendPolicySpec_Ai_COMPLETIONS
@@ -1764,9 +1804,7 @@ func buildJwtSignAuthPolicy(ctx PolicyCtx, auth *agentgateway.JwtSignAuth, names
 		AuthorizationLocation: translateAuthorizationLocation(auth.Location),
 	}
 
-	if auth.TTL != nil {
-		jwtSign.Ttl = durationpb.New(auth.TTL.Duration)
-	}
+	jwtSign.Ttl = durationToProto(auth.TTL)
 
 	return &api.BackendAuthPolicy{
 		Kind: &api.BackendAuthPolicy_JwtSign{

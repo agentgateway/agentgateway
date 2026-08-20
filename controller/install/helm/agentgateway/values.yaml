@@ -50,10 +50,15 @@ tolerations: []
 # -- Set affinity rules for pod scheduling, such as 'nodeAffinity:'.
 affinity: {}
 
+# -- Set the pod DNS configuration, such as 'options: [{name: ndots, value: "3"}]'. Merged with the DNS settings the kubelet derives from the pod's dnsPolicy.
+dnsConfig: {}
+
 # -- Configure the agentgateway control plane deployment.
 controller:
   # -- Set the number of controller pod replicas.
   replicaCount: 1
+  # -- Set the number of old ReplicaSets the controller deployment retains for rollback. Leave unset to use the Kubernetes default of 10. '0' is honored and keeps no history.
+  revisionHistoryLimit:
   # -- Set the priority class name for the controller pod.
   priorityClassName: ""
   # -- Set the log level for the controller.

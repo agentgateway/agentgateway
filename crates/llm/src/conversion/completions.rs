@@ -186,8 +186,7 @@ pub mod from_messages {
 		if let Some(tool_calls) = choice.message.tool_calls {
 			content.extend(tool_calls.into_iter().filter_map(|tc| match tc {
 				completions::MessageToolCalls::Function(f) => {
-					let input =
-						serde_json::from_str::<serde_json::Value>(&f.function.arguments).unwrap_or_default();
+					let input = crate::conversion::tool_arguments_to_input(&f.function.arguments);
 					Some(messages::ContentBlock::ToolUse {
 						id: f.id,
 						name: f.function.name,
@@ -512,6 +511,7 @@ pub mod from_messages {
 		>(b, buffer_limit, move |evt| {
 			let mut events: Vec<(&'static str, messages::MessagesStreamEvent)> = Vec::new();
 			match evt {
+				SseJsonEvent::Eof | SseJsonEvent::Error => return events,
 				SseJsonEvent::Done => {
 					flush_message_end(&mut state, &mut events, &log, true, log_content.tool_calls);
 					return events;

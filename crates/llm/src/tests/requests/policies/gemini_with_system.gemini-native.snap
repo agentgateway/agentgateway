@@ -1,0 +1,114 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/policies/gemini_with_system.json
+info:
+  systemInstruction:
+    parts:
+      - text: system prompt
+  contents:
+    - role: user
+      parts:
+        - text: "Hello, world"
+        - inlineData:
+            mimeType: image/png
+            data: AAAA
+---
+{
+  "request": {
+    "contents": [
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "prepend user message"
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "text": "prepend assistant message"
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "Hello, world"
+          },
+          {
+            "inlineData": {
+              "mimeType": "image/png",
+              "data": "AAAA"
+            }
+          }
+        ]
+      },
+      {
+        "role": "user",
+        "parts": [
+          {
+            "text": "append user message"
+          }
+        ]
+      },
+      {
+        "role": "model",
+        "parts": [
+          {
+            "text": "append assistant prompt"
+          }
+        ]
+      }
+    ],
+    "systemInstruction": {
+      "parts": [
+        {
+          "text": "prepend system prompt"
+        },
+        {
+          "text": "system prompt"
+        },
+        {
+          "text": "append system prompt"
+        }
+      ]
+    }
+  },
+  "parsed": {
+    "input_format": "Gemini",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "",
+    "provider": "gemini-native",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "system",
+        "content": "prepend system prompt\nsystem prompt\nappend system prompt"
+      },
+      {
+        "role": "user",
+        "content": "prepend user message"
+      },
+      {
+        "role": "assistant",
+        "content": "prepend assistant message"
+      },
+      {
+        "role": "user",
+        "content": "Hello, world"
+      },
+      {
+        "role": "user",
+        "content": "append user message"
+      },
+      {
+        "role": "assistant",
+        "content": "append assistant prompt"
+      }
+    ]
+  }
+}

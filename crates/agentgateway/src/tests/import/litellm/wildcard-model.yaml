@@ -2,3 +2,18 @@ model_list:
 - model_name: "*"
   litellm_params:
     model: "openai/*"
+- model_name: "gpt-*"
+  litellm_params:
+    model: "openai/gpt-*"
+- model_name: "*-preview"
+  litellm_params:
+    model: "openai/*-preview"
+- model_name: "team*chat"
+  litellm_params:
+    model: "openai/*"
+- model_name: "multi-wildcard"
+  litellm_params:
+    model: "openai/gpt-*-*"
+- model_name: "alias-*"
+  litellm_params:
+    model: "openai/model-*"

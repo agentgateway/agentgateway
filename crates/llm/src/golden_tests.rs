@@ -37,8 +37,11 @@ const GEMINI: &str = "gemini";
 const COMPLETIONS: &str = "completions";
 const BEDROCK_TITAN: &str = "bedrock-titan";
 const BEDROCK_COHERE: &str = "bedrock-cohere";
+const BEDROCK_NOVA: &str = "bedrock-nova";
 const COHERE: &str = "cohere";
 const VERTEX_GEMINI: &str = "vertex-gemini";
+const GEMINI_NATIVE: &str = "gemini-native";
+const RESPONSES: &str = "responses";
 
 mod requests {
 	use super::*;
@@ -60,7 +63,7 @@ mod requests {
 			.to_llm_request(
 				strng::new(match provider {
 					COMPLETIONS => OPENAI,
-					BEDROCK_TITAN | BEDROCK_COHERE => BEDROCK,
+					BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_NOVA => BEDROCK,
 					VERTEX_GEMINI => VERTEX,
 					provider => provider,
 				}),
@@ -96,6 +99,11 @@ mod requests {
 	}
 
 	fn apply_test_prompts<R: RequestType + Serialize>(r: &mut R) -> Result<Vec<u8>, AIError> {
+		apply_test_prompts_to(r);
+		serde_json::to_vec(r).map_err(AIError::RequestMarshal)
+	}
+
+	fn apply_test_prompts_to<R: RequestType + ?Sized>(r: &mut R) {
 		r.prepend_prompts(vec![
 			SimpleChatCompletionMessage {
 				role: strng::new("system"),
@@ -124,7 +132,6 @@ mod requests {
 				content: strng::new("append assistant prompt"),
 			},
 		]);
-		serde_json::to_vec(r).map_err(AIError::RequestMarshal)
 	}
 
 	const COMPLETION_REQUESTS: &[(&str, &[&str])] = &[
@@ -145,9 +152,15 @@ mod requests {
 		("generation-config", &[VERTEX_GEMINI]),
 	];
 	const MESSAGES_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
+		(
+			"basic",
+			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES],
+		),
 		("system_message", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
-		("tools", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
+		(
+			"tools",
+			&[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX, RESPONSES],
+		),
 		("server_tools", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
 		("reasoning", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
 		("metadata", &[ANTHROPIC, COMPLETIONS, BEDROCK, VERTEX]),
@@ -159,6 +172,7 @@ mod requests {
 		("gpt_adaptive_thinking_with_tools", &[COMPLETIONS]),
 		("reasoning_replay", &[BEDROCK]),
 		("tool_history_without_tools", &[BEDROCK]),
+		("responses_agent_subset", &[RESPONSES]),
 	];
 	const RESPONSES_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[BEDROCK, GEMINI]),
@@ -174,7 +188,10 @@ mod requests {
 		("with_system", &[ANTHROPIC, BEDROCK, VERTEX]),
 	];
 	const EMBEDDINGS_REQUESTS: &[(&str, &[&str])] = &[
-		("basic", &[OPENAI, BEDROCK_TITAN, BEDROCK_COHERE, VERTEX]),
+		(
+			"basic",
+			&[OPENAI, BEDROCK_TITAN, BEDROCK_COHERE, BEDROCK_NOVA, VERTEX],
+		),
 		("cohere-v4", &[BEDROCK_COHERE]),
 		("array", &[OPENAI, BEDROCK_COHERE, VERTEX]),
 		("full", &[VERTEX]),
@@ -182,6 +199,17 @@ mod requests {
 	const RERANK_REQUESTS: &[(&str, &[&str])] = &[
 		("basic", &[COHERE, BEDROCK, VERTEX]),
 		("passthrough-fields", &[COHERE, BEDROCK, VERTEX]),
+	];
+
+	/// Native Gemini inbound bodies, used for both the render snapshots and the fidelity assertions
+	/// in [`gemini_request_passthrough_is_lossless`].
+	const GEMINI_REQUESTS: &[&str] = &[
+		"text",
+		"tools",
+		"thinking",
+		"structured-output",
+		"image-inline",
+		"passthrough-fields",
 	];
 
 	#[test]
@@ -244,6 +272,9 @@ mod requests {
 						let body = serde_json::to_vec(i).map_err(AIError::RequestMarshal)?;
 						vertex.prepare_anthropic_message_body(body)
 					}),
+					RESPONSES => test_request(RESPONSES, &path, |i| {
+						conversion::responses::from_messages::translate(i)
+					}),
 					other => panic!("unsupported provider in MESSAGES_REQUESTS: {other}"),
 				}
 			}
@@ -298,6 +329,13 @@ mod requests {
 			guardrail_version: None,
 			provider_preference: Default::default(),
 		};
+		let nova = bedrock::Provider {
+			model: Some(strng::new("amazon.nova-2-multimodal-embeddings-v1:0")),
+			region: strng::new("us-east-1"),
+			guardrail_identifier: None,
+			guardrail_version: None,
+			provider_preference: Default::default(),
+		};
 		for (name, providers) in EMBEDDINGS_REQUESTS {
 			let path = format!("requests/embeddings/{name}.json");
 			for provider in *providers {
@@ -315,6 +353,9 @@ mod requests {
 							&cohere
 						};
 						conversion::bedrock::from_embeddings::translate(i, provider)
+					}),
+					BEDROCK_NOVA => test_request(BEDROCK_NOVA, &path, |i| {
+						conversion::bedrock::from_embeddings::translate(i, &nova)
 					}),
 					VERTEX => test_request(VERTEX, &path, |i: &mut types::embeddings::Request| {
 						conversion::vertex::from_embeddings::translate(i)
@@ -417,6 +458,68 @@ mod requests {
 	}
 
 	#[test]
+	fn gemini_native() {
+		// Native Gemini inbound: the "translation" is a re-serialize, so these snapshots exist to make
+		// any change to the wire body visible in review. `gemini_request_passthrough_is_lossless`
+		// asserts the fidelity property itself.
+		for name in GEMINI_REQUESTS {
+			let path = format!("requests/gemini/{name}.json");
+			test_request(GEMINI_NATIVE, &path, |i: &mut types::gemini::Request| {
+				serde_json::to_vec(&i.inner).map_err(AIError::RequestMarshal)
+			});
+		}
+
+		test_request(
+			GEMINI_NATIVE,
+			"requests/policies/gemini_with_system.json",
+			|i: &mut types::gemini::Request| {
+				apply_test_prompts_to(i);
+				serde_json::to_vec(&i.inner).map_err(AIError::RequestMarshal)
+			},
+		);
+	}
+
+	/// Parse + render must lose nothing on the native Gemini path. JSON key order is not preserved
+	/// (typed fields serialize in declaration order, then the `rest` flattens), so the assertion is
+	/// deep value equality plus byte-stability from the second pass onwards.
+	#[test]
+	fn gemini_request_passthrough_is_lossless() {
+		for name in GEMINI_REQUESTS {
+			let relative = format!("requests/gemini/{name}.json");
+			let input = fs::read_to_string(fixture_path(&relative)).expect("failed to read input file");
+			let expected: Value = serde_json::from_str(&input).expect("failed to parse input JSON");
+
+			let parsed: types::gemini::Request = serde_json::from_str(&input).expect("failed to parse");
+			let rendered = serde_json::to_vec(&parsed.inner).expect("failed to render");
+			let round_tripped: Value = serde_json::from_slice(&rendered).expect("rendered JSON");
+			assert_eq!(round_tripped, expected, "{name}: passthrough lost content");
+
+			let reparsed: types::gemini::Request =
+				serde_json::from_slice(&rendered).expect("failed to re-parse");
+			let rerendered = serde_json::to_vec(&reparsed.inner).expect("failed to re-render");
+			assert_eq!(
+				String::from_utf8_lossy(&rerendered),
+				String::from_utf8_lossy(&rendered),
+				"{name}: render is not byte-stable"
+			);
+		}
+	}
+
+	/// The only shape change the passthrough makes: `GenerationConfig`'s float fields are typed, so an
+	/// integer-valued JSON number comes back as a float. Both forms are valid proto3 JSON.
+	#[test]
+	fn gemini_request_normalizes_integer_valued_floats() {
+		let parsed: types::gemini::Request =
+			serde_json::from_value(json!({ "generationConfig": { "temperature": 1, "topK": 40 } }))
+				.expect("failed to parse");
+		let rendered = serde_json::to_vec(&parsed.inner).expect("failed to render");
+		assert_eq!(
+			String::from_utf8_lossy(&rendered),
+			r#"{"generationConfig":{"temperature":1.0,"topK":40}}"#
+		);
+	}
+
+	#[test]
 	fn get_messages() {
 		fn extract<R: RequestType + DeserializeOwned>(fixture: &str, provider: &str) {
 			let path = fixture_path(fixture);
@@ -456,6 +559,8 @@ mod requests {
 			"requests/responses/assistant-history.json",
 			"get-messages-responses",
 		);
+		extract::<types::gemini::Request>("requests/gemini/tools.json", "get-messages-gemini");
+		extract::<types::gemini::Request>("requests/gemini/image-inline.json", "get-messages-gemini");
 	}
 }
 
@@ -610,6 +715,7 @@ mod responses {
 	const BEDROCK_TO_DETECT: &str = "bedrock-detect";
 	const RESPONSES_TO_RESPONSES: &str = "responses-responses";
 	const RESPONSES_TO_DETECT: &str = "responses-detect";
+	const RESPONSES_TO_MESSAGES: &str = "responses-messages";
 	const VERTEX_GEMINI_TO_COMPLETIONS: &str = "vertex-gemini-completions";
 
 	const ALL_BEDROCK: &[&str] = &[
@@ -658,16 +764,31 @@ mod responses {
 		("tool_call", ALL_COMPLETIONS),
 		(
 			"truncated_tool_call",
-			&[COMPLETIONS_TO_COMPLETIONS, COMPLETIONS_TO_RESPONSES],
+			&[
+				COMPLETIONS_TO_COMPLETIONS,
+				COMPLETIONS_TO_MESSAGES,
+				COMPLETIONS_TO_RESPONSES,
+			],
 		),
 	];
 	const RESPONSES_RESPONSES: &[(&str, &[&str])] = &[
-		("basic", &[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT]),
+		(
+			"basic",
+			&[
+				RESPONSES_TO_RESPONSES,
+				RESPONSES_TO_DETECT,
+				RESPONSES_TO_MESSAGES,
+			],
+		),
+		("tool", &[RESPONSES_TO_MESSAGES]),
+		("reasoning", &[RESPONSES_TO_MESSAGES]),
+		("custom-tool", &[RESPONSES_TO_RESPONSES]),
 		("truncated_tool_call", &[RESPONSES_TO_RESPONSES]),
 	];
 	const EMBEDDING_RESPONSES: &[(&str, &str)] = &[
 		("response/bedrock-titan/embeddings.json", BEDROCK_TITAN),
 		("response/bedrock-cohere/embeddings.json", BEDROCK_COHERE),
+		("response/bedrock-nova/embeddings.json", BEDROCK_NOVA),
 		("response/vertex/embeddings.json", VERTEX),
 		("response/openai/embeddings.json", OPENAI),
 		("response/openai/gemini-embeddings.json", OPENAI),
@@ -699,7 +820,15 @@ mod responses {
 		("stream_basic", ALL_ANTHROPIC),
 		("stream_thinking", ALL_ANTHROPIC),
 		(
+			"stream_message_delta_usage",
+			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
+		),
+		(
 			"stream_tool",
+			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
+		),
+		(
+			"stream_tool_empty_args",
 			&[MESSAGES_TO_MESSAGES, MESSAGES_TO_COMPLETIONS],
 		),
 	];
@@ -713,6 +842,7 @@ mod responses {
 	const VERTEX_GEMINI_STREAM_RESPONSES: &[&str] = &["stream_tool"];
 	const RESPONSES_STREAM_RESPONSES: &[(&str, &[&str])] = &[
 		("stream", &[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT]),
+		("stream-custom-tool", &[RESPONSES_TO_RESPONSES]),
 		(
 			"stream-image",
 			&[RESPONSES_TO_RESPONSES, RESPONSES_TO_DETECT],
@@ -803,6 +933,9 @@ mod responses {
 								.unwrap_or_else(|_| types::detect::Response::new_raw(bytes)),
 						))
 					}),
+					RESPONSES_TO_MESSAGES => test_response(provider, &path, |i| {
+						conversion::responses::from_messages::translate_response(&i)
+					}),
 					other => panic!("unsupported provider in RESPONSES_RESPONSES: {other}"),
 				}
 			}
@@ -813,17 +946,61 @@ mod responses {
 			test_response(VERTEX_GEMINI_TO_COMPLETIONS, &path, |i| {
 				conversion::vertex_gemini::to_completions::translate_response(&i)
 			});
+			// The same responses served to a native Gemini client: body untouched, usage extracted.
+			test_response(GEMINI_NATIVE, &path, |i| {
+				serde_json::from_slice::<types::gemini::Response>(&i)
+					.map(|e| Box::new(e) as Box<dyn ResponseType>)
+					.map_err(AIError::ResponseParsing)
+			});
 		}
 	}
+
+	/// Parse + render must lose nothing on the native Gemini path. JSON key order is not preserved
+	/// (typed fields serialize in declaration order, then the `rest` flattens), so the assertion is
+	/// deep value equality plus byte-stability from the second pass onwards.
+	#[test]
+	fn gemini_response_passthrough_is_lossless() {
+		for name in ["basic", "tool", "reasoning"] {
+			let relative = format!("response/vertex-gemini/{name}.json");
+			let input = fs::read_to_string(fixture_path(&relative)).expect("failed to read input file");
+			let expected: Value = serde_json::from_str(&input).expect("failed to parse input JSON");
+
+			let parsed: types::gemini::Response = serde_json::from_str(&input).expect("failed to parse");
+			let rendered = ResponseType::serialize(&parsed).expect("failed to render");
+			let round_tripped: Value = serde_json::from_slice(&rendered).expect("rendered JSON");
+			assert_eq!(round_tripped, expected, "{name}: passthrough lost content");
+		}
+	}
+
+	/// The one documented exception to response fidelity: an empty `candidates` array is dropped,
+	/// which is what Google's own proto3 JSON encoder does with empty repeated fields (real blocked
+	/// responses omit the key entirely). Every other field of a blocked response survives.
+	#[test]
+	fn gemini_response_omits_empty_candidates_array() {
+		let input = fs::read_to_string(fixture_path("response/vertex-gemini/blocked.json"))
+			.expect("failed to read input file");
+		let mut expected: Value = serde_json::from_str(&input).expect("failed to parse input JSON");
+		assert_eq!(expected["candidates"], json!([]));
+		expected
+			.as_object_mut()
+			.expect("object")
+			.shift_remove("candidates");
+
+		let parsed: types::gemini::Response = serde_json::from_str(&input).expect("failed to parse");
+		let rendered = ResponseType::serialize(&parsed).expect("failed to render");
+		let round_tripped: Value = serde_json::from_slice(&rendered).expect("rendered JSON");
+		assert_eq!(round_tripped, expected);
+	}
+
 	#[test]
 	fn embeddings() {
 		for (path, provider) in EMBEDDING_RESPONSES {
 			match *provider {
-				BEDROCK_TITAN | BEDROCK_COHERE => {
-					let model = if *provider == BEDROCK_TITAN {
-						"amazon.titan-embed-text-v2:0"
-					} else {
-						"cohere.embed-english-v3"
+				BEDROCK_TITAN | BEDROCK_COHERE | BEDROCK_NOVA => {
+					let model = match *provider {
+						BEDROCK_TITAN => "amazon.titan-embed-text-v2:0",
+						BEDROCK_COHERE => "cohere.embed-english-v3",
+						_ => "amazon.nova-2-multimodal-embeddings-v1:0",
 					};
 					test_response(provider, path, |i| {
 						conversion::bedrock::from_embeddings::translate_response(
@@ -1063,7 +1240,7 @@ data: [DONE]
 			axum_core::body::Body::from(input),
 			1024 * 1024,
 			StreamingUsageGuard::default(),
-			crate::LogContentFields::default(),
+			LogContentFields::default(),
 		)
 		.collect()
 		.await
@@ -1086,6 +1263,56 @@ data: [DONE]
 				"cache_read_input_tokens": 20,
 			})
 		);
+	}
+
+	/// Anthropic streams a single empty `input_json_delta` for a tool call with no arguments.
+	/// OpenAI clients concatenate the deltas and parse the result, so the concatenation has to be
+	/// a JSON object: forwarding `""` verbatim makes the client's *next* request fail upstream with
+	/// `tool_use.input: Input should be a valid dictionary`.
+	#[tokio::test]
+	async fn messages_to_completions_stream_emits_object_for_empty_tool_arguments() {
+		let input = r#"event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_01A","name":"get_time","input":{}}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":""}}
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0}
+
+event: message_stop
+data: {"type":"message_stop"}
+
+"#;
+		let output = conversion::messages::from_completions::translate_stream(
+			axum_core::body::Body::from(input),
+			1024 * 1024,
+			StreamingUsageGuard::default(),
+			LogContentFields::default(),
+		)
+		.collect()
+		.await
+		.unwrap()
+		.to_bytes();
+
+		// Accumulate `arguments` across chunks exactly as an OpenAI client does.
+		let arguments: String = String::from_utf8(output.to_vec())
+			.unwrap()
+			.lines()
+			.filter_map(|line| line.strip_prefix("data: "))
+			.filter_map(|data| serde_json::from_str::<Value>(data).ok())
+			.filter_map(|chunk| {
+				chunk["choices"][0]["delta"]["tool_calls"][0]["function"]["arguments"]
+					.as_str()
+					.map(str::to_string)
+			})
+			.collect();
+
+		assert!(
+			serde_json::from_str::<serde_json::Map<String, Value>>(&arguments).is_ok(),
+			"streamed tool arguments must concatenate to a JSON object, got {arguments:?}"
+		);
+		assert_eq!(arguments, "{}");
 	}
 
 	#[test]
@@ -1128,4 +1355,197 @@ data: [DONE]
 			None
 		);
 	}
+}
+
+async fn test_stream(provider: &str, relative_path: &str) {
+	let input_path = fixture_path(relative_path);
+	let provider_bytes = fs::read(&input_path).expect("failed to read stream input file");
+	let input_str = String::from_utf8_lossy(&provider_bytes).to_string();
+
+	let output = conversion::responses::from_messages::translate_stream(
+		axum_core::body::Body::from(provider_bytes),
+		1024 * 1024,
+		StreamingUsageGuard::default(),
+		crate::LogContentFields {
+			completion: true,
+			tool_calls: true,
+		},
+	)
+	.collect()
+	.await
+	.unwrap()
+	.to_bytes();
+	let output_str = String::from_utf8_lossy(&output).to_string();
+	let (snapshot_path, snapshot_name) = snapshot_path_and_name(relative_path, provider);
+
+	insta::with_settings!({
+		info => &input_str,
+		description => input_path.to_string_lossy().to_string(),
+		omit_expression => true,
+		prepend_module_to_snapshot => false,
+		snapshot_path => snapshot_path,
+	}, {
+		insta::assert_snapshot!(snapshot_name, output_str);
+	});
+}
+
+#[tokio::test]
+async fn responses_to_messages_stream_translates_text_tool_and_usage() {
+	test_stream(
+		"responses-messages-streaming",
+		"response/responses/stream.json",
+	)
+	.await;
+}
+
+#[tokio::test]
+async fn responses_to_messages_stream_translates_image() {
+	test_stream(
+		"responses-messages-streaming",
+		"response/responses/stream-image.json",
+	)
+	.await;
+}
+
+#[tokio::test]
+async fn responses_to_messages_stream_translates_refusal() {
+	test_stream(
+		"responses-messages-streaming",
+		"response/responses/stream-refusal.json",
+	)
+	.await;
+}
+
+#[test]
+fn messages_to_responses_rejects_unsupported_features() {
+	let path = "requests/messages/reasoning_replay.json";
+	let input_str = fs::read_to_string(fixture_path(path)).expect("failed to read fixture");
+	let input: types::messages::Request =
+		serde_json::from_str(&input_str).expect("failed to parse fixture");
+	let err = conversion::responses::from_messages::translate(&input).unwrap_err();
+	assert!(
+		matches!(err, AIError::UnsupportedConversion(_)),
+		"expected UnsupportedConversion for {path}, got {err:?}"
+	);
+}
+
+#[test]
+fn messages_to_responses_accepts_and_drops_unrepresentable_fields() {
+	let input: types::messages::Request = serde_json::from_value(json!({
+		"model": "claude-sonnet-4-20250514",
+		"max_tokens": 1024,
+		"stop_sequences": ["</end>", "\n\nHuman:"],
+		"top_k": 40,
+		"messages": [{
+			"role": "user",
+			"content": [{"type": "text", "text": "hello"}]
+		}]
+	}))
+	.expect("failed to parse request");
+	let body = conversion::responses::from_messages::translate(&input)
+		.expect("stop_sequences/top_k should be accepted and dropped");
+	let body: Value = serde_json::from_slice(&body).expect("translated request should be JSON");
+	assert!(body.get("stop").is_none());
+	assert!(body.get("top_k").is_none());
+	assert_eq!(body["input"][0]["content"][0]["text"], "hello");
+}
+
+#[test]
+fn messages_to_responses_maps_tool_result_is_error_to_incomplete() {
+	let input_str = fs::read_to_string(fixture_path("requests/messages/tool_result_error.json"))
+		.expect("failed to read fixture");
+	let input: types::messages::Request =
+		serde_json::from_str(&input_str).expect("failed to parse fixture");
+	let body = conversion::responses::from_messages::translate(&input)
+		.expect("tool_result is_error should be mapped, not rejected");
+	let body: Value = serde_json::from_slice(&body).expect("translated request should be JSON");
+	let call_outputs = body["input"]
+		.as_array()
+		.expect("input should be an array")
+		.iter()
+		.filter(|item| item["type"] == "function_call_output")
+		.collect::<Vec<_>>();
+	assert_eq!(
+		call_outputs.len(),
+		1,
+		"expected one function_call_output: {body}"
+	);
+	assert_eq!(call_outputs[0]["call_id"], "toolu_01");
+	assert_eq!(call_outputs[0]["status"], "incomplete");
+}
+
+#[test]
+fn messages_to_responses_rejects_malformed_image_source() {
+	let error_sources = [
+		// base64 missing media_type
+		json!({"type": "base64", "data": "aGVsbG8="}),
+		// base64 missing data
+		json!({"type": "base64", "media_type": "image/png"}),
+		// url missing url
+		json!({"type": "url"}),
+		// file missing file_id
+		json!({"type": "file"}),
+		// unknown source type
+		json!({"type": "unknown_source"}),
+	];
+	for (i, source) in error_sources.iter().enumerate() {
+		let input: types::messages::Request = serde_json::from_value(json!({
+			"model": "claude-sonnet-4-20250514",
+			"max_tokens": 1024,
+			"messages": [{
+				"role": "user",
+				"content": [{"type": "image", "source": source}]
+			}]
+		}))
+		.expect("failed to parse request");
+		let err = conversion::responses::from_messages::translate(&input).unwrap_err();
+		assert!(
+			matches!(err, AIError::UnsupportedConversion(_)),
+			"expected UnsupportedConversion for error source #{i} ({source}), got {err:?}"
+		);
+	}
+}
+
+#[test]
+fn messages_to_responses_maps_anthropic_runtime_features() {
+	let input: types::messages::Request = serde_json::from_value(json!({
+		"model": "claude-sonnet-4-20250514",
+		"max_tokens": 1024,
+		"context_management": {
+			"edits": [{"type": "clear_thinking_20251015", "keep": "all"}]
+		},
+		"thinking": {"type": "enabled", "budget_tokens": 2048},
+		"system": [
+			{"type": "text", "text": "stable instructions"},
+			{
+				"type": "text",
+				"text": "cached instructions",
+				"cache_control": {"type": "ephemeral"}
+			}
+		],
+		"messages": [{
+			"role": "user",
+			"content": [{
+				"type": "text",
+				"text": "hello",
+				"cache_control": {"type": "ephemeral"}
+			}]
+		}]
+	}))
+	.expect("failed to parse request");
+	let body = conversion::responses::from_messages::translate(&input)
+		.expect("runtime features should translate");
+	let body: Value = serde_json::from_slice(&body).expect("translated request should be JSON");
+
+	assert!(body.get("context_management").is_none());
+	assert_eq!(body["reasoning"]["effort"], "high");
+	assert_eq!(body["input"][0]["role"], "system");
+	assert_eq!(
+		body["input"][0]["content"][1]["prompt_cache_breakpoint"]["mode"],
+		"explicit"
+	);
+	assert_eq!(
+		body["input"][1]["content"][0]["prompt_cache_breakpoint"]["mode"],
+		"explicit"
+	);
 }

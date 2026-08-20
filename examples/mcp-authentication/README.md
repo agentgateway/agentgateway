@@ -12,8 +12,10 @@ cargo run -- -f examples/mcp-authentication/config.yaml
 
 Let's look at the config to understand what's going on.
 
-### Demo dependencies
-For the demo, start Keycloak and the mock authorization server on `http://localhost:9000`:
+### Validation dependencies
+Start the lightweight authorization server. It serves the mock authorization endpoints on
+`http://localhost:9000` and the Keycloak-compatible discovery/JWKS endpoints on
+`http://localhost:7080`:
 
 ```bash
 make run-validation-deps

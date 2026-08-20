@@ -8,6 +8,7 @@ import secrets
 import urllib.parse
 import subprocess
 import os
+import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
@@ -178,6 +179,16 @@ class AuthServerHandler(BaseHTTPRequestHandler):
             self.handle_jwks()
         elif path == '/.well-known/oauth-authorization-server':
             self.handle_discovery()
+        elif path in (
+            '/realms/mcp/protocol/openid-connect/certs',
+            '/realms/agentgateway/protocol/openid-connect/certs',
+        ):
+            self.handle_jwks()
+        elif path in (
+            '/realms/mcp/.well-known/openid-configuration',
+            '/realms/agentgateway/.well-known/openid-configuration',
+        ):
+            self.handle_keycloak_discovery(path.split('/')[2])
         else:
             self.send_response(404)
             self.end_headers()
@@ -535,13 +546,35 @@ class AuthServerHandler(BaseHTTPRequestHandler):
         }
         self.send_json_response(discovery)
 
+    def handle_keycloak_discovery(self, realm):
+        issuer = f"http://localhost:{self.server.server_port}/realms/{realm}"
+        self.send_json_response({
+            "issuer": issuer,
+            "authorization_endpoint": f"{issuer}/protocol/openid-connect/auth",
+            "token_endpoint": f"{issuer}/protocol/openid-connect/token",
+            "jwks_uri": f"{issuer}/protocol/openid-connect/certs",
+            "registration_endpoint": f"{issuer}/clients-registrations/openid-connect",
+            "response_types_supported": ["code"],
+            "subject_types_supported": ["public"],
+            "id_token_signing_alg_values_supported": ["RS256"],
+            "scopes_supported": ["openid", "profile", "email", "offline_access"],
+            "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post"],
+            "code_challenge_methods_supported": ["S256"],
+        })
+
     def log_message(self, format, *args):
         """Override to provide cleaner logging"""
         print(f"[{self.address_string()}] {format % args}")
 
 def main():
+    host = os.environ.get('AUTH_SERVER_HOST', 'localhost')
     port = 9000
-    server = HTTPServer(('localhost', port), AuthServerHandler)
+    server = HTTPServer((host, port), AuthServerHandler)
+
+    keycloak_mock = None
+    if mock_port := os.environ.get('KEYCLOAK_MOCK_PORT'):
+        keycloak_mock = HTTPServer((host, int(mock_port)), AuthServerHandler)
+        threading.Thread(target=keycloak_mock.serve_forever, daemon=True).start()
 
     print(f"MCP Authorization Server running on http://localhost:{port}")
     print("Using RSA RS256 for JWT signing with OpenSSL")
@@ -558,6 +591,8 @@ def main():
     except KeyboardInterrupt:
         print("\nShutting down server...")
         server.shutdown()
+        if keycloak_mock:
+            keycloak_mock.shutdown()
 
 if __name__ == '__main__':
     main()

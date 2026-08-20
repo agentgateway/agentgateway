@@ -320,6 +320,14 @@
             }
           ]
         },
+        "sensitiveHeaders": {
+          "description": "Additional request headers whose values should be redacted from trace and debug output.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
         "customFunctions": {
           "description": "Custom CEL functions available to all CEL expressions. These can define re-usable snippets that\ncan be used in any expressions.\nConfigure as a block string containing one or more definitions, for example:\n`customFunctions: |`\n`  isInternal() { request.headers[\"x-env\"] == \"internal\" }`\n`  this.joined(prefix, parts...) { prefix + this + parts.join(\"\") }`",
           "type": "string",
@@ -552,7 +560,7 @@
           }
         },
         "tags": {
-          "description": "Freeform capability/routing tags (e.g. `mantle`/`runtime` marking AWS Bedrock endpoints).",
+          "description": "Freeform capability/routing tags for this model.",
           "type": "array",
           "uniqueItems": true,
           "items": {
@@ -712,6 +720,11 @@
           "description": "Read a file baseline and store UI-managed overlay resources in the configured database.",
           "type": "string",
           "const": "hybrid"
+        },
+        {
+          "description": "Disallow write operations to the config from the UI",
+          "type": "string",
+          "const": "readOnly"
         }
       ]
     },
@@ -3671,7 +3684,7 @@
           }
         },
         "requestedTokenType": {
-          "description": "`requested_token_type` parameter. Under token exchange, unset defaults to\naccess_token because this policy forwards bearer access tokens.",
+          "description": "`requested_token_type` parameter. When unset it is omitted from the request\n(RFC 8693 makes it optional). Some providers (e.g. Auth0 custom token exchange)\nreject an explicit access_token value paired with a custom `subject_token_type`.",
           "type": [
             "string",
             "null"
@@ -4038,8 +4051,18 @@
           }
         },
         "scopes": {
-          "description": "`scope` values for the requested token, sent space-delimited.",
+          "description": "`scope` values requested when obtaining the ID-JAG from the identity provider, sent\nspace-delimited.",
           "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "accessTokenScopes": {
+          "description": "`scope` values requested when exchanging the ID-JAG for an access token. When unset,\ninherits `scopes`. When empty, omits `scope`.",
+          "type": [
+            "array",
+            "null"
+          ],
           "items": {
             "type": "string"
           }
@@ -4172,6 +4195,10 @@
               "prefix": "Bearer "
             }
           }
+        },
+        "tokenType": {
+          "description": "RFC 8693 subject token type URI. Defaults to an OpenID Connect ID token.",
+          "type": "string"
         }
       },
       "additionalProperties": false
@@ -4388,6 +4415,17 @@
         "proxy": {
           "description": "Proxy backend used to tunnel the connection.",
           "$ref": "#/$defs/SimpleLocalBackendSerde"
+        },
+        "policies": {
+          "description": "Policies to connect to the proxy backend",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimpleLocalBackendPolicies"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false,
@@ -4646,11 +4684,11 @@
       ]
     },
     "JWTValidationOptions": {
-      "description": "JWT validation options controlling which claims must be present in a token.\n\nThe `required_claims` set specifies which RFC 7519 registered claims must\nexist in the token payload before validation proceeds. Only the following\nvalues are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered\nclaims such as `iat` and `jti` are **not** enforced by the underlying\n`jsonwebtoken` library and will be silently ignored.\n\nThis only enforces **presence**. Standard claims like `exp` and `nbf`\nhave their values validated independently (e.g., expiry is always checked\nwhen the `exp` claim is present, regardless of this setting).\n\nDefaults to `[\"exp\"]`.",
+      "description": "JWT validation options controlling which claims must be present in a token.\n\nThe `required_claims` set specifies which RFC 7519 registered claims must\nexist in the token payload before validation proceeds. Only the following\nvalues are recognized: `exp`, `nbf`, `aud`, `iss`, `sub`. Other registered\nclaims such as `iat` and `jti` are **not** enforced by the underlying\n`jsonwebtoken` library and will be silently ignored.\n\nThis only enforces **presence**. A configured issuer and non-empty audience\nlist independently require `iss` and `aud`, respectively. Standard claims\nlike `exp` and `nbf` have their values validated independently (e.g., expiry\nis always checked when the `exp` claim is present, regardless of this setting).\n\nDefaults to `[\"exp\"]`.",
       "type": "object",
       "properties": {
         "requiredClaims": {
-          "description": "Claims that must be present in the token before validation.\nOnly \"exp\", \"nbf\", \"aud\", \"iss\", \"sub\" are enforced; others\n(including \"iat\" and \"jti\") are ignored.\nDefaults to [\"exp\"]. Use an empty list to require no claims.",
+          "description": "Claims that must be present in the token before validation.\nOnly \"exp\", \"nbf\", \"aud\", \"iss\", \"sub\" are enforced; others\n(including \"iat\" and \"jti\") are ignored.\nDefaults to [\"exp\"]. Use an empty list to add no claim requirements beyond\nthose implied by the configured issuer and audiences.",
           "type": "array",
           "uniqueItems": true,
           "items": {
@@ -4699,6 +4737,16 @@
         },
         "transformations": {
           "description": "Request body values computed from CEL expressions.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
+        "finalTransformations": {
+          "description": "Request body values computed from CEL expressions.\nThese are applied after conversion to the provider's request format.",
           "type": [
             "object",
             "null"
@@ -5442,6 +5490,16 @@
           "const": "anthropicTokenCount"
         },
         {
+          "description": "Gemini models/{model}:generateContent and models/{model}:streamGenerateContent",
+          "type": "string",
+          "const": "generateContent"
+        },
+        {
+          "description": "Gemini models/{model}:countTokens",
+          "type": "string",
+          "const": "geminiCountTokens"
+        },
+        {
           "description": "Cohere /v2/rerank (document reranking)",
           "type": "string",
           "const": "rerank"
@@ -5930,11 +5988,11 @@
               }
             },
             "issuer": {
-              "description": "Expected token issuer, matched against the JWT `iss` claim.",
+              "description": "Expected token issuer. The JWT `iss` claim is required and must match.",
               "type": "string"
             },
             "audiences": {
-              "description": "Accepted token audiences, matched against the JWT `aud` claim when set.",
+              "description": "Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.",
               "type": [
                 "array",
                 "null"
@@ -5983,11 +6041,11 @@
       "type": "object",
       "properties": {
         "issuer": {
-          "description": "Expected token issuer, matched against the JWT `iss` claim.",
+          "description": "Expected token issuer. The JWT `iss` claim is required and must match.",
           "type": "string"
         },
         "audiences": {
-          "description": "Accepted token audiences, matched against the JWT `aud` claim when set.",
+          "description": "Accepted token audiences. A non-empty list requires a matching JWT `aud` claim.",
           "type": [
             "array",
             "null"
@@ -7339,7 +7397,7 @@
           "description": "Backend-level policies such as TLS, authentication, and transformations.",
           "anyOf": [
             {
-              "$ref": "#/$defs/LocalRouteBackendPolicies"
+              "$ref": "#/$defs/LocalBackendPolicies"
             },
             {
               "type": "null"
@@ -7419,6 +7477,19 @@
           "properties": {
             "dynamic": {
               "type": "object",
+              "properties": {
+                "target": {
+                  "description": "CEL expression evaluated against the request to compute the dial\ntarget (e.g. `extproc.workerPodIp + \":\" + string(extproc.workerPodPort)`\nto read dynamic metadata an extProc policy already set). Must\nevaluate to a `host:port` string. The expression and any policy that\nsupplies its dynamic metadata are trusted to select the dial target.\nIf unset, the target is read from the request's own :authority/URI, as\ntoday.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Expression"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
               "additionalProperties": false
             }
           },
@@ -7531,6 +7602,10 @@
               "type": "null"
             }
           ]
+        },
+        "dnsRebindingProtection": {
+          "description": "Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).\nOff by default; see https://github.com/agentgateway/agentgateway/issues/1855.",
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -8367,6 +8442,8 @@
         "responses",
         "embeddings",
         "anthropicTokenCount",
+        "generateContent",
+        "geminiCountTokens",
         "realtime",
         "rerank"
       ]
@@ -8563,6 +8640,18 @@
           ],
           "default": null
         },
+        "sessionAffinity": {
+          "description": "Apply best-effort session affinity using a request value selected by a CEL expression.\nRequests with the same value are consistently load balanced to the same healthy service\nendpoint or AI provider, but may be remapped when the available backends change.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SessionAffinityPolicy"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "ai": {
           "description": "Mark this as LLM traffic to enable LLM processing.",
           "anyOf": [
@@ -8673,6 +8762,20 @@
         }
       ]
     },
+    "SessionAffinityPolicy": {
+      "description": "Configures best-effort session affinity using an existing request attribute.\n\nThe source CEL expression selects the affinity value. Requests with the same value are\nconsistently load balanced to the same healthy service endpoint or AI provider. Unlike session\npersistence, this policy does not identify or track a previously selected backend, so changes to\nthe available backends may remap a value.",
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "CEL expression evaluated against request state. It must return a string or bytes value.\nExamples: `request.headers[\"x-session-id\"]` or `string(source.address)`.",
+          "$ref": "#/$defs/Expression"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "source"
+      ]
+    },
     "LocalAIProviders": {
       "type": "object",
       "properties": {
@@ -8724,239 +8827,6 @@
       "additionalProperties": false,
       "required": [
         "agentRuntimeArn"
-      ]
-    },
-    "LocalRouteBackendPolicies": {
-      "type": "object",
-      "properties": {
-        "requestHeaderModifier": {
-          "description": "Modify request headers before forwarding to this backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "transformations": {
-          "description": "Modify request and response data for this backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalTransformationConfig"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "backendTLS": {
-          "description": "TLS settings used when connecting to this backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalBackendTLS"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "backendAuth": {
-          "description": "Authentication credentials sent to this backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/BackendAuthCompat"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "http": {
-          "description": "HTTP protocol settings for this backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HTTP"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "tcp": {
-          "description": "TCP protocol settings for this backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/TCP"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "backendTunnel": {
-          "description": "Tunnel settings used when connecting to this backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Tunnel"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "responseHeaderModifier": {
-          "description": "Modify response headers returned from this backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HeaderModifier"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "requestRedirect": {
-          "description": "Return a redirect response instead of forwarding to this backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/RequestRedirect"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "health": {
-          "description": "Detect unhealthy backend responses and temporarily remove unhealthy endpoints.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/LocalHealthPolicy"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "extAuthz": {
-          "description": "Authorize incoming requests by calling an external authorization service after this backend is selected.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ExtAuthz"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "authorization": {
-          "description": "Authorize incoming requests after this backend is selected.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Authorization"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "mcpAuthorization": {
-          "description": "Authorization rules for MCP requests.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/McpAuthorization"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "mcpGuardrails": {
-          "description": "External MCP policy processors.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/McpGuardrails"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "a2a": {
-          "description": "Mark this traffic as A2A to enable A2A processing and telemetry.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/A2aPolicy"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "inferenceRouting": {
-          "description": "Route requests through an endpoint picker before forwarding to this backend.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/InferenceRouting"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "ai": {
-          "description": "Mark this as LLM traffic to enable LLM processing.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/Policy"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "sessionAffinity": {
-          "description": "Keep requests whose CEL expression produces the same value on one service endpoint.",
-          "anyOf": [
-            {
-              "$ref": "#/$defs/SessionAffinityPolicy"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        }
-      },
-      "additionalProperties": false
-    },
-    "SessionAffinityPolicy": {
-      "description": "Pins requests that carry the same affinity value to the same healthy service endpoint.\n\nThis policy is intentionally stateless. Every gateway replica computes the same rendezvous\nhash from the request affinity value and the currently available endpoint set.",
-      "type": "object",
-      "properties": {
-        "source": {
-          "description": "CEL expression evaluated against request state. It must return a string or bytes value.\nExamples: `request.headers[\"x-session-id\"]` or `string(source.address)`.",
-          "$ref": "#/$defs/Expression"
-        }
-      },
-      "additionalProperties": false,
-      "required": [
-        "source"
       ]
     },
     "LocalTCPRoute": {
@@ -9090,12 +8960,37 @@
           "type": "object",
           "properties": {
             "host": {
-              "description": "Hostname or IP address",
               "type": "string"
             }
           },
           "required": [
             "host"
+          ]
+        },
+        {
+          "description": "Resolve the dial target from downstream TLS SNI and the original destination port.",
+          "type": "object",
+          "properties": {
+            "dynamic": {
+              "type": "object",
+              "properties": {
+                "target": {
+                  "description": "CEL expression evaluated against TCP connection context to compute a\n`host:port` dial target. Available fields include `source.*` and\n`destination.*`; for TLS, `destination.hostname` is the sniffed SNI.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Expression"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "dynamic"
           ]
         },
         {
@@ -9316,6 +9211,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/NetworkAuthorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "networkExtAuthz": {
+          "description": "HTTP external authorization performed once for each downstream network connection.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ExtAuthz"
             },
             {
               "type": "null"
@@ -9885,6 +9792,17 @@
     "DatabaseLoggingConfig": {
       "type": "object",
       "properties": {
+        "llm": {
+          "description": "LLM detail stored in the database. `metadata` stores request metadata, usage, timing, and\ncost without prompt or completion content in the dedicated payload table. `full`\nadditionally captures and stores prompt and completion content there. When omitted, legacy\nbehavior is preserved: content captured by CEL expressions is also stored in the payload.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DatabaseLlmMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "add": {
           "description": "Database-only fields to add, computed from CEL expressions.",
           "type": "object",
@@ -9894,6 +9812,20 @@
         }
       },
       "additionalProperties": false
+    },
+    "DatabaseLlmMode": {
+      "oneOf": [
+        {
+          "description": "Store LLM metadata without prompt or completion content.",
+          "type": "string",
+          "const": "metadata"
+        },
+        {
+          "description": "Store LLM metadata and prompt/completion content.",
+          "type": "string",
+          "const": "full"
+        }
+      ]
     },
     "TracingConfig": {
       "description": "Configuration for dynamic tracing policy",
@@ -11362,6 +11294,16 @@
             "$ref": "#/$defs/Expression"
           }
         },
+        "finalTransformation": {
+          "description": "final_transformation allows setting values from CEL expressions for the request, overriding any existing values.\nOccurs after conversion of the request to the provider format, allowing for provider-specific transformations.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Expression"
+          }
+        },
         "requestHeaders": {
           "description": "requestHeaders modifies headers in requests to the LLM provider.",
           "anyOf": [
@@ -11886,6 +11828,10 @@
               "type": "null"
             }
           ]
+        },
+        "dnsRebindingProtection": {
+          "description": "Opt-in MCP DNS rebinding protection (Host/Origin must be localhost).\nOff by default; see https://github.com/agentgateway/agentgateway/issues/1855.",
+          "type": "boolean"
         },
         "policies": {
           "description": "Policies applied to MCP requests.",

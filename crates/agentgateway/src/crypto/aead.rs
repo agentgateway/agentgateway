@@ -5,61 +5,136 @@
 //! `crypto-aws-lc` (the default) backs it with `aws-lc-rs`. Additional backends
 //! plug in here behind `#[cfg]` without changing call sites.
 
-#[cfg(feature = "crypto-aws-lc")]
-use aws_lc_rs::aead::{AES_256_GCM, Aad, Nonce, RandomizedNonceKey};
-
 /// Length in bytes of the AES-256-GCM nonce that [`Aes256Gcm::seal`] prepends to
 /// each sealed message.
 const NONCE_LEN: usize = 12;
 
-/// AES-256-GCM authenticated encryption keyed with a caller-provided 32-byte key.
-///
-/// [`seal`](Aes256Gcm::seal) generates a fresh random nonce per message and
-/// returns `nonce || ciphertext || tag`; [`open`](Aes256Gcm::open) expects that
-/// same framing.
-#[cfg(feature = "crypto-aws-lc")]
-#[derive(Debug)]
-pub struct Aes256Gcm {
-	key: RandomizedNonceKey,
-}
+pub use imp::Aes256Gcm;
 
 #[cfg(feature = "crypto-aws-lc")]
-impl Aes256Gcm {
-	/// Creates an AES-256-GCM key from 32 bytes of key material.
-	pub fn new(key: &[u8]) -> Result<Self, AeadError> {
-		let key = RandomizedNonceKey::new(&AES_256_GCM, key).map_err(|_| AeadError::InvalidKey)?;
-		Ok(Self { key })
+mod imp {
+	use aws_lc_rs::aead::{AES_256_GCM, Aad, Nonce, RandomizedNonceKey};
+
+	use super::{AeadError, NONCE_LEN};
+
+	/// AES-256-GCM authenticated encryption keyed with a caller-provided 32-byte key.
+	///
+	/// [`seal`](Aes256Gcm::seal) generates a fresh random nonce per message and
+	/// returns `nonce || ciphertext || tag`; [`open`](Aes256Gcm::open) expects that
+	/// same framing.
+	#[derive(Debug)]
+	pub struct Aes256Gcm {
+		key: RandomizedNonceKey,
 	}
 
-	/// Seals `plaintext`, returning `nonce || ciphertext || tag`.
-	pub fn seal(&self, plaintext: &[u8]) -> Result<Vec<u8>, AeadError> {
-		let mut in_out = plaintext.to_vec();
-		// Generates a random nonce and appends the authentication tag in place.
-		let nonce = self
-			.key
-			.seal_in_place_append_tag(Aad::empty(), &mut in_out)
-			.map_err(|_| AeadError::EncryptionFailed)?;
-
-		let mut result = nonce.as_ref().to_vec();
-		result.extend_from_slice(&in_out);
-		Ok(result)
-	}
-
-	/// Opens data framed as `nonce || ciphertext || tag`, returning the plaintext.
-	pub fn open(&self, data: &[u8]) -> Result<Vec<u8>, AeadError> {
-		if data.len() < NONCE_LEN {
-			return Err(AeadError::InvalidFormat);
+	impl Aes256Gcm {
+		/// Creates an AES-256-GCM key from 32 bytes of key material.
+		pub fn new(key: &[u8]) -> Result<Self, AeadError> {
+			let key = RandomizedNonceKey::new(&AES_256_GCM, key).map_err(|_| AeadError::InvalidKey)?;
+			Ok(Self { key })
 		}
 
-		let (nonce_bytes, ciphertext) = data.split_at(NONCE_LEN);
-		let nonce =
-			Nonce::try_assume_unique_for_key(nonce_bytes).map_err(|_| AeadError::InvalidFormat)?;
-		let mut in_out = ciphertext.to_vec();
-		let plaintext = self
-			.key
-			.open_in_place(nonce, Aad::empty(), &mut in_out)
-			.map_err(|_| AeadError::DecryptionFailed)?;
-		Ok(plaintext.to_vec())
+		/// Seals `plaintext`, returning `nonce || ciphertext || tag`.
+		pub fn seal(&self, plaintext: &[u8]) -> Result<Vec<u8>, AeadError> {
+			let mut in_out = plaintext.to_vec();
+			// Generates a random nonce and appends the authentication tag in place.
+			let nonce = self
+				.key
+				.seal_in_place_append_tag(Aad::empty(), &mut in_out)
+				.map_err(|_| AeadError::EncryptionFailed)?;
+
+			let mut result = nonce.as_ref().to_vec();
+			result.extend_from_slice(&in_out);
+			Ok(result)
+		}
+
+		/// Opens data framed as `nonce || ciphertext || tag`, returning the plaintext.
+		pub fn open(&self, data: &[u8]) -> Result<Vec<u8>, AeadError> {
+			if data.len() < NONCE_LEN {
+				return Err(AeadError::InvalidFormat);
+			}
+
+			let (nonce_bytes, ciphertext) = data.split_at(NONCE_LEN);
+			let nonce =
+				Nonce::try_assume_unique_for_key(nonce_bytes).map_err(|_| AeadError::InvalidFormat)?;
+			let mut in_out = ciphertext.to_vec();
+			let plaintext = self
+				.key
+				.open_in_place(nonce, Aad::empty(), &mut in_out)
+				.map_err(|_| AeadError::DecryptionFailed)?;
+			Ok(plaintext.to_vec())
+		}
+	}
+}
+
+#[cfg(feature = "crypto-symcrypt")]
+mod imp {
+	use super::{AeadError, NONCE_LEN};
+
+	/// AES-256-GCM authentication tag length in bytes.
+	const TAG_LEN: usize = 16;
+	/// AES-256 key length in bytes.
+	const KEY_LEN: usize = 32;
+
+	/// AES-256-GCM authenticated encryption backed by SymCrypt. The wire format
+	/// (`nonce || ciphertext || tag`) matches the aws-lc-rs backend.
+	pub struct Aes256Gcm {
+		key: symcrypt::gcm::GcmExpandedKey,
+	}
+
+	impl Aes256Gcm {
+		/// Creates an AES-256-GCM key from 32 bytes of key material.
+		pub fn new(key: &[u8]) -> Result<Self, AeadError> {
+			if key.len() != KEY_LEN {
+				return Err(AeadError::InvalidKey);
+			}
+			let key =
+				symcrypt::gcm::GcmExpandedKey::new(key, symcrypt::cipher::BlockCipherType::AesBlock)
+					.map_err(|_| AeadError::InvalidKey)?;
+			Ok(Self { key })
+		}
+
+		/// Seals `plaintext`, returning `nonce || ciphertext || tag`.
+		pub fn seal(&self, plaintext: &[u8]) -> Result<Vec<u8>, AeadError> {
+			let mut nonce = [0u8; NONCE_LEN];
+			crate::crypto::rand::fill(&mut nonce).map_err(|_| AeadError::EncryptionFailed)?;
+			let mut buffer = plaintext.to_vec();
+			let mut tag = [0u8; TAG_LEN];
+			self
+				.key
+				.encrypt_in_place(&nonce, &[], &mut buffer, &mut tag);
+			let mut result = Vec::with_capacity(NONCE_LEN + buffer.len() + TAG_LEN);
+			result.extend_from_slice(&nonce);
+			result.extend_from_slice(&buffer);
+			result.extend_from_slice(&tag);
+			Ok(result)
+		}
+
+		/// Opens data framed as `nonce || ciphertext || tag`, returning the plaintext.
+		pub fn open(&self, data: &[u8]) -> Result<Vec<u8>, AeadError> {
+			if data.len() < NONCE_LEN + TAG_LEN {
+				return Err(AeadError::InvalidFormat);
+			}
+			let (nonce_bytes, rest) = data.split_at(NONCE_LEN);
+			let (ciphertext, tag) = rest.split_at(rest.len() - TAG_LEN);
+			let nonce: &[u8; NONCE_LEN] = nonce_bytes
+				.try_into()
+				.map_err(|_| AeadError::InvalidFormat)?;
+			let mut buffer = ciphertext.to_vec();
+			self
+				.key
+				.decrypt_in_place(nonce, &[], &mut buffer, tag)
+				.map_err(|_| AeadError::DecryptionFailed)?;
+			Ok(buffer)
+		}
+	}
+
+	// GcmExpandedKey does not implement Debug; provide a redacted impl matching the
+	// derived Debug on the aws-lc-rs backend.
+	impl std::fmt::Debug for Aes256Gcm {
+		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+			f.debug_struct("Aes256Gcm").finish_non_exhaustive()
+		}
 	}
 }
 

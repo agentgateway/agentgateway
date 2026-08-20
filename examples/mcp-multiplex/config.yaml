@@ -9,7 +9,12 @@ binds:
           - name: time
             stdio:
               cmd: uvx
-              args: ["mcp-server-time"]
+              # mcp-server-time requires `mcp>=1.23.0` with no upper bound, so uvx
+              # resolves the SDK to 2.x, which renamed McpError to MCPError. The
+              # server then fails to import and this target never starts, which
+              # fails initialize for the whole multiplexed backend. Constrain the
+              # SDK until mcp-server-time supports mcp 2.x.
+              args: ["--with", "mcp<2", "mcp-server-time"]
           - name: everything
             stdio:
               cmd: npx
