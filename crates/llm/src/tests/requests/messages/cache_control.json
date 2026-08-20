@@ -35,6 +35,13 @@
       "role": "user",
       "content": [
         {
+          "type": "text",
+          "text": "Cached user text",
+          "cache_control": {
+            "type": "ephemeral"
+          }
+        },
+        {
           "type": "image",
           "source": {
             "type": "base64",
@@ -72,7 +79,10 @@
           "type": "tool_use",
           "id": "call_mixed",
           "name": "lookup",
-          "input": {}
+          "input": {},
+          "cache_control": {
+            "type": "ephemeral"
+          }
         }
       ]
     },
@@ -155,6 +165,19 @@
           }
         }
       ]
+    }
+  ],
+  "tools": [
+    {
+      "name": "lookup",
+      "description": "Look up information",
+      "input_schema": {
+        "type": "object",
+        "properties": {}
+      },
+      "cache_control": {
+        "type": "ephemeral"
+      }
     }
   ]
 }
