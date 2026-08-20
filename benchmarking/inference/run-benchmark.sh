@@ -270,7 +270,7 @@ resolve_gke_identity() {
 }
 
 acquire_campaign_lock() {
-  [[ "${BENCHMARK_CLUSTER_PROVIDER}" == "gke" ]] || return
+  [[ "${BENCHMARK_CLUSTER_PROVIDER}" == "gke" ]] || return 0
   kubectl create namespace "${BENCHMARK_LOCK_NAMESPACE}" \
     --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 
@@ -1869,8 +1869,8 @@ teardown_treatment() {
 }
 
 cleanup_treatment_storage() {
-  [[ "${BENCHMARK_CLUSTER_PROVIDER}" == "gke" ]] || return
-  kubectl get namespace "${SCENARIO_NAME}" >/dev/null 2>&1 || return
+  [[ "${BENCHMARK_CLUSTER_PROVIDER}" == "gke" ]] || return 0
+  kubectl get namespace "${SCENARIO_NAME}" >/dev/null 2>&1 || return 0
 
   local owner campaign
   owner="$(kubectl get namespace "${SCENARIO_NAME}" \

@@ -145,6 +145,42 @@ fi
 
 echo "campaign lock tests passed"
 
+BENCHMARK_CLUSTER_PROVIDER=kind bash -c '
+  source "$1"
+  kubectl() {
+    echo "Kind no-op unexpectedly called kubectl: $*" >&2
+    return 1
+  }
+  acquire_campaign_lock
+' _ "${RUNNER}"
+
+echo "Kind campaign lock no-op test passed"
+
+BENCHMARK_CLUSTER_PROVIDER=kind bash -c '
+  source "$1"
+  SCENARIO_NAME=test-scenario
+  kubectl() {
+    echo "Kind no-op unexpectedly called kubectl: $*" >&2
+    return 1
+  }
+  cleanup_treatment_storage
+' _ "${RUNNER}"
+
+BENCHMARK_CLUSTER_PROVIDER=gke bash -c '
+  source "$1"
+  SCENARIO_NAME=absent-scenario
+  kubectl() {
+    [[ " $* " == *" get namespace absent-scenario "* ]] || {
+      echo "unexpected kubectl call: $*" >&2
+      return 2
+    }
+    return 1
+  }
+  cleanup_treatment_storage
+' _ "${RUNNER}"
+
+echo "storage cleanup no-op tests passed"
+
 BENCHMARK_ROUTING_POLICY=optimized-baseline bash -c '
   source "$1"
   resolve_workload
