@@ -1590,6 +1590,8 @@ message BackendPolicySpec {
     BackendReference proxy = 1;
     // Inline backend policies (e.g. TLS, auth) for the tunnel proxy backend.
     repeated BackendPolicySpec inline_policies = 2;
+    // Use CONNECT even when the tunneled application transport is plaintext HTTP.
+    bool connect = 3;
   }
   message BackendTCP {
     KeepaliveConfig keepalive = 1;

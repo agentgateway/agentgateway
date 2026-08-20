@@ -480,6 +480,7 @@
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
@@ -815,6 +816,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
@@ -1088,6 +1090,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -1361,6 +1364,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -1632,6 +1636,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -1940,6 +1945,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -2213,6 +2219,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -2484,6 +2491,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -2536,6 +2544,7 @@
 |`binds[].listeners[].routes[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].policies.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -2929,6 +2938,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`binds[].listeners[].routes[].policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
@@ -3044,6 +3054,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -3117,6 +3128,7 @@
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`binds[].listeners[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -3453,6 +3465,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.conditional[].descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
@@ -3736,6 +3749,7 @@
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`binds[].listeners[].routes[].policies.remoteRateLimit.descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
@@ -4092,6 +4106,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`binds[].listeners[].routes[].policies.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -4388,6 +4403,7 @@
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].policies.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`binds[].listeners[].routes[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -4687,6 +4703,7 @@
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -4973,6 +4990,7 @@
 |`binds[].listeners[].routes[].policies.extProc.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].policies.extProc.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].policies.extProc.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].policies.extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -5346,6 +5364,7 @@
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].mcp.targets[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
 |`binds[].listeners[].routes[].backends[].mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
@@ -5556,6 +5575,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
@@ -5671,6 +5691,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -5744,6 +5765,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -5809,6 +5831,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.policies.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -6366,6 +6389,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`binds[].listeners[].routes[].backends[].ai.policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -6674,6 +6698,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
@@ -6986,6 +7011,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
@@ -7259,6 +7285,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -7532,6 +7559,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -7803,6 +7831,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -8111,6 +8140,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -8384,6 +8414,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -8655,6 +8686,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -8895,6 +8927,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
@@ -9010,6 +9043,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -9083,6 +9117,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -9148,6 +9183,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -9705,6 +9741,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -10013,6 +10050,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
@@ -10325,6 +10363,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
@@ -10598,6 +10637,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -10871,6 +10911,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -11142,6 +11183,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -11450,6 +11492,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -11723,6 +11766,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -11994,6 +12038,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -12197,6 +12242,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
@@ -12312,6 +12358,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -12385,6 +12432,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`binds[].listeners[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -12450,6 +12498,7 @@
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].routes[].backends[].policies.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -13007,6 +13056,7 @@
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`binds[].listeners[].routes[].backends[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -13315,6 +13365,7 @@
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].routes[].backends[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
@@ -13627,6 +13678,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
@@ -13900,6 +13952,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -14173,6 +14226,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -14444,6 +14498,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -14752,6 +14807,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -15025,6 +15081,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -15296,6 +15353,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -15375,6 +15433,7 @@
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`binds[].listeners[].tcpRoutes[].backends[].policies.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -15960,6 +16019,7 @@
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].policies.extAuthz.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].policies.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`binds[].listeners[].policies.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -16256,6 +16316,7 @@
 |`binds[].listeners[].policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].policies.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`binds[].listeners[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -16555,6 +16616,7 @@
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.extProc.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].policies.extProc.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].policies.extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -16841,6 +16903,7 @@
 |`binds[].listeners[].policies.extProc.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`binds[].listeners[].policies.extProc.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`binds[].listeners[].policies.extProc.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`binds[].listeners[].policies.extProc.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`binds[].listeners[].policies.extProc.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`binds[].listeners[].policies.extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`binds[].listeners[].policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -17229,6 +17292,7 @@
 |`frontendPolicies.networkExtAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`frontendPolicies.networkExtAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`frontendPolicies.networkExtAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`frontendPolicies.networkExtAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`frontendPolicies.networkExtAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`frontendPolicies.networkExtAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`frontendPolicies.networkExtAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -17538,6 +17602,7 @@
 |`frontendPolicies.accessLog.otlp.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`frontendPolicies.accessLog.otlp.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`frontendPolicies.accessLog.otlp.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`frontendPolicies.accessLog.otlp.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`frontendPolicies.accessLog.otlp.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`frontendPolicies.accessLog.otlp.filter`|string|CEL expression that decides whether a request is exported over OTLP.|
 |`frontendPolicies.accessLog.otlp.fields`|object|OTLP-specific access log fields. If unset, the parent access log fields are used.|
@@ -17826,6 +17891,7 @@
 |`frontendPolicies.logging.otlp.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`frontendPolicies.logging.otlp.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`frontendPolicies.logging.otlp.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`frontendPolicies.logging.otlp.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`frontendPolicies.logging.otlp.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`frontendPolicies.logging.otlp.filter`|string|CEL expression that decides whether a request is exported over OTLP.|
 |`frontendPolicies.logging.otlp.fields`|object|OTLP-specific access log fields. If unset, the parent access log fields are used.|
@@ -18110,6 +18176,7 @@
 |`frontendPolicies.tracing.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`frontendPolicies.tracing.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`frontendPolicies.tracing.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`frontendPolicies.tracing.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`frontendPolicies.tracing.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`frontendPolicies.tracing.attributes`|object|Span attributes to add, keyed by attribute name.|
 |`frontendPolicies.tracing.resources`|object|Resource attributes to add to the tracer provider (OTel `Resource`).<br>This can be used to set things like `service.name` dynamically.|
@@ -18481,6 +18548,7 @@
 |`policies[].policy.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.mcpGuardrails.processors[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`policies[].policy.mcpGuardrails.processors[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`policies[].policy.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
@@ -18816,6 +18884,7 @@
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
@@ -19089,6 +19158,7 @@
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`policies[].policy.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -19362,6 +19432,7 @@
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`policies[].policy.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -19633,6 +19704,7 @@
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`policies[].policy.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -19941,6 +20013,7 @@
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -20214,6 +20287,7 @@
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`policies[].policy.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -20485,6 +20559,7 @@
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`policies[].policy.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -20537,6 +20612,7 @@
 |`policies[].policy.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`policies[].policy.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`policies[].policy.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`policies[].policy.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -20930,6 +21006,7 @@
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.backendAuth.oauthTokenExchange.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`policies[].policy.backendAuth.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`policies[].policy.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`policies[].policy.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
@@ -21045,6 +21122,7 @@
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`policies[].policy.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -21118,6 +21196,7 @@
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`policies[].policy.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -21454,6 +21533,7 @@
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.remoteRateLimit.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`policies[].policy.remoteRateLimit.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`policies[].policy.remoteRateLimit.conditional[].descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`policies[].policy.remoteRateLimit.conditional[].descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
@@ -21737,6 +21817,7 @@
 |`policies[].policy.remoteRateLimit.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.remoteRateLimit.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.remoteRateLimit.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.remoteRateLimit.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`policies[].policy.remoteRateLimit.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`policies[].policy.remoteRateLimit.descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`policies[].policy.remoteRateLimit.descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
@@ -22093,6 +22174,7 @@
 |`policies[].policy.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.extAuthz.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`policies[].policy.extAuthz.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`policies[].policy.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`policies[].policy.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -22389,6 +22471,7 @@
 |`policies[].policy.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`policies[].policy.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`policies[].policy.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`policies[].policy.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -22688,6 +22771,7 @@
 |`policies[].policy.extProc.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.extProc.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.extProc.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.extProc.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`policies[].policy.extProc.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`policies[].policy.extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -22974,6 +23058,7 @@
 |`policies[].policy.extProc.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`policies[].policy.extProc.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`policies[].policy.extProc.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`policies[].policy.extProc.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`policies[].policy.extProc.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`policies[].policy.extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`policies[].policy.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -23343,6 +23428,7 @@
 |`backends[].mcp.targets[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].mcp.targets[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].mcp.targets[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].mcp.targets[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].mcp.targets[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
 |`backends[].mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
@@ -23553,6 +23639,7 @@
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`backends[].ai.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
@@ -23668,6 +23755,7 @@
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -23741,6 +23829,7 @@
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -23806,6 +23895,7 @@
 |`backends[].ai.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.policies.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`backends[].ai.policies.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.policies.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -24363,6 +24453,7 @@
 |`backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.policies.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`backends[].ai.policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -24671,6 +24762,7 @@
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].ai.policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
@@ -24983,6 +25075,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
@@ -25256,6 +25349,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -25529,6 +25623,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -25800,6 +25895,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -26108,6 +26204,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -26381,6 +26478,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -26652,6 +26750,7 @@
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -26892,6 +26991,7 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
@@ -27007,6 +27107,7 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -27080,6 +27181,7 @@
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -27145,6 +27247,7 @@
 |`backends[].ai.groups[].providers[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].ai.groups[].providers[].policies.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -27702,6 +27805,7 @@
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.groups[].providers[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -28010,6 +28114,7 @@
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
@@ -28322,6 +28427,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
@@ -28595,6 +28701,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -28868,6 +28975,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -29139,6 +29247,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -29447,6 +29556,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -29720,6 +29830,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -29991,6 +30102,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -30192,6 +30304,7 @@
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`backends[].policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
@@ -30307,6 +30420,7 @@
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`backends[].policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -30380,6 +30494,7 @@
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -30445,6 +30560,7 @@
 |`backends[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].policies.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`backends[].policies.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`backends[].policies.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -31002,6 +31118,7 @@
 |`backends[].policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].policies.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`backends[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -31310,6 +31427,7 @@
 |`backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`backends[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
@@ -31622,6 +31740,7 @@
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
@@ -31895,6 +32014,7 @@
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -32168,6 +32288,7 @@
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -32439,6 +32560,7 @@
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -32747,6 +32869,7 @@
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -33020,6 +33143,7 @@
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -33291,6 +33415,7 @@
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -33681,6 +33806,7 @@
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
@@ -34016,6 +34142,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
@@ -34289,6 +34416,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -34562,6 +34690,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -34833,6 +34962,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -35141,6 +35271,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -35414,6 +35545,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -35685,6 +35817,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -35737,6 +35870,7 @@
 |`routeGroups[].routes[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].policies.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].policies.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -36130,6 +36264,7 @@
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routeGroups[].routes[].policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
@@ -36245,6 +36380,7 @@
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -36318,6 +36454,7 @@
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routeGroups[].routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -36654,6 +36791,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`routeGroups[].routes[].policies.remoteRateLimit.conditional[].descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
@@ -36937,6 +37075,7 @@
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.remoteRateLimit.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].policies.remoteRateLimit.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.remoteRateLimit.descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`routeGroups[].routes[].policies.remoteRateLimit.descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
@@ -37293,6 +37432,7 @@
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routeGroups[].routes[].policies.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -37589,6 +37729,7 @@
 |`routeGroups[].routes[].policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].policies.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routeGroups[].routes[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -37888,6 +38029,7 @@
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].policies.extProc.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -38174,6 +38316,7 @@
 |`routeGroups[].routes[].policies.extProc.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].policies.extProc.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].policies.extProc.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].policies.extProc.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].policies.extProc.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].policies.extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -38547,6 +38690,7 @@
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].mcp.targets[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].mcp.targets[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
 |`routeGroups[].routes[].backends[].mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
@@ -38757,6 +38901,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
@@ -38872,6 +39017,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -38945,6 +39091,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routeGroups[].routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -39010,6 +39157,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.policies.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -39567,6 +39715,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routeGroups[].routes[].backends[].ai.policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -39875,6 +40024,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].ai.policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
@@ -40187,6 +40337,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
@@ -40460,6 +40611,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -40733,6 +40885,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -41004,6 +41157,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -41312,6 +41466,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -41585,6 +41740,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -41856,6 +42012,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -42096,6 +42253,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
@@ -42211,6 +42369,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -42284,6 +42443,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -42349,6 +42509,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -42906,6 +43067,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -43214,6 +43376,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
@@ -43526,6 +43689,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
@@ -43799,6 +43963,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -44072,6 +44237,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -44343,6 +44509,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -44651,6 +44818,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -44924,6 +45092,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -45195,6 +45364,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -45398,6 +45568,7 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routeGroups[].routes[].backends[].policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
@@ -45513,6 +45684,7 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -45586,6 +45758,7 @@
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routeGroups[].routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -45651,6 +45824,7 @@
 |`routeGroups[].routes[].backends[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routeGroups[].routes[].backends[].policies.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -46208,6 +46382,7 @@
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routeGroups[].routes[].backends[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -46516,6 +46691,7 @@
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routeGroups[].routes[].backends[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
@@ -46828,6 +47004,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
@@ -47101,6 +47278,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -47374,6 +47552,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -47645,6 +47824,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -47953,6 +48133,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -48226,6 +48407,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -48497,6 +48679,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -48872,6 +49055,7 @@
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`gateways.*.listeners[].extAuthz.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`gateways.*.listeners[].extAuthz.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`gateways.*.listeners[].extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`gateways.*.listeners[].extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -49168,6 +49352,7 @@
 |`gateways.*.listeners[].extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`gateways.*.listeners[].extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`gateways.*.listeners[].extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`gateways.*.listeners[].extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`gateways.*.listeners[].extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`gateways.*.listeners[].extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`gateways.*.listeners[].extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -49467,6 +49652,7 @@
 |`gateways.*.listeners[].extProc.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`gateways.*.listeners[].extProc.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`gateways.*.listeners[].extProc.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`gateways.*.listeners[].extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`gateways.*.listeners[].extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -49753,6 +49939,7 @@
 |`gateways.*.listeners[].extProc.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`gateways.*.listeners[].extProc.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`gateways.*.listeners[].extProc.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`gateways.*.listeners[].extProc.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`gateways.*.listeners[].extProc.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`gateways.*.listeners[].extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`gateways.*.listeners[].extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -50168,6 +50355,7 @@
 |`gateways.*.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`gateways.*.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`gateways.*.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`gateways.*.extAuthz.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`gateways.*.extAuthz.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`gateways.*.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`gateways.*.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -50464,6 +50652,7 @@
 |`gateways.*.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`gateways.*.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`gateways.*.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`gateways.*.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`gateways.*.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`gateways.*.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`gateways.*.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -50763,6 +50952,7 @@
 |`gateways.*.extProc.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`gateways.*.extProc.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`gateways.*.extProc.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`gateways.*.extProc.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`gateways.*.extProc.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`gateways.*.extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`gateways.*.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -51049,6 +51239,7 @@
 |`gateways.*.extProc.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`gateways.*.extProc.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`gateways.*.extProc.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`gateways.*.extProc.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`gateways.*.extProc.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`gateways.*.extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`gateways.*.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -51485,6 +51676,7 @@
 |`routes[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.mcpGuardrails.processors[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].policies.mcpGuardrails.processors[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
@@ -51820,6 +52012,7 @@
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
@@ -52093,6 +52286,7 @@
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -52366,6 +52560,7 @@
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -52637,6 +52832,7 @@
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`routes[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -52945,6 +53141,7 @@
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -53218,6 +53415,7 @@
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -53489,6 +53687,7 @@
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`routes[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -53541,6 +53740,7 @@
 |`routes[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].policies.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`routes[].policies.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].policies.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -53934,6 +54134,7 @@
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routes[].policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
@@ -54049,6 +54250,7 @@
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routes[].policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -54122,6 +54324,7 @@
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routes[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -54458,6 +54661,7 @@
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].policies.remoteRateLimit.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].policies.remoteRateLimit.conditional[].descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`routes[].policies.remoteRateLimit.conditional[].descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
@@ -54741,6 +54945,7 @@
 |`routes[].policies.remoteRateLimit.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.remoteRateLimit.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].policies.remoteRateLimit.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.remoteRateLimit.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].policies.remoteRateLimit.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].policies.remoteRateLimit.descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`routes[].policies.remoteRateLimit.descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
@@ -55097,6 +55302,7 @@
 |`routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].policies.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.extAuthz.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].policies.extAuthz.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].policies.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routes[].policies.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -55393,6 +55599,7 @@
 |`routes[].policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].policies.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routes[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -55692,6 +55899,7 @@
 |`routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].policies.extProc.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.extProc.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].policies.extProc.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].policies.extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -55978,6 +56186,7 @@
 |`routes[].policies.extProc.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].policies.extProc.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].policies.extProc.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].policies.extProc.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].policies.extProc.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].policies.extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -56351,6 +56560,7 @@
 |`routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].mcp.targets[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].mcp.targets[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].mcp.targets[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
 |`routes[].backends[].mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
@@ -56561,6 +56771,7 @@
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routes[].backends[].ai.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
@@ -56676,6 +56887,7 @@
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -56749,6 +56961,7 @@
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routes[].backends[].ai.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -56814,6 +57027,7 @@
 |`routes[].backends[].ai.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.policies.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.policies.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].ai.policies.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -57371,6 +57585,7 @@
 |`routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.policies.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routes[].backends[].ai.policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -57679,6 +57894,7 @@
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].backends[].ai.policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
@@ -57991,6 +58207,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
@@ -58264,6 +58481,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -58537,6 +58755,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -58808,6 +59027,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -59116,6 +59336,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -59389,6 +59610,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -59660,6 +59882,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -59900,6 +60123,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
@@ -60015,6 +60239,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -60088,6 +60313,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routes[].backends[].ai.groups[].providers[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -60153,6 +60379,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].ai.groups[].providers[].policies.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -60710,6 +60937,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routes[].backends[].ai.groups[].providers[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -61018,6 +61246,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].backends[].ai.groups[].providers[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
@@ -61330,6 +61559,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
@@ -61603,6 +61833,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -61876,6 +62107,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -62147,6 +62379,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -62455,6 +62688,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -62728,6 +62962,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -62999,6 +63234,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -63202,6 +63438,7 @@
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routes[].backends[].policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
@@ -63317,6 +63554,7 @@
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -63390,6 +63628,7 @@
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`routes[].backends[].policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -63455,6 +63694,7 @@
 |`routes[].backends[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].policies.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`routes[].backends[].policies.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`routes[].backends[].policies.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -64012,6 +64252,7 @@
 |`routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].policies.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].policies.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`routes[].backends[].policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -64320,6 +64561,7 @@
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`routes[].backends[].policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
@@ -64632,6 +64874,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
@@ -64905,6 +65148,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -65178,6 +65422,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -65449,6 +65694,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`routes[].backends[].policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -65757,6 +66003,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -66030,6 +66277,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -66301,6 +66549,7 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`routes[].backends[].policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -66381,6 +66630,7 @@
 |`tcpRoutes[].backends[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`tcpRoutes[].backends[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`tcpRoutes[].backends[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`tcpRoutes[].backends[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`tcpRoutes[].backends[].policies.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -66849,6 +67099,7 @@
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.providers[].defaults.auth.oauthTokenExchange.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.providers[].defaults.auth.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.providers[].defaults.auth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`llm.providers[].defaults.auth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
@@ -66964,6 +67215,7 @@
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`llm.providers[].defaults.auth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -67037,6 +67289,7 @@
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`llm.providers[].defaults.auth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -67099,6 +67352,7 @@
 |`llm.providers[].defaults.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.providers[].defaults.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.providers[].defaults.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.providers[].defaults.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.providers[].defaults.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`llm.providers[].defaults.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.providers[].defaults.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -67566,6 +67820,7 @@
 |`llm.models[].auth.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.models[].auth.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].auth.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].auth.oauthTokenExchange.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.models[].auth.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.models[].auth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`llm.models[].auth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
@@ -67681,6 +67936,7 @@
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].auth.crossAppAccess.identityProvider.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.models[].auth.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.models[].auth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`llm.models[].auth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -67754,6 +68010,7 @@
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`llm.models[].auth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -67816,6 +68073,7 @@
 |`llm.models[].backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.models[].backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.models[].backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`llm.models[].backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`llm.models[].backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -68370,6 +68628,7 @@
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.request[].openAIModeration.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.models[].guardrails.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.models[].guardrails.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
@@ -68643,6 +68902,7 @@
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.models[].guardrails.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.models[].guardrails.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`llm.models[].guardrails.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -68916,6 +69176,7 @@
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.request[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.models[].guardrails.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.models[].guardrails.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`llm.models[].guardrails.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -69187,6 +69448,7 @@
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.models[].guardrails.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.models[].guardrails.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`llm.models[].guardrails.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -69495,6 +69757,7 @@
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.models[].guardrails.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`llm.models[].guardrails.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -69768,6 +70031,7 @@
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.response[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.models[].guardrails.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.models[].guardrails.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`llm.models[].guardrails.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -70039,6 +70303,7 @@
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.models[].guardrails.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.models[].guardrails.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`llm.models[].guardrails.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -70404,6 +70669,7 @@
 |`llm.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.policies.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.policies.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.extAuthz.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.policies.extAuthz.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.policies.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`llm.policies.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -70700,6 +70966,7 @@
 |`llm.policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.policies.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`llm.policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -70999,6 +71266,7 @@
 |`llm.policies.extProc.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.policies.extProc.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.policies.extProc.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.extProc.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.policies.extProc.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.policies.extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`llm.policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -71285,6 +71553,7 @@
 |`llm.policies.extProc.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.policies.extProc.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.policies.extProc.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.extProc.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.policies.extProc.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.policies.extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`llm.policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -71658,6 +71927,7 @@
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.guardrails.request[].openAIModeration.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.policies.guardrails.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.policies.guardrails.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
@@ -71931,6 +72201,7 @@
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.policies.guardrails.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.policies.guardrails.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`llm.policies.guardrails.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -72204,6 +72475,7 @@
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.guardrails.request[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.policies.guardrails.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.policies.guardrails.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`llm.policies.guardrails.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -72475,6 +72747,7 @@
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.guardrails.request[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.policies.guardrails.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.policies.guardrails.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`llm.policies.guardrails.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -72783,6 +73056,7 @@
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.policies.guardrails.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`llm.policies.guardrails.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -73056,6 +73330,7 @@
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.guardrails.response[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.policies.guardrails.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.policies.guardrails.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`llm.policies.guardrails.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -73327,6 +73602,7 @@
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.guardrails.response[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.policies.guardrails.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.policies.guardrails.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`llm.policies.guardrails.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -73622,6 +73898,7 @@
 |`llm.policies.remoteRateLimit.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`llm.policies.remoteRateLimit.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`llm.policies.remoteRateLimit.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`llm.policies.remoteRateLimit.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`llm.policies.remoteRateLimit.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`llm.policies.remoteRateLimit.descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`llm.policies.remoteRateLimit.descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
@@ -73933,6 +74210,7 @@
 |`mcp.targets[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`mcp.targets[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.targets[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.targets[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`mcp.targets[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.statefulMode`|enum|Whether to keep a persistent session across requests (Stateful) or create one per request (Stateless).<br>Possible values: `stateless`, `stateful`.|
 |`mcp.prefixMode`|enum|How to namespace tool names when multiplexing: `always` prefix with the target name, or only prefix when needed (`conditional`).<br>Possible values: `conditional`, `always`, `never`.|
@@ -74271,6 +74549,7 @@
 |`mcp.policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.mcpGuardrails.processors[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`mcp.policies.mcpGuardrails.processors[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.policies.mcpGuardrails.processors[].failureMode`|enum|Behavior when the processor is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.mcpGuardrails.processors[].metadata`|object|CEL expressions evaluated per request and sent to the processor as metadata.|
@@ -74606,6 +74885,7 @@
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the prompt.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
@@ -74879,6 +75159,7 @@
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`mcp.policies.ai.promptGuard.request[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor`|object|Use Google Model Armor to evaluate the prompt.<br>Configuration for Google Cloud Model Armor integration.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -75152,6 +75433,7 @@
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`mcp.policies.ai.promptGuard.request[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety`|object|Use Azure Content Safety to evaluate the prompt.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -75423,6 +75705,7 @@
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`mcp.policies.ai.promptGuard.request[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -75731,6 +76014,7 @@
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor`|object|Use Google Model Armor to evaluate the response.<br>Configuration for Google Cloud Model Armor integration.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.templateId`|string|The template ID for the Model Armor configuration|
@@ -76004,6 +76288,7 @@
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`mcp.policies.ai.promptGuard.response[].googleModelArmor.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety`|object|Use Azure Content Safety to evaluate the response.<br>Configuration for Azure Content Safety integration.<br><br>Uses the Azure AI Content Safety APIs to detect harmful content<br>and jailbreak attempts. The endpoint and authentication are shared<br>across all enabled features.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.endpoint`|string|The Azure Content Safety endpoint hostname (e.g., "<resource-name>.cognitiveservices.azure.com")|
@@ -76275,6 +76560,7 @@
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.analyzeText`|object|Analyze Text configuration for detecting harmful content categories<br>(Hate, SelfHarm, Sexual, Violence) and blocklist matches.|
 |`mcp.policies.ai.promptGuard.response[].azureContentSafety.analyzeText.severityThreshold`|integer|Severity threshold (0-6 for FourSeverityLevels). Content at or above this level is blocked. Default: 2.|
@@ -76327,6 +76613,7 @@
 |`mcp.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`mcp.policies.backendTunnel.policies`|object|Policies to connect to the proxy backend|
 |`mcp.policies.backendTunnel.policies.requestHeaderModifier`|object|Modify request headers before forwarding to this backend.|
 |`mcp.policies.backendTunnel.policies.requestHeaderModifier.add`|object|Headers to append without replacing existing values.|
@@ -76720,6 +77007,7 @@
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`mcp.policies.backendAuth.oauthTokenExchange.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.policies.backendAuth.oauthTokenExchange.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`mcp.policies.backendAuth.oauthTokenExchange.grantType`|enum|Selects which RFC the request follows; defaults to token exchange (RFC 8693).<br>Possible values: `tokenExchange`, `jwtBearer`.|
@@ -76835,6 +77123,7 @@
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`mcp.policies.backendAuth.crossAppAccess.identityProvider.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -76908,6 +77197,7 @@
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.path`|string|Token endpoint path on the backend; defaults to "/".|
 |`mcp.policies.backendAuth.crossAppAccess.resourceAuthorizationServer.clientAuth`|object|Client authentication used when calling the token endpoint.|
@@ -77244,6 +77534,7 @@
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.remoteRateLimit.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`mcp.policies.remoteRateLimit.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.policies.remoteRateLimit.conditional[].descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`mcp.policies.remoteRateLimit.conditional[].descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
@@ -77527,6 +77818,7 @@
 |`mcp.policies.remoteRateLimit.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.remoteRateLimit.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.remoteRateLimit.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.remoteRateLimit.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`mcp.policies.remoteRateLimit.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.policies.remoteRateLimit.descriptors`|[]object|Descriptors sent to the remote rate limit service.|
 |`mcp.policies.remoteRateLimit.descriptors[].entries`|[]object|Descriptor key/value entries. Values are CEL expressions evaluated from the request.|
@@ -77883,6 +78175,7 @@
 |`mcp.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.extAuthz.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`mcp.policies.extAuthz.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.policies.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`mcp.policies.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -78179,6 +78472,7 @@
 |`mcp.policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`mcp.policies.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`mcp.policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -78478,6 +78772,7 @@
 |`mcp.policies.extProc.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.extProc.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.extProc.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.extProc.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`mcp.policies.extProc.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.policies.extProc.conditional[].failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.extProc.conditional[].metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -78764,6 +79059,7 @@
 |`mcp.policies.extProc.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`mcp.policies.extProc.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`mcp.policies.extProc.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`mcp.policies.extProc.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`mcp.policies.extProc.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`mcp.policies.extProc.failureMode`|enum|Behavior when the external processing service is unavailable or returns an error.<br>Possible values: `failClosed`, `failOpen`.|
 |`mcp.policies.extProc.metadataContext`|object|Additional metadata to send to the external processing service.<br>Maps to the `metadata_context.filter_metadata` field in ProcessingRequest, and allows dynamic CEL expressions.|
@@ -79160,6 +79456,7 @@
 |`ui.policies.extAuthz.conditional[].policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`ui.policies.extAuthz.conditional[].policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`ui.policies.extAuthz.conditional[].policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`ui.policies.extAuthz.conditional[].policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`ui.policies.extAuthz.conditional[].policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`ui.policies.extAuthz.conditional[].protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`ui.policies.extAuthz.conditional[].protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|
@@ -79456,6 +79753,7 @@
 |`ui.policies.extAuthz.policies.backendTunnel.proxy.service.port`|integer|Port on the target Service to route to.|
 |`ui.policies.extAuthz.policies.backendTunnel.proxy.host`|string|Hostname or IP address|
 |`ui.policies.extAuthz.policies.backendTunnel.proxy.backend`|string|Explicit backend reference. Backend must be defined in the top level backends list|
+|`ui.policies.extAuthz.policies.backendTunnel.connect`|boolean|Use CONNECT even when the tunneled application transport is plaintext HTTP.|
 |`ui.policies.extAuthz.policies.backendTunnel.policies`|any|Policies to connect to the proxy backend|
 |`ui.policies.extAuthz.protocol`|object|Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.<br>Exactly one of grpc or http may be set.|
 |`ui.policies.extAuthz.protocol.grpc`|object|Call the authorization service using the gRPC authorization protocol.|

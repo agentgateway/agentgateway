@@ -1373,6 +1373,12 @@ spec:
                                                                   == ''Service'')
                                                                   ? has(self.port)
                                                                   : true'
+                                                            connect:
+                                                              description: Use CONNECT
+                                                                even when the tunneled
+                                                                application transport
+                                                                is plaintext HTTP.
+                                                              type: boolean
                                                             url:
                                                               description: |-
                                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -1901,6 +1907,12 @@ spec:
                                                                   == ''Service'')
                                                                   ? has(self.port)
                                                                   : true'
+                                                            connect:
+                                                              description: Use CONNECT
+                                                                even when the tunneled
+                                                                application transport
+                                                                is plaintext HTTP.
+                                                              type: boolean
                                                             url:
                                                               description: |-
                                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -2448,6 +2460,12 @@ spec:
                                                                   == ''Service'')
                                                                   ? has(self.port)
                                                                   : true'
+                                                            connect:
+                                                              description: Use CONNECT
+                                                                even when the tunneled
+                                                                application transport
+                                                                is plaintext HTTP.
+                                                              type: boolean
                                                             url:
                                                               description: |-
                                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -3405,6 +3423,12 @@ spec:
                                                                   == ''Service'')
                                                                   ? has(self.port)
                                                                   : true'
+                                                            connect:
+                                                              description: Use CONNECT
+                                                                even when the tunneled
+                                                                application transport
+                                                                is plaintext HTTP.
+                                                              type: boolean
                                                             url:
                                                               description: |-
                                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -3933,6 +3957,12 @@ spec:
                                                                   == ''Service'')
                                                                   ? has(self.port)
                                                                   : true'
+                                                            connect:
+                                                              description: Use CONNECT
+                                                                even when the tunneled
+                                                                application transport
+                                                                is plaintext HTTP.
+                                                              type: boolean
                                                             url:
                                                               description: |-
                                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -6844,6 +6874,10 @@ spec:
                                         - message: Must have port for Service reference
                                           rule: '(size(self.group) == 0 && self.kind
                                             == ''Service'') ? has(self.port) : true'
+                                      connect:
+                                        description: Use CONNECT even when the tunneled
+                                          application transport is plaintext HTTP.
+                                        type: boolean
                                       url:
                                         description: |-
                                           `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -9771,6 +9805,10 @@ spec:
                                       - message: Must have port for Service reference
                                         rule: '(size(self.group) == 0 && self.kind
                                           == ''Service'') ? has(self.port) : true'
+                                    connect:
+                                      description: Use CONNECT even when the tunneled
+                                        application transport is plaintext HTTP.
+                                      type: boolean
                                     url:
                                       description: |-
                                         `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -10635,6 +10673,11 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
+                                            connect:
+                                              description: Use CONNECT even when the
+                                                tunneled application transport is
+                                                plaintext HTTP.
+                                              type: boolean
                                             url:
                                               description: |-
                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -11084,6 +11127,11 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
+                                            connect:
+                                              description: Use CONNECT even when the
+                                                tunneled application transport is
+                                                plaintext HTTP.
+                                              type: boolean
                                             url:
                                               description: |-
                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -11555,6 +11603,11 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
+                                            connect:
+                                              description: Use CONNECT even when the
+                                                tunneled application transport is
+                                                plaintext HTTP.
+                                              type: boolean
                                             url:
                                               description: |-
                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -12386,6 +12439,11 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
+                                            connect:
+                                              description: Use CONNECT even when the
+                                                tunneled application transport is
+                                                plaintext HTTP.
+                                              type: boolean
                                             url:
                                               description: |-
                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -12835,6 +12893,11 @@ spec:
                                                 rule: '(size(self.group) == 0 && self.kind
                                                   == ''Service'') ? has(self.port)
                                                   : true'
+                                            connect:
+                                              description: Use CONNECT even when the
+                                                tunneled application transport is
+                                                plaintext HTTP.
+                                              type: boolean
                                             url:
                                               description: |-
                                                 `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -16173,6 +16236,10 @@ spec:
                         - message: Must have port for Service reference
                           rule: '(size(self.group) == 0 && self.kind == ''Service'')
                             ? has(self.port) : true'
+                      connect:
+                        description: Use CONNECT even when the tunneled application
+                          transport is plaintext HTTP.
+                        type: boolean
                       url:
                         description: |-
                           `url` directly specifies the HTTP(S) endpoint for this policy.

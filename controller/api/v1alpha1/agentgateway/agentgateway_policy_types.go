@@ -2490,6 +2490,10 @@ type BackendTunnel struct {
 	// +kubebuilder:validation:XValidation:rule="!has(self.url) || self.url.matches('^https?://[^/?#]+$')",message="url must not include a path for backend tunnel"
 	// +optional
 	PolicyBackendEndpoint `json:",inline"`
+
+	// Use CONNECT even when the tunneled application transport is plaintext HTTP.
+	// +optional
+	Connect bool `json:"connect,omitempty"`
 }
 
 type BackendHTTP struct {

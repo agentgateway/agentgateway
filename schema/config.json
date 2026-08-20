@@ -4496,6 +4496,10 @@
           "description": "Proxy backend used to tunnel the connection.",
           "$ref": "#/$defs/SimpleLocalBackendSerde"
         },
+        "connect": {
+          "description": "Use CONNECT even when the tunneled application transport is plaintext HTTP.",
+          "type": "boolean"
+        },
         "policies": {
           "description": "Policies to connect to the proxy backend",
           "anyOf": [

@@ -560,6 +560,7 @@ func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPoli
 					BackendTunnel: &api.BackendPolicySpec_BackendTunnel{
 						Proxy:          proxy,
 						InlinePolicies: inlinePolicies,
+						Connect:        tunnel.Connect,
 					},
 				},
 			},

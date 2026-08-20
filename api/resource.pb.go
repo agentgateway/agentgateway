@@ -13824,8 +13824,10 @@ type BackendPolicySpec_BackendTunnel struct {
 	Proxy *BackendReference      `protobuf:"bytes,1,opt,name=proxy,proto3" json:"proxy,omitempty"`
 	// Inline backend policies (e.g. TLS, auth) for the tunnel proxy backend.
 	InlinePolicies []*BackendPolicySpec `protobuf:"bytes,2,rep,name=inline_policies,json=inlinePolicies,proto3" json:"inline_policies,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Use CONNECT even when the tunneled application transport is plaintext HTTP.
+	Connect       bool `protobuf:"varint,3,opt,name=connect,proto3" json:"connect,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BackendPolicySpec_BackendTunnel) Reset() {
@@ -13870,6 +13872,13 @@ func (x *BackendPolicySpec_BackendTunnel) GetInlinePolicies() []*BackendPolicySp
 		return x.InlinePolicies
 	}
 	return nil
+}
+
+func (x *BackendPolicySpec_BackendTunnel) GetConnect() bool {
+	if x != nil {
+		return x.Connect
+	}
+	return false
 }
 
 type BackendPolicySpec_BackendTCP struct {
@@ -18448,7 +18457,7 @@ const file_resource_proto_rawDesc = "" +
 	"\vPolicyPhase\x12\t\n" +
 	"\x05ROUTE\x10\x00\x12\v\n" +
 	"\aGATEWAY\x10\x01B\x06\n" +
-	"\x04kind\"\xfca\n" +
+	"\x04kind\"\x96b\n" +
 	"\x11BackendPolicySpec\x12D\n" +
 	"\x03a2a\x18\x01 \x01(\v20.agentgateway.dev.resource.BackendPolicySpec.A2aH\x00R\x03a2a\x12l\n" +
 	"\x11inference_routing\x18\x02 \x01(\v2=.agentgateway.dev.resource.BackendPolicySpec.InferenceRoutingH\x00R\x10inferenceRouting\x12Z\n" +
@@ -18691,10 +18700,11 @@ const file_resource_proto_rawDesc = "" +
 	"\vHttpVersion\x12\x0f\n" +
 	"\vUNSPECIFIED\x10\x00\x12\t\n" +
 	"\x05HTTP1\x10\x01\x12\t\n" +
-	"\x05HTTP2\x10\x02\x1a\xa9\x01\n" +
+	"\x05HTTP2\x10\x02\x1a\xc3\x01\n" +
 	"\rBackendTunnel\x12A\n" +
 	"\x05proxy\x18\x01 \x01(\v2+.agentgateway.dev.resource.BackendReferenceR\x05proxy\x12U\n" +
-	"\x0finline_policies\x18\x02 \x03(\v2,.agentgateway.dev.resource.BackendPolicySpecR\x0einlinePolicies\x1a\x9a\x01\n" +
+	"\x0finline_policies\x18\x02 \x03(\v2,.agentgateway.dev.resource.BackendPolicySpecR\x0einlinePolicies\x12\x18\n" +
+	"\aconnect\x18\x03 \x01(\bR\aconnect\x1a\x9a\x01\n" +
 	"\n" +
 	"BackendTCP\x12H\n" +
 	"\tkeepalive\x18\x01 \x01(\v2*.agentgateway.dev.resource.KeepaliveConfigR\tkeepalive\x12B\n" +

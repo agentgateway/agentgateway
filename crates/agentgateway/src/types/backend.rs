@@ -67,6 +67,9 @@ impl HTTP {
 pub struct Tunnel {
 	/// Proxy backend used to tunnel the connection.
 	pub proxy: Arc<SimpleBackendReference>,
+	/// Use CONNECT even when the tunneled application transport is plaintext HTTP.
+	#[serde(default, skip_serializing_if = "std::ops::Not::not")]
+	pub connect: bool,
 	/// Policies to connect to the proxy backend
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
