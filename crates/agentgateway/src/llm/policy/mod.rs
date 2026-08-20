@@ -1231,7 +1231,7 @@ impl Policy {
 				replacements.push(None);
 				return;
 			}
-			match Self::apply_prompt_guard_regex(text, rgx) {
+			match Self::apply_prompt_guard_regex(text, rgx, GuardrailPhase::Request) {
 				Some(RegexResult::Reject) => {
 					rejected = true;
 				},
@@ -1273,7 +1273,7 @@ impl Policy {
 			if rejected {
 				return;
 			}
-			match Self::apply_prompt_guard_regex(text, rgx) {
+			match Self::apply_prompt_guard_regex(text, rgx, GuardrailPhase::Response) {
 				Some(RegexResult::Reject) => {
 					rejected = true;
 				},
@@ -1480,8 +1480,16 @@ impl Policy {
 	// 	}
 	// }
 
-	fn apply_prompt_guard_regex(original_content: &str, rgx: &RegexRules) -> Option<RegexResult> {
+	fn apply_prompt_guard_regex(
+		original_content: &str,
+		rgx: &RegexRules,
+		phase: GuardrailPhase,
+	) -> Option<RegexResult> {
 		let mut working: Option<String> = None;
+		let direction = match phase {
+			GuardrailPhase::Request => "request",
+			GuardrailPhase::Response => "response",
+		};
 
 		for r in &rgx.rules {
 			match r {
@@ -1497,6 +1505,12 @@ impl Policy {
 					if results.is_empty() {
 						continue;
 					}
+					debug!(
+						pattern = ?builtin,
+						action = ?rgx.action,
+						direction,
+						"prompt guard pattern matched"
+					);
 					match &rgx.action {
 						Action::Reject => return Some(RegexResult::Reject),
 						Action::Mask => {
@@ -1523,6 +1537,12 @@ impl Policy {
 					let content = working.as_deref().unwrap_or(original_content);
 					if matches!(rgx.action, Action::Reject) {
 						if pattern.is_match(content) {
+							debug!(
+								pattern = pattern.as_str(),
+								action = ?rgx.action,
+								direction,
+								"prompt guard pattern matched"
+							);
 							return Some(RegexResult::Reject);
 						}
 						continue;
@@ -1536,6 +1556,12 @@ impl Policy {
 					if ranges.is_empty() {
 						continue;
 					}
+					debug!(
+						pattern = pattern.as_str(),
+						action = ?rgx.action,
+						direction,
+						"prompt guard pattern matched"
+					);
 					let buf = working.get_or_insert_with(|| original_content.to_string());
 					// Reverse order to avoid index shifting
 					for range in ranges.into_iter().rev() {
@@ -2248,6 +2274,7 @@ fn test_apply_prompt_guard_regex_mask(
 			action: Action::Mask,
 			rules,
 		},
+		GuardrailPhase::Request,
 	);
 	match result {
 		Some(RegexResult::Mask(masked)) => assert_eq!(masked, expected),
@@ -2266,6 +2293,7 @@ fn test_apply_prompt_guard_regex_reject(#[case] rules: Vec<RegexRule>, #[case] i
 			action: Action::Reject,
 			rules,
 		},
+		GuardrailPhase::Request,
 	);
 	assert!(matches!(result, Some(RegexResult::Reject)));
 }
