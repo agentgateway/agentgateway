@@ -3812,6 +3812,10 @@ async fn send_mirror(
 // Connection header field. These are the headers defined by the
 // obsoleted RFC 2616 (section 13.5.1) and are used for backward
 // compatibility.
+//
+// NOTE: `Proxy-Authorization` is hop-by-hop but is deliberately absent here. It is stripped at the
+// outbound boundary (`client::Client::call`) instead, so that request policies such as `basicAuth`
+// can read it when the gateway acts as an authenticated forward proxy.
 static HOP_HEADERS: [HeaderName; 8] = [
 	header::CONNECTION,
 	// non-standard but still sent by libcurl and rejected by e.g. google

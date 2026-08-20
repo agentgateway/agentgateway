@@ -618,9 +618,10 @@ impl Client {
 			transport,
 		} = call;
 		async move {
-      req
-        .headers_mut()
-        .remove(http::header::PROXY_AUTHORIZATION);
+			// `Proxy-Authorization` is hop-by-hop: it authenticates the client to this gateway and
+			// must never reach the upstream. Request policies have already consumed it by now. This
+			// runs before the tunnel branch below, which inserts our own upstream proxy credential.
+			req.headers_mut().remove(http::header::PROXY_AUTHORIZATION);
 			let dest = connector
 				.resolve_target(transport.skip_dns_resolution(), &target)
 				.await?;
