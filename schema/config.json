@@ -4496,9 +4496,10 @@
           "description": "Proxy backend used to tunnel the connection.",
           "$ref": "#/$defs/SimpleLocalBackendSerde"
         },
-        "connect": {
-          "description": "Use CONNECT even when the tunneled application transport is plaintext HTTP.",
-          "type": "boolean"
+        "mode": {
+          "description": "How requests are sent through the proxy. In `connect` mode, HTTP policies on the proxy backend\ndo not run on tunneled requests; HTTP policies on the destination backend still run.",
+          "$ref": "#/$defs/TunnelMode",
+          "default": "auto"
         },
         "policies": {
           "description": "Policies to connect to the proxy backend",
@@ -4515,6 +4516,20 @@
       "additionalProperties": false,
       "required": [
         "proxy"
+      ]
+    },
+    "TunnelMode": {
+      "oneOf": [
+        {
+          "description": "Use CONNECT for TLS and non-HTTP transports, and absolute-form requests for plaintext HTTP.",
+          "type": "string",
+          "const": "auto"
+        },
+        {
+          "description": "Always use CONNECT. HTTP policies on the proxy backend do not run on tunneled requests.",
+          "type": "string",
+          "const": "connect"
+        }
       ]
     },
     "FailureMode": {

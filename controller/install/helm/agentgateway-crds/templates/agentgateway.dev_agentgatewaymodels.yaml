@@ -2275,10 +2275,16 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
-                                        connect:
-                                          description: Use CONNECT even when the tunneled
-                                            application transport is plaintext HTTP.
-                                          type: boolean
+                                        mode:
+                                          default: Auto
+                                          description: |-
+                                            How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
+                                            do not run on tunneled requests; HTTP policies on the destination backend still run.
+                                            Defaults to `Auto`.
+                                          enum:
+                                          - Auto
+                                          - Connect
+                                          type: string
                                         url:
                                           description: |-
                                             `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -2720,10 +2726,16 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
-                                        connect:
-                                          description: Use CONNECT even when the tunneled
-                                            application transport is plaintext HTTP.
-                                          type: boolean
+                                        mode:
+                                          default: Auto
+                                          description: |-
+                                            How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
+                                            do not run on tunneled requests; HTTP policies on the destination backend still run.
+                                            Defaults to `Auto`.
+                                          enum:
+                                          - Auto
+                                          - Connect
+                                          type: string
                                         url:
                                           description: |-
                                             `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -3184,10 +3196,16 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
-                                        connect:
-                                          description: Use CONNECT even when the tunneled
-                                            application transport is plaintext HTTP.
-                                          type: boolean
+                                        mode:
+                                          default: Auto
+                                          description: |-
+                                            How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
+                                            do not run on tunneled requests; HTTP policies on the destination backend still run.
+                                            Defaults to `Auto`.
+                                          enum:
+                                          - Auto
+                                          - Connect
+                                          type: string
                                         url:
                                           description: |-
                                             `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -4003,10 +4021,16 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
-                                        connect:
-                                          description: Use CONNECT even when the tunneled
-                                            application transport is plaintext HTTP.
-                                          type: boolean
+                                        mode:
+                                          default: Auto
+                                          description: |-
+                                            How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
+                                            do not run on tunneled requests; HTTP policies on the destination backend still run.
+                                            Defaults to `Auto`.
+                                          enum:
+                                          - Auto
+                                          - Connect
+                                          type: string
                                         url:
                                           description: |-
                                             `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -4448,10 +4472,16 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
-                                        connect:
-                                          description: Use CONNECT even when the tunneled
-                                            application transport is plaintext HTTP.
-                                          type: boolean
+                                        mode:
+                                          default: Auto
+                                          description: |-
+                                            How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
+                                            do not run on tunneled requests; HTTP policies on the destination backend still run.
+                                            Defaults to `Auto`.
+                                          enum:
+                                          - Auto
+                                          - Connect
+                                          type: string
                                         url:
                                           description: |-
                                             `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -4935,10 +4965,16 @@ spec:
                         - message: Must have port for Service reference
                           rule: '(size(self.group) == 0 && self.kind == ''Service'')
                             ? has(self.port) : true'
-                      connect:
-                        description: Use CONNECT even when the tunneled application
-                          transport is plaintext HTTP.
-                        type: boolean
+                      mode:
+                        default: Auto
+                        description: |-
+                          How requests are sent through the proxy. In `Connect` mode, HTTP policies on the proxy backend
+                          do not run on tunneled requests; HTTP policies on the destination backend still run.
+                          Defaults to `Auto`.
+                        enum:
+                        - Auto
+                        - Connect
+                        type: string
                       url:
                         description: |-
                           `url` directly specifies the HTTP(S) endpoint for this policy.

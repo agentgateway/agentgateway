@@ -63,13 +63,24 @@ impl HTTP {
 	}
 }
 
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum TunnelMode {
+	/// Use CONNECT for TLS and non-HTTP transports, and absolute-form requests for plaintext HTTP.
+	#[default]
+	Auto,
+	/// Always use CONNECT. HTTP policies on the proxy backend do not run on tunneled requests.
+	Connect,
+}
+
 #[apply(schema!)]
 pub struct Tunnel {
 	/// Proxy backend used to tunnel the connection.
 	pub proxy: Arc<SimpleBackendReference>,
-	/// Use CONNECT even when the tunneled application transport is plaintext HTTP.
-	#[serde(default, skip_serializing_if = "std::ops::Not::not")]
-	pub connect: bool,
+	/// How requests are sent through the proxy. In `connect` mode, HTTP policies on the proxy backend
+	/// do not run on tunneled requests; HTTP policies on the destination backend still run.
+	#[serde(default)]
+	pub mode: TunnelMode,
 	/// Policies to connect to the proxy backend
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]

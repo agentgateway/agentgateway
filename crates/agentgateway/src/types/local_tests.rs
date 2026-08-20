@@ -301,6 +301,30 @@ binds:
 	assert_eq!(expr.original_expression, "extproc.workerTarget");
 }
 
+#[tokio::test]
+async fn test_named_dynamic_backend_target_expression_normalizes() {
+	let normalized = normalize_test_yaml(
+		r#"
+backends:
+- name: worker
+  dynamic:
+    target: extproc.workerTarget
+"#,
+	)
+	.await
+	.expect("named dynamic backend with a target expression should normalize");
+
+	let expr = normalized
+		.backends
+		.iter()
+		.find_map(|backend| match &backend.backend {
+			Backend::Dynamic(_, expr) => expr.as_ref(),
+			_ => None,
+		})
+		.expect("named dynamic backend target expression should be set");
+	assert_eq!(expr.original_expression, "extproc.workerTarget");
+}
+
 #[test]
 fn test_local_backend_policies_reject_unknown_fields() {
 	// serde(flatten) disables deny_unknown_fields on the outer struct, but the

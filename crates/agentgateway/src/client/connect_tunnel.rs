@@ -1,14 +1,14 @@
 use http::HeaderValue;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-use crate::transport::stream::Socket;
+use crate::transport::stream::{Socket, TLSConnectionInfo};
 
 pub async fn handshake(
 	conn: Socket,
 	dest: &str,
 	auth: Option<HeaderValue>,
 ) -> Result<Socket, anyhow::Error> {
-	let (ext, metrics, inner) = conn.into_parts();
+	let (mut ext, metrics, inner) = conn.into_parts();
 	let mut conn = Socket::new_rewind(inner);
 	// While the raw HTTP/1 usage here looks pretty sketchy, hyper itself is doing this so its probably sufficient
 	// for our simple needs here.
@@ -46,6 +46,11 @@ pub async fn handshake(
 			let recvd = &buf[..pos];
 			if recvd.starts_with(b"HTTP/1.1 200") || recvd.starts_with(b"HTTP/1.0 200") {
 				let conn = conn.keep_after(end);
+				// The proxy's ALPN does not describe the protocol inside the tunnel.
+				if let Some(mut tls) = ext.get::<TLSConnectionInfo>().cloned() {
+					tls.negotiated_alpn = None;
+					ext.insert(tls);
+				}
 				return Ok(Socket::from_rewind(ext, metrics, conn));
 			} else if recvd.starts_with(b"HTTP/1.1 407") || recvd.starts_with(b"HTTP/1.0 407") {
 				return Err(anyhow::anyhow!("tunnel required auth"));
@@ -74,7 +79,7 @@ mod tests {
 	use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 	use super::*;
-	use crate::transport::stream::TCPConnectionInfo;
+	use crate::transport::stream::{Alpn, TCPConnectionInfo};
 
 	fn memory_socket(stream: tokio::io::DuplexStream) -> Socket {
 		Socket::from_memory(
@@ -105,9 +110,18 @@ mod tests {
 				.expect("write response");
 		});
 
-		let mut tunneled = handshake(memory_socket(client), "dest:443", None)
+		let mut client = memory_socket(client);
+		client.ext_mut().insert(TLSConnectionInfo {
+			server_name: Some("proxy.example".to_string()),
+			negotiated_alpn: Some(Alpn::Http11),
+			..Default::default()
+		});
+		let mut tunneled = handshake(client, "dest:443", None)
 			.await
 			.expect("handshake should succeed");
+		let tls = tunneled.must_ext::<TLSConnectionInfo>();
+		assert_eq!(tls.server_name.as_deref(), Some("proxy.example"));
+		assert_eq!(tls.negotiated_alpn, None);
 		let mut first_bytes = [0; 5];
 		tunneled
 			.read_exact(&mut first_bytes)

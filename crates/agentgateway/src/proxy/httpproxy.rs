@@ -1696,7 +1696,7 @@ pub async fn build_transport(
 			transport: Box::new(transport),
 			target: call.target.clone(),
 			token,
-			connect: tun.connect,
+			connect: tun.mode == backend::TunnelMode::Connect,
 		};
 		return Ok(Transport::Tunnel(app_transport, tc));
 	}

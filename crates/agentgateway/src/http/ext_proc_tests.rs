@@ -1871,19 +1871,16 @@ mod dynamic_metadata_flow {
 }
 
 mod dynamic_backend_target {
+	use tokio::io::{AsyncReadExt, AsyncWriteExt};
+	use tokio::net::{TcpListener, TcpStream};
+	use tokio::sync::oneshot;
+
 	use super::*;
 	use crate::proxy::request_builder::RequestBuilder;
-	use crate::types::{
-		agent::{
-			Backend, BackendTrafficPolicy, BackendWithPolicies, ResourceName, SimpleBackendReference,
-		},
-		backend,
+	use crate::types::agent::{
+		Backend, BackendTrafficPolicy, BackendWithPolicies, ResourceName, SimpleBackendReference,
 	};
-	use tokio::{
-		io::{AsyncReadExt, AsyncWriteExt},
-		net::{TcpListener, TcpStream},
-		sync::oneshot,
-	};
+	use crate::types::backend;
 
 	struct WorkerTargetExtProc {
 		target: String,
@@ -2012,7 +2009,7 @@ mod dynamic_backend_target {
 				backend: actor_backend,
 				inline_policies: vec![BackendTrafficPolicy::Tunnel(backend::Tunnel {
 					proxy: Arc::new(SimpleBackendReference::Backend(worker_backend.name())),
-					connect: true,
+					mode: backend::TunnelMode::Connect,
 					policies: vec![],
 				})],
 			};
