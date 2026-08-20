@@ -63,8 +63,11 @@ spec:
         args:
         - -f
         - /config/config.yaml
-        {{- if .Values.monitoring.enabled }}
         ports:
+        - name: ui
+          containerPort: 15000
+          protocol: TCP
+        {{- if .Values.monitoring.enabled }}
         - name: metrics
           containerPort: 15020
           protocol: TCP
