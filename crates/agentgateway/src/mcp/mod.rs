@@ -1,5 +1,6 @@
 mod apps;
 pub(crate) mod auth;
+pub(crate) mod direct_response;
 pub(crate) mod dns_rebinding;
 pub(crate) mod guardrails;
 mod handler;
@@ -18,8 +19,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use axum_core::BoxError;
+pub use direct_response::McpDirectResponse;
 use prometheus_client::encoding::{EncodeLabelValue, LabelValueEncoder};
-pub use rbac::{McpAuthorization, McpAuthorizationSet, ResourceId, ResourceType};
+pub use rbac::{
+	McpAuthorization, McpAuthorizationSet, McpDirectResponseSet, ResourceId, ResourceType,
+};
 use rmcp::model::{
 	CallToolRequestMethod, CancelTaskMethod, CompleteRequestMethod, ConstString,
 	DiscoverRequestMethod, ErrorCode, ErrorData, GetPromptRequestMethod, GetTaskMethod,

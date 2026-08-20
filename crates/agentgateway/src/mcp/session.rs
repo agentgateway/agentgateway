@@ -22,6 +22,7 @@ use sse_stream::{KeepAlive, Sse, SseBody, SseStream};
 use tokio::sync::mpsc::{Receiver, Sender};
 
 use crate::http::Response;
+use crate::mcp::direct_response::DirectResponse as McpDirectResponse;
 use crate::mcp::handler::{Relay, RelayInputs, ResolveKind};
 use crate::mcp::mergestream::Messages;
 use crate::mcp::streamablehttp::{ServerSseMessage, StreamableHttpPostResponse};
@@ -569,6 +570,13 @@ impl Session {
 							l.set_tool(service_name.to_string(), tool.to_string());
 							l.capture_call_arguments(call_arguments);
 						});
+						let res = rbac::ResourceType::Tool(rbac::ResourceId::new(
+							service_name.to_string(),
+							tool.to_string(),
+						));
+						if let Some(dr) = self.relay.direct_response.respond_for(&res, &cel) {
+							return Ok(direct_response_to_http(dr, r.id.clone()));
+						}
 						let tn = tool.to_string();
 						ctr.params.name = tn.into();
 						Box::pin(self.authorize_with_ctx(
@@ -997,6 +1005,17 @@ impl Drop for SessionDropper {
 		sm.remove(s.id.as_ref());
 		tokio::task::spawn(async move { s.delete_session(parts).await });
 	}
+}
+
+/// Wrap a single JSON-RPC reply as the body of an SSE response. Reuses the
+/// same transport shape that upstream replies use, so downstream clients see
+/// a uniform format whether the reply was synthetic or proxied.
+fn direct_response_to_http(dr: McpDirectResponse, req_id: RequestId) -> Response {
+	let msg = ServerSseMessage {
+		event_id: None,
+		message: Arc::new(dr.apply(req_id)),
+	};
+	sse_stream_response(futures_util::stream::once(async move { msg }), None)
 }
 
 pub(crate) fn sse_stream_response(

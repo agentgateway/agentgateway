@@ -32,7 +32,7 @@ use crate::http::{
 	HeaderOrPseudo, HeaderValue, ext_authz, ext_proc, filters, health, remoteratelimit, retry,
 	timeout,
 };
-use crate::mcp::{FailureMode, McpAuthorization};
+use crate::mcp::{FailureMode, McpAuthorization, McpDirectResponse};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::RequestPolicy;
 use crate::telemetry::log::OrderedStringMap;
@@ -2758,6 +2758,7 @@ pub enum TrafficPolicy {
 pub enum BackendTrafficPolicy {
 	Authorization(Authorization),
 	McpAuthorization(McpAuthorization),
+	McpDirectResponse(McpDirectResponse),
 	McpAuthentication(McpAuthentication),
 	McpGuardrails(Arc<crate::mcp::guardrails::McpGuardrails>),
 	A2a(A2aPolicy),

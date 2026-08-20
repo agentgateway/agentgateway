@@ -1735,6 +1735,18 @@
           ],
           "default": null
         },
+        "mcpDirectResponse": {
+          "description": "Synthetic direct responses for MCP tools/call.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpDirectResponse"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "mcpGuardrails": {
           "description": "External MCP policy processors.",
           "anyOf": [
@@ -2506,6 +2518,226 @@
         {
           "type": "string"
         }
+      ]
+    },
+    "McpDirectResponse": {
+      "description": "Policy holding direct-response rules for `tools/call`.",
+      "type": "object",
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/DirectResponseRule"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "DirectResponseRule": {
+      "type": "object",
+      "properties": {
+        "when": {
+          "$ref": "#/$defs/Expression"
+        },
+        "respond": {
+          "$ref": "#/$defs/DirectResponse2"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "when",
+        "respond"
+      ]
+    },
+    "DirectResponse2": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "callTool": {
+              "$ref": "#/$defs/CallToolResult"
+            }
+          },
+          "required": [
+            "callTool"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CallToolResult": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContentBlock"
+          }
+        },
+        "isError": {
+          "type": "boolean",
+          "default": false
+        },
+        "structuredContent": true,
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "content"
+      ]
+    },
+    "ContentBlock": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "text": {
+              "$ref": "#/$defs/TextContent"
+            }
+          },
+          "required": [
+            "text"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "resourceLink": {
+              "$ref": "#/$defs/ResourceLink"
+            }
+          },
+          "required": [
+            "resourceLink"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "TextContent": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "annotations": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Annotations"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "text"
+      ]
+    },
+    "Annotations": {
+      "type": "object",
+      "properties": {
+        "audience": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/AnnotationRole"
+          }
+        },
+        "priority": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "lastModified": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "AnnotationRole": {
+      "type": "string",
+      "enum": [
+        "user",
+        "assistant"
+      ]
+    },
+    "ResourceLink": {
+      "type": "object",
+      "properties": {
+        "uri": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "title": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "mimeType": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "size": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "annotations": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Annotations"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "uri",
+        "name"
       ]
     },
     "McpGuardrails": {
@@ -8633,6 +8865,18 @@
           "anyOf": [
             {
               "$ref": "#/$defs/McpAuthorization"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mcpDirectResponse": {
+          "description": "Synthetic direct responses for MCP tools/call.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpDirectResponse"
             },
             {
               "type": "null"

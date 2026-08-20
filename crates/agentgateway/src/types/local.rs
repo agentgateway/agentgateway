@@ -22,7 +22,7 @@ use crate::http::transformation_cel::{LocalTransformationConfig, Transformation}
 use crate::http::{filters, health, retry, timeout, transformation_cel};
 use crate::llm::policy::{PromptCachingConfig, PromptGuard};
 use crate::llm::{AIBackend, AIProvider, NamedAIProvider, anthropic, copilot, custom, openai};
-use crate::mcp::{FailureMode, McpAuthorization};
+use crate::mcp::{FailureMode, McpAuthorization, McpDirectResponse};
 use crate::store::{LocalWorkload, RequestPolicy};
 use crate::types::agent::{
 	A2aPolicy, Authorization, Backend, BackendKey, BackendReference, BackendTrafficPolicy,
@@ -1563,6 +1563,7 @@ impl LocalBackend {
 				LocalBackendPolicies {
 					simple: p,
 					mcp_authorization: None,
+					mcp_direct_response: None,
 					mcp_guardrails: None,
 					a2a: None,
 					inference_routing: None,
@@ -2576,6 +2577,9 @@ pub struct LocalBackendPolicies {
 	/// Authorization rules for MCP requests.
 	#[serde(default)]
 	pub mcp_authorization: Option<McpAuthorization>,
+	/// Synthetic direct responses for MCP tools/call.
+	#[serde(default)]
+	pub mcp_direct_response: Option<McpDirectResponse>,
 	/// External MCP policy processors.
 	#[serde(default)]
 	pub mcp_guardrails: Option<LocalMcpGuardrails>,
@@ -2660,6 +2664,7 @@ impl LocalBackendPolicies {
 					backend_tunnel,
 				},
 			mcp_authorization,
+			mcp_direct_response,
 			mcp_guardrails,
 			a2a,
 			inference_routing,
@@ -2695,6 +2700,9 @@ impl LocalBackendPolicies {
 		}
 		if let Some(p) = mcp_authorization {
 			pols.push(BackendTrafficPolicy::McpAuthorization(p))
+		}
+		if let Some(p) = mcp_direct_response {
+			pols.push(BackendTrafficPolicy::McpDirectResponse(p))
 		}
 		if let Some(p) = mcp_guardrails {
 			for w in p.load_warnings() {
@@ -2844,6 +2852,9 @@ pub struct FilterOrPolicy {
 	/// Authorization rules for MCP requests.
 	#[serde(default)]
 	mcp_authorization: Option<McpAuthorization>,
+	/// Synthetic direct responses for MCP tools/call.
+	#[serde(default)]
+	mcp_direct_response: Option<McpDirectResponse>,
 	/// External MCP policy processors.
 	#[serde(default)]
 	mcp_guardrails: Option<LocalMcpGuardrails>,
@@ -5135,6 +5146,7 @@ pub(crate) async fn split_policies_for_target(
 		direct_response,
 		cors,
 		mcp_authorization,
+		mcp_direct_response,
 		mcp_guardrails,
 		mcp_authentication,
 		a2a,
@@ -5205,6 +5217,9 @@ pub(crate) async fn split_policies_for_target(
 	// Backend policies
 	if let Some(p) = mcp_authorization {
 		backend_policies.push(BackendTrafficPolicy::McpAuthorization(p))
+	}
+	if let Some(p) = mcp_direct_response {
+		backend_policies.push(BackendTrafficPolicy::McpDirectResponse(p))
 	}
 	if let Some(p) = mcp_guardrails {
 		for w in p.load_warnings() {
