@@ -44,6 +44,8 @@ config:
                 priority: 0
               - model: imported/litellm/backup/1
                 priority: 1
+              - model: imported/litellm/spare/1
+                priority: 2
       - name: backup
         routing:
           failover:
@@ -88,4 +90,7 @@ findings:
     message: Mapped ordinary LiteLLM fallbacks to agentgateway priority-based failover
   - sourcePath: router_settings.default_fallbacks
     status: approximate
-    message: Mapped default_fallbacks to priority-based failover for routes without explicit fallbacks
+    message: "Flattened LiteLLM fallback recursion (per-hop explicit fallbacks, default_fallbacks at hops without one, attempted models skipped) into static priority-ordered failover targets"
+  - sourcePath: router_settings.default_fallbacks
+    status: manual
+    message: "LiteLLM serves unknown model names via the first default fallback \"backup\"; agentgateway returns 404 for unmatched model names because wildcard matching applies only to concrete llm.models entries; add a \"*\" model manually if unknown names must be served"
