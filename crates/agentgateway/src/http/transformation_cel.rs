@@ -47,6 +47,10 @@ pub struct LocalTransform {
 	/// CEL expression that computes a replacement body.
 	#[serde(default)]
 	pub body: Option<Strng>,
+	/// Trailers to set using CEL expressions for values.
+	#[serde(default)]
+	#[serde_as(as = "serde_with::Map<_, _>")]
+	pub trailers: Vec<(Strng, Strng)>,
 	/// Metadata values to add using CEL expressions.
 	#[serde(default)]
 	#[serde_as(as = "serde_with::Map<_, _>")]
@@ -112,6 +116,15 @@ impl TransformerConfig {
 			.body
 			.map(|b| compile(b.as_str(), strict, warnings))
 			.transpose()?;
+		let trailers = req
+			.trailers
+			.into_iter()
+			.map(|(k, v)| {
+				let tk = HeaderName::try_from(k.as_str())?;
+				let tv = compile(v.as_str(), strict, warnings)?;
+				Ok::<_, anyhow::Error>((tk, tv))
+			})
+			.collect::<Result<_, _>>()?;
 		let metadata = req
 			.metadata
 			.into_iter()
@@ -123,6 +136,7 @@ impl TransformerConfig {
 			remove,
 			replace,
 			body,
+			trailers,
 			metadata,
 		})
 	}
@@ -182,6 +196,9 @@ pub struct TransformerConfig {
 	pub replace: Option<cel::Expression>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub body: Option<cel::Expression>,
+	#[serde_as(as = "Vec<(crate::serdes::SerAsStr, _)>")]
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	pub trailers: Vec<(HeaderName, cel::Expression)>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub metadata: Vec<(Strng, cel::Expression)>,
 }
@@ -276,6 +293,53 @@ impl Transformation {
 			}
 		}
 		Self::apply(resp.into(), self.response.as_ref(), request)
+	}
+
+	fn schedule_response_trailers(&self, log: &mut RequestLog, resp: &mut Response) {
+		if self.response.trailers.is_empty() {
+			return;
+		}
+		let trailer_names = self
+			.response
+			.trailers
+			.iter()
+			.map(|(name, _)| name.as_str())
+			.collect::<Vec<_>>()
+			.join(", ");
+		if let Ok(value) = HeaderValue::from_str(&trailer_names) {
+			resp.headers_mut().append(header::TRAILER, value);
+		}
+		let body = std::mem::replace(resp.body_mut(), http::Body::empty());
+		// Erase the inner body's exact size hint so HTTP/1 uses chunked framing and can
+		// serialize the trailer frame that LogBody adds after the response completes.
+		*resp.body_mut() = http::Body::new(http_body_util::StreamBody::new(
+			http_body_util::BodyStream::new(body),
+		));
+		resp.headers_mut().remove(&header::CONTENT_LENGTH);
+		log
+			.response_trailer_transformations
+			.push(self.response.clone());
+	}
+
+	fn immediate_expressions(&self) -> impl Iterator<Item = &Expression> {
+		self
+			.request
+			.add
+			.iter()
+			.map(|v| &v.1)
+			.chain(self.request.set.iter().map(|v| &v.1))
+			.chain(self.request.replace.as_ref())
+			.chain(self.request.body.as_ref())
+			.chain(self.request.metadata.iter().map(|v| &v.1))
+			.chain(self.response.add.iter().map(|v| &v.1))
+			.chain(self.response.set.iter().map(|v| &v.1))
+			.chain(self.response.replace.as_ref())
+			.chain(self.response.body.as_ref())
+			.chain(self.response.metadata.iter().map(|v| &v.1))
+	}
+
+	fn response_trailer_expressions(&self) -> impl Iterator<Item = &Expression> {
+		self.response.trailers.iter().map(|v| &v.1)
 	}
 
 	fn exec_header<'a>(
@@ -392,20 +456,11 @@ impl crate::store::RequestPolicyTrait for Transformation {
 	}
 
 	fn expressions(&self) -> impl Iterator<Item = &Expression> {
-		self
-			.request
-			.add
-			.iter()
-			.map(|v| &v.1)
-			.chain(self.request.set.iter().map(|v| &v.1))
-			.chain(self.request.replace.as_ref())
-			.chain(self.request.body.as_ref())
-			.chain(self.request.metadata.iter().map(|v| &v.1))
-			.chain(self.response.add.iter().map(|v| &v.1))
-			.chain(self.response.set.iter().map(|v| &v.1))
-			.chain(self.response.replace.as_ref())
-			.chain(self.response.body.as_ref())
-			.chain(self.response.metadata.iter().map(|v| &v.1))
+		self.immediate_expressions()
+	}
+
+	fn log_expressions(&self) -> impl Iterator<Item = &Expression> {
+		self.response_trailer_expressions()
 	}
 }
 
@@ -419,6 +474,14 @@ impl store::BackendPolicyTrait for Transformation {
 		self.apply_request(req);
 		Ok(crate::http::PolicyResponse::default())
 	}
+
+	fn expressions(&self) -> impl Iterator<Item = &Expression> {
+		self.immediate_expressions()
+	}
+
+	fn log_expressions(&self) -> impl Iterator<Item = &Expression> {
+		self.response_trailer_expressions()
+	}
 }
 
 impl store::ResponsePolicyTrait for Transformation {
@@ -428,6 +491,7 @@ impl store::ResponsePolicyTrait for Transformation {
 		resp: &mut Response,
 	) -> Result<PolicyResponse, ProxyResponse> {
 		self.apply_response(resp, log.request_snapshot.as_deref());
+		self.schedule_response_trailers(log, resp);
 		Ok(crate::http::PolicyResponse::default())
 	}
 }

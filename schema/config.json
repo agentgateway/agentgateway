@@ -2802,6 +2802,14 @@
           ],
           "default": null
         },
+        "trailers": {
+          "description": "Trailers to set using CEL expressions for values.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {}
+        },
         "metadata": {
           "description": "Metadata values to add using CEL expressions.",
           "type": "object",

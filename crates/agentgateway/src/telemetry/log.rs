@@ -34,7 +34,7 @@ use tracing::{Level, debug, trace};
 use value_bag::visit::Visit;
 
 use crate::cel::{ContextBuilder, Expression, LLMContext};
-use crate::http::{Request, health};
+use crate::http::{HeaderOrPseudo, HeaderOrPseudoValue, Request, health};
 use crate::llm::InputFormat;
 use crate::llm::catalog::{CostLookupStatus, ModelCatalog};
 use crate::mcp::{MCPInfo, MCPOperation};
@@ -687,6 +687,17 @@ impl DropOnLog {
 		}
 	}
 
+	fn evaluate_response_trailers(&mut self) -> ::http::HeaderMap {
+		let debug_tracer = self.debug_tracer.clone();
+		dtrace::with_trace(debug_tracer, || {
+			self
+				.log
+				.as_mut()
+				.map(RequestLog::evaluate_response_trailers)
+				.unwrap_or_default()
+		})
+	}
+
 	/// Computes (health, eviction_duration, restore_health) for finish_request.
 	/// `unhealthy` should already be evaluated (preferably with the shared CEL executor when available).
 	/// When no CEL expression is set, the default treats 5xx, connection failures, or non-zero
@@ -965,6 +976,8 @@ impl RequestLog {
 			request_handle: None,
 			request_snapshot: None,
 			response_snapshot: None,
+			response_trailer_transformations: Vec::new(),
+			finalized_cel_inputs: None,
 			source_context: None,
 			response_bytes: 0,
 		}
@@ -1055,6 +1068,98 @@ impl RequestLog {
 		};
 		self.finish_request_handle_with_attempt(rh, end_time, status, retry_after, &cel_exec);
 	}
+
+	fn evaluate_response_trailers(&mut self) -> ::http::HeaderMap {
+		let transformations = std::mem::take(&mut self.response_trailer_transformations);
+		if transformations.is_empty() {
+			return ::http::HeaderMap::new();
+		}
+
+		self.finalize_cel_inputs();
+		let cel_exec = self.finalized_cel_executor();
+
+		let mut trailers = ::http::HeaderMap::new();
+		for transformation in transformations {
+			for (name, expression) in &transformation.trailers {
+				let key = HeaderOrPseudo::Header(name.clone());
+				let value = cel_exec.executor.eval(expression).ok();
+				if let Some(HeaderOrPseudoValue::Header(value)) =
+					HeaderOrPseudoValue::from_cel_result(&key, value)
+				{
+					trailers.insert(name.clone(), value);
+				}
+			}
+		}
+		crate::proxy::httpproxy::maybe_set_grpc_status(&self.grpc_status, &trailers);
+		if let Some(grpc_status) = self.grpc_status.load()
+			&& let Some(resp) = self.response_snapshot.as_mut()
+		{
+			resp.grpc_status = Some(grpc_status);
+		}
+		trailers
+	}
+
+	fn finalize_cel_inputs(&mut self) {
+		if self.finalized_cel_inputs.is_some() {
+			return;
+		}
+
+		let end_time = Timestamp::now();
+		let mut llm_response = self
+			.llm_response
+			.take()
+			.map(|llm_info| LLMContext::from_llm_info(llm_info, Some(self.model_catalog.as_ref())));
+		if let Some(llm_response) = llm_response.as_mut() {
+			llm_response.set_token_timing(self.start.as_instant(), end_time.as_instant());
+		}
+		let mcp = self.mcp_status.take();
+		if let Some(grpc_status) = self.grpc_status.load()
+			&& let Some(resp) = self.response_snapshot.as_mut()
+		{
+			resp.grpc_status = Some(grpc_status);
+		}
+		let proxy_timing = proxy_context(self);
+		if let Some(resp) = self.response_snapshot.as_mut() {
+			resp.proxy = Some(proxy_timing.clone());
+		}
+		self.finalized_cel_inputs = Some(FinalizedCelInputs {
+			end_time,
+			cel_end_time: cel::RequestTime(end_time.as_datetime()),
+			llm_response,
+			mcp,
+			proxy_timing,
+		});
+	}
+
+	fn finalized_cel_executor(&self) -> CelLoggingExecutor<'_> {
+		let finalized = self
+			.finalized_cel_inputs
+			.as_ref()
+			.expect("CEL inputs must be finalized before building an executor");
+		self.cel.build(CelLoggingBuildInputs {
+			req: self.request_snapshot.as_deref(),
+			resp: self.response_snapshot.as_ref(),
+			llm_response: finalized.llm_response.as_ref(),
+			mcp: finalized.mcp.as_ref().filter(|m| !m.is_empty()),
+			end_time: &finalized.cel_end_time,
+			proxy: Some(&finalized.proxy_timing),
+			source_context: self.source_context.as_ref(),
+		})
+	}
+}
+
+struct FinalizedCelInputs {
+	end_time: Timestamp,
+	cel_end_time: cel::RequestTime,
+	llm_response: Option<LLMContext>,
+	mcp: Option<MCPInfo>,
+	proxy_timing: cel::ProxyContext,
+}
+
+impl Debug for FinalizedCelInputs {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("FinalizedCelInputs").finish_non_exhaustive()
+	}
 }
 
 #[derive(Debug)]
@@ -1132,6 +1237,9 @@ pub struct RequestLog {
 	pub request_handle: Option<ActiveHandle>,
 	pub request_snapshot: Option<Arc<cel::RequestSnapshot>>,
 	pub response_snapshot: Option<cel::ResponseSnapshot>,
+	pub response_trailer_transformations:
+		Vec<Arc<crate::http::transformation_cel::TransformerConfig>>,
+	finalized_cel_inputs: Option<FinalizedCelInputs>,
 	/// Source context for TCP connections (where we don't have an HTTP request)
 	pub source_context: Option<cel::SourceContext>,
 
@@ -1193,42 +1301,18 @@ impl Drop for DropOnLog {
 
 			// Always run request_handle/finish_request first so LLM provider eviction (failover) runs
 			// even when logging/tracing/metrics are disabled.
-			let end_time = Timestamp::now();
+			log.finalize_cel_inputs();
+			let finalized = log
+				.finalized_cel_inputs
+				.as_ref()
+				.expect("CEL inputs were just finalized");
+			let end_time = finalized.end_time;
 			let duration = end_time.duration_since(&log.start);
 			let enable_trace = log.tracer.is_some();
-
-			let mut llm_response: Option<LLMContext> = log
-				.llm_response
-				.take()
-				.map(|llm_info| LLMContext::from_llm_info(llm_info, Some(log.model_catalog.as_ref())));
-			if let Some(llm_response) = llm_response.as_mut() {
-				llm_response.set_token_timing(log.start.as_instant(), end_time.as_instant());
-			}
-
-			let mcp = log.mcp_status.take();
+			let llm_response = &finalized.llm_response;
+			let mcp = &finalized.mcp;
 			let request_handle = log.request_handle.take();
-			let cel_end_time = cel::RequestTime(end_time.as_datetime());
-			// The response snapshot is captured before the response body is drained, so
-			// trailer-only grpc-status values are learned later by LogBody. Copy the final
-			// value back into the snapshot before evaluating access-log CEL fields.
-			if let Some(grpc_status) = log.grpc_status.load()
-				&& let Some(resp) = log.response_snapshot.as_mut()
-			{
-				resp.grpc_status = Some(grpc_status);
-			}
-			let proxy_timing = proxy_context(&log);
-			if let Some(resp) = log.response_snapshot.as_mut() {
-				resp.proxy = Some(proxy_timing.clone());
-			}
-			let cel_exec = log.cel.build(CelLoggingBuildInputs {
-				req: log.request_snapshot.as_deref(),
-				resp: log.response_snapshot.as_ref(),
-				llm_response: llm_response.as_ref(),
-				mcp: mcp.as_ref().filter(|m| !m.is_empty()),
-				end_time: &cel_end_time,
-				proxy: Some(&proxy_timing),
-				source_context: log.source_context.as_ref(),
-			});
+			let cel_exec = log.finalized_cel_executor();
 			if let Some(rh) = request_handle {
 				log.finish_request_handle(rh, end_time, &cel_exec);
 			}
@@ -1899,24 +1983,30 @@ where
 		cx: &mut Context<'_>,
 	) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
 		let this = self.project();
-		let result = ready!(this.body.poll_frame(cx));
-		match result {
-			Some(Ok(frame)) => {
-				if let Some(trailer) = frame.trailers_ref()
-					&& let Some(grpc) = this.log.as_mut().map(|log| log.grpc_status.clone())
-				{
-					crate::proxy::httpproxy::maybe_set_grpc_status(&grpc, trailer);
-				}
-				if let Some(log) = this.log.as_mut()
-					&& let Some(data) = frame.data_ref()
-				{
-					// Count the bytes in this data frame
-					log.response_bytes = log.response_bytes.saturating_add(data.remaining() as u64);
-				}
-				Poll::Ready(Some(Ok(frame)))
+		let frame = match ready!(this.body.poll_frame(cx)) {
+			Some(Ok(frame)) => frame,
+			Some(Err(error)) => return Poll::Ready(Some(Err(error))),
+			None => {
+				let trailers = this.log.evaluate_response_trailers();
+				return Poll::Ready((!trailers.is_empty()).then(|| Ok(Frame::trailers(trailers))));
 			},
-			res => Poll::Ready(res),
+		};
+
+		if let Some(log) = this.log.as_mut()
+			&& let Some(data) = frame.data_ref()
+		{
+			log.response_bytes = log.response_bytes.saturating_add(data.remaining() as u64);
 		}
+
+		let mut trailers = match frame.into_trailers() {
+			Ok(trailers) => trailers,
+			Err(frame) => return Poll::Ready(Some(Ok(frame))),
+		};
+		if let Some(grpc) = this.log.as_mut().map(|log| log.grpc_status.clone()) {
+			crate::proxy::httpproxy::maybe_set_grpc_status(&grpc, &trailers);
+		}
+		trailers.extend(this.log.evaluate_response_trailers());
+		Poll::Ready(Some(Ok(Frame::trailers(trailers))))
 	}
 
 	fn is_end_stream(&self) -> bool {

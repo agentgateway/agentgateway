@@ -2228,6 +2228,8 @@ fn transformation_from_proto(
 			// carry it yet, so dynamic configs leave it unset.
 			replace: None,
 			body,
+			// Trailer transformations are currently a local-config-only POC.
+			trailers: Vec::new(),
 			metadata,
 		}
 	}
