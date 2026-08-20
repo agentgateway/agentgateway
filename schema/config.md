@@ -541,6 +541,9 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
@@ -1660,6 +1663,9 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.response[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -6685,6 +6691,9 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
@@ -7804,6 +7813,9 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -10010,6 +10022,9 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
@@ -11129,6 +11144,9 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -13298,6 +13316,9 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
@@ -14417,6 +14438,9 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -18467,6 +18491,9 @@
 |`policies[].policy.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`policies[].policy.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`policies[].policy.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`policies[].policy.ai.promptGuard.request[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`policies[].policy.ai.promptGuard.request[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`policies[].policy.ai.promptGuard.request[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`policies[].policy.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
@@ -19586,6 +19613,9 @@
 |`policies[].policy.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`policies[].policy.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`policies[].policy.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`policies[].policy.ai.promptGuard.response[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`policies[].policy.ai.promptGuard.response[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`policies[].policy.ai.promptGuard.response[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`policies[].policy.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -24607,6 +24637,9 @@
 |`backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`backends[].ai.policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`backends[].ai.policies.ai.promptGuard.request[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`backends[].ai.policies.ai.promptGuard.request[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`backends[].ai.policies.ai.promptGuard.request[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
@@ -25726,6 +25759,9 @@
 |`backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`backends[].ai.policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`backends[].ai.policies.ai.promptGuard.response[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`backends[].ai.policies.ai.promptGuard.response[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`backends[].ai.policies.ai.promptGuard.response[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -27932,6 +27968,9 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
@@ -29051,6 +29090,9 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -31218,6 +31260,9 @@
 |`backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`backends[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`backends[].policies.ai.promptGuard.request[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`backends[].policies.ai.promptGuard.request[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`backends[].policies.ai.promptGuard.request[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`backends[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
@@ -32337,6 +32382,9 @@
 |`backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`backends[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`backends[].policies.ai.promptGuard.response[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`backends[].policies.ai.promptGuard.response[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`backends[].policies.ai.promptGuard.response[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -33604,6 +33652,9 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
@@ -34723,6 +34774,9 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`routeGroups[].routes[].policies.ai.promptGuard.response[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -39748,6 +39802,9 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
@@ -40867,6 +40924,9 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -43073,6 +43133,9 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
@@ -44192,6 +44255,9 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -46361,6 +46427,9 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
@@ -47480,6 +47549,9 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -51333,6 +51405,9 @@
 |`routes[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routes[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routes[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].policies.ai.promptGuard.request[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`routes[].policies.ai.promptGuard.request[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`routes[].policies.ai.promptGuard.request[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`routes[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
@@ -52452,6 +52527,9 @@
 |`routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routes[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routes[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].policies.ai.promptGuard.response[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`routes[].policies.ai.promptGuard.response[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`routes[].policies.ai.promptGuard.response[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routes[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -57477,6 +57555,9 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
@@ -58596,6 +58677,9 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`routes[].backends[].ai.policies.ai.promptGuard.response[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -60802,6 +60886,9 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
@@ -61921,6 +62008,9 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -64090,6 +64180,9 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routes[].backends[].policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routes[].backends[].policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].backends[].policies.ai.promptGuard.request[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`routes[].backends[].policies.ai.promptGuard.request[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`routes[].backends[].policies.ai.promptGuard.request[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`routes[].backends[].policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
@@ -65209,6 +65302,9 @@
 |`routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`routes[].backends[].policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`routes[].backends[].policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`routes[].backends[].policies.ai.promptGuard.response[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`routes[].backends[].policies.ai.promptGuard.response[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`routes[].backends[].policies.ai.promptGuard.response[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`routes[].backends[].policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -67805,6 +67901,9 @@
 |`llm.models[].guardrails.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`llm.models[].guardrails.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`llm.models[].guardrails.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`llm.models[].guardrails.request[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`llm.models[].guardrails.request[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`llm.models[].guardrails.request[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`llm.models[].guardrails.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`llm.models[].guardrails.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`llm.models[].guardrails.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
@@ -68924,6 +69023,9 @@
 |`llm.models[].guardrails.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`llm.models[].guardrails.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`llm.models[].guardrails.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`llm.models[].guardrails.response[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`llm.models[].guardrails.response[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`llm.models[].guardrails.response[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`llm.models[].guardrails.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`llm.models[].guardrails.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`llm.models[].guardrails.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -71081,6 +71183,9 @@
 |`llm.policies.guardrails.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`llm.policies.guardrails.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`llm.policies.guardrails.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`llm.policies.guardrails.request[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`llm.policies.guardrails.request[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`llm.policies.guardrails.request[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`llm.policies.guardrails.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`llm.policies.guardrails.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`llm.policies.guardrails.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
@@ -72200,6 +72305,9 @@
 |`llm.policies.guardrails.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`llm.policies.guardrails.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`llm.policies.guardrails.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`llm.policies.guardrails.response[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`llm.policies.guardrails.response[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`llm.policies.guardrails.response[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`llm.policies.guardrails.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`llm.policies.guardrails.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`llm.policies.guardrails.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|
@@ -74019,6 +74127,9 @@
 |`mcp.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`mcp.policies.ai.promptGuard.request[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`mcp.policies.ai.promptGuard.request[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`mcp.policies.ai.promptGuard.request[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`mcp.policies.ai.promptGuard.request[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`mcp.policies.ai.promptGuard.request[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration`|object|Use OpenAI moderation to evaluate the prompt.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.model`|string|Moderation model to use. Defaults to `omni-moderation-latest`.|
 |`mcp.policies.ai.promptGuard.request[].openAIModeration.policies`|object|Backend policies used when calling the moderation provider.|
@@ -75138,6 +75249,9 @@
 |`mcp.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.exact`|string||
 |`mcp.policies.ai.promptGuard.response[].webhook.forwardHeaderMatches[].value.regex`|string||
 |`mcp.policies.ai.promptGuard.response[].webhook.failureMode`|enum|Behavior when the webhook is unreachable or returns an error.<br>Defaults to `failClosed`.<br>Possible values: `failClosed`, `failOpen`.|
+|`mcp.policies.ai.promptGuard.response[].webhook.messageFormat`|enum|Wire format used to talk to the webhook. Defaults to `guardrail`.<br>Possible values: `guardrail`, `raw`.|
+|`mcp.policies.ai.promptGuard.response[].webhook.path`|string|Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for request<br>guards and `/response` for response guards. Can also be overridden per-request via the<br>`:path` pseudo-header in `headers`.|
+|`mcp.policies.ai.promptGuard.response[].webhook.minSizeBytes`|integer|Minimum size, in bytes, of the JSON-serialized messages before the webhook is called.<br>Requests/responses below the threshold skip the webhook entirely and are left unchanged.<br>Defaults to 0 (always call).|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails`|object|Use AWS Bedrock Guardrails to evaluate the response.<br>Configuration for AWS Bedrock Guardrails integration.|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailIdentifier`|string|The unique identifier of the guardrail|
 |`mcp.policies.ai.promptGuard.response[].bedrockGuardrails.guardrailVersion`|string|The version of the guardrail|

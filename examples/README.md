@@ -16,6 +16,7 @@ This directory contains examples of how to use agentgateway. Each example is nam
 ### LLM
 
 * [llm-basic](llm-basic/README.md): proxy LLM requests to OpenAI and Anthropic with provider-specific model prefixes.
+* [llm-context-compression](llm-context-compression/README.md): shrink LLM request context through an external compression engine (e.g. Headroom) before it reaches the provider.
 * [llm-cost-routing](llm-cost-routing/README.md): classify LLM requests with CEL and route the same public model name to different upstream models.
 * [llm-ollama-postgres](llm-ollama-postgres/README.md): proxy local Ollama models and store request logs in Postgres.
 * [llm-prompt-enrichment](llm-prompt-enrichment/README.md): append or prepend prompts to agentgateway AI requests.

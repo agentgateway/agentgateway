@@ -4016,6 +4016,10 @@ fn convert_webhook(
 		headers,
 		forward_header_matches,
 		failure_mode,
+		// Not yet exposed over xDS; only configurable via local config.
+		message_format: llm::policy::WebhookMessageFormat::default(),
+		path: None,
+		min_size_bytes: 0,
 	})
 }
 

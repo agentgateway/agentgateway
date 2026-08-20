@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Context-compression example.
+#
+# Run a compression engine alongside the gateway to shrink request messages before they
+# reach the LLM. Any service implementing Headroom's /v1/compress API works; this example
+# uses Headroom (https://github.com/headroomlabs-ai/headroom):
+#
+#   headroom proxy --port 8787 --mode cache
+#
+# Compression is not a dedicated policy: it is the same guardrail webhook used for prompt
+# guards, pointed at a compression endpoint with messageFormat: raw. In raw mode the gateway
+# sends/receives provider-native messages with no guardrail envelope, so tool calls and cache
+# markers survive the round-trip. If the engine is unreachable, `failureMode: failOpen`
+# (the default) forwards the original request unchanged.
+#
+# This uses the `llm` server form (default port 4000).
+llm:
+  models:
+  - name: "*"
+    provider: openAI
+    params:
+      apiKey: "$OPENAI_API_KEY"
+    guardrails:
+      request:
+      - webhook:
+          target:
+            host: 127.0.0.1:8787
+          messageFormat: raw
+          path: /v1/compress
+          # failureMode: failOpen   # failOpen (default) | failClosed
+          minSizeBytes: 16384       # skip requests whose messages are smaller than this
+          # forwardHeaderMatches:   # empty => no headers forwarded (unlike guardrail mode's
+          #   - name: anthropic-beta  # curated defaults). List cache/context headers the engine
+          #     value: {regex: ".*"} # needs to decide what is safely compressible.
