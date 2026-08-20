@@ -409,9 +409,19 @@ impl ConfigImporter for LiteLlmImporter {
 			.router_settings
 			.get("max_fallbacks")
 			.and_then(Value::as_u64)
-			.filter(|max_fallbacks| *max_fallbacks > 0)
 			.map(|max_fallbacks| max_fallbacks as usize)
 			.unwrap_or(DEFAULT_MAX_FALLBACKS);
+		let mut removed_fallback_targets = false;
+		if max_fallbacks == 0 {
+			// LiteLLM raises before attempting any fallback group, so no failover survives, not even
+			// the explicitly configured groups applied above.
+			for route in plan.routes.values_mut() {
+				if !route.fallback_groups.is_empty() {
+					route.fallback_groups = Vec::new();
+					removed_fallback_targets = true;
+				}
+			}
+		}
 		if let Some((source_path, default_fallbacks)) = default_fallbacks {
 			apply_default_fallbacks(
 				default_fallbacks,
@@ -449,11 +459,36 @@ impl ConfigImporter for LiteLlmImporter {
 		for setting in config.router_settings.keys() {
 			match setting.as_str() {
 				"fallbacks" | "routing_strategy" | "default_fallbacks" => continue,
-				"max_fallbacks" if default_fallbacks.is_some() => {
+				"max_fallbacks" => {
+					let (status, message) = match config.router_settings.get(setting).and_then(Value::as_u64)
+					{
+						None => (
+							ImportStatus::Manual,
+							"max_fallbacks must be a non-negative integer; the LiteLLM default of 5 was assumed"
+								.to_string(),
+						),
+						Some(0) if removed_fallback_targets => (
+							ImportStatus::Exact,
+							"max_fallbacks: 0 disables LiteLLM fallbacks; emitted failover targets were removed"
+								.to_string(),
+						),
+						Some(0) => (
+							ImportStatus::Exact,
+							"max_fallbacks: 0 disables LiteLLM fallbacks".to_string(),
+						),
+						Some(_) if default_fallbacks.is_none() => (
+							ImportStatus::Manual,
+							"No automatic mapping is available; review this router setting".to_string(),
+						),
+						Some(_) => (
+							ImportStatus::Exact,
+							"max_fallbacks bounds the flattened failover chain length".to_string(),
+						),
+					};
 					plan.findings.push(ImportFinding {
 						source_path: format!("router_settings.{setting}"),
-						status: ImportStatus::Exact,
-						message: "max_fallbacks bounds the flattened failover chain length".to_string(),
+						status,
+						message,
 					});
 				},
 				"context_window_fallbacks" | "content_policy_fallbacks" => {
@@ -1195,6 +1230,23 @@ fn apply_default_fallbacks(
 		}
 	}
 
+	if max_fallbacks == 0 {
+		// Fallbacks are already disabled at the call site; only the unknown-model re-assign survives,
+		// because LiteLLM resolves that during deployment lookup rather than in run_async_fallback.
+		if let Some(first) = defaults.first()
+			&& !plan.routes.contains_key("*")
+		{
+			plan.findings.push(ImportFinding {
+				source_path: source_path.to_string(),
+				status: ImportStatus::Manual,
+				message: format!(
+					"LiteLLM serves unknown model names via the first default fallback {first:?}; agentgateway returns 404 for unmatched model names because wildcard matching applies only to concrete llm.models entries; add a \"*\" model manually if unknown names must be served"
+				),
+			});
+		}
+		return;
+	}
+
 	let mut explicit: IndexMap<&str, Vec<&str>> = IndexMap::new();
 	for entry in explicit_fallbacks
 		.and_then(Value::as_array)
@@ -1226,6 +1278,7 @@ fn apply_default_fallbacks(
 		let mut visited: HashSet<&str> = HashSet::from([route_name.as_str()]);
 		extend_fallback_chain(
 			route_name,
+			0,
 			&explicit,
 			&default_names,
 			&plan.routes,
@@ -1301,8 +1354,16 @@ fn apply_default_fallbacks(
 
 /// Walks the LiteLLM fallback graph depth-first in attempt order, appending every model group that
 /// would be tried after `node` fails.
+///
+/// Mirrors `run_async_fallback`: the budget check happens once per frame on entry, and `depth`
+/// increments per attempted sibling within a frame and is inherited by that sibling's own frame, so
+/// earlier siblings' attempts consume the descent budget of later siblings rather than capping the
+/// sibling list itself. Children that were never imported are skipped without consuming depth
+/// because they cannot be emitted; LiteLLM would attempt and fail them.
+#[allow(clippy::too_many_arguments)]
 fn extend_fallback_chain<'a>(
 	node: &'a str,
+	depth: usize,
 	explicit: &IndexMap<&'a str, Vec<&'a str>>,
 	defaults: &[&'a str],
 	routes: &'a IndexMap<String, ImportedRoute>,
@@ -1310,20 +1371,23 @@ fn extend_fallback_chain<'a>(
 	visited: &mut HashSet<&'a str>,
 	chain: &mut Vec<&'a str>,
 ) {
+	if depth >= max_fallbacks {
+		return;
+	}
+	let mut depth = depth;
 	let children = explicit.get(node).map(Vec::as_slice).unwrap_or(defaults);
 	for child in children.iter().copied() {
-		if chain.len() >= max_fallbacks {
-			return;
-		}
 		let Some((child, _)) = routes.get_key_value(child) else {
 			continue;
 		};
 		if !visited.insert(child) {
 			continue;
 		}
+		depth += 1;
 		chain.push(child);
 		extend_fallback_chain(
 			child,
+			depth,
 			explicit,
 			defaults,
 			routes,
@@ -1474,6 +1538,26 @@ mod tests {
 	#[test]
 	fn reports_wildcard_default_fallback_limitations() {
 		assert_litellm_golden("default-fallbacks-wildcard");
+	}
+
+	#[test]
+	fn flattens_branching_fallbacks_with_depth_budget() {
+		assert_litellm_golden("default-fallbacks-branching");
+	}
+
+	#[test]
+	fn disables_fallbacks_when_max_fallbacks_is_zero() {
+		assert_litellm_golden("default-fallbacks-max-zero");
+	}
+
+	#[test]
+	fn reports_invalid_max_fallbacks() {
+		assert_litellm_golden("default-fallbacks-max-invalid");
+	}
+
+	#[test]
+	fn disables_explicit_fallbacks_when_max_fallbacks_is_zero_without_defaults() {
+		assert_litellm_golden("max-fallbacks-zero-without-defaults");
 	}
 
 	#[test]
