@@ -6,7 +6,7 @@ pub mod references;
 
 pub use crate::common::ast::IdedExpr as Expression;
 
-mod macros;
+pub(crate) mod macros;
 mod parse;
 #[allow(non_snake_case)]
 mod parser;
