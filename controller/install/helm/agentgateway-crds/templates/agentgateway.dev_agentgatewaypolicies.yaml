@@ -4,6 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.20.0
+    {{- with .Values.crds.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
   labels:
     app: agentgateway
     app.kubernetes.io/name: agentgateway
