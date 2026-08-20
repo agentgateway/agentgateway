@@ -84,7 +84,7 @@ affinity: {}
 # -- The DNS configuration for the agentgateway proxy pod, which is merged with the settings that the kubelet derives from the pod's dnsPolicy. For example, 'options: [{name: ndots, value: "3"}]'.
 dnsConfig: {}
 
-# -- Configure the gateway service.
+# Configure the gateway service.
 gateway:
   service:
     # -- Create the primary Kubernetes service for the gateway listener, named after the Helm release.
@@ -138,7 +138,7 @@ gateway:
   # -- Additional services that select the same agentgateway proxy pods, such as a separate service for the Admin UI.
   extraServices: []
 
-# -- Prometheus Operator integration.
+# Prometheus Operator integration.
 monitoring:
   # -- Enable the integration to create a PodMonitor and expose the metrics container port
   enabled: false
@@ -155,13 +155,13 @@ monitoring:
 # -- The standalone agentgateway configuration to serve, in the same format as a local agentgateway config file. The chart manages the 'config.storage' and 'config.database' sections for you based on the 'mode' value, so do not set them here.
 config: {}
 
-# -- Postgres connection used by database mode.
+# Postgres connection used by database mode.
 database:
   postgres:
     # -- The PostgreSQL connection string that the the chart renders into the ConfigMap. Required in database mode.
     url: ""
 
-# -- OIDC secret that agentgateway uses to sign the Admin UI session cookie.
+# OIDC secret that agentgateway uses to sign the Admin UI session cookie.
 oidc:
   # -- The name of an existing secret that has the 'OIDC_COOKIE_SECRET' key. If unset, the chart references a '<release name>-oidc' secret as an optional secret.
   cookieSecretName: ""
