@@ -618,6 +618,9 @@ impl Client {
 			transport,
 		} = call;
 		async move {
+      req
+        .headers_mut()
+        .remove(http::header::PROXY_AUTHORIZATION);
 			let dest = connector
 				.resolve_target(transport.skip_dns_resolution(), &target)
 				.await?;
