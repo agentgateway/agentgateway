@@ -179,6 +179,16 @@ Create these records after the LoadBalancer addresses are assigned:
 | `${NETBIRD_PROXY_DOMAIN}` | `netbird-proxy` LoadBalancer address |
 | `*.${NETBIRD_PROXY_DOMAIN}` | CNAME to `${NETBIRD_PROXY_DOMAIN}` |
 
+Repeated installations that reuse these DNS names may receive different
+LoadBalancer addresses. DNS resolvers, operating systems, browsers, and ACME
+certificate authorities can continue using the previous addresses until their
+caches expire. Before requesting certificates or running verification, confirm
+that the DNS names resolve to the addresses reported by the current Services.
+Flush local DNS caches where appropriate, but allow time for the record TTL to
+expire when an upstream resolver still has the old value. For frequently
+recreated environments, consider reserving static LoadBalancer addresses or
+lowering the DNS TTL before changing the records.
+
 cert-manager obtains the management certificate with an HTTP-01 challenge
 through the management Gateway. The Agent Network proxy obtains its
 certificate with a TLS-ALPN-01 challenge. Wait for the management certificate
