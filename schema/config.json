@@ -11113,6 +11113,7 @@
         "huggingface",
         "mistral",
         "openrouter",
+        "orcarouter",
         "togetherai",
         "xai",
         "fireworks"

@@ -950,6 +950,7 @@ fn map_provider(provider: &str) -> Option<&'static str> {
 		"groq" => Some("groq"),
 		"mistral" => Some("mistral"),
 		"openrouter" => Some("openrouter"),
+		"orcarouter" => Some("orcarouter"),
 		"together_ai" | "togetherai" => Some("togetherai"),
 		"xai" => Some("xai"),
 		"deepinfra" => Some("deepinfra"),

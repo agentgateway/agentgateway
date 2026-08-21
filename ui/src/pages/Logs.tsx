@@ -1138,6 +1138,7 @@ const PROVIDER_ICON_KEYS = [
 	'huggingface',
 	'mistral',
 	'openrouter',
+	'orcarouter',
 	'togetherai',
 	'xai',
 	'fireworks'
