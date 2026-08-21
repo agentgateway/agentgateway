@@ -355,6 +355,7 @@ impl HttpConnection {
 			HttpConnection::Http2(h) => h.load.remaining_capacity(),
 		}
 	}
+	#[allow(clippy::result_large_err)]
 	pub fn try_send_request(
 		&mut self,
 		req: Request<RequestBody>,
