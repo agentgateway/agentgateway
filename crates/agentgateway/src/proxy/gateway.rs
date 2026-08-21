@@ -504,25 +504,31 @@ impl Gateway {
 				}
 			},
 			BindProtocol::auto => {
-				// Auto-detect: peek at first byte to distinguish TLS from plaintext HTTP.
+				// Auto-detect: peek at the first bytes to distinguish TLS, plaintext
+				// HTTP, or raw TCP. A TLS ClientHello is identified by its record type
+				// (the first byte, 0x16) alone; telling HTTP apart from an arbitrary
+				// TCP protocol needs a few more bytes -- enough to see a full method
+				// token -- but it's still a bounded, cheap peek, and the socket is
+				// rewound before dispatch either way, so nothing is consumed from
+				// whichever path ends up handling the connection.
+				const AUTO_PROTOCOL_PEEK_LEN: usize = 8;
 				let def = frontend::TLS::default();
 				let to = policies.tls.as_ref().unwrap_or(&def).handshake_timeout;
 				let (ext, metrics, inner) = raw_stream.into_parts();
 				let mut rewind = Socket::new_rewind(inner);
-				let mut buf = [0u8; 1];
-				match tokio::time::timeout(
-					to,
-					tokio::io::AsyncReadExt::read_exact(&mut rewind, &mut buf),
-				)
-				.await
-				{
+				let mut buf = [0u8; AUTO_PROTOCOL_PEEK_LEN];
+				match tokio::time::timeout(to, peek_auto_protocol(&mut rewind, &mut buf)).await {
 					Err(_) => {
 						debug!(bind=%bind_name, "auto protocol detection timed out");
 					},
-					Ok(Ok(_)) => {
+					Ok(Ok(0)) => {
+						debug!(bind=%bind_name, "auto protocol detection: connection closed before any bytes");
+					},
+					Ok(Ok(n)) => {
 						rewind.rewind();
 						let stream = Socket::from_rewind(ext, metrics, rewind);
-						if buf[0] == 0x16 {
+						let peeked = &buf[..n];
+						if peeked[0] == 0x16 {
 							// TLS ClientHello — dispatch as TLS
 							match Self::maybe_terminate_tls(
 								inputs.clone(),
@@ -568,7 +574,7 @@ impl Gateway {
 									log_tls_termination_error(peer_addr, &bind_protocol, &e);
 								},
 							}
-						} else {
+						} else if looks_like_http(peeked) {
 							// Plaintext HTTP
 							let err = Self::proxy(
 								bind_name,
@@ -583,6 +589,11 @@ impl Gateway {
 							if let Err(e) = err {
 								warn!(src.addr = %peer_addr, "proxy error: {e}");
 							}
+						} else {
+							// Neither a TLS ClientHello nor a recognizable HTTP request
+							// line -- treat as opaque TCP rather than force-feeding it to
+							// the HTTP server, where it would just fail to parse.
+							Self::proxy_tcp(bind_name, inputs, None, stream, drain).await
 						}
 					},
 					Ok(Err(e)) => {
@@ -1136,7 +1147,7 @@ impl Gateway {
 					if is_https
 						&& let Some(io) = acceptor.take_io()
 						&& let Some(data) = io.buffered()
-						&& tls_looks_like_http(data)
+						&& looks_like_http(&data)
 					{
 						anyhow::bail!("client sent an HTTP request to an HTTPS listener: {e}");
 						// TODO(https://github.com/rustls/tokio-rustls/pull/147): write
@@ -1579,13 +1590,67 @@ impl Gateway {
 	}
 }
 
-fn tls_looks_like_http(d: Bytes) -> bool {
-	d.starts_with(b"GET /")
-		|| d.starts_with(b"POST /")
-		|| d.starts_with(b"HEAD /")
-		|| d.starts_with(b"PUT /")
-		|| d.starts_with(b"OPTIONS /")
-		|| d.starts_with(b"DELETE /")
+/// Recognizes the start of a plaintext HTTP/1.x request line (an uppercase
+/// method token followed by a space -- RFC 7230's `method SP request-target`)
+/// or the HTTP/2 prior-knowledge preface ("PRI * HTTP/2.0"). CONNECT and
+/// OPTIONS's request-target isn't origin-form ("/"), so this checks the
+/// trailing space rather than assuming a path follows.
+///
+/// Used both to give a clearer error when a client sends plaintext HTTP to an
+/// HTTPS-only listener, and by `BindProtocol::auto` to decide whether non-TLS
+/// bytes should be treated as HTTP or fall through to opaque TCP.
+fn looks_like_http(d: &[u8]) -> bool {
+	const METHODS: &[&[u8]] = &[
+		b"GET ",
+		b"HEAD ",
+		b"POST ",
+		b"PUT ",
+		b"DELETE ",
+		b"CONNECT ",
+		b"OPTIONS ",
+		b"TRACE ",
+		b"PATCH ",
+	];
+	METHODS.iter().any(|m| d.starts_with(m)) || d.starts_with(b"PRI *")
+}
+
+/// Returns whether `d` can still become a recognizable plaintext HTTP request
+/// line after reading more bytes.
+fn could_be_http_prefix(d: &[u8]) -> bool {
+	const METHODS: &[&[u8]] = &[
+		b"GET ",
+		b"HEAD ",
+		b"POST ",
+		b"PUT ",
+		b"DELETE ",
+		b"CONNECT ",
+		b"OPTIONS ",
+		b"TRACE ",
+		b"PATCH ",
+	];
+	METHODS.iter().any(|m| m.starts_with(d)) || b"PRI *".starts_with(d)
+}
+
+/// Reads just enough bytes for `BindProtocol::auto` detection. TLS is decided
+/// by its first byte; non-TLS traffic is read only while it could still be an
+/// HTTP request-line prefix, so opaque TCP does not wait for the peek window.
+async fn peek_auto_protocol<R: tokio::io::AsyncRead + Unpin>(
+	r: &mut R,
+	buf: &mut [u8],
+) -> std::io::Result<usize> {
+	let mut total = 0;
+	while total < buf.len() {
+		let n = tokio::io::AsyncReadExt::read(r, &mut buf[total..total + 1]).await?;
+		if n == 0 {
+			break;
+		}
+		total += n;
+		let peeked = &buf[..total];
+		if peeked[0] == 0x16 || looks_like_http(peeked) || !could_be_http_prefix(peeked) {
+			break;
+		}
+	}
+	Ok(total)
 }
 
 pub fn auto_server(c: Option<&frontend::HTTP>) -> auto::Builder<::hyper_util::rt::TokioExecutor> {

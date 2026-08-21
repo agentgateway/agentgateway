@@ -8,8 +8,8 @@ use secrecy::SecretString;
 use crate::llm::{AIProvider, NamedAIProvider};
 use crate::serdes::FileInlineOrRemote;
 use crate::types::agent::{
-	Backend, BackendTrafficPolicy, ListenerTarget, PathMatch, PolicyPhase, PolicyTarget, PolicyType,
-	ResourceName, RouteBackendTarget, Target, TrafficPolicy,
+	Backend, BackendTrafficPolicy, BindProtocol, ListenerTarget, PathMatch, PolicyPhase,
+	PolicyTarget, PolicyType, ResourceName, RouteBackendTarget, Target, TrafficPolicy,
 };
 use crate::types::local::NormalizedLocalConfig;
 use crate::*;
@@ -334,6 +334,49 @@ binds:
 		err.to_string().contains("at most one wildcard bind"),
 		"{err:?}"
 	);
+}
+
+#[tokio::test]
+async fn test_local_listener_protocol_auto_allows_both_route_sets() {
+	// protocol: AUTO is the one case where a single listener may declare both
+	// `routes` and `tcpRoutes` -- BindProtocol::auto picks whichever applies
+	// per connection, based on peeking the first bytes (see gateway.rs).
+	let normalized = normalize_test_yaml(
+		r#"
+binds:
+- port: 1080
+  listeners:
+  - protocol: AUTO
+    routes:
+    - backends:
+      - dynamic: {}
+    tcpRoutes:
+    - backends:
+      - host: "127.0.0.1:1"
+"#,
+	)
+	.await
+	.expect("an Auto listener with both routes and tcpRoutes should normalize");
+
+	assert_eq!(normalized.binds.len(), 1);
+	assert_eq!(normalized.binds[0].protocol, BindProtocol::auto);
+	assert_eq!(normalized.listener_routes[0].1.len(), 1);
+	assert_eq!(normalized.listener_tcp_routes[0].1.len(), 1);
+}
+
+#[tokio::test]
+async fn test_local_listener_protocol_auto_requires_a_route_set() {
+	let err = normalize_test_yaml(
+		r#"
+binds:
+- port: 1080
+  listeners:
+  - protocol: AUTO
+"#,
+	)
+	.await
+	.expect_err("an Auto listener with neither routes nor tcpRoutes should be rejected");
+	assert!(err.to_string().contains("protocol AUTO"), "{err}");
 }
 
 #[tokio::test]
