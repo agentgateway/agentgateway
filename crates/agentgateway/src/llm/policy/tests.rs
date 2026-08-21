@@ -20,6 +20,9 @@ async fn webhook_fail_open_emits_single_metric() {
 				headers: Default::default(),
 				forward_header_matches: vec![],
 				failure_mode: FailureMode::FailOpen,
+				message_format: Default::default(),
+				path: None,
+				min_size_bytes: 0,
 			}),
 		}],
 		response: vec![],
@@ -3077,4 +3080,210 @@ fn test_zero_width_pattern_is_a_noop() {
 			"messages": [{"role": "user", "content": "hello world"}]
 		})
 	);
+}
+
+/// End-to-end: a request guard configured with `messageFormat: raw` calls a real (mocked)
+/// webhook over HTTP and applies the messages it returns.
+#[tokio::test]
+async fn raw_webhook_end_to_end_replaces_messages() {
+	use wiremock::matchers::{method, path};
+	use wiremock::{Mock, MockServer, ResponseTemplate};
+
+	use crate::telemetry::metrics::GuardrailAction;
+	use crate::types::agent::{SimpleBackendReference, Target};
+
+	let mock = MockServer::start().await;
+	Mock::given(method("POST"))
+		.and(path("/v1/compress"))
+		.respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+			"messages": [{"role": "user", "content": "compressed"}]
+		})))
+		.mount(&mock)
+		.await;
+
+	let guard = RequestGuard {
+		rejection: Default::default(),
+		scope: default_content_scope(),
+		kind: RequestGuardKind::Webhook(Webhook {
+			target: SimpleBackendReference::InlineBackend(Target::Address(*mock.address())),
+			headers: Default::default(),
+			forward_header_matches: vec![],
+			failure_mode: FailureMode::FailClosed,
+			message_format: WebhookMessageFormat::Raw,
+			path: Some("/v1/compress".to_string()),
+			min_size_bytes: 0,
+		}),
+	};
+
+	let mut req: crate::llm::types::completions::Request = serde_json::from_value(serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [{"role": "user", "content": "original long message"}]
+	}))
+	.unwrap();
+
+	let client = crate::test_helpers::policy_client();
+	let (action, rejection) = Policy::apply_single_request_guard(
+		&guard,
+		&mut req,
+		&::http::HeaderMap::new(),
+		&client,
+		None,
+		None,
+	)
+	.await
+	.unwrap();
+
+	assert!(rejection.is_none());
+	assert_eq!(action, GuardrailAction::Mask);
+	assert_eq!(req.get_messages()[0].content.to_string(), "compressed");
+}
+
+/// `messageFormat: raw` is only for request guards; using it on a response guard
+/// fails per `failureMode` rather than doing anything with the (unsupported) response body.
+#[tokio::test]
+async fn raw_message_format_on_response_guard_fails_per_failure_mode() {
+	use crate::telemetry::metrics::GuardrailAction;
+	use crate::types::agent::SimpleBackendReference;
+
+	fn guard(failure_mode: FailureMode) -> ResponseGuard {
+		ResponseGuard {
+			rejection: Default::default(),
+			kind: ResponseGuardKind::Webhook(Webhook {
+				target: SimpleBackendReference::Invalid,
+				headers: Default::default(),
+				forward_header_matches: vec![],
+				failure_mode,
+				message_format: WebhookMessageFormat::Raw,
+				path: None,
+				min_size_bytes: 0,
+			}),
+		}
+	}
+
+	let client = crate::test_helpers::policy_client();
+	let mut resp = TextResponse {
+		content: "hello".to_string(),
+	};
+
+	let (action, rejection) = Policy::apply_single_response_guard(
+		&guard(FailureMode::FailOpen),
+		&mut resp,
+		&::http::HeaderMap::new(),
+		&client,
+		None,
+	)
+	.await
+	.unwrap();
+	assert!(rejection.is_none());
+	assert_eq!(action, GuardrailAction::FailOpen);
+
+	let err = Policy::apply_single_response_guard(
+		&guard(FailureMode::FailClosed),
+		&mut resp,
+		&::http::HeaderMap::new(),
+		&client,
+		None,
+	)
+	.await;
+	assert!(err.is_err());
+}
+
+/// Request formats with no message array (e.g. embeddings) are skipped rather than calling
+/// the raw webhook at all.
+#[tokio::test]
+async fn raw_webhook_skips_message_less_formats_without_calling_backend() {
+	use wiremock::MockServer;
+
+	use crate::telemetry::metrics::GuardrailAction;
+	use crate::types::agent::{SimpleBackendReference, Target};
+
+	// No mocks registered — any request received would panic wiremock's strict matching,
+	// proving the webhook is never called for this request format.
+	let mock = MockServer::start().await;
+
+	let guard = RequestGuard {
+		rejection: Default::default(),
+		scope: default_content_scope(),
+		kind: RequestGuardKind::Webhook(Webhook {
+			target: SimpleBackendReference::InlineBackend(Target::Address(*mock.address())),
+			headers: Default::default(),
+			forward_header_matches: vec![],
+			failure_mode: FailureMode::FailClosed,
+			message_format: WebhookMessageFormat::Raw,
+			path: None,
+			min_size_bytes: 0,
+		}),
+	};
+
+	let mut req: crate::llm::types::embeddings::Request = serde_json::from_value(serde_json::json!({
+		"model": "text-embedding-3-small",
+		"input": "hello world"
+	}))
+	.unwrap();
+
+	let client = crate::test_helpers::policy_client();
+	let (action, rejection) = Policy::apply_single_request_guard(
+		&guard,
+		&mut req,
+		&::http::HeaderMap::new(),
+		&client,
+		None,
+		None,
+	)
+	.await
+	.unwrap();
+
+	assert!(rejection.is_none());
+	assert_eq!(action, GuardrailAction::Allow);
+	assert_eq!(mock.received_requests().await.unwrap().len(), 0);
+}
+
+/// `minSizeBytes` gates the webhook call on the full request path: requests below the
+/// threshold never reach the backend and are left unchanged.
+#[tokio::test]
+async fn raw_webhook_min_size_gate_skips_small_requests_without_calling_backend() {
+	use wiremock::MockServer;
+
+	use crate::telemetry::metrics::GuardrailAction;
+	use crate::types::agent::{SimpleBackendReference, Target};
+
+	// No mocks registered — the gate must prevent any call from reaching this server.
+	let mock = MockServer::start().await;
+
+	let guard = RequestGuard {
+		rejection: Default::default(),
+		scope: default_content_scope(),
+		kind: RequestGuardKind::Webhook(Webhook {
+			target: SimpleBackendReference::InlineBackend(Target::Address(*mock.address())),
+			headers: Default::default(),
+			forward_header_matches: vec![],
+			failure_mode: FailureMode::FailClosed,
+			message_format: WebhookMessageFormat::Raw,
+			path: Some("/v1/compress".to_string()),
+			min_size_bytes: 1_000_000,
+		}),
+	};
+
+	let mut req: crate::llm::types::completions::Request = serde_json::from_value(serde_json::json!({
+		"model": "gpt-4o",
+		"messages": [{"role": "user", "content": "hi"}]
+	}))
+	.unwrap();
+
+	let client = crate::test_helpers::policy_client();
+	let (action, rejection) = Policy::apply_single_request_guard(
+		&guard,
+		&mut req,
+		&::http::HeaderMap::new(),
+		&client,
+		None,
+		None,
+	)
+	.await
+	.unwrap();
+
+	assert!(rejection.is_none());
+	assert_eq!(action, GuardrailAction::Allow);
+	assert_eq!(mock.received_requests().await.unwrap().len(), 0);
+	assert_eq!(req.get_messages()[0].content.to_string(), "hi");
 }

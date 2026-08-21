@@ -143,8 +143,11 @@ func processWebhook(ctx PolicyCtx, namespace string, webhook *agentgateway.Webho
 	}
 
 	w := &api.BackendPolicySpec_Ai_Webhook{
-		Backend:     be,
-		FailureMode: webhookFailureMode(webhook.FailureMode),
+		Backend:       be,
+		FailureMode:   webhookFailureMode(webhook.FailureMode),
+		MessageFormat: webhookMessageFormat(webhook.MessageFormat),
+		Path:          webhook.Path,
+		MinSizeBytes:  uint64(ptr.OrDefault(webhook.MinSizeBytes, 0)), // nolint:gosec // G115: kubebuilder validation ensures non-negative
 	}
 
 	var errs []error
@@ -183,6 +186,13 @@ func webhookFailureMode(mode agentgateway.FailureMode) api.BackendPolicySpec_Ai_
 		return api.BackendPolicySpec_Ai_Webhook_FAIL_OPEN
 	}
 	return api.BackendPolicySpec_Ai_Webhook_FAIL_CLOSED
+}
+
+func webhookMessageFormat(format agentgateway.WebhookMessageFormat) api.BackendPolicySpec_Ai_Webhook_MessageFormat {
+	if format == agentgateway.WebhookMessageFormatRaw {
+		return api.BackendPolicySpec_Ai_Webhook_RAW
+	}
+	return api.BackendPolicySpec_Ai_Webhook_GUARDRAIL
 }
 
 func processBuiltinRegexRule(builtin agentgateway.BuiltIn, logger *slog.Logger) *api.BackendPolicySpec_Ai_RegexRule {

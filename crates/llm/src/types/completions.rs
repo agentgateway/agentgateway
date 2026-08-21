@@ -403,6 +403,18 @@ impl super::RequestType for Request {
 		self.messages = messages.into_iter().map(convert_message).collect();
 	}
 
+	fn raw_messages(&self) -> Option<Vec<serde_json::Value>> {
+		match serde_json::to_value(&self.messages).ok()? {
+			serde_json::Value::Array(messages) => Some(messages),
+			_ => None,
+		}
+	}
+
+	fn set_raw_messages(&mut self, messages: Vec<serde_json::Value>) -> anyhow::Result<()> {
+		self.messages = serde_json::from_value(serde_json::Value::Array(messages))?;
+		Ok(())
+	}
+
 	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
 		for msg in &mut self.messages {
 			let scope = match msg.role.as_str() {
@@ -1138,6 +1150,35 @@ pub mod typed {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::types::RequestType;
+
+	#[test]
+	fn raw_messages_round_trip_preserves_tool_calls() {
+		let json_str = r#"{
+			"model": "gpt-4",
+			"messages": [
+				{"role": "user", "content": "what's the weather?"},
+				{
+					"role": "assistant",
+					"content": null,
+					"tool_calls": [
+						{"id": "call_1", "type": "function", "function": {"name": "get_weather", "arguments": "{}"}}
+					]
+				},
+				{"role": "tool", "tool_call_id": "call_1", "content": "sunny"}
+			]
+		}"#;
+		let mut req: Request = serde_json::from_str(json_str).unwrap();
+		let raw = req.raw_messages().expect("completions supports raw messages");
+		assert_eq!(raw.len(), 3);
+		assert_eq!(
+			raw[1]["tool_calls"][0]["function"]["name"],
+			serde_json::json!("get_weather")
+		);
+
+		req.set_raw_messages(raw).unwrap();
+		assert_eq!(req.messages.len(), 3);
+	}
 
 	#[test]
 	fn test_extract_tool_calls_from_response() {

@@ -266,6 +266,18 @@ impl RequestType for Request {
 		self.messages = message_prompts.into_iter().map(Into::into).collect();
 	}
 
+	fn raw_messages(&self) -> Option<Vec<serde_json::Value>> {
+		match serde_json::to_value(&self.messages).ok()? {
+			serde_json::Value::Array(messages) => Some(messages),
+			_ => None,
+		}
+	}
+
+	fn set_raw_messages(&mut self, messages: Vec<serde_json::Value>) -> anyhow::Result<()> {
+		self.messages = serde_json::from_value(serde_json::Value::Array(messages))?;
+		Ok(())
+	}
+
 	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
 		match &mut self.system {
 			Some(TextBlock::Text(text)) => f(ContentScope::SystemPrompt, text),
@@ -1321,7 +1333,46 @@ pub mod typed {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::types::ResponseType;
+	use crate::types::{RequestType, ResponseType};
+
+	#[test]
+	fn raw_messages_round_trip_preserves_tool_use_and_cache_control() {
+		let json_str = r#"{
+			"model": "claude-3-opus",
+			"max_tokens": 100,
+			"messages": [
+				{
+					"role": "user",
+					"content": [
+						{"type": "text", "text": "what's the weather?", "cache_control": {"type": "ephemeral"}}
+					]
+				},
+				{
+					"role": "assistant",
+					"content": [
+						{"type": "tool_use", "id": "toolu_1", "name": "get_weather", "input": {}}
+					]
+				},
+				{
+					"role": "user",
+					"content": [
+						{"type": "tool_result", "tool_use_id": "toolu_1", "content": "sunny"}
+					]
+				}
+			]
+		}"#;
+		let mut req: Request = serde_json::from_str(json_str).unwrap();
+		let raw = req.raw_messages().expect("anthropic messages supports raw messages");
+		assert_eq!(raw.len(), 3);
+		assert_eq!(
+			raw[0]["content"][0]["cache_control"]["type"],
+			serde_json::json!("ephemeral")
+		);
+		assert_eq!(raw[1]["content"][0]["type"], serde_json::json!("tool_use"));
+
+		req.set_raw_messages(raw).unwrap();
+		assert_eq!(req.messages.len(), 3);
+	}
 
 	fn make_typed_response_with_tool_use() -> typed::MessagesResponse {
 		typed::MessagesResponse {

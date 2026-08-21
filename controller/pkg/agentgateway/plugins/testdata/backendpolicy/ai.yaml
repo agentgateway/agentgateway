@@ -100,6 +100,9 @@ spec:
                 group: ""
                 port: 80
               failureMode: FailOpen
+              messageFormat: Raw
+              path: /v1/compress
+              minSizeBytes: 16384
       promptCaching:
         cacheSystem: true
         cacheMessages: true
@@ -178,6 +181,9 @@ output:
                     hostname: webhook.default.svc.cluster.local
                     namespace: default
                 failureMode: FAIL_OPEN
+                messageFormat: RAW
+                minSizeBytes: "16384"
+                path: /v1/compress
           prompts:
             append:
             - content: hello!

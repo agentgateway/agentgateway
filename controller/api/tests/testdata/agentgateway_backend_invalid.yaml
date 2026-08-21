@@ -28,6 +28,26 @@ spec:
                 auth:
                   oauthTokenExchange: {}
 ---
+_err: "messageFormat 'Raw' is not supported on response guards"
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: prompt-guard-response-webhook-raw
+spec:
+  ai:
+    provider:
+      openai: {}
+  policies:
+    ai:
+      promptGuard:
+        response:
+        - webhook:
+            backendRef:
+              name: compression
+              kind: AgentgatewayBackend
+              group: agentgateway.dev
+            messageFormat: Raw
+---
 _err: AI policies require AI
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend

@@ -116,6 +116,20 @@ pub trait RequestType: Send + Sync {
 	fn set_messages(&mut self, messages: Vec<SimpleChatCompletionMessage>);
 	fn to_value(&self) -> serde_json::Result<serde_json::Value>;
 	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String));
+
+	/// The request's messages as raw, provider-native JSON, preserving fields (tool calls, cache
+	/// markers, ...) that [`Self::get_messages`]'s simplified role/content shape would lose.
+	/// Returns `None` for formats with no message array (embeddings, rerank, ...) or that don't
+	/// support raw round-tripping.
+	fn raw_messages(&self) -> Option<Vec<serde_json::Value>> {
+		None
+	}
+	/// Replace the messages with raw, provider-native JSON previously produced by
+	/// [`Self::raw_messages`] (possibly rewritten by an external processor). Returns an error if
+	/// this format doesn't support raw replacement.
+	fn set_raw_messages(&mut self, _messages: Vec<serde_json::Value>) -> anyhow::Result<()> {
+		anyhow::bail!("raw message replacement is not supported for this request format")
+	}
 }
 
 /// Scan runs of consecutive text parts as one `sep`-joined string: `[t1, t2, img, t3]` scans

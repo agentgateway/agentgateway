@@ -173,7 +173,37 @@ type Webhook struct {
 	// `FailClosed` (default) rejects the request.
 	// +optional
 	FailureMode FailureMode `json:"failureMode,omitempty"`
+
+	// Wire format used to talk to the webhook. `Guardrail` (default) sends/receives
+	// the guardrail envelope with simplified role/content messages. `Raw` sends/receives
+	// provider-native messages with no envelope, preserving tool calls and cache markers;
+	// only supported on request guards.
+	// +optional
+	MessageFormat WebhookMessageFormat `json:"messageFormat,omitempty"`
+
+	// Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for
+	// request guards and `/response` for response guards.
+	// +optional
+	Path *string `json:"path,omitempty"`
+
+	// Minimum size, in bytes, of the JSON-serialized messages before the webhook is
+	// called. Requests/responses below the threshold skip the webhook entirely.
+	// Defaults to 0 (always call).
+	// +optional
+	MinSizeBytes *int64 `json:"minSizeBytes,omitempty"`
 }
+
+const (
+	// WebhookMessageFormatGuardrail sends/receives the guardrail envelope with
+	// simplified role/content messages (default).
+	WebhookMessageFormatGuardrail WebhookMessageFormat = "Guardrail"
+	// WebhookMessageFormatRaw sends/receives provider-native messages with no
+	// envelope. Only supported on request guards.
+	WebhookMessageFormatRaw WebhookMessageFormat = "Raw"
+)
+
+// +k8s:enum
+type WebhookMessageFormat string
 
 // Response to return to the client if request content
 // is matched against a regex pattern and the action is `REJECT`.
@@ -289,6 +319,7 @@ type PromptguardRequest struct {
 
 // Prompt guards to apply to responses returned by the LLM provider.
 // +kubebuilder:validation:ExactlyOneOf=regex;webhook;bedrockGuardrails;googleModelArmor
+// +kubebuilder:validation:XValidation:rule="!has(self.webhook) || !has(self.webhook.messageFormat) || self.webhook.messageFormat != 'Raw'",message="webhook: messageFormat 'Raw' is not supported on response guards"
 type PromptguardResponse struct {
 	// Custom response message to return to the client. If not specified, defaults to
 	// `The response was rejected due to inappropriate content`.

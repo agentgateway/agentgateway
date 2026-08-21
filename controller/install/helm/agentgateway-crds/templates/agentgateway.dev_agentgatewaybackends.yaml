@@ -2640,6 +2640,28 @@ spec:
                                                         to include in webhook requests.
                                                       maxProperties: 64
                                                       type: object
+                                                    messageFormat:
+                                                      description: |-
+                                                        Wire format used to talk to the webhook. `Guardrail` (default) sends/receives
+                                                        the guardrail envelope with simplified role/content messages. `Raw` sends/receives
+                                                        provider-native messages with no envelope, preserving tool calls and cache markers;
+                                                        only supported on request guards.
+                                                      enum:
+                                                      - Guardrail
+                                                      - Raw
+                                                      type: string
+                                                    minSizeBytes:
+                                                      description: |-
+                                                        Minimum size, in bytes, of the JSON-serialized messages before the webhook is
+                                                        called. Requests/responses below the threshold skip the webhook entirely.
+                                                        Defaults to 0 (always call).
+                                                      format: int64
+                                                      type: integer
+                                                    path:
+                                                      description: |-
+                                                        Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for
+                                                        request guards and `/response` for response guards.
+                                                      type: string
                                                   required:
                                                   - backendRef
                                                   type: object
@@ -4076,11 +4098,38 @@ spec:
                                                         to include in webhook requests.
                                                       maxProperties: 64
                                                       type: object
+                                                    messageFormat:
+                                                      description: |-
+                                                        Wire format used to talk to the webhook. `Guardrail` (default) sends/receives
+                                                        the guardrail envelope with simplified role/content messages. `Raw` sends/receives
+                                                        provider-native messages with no envelope, preserving tool calls and cache markers;
+                                                        only supported on request guards.
+                                                      enum:
+                                                      - Guardrail
+                                                      - Raw
+                                                      type: string
+                                                    minSizeBytes:
+                                                      description: |-
+                                                        Minimum size, in bytes, of the JSON-serialized messages before the webhook is
+                                                        called. Requests/responses below the threshold skip the webhook entirely.
+                                                        Defaults to 0 (always call).
+                                                      format: int64
+                                                      type: integer
+                                                    path:
+                                                      description: |-
+                                                        Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for
+                                                        request guards and `/response` for response guards.
+                                                      type: string
                                                   required:
                                                   - backendRef
                                                   type: object
                                               type: object
                                               x-kubernetes-validations:
+                                              - message: 'webhook: messageFormat ''Raw''
+                                                  is not supported on response guards'
+                                                rule: '!has(self.webhook) || !has(self.webhook.messageFormat)
+                                                  || self.webhook.messageFormat !=
+                                                  ''Raw'''
                                               - message: exactly one of the fields
                                                   in [regex webhook bedrockGuardrails
                                                   googleModelArmor] must be set
@@ -11604,6 +11653,28 @@ spec:
                                         in webhook requests.
                                       maxProperties: 64
                                       type: object
+                                    messageFormat:
+                                      description: |-
+                                        Wire format used to talk to the webhook. `Guardrail` (default) sends/receives
+                                        the guardrail envelope with simplified role/content messages. `Raw` sends/receives
+                                        provider-native messages with no envelope, preserving tool calls and cache markers;
+                                        only supported on request guards.
+                                      enum:
+                                      - Guardrail
+                                      - Raw
+                                      type: string
+                                    minSizeBytes:
+                                      description: |-
+                                        Minimum size, in bytes, of the JSON-serialized messages before the webhook is
+                                        called. Requests/responses below the threshold skip the webhook entirely.
+                                        Defaults to 0 (always call).
+                                      format: int64
+                                      type: integer
+                                    path:
+                                      description: |-
+                                        Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for
+                                        request guards and `/response` for response guards.
+                                      type: string
                                   required:
                                   - backendRef
                                   type: object
@@ -12844,11 +12915,37 @@ spec:
                                         in webhook requests.
                                       maxProperties: 64
                                       type: object
+                                    messageFormat:
+                                      description: |-
+                                        Wire format used to talk to the webhook. `Guardrail` (default) sends/receives
+                                        the guardrail envelope with simplified role/content messages. `Raw` sends/receives
+                                        provider-native messages with no envelope, preserving tool calls and cache markers;
+                                        only supported on request guards.
+                                      enum:
+                                      - Guardrail
+                                      - Raw
+                                      type: string
+                                    minSizeBytes:
+                                      description: |-
+                                        Minimum size, in bytes, of the JSON-serialized messages before the webhook is
+                                        called. Requests/responses below the threshold skip the webhook entirely.
+                                        Defaults to 0 (always call).
+                                      format: int64
+                                      type: integer
+                                    path:
+                                      description: |-
+                                        Request path sent to the webhook, e.g. `/v1/compress`. Defaults to `/request` for
+                                        request guards and `/response` for response guards.
+                                      type: string
                                   required:
                                   - backendRef
                                   type: object
                               type: object
                               x-kubernetes-validations:
+                              - message: 'webhook: messageFormat ''Raw'' is not supported
+                                  on response guards'
+                                rule: '!has(self.webhook) || !has(self.webhook.messageFormat)
+                                  || self.webhook.messageFormat != ''Raw'''
                               - message: exactly one of the fields in [regex webhook
                                   bedrockGuardrails googleModelArmor] must be set
                                 rule: '[has(self.regex),has(self.webhook),has(self.bedrockGuardrails),has(self.googleModelArmor)].filter(x,x==true).size()
