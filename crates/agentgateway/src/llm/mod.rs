@@ -20,15 +20,17 @@ use rand::RngExt;
 use serde::de::DeserializeOwned;
 
 use crate::http::auth::{
-	AppliedBackendAuthLocation, AwsAuth, AzureAuth, BackendAuth, BackendAuthKind, GcpAuth,
+	AppliedBackendAuthLocation, AuthorizationLocation, AwsAuth, AzureAuth, BackendAuth,
+	BackendAuthKind, GcpAuth,
 };
 use crate::http::jwt::Claims;
+use crate::http::transformation_cel::TransformationMetadata;
 use crate::http::{Body, Request, Response};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::store::{BackendPolicies, LLMResponsePolicies};
 use crate::telemetry::log::{AsyncLog, RequestLog};
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
-use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
+use crate::types::loadbalancer::ActiveHandle;
 use crate::*;
 pub mod model_router;
 pub use agent_llm::{azure, bedrock, vertex};
@@ -44,6 +46,7 @@ use crate::proxy::dtrace;
 use crate::store;
 
 pub const LOCAL_LISTENER_NAME: &str = "llm";
+pub const BACKEND_AUTH_OVERRIDE_METADATA: &str = "agentgateway.dev/backend-auth";
 
 #[cfg(test)]
 mod anthropic_tests;
@@ -72,32 +75,67 @@ impl AIBackend {
 	pub fn select_provider(
 		&self,
 		affinity_key: Option<u64>,
+		health_scope: Option<u64>,
 	) -> Option<(Arc<NamedAIProvider>, ActiveHandle)> {
-		if let Some(affinity_key) = affinity_key {
-			let (provider, info) = self.providers.select_by_affinity(affinity_key)?;
-			let handle = self.providers.start_request(provider.name.clone(), &info);
-			return Some((provider, handle));
+		type Candidate = (
+			Arc<NamedAIProvider>,
+			Arc<crate::types::loadbalancer::EndpointInfo>,
+			u64,
+		);
+		let mut groups = self.providers.active_priority_groups();
+		if groups.iter().all(Vec::is_empty) {
+			groups = vec![self.providers.rejected_fallback()];
 		}
-		let iter = self.providers.iter();
-		let index = iter.index();
-		if index.is_empty() {
-			return None;
+		let mut fallback: Option<Vec<Candidate>> = None;
+		let mut available = None;
+		for group in groups {
+			if group.is_empty() {
+				continue;
+			}
+			let candidates = group
+				.into_iter()
+				.map(|candidate| {
+					let info = candidate.info_for_scope(health_scope);
+					let affinity_score = affinity_key
+						.map(|key| candidate.affinity_score(key))
+						.unwrap_or_default();
+					(candidate.endpoint, info, affinity_score)
+				})
+				.collect::<Vec<_>>();
+			fallback.get_or_insert_with(|| candidates.clone());
+			let healthy = candidates
+				.into_iter()
+				.filter(|(_, info, _)| health_scope.is_none() || !info.is_ejected())
+				.collect::<Vec<_>>();
+			if !healthy.is_empty() {
+				available = Some(healthy);
+				break;
+			}
 		}
-		// Intentionally allow `rand::seq::index::sample` so we can pick the same element twice
-		// This avoids starvation where the worst endpoint gets 0 traffic
-		let a = rand::rng().random_range(0..index.len());
-		let b = rand::rng().random_range(0..index.len());
-		let best = [a, b]
-			.into_iter()
-			.map(|idx| {
-				let (_, EndpointWithInfo { endpoint, info, .. }) =
-					index.get_index(idx).expect("index already checked");
-				(endpoint.clone(), info)
-			})
-			.max_by(|(_, a), (_, b)| a.score().total_cmp(&b.score()));
-		let (ep, ep_info) = best?;
-		let handle = self.providers.start_request(ep.name.clone(), ep_info);
-		Some((ep, handle))
+		// Preserve the existing degraded fallback within this scope when every priority is evicted.
+		let available = available.or(fallback)?;
+		let (provider, info, _) = if affinity_key.is_some() {
+			available
+				.into_iter()
+				.max_by_key(|(_, _, affinity_score)| *affinity_score)?
+		} else {
+			// Intentionally allow `rand::seq::index::sample` so we can pick the same element twice
+			// This avoids starvation where the worst endpoint gets 0 traffic
+			let a = rand::rng().random_range(0..available.len());
+			let b = rand::rng().random_range(0..available.len());
+			[a, b]
+				.into_iter()
+				.map(|idx| &available[idx])
+				.max_by(|(_, a, _), (_, b, _)| a.score().total_cmp(&b.score()))?
+				.clone()
+		};
+		let handle = match health_scope {
+			Some(_) => self
+				.providers
+				.start_scoped_request(provider.name.clone(), &info),
+			None => self.providers.start_request(provider.name.clone(), &info),
+		};
+		Some((provider.clone(), handle))
 	}
 }
 
@@ -1418,6 +1456,23 @@ impl AIProvider {
 		route_type: RouteType,
 		llm_request: Option<&LLMRequest>,
 	) -> anyhow::Result<()> {
+		if matches!(self, AIProvider::Anthropic(_) | AIProvider::OpenAI(_))
+			&& let Some(key) = req
+				.extensions()
+				.get::<TransformationMetadata>()
+				.and_then(|metadata| metadata.0.get(BACKEND_AUTH_OVERRIDE_METADATA))
+				.and_then(serde_json::Value::as_str)
+				.filter(|key| !key.is_empty())
+				.map(str::to_owned)
+		{
+			AuthorizationLocation::bearer_header().insert(req, &key)?;
+			// The metadata credential is the final provider auth override, even when another backend
+			// credential was configured explicitly. Treat its standard Authorization location as
+			// implicit so Anthropic can perform its normal Bearer -> x-api-key rewrite.
+			req
+				.extensions_mut()
+				.insert(AppliedBackendAuthLocation { explicit: false });
+		}
 		match self {
 			AIProvider::Anthropic(_) => {
 				http::modify_req(req, |req| {

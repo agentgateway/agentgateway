@@ -1,6 +1,7 @@
 use crate::http::auth::AppliedBackendAuthLocation;
+use crate::http::transformation_cel::TransformationMetadata;
 use crate::llm::anthropic::OAUTH_TOKEN_PREFIX;
-use crate::llm::{AIProvider, RouteType, anthropic};
+use crate::llm::{AIProvider, RouteType, anthropic, openai};
 
 // ── set_required_fields integration tests ───────────────────────────────────
 
@@ -81,6 +82,49 @@ fn set_required_fields_api_key_token() {
 	assert!(req.headers().contains_key("x-api-key"));
 	// anthropic-version must be set.
 	assert!(req.headers().contains_key("anthropic-version"));
+}
+
+#[test]
+fn set_required_fields_uses_generic_backend_auth_metadata() {
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
+	let mut req = make_bearer_request_with_explicit_auth("configured-key");
+	req
+		.extensions_mut()
+		.insert(TransformationMetadata(serde_json::Map::from_iter([(
+			crate::llm::BACKEND_AUTH_OVERRIDE_METADATA.to_string(),
+			serde_json::Value::String("sk-ant-scoped".to_string()),
+		)])));
+
+	provider
+		.set_required_fields(&mut req, RouteType::Messages, None)
+		.unwrap();
+
+	assert_eq!(req.headers().get("x-api-key").unwrap(), "sk-ant-scoped");
+	assert!(!req.headers().contains_key(::http::header::AUTHORIZATION));
+}
+
+#[test]
+fn openai_uses_generic_backend_auth_metadata() {
+	let provider = AIProvider::OpenAI(openai::Provider {
+		model: None,
+		moderation: None,
+	});
+	let mut req = make_bearer_request_with_explicit_auth("configured-key");
+	req
+		.extensions_mut()
+		.insert(TransformationMetadata(serde_json::Map::from_iter([(
+			crate::llm::BACKEND_AUTH_OVERRIDE_METADATA.to_string(),
+			serde_json::Value::String("sk-openai-scoped".to_string()),
+		)])));
+
+	provider
+		.set_required_fields(&mut req, RouteType::Completions, None)
+		.unwrap();
+
+	assert_eq!(
+		req.headers().get(::http::header::AUTHORIZATION).unwrap(),
+		"Bearer sk-openai-scoped"
+	);
 }
 
 // ── Explicit backend auth location tests ────────────────────────────────────
