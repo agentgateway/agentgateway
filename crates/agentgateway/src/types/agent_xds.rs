@@ -2471,7 +2471,11 @@ fn traffic_policy_from_proto(
 		Some(tps::Kind::Retry(r)) => {
 			let attempts = std::num::NonZeroU8::new(r.attempts as u8)
 				.unwrap_or_else(|| std::num::NonZeroU8::new(1).unwrap());
-			let backoff = r.backoff.as_ref().map(|d| (*d).try_into()).transpose()?;
+			let backoff = r.backoff.as_ref().map(|d| {
+			let dur: std::time::Duration = (*d).try_into()
+				.map_err(|e: prost_types::DurationError| ProtoError::Generic(e.to_string()))?;
+			Ok::<_, ProtoError>(agent_core::serdes::BackoffSpec::Fixed(dur))
+		}).transpose()?;
 			let codes = r
 				.retry_status_codes
 				.iter()
