@@ -1138,17 +1138,15 @@ pub struct RequestLog {
 	pub response_bytes: u64,
 }
 
-/// Mirrors the status/error severity classification already used for the debug
-/// tracer (see `dtrace::MessageType::severity`), so access logs get the same
-/// error/warn/info split instead of always reporting "info".
-fn request_log_level(status: Option<crate::http::StatusCode>, error: Option<&str>) -> &'static str {
-	if error.is_some() || status.is_some_and(|s| s.as_u16() >= 500) {
-		"error"
-	} else if status.is_some_and(|s| s.as_u16() >= 400) {
-		"warn"
-	} else {
-		"info"
-	}
+/// A non-2xx/3xx `http.status` on its own does not make a request log entry an
+/// "error": the gateway relaying an upstream's or client's status faithfully
+/// did its job correctly. `log.error`, on the other hand, is only populated
+/// when the gateway itself failed to produce a normal response (routing,
+/// policy, backend-connectivity, decode failures, ...), which is what "error"
+/// severity should actually mean here. Filtering/alerting on `http.status`
+/// itself is what the CEL log filter is for.
+fn request_log_level(error: Option<&str>) -> &'static str {
+	if error.is_some() { "error" } else { "info" }
 }
 
 impl Drop for DropOnLog {
@@ -1330,11 +1328,11 @@ impl Drop for DropOnLog {
 					.inc();
 			}
 
-			let level = request_log_level(log.status, log.error.as_deref());
-			let level_filter = match level {
-				"error" => Level::ERROR,
-				"warn" => Level::WARN,
-				_ => Level::INFO,
+			let level = request_log_level(log.error.as_deref());
+			let level_filter = if level == "error" {
+				Level::ERROR
+			} else {
+				Level::INFO
 			};
 			let maybe_enable_log = agent_core::telemetry::enabled("request", &level_filter);
 			let otlp_log_enabled = log.otel_logger.is_some();
@@ -2581,27 +2579,13 @@ mod tests {
 	}
 
 	#[test]
-	fn request_log_level_reflects_status_and_error() {
-		use crate::http::StatusCode;
-
-		assert_eq!(request_log_level(None, None), "info");
-		assert_eq!(request_log_level(Some(StatusCode::OK), None), "info");
-		assert_eq!(request_log_level(Some(StatusCode::NOT_FOUND), None), "warn");
-		assert_eq!(
-			request_log_level(Some(StatusCode::BAD_GATEWAY), None),
-			"error"
-		);
-		assert_eq!(
-			request_log_level(Some(StatusCode::INTERNAL_SERVER_ERROR), None),
-			"error"
-		);
-		// An error takes precedence even without a 5xx status (e.g. connection reset
-		// before a response was ever produced).
-		assert_eq!(
-			request_log_level(Some(StatusCode::OK), Some("boom")),
-			"error"
-		);
-		assert_eq!(request_log_level(None, Some("boom")), "error");
+	fn request_log_level_reflects_gateway_error_only() {
+		// A non-2xx/3xx http.status alone does not make the entry "error": the
+		// gateway relaying an upstream's or client's status faithfully did its
+		// job. Only a populated `log.error` (the gateway itself failing to
+		// produce a normal response) should raise the level.
+		assert_eq!(request_log_level(None), "info");
+		assert_eq!(request_log_level(Some("boom")), "error");
 	}
 
 	#[test]
