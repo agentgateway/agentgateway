@@ -1,0 +1,5 @@
+# Plain Kubernetes Service treatment: no gateway, EPP, or proxy.
+scenario:
+  - name: baseline
+    gateway:
+      className: none

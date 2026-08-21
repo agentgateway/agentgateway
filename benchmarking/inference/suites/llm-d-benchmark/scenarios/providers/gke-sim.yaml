@@ -1,0 +1,7 @@
+scenario:
+  - name: gke-sim
+    decode:
+      replicas: 1
+    storage:
+      modelPvc:
+        size: 2Gi

@@ -1,0 +1,54 @@
+# Deterministic load sweep for comparing the plain-Service and agentgateway
+# paths. Multiple stages give Prism a throughput/latency curve instead of the
+# single smoke-test point produced by sanity_random.yaml.
+load:
+  type: constant
+  interval: 1.0
+  base_seed: 42
+  stages:
+    - rate: 1
+      duration: 60
+    - rate: 2
+      duration: 60
+    - rate: 4
+      duration: 60
+    - rate: 8
+      duration: 60
+    - rate: 12
+      duration: 60
+    - rate: 16
+      duration: 60
+api:
+  type: completion
+  streaming: true
+server:
+  type: vllm
+  model_name: REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_MODEL
+  base_url: REPLACE_ENV_LLMDBENCH_HARNESS_STACK_ENDPOINT_URL
+  ignore_eos: true
+tokenizer:
+  pretrained_model_name_or_path: REPLACE_ENV_LLMDBENCH_DEPLOY_CURRENT_MODEL
+data:
+  type: random
+  input_distribution:
+    type: normal
+    min: 256
+    max: 512
+    mean: 384
+    std_dev: 10
+    total_count: 1000
+  output_distribution:
+    type: normal
+    min: 10
+    max: 100
+    mean: 50
+    std_dev: 10
+    total_count: 1000
+report:
+  request_lifecycle:
+    summary: true
+    per_stage: true
+    per_request: true
+storage:
+  local_storage:
+    path: /workspace

@@ -1,0 +1,5 @@
+scenario:
+  - name: kind-sim
+    storage:
+      modelPvc:
+        size: 2Gi

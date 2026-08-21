@@ -1,0 +1,8 @@
+scenario:
+  - name: agentgateway-standalone
+    router:
+      proxy:
+        proxyType: agentgateway
+        presets:
+          agentgateway:
+            pullPolicy: IfNotPresent

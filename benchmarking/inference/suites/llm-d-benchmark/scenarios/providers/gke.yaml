@@ -1,0 +1,27 @@
+# Defaults that work for single-node simulator/CPU runs on GKE.
+scenario:
+  - name: gke
+    # Keep upstream's Prometheus Operator integration off. The wrapper runs
+    # llm-d-benchmark's direct collector independently and, when available,
+    # applies GKE monitoring.googleapis.com PodMonitoring resources.
+    monitoring:
+      installPrometheusCrds: false
+      podmonitor:
+        enabled: false
+      metricsScrapeEnabled: false
+    router:
+      monitoring:
+        prometheus:
+          enabled: false
+
+    storage:
+      modelPvc:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: standard-rwo
+        size: 80Gi
+      workloadPvc:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: standard-rwo
+        size: 3Gi

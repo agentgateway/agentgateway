@@ -1,0 +1,7 @@
+scenario:
+  - name: agentgateway-gateway
+    gateway:
+      className: agentgateway
+    router:
+      inferencePool:
+        create: true

@@ -1,0 +1,24 @@
+scenario:
+  - name: sim
+    affinity:
+      enabled: true
+      nodeSelector:
+        kubernetes.io/os: linux
+    accelerator:
+      count: 0
+      memory: 24
+    model:
+      maxModelLen: 1024
+      gpuMemoryUtilization: 0
+    decode:
+      replicas: 3
+      parallelism:
+        tensor: 0
+        data: 1
+        dataLocal: 1
+        workers: 1
+      resources:
+        limits: {memory: 100Mi, cpu: "0"}
+        requests: {memory: 100Mi, cpu: "0"}
+      accelerator:
+        count: 0

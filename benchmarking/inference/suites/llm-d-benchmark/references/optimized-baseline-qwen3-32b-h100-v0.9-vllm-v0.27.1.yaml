@@ -1,0 +1,35 @@
+# Controlled vLLM v0.27.1 comparison for the historical llm-d v0.9
+# Qwen3-32B/H100 report profile. Keep this overlay identical to
+# optimized-baseline-qwen3-32b-h100-v0.9.yaml except for the vLLM image so a
+# diagnostic run measures the model-server version rather than flag drift.
+scenario:
+  - name: optimized-baseline-qwen3-32b-h100-v0.9-vllm-v0.27.1
+    images:
+      vllm:
+        repository: docker.io/vllm/vllm-openai
+        tag: v0.27.1
+    vllmCommon:
+      shmMemory: 20Gi
+    decode:
+      replicas: 8
+      parallelism:
+        tensor: 2
+        data: 1
+        dataLocal: 1
+        workers: 1
+      resources:
+        limits: {memory: 128Gi, cpu: "16"}
+        requests: {memory: 96Gi, cpu: "8"}
+      vllm:
+        customCommand: |
+          vllm serve /model-cache/$MODEL_PATH \
+          --host 0.0.0.0 \
+          --served-model-name $MODEL_NAME \
+          --port $VLLM_METRICS_PORT \
+          --disable-access-log-for-endpoints=/health,/metrics,/v1/models \
+          --tensor-parallel-size=$TP_SIZE
+    router:
+      epp:
+        resources:
+          limits: {memory: 16Gi}
+          requests: {memory: 8Gi, cpu: "4"}
