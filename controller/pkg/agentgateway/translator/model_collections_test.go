@@ -21,9 +21,8 @@ func TestModelServingRuleGuards(t *testing.T) {
 		return gwv1.HTTPRouteRule{
 			Name:    &name,
 			Matches: []gwv1.HTTPRouteMatch{{Path: &gwv1.HTTPPathMatch{Type: &pathType, Value: &path}}},
-			BackendRefs: []gwv1.HTTPBackendRef{{BackendRef: gwv1.BackendRef{BackendObjectReference: gwv1.BackendObjectReference{
-				Group: &group, Kind: &kind, Name: "*",
-			}}}},
+			BackendRefs: []gwv1.HTTPBackendRef{{
+				Group: &group, Kind: &kind, Name: "*"}},
 		}
 	}
 	tests := []struct {

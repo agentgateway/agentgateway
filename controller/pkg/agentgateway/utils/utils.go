@@ -195,11 +195,9 @@ var TypedNamespacedNameIndexCollectionFunc = krt.WithIndexCollectionFromString(f
 		panic("invalid TypedNamespacedName: " + s)
 	}
 	return TypedNamespacedName{
-		NamespacedName: types.NamespacedName{
-			Namespace: parts[1],
-			Name:      parts[2],
-		},
-		Kind: parts[0],
+		Namespace: parts[1],
+		Name:      parts[2],
+		Kind:      parts[0],
 	}
 })
 
@@ -218,10 +216,8 @@ var SectionedNamespacedNameIndexCollectionFunc = krt.WithIndexCollectionFromStri
 		panic("invalid SectionedNamespacedName: " + s)
 	}
 	return SectionedNamespacedName{
-		NamespacedName: types.NamespacedName{
-			Namespace: parts[0],
-			Name:      parts[1],
-		},
+		Namespace:   parts[0],
+		Name:        parts[1],
 		SectionName: gwv1.SectionName(parts[2]),
 	}
 })

@@ -150,11 +150,9 @@ func setupDummyAncestorMapping(ctx plugins.PolicyCtx) []*gwv1.HTTPRoute {
 	dummyRoutes := []*gwv1.HTTPRoute{}
 	for idx, backend := range bes {
 		dummyRoutes = append(dummyRoutes, &gwv1.HTTPRoute{
-			TypeMeta: metav1.TypeMeta{},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("dummy-%d", idx),
-				Namespace: "default",
-			},
+			TypeMeta:  metav1.TypeMeta{},
+			Name:      fmt.Sprintf("dummy-%d", idx),
+			Namespace: "default",
 			Spec: gwv1.HTTPRouteSpec{
 				CommonRouteSpec: gwv1.CommonRouteSpec{
 					ParentRefs: []gwv1.ParentReference{{
@@ -163,15 +161,11 @@ func setupDummyAncestorMapping(ctx plugins.PolicyCtx) []*gwv1.HTTPRoute {
 				},
 				Rules: []gwv1.HTTPRouteRule{{
 					BackendRefs: []gwv1.HTTPBackendRef{{
-						BackendRef: gwv1.BackendRef{
-							BackendObjectReference: gwv1.BackendObjectReference{
-								Group:     new(gwv1.Group(backend.GetObjectKind().GroupVersionKind().Group)),
-								Kind:      new(gwv1.Kind(backend.GetObjectKind().GroupVersionKind().Kind)),
-								Name:      gwv1.ObjectName(backend.GetName()),
-								Namespace: new(gwv1.Namespace(backend.GetNamespace())),
-								Port:      nil,
-							},
-						},
+						Group:     new(gwv1.Group(backend.GetObjectKind().GroupVersionKind().Group)),
+						Kind:      new(gwv1.Kind(backend.GetObjectKind().GroupVersionKind().Kind)),
+						Name:      gwv1.ObjectName(backend.GetName()),
+						Namespace: new(gwv1.Namespace(backend.GetNamespace())),
+						Port:      nil,
 					}},
 				}},
 			},

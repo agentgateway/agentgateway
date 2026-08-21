@@ -216,14 +216,10 @@ data:
 
 func caManifest(t base.Test, name string, cert []byte) string {
 	cm := &corev1.ConfigMap{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "ConfigMap",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: frontendTLSNamespace,
-			Name:      name,
-		},
+		APIVersion: "v1",
+		Kind:       "ConfigMap",
+		Namespace:  frontendTLSNamespace,
+		Name:       name,
 		Data: map[string]string{
 			"ca.crt": string(cert),
 		},

@@ -69,8 +69,8 @@ func BuildAgwBackendReferences(
 ) []*plugins.PolicyAttachment {
 	var attachments []*plugins.PolicyAttachment
 	self := utils.TypedNamespacedName{
-		NamespacedName: types.NamespacedName{Namespace: backend.Namespace, Name: backend.Name},
-		Kind:           wellknown.AgentgatewayBackendGVK.Kind,
+		Namespace: backend.Namespace, Name: backend.Name,
+		Kind: wellknown.AgentgatewayBackendGVK.Kind,
 	}
 	app := func(ref gwv1.BackendObjectReference) {
 		attachments = append(attachments, &plugins.PolicyAttachment{

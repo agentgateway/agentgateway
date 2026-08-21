@@ -68,11 +68,9 @@ func extractModelAncestorBackends(ctx RouteContext, model *agentgateway.Agentgat
 		return nil
 	}
 	source := utils.TypedNamespacedName{
-		NamespacedName: types.NamespacedName{
-			Namespace: model.Namespace,
-			Name:      model.Name,
-		},
-		Kind: wellknown.AgentgatewayModelGVK.Kind,
+		Namespace: model.Namespace,
+		Name:      model.Name,
+		Kind:      wellknown.AgentgatewayModelGVK.Kind,
 	}
 	gateways := sets.Set[types.NamespacedName]{}
 	for _, parent := range FilteredReferences(extractModelParentReferenceInfo(ctx, model)) {
@@ -83,12 +81,10 @@ func extractModelAncestorBackends(ctx RouteContext, model *agentgateway.Agentgat
 		kind = *custom.BackendRef.Kind
 	}
 	backend := utils.TypedNamespacedName{
-		NamespacedName: types.NamespacedName{
-			// backendRef may target only namespace-local resources.
-			Namespace: model.Namespace,
-			Name:      custom.BackendRef.Name,
-		},
-		Kind: kind,
+		// backendRef may target only namespace-local resources.
+		Namespace: model.Namespace,
+		Name:      custom.BackendRef.Name,
+		Kind:      kind,
 	}
 	gtw := gateways.UnsortedList()
 	slices.SortFunc(gtw, func(a, b types.NamespacedName) int {
@@ -158,7 +154,7 @@ func extractModelParentReferenceInfo(ctx RouteContext, model *agentgateway.Agent
 		}
 		for _, gatewayParent := range FilteredReferences(extractParentReferenceInfo(ctx, ctx.RouteParents, route)) {
 			gatewayParent.OriginalReference = ref
-			gatewayParent.ParentKey = utils.TypedNamespacedName{NamespacedName: types.NamespacedName{Namespace: namespace, Name: route.Name}, Kind: wellknown.HTTPRouteKind}
+			gatewayParent.ParentKey = utils.TypedNamespacedName{Namespace: namespace, Name: route.Name, Kind: wellknown.HTTPRouteKind}
 			gatewayParent.ParentSection = ptr.OrEmpty(ref.SectionName)
 			gatewayParent.ModelRouterKey = routerKey
 			parents = append(parents, gatewayParent)

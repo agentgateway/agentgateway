@@ -8,7 +8,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
@@ -111,7 +110,7 @@ func TestResolveEndpoint(t *testing.T) {
 			inputs: []any{
 				gatewayJWTPolicy(backendRemote),
 				&agentgateway.AgentgatewayBackend{
-					ObjectMeta: metav1.ObjectMeta{Name: "dummy-idp", Namespace: "default"},
+					Name: "dummy-idp", Namespace: "default",
 				},
 			},
 			remoteProvider: backendRemote,
@@ -154,14 +153,12 @@ func TestResolveEndpoint(t *testing.T) {
 
 func gatewayJWTPolicy(remote agentgateway.RemoteJWKS) *agentgateway.AgentgatewayPolicy {
 	return &agentgateway.AgentgatewayPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "gw-policy", Namespace: "default"},
+		Name: "gw-policy", Namespace: "default",
 		Spec: agentgateway.AgentgatewayPolicySpec{
 			TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
-				LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
-					Group: gwv1.Group(gwv1.GroupVersion.Group),
-					Kind:  gwv1.Kind("Gateway"),
-					Name:  gwv1.ObjectName("super-gateway"),
-				},
+				Group: gwv1.Group(gwv1.GroupVersion.Group),
+				Kind:  gwv1.Kind("Gateway"),
+				Name:  gwv1.ObjectName("super-gateway"),
 			}},
 			Traffic: &agentgateway.Traffic{
 				JWTAuthentication: &agentgateway.JWTAuthentication{
@@ -178,19 +175,15 @@ func gatewayJWTPolicy(remote agentgateway.RemoteJWKS) *agentgateway.Agentgateway
 
 func attachedBackendPolicy(group gwv1.Group, kind gwv1.Kind, name string, tlsPolicy *agentgateway.BackendTLS) *agentgateway.AgentgatewayPolicy {
 	return &agentgateway.AgentgatewayPolicy{
-		ObjectMeta: metav1.ObjectMeta{Name: "idp-policy", Namespace: "default"},
+		Name: "idp-policy", Namespace: "default",
 		Spec: agentgateway.AgentgatewayPolicySpec{
 			TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
-				LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
-					Group: group,
-					Kind:  kind,
-					Name:  gwv1.ObjectName(name),
-				},
+				Group: group,
+				Kind:  kind,
+				Name:  gwv1.ObjectName(name),
 			}},
 			Backend: &agentgateway.BackendFull{
-				BackendSimple: agentgateway.BackendSimple{
-					TLS: tlsPolicy,
-				},
+				TLS: tlsPolicy,
 			},
 		},
 	}
@@ -198,16 +191,14 @@ func attachedBackendPolicy(group gwv1.Group, kind gwv1.Kind, name string, tlsPol
 
 func staticBackend(name, host string, port int32, tlsPolicy *agentgateway.BackendTLS) *agentgateway.AgentgatewayBackend {
 	return &agentgateway.AgentgatewayBackend{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default"},
+		Name: name, Namespace: "default",
 		Spec: agentgateway.AgentgatewayBackendSpec{
 			Static: &agentgateway.StaticBackend{
 				Host: host,
 				Port: port,
 			},
 			Policies: &agentgateway.BackendFull{
-				BackendSimple: agentgateway.BackendSimple{
-					TLS: tlsPolicy,
-				},
+				TLS: tlsPolicy,
 			},
 		},
 	}
@@ -216,16 +207,14 @@ func staticBackend(name, host string, port int32, tlsPolicy *agentgateway.Backen
 func remoteProvider(path string, backendRef gwv1.BackendObjectReference) agentgateway.RemoteJWKS {
 	jwksPath := agentgateway.LongString(path)
 	return agentgateway.RemoteJWKS{
-		JwksPath: &jwksPath,
-		PolicyBackendEndpoint: agentgateway.PolicyBackendEndpoint{
-			BackendRef: &backendRef,
-		},
+		JwksPath:   &jwksPath,
+		BackendRef: &backendRef,
 	}
 }
 
 func testCAConfigMap() *corev1.ConfigMap {
 	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Name: "ca", Namespace: "default"},
+		Name: "ca", Namespace: "default",
 		Data: map[string]string{
 			"ca.crt": testCertPEM,
 		},

@@ -720,11 +720,9 @@ func ToInternalParentReference(p gwv1.ParentReference, localNamespace string, al
 	}
 	return utils.TypedNamespacedName{
 		Kind: ref.Kind,
-		NamespacedName: types.NamespacedName{
-			Name: string(p.Name),
-			// Unset namespace means "same namespace"
-			Namespace: defaultString(p.Namespace, localNamespace),
-		},
+		Name: string(p.Name),
+		// Unset namespace means "same namespace"
+		Namespace: defaultString(p.Namespace, localNamespace),
 	}, nil
 }
 

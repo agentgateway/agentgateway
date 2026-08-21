@@ -529,10 +529,8 @@ func (g *agentgatewayParametersHelmValuesGenerator) getDefaultAgentgatewayHelmVa
 				CaCert:  &g.inputs.ControlPlane.XdsTlsCaCert,
 			},
 		},
-		AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
-			Resources: &corev1.ResourceRequirements{
-				Requests: defaultResourceRequests.DeepCopy(),
-			},
+		Resources: &corev1.ResourceRequirements{
+			Requests: defaultResourceRequests.DeepCopy(),
 		},
 	}
 
@@ -601,17 +599,13 @@ func (g *agentgatewayParametersHelmValuesGenerator) buildSessionKeySecret(
 		return nil, err
 	}
 	return &corev1.Secret{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: corev1.SchemeGroupVersion.String(),
-			Kind:       "Secret",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: gw.Namespace,
-			Labels: map[string]string{
-				wellknown.GatewayNameLabel:      safeLabelValue(gw.Name),
-				wellknown.GatewayClassNameLabel: string(gw.Spec.GatewayClassName),
-			},
+		APIVersion: corev1.SchemeGroupVersion.String(),
+		Kind:       "Secret",
+		Name:       secretName,
+		Namespace:  gw.Namespace,
+		Labels: map[string]string{
+			wellknown.GatewayNameLabel:      safeLabelValue(gw.Name),
+			wellknown.GatewayClassNameLabel: string(gw.Spec.GatewayClassName),
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
@@ -655,12 +649,10 @@ func GatewayIRFrom(gw *gwv1.Gateway, controllerNameGuess string) *collections.Ga
 		ports.Insert(l.Port)
 	}
 	return &collections.GatewayForDeployer{
-		ObjectSource: collections.ObjectSource{
-			Group:     gwv1.GroupVersion.Group,
-			Kind:      wellknown.GatewayKind,
-			Namespace: gw.Namespace,
-			Name:      gw.Name,
-		},
+		Group:          gwv1.GroupVersion.Group,
+		Kind:           wellknown.GatewayKind,
+		Namespace:      gw.Namespace,
+		Name:           gw.Name,
 		ControllerName: controllerNameGuess,
 		Ports:          smallset.New(ports.UnsortedList()...),
 		// This guess path has no ListenerSets, so internal ports are derived from the

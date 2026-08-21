@@ -212,8 +212,8 @@ func TranslateAgentgatewayPolicy(
 		}
 
 		targetObject := utils.TypedNamespacedName{
-			NamespacedName: types.NamespacedName{Namespace: targetNamespace, Name: string(name)},
-			Kind:           gk.Kind,
+			Namespace: targetNamespace, Name: string(name),
+			Kind: gk.Kind,
 		}
 
 		for _, policyTarget := range policyTargets {
@@ -2193,8 +2193,8 @@ func BackendReferencesFromPolicyForSource(
 	}
 	s := policy.Spec
 	self := utils.TypedNamespacedName{
-		NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: policy.Name},
-		Kind:           sourceGVK.Kind,
+		Namespace: policy.Namespace, Name: policy.Name,
+		Kind: sourceGVK.Kind,
 	}
 
 	seenTargets := make(map[utils.TypedNamespacedName]struct{})
@@ -2213,8 +2213,8 @@ func BackendReferencesFromPolicyForSource(
 			continue
 		}
 		addTarget(utils.TypedNamespacedName{
-			NamespacedName: types.NamespacedName{Namespace: policy.Namespace, Name: string(tgt.Name)},
-			Kind:           string(tgt.Kind),
+			Namespace: policy.Namespace, Name: string(tgt.Name),
+			Kind: string(tgt.Kind),
 		})
 	}
 	for _, selector := range s.TargetSelectors {
@@ -2223,8 +2223,8 @@ func BackendReferencesFromPolicyForSource(
 				continue
 			}
 			addTarget(utils.TypedNamespacedName{
-				NamespacedName: types.NamespacedName{Namespace: target.Namespace, Name: string(target.Name)},
-				Kind:           string(selector.Kind),
+				Namespace: target.Namespace, Name: string(target.Name),
+				Kind: string(selector.Kind),
 			})
 		}
 	}
@@ -2283,8 +2283,8 @@ func referencedBackendsFromPolicy(ctx krt.HandlerContext, policy *agentgateway.A
 			continue
 		}
 		backends = append(backends, utils.TypedNamespacedName{
-			NamespacedName: types.NamespacedName{Namespace: DefaultString(ref.Namespace, policy.Namespace), Name: string(ref.Name)},
-			Kind:           DefaultString(ref.Kind, wellknown.ServiceKind),
+			Namespace: DefaultString(ref.Namespace, policy.Namespace), Name: string(ref.Name),
+			Kind: DefaultString(ref.Kind, wellknown.ServiceKind),
 		})
 	}
 	return backends

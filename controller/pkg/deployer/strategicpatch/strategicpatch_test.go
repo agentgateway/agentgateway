@@ -21,13 +21,9 @@ func TestOverlayApplier_ApplyOverlays_NilParams(t *testing.T) {
 	applier := NewOverlayApplier(nil)
 	objs := []client.Object{
 		&appsv1.Deployment{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "apps/v1",
-				Kind:       "Deployment",
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-deployment",
-			},
+			APIVersion: "apps/v1",
+			Kind:       "Deployment",
+			Name:       "test-deployment",
 		},
 	}
 
@@ -53,15 +49,11 @@ func TestOverlayApplier_ApplyOverlays_MetadataLabels(t *testing.T) {
 
 	applier := NewOverlayApplier(params)
 	deployment := &appsv1.Deployment{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "apps/v1",
-			Kind:       "Deployment",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-deployment",
-			Labels: map[string]string{
-				"existing-label": "existing-value",
-			},
+		APIVersion: "apps/v1",
+		Kind:       "Deployment",
+		Name:       "test-deployment",
+		Labels: map[string]string{
+			"existing-label": "existing-value",
 		},
 	}
 	objs := []client.Object{deployment}
@@ -91,13 +83,9 @@ func TestOverlayApplier_ApplyOverlays_MetadataAnnotations(t *testing.T) {
 
 	applier := NewOverlayApplier(params)
 	svc := &corev1.Service{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Service",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-service",
-		},
+		APIVersion: "v1",
+		Kind:       "Service",
+		Name:       "test-service",
 	}
 	objs := []client.Object{svc}
 
@@ -138,13 +126,9 @@ func TestOverlayApplier_ApplyOverlays_DeploymentSpec(t *testing.T) {
 
 	applier := NewOverlayApplier(params)
 	deployment := &appsv1.Deployment{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "apps/v1",
-			Kind:       "Deployment",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-deployment",
-		},
+		APIVersion: "apps/v1",
+		Kind:       "Deployment",
+		Name:       "test-deployment",
 		Spec: appsv1.DeploymentSpec{
 			Replicas: ptr.To[int32](1),
 			Template: corev1.PodTemplateSpec{
@@ -197,13 +181,9 @@ func TestOverlayApplier_ApplyOverlays_DaemonSetSpec(t *testing.T) {
 
 	applier := NewOverlayApplier(params)
 	daemonSet := &appsv1.DaemonSet{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "apps/v1",
-			Kind:       "DaemonSet",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-daemonset",
-		},
+		APIVersion: "apps/v1",
+		Kind:       "DaemonSet",
+		Name:       "test-daemonset",
 		Spec: appsv1.DaemonSetSpec{
 			UpdateStrategy: appsv1.DaemonSetUpdateStrategy{
 				Type: appsv1.OnDeleteDaemonSetStrategyType,
@@ -231,12 +211,10 @@ func TestOverlayApplier_RejectsHPADaemonSetWorkload(t *testing.T) {
 	}
 
 	daemonSet := &appsv1.DaemonSet{
-		TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "DaemonSet"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-daemonset",
-			Namespace: "default",
-		},
-		Spec: appsv1.DaemonSetSpec{},
+		APIVersion: "apps/v1", Kind: "DaemonSet",
+		Name:      "test-daemonset",
+		Namespace: "default",
+		Spec:      appsv1.DaemonSetSpec{},
 	}
 
 	applier := NewOverlayApplier(params)
@@ -270,13 +248,9 @@ func TestOverlayApplier_ApplyOverlays_DeleteContainerWithPatchDirective(t *testi
 
 	applier := NewOverlayApplier(params)
 	deployment := &appsv1.Deployment{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "apps/v1",
-			Kind:       "Deployment",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-deployment",
-		},
+		APIVersion: "apps/v1",
+		Kind:       "Deployment",
+		Name:       "test-deployment",
 		Spec: appsv1.DeploymentSpec{
 			Template: corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
@@ -321,13 +295,9 @@ func TestOverlayApplier_ApplyOverlays_ServiceSpec(t *testing.T) {
 
 	applier := NewOverlayApplier(params)
 	svc := &corev1.Service{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Service",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-service",
-		},
+		APIVersion: "v1",
+		Kind:       "Service",
+		Name:       "test-service",
 		Spec: corev1.ServiceSpec{
 			Type: corev1.ServiceTypeLoadBalancer,
 		},
@@ -367,20 +337,20 @@ func TestOverlayApplier_ApplyOverlays_MultipleObjects(t *testing.T) {
 	applier := NewOverlayApplier(params)
 	objs := []client.Object{
 		&appsv1.Deployment{
-			TypeMeta:   metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
-			ObjectMeta: metav1.ObjectMeta{Name: "test-deployment"},
+			APIVersion: "apps/v1", Kind: "Deployment",
+			Name: "test-deployment",
 		},
 		&corev1.Service{
-			TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Service"},
-			ObjectMeta: metav1.ObjectMeta{Name: "test-service"},
+			APIVersion: "v1", Kind: "Service",
+			Name: "test-service",
 		},
 		&corev1.ServiceAccount{
-			TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "ServiceAccount"},
-			ObjectMeta: metav1.ObjectMeta{Name: "test-sa"},
+			APIVersion: "v1", Kind: "ServiceAccount",
+			Name: "test-sa",
 		},
 		&corev1.ConfigMap{
-			TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-			ObjectMeta: metav1.ObjectMeta{Name: "test-cm"},
+			APIVersion: "v1", Kind: "ConfigMap",
+			Name: "test-cm",
 		},
 	}
 
@@ -538,12 +508,10 @@ func TestLayeredOverlayApplier_PodDisruptionBudgetUsesFinalWorkloadSelector(t *t
 // PDB / HPA / VPA creation.
 func deploymentWithLabels(labels map[string]string) *appsv1.Deployment {
 	return &appsv1.Deployment{
-		TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "gw",
-			Namespace: "default",
-			Labels:    labels,
-		},
+		APIVersion: "apps/v1", Kind: "Deployment",
+		Name:      "gw",
+		Namespace: "default",
+		Labels:    labels,
 		Spec: appsv1.DeploymentSpec{
 			Selector: &metav1.LabelSelector{MatchLabels: labels},
 		},
@@ -592,12 +560,10 @@ func TestPodDisruptionBudget_OverlayLabelsMergeOnTop(t *testing.T) {
 
 func TestCreatePodDisruptionBudget_UsesDaemonSetSelector(t *testing.T) {
 	daemonSet := &appsv1.DaemonSet{
-		TypeMeta: metav1.TypeMeta{APIVersion: "apps/v1", Kind: "DaemonSet"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-daemonset",
-			Namespace: "default",
-			Labels:    gatewayLabels,
-		},
+		APIVersion: "apps/v1", Kind: "DaemonSet",
+		Name:      "test-daemonset",
+		Namespace: "default",
+		Labels:    gatewayLabels,
 		Spec: appsv1.DaemonSetSpec{
 			Selector: &metav1.LabelSelector{MatchLabels: gatewayLabels},
 		},

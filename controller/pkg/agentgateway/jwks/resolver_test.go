@@ -7,7 +7,6 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/ptr"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gwv1b1 "sigs.k8s.io/gateway-api/apis/v1beta1"
@@ -96,8 +95,8 @@ func TestResolverBackendRefGrant(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			inputs := []any{&corev1.Service{
-				ObjectMeta: metav1.ObjectMeta{Name: string(targetName), Namespace: targetNS},
-				Spec:       corev1.ServiceSpec{Ports: []corev1.ServicePort{{Port: 80}}},
+				Name: string(targetName), Namespace: targetNS,
+				Spec: corev1.ServiceSpec{Ports: []corev1.ServicePort{{Port: 80}}},
 			}}
 			if tt.grant != nil {
 				inputs = append(inputs, tt.grant)
@@ -139,7 +138,7 @@ func TestResolverBackendRefGrant(t *testing.T) {
 
 func referenceGrant(namespace string, source schema.GroupKind, sourceNamespace string, targetName *gwv1b1.ObjectName) *gwv1b1.ReferenceGrant {
 	return &gwv1b1.ReferenceGrant{
-		ObjectMeta: metav1.ObjectMeta{Name: "allow-jwks", Namespace: namespace},
+		Name: "allow-jwks", Namespace: namespace,
 		Spec: gwv1b1.ReferenceGrantSpec{
 			From: []gwv1b1.ReferenceGrantFrom{{
 				Group:     gwv1b1.Group(source.Group),

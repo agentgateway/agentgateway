@@ -14,7 +14,6 @@ import (
 	"istio.io/istio/pkg/slices"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/agentgateway/agentgateway/api"
@@ -123,11 +122,9 @@ func TranslateInlineBackendPolicy(
 	policy *agentgateway.BackendFull,
 ) ([]*api.BackendPolicySpec, error) {
 	dummy := &agentgateway.AgentgatewayPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "inline_policy",
-			Namespace: namespace,
-		},
-		Spec: agentgateway.AgentgatewayPolicySpec{Backend: policy},
+		Name:      "inline_policy",
+		Namespace: namespace,
+		Spec:      agentgateway.AgentgatewayPolicySpec{Backend: policy},
 	}
 	res, err := translateBackendPolicyToAgw(ctx, dummy)
 	return slices.MapFilter(res, func(e *api.Policy) **api.BackendPolicySpec {
