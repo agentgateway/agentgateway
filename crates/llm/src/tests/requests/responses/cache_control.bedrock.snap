@@ -39,47 +39,65 @@ info:
         "role": "user",
         "content": [
           {
-            "type": "text",
-            "text": "Cached user input",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
-            }
-          }
-        ]
-      },
-      {
-        "role": "developer",
-        "content": [
+            "text": "Cached user input"
+          },
           {
-            "type": "text",
-            "text": "Cached system input",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
+            "cachePoint": {
+              "type": "default"
             }
-          }
-        ]
-      },
-      {
-        "role": "developer",
-        "content": [
+          },
           {
-            "type": "text",
-            "text": "Cached developer input",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
+            "image": {
+              "format": "png",
+              "source": {
+                "bytes": "aGVsbG8="
+              }
+            }
+          },
+          {
+            "cachePoint": {
+              "type": "default"
+            }
+          },
+          {
+            "document": {
+              "format": "txt",
+              "name": "notes",
+              "source": {
+                "bytes": "aGVsbG8="
+              }
+            }
+          },
+          {
+            "cachePoint": {
+              "type": "default"
             }
           }
         ]
       }
     ],
-    "model": "gpt-5",
-    "stream": false
+    "system": [
+      {
+        "text": "Cached system input"
+      },
+      {
+        "cachePoint": {
+          "type": "default"
+        }
+      },
+      {
+        "text": "Cached developer input"
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 4096
+    }
   },
   "parsed": {
     "input_format": "Responses",
     "cache_convention": "InputIncludesCache",
     "request_model": "gpt-5",
-    "provider": "gemini",
+    "provider": "bedrock",
     "streaming": false,
     "params": {},
     "prompt": [

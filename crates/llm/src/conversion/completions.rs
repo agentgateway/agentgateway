@@ -73,52 +73,35 @@ pub(crate) fn parse_data_url(url: &str) -> Option<(&str, &str)> {
 	Some((media_type, data))
 }
 
-pub(crate) fn extract_system_text(
-	msg: &types::completions::typed::RequestMessage,
-) -> Option<String> {
-	fn normalize_text(text: &str) -> Option<String> {
-		if text.trim().is_empty() {
-			None
-		} else {
-			Some(text.to_string())
+/// Parse an OpenAI completions request while accepting Anthropic's commonly-used
+/// `cache_control` extension as an alias for `prompt_cache_breakpoint` on content parts.
+pub(crate) fn parse_request_with_cache_control(
+	req: &types::completions::Request,
+) -> Result<types::completions::typed::Request, serde_json::Error> {
+	let mut req = req.clone();
+	for message in &mut req.messages {
+		let Some(types::completions::Content::Array(parts)) = &mut message.content else {
+			continue;
+		};
+		for part in parts {
+			let Some(fields) = part.rest.as_object_mut() else {
+				continue;
+			};
+			if !fields.contains_key("prompt_cache_breakpoint")
+				&& fields
+					.get("cache_control")
+					.and_then(|value| value.get("type"))
+					.and_then(serde_json::Value::as_str)
+					== Some("ephemeral")
+			{
+				fields.insert(
+					"prompt_cache_breakpoint".to_string(),
+					serde_json::json!({"mode": "explicit"}),
+				);
+			}
 		}
 	}
-
-	match msg {
-		types::completions::typed::RequestMessage::System(system) => match &system.content {
-			types::completions::typed::RequestSystemMessageContent::Text(text) => normalize_text(text),
-			types::completions::typed::RequestSystemMessageContent::Array(parts) => {
-				let text = parts
-					.iter()
-					.map(|part| match part {
-						types::completions::typed::RequestSystemMessageContentPart::Text(text) => {
-							text.text.as_str()
-						},
-					})
-					.filter(|text| !text.trim().is_empty())
-					.collect::<Vec<_>>()
-					.join("\n");
-				normalize_text(&text)
-			},
-		},
-		types::completions::typed::RequestMessage::Developer(developer) => match &developer.content {
-			types::completions::typed::RequestDeveloperMessageContent::Text(text) => normalize_text(text),
-			types::completions::typed::RequestDeveloperMessageContent::Array(parts) => {
-				let text = parts
-					.iter()
-					.map(|part| match part {
-						types::completions::typed::RequestDeveloperMessageContentPart::Text(text) => {
-							text.text.as_str()
-						},
-					})
-					.filter(|text| !text.trim().is_empty())
-					.collect::<Vec<_>>()
-					.join("\n");
-				normalize_text(&text)
-			},
-		},
-		_ => None,
-	}
+	crate::json::convert::<_, types::completions::typed::Request>(&req)
 }
 
 pub mod from_messages {

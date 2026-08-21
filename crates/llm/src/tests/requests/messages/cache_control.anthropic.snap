@@ -110,22 +110,6 @@ info:
   "request": {
     "messages": [
       {
-        "role": "system",
-        "content": [
-          {
-            "type": "text",
-            "text": "First system block"
-          },
-          {
-            "type": "text",
-            "text": "Second system block",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
-            }
-          }
-        ]
-      },
-      {
         "role": "assistant",
         "content": [
           {
@@ -135,8 +119,8 @@ info:
           {
             "type": "text",
             "text": "Second assistant block",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
+            "cache_control": {
+              "type": "ephemeral"
             }
           }
         ]
@@ -147,110 +131,122 @@ info:
           {
             "type": "text",
             "text": "Cached user text",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
+            "cache_control": {
+              "type": "ephemeral"
             }
           },
           {
-            "type": "image_url",
-            "image_url": {
-              "url": "data:image/png;base64,aGVsbG8="
+            "type": "image",
+            "source": {
+              "type": "base64",
+              "media_type": "image/png",
+              "data": "aGVsbG8="
+            },
+            "cache_control": {
+              "type": "ephemeral"
             }
           }
         ]
       },
       {
         "role": "assistant",
-        "tool_calls": [
+        "content": [
           {
-            "type": "function",
+            "type": "tool_use",
             "id": "call_text",
-            "function": {
-              "name": "lookup",
-              "arguments": "{}"
-            }
+            "name": "lookup",
+            "input": {}
           },
           {
-            "type": "function",
+            "type": "tool_use",
             "id": "call_array",
-            "function": {
-              "name": "lookup",
-              "arguments": "{}"
-            }
+            "name": "lookup",
+            "input": {}
           },
           {
-            "type": "function",
+            "type": "tool_use",
             "id": "call_image",
-            "function": {
-              "name": "lookup",
-              "arguments": "{}"
-            }
+            "name": "lookup",
+            "input": {}
           },
           {
-            "type": "function",
+            "type": "tool_use",
             "id": "call_mixed",
-            "function": {
-              "name": "lookup",
-              "arguments": "{}"
+            "name": "lookup",
+            "input": {},
+            "cache_control": {
+              "type": "ephemeral"
             }
           }
         ]
       },
       {
-        "role": "tool",
+        "role": "user",
         "content": [
           {
-            "type": "text",
-            "text": "text result",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
+            "type": "tool_result",
+            "tool_use_id": "call_text",
+            "content": "text result",
+            "cache_control": {
+              "type": "ephemeral"
             }
-          }
-        ],
-        "tool_call_id": "call_text"
-      },
-      {
-        "role": "tool",
-        "content": [
-          {
-            "type": "text",
-            "text": "array result",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
-            }
-          }
-        ],
-        "tool_call_id": "call_array"
-      },
-      {
-        "role": "tool",
-        "content": [
-          {
-            "type": "text",
-            "text": "",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
-            }
-          }
-        ],
-        "tool_call_id": "call_image"
-      },
-      {
-        "role": "tool",
-        "content": [
-          {
-            "type": "text",
-            "text": "before image"
           },
           {
-            "type": "text",
-            "text": "after image",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
-            }
+            "type": "tool_result",
+            "tool_use_id": "call_array",
+            "content": [
+              {
+                "type": "text",
+                "text": "array result",
+                "cache_control": {
+                  "type": "ephemeral"
+                }
+              }
+            ]
+          },
+          {
+            "type": "tool_result",
+            "tool_use_id": "call_image",
+            "content": [
+              {
+                "type": "image",
+                "source": {
+                  "type": "base64",
+                  "media_type": "image/png",
+                  "data": "aGVsbG8="
+                },
+                "cache_control": {
+                  "type": "ephemeral"
+                }
+              }
+            ]
+          },
+          {
+            "type": "tool_result",
+            "tool_use_id": "call_mixed",
+            "content": [
+              {
+                "type": "text",
+                "text": "before image"
+              },
+              {
+                "type": "image",
+                "source": {
+                  "type": "base64",
+                  "media_type": "image/png",
+                  "data": "aGVsbG8="
+                },
+                "cache_control": {
+                  "type": "ephemeral"
+                }
+              },
+              {
+                "type": "text",
+                "text": "after image"
+              }
+            ]
           }
-        ],
-        "tool_call_id": "call_mixed"
+        ]
       },
       {
         "role": "system",
@@ -258,27 +254,38 @@ info:
           {
             "type": "text",
             "text": "System-role block",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
+            "cache_control": {
+              "type": "ephemeral"
             }
           }
         ]
       }
     ],
     "model": "gpt-5.6-terra",
-    "reasoning_effort": "none",
-    "max_completion_tokens": 1024,
-    "stream": false,
+    "system": [
+      {
+        "type": "text",
+        "text": "First system block"
+      },
+      {
+        "type": "text",
+        "text": "Second system block",
+        "cache_control": {
+          "type": "ephemeral"
+        }
+      }
+    ],
+    "max_tokens": 1024,
     "tools": [
       {
-        "type": "function",
-        "function": {
-          "name": "lookup",
-          "description": "Look up information",
-          "parameters": {
-            "type": "object",
-            "properties": {}
-          }
+        "name": "lookup",
+        "description": "Look up information",
+        "input_schema": {
+          "type": "object",
+          "properties": {}
+        },
+        "cache_control": {
+          "type": "ephemeral"
         }
       }
     ]
@@ -287,7 +294,7 @@ info:
     "input_format": "Messages",
     "cache_convention": "InputIncludesCache",
     "request_model": "gpt-5.6-terra",
-    "provider": "openai",
+    "provider": "anthropic",
     "streaming": false,
     "params": {
       "max_tokens": 1024

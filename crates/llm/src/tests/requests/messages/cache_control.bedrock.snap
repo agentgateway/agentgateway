@@ -110,33 +110,17 @@ info:
   "request": {
     "messages": [
       {
-        "role": "system",
-        "content": [
-          {
-            "type": "text",
-            "text": "First system block"
-          },
-          {
-            "type": "text",
-            "text": "Second system block",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
-            }
-          }
-        ]
-      },
-      {
         "role": "assistant",
         "content": [
           {
-            "type": "text",
             "text": "First assistant block"
           },
           {
-            "type": "text",
-            "text": "Second assistant block",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
+            "text": "Second assistant block"
+          },
+          {
+            "cachePoint": {
+              "type": "default"
             }
           }
         ]
@@ -145,149 +129,168 @@ info:
         "role": "user",
         "content": [
           {
-            "type": "text",
-            "text": "Cached user text",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
+            "text": "Cached user text"
+          },
+          {
+            "cachePoint": {
+              "type": "default"
             }
           },
           {
-            "type": "image_url",
-            "image_url": {
-              "url": "data:image/png;base64,aGVsbG8="
+            "image": {
+              "format": "png",
+              "source": {
+                "bytes": "aGVsbG8="
+              }
+            }
+          },
+          {
+            "cachePoint": {
+              "type": "default"
             }
           }
         ]
       },
       {
         "role": "assistant",
-        "tool_calls": [
+        "content": [
           {
-            "type": "function",
-            "id": "call_text",
-            "function": {
+            "toolUse": {
+              "toolUseId": "call_text",
               "name": "lookup",
-              "arguments": "{}"
+              "input": {}
             }
           },
           {
-            "type": "function",
-            "id": "call_array",
-            "function": {
+            "toolUse": {
+              "toolUseId": "call_array",
               "name": "lookup",
-              "arguments": "{}"
+              "input": {}
             }
           },
           {
-            "type": "function",
-            "id": "call_image",
-            "function": {
+            "toolUse": {
+              "toolUseId": "call_image",
               "name": "lookup",
-              "arguments": "{}"
+              "input": {}
             }
           },
           {
-            "type": "function",
-            "id": "call_mixed",
-            "function": {
+            "toolUse": {
+              "toolUseId": "call_mixed",
               "name": "lookup",
-              "arguments": "{}"
+              "input": {}
             }
           }
         ]
       },
       {
-        "role": "tool",
+        "role": "user",
         "content": [
           {
-            "type": "text",
-            "text": "text result",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
+            "toolResult": {
+              "toolUseId": "call_text",
+              "content": [
+                {
+                  "text": "text result"
+                }
+              ],
+              "status": null
             }
-          }
-        ],
-        "tool_call_id": "call_text"
-      },
-      {
-        "role": "tool",
-        "content": [
-          {
-            "type": "text",
-            "text": "array result",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
-            }
-          }
-        ],
-        "tool_call_id": "call_array"
-      },
-      {
-        "role": "tool",
-        "content": [
-          {
-            "type": "text",
-            "text": "",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
-            }
-          }
-        ],
-        "tool_call_id": "call_image"
-      },
-      {
-        "role": "tool",
-        "content": [
-          {
-            "type": "text",
-            "text": "before image"
           },
           {
-            "type": "text",
-            "text": "after image",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
+            "toolResult": {
+              "toolUseId": "call_array",
+              "content": [
+                {
+                  "text": "array result"
+                }
+              ],
+              "status": null
             }
-          }
-        ],
-        "tool_call_id": "call_mixed"
-      },
-      {
-        "role": "system",
-        "content": [
+          },
           {
-            "type": "text",
-            "text": "System-role block",
-            "prompt_cache_breakpoint": {
-              "mode": "explicit"
+            "toolResult": {
+              "toolUseId": "call_image",
+              "content": [
+                {
+                  "image": {
+                    "format": "png",
+                    "source": {
+                      "bytes": "aGVsbG8="
+                    }
+                  }
+                }
+              ],
+              "status": null
+            }
+          },
+          {
+            "toolResult": {
+              "toolUseId": "call_mixed",
+              "content": [
+                {
+                  "text": "before image"
+                },
+                {
+                  "image": {
+                    "format": "png",
+                    "source": {
+                      "bytes": "aGVsbG8="
+                    }
+                  }
+                },
+                {
+                  "text": "after image"
+                }
+              ],
+              "status": null
             }
           }
         ]
       }
     ],
-    "model": "gpt-5.6-terra",
-    "reasoning_effort": "none",
-    "max_completion_tokens": 1024,
-    "stream": false,
-    "tools": [
+    "system": [
       {
-        "type": "function",
-        "function": {
-          "name": "lookup",
-          "description": "Look up information",
-          "parameters": {
-            "type": "object",
-            "properties": {}
+        "text": "First system block"
+      },
+      {
+        "text": "Second system block"
+      },
+      {
+        "cachePoint": {
+          "type": "default"
+        }
+      },
+      {
+        "text": "System-role block"
+      }
+    ],
+    "inferenceConfig": {
+      "maxTokens": 1024
+    },
+    "toolConfig": {
+      "tools": [
+        {
+          "toolSpec": {
+            "name": "lookup",
+            "description": "Look up information",
+            "inputSchema": {
+              "json": {
+                "type": "object",
+                "properties": {}
+              }
+            }
           }
         }
-      }
-    ]
+      ]
+    }
   },
   "parsed": {
     "input_format": "Messages",
     "cache_convention": "InputIncludesCache",
     "request_model": "gpt-5.6-terra",
-    "provider": "openai",
+    "provider": "bedrock",
     "streaming": false,
     "params": {
       "max_tokens": 1024
