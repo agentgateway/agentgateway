@@ -303,15 +303,16 @@ headers and adds values derived from the authenticated NetBird caller. The
 AgentgatewayParameters resource maps these headers to the
 `agentgateway.user` and `agentgateway.group` standard request-log attributes.
 
-The groups header is a sorted CSV of display names for attribution. It is not
-a delimiter-safe set of stable group IDs and must not be used as an
+The `x-netbird-groups` header is a sorted CSV of display names for attribution.
+It is not a delimiter-safe set of stable group IDs and must not be used as an
 agentgateway authorization claim.
 
-The agentgateway listener must remain unreachable except through the NetBird
-proxy. Strict API-key authentication protects the hop, but the shared key by
-itself does not make caller-supplied identity headers trustworthy. If your CNI
-does not enforce Kubernetes NetworkPolicy, apply equivalent controls with a
-service mesh, firewall, or private network.
+The private AI listener on the `netbird-agentgateway` Gateway must remain
+unreachable except through the NetBird proxy. Strict API-key authentication
+protects the hop, but the shared key by itself does not make caller-supplied
+identity headers trustworthy. If your CNI does not enforce Kubernetes
+NetworkPolicy, apply equivalent controls with a service mesh, firewall, or
+private network.
 
 ## Pricing behavior
 
