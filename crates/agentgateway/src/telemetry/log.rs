@@ -1138,6 +1138,19 @@ pub struct RequestLog {
 	pub response_bytes: u64,
 }
 
+/// Mirrors the status/error severity classification already used for the debug
+/// tracer (see `dtrace::MessageType::severity`), so access logs get the same
+/// error/warn/info split instead of always reporting "info".
+fn request_log_level(status: Option<crate::http::StatusCode>, error: Option<&str>) -> &'static str {
+	if error.is_some() || status.is_some_and(|s| s.as_u16() >= 500) {
+		"error"
+	} else if status.is_some_and(|s| s.as_u16() >= 400) {
+		"warn"
+	} else {
+		"info"
+	}
+}
+
 impl Drop for DropOnLog {
 	fn drop(&mut self) {
 		let status = self
@@ -1317,7 +1330,13 @@ impl Drop for DropOnLog {
 					.inc();
 			}
 
-			let maybe_enable_log = agent_core::telemetry::enabled("request", &Level::INFO);
+			let level = request_log_level(log.status, log.error.as_deref());
+			let level_filter = match level {
+				"error" => Level::ERROR,
+				"warn" => Level::WARN,
+				_ => Level::INFO,
+			};
+			let maybe_enable_log = agent_core::telemetry::enabled("request", &level_filter);
 			let otlp_log_enabled = log.otel_logger.is_some();
 			// For now we only enable this log for LLM requests to keep cost/performance appropriate.
 			let log_store_enabled = log_store::enabled()
@@ -1743,7 +1762,7 @@ impl Drop for DropOnLog {
 					let eval = v.as_ref().map(json_value_to_value_bag);
 					otlp_kv.push((k, eval));
 				}
-				otel.emit("info", "request", &otlp_kv);
+				otel.emit(level, "request", &otlp_kv);
 			}
 
 			if maybe_enable_log || log_store_enabled {
@@ -1769,7 +1788,7 @@ impl Drop for DropOnLog {
 				}
 
 				if maybe_enable_log {
-					agent_core::telemetry::log("info", "request", &kv);
+					agent_core::telemetry::log(level, "request", &kv);
 				}
 
 				if log_store_enabled {
@@ -2559,6 +2578,30 @@ mod tests {
 	fn database_llm_metadata_does_not_persist_captured_content() {
 		let context = llm_context_with_content();
 		assert!(database_llm_payload(Some(DatabaseLlmMode::Metadata), Some(&context)).is_none());
+	}
+
+	#[test]
+	fn request_log_level_reflects_status_and_error() {
+		use crate::http::StatusCode;
+
+		assert_eq!(request_log_level(None, None), "info");
+		assert_eq!(request_log_level(Some(StatusCode::OK), None), "info");
+		assert_eq!(request_log_level(Some(StatusCode::NOT_FOUND), None), "warn");
+		assert_eq!(
+			request_log_level(Some(StatusCode::BAD_GATEWAY), None),
+			"error"
+		);
+		assert_eq!(
+			request_log_level(Some(StatusCode::INTERNAL_SERVER_ERROR), None),
+			"error"
+		);
+		// An error takes precedence even without a 5xx status (e.g. connection reset
+		// before a response was ever produced).
+		assert_eq!(
+			request_log_level(Some(StatusCode::OK), Some("boom")),
+			"error"
+		);
+		assert_eq!(request_log_level(None, Some("boom")), "error");
 	}
 
 	#[test]
