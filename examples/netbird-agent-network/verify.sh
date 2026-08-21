@@ -5,7 +5,7 @@ NAMESPACE=netbird-agent-network
 AGENTGATEWAY_NAMESPACE=netbird-agent-network
 RUN_LIVE_PROVIDER_TESTS=${RUN_LIVE_PROVIDER_TESTS:-false}
 OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
-ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-3-5-haiku-latest}
+ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-haiku-4-5-20251001}
 
 for command in curl jq kubectl; do
   if ! command -v "${command}" >/dev/null 2>&1; then
@@ -14,7 +14,7 @@ for command in curl jq kubectl; do
   fi
 done
 
-for variable in NETBIRD_AGENT_ENDPOINT NETBIRD_VIRTUAL_KEY; do
+for variable in NETBIRD_AGENT_ENDPOINT NETBIRD_MANAGEMENT_DOMAIN NETBIRD_VIRTUAL_KEY; do
   if [[ -z "${!variable:-}" ]]; then
     echo "required environment variable is not set: ${variable}" >&2
     exit 1
@@ -50,7 +50,13 @@ assert_status() {
 echo "Checking workload readiness"
 kubectl wait --for=condition=Programmed gateway/netbird-agentgateway \
   -n "${AGENTGATEWAY_NAMESPACE}" --timeout=300s
+kubectl wait --for=condition=Programmed gateway/netbird-management \
+  -n "${AGENTGATEWAY_NAMESPACE}" --timeout=300s
+kubectl wait --for=condition=Ready certificate/netbird-management \
+  -n "${AGENTGATEWAY_NAMESPACE}" --timeout=300s
 kubectl rollout status deployment/netbird-agentgateway \
+  -n "${AGENTGATEWAY_NAMESPACE}" --timeout=300s
+kubectl rollout status deployment/netbird-management \
   -n "${AGENTGATEWAY_NAMESPACE}" --timeout=300s
 kubectl rollout status deployment/netbird-server \
   -n "${NAMESPACE}" --timeout=300s
@@ -58,6 +64,10 @@ kubectl rollout status deployment/netbird-proxy \
   -n "${NAMESPACE}" --timeout=300s
 kubectl rollout status deployment/netbird-example-client \
   -n "${NAMESPACE}" --timeout=300s
+
+echo "Checking the public management gateway"
+assert_status 200 "https://${NETBIRD_MANAGEMENT_DOMAIN}/api/instance"
+assert_status 308 "http://${NETBIRD_MANAGEMENT_DOMAIN}/api/instance"
 
 kubectl port-forward -n "${AGENTGATEWAY_NAMESPACE}" \
   service/netbird-agentgateway 18080:80 \

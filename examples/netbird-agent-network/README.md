@@ -10,6 +10,16 @@ and Anthropic requests to their respective providers.
 ```text
 NetBird client
     |
+    | management HTTPS
+    v
+public management agentgateway
+    |
+    | HTTP/2 cleartext inside the cluster
+    v
+private NetBird server
+
+NetBird client
+    |
     | generated Agent Network HTTPS endpoint
     v
 NetBird proxy
@@ -22,9 +32,10 @@ private agentgateway listener
     `-- all other paths ---------> OpenAI
 ```
 
-The manifests use public LoadBalancer Services for the NetBird management
-server and Agent Network proxy. The agentgateway Service is ClusterIP-only and
-a NetworkPolicy permits ingress only from the NetBird proxy.
+The manifests use public LoadBalancer Services for the management agentgateway
+and Agent Network proxy. The NetBird server and AI agentgateway Services are
+ClusterIP-only. NetworkPolicies permit only the management agentgateway to
+reach the server and only the NetBird proxy to reach the AI gateway.
 
 ## Temporary NetBird images
 
@@ -55,8 +66,9 @@ in `versions.env` with the first official `netbirdio/netbird-server` and
   not acceptable in your cluster, connect an external NetBird client and omit
   the `netbird-example-client` Deployment.
 
-The example was tested with agentgateway 1.4.1, Gateway API 1.6.0, and the
-NetBird 0.77.0 client. All versions are pinned in `versions.env`.
+The example was tested with agentgateway 1.4.1, cert-manager 1.21.1, Gateway
+API 1.6.0, and the NetBird 0.77.0 client. All versions are pinned in
+`versions.env`.
 
 ## 1. Set variables
 
@@ -88,13 +100,23 @@ Keep these values in a password manager. In particular, rerunning the example
 with a different virtual key without updating both systems will cause
 agentgateway to reject NetBird requests.
 
-## 2. Install agentgateway
+## 2. Install the controllers
 
-Install Gateway API and the pinned agentgateway charts:
+Install Gateway API, cert-manager with Gateway API support, and the pinned
+agentgateway charts:
 
 ```bash
 kubectl apply --server-side --force-conflicts \
   -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/${GATEWAY_API_VERSION}/standard-install.yaml"
+
+helm upgrade -i cert-manager \
+  oci://quay.io/jetstack/charts/cert-manager \
+  --create-namespace \
+  --namespace cert-manager \
+  --version "${CERT_MANAGER_VERSION}" \
+  --set crds.enabled=true \
+  --set config.gatewayAPI.enabled=true \
+  --wait
 
 helm upgrade -i agentgateway-crds \
   oci://cr.agentgateway.dev/charts/agentgateway-crds \
@@ -119,8 +141,9 @@ kubectl create namespace netbird-agent-network \
   --dry-run=client -o yaml | kubectl apply -f -
 
 envsubst < secrets.example.yaml | kubectl apply -f -
-kubectl apply -f agentgateway.yaml
 envsubst < netbird.yaml | kubectl apply -f -
+kubectl apply -f agentgateway.yaml
+envsubst < management-gateway.yaml | kubectl apply -f -
 ```
 
 The proxy and client pods initially wait for secrets created by
@@ -129,7 +152,7 @@ The proxy and client pods initially wait for secrets created by
 Wait for the public addresses:
 
 ```bash
-kubectl get service netbird-server netbird-proxy \
+kubectl get service netbird-management netbird-proxy \
   -n netbird-agent-network --watch
 ```
 
@@ -139,14 +162,20 @@ Create these records after the LoadBalancer addresses are assigned:
 
 | Name | Target |
 | --- | --- |
-| `${NETBIRD_MANAGEMENT_DOMAIN}` | `netbird-server` LoadBalancer address |
+| `${NETBIRD_MANAGEMENT_DOMAIN}` | `netbird-management` LoadBalancer address |
 | `${NETBIRD_PROXY_DOMAIN}` | `netbird-proxy` LoadBalancer address |
 | `*.${NETBIRD_PROXY_DOMAIN}` | CNAME to `${NETBIRD_PROXY_DOMAIN}` |
 
-Both NetBird services obtain certificates with the TLS-ALPN-01 ACME
-challenge. Wait until the management endpoint answers over HTTPS:
+cert-manager obtains the management certificate with an HTTP-01 challenge
+through the management Gateway. The Agent Network proxy obtains its
+certificate with a TLS-ALPN-01 challenge. Wait for the management certificate
+and endpoint:
 
 ```bash
+kubectl wait --for=condition=Ready issuer/netbird-letsencrypt \
+  -n netbird-agent-network --timeout=5m
+kubectl wait --for=condition=Ready certificate/netbird-management \
+  -n netbird-agent-network --timeout=10m
 curl -fsS "https://${NETBIRD_MANAGEMENT_DOMAIN}/api/instance"
 ```
 
@@ -198,7 +227,7 @@ costs:
 ```bash
 export RUN_LIVE_PROVIDER_TESTS=true
 export OPENAI_MODEL=gpt-4o-mini
-export ANTHROPIC_MODEL=claude-3-5-haiku-latest
+export ANTHROPIC_MODEL=claude-haiku-4-5-20251001
 ./verify.sh
 ```
 
@@ -273,8 +302,10 @@ exact.
   from a peer authorized by the Agent Network policy.
 - A pending NetBird client commonly means `/dev/net/tun` or privileged pods are
   unavailable. Use an external disposable peer in that case.
-- ACME failures usually indicate that the A record does not point to the
-  current LoadBalancer address or TCP 443 is filtered.
+- Management certificate failures usually indicate that its A record does not
+  point to the `netbird-management` LoadBalancer or TCP 80 is filtered. Agent
+  Network proxy certificate failures usually indicate that TCP 443 is
+  filtered or its DNS records point to the wrong LoadBalancer.
 - Inspect `AgentgatewayBackend`, `AgentgatewayPolicy`, `HTTPRoute`, and Gateway
   status conditions before looking at pod logs.
 
@@ -285,10 +316,11 @@ exact.
 ```
 
 The script removes the dedicated NetBird namespace and only the agentgateway
-resources owned by this example. It does not uninstall shared Gateway API or
-agentgateway control-plane components, and it does not remove DNS records.
-Deleting the namespace also deletes the example's PVCs and NetBird database;
-that data is not recoverable unless the storage system retains a snapshot.
+resources owned by this example. It does not uninstall shared Gateway API,
+cert-manager, or agentgateway control-plane components, and it does not remove
+DNS records. Deleting the namespace also deletes the example's PVCs and
+NetBird database; that data is not recoverable unless the storage system
+retains a snapshot.
 
 ## Tracking
 

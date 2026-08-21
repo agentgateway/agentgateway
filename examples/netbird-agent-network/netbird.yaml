@@ -17,7 +17,7 @@ spec:
     - ReadWriteOnce
   resources:
     requests:
-      storage: 5Gi
+      storage: 1Gi
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -62,8 +62,8 @@ spec:
             - name: NB_SETUP_PAT_ENABLED
               value: "true"
           ports:
-            - name: tls
-              containerPort: 443
+            - name: http
+              containerPort: 8080
             - name: health
               containerPort: 9000
           resources:
@@ -96,13 +96,14 @@ metadata:
     app.kubernetes.io/name: netbird-server
     app.kubernetes.io/part-of: netbird-agent-network
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app.kubernetes.io/name: netbird-server
   ports:
-    - name: tls
-      port: 443
-      targetPort: tls
+    - name: http
+      port: 80
+      targetPort: http
+      appProtocol: kubernetes.io/h2c
 ---
 apiVersion: apps/v1
 kind: Deployment

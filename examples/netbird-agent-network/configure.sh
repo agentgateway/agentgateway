@@ -178,6 +178,6 @@ echo "Export this value before running verify.sh:"
 echo "export NETBIRD_AGENT_ENDPOINT=${endpoint}"
 echo
 echo "Create the following DNS records if they do not exist:"
-echo "  ${NETBIRD_MANAGEMENT_DOMAIN} -> netbird-server LoadBalancer address"
+echo "  ${NETBIRD_MANAGEMENT_DOMAIN} -> netbird-management LoadBalancer address"
 echo "  ${NETBIRD_PROXY_DOMAIN} -> netbird-proxy LoadBalancer address"
 echo "  *.${NETBIRD_PROXY_DOMAIN} -> ${NETBIRD_PROXY_DOMAIN}"
