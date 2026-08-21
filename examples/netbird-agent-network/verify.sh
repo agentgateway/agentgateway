@@ -47,6 +47,21 @@ assert_status() {
   fi
 }
 
+assert_websocket_upgrade() {
+  local url=$1
+  local actual
+  actual=$(curl -s --http1.1 --max-time 2 -o /dev/null -w '%{http_code}' \
+    -H 'Connection: Upgrade' \
+    -H 'Upgrade: websocket' \
+    -H 'Sec-WebSocket-Key: MDEyMzQ1Njc4OWFiY2RlZg==' \
+    -H 'Sec-WebSocket-Version: 13' \
+    "${url}" || true)
+  if [[ "${actual}" != "101" ]]; then
+    echo "expected WebSocket upgrade HTTP 101, got ${actual}: ${url}" >&2
+    exit 1
+  fi
+}
+
 echo "Checking workload readiness"
 kubectl wait --for=condition=Programmed gateway/netbird-agentgateway \
   -n "${AGENTGATEWAY_NAMESPACE}" --timeout=300s
@@ -68,6 +83,9 @@ kubectl rollout status deployment/netbird-example-client \
 echo "Checking the public management gateway"
 assert_status 200 "https://${NETBIRD_MANAGEMENT_DOMAIN}/api/instance"
 assert_status 308 "http://${NETBIRD_MANAGEMENT_DOMAIN}/api/instance"
+
+echo "Checking the relay WebSocket upgrade"
+assert_websocket_upgrade "https://${NETBIRD_MANAGEMENT_DOMAIN}/relay"
 
 kubectl port-forward -n "${AGENTGATEWAY_NAMESPACE}" \
   service/netbird-agentgateway 18080:80 \

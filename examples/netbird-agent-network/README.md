@@ -15,16 +15,18 @@ NetBird client
     | management HTTPS
     v
 public management agentgateway
-    |
-    | HTTP/2 cleartext inside the cluster
-    v
-private NetBird server
+    |-- /relay -------- HTTP/1.1 WebSocket --\
+    |                                         > private NetBird server
+    `-- all other paths -- HTTP/2 cleartext -/
 ```
 
 The management agentgateway has a public LoadBalancer and terminates HTTPS for
-NetBird clients. It forwards management traffic over the cluster network to the
-NetBird server's private ClusterIP Service. A NetworkPolicy permits only the
-management agentgateway to reach the server.
+NetBird clients. It sends the relay WebSocket endpoint over HTTP/1.1 and all
+other management traffic over HTTP/2 cleartext to two private ClusterIP
+Services that select the same NetBird server pods. The protocol split preserves
+the WebSocket upgrade headers while continuing to support management and signal
+gRPC. A NetworkPolicy permits only the management agentgateway to reach the
+server.
 
 ### Agent Network traffic
 
@@ -245,9 +247,9 @@ export NETBIRD_PAT=nbp_replace_me
 
 ## 6. Verify the integration
 
-The default verification is non-billable. It checks resource readiness,
-strict virtual-key rejection, and that an unauthenticated public caller cannot
-bypass NetBird:
+The default verification is non-billable. It checks resource readiness, the
+public management endpoint, the relay WebSocket upgrade, strict virtual-key
+rejection, and that an unauthenticated public caller cannot bypass NetBird:
 
 ```bash
 ./verify.sh

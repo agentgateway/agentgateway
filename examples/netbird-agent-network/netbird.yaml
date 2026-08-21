@@ -105,6 +105,23 @@ spec:
       targetPort: http
       appProtocol: kubernetes.io/h2c
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netbird-server-relay
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/name: netbird-server
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: netbird-server
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:

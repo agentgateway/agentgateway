@@ -59,6 +59,13 @@ spec:
   hostnames:
     - ${NETBIRD_MANAGEMENT_DOMAIN}
   rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /relay
+      backendRefs:
+        - name: netbird-server-relay
+          port: 80
     - backendRefs:
         - name: netbird-server
           port: 80
