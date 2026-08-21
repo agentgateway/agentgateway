@@ -2,6 +2,15 @@
 
 This directory contains examples of how to use agentgateway. Each example is named `<type>-<name>`, where `type` is one of `mcp`, `llm`, or `traffic`.
 
+Integration examples may instead use the upstream project's name when they
+span more than one agentgateway traffic type.
+
+### Integrations
+
+* [netbird-agent-network](netbird-agent-network/README.md): authenticate and
+  authorize OpenAI and Anthropic traffic with NetBird Agent Network before
+  routing it through a private agentgateway listener.
+
 ### MCP
 
 * [mcp-basic](mcp-basic/README.md): the simplest way to get started with agentgateway, exposing a single MCP server over Stdio.

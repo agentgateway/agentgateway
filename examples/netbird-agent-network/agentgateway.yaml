@@ -1,0 +1,151 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: netbird-agentgateway
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  rawConfig:
+    config:
+      standardAttributes:
+        user: 'request.headers["x-netbird-user-id"]'
+        group: 'request.headers["x-netbird-groups"]'
+  service:
+    spec:
+      type: ClusterIP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: netbird-agentgateway
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  gatewayClassName: agentgateway
+  infrastructure:
+    parametersRef:
+      group: agentgateway.dev
+      kind: AgentgatewayParameters
+      name: netbird-agentgateway
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: netbird-openai
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  ai:
+    provider:
+      openai: {}
+  policies:
+    ai:
+      routes:
+        '*': Passthrough
+        /v1/chat/completions: Completions
+        /v1/models: Passthrough
+        /v1/responses: Responses
+    auth:
+      secretRef:
+        name: netbird-openai
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: netbird-anthropic
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  ai:
+    provider:
+      anthropic: {}
+  policies:
+    ai:
+      routes:
+        '*': Passthrough
+        /v1/messages: Messages
+        /v1/messages/count_tokens: AnthropicTokenCount
+    auth:
+      secretRef:
+        name: netbird-anthropic
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: netbird-agent-network
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  parentRefs:
+    - name: netbird-agentgateway
+      sectionName: http
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /v1/messages
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: netbird-anthropic
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - group: agentgateway.dev
+          kind: AgentgatewayBackend
+          name: netbird-openai
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: netbird-agent-network-api-key
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: netbird-agent-network
+  traffic:
+    apiKeyAuthentication:
+      mode: Strict
+      secretRef:
+        name: netbird-agentgateway-keys
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: netbird-agentgateway-ingress
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: netbird-agentgateway
+      app.kubernetes.io/name: netbird-agentgateway
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: netbird-proxy
+      ports:
+        - protocol: TCP
+          port: 80
