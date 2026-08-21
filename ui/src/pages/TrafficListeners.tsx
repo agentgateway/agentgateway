@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { Network, Pencil, Plus, Route as RouteIcon, Trash2 } from 'lucide-react';
+import { AlertTriangle, Network, Pencil, Plus, Route as RouteIcon, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import { ConfigDiffSaveActions } from '@/components/ConfigDiffDrawer';
@@ -26,7 +26,7 @@ import {
 } from '@/pages/traffic/TrafficConfigDumpPanel';
 import { TrafficPolicySection } from '@/pages/traffic/TrafficPolicySection';
 import { type SchemaHelp, useSchemaHelp } from '@/schemaHelp';
-import { listenerContexts, listenerDisplayName, trafficStats } from '@/traffic';
+import { findDuplicatePorts, listenerContexts, listenerDisplayName, trafficStats } from '@/traffic';
 import type { GatewayConfig, TrafficBind, TrafficListener } from '@/types';
 
 const protocols = ['HTTP', 'HTTPS', 'TCP', 'TLS', 'HBONE'] as const;
@@ -67,6 +67,10 @@ function TrafficListenersEditorPage() {
 	const help = useSchemaHelp();
 	const listeners = useMemo(() => listenerContexts(config.data), [config.data]);
 	const stats = trafficStats(config.data);
+	const duplicatePorts = useMemo(
+		() => findDuplicatePorts(config.data?.binds ?? []),
+		[config.data]
+	);
 	const [bindEditor, setBindEditor] = useState<TrafficBind | null>(null);
 	const [listenerEditor, setListenerEditor] = useState<{
 		bindIndex: number;
@@ -158,6 +162,15 @@ function TrafficListenersEditorPage() {
 					Edit those listeners through raw YAML or split the routes across separate listeners.
 				</StatusBanner>
 			) : null}
+			{duplicatePorts.size ? (
+				<StatusBanner
+					state="warn"
+					title={`Port conflict: ${duplicatePorts.size === 1 ? 'port' : 'ports'} ${[...duplicatePorts].join(', ')} used by multiple binds`}
+				>
+					Each port should only be bound once. The gateway will reject this configuration.
+					Remove or reassign duplicate binds to resolve the conflict.
+				</StatusBanner>
+			) : null}
 
 			<Panel>
 				{config.isLoading ? (
@@ -189,7 +202,18 @@ function TrafficListenersEditorPage() {
 								<section className="traffic-bind" key={`${bind.port}-${bindIndex}`}>
 									<div className="traffic-bind-header">
 										<div>
-											<h3>Port {bind.port}</h3>
+											<h3>
+												{duplicatePorts.has(bind.port) ? (
+													<Tooltip content="Port conflict: another bind uses this port">
+														<AlertTriangle
+															size={16}
+															className="inline-icon warn"
+															aria-label="Port conflict"
+														/>
+													</Tooltip>
+												) : null}
+												Port {bind.port}
+											</h3>
 											<p>
 												{bindListeners.length} listeners · {listenerRouteCount(bind)} routes ·{' '}
 												{backendCount} backends

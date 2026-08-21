@@ -23,6 +23,16 @@ export interface RouteContext extends ListenerContext {
 	routeIndex: number;
 }
 
+export function findDuplicatePorts(binds: TrafficBind[]): Set<number> {
+	const seen = new Set<number>();
+	const duplicates = new Set<number>();
+	for (const bind of binds) {
+		if (seen.has(bind.port)) duplicates.add(bind.port);
+		else seen.add(bind.port);
+	}
+	return duplicates;
+}
+
 export function trafficStats(config: GatewayConfig | undefined) {
 	const binds = config?.binds ?? [];
 	const gateways = Object.values(config?.gateways ?? {});
@@ -33,6 +43,7 @@ export function trafficStats(config: GatewayConfig | undefined) {
 	let tcpRoutes = 0;
 	let backends = 0;
 	let invalidListeners = 0;
+	const portConflicts = findDuplicatePorts(binds).size;
 	for (const bind of binds) {
 		for (const listener of bind.listeners ?? []) {
 			listeners += 1;
@@ -59,7 +70,8 @@ export function trafficStats(config: GatewayConfig | undefined) {
 		httpRoutes,
 		tcpRoutes,
 		backends,
-		invalidListeners
+		invalidListeners,
+		portConflicts
 	};
 }
 
