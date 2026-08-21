@@ -748,6 +748,7 @@ func processDirectResponseTraffic(_ PolicyCtx, directResponse *agentgateway.Dire
 func processJWTAuthenticationPolicy(ctx PolicyCtx, jwt *agentgateway.JWTAuthentication, policyPhase *agentgateway.PolicyPhase, basePolicyName string, policy types.NamespacedName) (*api.Policy, error) {
 	p := &api.TrafficPolicySpec_JWT{}
 	p.AuthorizationLocation = translateAuthorizationExtractionLocation(jwt.Location)
+	p.PreserveToken = jwt.PreserveToken
 
 	switch jwt.Mode {
 	case agentgateway.JWTAuthenticationModeOptional:

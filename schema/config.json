@@ -6016,6 +6016,11 @@
                 }
               }
             },
+            "preserveToken": {
+              "description": "Keep a successfully validated JWT in its original location.",
+              "type": "boolean",
+              "default": false
+            },
             "providers": {
               "description": "Trusted issuers and their signing keys.",
               "type": "array",
@@ -6047,6 +6052,11 @@
                   "prefix": "Bearer "
                 }
               }
+            },
+            "preserveToken": {
+              "description": "Keep a successfully validated JWT in its original location.",
+              "type": "boolean",
+              "default": false
             },
             "issuer": {
               "description": "Expected token issuer. The JWT `iss` claim is required and must match.",

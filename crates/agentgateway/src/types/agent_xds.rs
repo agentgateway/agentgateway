@@ -577,6 +577,7 @@ fn mcp_authentication_from_proto(
 		jwt_provider.into_iter().collect(),
 		mode.into(),
 		http::auth::AuthorizationLocation::bearer_header(),
+		false,
 	);
 	Ok(build_mcp_authentication(
 		m.issuer.clone(),
@@ -2609,6 +2610,7 @@ fn traffic_policy_from_proto(
 					jwt.authorization_location.as_ref(),
 					http::auth::AuthorizationLocation::bearer_header(),
 				)?,
+				jwt.preserve_token,
 			);
 			let mcp = match &jwt.mcp {
 				Some(mcp) => {
