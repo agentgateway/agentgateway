@@ -1,0 +1,285 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: netbird-agent-network
+  labels:
+    app.kubernetes.io/part-of: netbird-agent-network
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: netbird-server-data
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: netbird-proxy-certs
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netbird-server
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/name: netbird-server
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: netbird-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: netbird-server
+        app.kubernetes.io/part-of: netbird-agent-network
+    spec:
+      containers:
+        - name: netbird-server
+          image: ${NETBIRD_SERVER_IMAGE}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NB_SETUP_PAT_ENABLED
+              value: "true"
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: health
+              containerPort: 9000
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/netbird
+              readOnly: true
+            - name: data
+              mountPath: /var/lib/netbird
+      volumes:
+        - name: config
+          secret:
+            secretName: netbird-server-config
+        - name: data
+          persistentVolumeClaim:
+            claimName: netbird-server-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netbird-server
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/name: netbird-server
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: netbird-server
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      appProtocol: kubernetes.io/h2c
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netbird-server-relay
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/name: netbird-server
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: netbird-server
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netbird-proxy
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/name: netbird-proxy
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: netbird-proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: netbird-proxy
+        app.kubernetes.io/part-of: netbird-agent-network
+    spec:
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: netbird-proxy
+          image: ${NETBIRD_PROXY_IMAGE}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NB_PROXY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: netbird-proxy-auth
+                  key: token
+            - name: NB_PROXY_MANAGEMENT_ADDRESS
+              value: https://${NETBIRD_MANAGEMENT_DOMAIN}
+            - name: NB_PROXY_DOMAIN
+              value: ${NETBIRD_PROXY_DOMAIN}
+            - name: NB_PROXY_ADDRESS
+              value: :443
+            - name: NB_PROXY_CERTIFICATE_DIRECTORY
+              value: /certs
+            - name: NB_PROXY_ACME_CERTIFICATES
+              value: "true"
+            - name: NB_PROXY_ACME_CHALLENGE_TYPE
+              value: tls-alpn-01
+            - name: NB_PROXY_CERT_LOCK_METHOD
+              value: flock
+            - name: NB_PROXY_HEALTH_ADDRESS
+              value: :8080
+            - name: NB_PROXY_PRIVATE
+              value: "true"
+            - name: NB_RELAY_TRANSPORT
+              value: ws
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+                - NET_BIND_SERVICE
+                - SYS_ADMIN
+                - SYS_RESOURCE
+          ports:
+            - name: tls
+              containerPort: 443
+            - name: health
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz/ready
+              port: health
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz/live
+              port: health
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 2Gi
+          volumeMounts:
+            - name: certs
+              mountPath: /certs
+      volumes:
+        - name: certs
+          persistentVolumeClaim:
+            claimName: netbird-proxy-certs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netbird-proxy
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/name: netbird-proxy
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  type: LoadBalancer
+  selector:
+    app.kubernetes.io/name: netbird-proxy
+  ports:
+    - name: tls
+      port: 443
+      targetPort: tls
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netbird-example-client
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/name: netbird-example-client
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: netbird-example-client
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: netbird-example-client
+        app.kubernetes.io/part-of: netbird-agent-network
+    spec:
+      containers:
+        - name: netbird
+          image: ${NETBIRD_CLIENT_IMAGE}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NB_MANAGEMENT_URL
+              value: https://${NETBIRD_MANAGEMENT_DOMAIN}
+            - name: NB_SETUP_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: netbird-client-setup
+                  key: setup-key
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: tun
+              mountPath: /dev/net/tun
+            - name: state
+              mountPath: /var/lib/netbird
+        - name: test
+          image: curlimages/curl:8.12.1
+          command:
+            - sleep
+            - infinity
+      volumes:
+        - name: tun
+          hostPath:
+            path: /dev/net/tun
+            type: CharDevice
+        - name: state
+          emptyDir: {}

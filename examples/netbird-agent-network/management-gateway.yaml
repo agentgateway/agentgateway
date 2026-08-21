@@ -1,0 +1,150 @@
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: netbird-management
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  service:
+    spec:
+      type: LoadBalancer
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: netbird-management
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  gatewayClassName: agentgateway
+  infrastructure:
+    parametersRef:
+      group: agentgateway.dev
+      kind: AgentgatewayParameters
+      name: netbird-management
+  listeners:
+    - name: http
+      hostname: ${NETBIRD_MANAGEMENT_DOMAIN}
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: https
+      hostname: ${NETBIRD_MANAGEMENT_DOMAIN}
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: netbird-management-tls
+            kind: Secret
+      allowedRoutes:
+        namespaces:
+          from: Same
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: netbird-management
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  parentRefs:
+    - name: netbird-management
+      sectionName: https
+  hostnames:
+    - ${NETBIRD_MANAGEMENT_DOMAIN}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /relay
+      backendRefs:
+        - name: netbird-server-relay
+          port: 80
+    - backendRefs:
+        - name: netbird-server
+          port: 80
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: netbird-management-redirect
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  parentRefs:
+    - name: netbird-management
+      sectionName: http
+  hostnames:
+    - ${NETBIRD_MANAGEMENT_DOMAIN}
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            statusCode: 308
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: netbird-letsencrypt
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  acme:
+    email: ${NETBIRD_LETSENCRYPT_EMAIL}
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: netbird-letsencrypt-account
+    solvers:
+      - http01:
+          gatewayHTTPRoute:
+            parentRefs:
+              - name: netbird-management
+                namespace: netbird-agent-network
+                kind: Gateway
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: netbird-management
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  secretName: netbird-management-tls
+  issuerRef:
+    name: netbird-letsencrypt
+    kind: Issuer
+  dnsNames:
+    - ${NETBIRD_MANAGEMENT_DOMAIN}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: netbird-server-ingress
+  namespace: netbird-agent-network
+  labels:
+    app.kubernetes.io/part-of: netbird-agent-network
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: netbird-server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: netbird-management
+              app.kubernetes.io/name: netbird-management
+      ports:
+        - protocol: TCP
+          port: 8080
