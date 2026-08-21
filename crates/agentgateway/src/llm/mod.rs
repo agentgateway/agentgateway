@@ -30,6 +30,7 @@ use crate::telemetry::log::{AsyncLog, RequestLog};
 use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, Target};
 use crate::types::loadbalancer::{ActiveHandle, EndpointWithInfo};
 use crate::*;
+pub mod bedrock_metadata;
 pub mod model_router;
 pub use agent_llm::{azure, bedrock, vertex};
 
@@ -137,6 +138,19 @@ pub enum AIProvider {
 pub struct BedrockProvider {
 	#[serde(flatten)]
 	pub provider: bedrock::Provider,
+	/// Request metadata attached to every Bedrock call, recorded in the model
+	/// invocation logs (not on the bill) for per-prompt attribution. Each entry is
+	/// a static `value` or a CEL `expression` evaluated against the request, the
+	/// same shape as `assumeRole.tags`. Operator entries override caller-supplied
+	/// `x-bedrock-metadata` keys of the same name; an expression that cannot
+	/// produce a valid value rejects the request.
+	#[serde(
+		default,
+		skip_serializing_if = "bedrock_metadata::BedrockRequestMetadata::is_empty",
+		deserialize_with = "bedrock_metadata::deserialize",
+		serialize_with = "bedrock_metadata::serialize"
+	)]
+	pub request_metadata: bedrock_metadata::BedrockRequestMetadata,
 	#[serde(skip)]
 	pub source_credentials_cache: crate::http::auth::aws::AwsCredentialsCache,
 	#[serde(skip)]
@@ -147,9 +161,16 @@ impl BedrockProvider {
 	pub fn new(provider: bedrock::Provider) -> Self {
 		Self {
 			provider,
+			request_metadata: Default::default(),
 			source_credentials_cache: Default::default(),
 			assume_role_cache: Default::default(),
 		}
+	}
+
+	/// CEL expressions this provider evaluates per request, registered with the
+	/// request context so the snapshot captures what they read.
+	pub fn cel_expressions(&self) -> impl Iterator<Item = &cel::Expression> {
+		self.request_metadata.expressions()
 	}
 }
 
@@ -160,7 +181,28 @@ impl schemars::JsonSchema for BedrockProvider {
 	}
 
 	fn json_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
-		<bedrock::Provider as schemars::JsonSchema>::json_schema(generator)
+		// The inner provider's schema, plus the gateway-side field that carries CEL
+		// and therefore cannot live in the provider crate.
+		let mut schema = <bedrock::Provider as schemars::JsonSchema>::json_schema(generator);
+		let entries = generator.subschema_for::<Vec<bedrock_metadata::BedrockRequestMetadataEntry>>();
+		let mut entries = entries.to_value();
+		if let Some(obj) = entries.as_object_mut() {
+			obj.insert(
+				"description".to_string(),
+				serde_json::Value::String(
+					"Request metadata attached to every Bedrock call, recorded in the model invocation logs (not on the bill) for per-prompt attribution. Each entry is a static `value` or a CEL `expression` evaluated against the request, the same shape as `assumeRole.tags`. Operator entries override caller-supplied `x-bedrock-metadata` keys of the same name; an expression that cannot produce a valid value rejects the request.".to_string(),
+				),
+			);
+		}
+		if let Some(properties) = schema
+			.ensure_object()
+			.entry("properties")
+			.or_insert_with(|| serde_json::json!({}))
+			.as_object_mut()
+		{
+			properties.insert("requestMetadata".to_string(), entries);
+		}
+		schema
 	}
 }
 
@@ -221,9 +263,37 @@ impl std::ops::DerefMut for AzureProvider {
 	}
 }
 
+/// Where Bedrock accepts request metadata for a given upstream API.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BedrockMetadataPlacement {
+	/// `Converse` / `ConverseStream`: the `requestMetadata` body field.
+	Body,
+	/// `InvokeModel` / `InvokeModelWithResponseStream`: the signed header.
+	Header,
+	/// APIs that do not accept request metadata.
+	None,
+}
+
 impl AIProvider {
 	pub fn bedrock(provider: bedrock::Provider) -> Self {
 		Self::Bedrock(BedrockProvider::new(provider))
+	}
+
+	/// CEL expressions the provider evaluates per request.
+	pub fn cel_expressions(&self) -> Box<dyn Iterator<Item = &cel::Expression> + '_> {
+		match self {
+			AIProvider::Bedrock(b) => Box::new(b.cel_expressions()),
+			_ => Box::new(std::iter::empty()),
+		}
+	}
+
+	/// Operator-resolved Bedrock request metadata, if this is a Bedrock provider
+	/// with any configured.
+	fn bedrock_request_metadata(&self) -> Option<&bedrock_metadata::BedrockRequestMetadata> {
+		match self {
+			AIProvider::Bedrock(b) if !b.request_metadata.is_empty() => Some(&b.request_metadata),
+			_ => None,
+		}
 	}
 
 	pub fn azure(provider: azure::Provider) -> Self {
@@ -2073,6 +2143,12 @@ impl AIProvider {
 			Some(p) => p.apply_final_transformations(rendered.body, log)?,
 			None => rendered.body,
 		};
+		let body = self.apply_bedrock_request_metadata(
+			body,
+			&mut parts,
+			Some(provider_format.route_type()),
+			log,
+		)?;
 		parts.headers.remove(header::CONTENT_LENGTH);
 		let req = Request::from_parts(parts, Body::from(body));
 		Ok(RequestResult::Success {
@@ -2080,6 +2156,71 @@ impl AIProvider {
 			llm_request: llm_info,
 			upstream_route_type: provider_format.route_type(),
 		})
+	}
+
+	/// Attaches operator-resolved request metadata to a Bedrock-bound request.
+	///
+	/// `Converse`/`ConverseStream` carry it in the body; the `InvokeModel` family
+	/// carries it in a signed header. Routes Bedrock does not accept metadata on
+	/// (count-tokens, rerank) are left untouched. Fails closed on an expression
+	/// that cannot resolve, before the request reaches Bedrock.
+	fn apply_bedrock_request_metadata(
+		&self,
+		body: Vec<u8>,
+		parts: &mut Parts,
+		route_type: Option<RouteType>,
+		log: &mut Option<&mut RequestLog>,
+	) -> Result<Vec<u8>, AIError> {
+		let Some(metadata) = self.bedrock_request_metadata() else {
+			return Ok(body);
+		};
+		let path = parts.uri.path();
+		let placement = match route_type {
+			Some(RouteType::Embeddings) => BedrockMetadataPlacement::Header,
+			Some(RouteType::AnthropicTokenCount) | Some(RouteType::Rerank) => {
+				BedrockMetadataPlacement::None
+			},
+			Some(_) => BedrockMetadataPlacement::Body,
+			// Raw passthrough: decide from the upstream path the caller addressed.
+			None if path.ends_with("/converse") || path.ends_with("/converse-stream") => {
+				BedrockMetadataPlacement::Body
+			},
+			None if path.ends_with("/invoke") || path.ends_with("/invoke-with-response-stream") => {
+				BedrockMetadataPlacement::Header
+			},
+			None => BedrockMetadataPlacement::None,
+		};
+		let snapshot = log.as_ref().and_then(|x| x.request_snapshot.as_deref());
+		match placement {
+			BedrockMetadataPlacement::None => Ok(body),
+			BedrockMetadataPlacement::Header => {
+				let empty = serde_json::Value::Null;
+				let exec = Executor::new_llm(snapshot, &empty);
+				let value = metadata.header_value(&exec)?;
+				parts
+					.headers
+					.insert(bedrock_metadata::REQUEST_METADATA_HEADER, value);
+				Ok(body)
+			},
+			BedrockMetadataPlacement::Body => {
+				let mut v: serde_json::Value =
+					serde_json::from_slice(body.as_slice()).map_err(AIError::RequestParsing)?;
+				{
+					let exec = Executor::new_llm(snapshot, &v);
+					// Resolve against the body first, then mutate it. The executor borrows the
+					// value, so the resolved entries are materialized before the edit.
+					let resolved = metadata.resolve(&exec)?;
+					drop(exec);
+					let serde_json::Value::Object(map) = &mut v else {
+						return Err(AIError::MissingField(
+							"converted request must be an object".into(),
+						));
+					};
+					metadata.merge_resolved_into_body(map, resolved);
+				}
+				serde_json::to_vec(&v).map_err(AIError::RequestMarshal)
+			},
+		}
 	}
 
 	#[allow(clippy::too_many_arguments)]
@@ -2152,6 +2293,12 @@ impl AIProvider {
 			},
 			_ => body,
 		};
+		let body = self.apply_bedrock_request_metadata(
+			body,
+			&mut parts,
+			provider_format.map(|f| f.route_type()),
+			log,
+		)?;
 		parts.headers.remove(header::CONTENT_LENGTH);
 		let req = Request::from_parts(parts, Body::from(body));
 		Ok(RequestResult::Success {

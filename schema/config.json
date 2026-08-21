@@ -8418,11 +8418,50 @@
             "string",
             "null"
           ]
+        },
+        "requestMetadata": {
+          "description": "Request metadata attached to every Bedrock call, recorded in the model invocation logs (not on the bill) for per-prompt attribution. Each entry is a static `value` or a CEL `expression` evaluated against the request, the same shape as `assumeRole.tags`. Operator entries override caller-supplied `x-bedrock-metadata` keys of the same name; an expression that cannot produce a valid value rejects the request.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/BedrockRequestMetadataEntry"
+          }
         }
       },
       "additionalProperties": false,
       "required": [
         "region"
+      ]
+    },
+    "BedrockRequestMetadataEntry": {
+      "description": "One request-metadata entry in configuration form. Exactly one of `value`\nand `expression` must be set.",
+      "type": "object",
+      "properties": {
+        "key": {
+          "description": "Metadata key.",
+          "type": "string"
+        },
+        "value": {
+          "description": "Static metadata value.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expression": {
+          "description": "CEL expression evaluated against each request to produce the value, for\nexample `jwt.sub` or `request.headers[\"x-app\"]`. If the expression does not\nproduce a valid value at request time, the request is rejected.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "key"
       ]
     },
     "AzureProvider": {

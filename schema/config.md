@@ -5376,6 +5376,10 @@
 |`binds[].listeners[].routes[].backends[].ai.provider.bedrock.region`|string|AWS region for the Bedrock endpoint.|
 |`binds[].listeners[].routes[].backends[].ai.provider.bedrock.guardrailIdentifier`|string|Identifier of the Bedrock guardrail to apply.|
 |`binds[].listeners[].routes[].backends[].ai.provider.bedrock.guardrailVersion`|string|Version of the Bedrock guardrail to apply.|
+|`binds[].listeners[].routes[].backends[].ai.provider.bedrock.requestMetadata`|[]object|Request metadata attached to every Bedrock call, recorded in the model invocation logs (not on the bill) for per-prompt attribution. Each entry is a static `value` or a CEL `expression` evaluated against the request, the same shape as `assumeRole.tags`. Operator entries override caller-supplied `x-bedrock-metadata` keys of the same name; an expression that cannot produce a valid value rejects the request.|
+|`binds[].listeners[].routes[].backends[].ai.provider.bedrock.requestMetadata[].key`|string|Metadata key.|
+|`binds[].listeners[].routes[].backends[].ai.provider.bedrock.requestMetadata[].value`|string|Static metadata value.|
+|`binds[].listeners[].routes[].backends[].ai.provider.bedrock.requestMetadata[].expression`|string|CEL expression evaluated against each request to produce the value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid value at request time, the request is rejected.|
 |`binds[].listeners[].routes[].backends[].ai.provider.azure`|object||
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -8715,6 +8719,10 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.region`|string|AWS region for the Bedrock endpoint.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailIdentifier`|string|Identifier of the Bedrock guardrail to apply.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailVersion`|string|Version of the Bedrock guardrail to apply.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.requestMetadata`|[]object|Request metadata attached to every Bedrock call, recorded in the model invocation logs (not on the bill) for per-prompt attribution. Each entry is a static `value` or a CEL `expression` evaluated against the request, the same shape as `assumeRole.tags`. Operator entries override caller-supplied `x-bedrock-metadata` keys of the same name; an expression that cannot produce a valid value rejects the request.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.requestMetadata[].key`|string|Metadata key.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.requestMetadata[].value`|string|Static metadata value.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.bedrock.requestMetadata[].expression`|string|CEL expression evaluated against each request to produce the value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid value at request time, the request is rejected.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure`|object||
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -23373,6 +23381,10 @@
 |`backends[].ai.provider.bedrock.region`|string|AWS region for the Bedrock endpoint.|
 |`backends[].ai.provider.bedrock.guardrailIdentifier`|string|Identifier of the Bedrock guardrail to apply.|
 |`backends[].ai.provider.bedrock.guardrailVersion`|string|Version of the Bedrock guardrail to apply.|
+|`backends[].ai.provider.bedrock.requestMetadata`|[]object|Request metadata attached to every Bedrock call, recorded in the model invocation logs (not on the bill) for per-prompt attribution. Each entry is a static `value` or a CEL `expression` evaluated against the request, the same shape as `assumeRole.tags`. Operator entries override caller-supplied `x-bedrock-metadata` keys of the same name; an expression that cannot produce a valid value rejects the request.|
+|`backends[].ai.provider.bedrock.requestMetadata[].key`|string|Metadata key.|
+|`backends[].ai.provider.bedrock.requestMetadata[].value`|string|Static metadata value.|
+|`backends[].ai.provider.bedrock.requestMetadata[].expression`|string|CEL expression evaluated against each request to produce the value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid value at request time, the request is rejected.|
 |`backends[].ai.provider.azure`|object||
 |`backends[].ai.provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -26712,6 +26724,10 @@
 |`backends[].ai.groups[].providers[].provider.bedrock.region`|string|AWS region for the Bedrock endpoint.|
 |`backends[].ai.groups[].providers[].provider.bedrock.guardrailIdentifier`|string|Identifier of the Bedrock guardrail to apply.|
 |`backends[].ai.groups[].providers[].provider.bedrock.guardrailVersion`|string|Version of the Bedrock guardrail to apply.|
+|`backends[].ai.groups[].providers[].provider.bedrock.requestMetadata`|[]object|Request metadata attached to every Bedrock call, recorded in the model invocation logs (not on the bill) for per-prompt attribution. Each entry is a static `value` or a CEL `expression` evaluated against the request, the same shape as `assumeRole.tags`. Operator entries override caller-supplied `x-bedrock-metadata` keys of the same name; an expression that cannot produce a valid value rejects the request.|
+|`backends[].ai.groups[].providers[].provider.bedrock.requestMetadata[].key`|string|Metadata key.|
+|`backends[].ai.groups[].providers[].provider.bedrock.requestMetadata[].value`|string|Static metadata value.|
+|`backends[].ai.groups[].providers[].provider.bedrock.requestMetadata[].expression`|string|CEL expression evaluated against each request to produce the value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid value at request time, the request is rejected.|
 |`backends[].ai.groups[].providers[].provider.azure`|object||
 |`backends[].ai.groups[].providers[].provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -38577,6 +38593,10 @@
 |`routeGroups[].routes[].backends[].ai.provider.bedrock.region`|string|AWS region for the Bedrock endpoint.|
 |`routeGroups[].routes[].backends[].ai.provider.bedrock.guardrailIdentifier`|string|Identifier of the Bedrock guardrail to apply.|
 |`routeGroups[].routes[].backends[].ai.provider.bedrock.guardrailVersion`|string|Version of the Bedrock guardrail to apply.|
+|`routeGroups[].routes[].backends[].ai.provider.bedrock.requestMetadata`|[]object|Request metadata attached to every Bedrock call, recorded in the model invocation logs (not on the bill) for per-prompt attribution. Each entry is a static `value` or a CEL `expression` evaluated against the request, the same shape as `assumeRole.tags`. Operator entries override caller-supplied `x-bedrock-metadata` keys of the same name; an expression that cannot produce a valid value rejects the request.|
+|`routeGroups[].routes[].backends[].ai.provider.bedrock.requestMetadata[].key`|string|Metadata key.|
+|`routeGroups[].routes[].backends[].ai.provider.bedrock.requestMetadata[].value`|string|Static metadata value.|
+|`routeGroups[].routes[].backends[].ai.provider.bedrock.requestMetadata[].expression`|string|CEL expression evaluated against each request to produce the value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid value at request time, the request is rejected.|
 |`routeGroups[].routes[].backends[].ai.provider.azure`|object||
 |`routeGroups[].routes[].backends[].ai.provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -41916,6 +41936,10 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.bedrock.region`|string|AWS region for the Bedrock endpoint.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailIdentifier`|string|Identifier of the Bedrock guardrail to apply.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailVersion`|string|Version of the Bedrock guardrail to apply.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.bedrock.requestMetadata`|[]object|Request metadata attached to every Bedrock call, recorded in the model invocation logs (not on the bill) for per-prompt attribution. Each entry is a static `value` or a CEL `expression` evaluated against the request, the same shape as `assumeRole.tags`. Operator entries override caller-supplied `x-bedrock-metadata` keys of the same name; an expression that cannot produce a valid value rejects the request.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.bedrock.requestMetadata[].key`|string|Metadata key.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.bedrock.requestMetadata[].value`|string|Static metadata value.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.bedrock.requestMetadata[].expression`|string|CEL expression evaluated against each request to produce the value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid value at request time, the request is rejected.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure`|object||
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -56381,6 +56405,10 @@
 |`routes[].backends[].ai.provider.bedrock.region`|string|AWS region for the Bedrock endpoint.|
 |`routes[].backends[].ai.provider.bedrock.guardrailIdentifier`|string|Identifier of the Bedrock guardrail to apply.|
 |`routes[].backends[].ai.provider.bedrock.guardrailVersion`|string|Version of the Bedrock guardrail to apply.|
+|`routes[].backends[].ai.provider.bedrock.requestMetadata`|[]object|Request metadata attached to every Bedrock call, recorded in the model invocation logs (not on the bill) for per-prompt attribution. Each entry is a static `value` or a CEL `expression` evaluated against the request, the same shape as `assumeRole.tags`. Operator entries override caller-supplied `x-bedrock-metadata` keys of the same name; an expression that cannot produce a valid value rejects the request.|
+|`routes[].backends[].ai.provider.bedrock.requestMetadata[].key`|string|Metadata key.|
+|`routes[].backends[].ai.provider.bedrock.requestMetadata[].value`|string|Static metadata value.|
+|`routes[].backends[].ai.provider.bedrock.requestMetadata[].expression`|string|CEL expression evaluated against each request to produce the value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid value at request time, the request is rejected.|
 |`routes[].backends[].ai.provider.azure`|object||
 |`routes[].backends[].ai.provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`routes[].backends[].ai.provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|
@@ -59720,6 +59748,10 @@
 |`routes[].backends[].ai.groups[].providers[].provider.bedrock.region`|string|AWS region for the Bedrock endpoint.|
 |`routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailIdentifier`|string|Identifier of the Bedrock guardrail to apply.|
 |`routes[].backends[].ai.groups[].providers[].provider.bedrock.guardrailVersion`|string|Version of the Bedrock guardrail to apply.|
+|`routes[].backends[].ai.groups[].providers[].provider.bedrock.requestMetadata`|[]object|Request metadata attached to every Bedrock call, recorded in the model invocation logs (not on the bill) for per-prompt attribution. Each entry is a static `value` or a CEL `expression` evaluated against the request, the same shape as `assumeRole.tags`. Operator entries override caller-supplied `x-bedrock-metadata` keys of the same name; an expression that cannot produce a valid value rejects the request.|
+|`routes[].backends[].ai.groups[].providers[].provider.bedrock.requestMetadata[].key`|string|Metadata key.|
+|`routes[].backends[].ai.groups[].providers[].provider.bedrock.requestMetadata[].value`|string|Static metadata value.|
+|`routes[].backends[].ai.groups[].providers[].provider.bedrock.requestMetadata[].expression`|string|CEL expression evaluated against each request to produce the value, for<br>example `jwt.sub` or `request.headers["x-app"]`. If the expression does not<br>produce a valid value at request time, the request is rejected.|
 |`routes[].backends[].ai.groups[].providers[].provider.azure`|object||
 |`routes[].backends[].ai.groups[].providers[].provider.azure.model`|string|Model ID to send to Azure, overriding the model in the client request.|
 |`routes[].backends[].ai.groups[].providers[].provider.azure.resourceName`|string|The Azure resource name used to construct the endpoint host.|

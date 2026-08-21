@@ -3623,3 +3623,211 @@ fn query_requests_sse_matches_alt_query_parameter() {
 		"/v1beta/models/gemini-2.5-flash:streamGenerateContent?halt=sse"
 	)));
 }
+
+fn bedrock_provider_with_request_metadata(
+	entries: Vec<bedrock_metadata::BedrockRequestMetadataEntry>,
+) -> AIProvider {
+	let mut provider = BedrockProvider::new(bedrock::Provider {
+		model: Some(strng::new("amazon.nova-micro-v1:0")),
+		region: strng::new("us-east-1"),
+		guardrail_identifier: None,
+		guardrail_version: None,
+	});
+	provider.request_metadata =
+		bedrock_metadata::BedrockRequestMetadata::try_new(entries).expect("metadata should validate");
+	AIProvider::Bedrock(provider)
+}
+
+fn bedrock_test_backend_info() -> crate::http::auth::BackendInfo {
+	use crate::test_helpers::proxymock::setup_proxy_test;
+	use crate::types::agent::BackendTarget;
+	crate::http::auth::BackendInfo {
+		target: BackendTarget::Invalid,
+		call_target: Target::from(("bedrock-runtime.us-east-1.amazonaws.com", 443)),
+		inputs: setup_proxy_test("{}").unwrap().pi,
+	}
+}
+
+fn metadata_entry(key: &str, value: &str) -> bedrock_metadata::BedrockRequestMetadataEntry {
+	bedrock_metadata::BedrockRequestMetadataEntry {
+		key: key.to_string(),
+		value: Some(value.to_string()),
+		expression: None,
+	}
+}
+
+#[tokio::test]
+async fn bedrock_request_metadata_lands_in_converse_body_and_overrides_caller_keys() {
+	let provider = bedrock_provider_with_request_metadata(vec![
+		metadata_entry("team", "platform"),
+		metadata_entry("environment", "prod"),
+	]);
+	let req = ::http::Request::builder()
+		.uri("https://gateway.example.com/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		// Caller-supplied metadata: the operator's `team` wins, `experiment` survives.
+		.header(
+			"x-bedrock-metadata",
+			r#"{"team": "caller-says-so", "experiment": "b"}"#,
+		)
+		.body(Body::from(
+			json!({
+				"model": "amazon.nova-micro-v1:0",
+				"messages": [{"role": "user", "content": "hello"}],
+			})
+			.to_string(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		upstream_route_type,
+		..
+	} = provider
+		.process_completions_request(
+			&bedrock_test_backend_info(),
+			None,
+			req,
+			false,
+			&mut None,
+			None,
+		)
+		.await
+		.expect("Bedrock completions request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+	assert_eq!(upstream_route_type, RouteType::Completions);
+	assert!(
+		forwarded
+			.headers()
+			.get(bedrock_metadata::REQUEST_METADATA_HEADER)
+			.is_none(),
+		"Converse carries metadata in the body, not the header"
+	);
+
+	let body = forwarded.into_body().collect().await.unwrap().to_bytes();
+	let json: Value = serde_json::from_slice(&body).expect("forwarded body should be JSON");
+	assert_eq!(
+		json["requestMetadata"],
+		json!({"team": "platform", "environment": "prod", "experiment": "b"}),
+		"{json}"
+	);
+}
+
+#[tokio::test]
+async fn bedrock_request_metadata_rides_signed_header_on_invoke_model() {
+	let provider = bedrock_provider_with_request_metadata(vec![metadata_entry("team", "platform")]);
+	let req = ::http::Request::builder()
+		.uri("https://gateway.example.com/v1/embeddings")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			json!({"model": "amazon.titan-embed-text-v2:0", "input": "hello"}).to_string(),
+		))
+		.unwrap();
+
+	let RequestResult::Success {
+		request: forwarded,
+		upstream_route_type,
+		..
+	} = provider
+		.process_embeddings_request(&bedrock_test_backend_info(), None, req, false, &mut None)
+		.await
+		.expect("Bedrock embeddings request should process")
+	else {
+		panic!("expected forwarded request");
+	};
+	assert_eq!(upstream_route_type, RouteType::Embeddings);
+
+	let header = forwarded
+		.headers()
+		.get(bedrock_metadata::REQUEST_METADATA_HEADER)
+		.expect("InvokeModel carries metadata in the signed header")
+		.to_str()
+		.unwrap()
+		.to_string();
+	let parsed: Value = serde_json::from_str(&header).unwrap();
+	assert_eq!(parsed, json!({"team": "platform"}));
+
+	let body = forwarded.into_body().collect().await.unwrap().to_bytes();
+	let json: Value = serde_json::from_slice(&body).expect("forwarded body should be JSON");
+	assert!(json.get("requestMetadata").is_none(), "{json}");
+}
+
+#[tokio::test]
+async fn bedrock_request_metadata_fails_closed_when_identity_is_unavailable() {
+	// A dynamic entry with no request context to resolve it from: the request is
+	// rejected before it reaches Bedrock, rather than forwarded unattributed.
+	let provider =
+		bedrock_provider_with_request_metadata(vec![bedrock_metadata::BedrockRequestMetadataEntry {
+			key: "user".to_string(),
+			value: None,
+			expression: Some(std::sync::Arc::new(
+				crate::cel::Expression::new_strict("jwt.sub").unwrap(),
+			)),
+		}]);
+	let req = ::http::Request::builder()
+		.uri("https://gateway.example.com/v1/chat/completions")
+		.header(::http::header::CONTENT_TYPE, "application/json")
+		.body(Body::from(
+			json!({
+				"model": "amazon.nova-micro-v1:0",
+				"messages": [{"role": "user", "content": "hello"}],
+			})
+			.to_string(),
+		))
+		.unwrap();
+
+	let err = provider
+		.process_completions_request(
+			&bedrock_test_backend_info(),
+			None,
+			req,
+			false,
+			&mut None,
+			None,
+		)
+		.await
+		.expect_err("unresolvable metadata must reject the request");
+	assert!(matches!(err, AIError::RequestMetadata(_)), "{err}");
+}
+
+#[test]
+fn bedrock_request_metadata_round_trips_through_provider_config() {
+	let provider: AIProvider = serde_json::from_value(json!({
+		"bedrock": {
+			"region": "us-east-1",
+			"model": "amazon.nova-micro-v1:0",
+			"requestMetadata": [
+				{"key": "environment", "value": "prod"},
+				{"key": "user", "expression": "jwt.sub"}
+			]
+		}
+	}))
+	.expect("bedrock provider with request metadata should deserialize");
+	let AIProvider::Bedrock(bedrock) = &provider else {
+		panic!("expected bedrock provider");
+	};
+	assert_eq!(bedrock.region, "us-east-1");
+	assert!(!bedrock.request_metadata.is_empty());
+	assert_eq!(bedrock.cel_expressions().count(), 1);
+
+	let serialized = serde_json::to_value(&provider).unwrap();
+	assert_eq!(
+		serialized["bedrock"]["requestMetadata"],
+		json!([
+			{"key": "environment", "value": "prod"},
+			{"key": "user", "expression": "jwt.sub"}
+		])
+	);
+
+	// Invalid entries are rejected at config load, not at request time.
+	let err = serde_json::from_value::<AIProvider>(json!({
+		"bedrock": {
+			"region": "us-east-1",
+			"requestMetadata": [{"key": "team", "value": "a", "expression": "jwt.sub"}]
+		}
+	}))
+	.unwrap_err();
+	assert!(err.to_string().contains("exactly one"), "{err}");
+}

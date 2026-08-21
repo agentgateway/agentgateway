@@ -1,0 +1,62 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+#
+# Attribution for Amazon Bedrock traffic, resolved once at the gateway from a
+# validated identity and carried to the two places AWS records it:
+#
+#   * the bill: STS session tags and the role session name on the per-request
+#     AssumeRole, which surface in Cost Explorer and the Cost and Usage Report
+#     (after the tag keys are activated as cost allocation tags); and
+#   * the invocation logs: Bedrock request metadata, recorded per call in the
+#     model invocation logs for per-prompt attribution.
+#
+# Both use the same CEL expressions, so a caller's JWT subject becomes the same
+# value on the bill and in the logs. A caller cannot set either: the values come
+# from a token the gateway validated or from operator configuration, and a
+# request whose expressions cannot resolve is rejected before it reaches AWS.
+config: {}
+binds:
+- port: 4000
+  listeners:
+  - name: default
+    protocol: HTTP
+    routes:
+    - name: bedrock
+      policies:
+        jwtAuth:
+          issuer: agentgateway.dev
+          audiences: [test.agentgateway.dev]
+          jwks:
+            # Relative to the folder the binary runs from, not the config file
+            file: ./manifests/jwt/pub-key
+      backends:
+      - ai:
+          name: bedrock
+          provider:
+            bedrock:
+              region: us-east-1
+              model: amazon.nova-micro-v1:0
+              # Per-call metadata, recorded in the model invocation logs.
+              requestMetadata:
+              - key: user
+                expression: jwt.sub
+              - key: team
+                expression: request.headers["x-team"]
+              - key: environment
+                value: prod
+          policies:
+            backendAuth:
+              aws:
+                assumeRole:
+                  roleArn: arn:aws:iam::123456789012:role/bedrock-invoke
+                  # Per-caller session identity, visible in CloudTrail and in
+                  # the Cost and Usage Report's IAM principal column.
+                  sessionName:
+                    expression: jwt.sub
+                  # Session tags, surfacing as cost allocation tags on the bill.
+                  tags:
+                  - key: user
+                    expression: jwt.sub
+                  - key: team
+                    expression: request.headers["x-team"]
+                  - key: environment
+                    value: prod

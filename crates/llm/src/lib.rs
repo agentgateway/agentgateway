@@ -507,6 +507,8 @@ pub enum AIError {
 	Encoding(axum_core::Error),
 	#[error("error computing tokens")]
 	JoinError(#[from] tokio::task::JoinError),
+	#[error("bedrock request metadata could not be resolved: {0}")]
+	RequestMetadata(Strng),
 }
 
 #[apply(schema!)]

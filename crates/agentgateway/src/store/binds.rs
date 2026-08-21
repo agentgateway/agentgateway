@@ -354,6 +354,11 @@ impl BackendPolicies {
 				ctx.register_expression(expr);
 			}
 		}
+		if let Some(provider) = self.llm_provider.as_ref() {
+			for expr in provider.provider.cel_expressions() {
+				ctx.register_expression(expr);
+			}
+		}
 		if let Some(health) = self.health.as_ref() {
 			health.register_expressions(ctx);
 		}
