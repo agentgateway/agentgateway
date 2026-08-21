@@ -1207,6 +1207,7 @@ fn apply_default_fallbacks(
 
 	let mut seen = HashSet::new();
 	let mut defaults: Vec<String> = Vec::new();
+	let mut default_names: Vec<&str> = Vec::new();
 	for entry in entries {
 		let Some(name) = entry.as_str() else {
 			plan.findings.push(ImportFinding {
@@ -1219,6 +1220,7 @@ fn apply_default_fallbacks(
 		if !seen.insert(name) {
 			continue;
 		}
+		default_names.push(name);
 		if plan.routes.contains_key(name) {
 			defaults.push(name.to_string());
 		} else {
@@ -1263,7 +1265,6 @@ fn apply_default_fallbacks(
 				.or_insert_with(|| targets.iter().filter_map(Value::as_str).collect());
 		}
 	}
-	let default_names: Vec<&str> = defaults.iter().map(String::as_str).collect();
 
 	let mut wildcard_routes: Vec<String> = Vec::new();
 	let mut updates: Vec<(String, Vec<Vec<String>>)> = Vec::new();
@@ -1358,8 +1359,9 @@ fn apply_default_fallbacks(
 /// Mirrors `run_async_fallback`: the budget check happens once per frame on entry, and `depth`
 /// increments per attempted sibling within a frame and is inherited by that sibling's own frame, so
 /// earlier siblings' attempts consume the descent budget of later siblings rather than capping the
-/// sibling list itself. Children that were never imported are skipped without consuming depth
-/// because they cannot be emitted; LiteLLM would attempt and fail them.
+/// sibling list itself. Children that were never imported consume a depth slot and visitation like
+/// any attempted sibling, because LiteLLM attempts and fails them, but they are not emitted and
+/// their own fallback entries are not walked.
 #[allow(clippy::too_many_arguments)]
 fn extend_fallback_chain<'a>(
 	node: &'a str,
@@ -1377,13 +1379,13 @@ fn extend_fallback_chain<'a>(
 	let mut depth = depth;
 	let children = explicit.get(node).map(Vec::as_slice).unwrap_or(defaults);
 	for child in children.iter().copied() {
-		let Some((child, _)) = routes.get_key_value(child) else {
-			continue;
-		};
 		if !visited.insert(child) {
 			continue;
 		}
 		depth += 1;
+		if !routes.contains_key(child) {
+			continue;
+		}
 		chain.push(child);
 		extend_fallback_chain(
 			child,
@@ -1563,6 +1565,11 @@ mod tests {
 	#[test]
 	fn reports_conditional_fallback_settings_as_manual() {
 		assert_litellm_golden("conditional-fallbacks");
+	}
+
+	#[test]
+	fn counts_unimported_fallback_targets_against_depth() {
+		assert_litellm_golden("default-fallbacks-unimported-depth");
 	}
 
 	#[test]
