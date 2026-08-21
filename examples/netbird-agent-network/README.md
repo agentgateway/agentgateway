@@ -1,11 +1,11 @@
 # NetBird Agent Network with agentgateway
 
 This example places [agentgateway](https://agentgateway.dev/) behind a
-[NetBird Agent Network](https://netbird.io/) endpoint. NetBird authenticates
+[NetBird Agent Network](https://netbird.ai/) endpoint. NetBird authenticates
 the caller, applies Agent Network policy, replaces identity headers with
 trusted values, and forwards the request to a private agentgateway listener.
 Agentgateway authenticates NetBird with a virtual API key and routes OpenAI
-and Anthropic request shapes to their respective providers.
+and Anthropic requests to their respective providers.
 
 ```text
 NetBird client
@@ -22,11 +22,9 @@ private agentgateway listener
     `-- all other paths ---------> OpenAI
 ```
 
-The manifests are based on the GKE environment used to validate
-[netbirdio/netbird#6970](https://github.com/netbirdio/netbird/issues/6970).
-They use public LoadBalancer Services for the NetBird management server and
-Agent Network proxy. The agentgateway Service is ClusterIP-only and a
-NetworkPolicy permits ingress only from the NetBird proxy.
+The manifests use public LoadBalancer Services for the NetBird management
+server and Agent Network proxy. The agentgateway Service is ClusterIP-only and
+a NetworkPolicy permits ingress only from the NetBird proxy.
 
 ## Temporary NetBird images
 
@@ -46,6 +44,10 @@ in `versions.env` with the first official `netbirdio/netbird-server` and
 ## Prerequisites
 
 - A Kubernetes cluster with a default StorageClass and LoadBalancer support.
+  The StorageClass dynamically provisions volumes for NetBird server state and
+  the Agent Network proxy's ACME certificate cache. Alternatively, set
+  `storageClassName` on both claims in `netbird.yaml` or pre-provision matching
+  volumes.
 - `kubectl`, Helm, `curl`, `envsubst`, `jq`, and OpenSSL.
 - Three DNS records in a domain you control.
 - OpenAI and Anthropic API credentials.
