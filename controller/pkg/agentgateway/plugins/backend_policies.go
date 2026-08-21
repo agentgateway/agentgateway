@@ -28,6 +28,7 @@ import (
 const (
 	aiPolicySuffix                = ":ai"
 	backendTlsPolicySuffix        = ":backend-tls"
+	backendTcpPolicySuffix        = ":backend-tcp"
 	backendTunnelPolicySuffix     = ":backend-tunnel"
 	backendauthPolicySuffix       = ":backend-auth"
 	backendTransformationSuffix   = ":backend-transformation"
@@ -172,7 +173,7 @@ func translateBackendPolicyToAgw(
 	}
 
 	if s := backend.TCP; s != nil {
-		appendPolicy("backendTCP")(translateBackendTCP(ctx, policy, policyName))
+		appendPolicy("backendTCP")(translateBackendTCP(policy, policyName), nil)
 	}
 
 	if s := backend.Health; s != nil {
@@ -353,9 +354,38 @@ func translateBackendHealthPolicy(policy *agentgateway.AgentgatewayPolicy) (*api
 	return evictPolicy, errors.Join(errs...)
 }
 
-func translateBackendTCP(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy, name string) (*api.Policy, error) {
-	// TODO
-	return nil, nil
+func translateBackendTCP(policy *agentgateway.AgentgatewayPolicy, name string) *api.Policy {
+	tcp := policy.Spec.Backend.TCP
+	spec := &api.BackendPolicySpec_BackendTCP{
+		ConnectTimeout: durationToProto(tcp.ConnectTimeout),
+	}
+	if ka := tcp.Keepalive; ka != nil {
+		spec.Keepalive = &api.KeepaliveConfig{
+			Time:     durationToProto(ka.Time),
+			Interval: durationToProto(ka.Interval),
+		}
+		if ka.Retries != nil {
+			spec.Keepalive.Retries = castUint32(ka.Retries) //nolint:gosec // G115: kubebuilder validation ensures safe for uint32
+		}
+	}
+
+	tcpPolicy := &api.Policy{
+		Key:  name + backendTcpPolicySuffix,
+		Name: TypedResourceName(wellknown.AgentgatewayPolicyGVK.Kind, policy),
+		Kind: &api.Policy_Backend{
+			Backend: &api.BackendPolicySpec{
+				Kind: &api.BackendPolicySpec_BackendTcp{
+					BackendTcp: spec,
+				},
+			},
+		},
+	}
+
+	logger.Debug("generated backend TCP policy",
+		"policy", policy.Name,
+		"agentgateway_policy", tcpPolicy.Name)
+
+	return tcpPolicy
 }
 
 func translateBackendTransformation(
