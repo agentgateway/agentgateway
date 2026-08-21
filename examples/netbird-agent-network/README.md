@@ -79,6 +79,15 @@ in `versions.env` with the first official `netbirdio/netbird-server` and
   not acceptable in your cluster, connect an external NetBird client and omit
   the `netbird-example-client` Deployment.
 
+The `1Gi` proxy certificate claim in `netbird.yaml` is a conservative,
+portable default, not a NetBird capacity requirement. A small deployment
+normally uses only tens of KiB for its ACME account and endpoint certificates.
+You can request a smaller volume if your StorageClass supports it. For a
+disposable test, you can remove the `netbird-proxy-certs` claim and replace the
+proxy's `certs` volume with `emptyDir: {}`. An `emptyDir` cache is lost whenever
+the pod is replaced or rescheduled, causing the proxy to request certificates
+again and increasing the risk of ACME validation failures or rate limits.
+
 The example was tested with agentgateway 1.4.1, cert-manager 1.21.1, Gateway
 API 1.6.0, and the NetBird 0.77.0 client. All versions are pinned in
 `versions.env`.
