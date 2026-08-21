@@ -319,6 +319,7 @@ type PromptguardRequest struct {
 
 // Prompt guards to apply to responses returned by the LLM provider.
 // +kubebuilder:validation:ExactlyOneOf=regex;webhook;bedrockGuardrails;googleModelArmor
+// +kubebuilder:validation:XValidation:rule="!has(self.webhook) || !has(self.webhook.messageFormat) || self.webhook.messageFormat != 'Raw'",message="webhook: messageFormat 'Raw' is not supported on response guards"
 type PromptguardResponse struct {
 	// Custom response message to return to the client. If not specified, defaults to
 	// `The response was rejected due to inappropriate content`.
