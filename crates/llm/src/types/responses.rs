@@ -80,34 +80,144 @@ impl RawInputItem {
 		Some(SimpleChatCompletionMessage { role, content })
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
-		if self.0.get("role").is_some() {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
+		if let Some(role) = self.0.get("role").and_then(|r| r.as_str()) {
+			let scope = match role {
+				"system" | "developer" => ContentScope::SystemPrompt,
+				_ => ContentScope::Messages,
+			};
 			match self.0.get_mut("content") {
-				Some(Value::String(text)) => f(text),
+				Some(Value::String(text)) => f(scope, text),
 				Some(Value::Array(parts)) => {
-					crate::types::scan_text_runs(
-						parts,
-						"\n",
-						|part| {
-							if !matches!(
-								part.get("type").and_then(|t| t.as_str()),
-								Some("input_text" | "output_text")
-							) {
-								return None;
-							}
-							match part.get_mut("text") {
-								Some(Value::String(text)) => Some(text),
-								_ => None,
-							}
-						},
-						f,
-					);
+					// assistant refusal parts carry prose under `refusal`, not `text`
+					for part in parts.iter_mut() {
+						visit_json_at(part, &["refusal"], scope, f);
+					}
+					scan_value_text_runs(scope, parts, f);
 				},
 				_ => {},
 			}
+			return;
 		}
-		// TODO opt-in setting to apply guards to tool results
+		visit_tool_item_text(&mut self.0, f);
 	}
+}
+
+// visit every documented item type
+// known-ignored items should be listed
+// unknown items should be logged for future review
+// https://github.com/openai/openai-openapi may give us a way to keep an eye on changes
+fn visit_tool_item_text(value: &mut Value, f: &mut dyn FnMut(ContentScope, &mut String)) {
+	match value.get("type").and_then(|t| t.as_str()) {
+		// `output` is either a plain string or a content-part array.
+		Some(
+			"function_call_output"
+			| "custom_tool_call_output"
+			| "local_shell_call_output"
+			| "shell_call_output"
+			| "apply_patch_call_output",
+		) => {
+			visit_json_at(value, &["output"], ContentScope::ToolOutput, f);
+		},
+		Some("program_output") => {
+			visit_json_at(value, &["result"], ContentScope::ToolOutput, f);
+		},
+		// `mcp_call` carries the model's arguments plus the server's output/error on one item.
+		Some("function_call" | "mcp_call" | "mcp_approval_request") => {
+			visit_json_at(value, &["arguments"], ContentScope::ToolInput, f);
+			visit_json_at(value, &["output"], ContentScope::ToolOutput, f);
+			visit_json_at(value, &["error"], ContentScope::ToolOutput, f);
+		},
+		Some("custom_tool_call") => {
+			visit_json_at(value, &["input"], ContentScope::ToolInput, f);
+		},
+		// Model-written JavaScript for programmatic tool calling; the item's `fingerprint`
+		// must round-trip intact and is not visited.
+		Some("program") => {
+			visit_json_at(value, &["code"], ContentScope::ToolInput, f);
+		},
+		// Model-directed actions; `actions` is computer_call's batched form, and the
+		// safety-check prose rides along with the call.
+		Some("local_shell_call" | "shell_call" | "computer_call" | "web_search_call") => {
+			visit_json_at(value, &["action"], ContentScope::ToolInput, f);
+			visit_json_at(value, &["actions"], ContentScope::ToolInput, f);
+			visit_json_at(
+				value,
+				&["pending_safety_checks"],
+				ContentScope::ToolInput,
+				f,
+			);
+		},
+		Some("apply_patch_call") => {
+			visit_json_at(value, &["operation"], ContentScope::ToolInput, f);
+		},
+		// `output` is a screenshot; only the safety-check prose is readable.
+		Some("computer_call_output") => {
+			visit_json_at(
+				value,
+				&["acknowledged_safety_checks"],
+				ContentScope::ToolOutput,
+				f,
+			);
+		},
+		Some("file_search_call") => {
+			visit_json_at(value, &["queries"], ContentScope::ToolInput, f);
+			visit_json_at(value, &["results"], ContentScope::ToolOutput, f);
+		},
+		Some("code_interpreter_call") => {
+			visit_json_at(value, &["code"], ContentScope::ToolInput, f);
+			visit_json_at(value, &["outputs"], ContentScope::ToolOutput, f);
+		},
+		// Empty object today; the documented growth point for tool-search arguments.
+		Some("tool_search_call") => {
+			visit_json_at(value, &["arguments"], ContentScope::ToolInput, f);
+		},
+		// Server-controlled tool listings: descriptions are a prompt-injection vector.
+		Some("mcp_list_tools" | "tool_search_output") => {
+			visit_json_at(value, &["tools"], ContentScope::ToolOutput, f);
+			visit_json_at(value, &["error"], ContentScope::ToolOutput, f);
+		},
+		Some("mcp_approval_response") => {
+			visit_json_at(value, &["reason"], ContentScope::ToolInput, f);
+		},
+		// Client-authored tool definitions, unscanned like the request's `tools` field.
+		Some("additional_tools") => {},
+		// No readable text: references, triggers, base64 image results.
+		Some("item_reference" | "compaction_trigger" | "image_generation_call") => {},
+		// `encrypted_content`/fingerprint the API verifies on replay; a mask would break the
+		// request, and reasoning text is bound to its encrypted blob.
+		Some("reasoning" | "compaction") => {},
+		other => {
+			tracing::debug!(
+				item_type = other.unwrap_or("<none>"),
+				"unrecognized input item; not scanned by prompt guards"
+			);
+		},
+	}
+}
+
+fn scan_value_text_runs(
+	scope: ContentScope,
+	parts: &mut Vec<Value>,
+	f: &mut dyn FnMut(ContentScope, &mut String),
+) {
+	crate::types::scan_text_runs(
+		parts,
+		"\n",
+		|part| {
+			if !matches!(
+				part.get("type").and_then(|t| t.as_str()),
+				Some("input_text" | "output_text")
+			) {
+				return None;
+			}
+			match part.get_mut("text") {
+				Some(Value::String(text)) => Some(text),
+				_ => None,
+			}
+		},
+		&mut |text| f(scope, text),
+	);
 }
 
 #[derive(Debug, Deserialize, Clone, Serialize)]
@@ -455,12 +565,12 @@ impl RequestType for Request {
 		);
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
 		if let Some(instructions) = &mut self.instructions {
-			f(instructions);
+			f(ContentScope::SystemPrompt, instructions);
 		}
 		match &mut self.input {
-			RequestInput::Text(text) => f(text),
+			RequestInput::Text(text) => f(ContentScope::Messages, text),
 			RequestInput::Items(items) => {
 				for item in items {
 					item.visit_text_mut(f);

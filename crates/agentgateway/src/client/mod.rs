@@ -777,6 +777,7 @@ mod tests {
 		let metrics = Arc::new(crate::metrics::Metrics::new(
 			&mut registry,
 			FzHashSet::default(),
+			Default::default(),
 		));
 
 		let client = Client::new(

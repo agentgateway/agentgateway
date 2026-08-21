@@ -22,7 +22,9 @@ use bytes::Bytes;
 use itertools::Itertools;
 use serde::{Deserialize, Deserializer, Serialize};
 
-use crate::types::{OutputMessage, OutputMessagePart, ResponseType, vertex_gemini as vg};
+use crate::types::{
+	ContentScope, OutputMessage, OutputMessagePart, ResponseType, vertex_gemini as vg,
+};
 use crate::{
 	AIError, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, RequestType,
 	SimpleChatCompletionMessage, logged_response_parsing, webhook,
@@ -129,6 +131,59 @@ fn visit_content_text(content: &mut vg::Content, f: &mut dyn FnMut(&mut String))
 	);
 }
 
+// visit every part (that is represented in the typed SDK)
+// unknown items should be logged for future review
+// https://ai.google.dev/api/generate-content#Part
+fn visit_tool_part_text(part: &mut vg::Part, f: &mut dyn FnMut(ContentScope, &mut String)) {
+	match part {
+		// not a tool, visit_content_text covers Text
+		vg::Part::Text(_) => {},
+		vg::Part::FunctionCall(p) => {
+			crate::types::visit_json_strings(&mut p.function_call.args, &mut |text| {
+				f(ContentScope::ToolInput, text)
+			});
+		},
+		// only scan the response, not IDs or `rest` which may contain multi-modal
+		// things that are difficult to scan
+		vg::Part::FunctionResponse(p) => {
+			crate::types::visit_json_strings(&mut p.function_response.response, &mut |text| {
+				f(ContentScope::ToolOutput, text)
+			});
+		},
+		// only scan executable_code.code as other fields may contain
+		// things like "language: PYTHON" that we shouldn't touch
+		vg::Part::ExecutableCode(p) => {
+			crate::types::visit_json_at(
+				&mut p.executable_code,
+				&["code"],
+				ContentScope::ToolInput,
+				f,
+			);
+		},
+		// only scan code_execution_result.output as other fields may contain
+		// things like "outcome: OUTCOME_OK" that we shouldn't touch
+		vg::Part::CodeExecutionResult(p) => {
+			crate::types::visit_json_at(
+				&mut p.code_execution_result,
+				&["output"],
+				ContentScope::ToolOutput,
+				f,
+			);
+		},
+		// No readable text: base64 payloads and file references.
+		vg::Part::InlineData(_) | vg::Part::FileData(_) => {},
+		vg::Part::Unknown(value) => {
+			tracing::debug!(
+				keys = value
+					.as_object()
+					.map(|o| o.keys().join(","))
+					.unwrap_or_default(),
+				"unrecognized part; not scanned by prompt guards"
+			);
+		},
+	}
+}
+
 impl RequestType for Request {
 	fn body_is_json(&self) -> bool {
 		true
@@ -203,12 +258,15 @@ impl RequestType for Request {
 		serde_json::to_value(&self.inner)
 	}
 
-	fn visit_text_mut(&mut self, f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, f: &mut dyn FnMut(ContentScope, &mut String)) {
 		if let Some(system) = &mut self.inner.system_instruction {
-			visit_content_text(system, f);
+			visit_content_text(system, &mut |text| f(ContentScope::SystemPrompt, text));
 		}
 		for content in &mut self.inner.contents {
-			visit_content_text(content, f);
+			for part in &mut content.parts {
+				visit_tool_part_text(part, f);
+			}
+			visit_content_text(content, &mut |text| f(ContentScope::Messages, text));
 		}
 	}
 }
@@ -280,7 +338,7 @@ impl RequestType for CountTokensRequest {
 		serde_json::to_value(self)
 	}
 
-	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(&mut String)) {
+	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(ContentScope, &mut String)) {
 		unimplemented!(
 			"visit_text_mut is used for prompt guard; prompt guard is disabled for gemini countTokens."
 		)

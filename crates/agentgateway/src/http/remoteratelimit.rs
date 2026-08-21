@@ -409,11 +409,20 @@ impl RemoteRateLimit {
 				})
 				.join(" | ")
 		);
-		let chan = self
-			.target
-			.grpc_channel(client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::RateLimit));
+		let policy_client =
+			client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::RateLimit);
+		let chan = self.target.grpc_channel(policy_client.clone());
 		let mut client = RateLimitServiceClient::new(chan);
+		let mut request = tonic::Request::new(request);
+		let mut span = policy_client.start_grpc_span(
+			&mut request,
+			self.target.target.as_ref(),
+			"/envoy.service.ratelimit.v3.RateLimitService/ShouldRateLimit",
+		);
 		let resp = client.should_rate_limit(request).await;
+		if let Some(span) = span.as_deref_mut() {
+			span.record_grpc_result(&resp);
+		}
 		trace!("check response: {:?}", resp);
 		if let Err(ref error) = resp {
 			let ignore = self.failure_mode == FailureMode::FailOpen;

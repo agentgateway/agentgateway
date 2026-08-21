@@ -1300,6 +1300,7 @@ pub fn setup_proxy_test(cfg: &str) -> anyhow::Result<TestBind> {
 pub fn setup_proxy_test_with_config(config: crate::Config) -> TestBind {
 	crate::crypto::init();
 	let encoder = config.session_encoder.clone();
+	let histogram_mode = config.histograms;
 	let stores = Stores::new(config.ipv6_enabled, config.threading_mode);
 	let client = client::Client::new(&config.dns, None, Default::default(), None);
 	let (drain_tx, drain_rx) = drain::new();
@@ -1309,6 +1310,7 @@ pub fn setup_proxy_test_with_config(config: crate::Config) -> TestBind {
 		metrics: Arc::new(crate::metrics::Metrics::new(
 			metrics::sub_registry(&mut Registry::default()),
 			Default::default(),
+			histogram_mode,
 		)),
 		model_catalog: catalog::ModelCatalog::empty(),
 		admin: None,

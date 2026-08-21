@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+	"testing/iotest"
 
 	"github.com/spf13/cobra"
 )
@@ -80,11 +83,29 @@ func TestRunRawFromTraceFile(t *testing.T) {
 	}
 }
 
+func TestRunRawReturnsReadErrorAfterValidEvent(t *testing.T) {
+	line := `{"eventEnd":1,"severity":"INFO","message":{"type":"event","message":"hello"}}`
+	body := io.NopCloser(io.MultiReader(strings.NewReader(line), iotest.ErrReader(io.ErrUnexpectedEOF)))
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.Background())
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+
+	err := runRaw(cmd, nil, body, nil, 0)
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("got %v, want unexpected EOF", err)
+	}
+	if got := output.String(); got != line+"\n" {
+		t.Fatalf("got %q, want %q", got, line+"\n")
+	}
+}
+
 func TestConsumeTraceAcceptsStructuredPolicyEventDetails(t *testing.T) {
 	line := `{"eventEnd":1,"severity":"info","message":{"type":"policyEvent","kind":"llm_cost","details":{"provider":"openai","model":"gpt-4o-mini","status":"exact"}}}`
 
 	var got traceEnvelope
-	err := consumeTrace(strings.NewReader(line+"\n"), func(_ string, envelope traceEnvelope) error {
+	err := consumeTrace(strings.NewReader(line+"\n"), false, func(_ string, envelope traceEnvelope) error {
 		got = envelope
 		return nil
 	})
@@ -106,7 +127,7 @@ func TestConsumeTraceAcceptsLongTraceEvents(t *testing.T) {
 	line := `{"eventEnd":1,"severity":"info","message":{"type":"event","message":"` + message + `"}}`
 
 	var got traceEnvelope
-	err := consumeTrace(strings.NewReader(line+"\n"), func(_ string, envelope traceEnvelope) error {
+	err := consumeTrace(strings.NewReader(line+"\n"), false, func(_ string, envelope traceEnvelope) error {
 		got = envelope
 		return nil
 	})
@@ -118,11 +139,42 @@ func TestConsumeTraceAcceptsLongTraceEvents(t *testing.T) {
 	}
 }
 
+func TestConsumeTraceEmitsReadErrorAfterValidEvent(t *testing.T) {
+	line := `{"eventEnd":1,"severity":"info","message":{"type":"event","message":"hello"}}`
+	body := io.MultiReader(strings.NewReader(line+"\n{"), iotest.ErrReader(io.ErrUnexpectedEOF))
+
+	var got []traceEnvelope
+	err := consumeTrace(body, true, func(_ string, envelope traceEnvelope) error {
+		got = append(got, envelope)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d events, want 2", len(got))
+	}
+	wantMessage := "failed to read trace stream: unexpected EOF; failed to process final trace event: failed to decode trace event: unexpected end of JSON input"
+	if got[1].Severity != "error" || got[1].Message.Type != "message" || got[1].Message.Message != wantMessage {
+		t.Fatalf("got error event %#v", got[1])
+	}
+}
+
+func TestConsumeTraceReturnsReadErrorBeforeAnyEvent(t *testing.T) {
+	err := consumeTrace(iotest.ErrReader(io.ErrUnexpectedEOF), true, func(_ string, _ traceEnvelope) error {
+		t.Fatal("unexpected event")
+		return nil
+	})
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("got %v, want unexpected EOF", err)
+	}
+}
+
 func TestSummarizePolicyEventStringDetails(t *testing.T) {
 	line := `{"eventEnd":1,"severity":"info","message":{"type":"policyEvent","kind":"cors","details":"request has no Origin header"}}`
 
 	var got traceEnvelope
-	err := consumeTrace(strings.NewReader(line+"\n"), func(_ string, envelope traceEnvelope) error {
+	err := consumeTrace(strings.NewReader(line+"\n"), false, func(_ string, envelope traceEnvelope) error {
 		got = envelope
 		return nil
 	})
@@ -140,7 +192,7 @@ func TestSummarizeTraceSampling(t *testing.T) {
 	line := `{"eventEnd":1,"severity":"info","message":{"type":"traceSampling","decision":"sample (client)"}}`
 
 	var got traceEnvelope
-	err := consumeTrace(strings.NewReader(line+"\n"), func(_ string, envelope traceEnvelope) error {
+	err := consumeTrace(strings.NewReader(line+"\n"), false, func(_ string, envelope traceEnvelope) error {
 		got = envelope
 		return nil
 	})

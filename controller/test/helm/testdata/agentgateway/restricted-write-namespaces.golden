@@ -192,21 +192,6 @@ roleRef:
   name: agentgateway-default
   apiGroup: rbac.authorization.k8s.io
 ---
-# Source: agentgateway/templates/serviceaccount.yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: agentgateway-write-role-default
-subjects:
-- kind: ServiceAccount
-  name: test-release-agentgateway
-  namespace: default
-roleRef:
-  kind: ClusterRole
-  name: agentgateway-default-deployer
-  apiGroup: rbac.authorization.k8s.io
-
----
 # Source: agentgateway/templates/role.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -242,6 +227,37 @@ roleRef:
   kind: Role
   name: agentgateway-default-local
   apiGroup: rbac.authorization.k8s.io
+---
+# Source: agentgateway/templates/serviceaccount.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agentgateway-write-role-default
+  namespace: team-a
+subjects:
+- kind: ServiceAccount
+  name: test-release-agentgateway
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: agentgateway-default-deployer
+  apiGroup: rbac.authorization.k8s.io
+---
+# Source: agentgateway/templates/serviceaccount.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agentgateway-write-role-default
+  namespace: team-b
+subjects:
+- kind: ServiceAccount
+  name: test-release-agentgateway
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: agentgateway-default-deployer
+  apiGroup: rbac.authorization.k8s.io
+
 ---
 # Source: agentgateway/templates/service.yaml
 apiVersion: v1
@@ -380,11 +396,3 @@ spec:
             requests:
               cpu: 100m
               memory: 128Mi
-          volumeMounts:
-            - mountPath: /var/lib/agentgateway/plugins
-              name: plugin-cache
-              readOnly: true
-      volumes:
-        - name: plugin-cache
-          secret:
-            secretName: agentgateway-plugin-cache

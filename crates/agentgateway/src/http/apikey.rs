@@ -145,15 +145,178 @@ where
 
 #[apply(schema_ser!)]
 pub struct APIKeyAuthentication {
-	// A map of API keys to the metadata for that key
+	// A map of API keys to the policy for that key.
 	#[serde(serialize_with = "ser_redact")]
-	pub users: Arc<HashMap<APIKeyHash, UserMetadata>>,
+	pub users: Arc<HashMap<APIKeyHash, APIKeyPolicy>>,
 
 	/// Validation mode for API Key authentication
 	pub mode: Mode,
 
 	#[serde(default)]
 	pub location: AuthorizationLocation,
+}
+
+#[derive(Debug, Clone)]
+pub struct APIKeyPolicy {
+	pub metadata: UserMetadata,
+	pub allowed_models: AllowedModels,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct AllowedModels(Option<Vec<AllowedModelPattern>>);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum AllowedModelPattern {
+	Exact(String),
+	Prefix(String),
+	Suffix(String),
+	All,
+}
+
+impl AllowedModels {
+	fn compile(patterns: Option<Vec<String>>) -> anyhow::Result<Self> {
+		let Some(patterns) = patterns else {
+			return Ok(Self(None));
+		};
+		if patterns.len() > 1 && patterns.iter().any(|pattern| pattern == "*") {
+			anyhow::bail!("allowedModels cannot combine '*' with other values");
+		}
+
+		let mut compiled = Vec::with_capacity(patterns.len());
+		for pattern in patterns {
+			if pattern.is_empty() {
+				anyhow::bail!("allowedModels cannot contain an empty model name");
+			}
+			let wildcard_count = pattern.bytes().filter(|byte| *byte == b'*').count();
+			let pattern = match wildcard_count {
+				0 => AllowedModelPattern::Exact(pattern),
+				1 if pattern == "*" => AllowedModelPattern::All,
+				1 if pattern.ends_with('*') => {
+					AllowedModelPattern::Prefix(pattern.trim_end_matches('*').to_string())
+				},
+				1 if pattern.starts_with('*') => {
+					AllowedModelPattern::Suffix(pattern.trim_start_matches('*').to_string())
+				},
+				_ => anyhow::bail!(
+					"allowedModels pattern {pattern:?} must contain at most one wildcard, at the beginning or end"
+				),
+			};
+			if !compiled.contains(&pattern) {
+				compiled.push(pattern);
+			}
+		}
+		Ok(Self(Some(compiled)))
+	}
+
+	pub fn allows(&self, model: &str) -> bool {
+		self
+			.0
+			.as_ref()
+			.is_none_or(|patterns| patterns.iter().any(|pattern| pattern.allows(model)))
+	}
+}
+
+impl AllowedModelPattern {
+	fn allows(&self, model: &str) -> bool {
+		match self {
+			Self::Exact(exact) => model == exact,
+			Self::Prefix(prefix) => model.starts_with(prefix),
+			Self::Suffix(suffix) => model.ends_with(suffix),
+			Self::All => true,
+		}
+	}
+
+	fn intersects(&self, configured_model: &str) -> bool {
+		match self {
+			Self::All => true,
+			Self::Exact(model) => configured_model_pattern_matches(configured_model, model),
+			Self::Prefix(allowed) => {
+				if configured_model == "*" {
+					return true;
+				}
+				if let Some(configured) = configured_model.strip_suffix('*') {
+					return allowed.starts_with(configured) || configured.starts_with(allowed);
+				}
+				configured_model.starts_with('*') || configured_model.starts_with(allowed)
+			},
+			Self::Suffix(allowed) => {
+				if configured_model == "*" {
+					return true;
+				}
+				if let Some(configured) = configured_model.strip_prefix('*') {
+					return allowed.ends_with(configured) || configured.ends_with(allowed);
+				}
+				configured_model.ends_with('*') || configured_model.ends_with(allowed)
+			},
+		}
+	}
+}
+
+fn configured_model_pattern_matches(pattern: &str, model: &str) -> bool {
+	if pattern == "*" {
+		return true;
+	}
+	if let Some(prefix) = pattern.strip_suffix('*') {
+		return model.starts_with(prefix);
+	}
+	if let Some(suffix) = pattern.strip_prefix('*') {
+		return model.ends_with(suffix);
+	}
+	pattern == model
+}
+
+#[derive(Debug, Clone)]
+pub struct ModelAccessPolicy {
+	allowed_models: AllowedModels,
+}
+
+impl ModelAccessPolicy {
+	pub fn allows(&self, model: &str) -> bool {
+		self.allowed_models.allows(model)
+	}
+}
+
+pub fn discoverable_models<'a>(
+	policy: Option<&'a ModelAccessPolicy>,
+	configured_model: &'a str,
+) -> impl Iterator<Item = &'a str> + 'a {
+	let patterns = policy.and_then(|policy| policy.allowed_models.0.as_deref());
+	let configured_is_pattern = configured_model.contains('*');
+	let configured = std::iter::once(configured_model).filter(move |_| {
+		if configured_is_pattern {
+			patterns.is_none()
+		} else {
+			patterns.is_none_or(|patterns| {
+				patterns
+					.iter()
+					.any(|pattern| pattern.allows(configured_model))
+			})
+		}
+	});
+	let mut emitted_configured = false;
+	let intersections = patterns.into_iter().flatten().filter_map(move |pattern| {
+		if !configured_is_pattern {
+			return None;
+		}
+		match pattern {
+			AllowedModelPattern::Exact(model)
+				if configured_model_pattern_matches(configured_model, model) =>
+			{
+				Some(model.as_str())
+			},
+			pattern if pattern.intersects(configured_model) && !emitted_configured => {
+				emitted_configured = true;
+				Some(configured_model)
+			},
+			_ => None,
+		}
+	});
+	configured.chain(intersections)
+}
+
+struct AuthenticatedAPIKey {
+	claims: Claims,
+	model_access: ModelAccessPolicy,
 }
 
 impl APIKeyAuthentication {
@@ -166,14 +329,22 @@ impl APIKeyAuthentication {
 			users: Arc::new(
 				keys
 					.into_iter()
-					.map(|(key, meta)| (key.sha256(), meta))
+					.map(|(key, metadata)| {
+						(
+							key.sha256(),
+							APIKeyPolicy {
+								metadata,
+								allowed_models: AllowedModels::default(),
+							},
+						)
+					})
 					.collect(),
 			),
 			mode,
 			location,
 		}
 	}
-	async fn verify(&self, req: &mut Request) -> Result<Option<Claims>, ProxyError> {
+	async fn verify(&self, req: &mut Request) -> Result<Option<AuthenticatedAPIKey>, ProxyError> {
 		let Some(key) = self.location.extract(req) else {
 			// In strict mode, we require credentials
 			if self.mode == Mode::Strict {
@@ -194,18 +365,22 @@ impl APIKeyAuthentication {
 		};
 
 		let key = APIKey::new(key);
-		if let Some(meta) = self.users.get(&key.sha256()) {
+		if let Some(policy) = self.users.get(&key.sha256()) {
 			pol_result!(
 				dtrace::Info,
 				Apply,
 				"authenticated request with API key with metadata {}",
-				serde_json::to_string(meta).unwrap_or_default()
+				serde_json::to_string(&policy.metadata).unwrap_or_default()
 			);
-			let claims = Claims {
-				key,
-				metadata: meta.clone(),
-			};
-			Ok(Some(claims))
+			Ok(Some(AuthenticatedAPIKey {
+				claims: Claims {
+					key,
+					metadata: policy.metadata.clone(),
+				},
+				model_access: ModelAccessPolicy {
+					allowed_models: policy.allowed_models.clone(),
+				},
+			}))
 		} else if self.mode == Mode::Permissive {
 			pol_result!(
 				dtrace::Warn,
@@ -234,10 +409,11 @@ impl crate::store::RequestPolicyTrait for APIKeyAuthentication {
 		req: &mut Request,
 	) -> Result<crate::http::PolicyResponse, ProxyResponse> {
 		let res = self.verify(req).await.map_err(ProxyResponse::from)?;
-		if let Some(claims) = res {
+		if let Some(authenticated) = res {
 			self.location.remove(req).map_err(ProxyResponse::from)?;
 			// Insert the claims into extensions so we can reference it later
-			req.extensions_mut().insert(claims);
+			req.extensions_mut().insert(authenticated.claims);
+			req.extensions_mut().insert(authenticated.model_access);
 		}
 		Ok(crate::http::PolicyResponse::default())
 	}
@@ -269,6 +445,10 @@ pub enum LocalAPIKey {
 		key: APIKey,
 		/// Optional metadata attached to requests authenticated with this key.
 		metadata: Option<UserMetadata>,
+		/// Model patterns this key is allowed to access.
+		/// Omitted means no additional constraint; an empty list denies all models.
+		#[serde(rename = "allowedModels", default)]
+		allowed_models: Option<Vec<String>>,
 	},
 	Sha256 {
 		/// SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.
@@ -276,24 +456,55 @@ pub enum LocalAPIKey {
 		key_hash: APIKeyHash,
 		/// Optional metadata attached to requests authenticated with this key.
 		metadata: Option<UserMetadata>,
+		/// Model patterns this key is allowed to access.
+		/// Omitted means no additional constraint; an empty list denies all models.
+		#[serde(rename = "allowedModels", default)]
+		allowed_models: Option<Vec<String>>,
 	},
 }
 
 impl LocalAPIKey {
-	fn into_parts(self) -> (APIKeyHash, UserMetadata) {
-		match self {
-			LocalAPIKey::Key { key, metadata } => (key.sha256(), metadata.unwrap_or_default()),
-			LocalAPIKey::Sha256 { key_hash, metadata } => (key_hash, metadata.unwrap_or_default()),
-		}
+	fn into_parts(self) -> anyhow::Result<(APIKeyHash, APIKeyPolicy)> {
+		let (key_hash, metadata, allowed_models) = match self {
+			LocalAPIKey::Key {
+				key,
+				metadata,
+				allowed_models,
+			} => (key.sha256(), metadata, allowed_models),
+			LocalAPIKey::Sha256 {
+				key_hash,
+				metadata,
+				allowed_models,
+			} => (key_hash, metadata, allowed_models),
+		};
+		Ok((
+			key_hash,
+			APIKeyPolicy {
+				metadata: metadata.unwrap_or_default(),
+				allowed_models: AllowedModels::compile(allowed_models)?,
+			},
+		))
 	}
 }
 
 impl LocalAPIKeys {
-	pub fn into(self) -> APIKeyAuthentication {
-		APIKeyAuthentication {
-			users: Arc::new(self.keys.into_iter().map(LocalAPIKey::into_parts).collect()),
+	pub fn compile(self) -> anyhow::Result<APIKeyAuthentication> {
+		Ok(APIKeyAuthentication {
+			users: Arc::new(
+				self
+					.keys
+					.into_iter()
+					.map(LocalAPIKey::into_parts)
+					.collect::<anyhow::Result<_>>()?,
+			),
 			mode: self.mode,
 			location: self.location,
-		}
+		})
+	}
+
+	pub fn into(self) -> APIKeyAuthentication {
+		self
+			.compile()
+			.expect("API key allowedModels configuration must be valid")
 	}
 }

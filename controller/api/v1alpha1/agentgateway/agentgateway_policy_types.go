@@ -2142,7 +2142,9 @@ type AzureAuth struct {
 	// +optional
 	SecretRef *LocalSecretObjectRef `json:"secretRef,omitempty"`
 
-	// Managed identity authentication settings.
+	// Managed identity authentication settings. Leave this object empty to use
+	// the system-assigned identity. To use a user-assigned identity, set one of
+	// `clientId`, `objectId`, or `resourceId`.
 	//
 	// +optional
 	ManagedIdentity *AzureManagedIdentity `json:"managedIdentity,omitempty"`
@@ -2155,13 +2157,26 @@ type AzureAuth struct {
 	WorkloadIdentity *AzureWorkloadIdentity `json:"workloadIdentity,omitempty"`
 }
 
+// AzureManagedIdentity configures authentication with an Azure managed
+// identity. Leave all identifiers unset to use the system-assigned identity.
+// To use a user-assigned identity, set one identifier.
+//
+// +kubebuilder:validation:AtMostOneOf=clientId;objectId;resourceId
 type AzureManagedIdentity struct {
-	// +required
-	ClientID string `json:"clientId"`
-	// +required
-	ObjectID string `json:"objectId"`
-	// +required
-	ResourceID string `json:"resourceId"`
+	// Client ID of the user-assigned managed identity.
+	//
+	// +optional
+	ClientID string `json:"clientId,omitempty"`
+
+	// Object ID of the user-assigned managed identity.
+	//
+	// +optional
+	ObjectID string `json:"objectId,omitempty"`
+
+	// Resource ID of the user-assigned managed identity.
+	//
+	// +optional
+	ResourceID string `json:"resourceId,omitempty"`
 }
 
 // AzureWorkloadIdentity configures Azure Workload Identity authentication.

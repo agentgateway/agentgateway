@@ -853,6 +853,26 @@ fn convert_provider_format_config(
 	})
 }
 
+fn convert_content_scopes(scopes: &[i32]) -> Result<Vec<llm::ContentScope>, ProtoError> {
+	use proto::agent::backend_policy_spec::ai::ContentScope as ProtoScope;
+
+	if scopes.is_empty() {
+		return Ok(llm::policy::default_content_scope());
+	}
+	scopes
+		.iter()
+		.map(|s| match ProtoScope::try_from(*s) {
+			Ok(ProtoScope::SystemPrompt) => Ok(llm::ContentScope::SystemPrompt),
+			Ok(ProtoScope::Messages) => Ok(llm::ContentScope::Messages),
+			Ok(ProtoScope::ToolOutput) => Ok(llm::ContentScope::ToolOutput),
+			Ok(ProtoScope::ToolInput) => Ok(llm::ContentScope::ToolInput),
+			Ok(ProtoScope::Unspecified) | Err(_) => Err(ProtoError::Generic(format!(
+				"unknown prompt guard content scope value {s}"
+			))),
+		})
+		.collect()
+}
+
 fn convert_backend_ai_policy(
 	ai: &proto::agent::backend_policy_spec::Ai,
 	diagnostics: &mut Diagnostics,
@@ -950,7 +970,17 @@ fn convert_backend_ai_policy(
 						})
 					},
 				};
-				Ok(llm::policy::RequestGuard { rejection, kind })
+				let guard = llm::policy::RequestGuard {
+					rejection,
+					scope: convert_content_scopes(&reqp.scope)?,
+					kind,
+				};
+
+				// TODO not all guard types properly scan all scopes
+				// avoids silently ignoring configured scopes
+				guard.validate_scope().map_err(ProtoError::Generic)?;
+
+				Ok(guard)
 			})
 			.collect::<Result<Vec<_>, ProtoError>>()?;
 
@@ -2958,7 +2988,13 @@ fn traffic_policy_from_proto(
 							));
 						},
 					};
-					Ok::<_, ProtoError>((key, meta))
+					Ok::<_, ProtoError>((
+						key,
+						http::apikey::APIKeyPolicy {
+							metadata: meta,
+							allowed_models: Default::default(),
+						},
+					))
 				})
 				.collect::<Result<Vec<_>, _>>()?;
 			TrafficPolicy::APIKey(RequestPolicy::single(http::apikey::APIKeyAuthentication {
@@ -3166,7 +3202,12 @@ fn external_auth_from_proto(
 }
 
 fn convert_duration(d: prost_types::Duration) -> Duration {
-	Duration::from_secs(d.seconds as u64) + Duration::from_nanos(d.nanos as u64)
+	// Proto duration fields are signed,
+	// but the standard duration type only represents positive spans of time.
+	// Clamp negative components at zero to avoid unexpected behaviors.
+	let secs = d.seconds.max(0) as u64;
+	let nanos = d.nanos.max(0) as u32;
+	Duration::new(secs, nanos)
 }
 
 fn convert_jwt_sign_ttl(ttl: Option<prost_types::Duration>) -> Result<Option<Duration>, String> {
@@ -4121,6 +4162,48 @@ mod tests {
 	use crate::types::proto::agent::backend_policy_spec::Ai;
 
 	#[test]
+	fn prompt_guard_scope_from_proto() {
+		use proto::agent::backend_policy_spec::ai::ContentScope as ProtoScope;
+
+		// unset scope keeps today's default so existing configs are unaffected
+		assert_eq!(
+			convert_content_scopes(&[]).unwrap(),
+			llm::policy::default_content_scope()
+		);
+		// opting in to tool scanning
+		assert_eq!(
+			convert_content_scopes(&[
+				ProtoScope::Messages as i32,
+				ProtoScope::ToolOutput as i32,
+				ProtoScope::ToolInput as i32,
+			])
+			.unwrap(),
+			vec![
+				llm::ContentScope::Messages,
+				llm::ContentScope::ToolOutput,
+				llm::ContentScope::ToolInput,
+			]
+		);
+		convert_content_scopes(&[ProtoScope::Unspecified as i32]).unwrap_err();
+		convert_content_scopes(&[42]).unwrap_err();
+
+		// TODO respect scopes in all guard types
+		let ai = Ai {
+			prompt_guard: Some(proto::agent::backend_policy_spec::ai::PromptGuard {
+				request: vec![proto::agent::backend_policy_spec::ai::RequestGuard {
+					rejection: None,
+					kind: Some(Kind::OpenaiModeration(Default::default())),
+					scope: vec![ProtoScope::ToolInput as i32],
+				}],
+				..Default::default()
+			}),
+			..Default::default()
+		};
+		let err = convert_backend_ai_policy(&ai, &mut Diagnostics::default()).unwrap_err();
+		assert!(err.to_string().contains("non-default scope"), "{err}");
+	}
+
+	#[test]
 	fn inline_backend_reference_validates_target() {
 		let ip = proto::agent::BackendReference {
 			kind: Some(proto::agent::backend_reference::Kind::Inline(
@@ -4977,6 +5060,28 @@ mod tests {
 			}))
 			.unwrap(),
 			Some(Duration::from_millis(1500))
+		);
+	}
+
+	#[test]
+	fn convert_duration_negative_seconds_and_nanos_becomes_zero() {
+		assert_eq!(
+			convert_duration(prost_types::Duration {
+				seconds: -1,
+				nanos: -500_000_000,
+			}),
+			Duration::ZERO
+		);
+	}
+
+	#[test]
+	fn convert_duration_mixed_sign_clamps_negative_component() {
+		assert_eq!(
+			convert_duration(prost_types::Duration {
+				seconds: -1,
+				nanos: 500_000_000,
+			}),
+			Duration::from_millis(500)
 		);
 	}
 

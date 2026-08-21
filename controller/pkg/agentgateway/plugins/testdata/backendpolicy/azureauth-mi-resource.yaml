@@ -12,7 +12,8 @@ spec:
     auth:
       azure:
         managedIdentity:
-          clientId: my-client-id
+          resourceId: my-resource-id
+
 ---
 # Output
 output:
@@ -27,7 +28,7 @@ output:
             explicitConfig:
               managedIdentityCredential:
                 userAssignedIdentity:
-                  clientId: my-client-id
+                  resourceId: my-resource-id
       key: backend/default/agw:backend-auth:default/test
       name:
         kind: AgentgatewayPolicy

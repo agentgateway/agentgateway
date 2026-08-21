@@ -11,9 +11,10 @@ use agent_core::prelude::AssertSize;
 pub(crate) use client::McpHttpClient;
 use itertools::Itertools;
 pub use openapi::ParseError as OpenAPIParseError;
+use opentelemetry::KeyValue;
 use rmcp::model::{
-	ClientJsonRpcMessage, ClientNotification, ClientRequest, ExtensionCapabilities, GetMeta,
-	JsonObject, JsonRpcRequest,
+	ClientJsonRpcMessage, ClientNotification, ClientRequest, ConstString, ExtensionCapabilities,
+	GetMeta, JsonObject, JsonRpcRequest,
 };
 use rmcp::transport::TokioChildProcess;
 use rmcp::transport::common::http_header::HEADER_SESSION_ID;
@@ -24,9 +25,10 @@ use crate::mcp::mergestream::Messages;
 use crate::mcp::router::{McpBackendGroup, McpTarget};
 use crate::mcp::streamablehttp::StreamableHttpPostResponse;
 use crate::mcp::{FailureMode, mergestream, upstream};
-use crate::proxy::ProxyError;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::telemetry::trc::TraceParent;
+use crate::proxy::{ProxyError, ProxyResponseReason};
+use crate::telemetry::log::{SpanWriteOnDrop, SpanWriter};
+use crate::telemetry::metrics::{OutboundCallKind, OutboundCallLabels, OutboundCallSubtype};
 use crate::types::agent::{McpPrefixMode, McpTargetSpec};
 use crate::*;
 
@@ -51,17 +53,10 @@ impl IncomingRequestContext {
 		}
 	}
 	pub fn new(parts: &::http::request::Parts) -> Self {
-		let mut headers = parts.headers.clone();
-		if let Some(tp) = parts.extensions.get::<TraceParent>() {
-			headers.insert(
-				http::x_headers::TRACEPARENT,
-				::http::HeaderValue::from_bytes(format!("{tp:?}").as_bytes()).unwrap(),
-			);
-		}
 		Self {
 			method: parts.method.clone(),
 			uri: parts.uri.clone(),
-			headers,
+			headers: parts.headers.clone(),
 			ext: parts.extensions.clone(),
 			authority: parts.uri.authority().cloned(),
 		}
@@ -124,6 +119,33 @@ impl IncomingRequestContext {
 				serde_json::Value::String(value.to_string()),
 			);
 		}
+	}
+	fn start_mcp_outbound_span(
+		&mut self,
+		name: String,
+		target_name: &str,
+		method: Option<&str>,
+		tool_name: Option<&str>,
+	) -> Option<SpanWriteOnDrop> {
+		let mut span = self.extensions().get::<SpanWriter>().and_then(|writer| {
+			writer.is_enabled().then(|| {
+				writer.start_outbound(OutboundCallLabels {
+					kind: OutboundCallKind::Primary,
+					subtype: OutboundCallSubtype::Mcp,
+				})
+			})
+		})?;
+		span.rename_span(name);
+		span.add_attribute(KeyValue::new("mcp.target", target_name.to_string()));
+		if let Some(method) = method {
+			span.add_attribute(KeyValue::new("mcp.method.name", method.to_owned()));
+		}
+		if let Some(tool_name) = tool_name {
+			span.add_attribute(KeyValue::new("gen_ai.tool.name", tool_name.to_owned()));
+		}
+		span.inject_headers(self.headers_mut());
+		self.extensions_mut().insert(span.span_writer());
+		Some(span)
 	}
 	// Empty-bodied Request mirroring the incoming headers/extensions, for CEL input.
 	pub fn as_request(&self) -> crate::http::Request {
@@ -199,121 +221,228 @@ impl Upstream {
 		}
 	}
 
-	pub(crate) async fn delete(&self, ctx: &IncomingRequestContext) -> Result<(), UpstreamError> {
-		match &self {
-			Upstream::McpStdio(c) => {
-				c.stop().await?;
-			},
-			Upstream::McpStreamable(c) => {
-				if c.has_session_id() {
-					c.send_delete(ctx).await?;
-				}
-			},
-			Upstream::McpSSE(c) => {
-				c.stop().await?;
-			},
-			Upstream::OpenAPI(_) => {
-				// No need to do anything here
-			},
+	pub(crate) async fn delete(
+		&self,
+		target_name: &str,
+		ctx: &IncomingRequestContext,
+	) -> Result<(), UpstreamError> {
+		if matches!(self, Upstream::OpenAPI(_))
+			|| matches!(self, Upstream::McpStreamable(c) if !c.has_session_id())
+		{
+			return Ok(());
 		}
-		Ok(())
+		let mut ctx = ctx.clone();
+		let mut span =
+			ctx.start_mcp_outbound_span(format!("DELETE {target_name}"), target_name, None, None);
+		let result: Result<(), UpstreamError> = async {
+			match &self {
+				Upstream::McpStdio(c) => {
+					c.stop().await?;
+				},
+				Upstream::McpStreamable(c) => {
+					if c.has_session_id() {
+						c.send_delete(&ctx).await?;
+					}
+				},
+				Upstream::McpSSE(c) => {
+					c.stop().await?;
+				},
+				Upstream::OpenAPI(_) => {
+					// No need to do anything here
+				},
+			}
+			Ok(())
+		}
+		.await;
+		if let (Some(span), Err(error)) = (span.as_mut(), &result) {
+			span.set_error(ProxyResponseReason::MCP.to_string(), error.to_string());
+		}
+		result
 	}
 	pub(crate) async fn get_event_stream(
 		&self,
+		target_name: &str,
 		ctx: &IncomingRequestContext,
 	) -> Result<mergestream::Messages, UpstreamError> {
-		match &self {
-			Upstream::McpStdio(c) => Ok(c.get_event_stream().await?),
-			Upstream::McpSSE(c) => c.connect_to_event_stream(ctx).await,
-			Upstream::McpStreamable(c) => c
-				.get_event_stream(ctx)
-				.await?
-				.try_into()
-				.map_err(Into::into),
-			Upstream::OpenAPI(_m) => Ok(Messages::pending()),
+		if matches!(self, Upstream::McpStdio(_) | Upstream::OpenAPI(_)) {
+			return match self {
+				Upstream::McpStdio(c) => Ok(c.get_event_stream().await?),
+				Upstream::OpenAPI(_) => Ok(Messages::pending()),
+				_ => unreachable!(),
+			};
 		}
+		let mut ctx = ctx.clone();
+		let mut span =
+			ctx.start_mcp_outbound_span(format!("GET {target_name}"), target_name, None, None);
+		let result: Result<Messages, UpstreamError> = async {
+			match &self {
+				Upstream::McpStdio(c) => Ok(c.get_event_stream().await?),
+				Upstream::McpSSE(c) => c.connect_to_event_stream(&ctx).await,
+				Upstream::McpStreamable(c) => c
+					.get_event_stream(&ctx)
+					.await?
+					.try_into()
+					.map_err(Into::into),
+				Upstream::OpenAPI(_m) => Ok(Messages::pending()),
+			}
+		}
+		.await;
+		if let (Some(span), Err(error)) = (span.as_mut(), &result) {
+			span.set_error(ProxyResponseReason::MCP.to_string(), error.to_string());
+		}
+		result
 	}
 	pub(crate) async fn generic_stream(
 		&self,
+		target_name: &str,
 		mut request: JsonRpcRequest<ClientRequest>,
 		ctx: &IncomingRequestContext,
 	) -> Result<mergestream::Messages, UpstreamError> {
-		// stdio/SSE route server-initiated notifications through `get_event_stream`,
-		// which `subscriptions/listen` never merges. Reject them before sending
-		// an ack over a silent stream. OpenAPI has no notifications to lose.
-		if matches!(&self, Upstream::McpStdio(_) | Upstream::McpSSE(_))
-			&& matches!(
-				&request.request,
-				ClientRequest::SubscriptionsListenRequest(_)
-			) {
-			return Err(UpstreamError::Unavailable(
-				"subscriptions/listen is not supported for stdio/SSE upstreams".to_string(),
-			));
-		}
-		ctx.stamp_trace_context(&mut request.request.get_meta_mut().0);
-		match &self {
-			Upstream::McpStdio(c) => Ok(mergestream::Messages::from(
-				Box::pin(c.send_message(request, ctx).assert_size::<{ 6 * 1024 }>()).await?,
-			)),
-			Upstream::McpSSE(c) => Ok(mergestream::Messages::from(
-				Box::pin(c.send_message(request, ctx).assert_size::<{ 6 * 1024 }>()).await?,
-			)),
-			Upstream::McpStreamable(c) => {
-				let is_init = matches!(&request.request, &ClientRequest::InitializeRequest(_));
-				let res = Box::pin(c.send_request(request, ctx).assert_size::<{ 6 * 1024 }>()).await?;
-				if is_init {
-					let sid = match &res {
-						StreamableHttpPostResponse::Accepted => None,
-						StreamableHttpPostResponse::Json(_, sid) => sid.as_ref(),
-						StreamableHttpPostResponse::Sse(_, sid) => sid.as_ref(),
-					};
-					c.set_session_id(sid.map(|s| s.as_str()), None);
-				}
-				res.try_into().map_err(Into::into)
+		let method = request.request.method().to_string();
+		let (operation_target, tool_name) = match &request.request {
+			ClientRequest::CallToolRequest(request) => {
+				let name = request.params.name.as_ref();
+				(Some(name), Some(name))
 			},
-			Upstream::OpenAPI(c) => {
-				Ok(Box::pin(c.send_message(request, ctx).assert_size::<{ 6 * 1024 }>()).await?)
+			ClientRequest::GetPromptRequest(request) => (Some(request.params.name.as_str()), None),
+			ClientRequest::CompleteRequest(request) => match &request.params.r#ref {
+				rmcp::model::Reference::Prompt(prompt) => (Some(prompt.name.as_str()), None),
+				_ => (None, None),
 			},
+			_ => (None, None),
+		};
+		let mut ctx = ctx.clone();
+		let mut span = ctx.start_mcp_outbound_span(
+			match operation_target {
+				Some(operation_target) => format!("{method} {target_name}_{operation_target}"),
+				None => format!("{method} {target_name}"),
+			},
+			target_name,
+			Some(&method),
+			tool_name,
+		);
+
+		let result = async {
+			// stdio/SSE route server-initiated notifications through `get_event_stream`,
+			// which `subscriptions/listen` never merges. Reject them before sending
+			// an ack over a silent stream. OpenAPI has no notifications to lose.
+			if matches!(&self, Upstream::McpStdio(_) | Upstream::McpSSE(_))
+				&& matches!(
+					&request.request,
+					ClientRequest::SubscriptionsListenRequest(_)
+				) {
+				return Err(UpstreamError::Unavailable(
+					"subscriptions/listen is not supported for stdio/SSE upstreams".to_string(),
+				));
+			}
+			ctx.stamp_trace_context(&mut request.request.get_meta_mut().0);
+			match &self {
+				Upstream::McpStdio(c) => Ok(mergestream::Messages::from(
+					Box::pin(c.send_message(request, &ctx).assert_size::<{ 6 * 1024 }>()).await?,
+				)),
+				Upstream::McpSSE(c) => Ok(mergestream::Messages::from(
+					Box::pin(c.send_message(request, &ctx).assert_size::<{ 6 * 1024 }>()).await?,
+				)),
+				Upstream::McpStreamable(c) => {
+					let is_init = matches!(&request.request, &ClientRequest::InitializeRequest(_));
+					let res = Box::pin(c.send_request(request, &ctx).assert_size::<{ 6 * 1024 }>()).await?;
+					if is_init {
+						let sid = match &res {
+							StreamableHttpPostResponse::Accepted => None,
+							StreamableHttpPostResponse::Json(_, sid) => sid.as_ref(),
+							StreamableHttpPostResponse::Sse(_, sid) => sid.as_ref(),
+						};
+						c.set_session_id(sid.map(|s| s.as_str()), None);
+					}
+					res.try_into().map_err(Into::into)
+				},
+				Upstream::OpenAPI(c) => {
+					Ok(Box::pin(c.send_message(request, &ctx).assert_size::<{ 6 * 1024 }>()).await?)
+				},
+			}
 		}
+		.await;
+		if let (Some(span), Err(error)) = (span.as_mut(), &result) {
+			span.set_error(ProxyResponseReason::MCP.to_string(), error.to_string());
+		}
+		result
 	}
 
 	pub(crate) async fn generic_notification(
 		&self,
+		target_name: &str,
 		mut request: ClientNotification,
 		ctx: &IncomingRequestContext,
 	) -> Result<(), UpstreamError> {
-		ctx.stamp_trace_context(&mut request.get_meta_mut().0);
-		match &self {
-			Upstream::McpStdio(c) => {
-				c.send_notification(request, ctx).await?;
-			},
-			Upstream::McpSSE(c) => {
-				c.send_notification(request, ctx).await?;
-			},
-			Upstream::McpStreamable(c) => {
-				c.send_notification(request, ctx).await?;
-			},
-			Upstream::OpenAPI(_) => {},
+		if matches!(self, Upstream::OpenAPI(_)) {
+			return Ok(());
 		}
-		Ok(())
+		let method = match &request {
+			ClientNotification::CancelledNotification(r) => r.method.as_str(),
+			ClientNotification::ProgressNotification(r) => r.method.as_str(),
+			ClientNotification::InitializedNotification(r) => r.method.as_str(),
+			ClientNotification::RootsListChangedNotification(r) => r.method.as_str(),
+			ClientNotification::CustomNotification(r) => r.method.as_str(),
+			_ => "unknown",
+		};
+		let mut ctx = ctx.clone();
+		let mut span = ctx.start_mcp_outbound_span(
+			format!("{method} {target_name}"),
+			target_name,
+			Some(method),
+			None,
+		);
+		ctx.stamp_trace_context(&mut request.get_meta_mut().0);
+		let result: Result<(), UpstreamError> = async {
+			match &self {
+				Upstream::McpStdio(c) => c.send_notification(request, &ctx).await?,
+				Upstream::McpSSE(c) => c.send_notification(request, &ctx).await?,
+				Upstream::McpStreamable(c) => {
+					c.send_notification(request, &ctx).await?;
+				},
+				Upstream::OpenAPI(_) => {},
+			}
+			Ok(())
+		}
+		.await;
+		if let (Some(span), Err(error)) = (span.as_mut(), &result) {
+			span.set_error(ProxyResponseReason::MCP.to_string(), error.to_string());
+		}
+		result
 	}
 
 	pub(crate) async fn generic_client_message(
 		&self,
+		target_name: &str,
 		message: ClientJsonRpcMessage,
 		ctx: &IncomingRequestContext,
 	) -> Result<(), UpstreamError> {
-		match &self {
-			Upstream::McpStdio(c) => c.send_client_message(message, ctx).await,
-			Upstream::McpSSE(c) => c.send_client_message(message, ctx).await,
-			Upstream::McpStreamable(c) => {
-				c.send_client_message(message, ctx).await?;
-				Ok(())
-			},
-			Upstream::OpenAPI(_) => Err(UpstreamError::InvalidRequest(
+		if matches!(self, Upstream::OpenAPI(_)) {
+			return Err(UpstreamError::InvalidRequest(
 				"openapi upstream does not support server-to-client routing".into(),
-			)),
+			));
 		}
+		let mut ctx = ctx.clone();
+		let mut span =
+			ctx.start_mcp_outbound_span(format!("response {target_name}"), target_name, None, None);
+		let result: Result<(), UpstreamError> = async {
+			match &self {
+				Upstream::McpStdio(c) => c.send_client_message(message, &ctx).await,
+				Upstream::McpSSE(c) => c.send_client_message(message, &ctx).await,
+				Upstream::McpStreamable(c) => {
+					c.send_client_message(message, &ctx).await?;
+					Ok(())
+				},
+				Upstream::OpenAPI(_) => Err(UpstreamError::InvalidRequest(
+					"openapi upstream does not support server-to-client routing".into(),
+				)),
+			}
+		}
+		.await;
+		if let (Some(span), Err(error)) = (span.as_mut(), &result) {
+			span.set_error(ProxyResponseReason::MCP.to_string(), error.to_string());
+		}
+		result
 	}
 }
 
@@ -341,6 +470,7 @@ impl UpstreamGroup {
 	}
 
 	pub(crate) fn new(client: PolicyClient, backend: McpBackendGroup) -> Result<Self, mcp::Error> {
+		let client = PolicyClient::new(client.inputs.clone());
 		let is_multiplexing = backend.targets.len() != 1;
 		let default_target_name = (!is_multiplexing && backend.prefix_mode != McpPrefixMode::Always)
 			.then(|| backend.targets[0].name.to_string());
@@ -739,42 +869,5 @@ mod tests {
 		let mut req = ping_request();
 		ctx.stamp_trace_context(&mut req.get_meta_mut().0);
 		assert!(req.get_meta().0.get("traceparent").is_none());
-	}
-
-	const GATEWAY_TP: &str = "00-4bf92f3577b34da6a3ce929d0e0e4736-076240a3c93307bf-01";
-	const CALLER_TP: &str = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
-
-	// Inbound request carries the caller's traceparent; the gateway's own span must win.
-	fn ctx_with_stale_traceparent() -> IncomingRequestContext {
-		let mut req = ::http::Request::builder()
-			.uri("http://example/")
-			.header("traceparent", CALLER_TP)
-			.header("tracestate", "vendor=abc")
-			.body(())
-			.unwrap();
-		req
-			.extensions_mut()
-			.insert(TraceParent::try_from(GATEWAY_TP).unwrap());
-		IncomingRequestContext::new(&req.into_parts().0)
-	}
-
-	#[test]
-	fn apply_prefers_gateway_span() {
-		let ctx = ctx_with_stale_traceparent();
-		let mut req = empty_upstream_req();
-		ctx.apply(&mut req).unwrap();
-		assert_eq!(req.headers().get("traceparent").unwrap(), GATEWAY_TP);
-		// Other trace headers still pass through untouched.
-		assert_eq!(req.headers().get("tracestate").unwrap(), "vendor=abc");
-	}
-
-	#[test]
-	fn stamp_trace_context_prefers_gateway_span() {
-		let ctx = ctx_with_stale_traceparent();
-		let mut req = ping_request();
-		ctx.stamp_trace_context(&mut req.get_meta_mut().0);
-		let meta = &req.get_meta().0;
-		assert_eq!(meta.get("traceparent").unwrap(), GATEWAY_TP);
-		assert_eq!(meta.get("tracestate").unwrap(), "vendor=abc");
 	}
 }

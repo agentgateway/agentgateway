@@ -117,7 +117,19 @@ func isDelegatedChildHTTPRoute(obj *gwv1.HTTPRoute) bool {
 	}
 	return false
 }
-func childAllowsParent(obj *gwv1.HTTPRoute, parentRef resolvedBinding) bool {
+func childAllowsParent(
+	krtctx krt.HandlerContext,
+	obj *gwv1.HTTPRoute,
+	parentRef resolvedBinding,
+	grants ReferenceGrants,
+	grantMode apisettings.BackendRefGrantMode,
+) bool {
+	if len(obj.Spec.ParentRefs) == 0 {
+		if obj.Namespace == parentRef.Parent.Namespace || !grantMode.RequireRouteBackendGrant() {
+			return true
+		}
+		return grants.ParentlessHTTPRouteAllowed(krtctx, parentRef.Parent.Namespace, config.NamespacedName(obj))
+	}
 	allowedParents := slices.MapFilter(obj.Spec.ParentRefs, func(ref gwv1.ParentReference) *types.NamespacedName {
 		if NormalizeReference(ref.Group, ref.Kind, wellknown.GatewayGVK.GroupKind()) != wellknown.HTTPRouteGVK.GroupKind() {
 			return nil
@@ -127,9 +139,6 @@ func childAllowsParent(obj *gwv1.HTTPRoute, parentRef resolvedBinding) bool {
 			Name:      string(ref.Name),
 		})
 	})
-	if len(allowedParents) == 0 {
-		return true
-	}
 	return slices.Contains(allowedParents, parentRef.Parent)
 }
 
@@ -250,6 +259,9 @@ func buildDelegatedHTTPRoutes(
 		}
 		gateways := sets.New[types.NamespacedName]()
 		for _, parentBinding := range findMatchingBindings(krtctx, sourceRoute) {
+			if !childAllowsParent(krtctx, sourceRoute, resolvedBinding{Parent: parentBinding.Source}, inputs.Grants, inputs.BackendRefGrantMode) {
+				continue
+			}
 			gateways.InsertAll(resolveGateways(krtctx, parentBinding, seen.Copy())...)
 		}
 		return slices.SortBy(gateways.UnsortedList(), types.NamespacedName.String)
@@ -290,7 +302,7 @@ func buildDelegatedHTTPRoutes(
 		ctx := inputs.WithCtx(krtctx)
 		var resources []agwir.AgwResource
 		for _, binding := range matchingBindings(krtctx, obj) {
-			if !childAllowsParent(obj, binding) {
+			if !childAllowsParent(krtctx, obj, binding, inputs.Grants, inputs.BackendRefGrantMode) {
 				continue
 			}
 			for n, rule := range obj.Spec.Rules {
@@ -328,7 +340,7 @@ func buildDelegatedHTTPRoutes(
 		}
 		gateways := sets.New[types.NamespacedName]()
 		for _, binding := range matchingBindings(krtctx, obj) {
-			if !childAllowsParent(obj, binding) {
+			if !childAllowsParent(krtctx, obj, binding, inputs.Grants, inputs.BackendRefGrantMode) {
 				continue
 			}
 			gateways.Insert(binding.Gateway)

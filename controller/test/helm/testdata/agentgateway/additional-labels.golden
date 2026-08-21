@@ -21,49 +21,30 @@ kind: ClusterRole
 metadata:
   name: agentgateway-default
 rules:
-- apiGroups:
-  - ""
+# Service discovery information
+- apiGroups: [""]
   resources:
-  - configmaps
-  - services
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - endpoints
   - namespaces
   - nodes
   - pods
+  - services
+  - configmaps # Used for reference configs in policies/TLS/API keys, etc
+  - secrets # Used for reference configs in policies/TLS/API keys, etc
   verbs:
   - get
   - list
   - watch
+
 - apiGroups:
-  - ""
+  - discovery.k8s.io
   resources:
-  - events
+  - endpointslices
   verbs:
-  - create
-  - patch
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  - serviceaccounts
-  verbs:
-  - create
-  - delete
   - get
   - list
-  - patch
   - watch
+
+# Watches agentgateway configuration resources.
 - apiGroups:
   - agentgateway.dev
   resources:
@@ -75,6 +56,8 @@ rules:
   - get
   - list
   - watch
+
+# Reports reconciliation status on agentgateway configuration resources.
 - apiGroups:
   - agentgateway.dev
   resources:
@@ -86,6 +69,8 @@ rules:
   - get
   - patch
   - update
+
+# Detects which optional Kubernetes APIs are installed in the cluster.
 - apiGroups:
   - apiextensions.k8s.io
   resources:
@@ -94,53 +79,13 @@ rules:
   - get
   - list
   - watch
-- apiGroups:
-  - apps
-  resources:
-  - daemonsets
-  - deployments
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - authentication.k8s.io
-  resources:
-  - tokenreviews
-  verbs:
-  - create
-- apiGroups:
-  - autoscaling
-  resources:
-  - horizontalpodautoscalers
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - coordination.k8s.io
-  resources:
-  - leases
-  verbs:
-  - create
-  - get
-  - update
-- apiGroups:
-  - discovery.k8s.io
-  resources:
-  - endpointslices
-  verbs:
-  - get
-  - list
-  - watch
+
+# Authenticates proxy service-account tokens presented to the xDS server.
+- apiGroups: [authentication.k8s.io]
+  resources: [tokenreviews]
+  verbs: [create]
+
+# Watches Gateway API configuration used to build proxy configuration.
 - apiGroups:
   - gateway.networking.k8s.io
   resources:
@@ -156,6 +101,8 @@ rules:
   - get
   - list
   - watch
+
+# Status reports
 - apiGroups:
   - gateway.networking.k8s.io
   resources:
@@ -170,48 +117,68 @@ rules:
   verbs:
   - patch
   - update
-- apiGroups:
-  - gateway.networking.k8s.io
-  resources:
-  - gatewayclasses
-  verbs:
-  - create
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - networking.istio.io
+
+# Creates and maintains the GatewayClass owned by this controller.
+# Cluster scoped resource so must be in the cluster role.
+- apiGroups: [gateway.networking.k8s.io]
+  resources: [gatewayclasses]
+  verbs: [create, get, list, patch, update, watch]
+
+# Discovers Istio services and workloads when Istio integration is enabled.
+- apiGroups: [networking.istio.io]
   resources:
   - destinationrules
   - serviceentries
   - workloadentries
-  verbs:
-  - get
-  - list
-  - watch
-- apiGroups:
-  - policy
-  resources:
-  - poddisruptionbudgets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - security.istio.io
-  resources:
-  - authorizationpolicies
-  verbs:
-  - get
-  - list
-  - watch
+  verbs: [get, list, watch]
 
+# While the deployer uses scoped roles under '-deployer' for writes, we cannot do a scoped watch
+# Without opening N watches. instead, just always watch all which is generally acceptable.
+- apiGroups: [policy]
+  resources: [poddisruptionbudgets]
+  verbs: [get, list, watch]
+- apiGroups: [""]
+  resources: [serviceaccounts, services]
+  verbs: [get, list, watch]
+- apiGroups: [apps]
+  resources:
+  - daemonsets
+  - deployments
+  verbs: [get, list, watch]
+- apiGroups: [autoscaling]
+  resources: [horizontalpodautoscalers]
+  verbs: [get, list, watch]
+---
+# Source: agentgateway/templates/role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: agentgateway-default-deployer
+rules:
+# Objects created by the Gateway deployer.
+- apiGroups: [""]
+  resources:
+  - configmaps
+  - secrets
+  - serviceaccounts
+  - services
+  verbs: [create, delete, patch, update]
+- apiGroups: [apps]
+  resources:
+  - daemonsets
+  - deployments
+  verbs: [create, delete, patch, update]
+- apiGroups: [autoscaling]
+  resources: [horizontalpodautoscalers]
+  verbs: [create, delete, patch, update]
+- apiGroups: [policy]
+  resources: [poddisruptionbudgets]
+  verbs: [create, delete, patch, update]
+
+# Publishes warning Events on Gateways when a proxy NACKs xDS configuration.
+- apiGroups: [""]
+  resources: [events]
+  verbs: [create, patch]
 ---
 # Source: agentgateway/templates/serviceaccount.yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -226,8 +193,57 @@ roleRef:
   kind: ClusterRole
   name: agentgateway-default
   apiGroup: rbac.authorization.k8s.io
+---
+# Source: agentgateway/templates/serviceaccount.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: agentgateway-write-role-default
+subjects:
+- kind: ServiceAccount
+  name: test-release-agentgateway
+  namespace: default
+roleRef:
+  kind: ClusterRole
+  name: agentgateway-default-deployer
+  apiGroup: rbac.authorization.k8s.io
 
+---
+# Source: agentgateway/templates/role.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: agentgateway-default-local
+  namespace: default
+rules:
+# Coordinates controller leader election in the controller namespace.
+- apiGroups: [coordination.k8s.io]
+  resources: [leases]
+  verbs: [create, get, update]
+# Creates the xDS TLS certificate Secret when it does not already exist.
+- apiGroups: [""]
+  resources: [secrets]
+  verbs: [create]
+# Persists fetched JWKS keysets in the controller namespace.
+- apiGroups: [""]
+  resources: [configmaps]
+  verbs: [create, delete, patch, update]
 
+---
+# Source: agentgateway/templates/serviceaccount.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agentgateway-local-role-default
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: test-release-agentgateway
+  namespace: default
+roleRef:
+  kind: Role
+  name: agentgateway-default-local
+  apiGroup: rbac.authorization.k8s.io
 ---
 # Source: agentgateway/templates/service.yaml
 apiVersion: v1

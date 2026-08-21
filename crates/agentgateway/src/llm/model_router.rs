@@ -178,6 +178,9 @@ impl ModelRouter {
 			Ok(requested_model) => requested_model,
 			Err(resp) => return ResolveResult::DirectResponse(*resp),
 		};
+		if !api_key_model_authorized(req, &requested_model.model) {
+			return ResolveResult::DirectResponse(api_key_model_authorization_denied_response());
+		}
 		req
 			.extensions_mut()
 			.get_or_insert_with(TransformationMetadata::default)
@@ -214,11 +217,15 @@ impl ModelRouter {
 			.iter()
 			.filter(|model| model.visibility == ModelVisibility::Public)
 			.filter(|model| model_authorized(model, req))
-			.map(|model| model_list_entry(&model.name, model.created))
+			.flat_map(|model| {
+				api_key_discoverable_models(req, &model.name)
+					.map(|name| model_list_entry(name, model.created))
+			})
 			.chain(
 				self
 					.virtual_models
 					.iter()
+					.filter(|model| api_key_model_authorized(req, &model.name))
 					.map(|model| model_list_entry(&model.name, model.created)),
 			)
 			.collect::<Vec<_>>();
@@ -356,6 +363,14 @@ fn model_authorization_denied_response() -> Response {
 	)
 }
 
+fn api_key_model_authorization_denied_response() -> Response {
+	llm_error_response(
+		::http::StatusCode::FORBIDDEN,
+		"Model is not allowed for this API key",
+		"model_not_allowed",
+	)
+}
+
 fn request_body_too_large_response() -> Response {
 	llm_error_response(
 		::http::StatusCode::PAYLOAD_TOO_LARGE,
@@ -396,6 +411,32 @@ fn model_authorized(model: &ModelRoute, req: &Request) -> bool {
 	)
 	.apply(req)
 	.is_ok()
+}
+
+fn api_key_model_authorized(req: &Request, model: &str) -> bool {
+	let Some(policy) = req
+		.extensions()
+		.get::<crate::http::apikey::ModelAccessPolicy>()
+	else {
+		return true;
+	};
+	let allowed = policy.allows(model);
+	if !allowed {
+		tracing::debug!(model, "requested model is not allowed for API key");
+	}
+	allowed
+}
+
+fn api_key_discoverable_models<'a>(
+	req: &'a Request,
+	configured_model: &'a str,
+) -> impl Iterator<Item = &'a str> + 'a {
+	crate::http::apikey::discoverable_models(
+		req
+			.extensions()
+			.get::<crate::http::apikey::ModelAccessPolicy>(),
+		configured_model,
+	)
 }
 
 fn model_list_entry(id: &str, created: u64) -> serde_json::Value {

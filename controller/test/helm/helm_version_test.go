@@ -290,6 +290,14 @@ controllerName: example.com/custom-agentgateway
 `,
 		},
 		{
+			name: "restricted-write-namespaces",
+			valuesYAML: `rbac:
+  gatewayNamespaces:
+  - team-a
+  - team-b
+`,
+		},
+		{
 			name: "dns-config",
 			valuesYAML: `dnsConfig:
   options:

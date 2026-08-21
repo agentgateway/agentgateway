@@ -2498,6 +2498,28 @@ spec:
                                                       be set
                                                     rule: '[has(self.message),has(self.statusCode)].filter(x,x==true).size()
                                                       >= 1'
+                                                scope:
+                                                  description: |-
+                                                    Which parts of the request this guard inspects. When unset, defaults to
+                                                    `SystemPrompt` and `Messages`. Tool call inputs and outputs are not
+                                                    inspected unless `ToolInput`/`ToolOutput` are listed explicitly.
+                                                    In APIs that send tool arguments as opaque JSON, such as Completions, the
+                                                    arguments are masked as a single string, meaning a prompt guard has the
+                                                    potential to rewrite the arguments into invalid JSON.
+                                                  items:
+                                                    description: Which category of
+                                                      request content a prompt guard
+                                                      inspects.
+                                                    enum:
+                                                    - Messages
+                                                    - SystemPrompt
+                                                    - ToolInput
+                                                    - ToolOutput
+                                                    type: string
+                                                  maxItems: 4
+                                                  minItems: 1
+                                                  type: array
+                                                  x-kubernetes-list-type: set
                                                 webhook:
                                                   description: Webhook that receives
                                                     requests for prompt guarding.
@@ -2633,6 +2655,15 @@ spec:
                                                   type: object
                                               type: object
                                               x-kubernetes-validations:
+                                              - message: 'scope: only regex and bedrockGuardrails
+                                                  guards support a non-default scope;
+                                                  other guard kinds always inspect
+                                                  the default (SystemPrompt + Messages)'
+                                                rule: '!has(self.scope) || has(self.regex)
+                                                  || has(self.bedrockGuardrails) ||
+                                                  (self.scope.size() == 2 && ''SystemPrompt''
+                                                  in self.scope && ''Messages'' in
+                                                  self.scope)'
                                               - message: exactly one of the fields
                                                   in [regex webhook openAIModeration
                                                   bedrockGuardrails googleModelArmor]
@@ -4288,20 +4319,30 @@ spec:
                                           the backend.
                                         properties:
                                           managedIdentity:
-                                            description: Managed identity authentication
-                                              settings.
+                                            description: |-
+                                              Managed identity authentication settings. Leave this object empty to use
+                                              the system-assigned identity. To use a user-assigned identity, set one of
+                                              `clientId`, `objectId`, or `resourceId`.
                                             properties:
                                               clientId:
+                                                description: Client ID of the user-assigned
+                                                  managed identity.
                                                 type: string
                                               objectId:
+                                                description: Object ID of the user-assigned
+                                                  managed identity.
                                                 type: string
                                               resourceId:
+                                                description: Resource ID of the user-assigned
+                                                  managed identity.
                                                 type: string
-                                            required:
-                                            - clientId
-                                            - objectId
-                                            - resourceId
                                             type: object
+                                            x-kubernetes-validations:
+                                            - message: at most one of the fields in
+                                                [clientId objectId resourceId] may
+                                                be set
+                                              rule: '[has(self.clientId),has(self.objectId),has(self.resourceId)].filter(x,x==true).size()
+                                                <= 1'
                                           secretRef:
                                             description: |-
                                               Credential source for Azure credentials, defaulting to a Kubernetes
@@ -7570,20 +7611,30 @@ spec:
                                         the backend.
                                       properties:
                                         managedIdentity:
-                                          description: Managed identity authentication
-                                            settings.
+                                          description: |-
+                                            Managed identity authentication settings. Leave this object empty to use
+                                            the system-assigned identity. To use a user-assigned identity, set one of
+                                            `clientId`, `objectId`, or `resourceId`.
                                           properties:
                                             clientId:
+                                              description: Client ID of the user-assigned
+                                                managed identity.
                                               type: string
                                             objectId:
+                                              description: Object ID of the user-assigned
+                                                managed identity.
                                               type: string
                                             resourceId:
+                                              description: Resource ID of the user-assigned
+                                                managed identity.
                                               type: string
-                                          required:
-                                          - clientId
-                                          - objectId
-                                          - resourceId
                                           type: object
+                                          x-kubernetes-validations:
+                                          - message: at most one of the fields in
+                                              [clientId objectId resourceId] may be
+                                              set
+                                            rule: '[has(self.clientId),has(self.objectId),has(self.resourceId)].filter(x,x==true).size()
+                                              <= 1'
                                         secretRef:
                                           description: |-
                                             Credential source for Azure credentials, defaulting to a Kubernetes
@@ -11437,6 +11488,27 @@ spec:
                                       statusCode] must be set
                                     rule: '[has(self.message),has(self.statusCode)].filter(x,x==true).size()
                                       >= 1'
+                                scope:
+                                  description: |-
+                                    Which parts of the request this guard inspects. When unset, defaults to
+                                    `SystemPrompt` and `Messages`. Tool call inputs and outputs are not
+                                    inspected unless `ToolInput`/`ToolOutput` are listed explicitly.
+                                    In APIs that send tool arguments as opaque JSON, such as Completions, the
+                                    arguments are masked as a single string, meaning a prompt guard has the
+                                    potential to rewrite the arguments into invalid JSON.
+                                  items:
+                                    description: Which category of request content
+                                      a prompt guard inspects.
+                                    enum:
+                                    - Messages
+                                    - SystemPrompt
+                                    - ToolInput
+                                    - ToolOutput
+                                    type: string
+                                  maxItems: 4
+                                  minItems: 1
+                                  type: array
+                                  x-kubernetes-list-type: set
                                 webhook:
                                   description: Webhook that receives requests for
                                     prompt guarding.
@@ -11557,6 +11629,13 @@ spec:
                                   type: object
                               type: object
                               x-kubernetes-validations:
+                              - message: 'scope: only regex and bedrockGuardrails
+                                  guards support a non-default scope; other guard
+                                  kinds always inspect the default (SystemPrompt +
+                                  Messages)'
+                                rule: '!has(self.scope) || has(self.regex) || has(self.bedrockGuardrails)
+                                  || (self.scope.size() == 2 && ''SystemPrompt'' in
+                                  self.scope && ''Messages'' in self.scope)'
                               - message: exactly one of the fields in [regex webhook
                                   openAIModeration bedrockGuardrails googleModelArmor]
                                   must be set
@@ -13007,19 +13086,29 @@ spec:
                         description: Azure authentication method for the backend.
                         properties:
                           managedIdentity:
-                            description: Managed identity authentication settings.
+                            description: |-
+                              Managed identity authentication settings. Leave this object empty to use
+                              the system-assigned identity. To use a user-assigned identity, set one of
+                              `clientId`, `objectId`, or `resourceId`.
                             properties:
                               clientId:
+                                description: Client ID of the user-assigned managed
+                                  identity.
                                 type: string
                               objectId:
+                                description: Object ID of the user-assigned managed
+                                  identity.
                                 type: string
                               resourceId:
+                                description: Resource ID of the user-assigned managed
+                                  identity.
                                 type: string
-                            required:
-                            - clientId
-                            - objectId
-                            - resourceId
                             type: object
+                            x-kubernetes-validations:
+                            - message: at most one of the fields in [clientId objectId
+                                resourceId] may be set
+                              rule: '[has(self.clientId),has(self.objectId),has(self.resourceId)].filter(x,x==true).size()
+                                <= 1'
                           secretRef:
                             description: |-
                               Credential source for Azure credentials, defaulting to a Kubernetes

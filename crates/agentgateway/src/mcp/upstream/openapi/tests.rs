@@ -47,6 +47,7 @@ async fn setup_with_prefix(prefix: &str) -> (MockServer, Handler) {
 		metrics: Arc::new(crate::metrics::Metrics::new(
 			metrics::sub_registry(&mut Registry::default()),
 			Default::default(),
+			Default::default(),
 		)),
 		model_catalog: crate::llm::catalog::ModelCatalog::empty(),
 		admin: None,
@@ -1829,6 +1830,7 @@ async fn test_call_tool_with_binary_body() {
 		stores: stores.clone(),
 		metrics: Arc::new(crate::metrics::Metrics::new(
 			agent_core::metrics::sub_registry(&mut prometheus_client::registry::Registry::default()),
+			Default::default(),
 			Default::default(),
 		)),
 		model_catalog: crate::llm::catalog::ModelCatalog::empty(),

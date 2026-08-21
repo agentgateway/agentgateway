@@ -30,7 +30,7 @@ use crate::mcp::subscriptions::ResourceSubscription;
 use crate::mcp::upstream::{IncomingRequestContext, UpstreamError};
 use crate::mcp::{ClientError, FailureMode, MCPInfo, apps, mergestream, rbac, upstream};
 use crate::proxy::httpproxy::PolicyClient;
-use crate::telemetry::log::{AsyncLog, SpanWriteOnDrop, SpanWriter};
+use crate::telemetry::log::AsyncLog;
 use crate::types::agent::{McpPrefixMode, ResourceName};
 
 const DELIMITER: &str = "_";
@@ -314,6 +314,7 @@ impl Relay {
 		policies: McpAuthorizationSet,
 		client: PolicyClient,
 	) -> Result<Self, mcp::Error> {
+		let client = PolicyClient::new(client.inputs.clone());
 		Ok(Self {
 			upstreams: Arc::new(upstream::UpstreamGroup::new(client.clone(), backend)?),
 			policies,
@@ -415,7 +416,7 @@ impl Relay {
 			.upstreams
 			.iter_named()
 			.map(|(target, con)| async move {
-				let res = Self::serves_name(&con, kind, name, ctx).await;
+				let res = Self::serves_name(target.as_str(), &con, kind, name, ctx).await;
 				(target, res)
 			})
 			.collect();
@@ -452,6 +453,7 @@ impl Relay {
 	/// Page through one target's `kind` list until `name` is found or the pages
 	/// run out. `Ok(false)` includes targets that don't support the list method.
 	async fn serves_name(
+		target_name: &str,
 		con: &upstream::Upstream,
 		kind: ResolveKind,
 		name: &str,
@@ -469,7 +471,9 @@ impl Relay {
 				RequestId::String(format!("agw-resolve-{seq}").into()),
 				kind.list_request(cursor),
 			);
-			let Some(result) = Self::first_response(con.generic_stream(req, ctx).await?).await? else {
+			let Some(result) =
+				Self::first_response(con.generic_stream(target_name, req, ctx).await?).await?
+			else {
 				return Ok(false);
 			};
 			if !matches!(
@@ -1069,7 +1073,10 @@ impl Relay {
 			.map(|(name, con)| {
 				let r = request_for_target(name.as_str(), r);
 				let ctx = &*ctx;
-				async move { (name, con.generic_stream(r, ctx).await) }
+				async move {
+					let result = con.generic_stream(name.as_str(), r, ctx).await;
+					(name, result)
+				}
 			})
 			.collect();
 		let fut_results = futures::future::join_all(futs).await;
@@ -1244,7 +1251,11 @@ impl Relay {
 		let cel = CelExecWrapper::new(ctx.as_request().map(|_| ()));
 		let stream = self.rewrite_outbound_server_messages(
 			service_name,
-			Box::pin(us.generic_stream(r, &ctx).assert_size::<{ 3 * 1024 }>()).await?,
+			Box::pin(
+				us.generic_stream(service_name, r, &ctx)
+					.assert_size::<{ 3 * 1024 }>(),
+			)
+			.await?,
 			cel,
 		);
 		let stream = track_outbound_server_requests_for_downstream(
@@ -1264,7 +1275,7 @@ impl Relay {
 			.iter_named()
 			.map(|(name, con)| {
 				let ctx = &ctx;
-				async move { (name, con.delete(ctx).await) }
+				async move { (name.clone(), con.delete(name.as_str(), ctx).await) }
 			})
 			.collect();
 
@@ -1299,7 +1310,7 @@ impl Relay {
 			.iter_named()
 			.map(|(name, con)| {
 				let ctx = &ctx;
-				async move { (name, con.get_event_stream(ctx).await) }
+				async move { (name.clone(), con.get_event_stream(name.as_str(), ctx).await) }
 			})
 			.collect();
 
@@ -1453,7 +1464,8 @@ impl Relay {
 		};
 
 		let us = self.upstreams.get(upstream.as_str())?;
-		us.generic_client_message(message, &ctx).await?;
+		us.generic_client_message(upstream.as_str(), message, &ctx)
+			.await?;
 		Ok(accepted_response())
 	}
 
@@ -1468,7 +1480,14 @@ impl Relay {
 			.map(|(name, con)| {
 				let notification = r.notification.clone();
 				let ctx = &ctx;
-				async move { (name, con.generic_notification(notification, ctx).await) }
+				async move {
+					(
+						name.clone(),
+						con
+							.generic_notification(name.as_str(), notification, ctx)
+							.await,
+					)
+				}
 			})
 			.collect();
 
@@ -1504,7 +1523,7 @@ impl Relay {
 				"unknown service {service_name}"
 			)));
 		};
-		us.generic_notification(r, &ctx).await?;
+		us.generic_notification(service_name, r, &ctx).await?;
 		Ok(accepted_response())
 	}
 
@@ -1573,24 +1592,15 @@ impl Relay {
 	}
 }
 
-pub fn setup_request_log(
-	http: Parts,
-	span_name: &str,
-) -> (SpanWriteOnDrop, AsyncLog<MCPInfo>, CelExecWrapper) {
+pub fn setup_request_log(http: Parts) -> (AsyncLog<MCPInfo>, CelExecWrapper) {
 	let log = http
 		.extensions
 		.get::<AsyncLog<MCPInfo>>()
 		.cloned()
 		.unwrap_or_default();
 
-	let tracer = http
-		.extensions
-		.get::<SpanWriter>()
-		.cloned()
-		.unwrap_or_default();
 	let cel = CelExecWrapper::new(::http::Request::from_parts(http, ()));
-	let _span = tracer.start(span_name.to_string());
-	(_span, log, cel)
+	(log, cel)
 }
 
 pub(crate) struct GuardrailsCtx {

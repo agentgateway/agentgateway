@@ -19,6 +19,12 @@ serviceAccount:
   # -- Set the name of the service account to use. If not set and create is true, a name is generated using the fullname template.
   name: ""
 
+# -- Configure the RBAC permissions created for the controller.
+rbac:
+  # -- Restrict namespaced write permissions to these namespaces. The namespaces must already exist. An empty list preserves the default cluster-wide write access. Cluster-wide read permissions and writes to cluster-scoped resources are unaffected.
+  # Restricting this list means only Gateways in these namespaces can be used.
+  gatewayNamespaces: []
+
 # -- Add annotations to the agentgateway deployment.
 deploymentAnnotations: {}
 

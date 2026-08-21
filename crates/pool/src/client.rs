@@ -201,6 +201,7 @@ where
 		}
 	}
 
+	#[allow(clippy::result_large_err)]
 	async fn try_send_request(
 		&self,
 		req: Request<RequestBody>,

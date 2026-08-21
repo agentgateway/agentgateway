@@ -8,10 +8,10 @@ use agent_core::prelude::Strng;
 use agent_core::strng;
 pub use agent_llm::tokenizer::{num_tokens_from_messages, preload_tokenizers};
 pub use agent_llm::{
-	AIError, CacheTokenConvention, ChatFormat, InputFormat, LLMInfo, LLMRequest, LLMRequestParams,
-	LLMResponse, LogContentFields, PromptCachingConfig, Provider, ProviderState, RequestType,
-	ResponseType, RouteType, SimpleChatCompletionMessage, anthropic, conversion, copilot, custom,
-	gemini, logged_response_parsing, openai, types,
+	AIError, CacheTokenConvention, ChatFormat, ContentScope, InputFormat, LLMInfo, LLMRequest,
+	LLMRequestParams, LLMResponse, LogContentFields, PromptCachingConfig, Provider, ProviderState,
+	RequestType, ResponseType, RouteType, SimpleChatCompletionMessage, anthropic, conversion,
+	copilot, custom, gemini, logged_response_parsing, openai, types,
 };
 use axum_extra::headers::authorization::Bearer;
 use headers::{ContentEncoding, HeaderMapExt};
@@ -2037,11 +2037,13 @@ impl AIProvider {
 			p.apply_prompt_enrichment(req);
 
 			if original_format.supports_prompt_guard() {
+				let client =
+					PolicyClient::new(backend_info.inputs.clone()).with_parent_extensions(&parts.extensions);
 				let http_headers = &parts.headers;
 				let claims = parts.extensions.get::<Claims>().cloned();
 				let original = log.as_ref().and_then(|l| l.request_snapshot.clone());
 				if let Some((response, guardrail)) = p
-					.apply_prompt_guard(backend_info, req, http_headers, claims, original.as_deref())
+					.apply_prompt_guard(&client, req, http_headers, claims, original.as_deref())
 					.await
 					.map_err(|e| {
 						warn!("failed to call prompt guard webhook: {e}");

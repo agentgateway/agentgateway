@@ -38,7 +38,21 @@ impl ProxyResponse {
 		let ProxyResponse::Error(e) = self else {
 			return ProxyResponseReason::DirectResponse;
 		};
-		match e {
+		e.as_reason()
+	}
+	pub fn downcast(self) -> ProxyError {
+		match self {
+			ProxyResponse::Error(e) => e,
+			ProxyResponse::DirectResponse(_) => ProxyError::ProcessingString(
+				"attempted to return a direct response in an invalid context".to_string(),
+			),
+		}
+	}
+}
+
+impl ProxyError {
+	pub fn as_reason(&self) -> ProxyResponseReason {
+		match self {
 			ProxyError::BindNotFound
 			| ProxyError::ListenerNotFound
 			| ProxyError::RouteNotFound
@@ -81,14 +95,6 @@ impl ProxyResponse {
 				ProxyResponseReason::RateLimit
 			},
 			ProxyError::GuardrailRejected { .. } => ProxyResponseReason::Guardrail,
-		}
-	}
-	pub fn downcast(self) -> ProxyError {
-		match self {
-			ProxyResponse::Error(e) => e,
-			ProxyResponse::DirectResponse(_) => ProxyError::ProcessingString(
-				"attempted to return a direct response in an invalid context".to_string(),
-			),
 		}
 	}
 }
@@ -364,7 +370,13 @@ impl ProxyError {
 				| http::oidc::Error::Config(_)
 				| http::oidc::Error::Http(_) => StatusCode::INTERNAL_SERVER_ERROR,
 			},
-			ProxyError::BasicAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
+			ProxyError::BasicAuthenticationFailure(ref e) => {
+				if e.is_proxy() {
+					StatusCode::PROXY_AUTHENTICATION_REQUIRED
+				} else {
+					StatusCode::UNAUTHORIZED
+				}
+			},
 			ProxyError::APIKeyAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::McpJwtAuthenticationFailure(_, _) => StatusCode::UNAUTHORIZED,
 			ProxyError::AuthorizationFailed => StatusCode::FORBIDDEN,
@@ -437,15 +449,18 @@ impl ProxyError {
 			http::x_headers::set_ratelimit_headers(hm, limit, remaining, reset_seconds);
 		}
 
-		// Add WWW-Authenticate header for basic auth failures
+		// Add an authentication challenge for basic auth failures. Requests authenticating to the
+		// gateway as a forward proxy are challenged with `Proxy-Authenticate` (paired with 407);
+		// ordinary requests use `WWW-Authenticate` (paired with 401).
 		if let ProxyError::BasicAuthenticationFailure(err) = &self {
-			let realm = match err {
-				http::basicauth::Error::Missing { realm } => realm,
-				http::basicauth::Error::InvalidCredentials { realm } => realm,
+			let auth_header = format!("Basic realm=\"{}\"", err.realm());
+			let challenge = if err.is_proxy() {
+				hyper::header::PROXY_AUTHENTICATE
+			} else {
+				hyper::header::WWW_AUTHENTICATE
 			};
-			let auth_header = format!("Basic realm=\"{}\"", realm);
 			if let Ok(hv) = HeaderValue::try_from(auth_header) {
-				rb = rb.header(hyper::header::WWW_AUTHENTICATE, hv);
+				rb = rb.header(challenge, hv);
 			}
 		}
 
@@ -505,6 +520,7 @@ fn http_status_to_grpc_status(status: StatusCode) -> Code {
 		StatusCode::OK => Code::Ok,
 		StatusCode::BAD_REQUEST => Code::Internal,
 		StatusCode::UNAUTHORIZED => Code::Unauthenticated,
+		StatusCode::PROXY_AUTHENTICATION_REQUIRED => Code::Unauthenticated,
 		StatusCode::FORBIDDEN => Code::PermissionDenied,
 		// HTTP 404 maps to UNIMPLEMENTED, not gRPC NOT_FOUND.
 		StatusCode::NOT_FOUND => Code::Unimplemented,

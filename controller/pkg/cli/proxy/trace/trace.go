@@ -303,7 +303,7 @@ func runRaw(cmd *cobra.Command, target *traceTarget, body io.ReadCloser, request
 
 	printErrCh := make(chan error, 1)
 	go func() {
-		printErrCh <- consumeTrace(body, func(raw string, _ traceEnvelope) error {
+		printErrCh <- consumeTrace(body, false, func(raw string, _ traceEnvelope) error {
 			_, err := fmt.Fprintln(cmd.OutOrStdout(), raw)
 			return err
 		})
@@ -524,16 +524,23 @@ func curlConnectTo(localAddress string, requestURL *url.URL) (string, error) {
 	return fmt.Sprintf("%s:%s:%s:%s", requestHost, requestPort, localHost, localPort), nil
 }
 
-func consumeTrace(body io.Reader, onEvent func(raw string, envelope traceEnvelope) error) error {
+func consumeTrace(body io.Reader, readErrorsAsEvents bool, onEvent func(raw string, envelope traceEnvelope) error) error {
 	reader := bufio.NewReader(body)
 
 	var dataLines []string
+	emitted := false
+	var callbackErr error
 	emit := func(raw string) error {
 		var envelope traceEnvelope
 		if err := json.Unmarshal([]byte(raw), &envelope); err != nil {
 			return fmt.Errorf("failed to decode trace event: %w", err)
 		}
-		return onEvent(raw, envelope)
+		if err := onEvent(raw, envelope); err != nil {
+			callbackErr = err
+			return err
+		}
+		emitted = true
+		return nil
 	}
 	flush := func() error {
 		if len(dataLines) == 0 {
@@ -546,26 +553,52 @@ func consumeTrace(body io.Reader, onEvent func(raw string, envelope traceEnvelop
 
 	for {
 		line, err := reader.ReadString('\n')
-		if err != nil && !errors.Is(err, io.EOF) {
-			return fmt.Errorf("failed to read trace stream: %w", err)
-		}
 		if line != "" {
 			line = strings.TrimSuffix(line, "\n")
 			line = strings.TrimSuffix(line, "\r")
 		}
+		var processErr error
 		if line == "" {
-			if err := flush(); err != nil {
-				return err
-			}
+			processErr = flush()
 		} else if after, ok := strings.CutPrefix(line, "data: "); ok {
 			dataLines = append(dataLines, after)
 		} else if strings.HasPrefix(strings.TrimSpace(line), "{") {
-			if err := flush(); err != nil {
-				return err
+			processErr = flush()
+			if processErr == nil {
+				processErr = emit(strings.TrimSpace(line))
 			}
-			if err := emit(strings.TrimSpace(line)); err != nil {
-				return err
+		}
+
+		if err != nil && !errors.Is(err, io.EOF) {
+			if processErr == nil {
+				processErr = flush()
 			}
+			if callbackErr != nil {
+				return callbackErr
+			}
+			if !emitted || !readErrorsAsEvents {
+				return fmt.Errorf("failed to read trace stream: %w", err)
+			}
+
+			message := fmt.Sprintf("failed to read trace stream: %v", err)
+			if processErr != nil {
+				message += fmt.Sprintf("; failed to process final trace event: %v", processErr)
+			}
+			envelope := traceEnvelope{
+				Severity: "error",
+				Message: traceEvent{
+					Type:    "message",
+					Message: message,
+				},
+			}
+			raw, marshalErr := json.Marshal(envelope)
+			if marshalErr != nil {
+				return marshalErr
+			}
+			return onEvent(string(raw), envelope)
+		}
+		if processErr != nil {
+			return processErr
 		}
 
 		if errors.Is(err, io.EOF) {
@@ -579,7 +612,7 @@ func streamTraceRows(body io.Reader, onRow func(traceRow)) error {
 	var currentSnapshot json.RawMessage
 	var previousSnapshot json.RawMessage
 
-	return consumeTrace(body, func(raw string, envelope traceEnvelope) error {
+	return consumeTrace(body, true, func(raw string, envelope traceEnvelope) error {
 		row := traceRow{
 			RawJSON:          raw,
 			Envelope:         envelope,

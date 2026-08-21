@@ -97,7 +97,7 @@ async fn test_classify_request_uses_original_url_for_agent_card() {
 	let ty = classify_request(&mut req).await;
 
 	match ty {
-		RequestType::AgentCard(uri, _) => assert_eq!(uri, original),
+		RequestType::AgentCard(uri, _, _) => assert_eq!(uri, original),
 		other => panic!("expected agent card request, got {other:?}"),
 	}
 }
@@ -119,7 +119,7 @@ async fn test_classify_request_uses_original_url_for_agent_card_with_subpath() {
 	let ty = classify_request(&mut req).await;
 
 	match ty {
-		RequestType::AgentCard(uri, _) => assert_eq!(uri, original),
+		RequestType::AgentCard(uri, _, _) => assert_eq!(uri, original),
 		other => panic!("expected agent card request, got {other:?}"),
 	}
 }
@@ -142,7 +142,7 @@ async fn test_classify_request_uses_x_forwarded_proto_for_agent_card() {
 	let ty = classify_request(&mut req).await;
 
 	match ty {
-		RequestType::AgentCard(uri, _) => {
+		RequestType::AgentCard(uri, _, _) => {
 			assert_eq!(
 				uri,
 				"https://example.com/api/.well-known/agent-card.json"
@@ -191,6 +191,7 @@ async fn test_apply_to_response_rewrites_agent_card_url() {
 				.parse()
 				.unwrap(),
 			"/.well-known/agent-card.json".to_string(),
+			None,
 		),
 		&mut resp,
 	)
@@ -225,6 +226,7 @@ async fn test_apply_to_response_rewrites_v1_agent_card_single_interface() {
 				.parse()
 				.unwrap(),
 			"/.well-known/agent-card.json".to_string(),
+			None,
 		),
 		&mut resp,
 	)
@@ -263,6 +265,7 @@ async fn test_apply_to_response_rewrites_v1_agent_card_multiple_interfaces() {
 				.parse()
 				.unwrap(),
 			"/.well-known/agent-card.json".to_string(),
+			None,
 		),
 		&mut resp,
 	)
@@ -304,6 +307,7 @@ async fn test_apply_to_response_rewrites_v1_agent_card_root_path() {
 				.parse()
 				.unwrap(),
 			"/.well-known/agent-card.json".to_string(),
+			None,
 		),
 		&mut resp,
 	)
@@ -342,6 +346,7 @@ async fn test_apply_to_response_skips_interface_without_url() {
 				.parse()
 				.unwrap(),
 			"/.well-known/agent-card.json".to_string(),
+			None,
 		),
 		&mut resp,
 	)
@@ -374,6 +379,7 @@ async fn test_apply_to_response_errors_when_neither_url_field_present() {
 				.parse()
 				.unwrap(),
 			"/.well-known/agent-card.json".to_string(),
+			None,
 		),
 		&mut resp,
 	)
@@ -613,6 +619,7 @@ async fn test_apply_to_response_rewrites_url_with_path_rewrite() {
 			// Backend (rewritten) request path — the URL rewrite policy translated
 			// /a2a/tick -> /a2a/tock before sending to the backend.
 			"/a2a/tock/.well-known/agent-card.json".to_string(),
+			None,
 		),
 		&mut resp,
 	)
@@ -654,6 +661,7 @@ async fn test_apply_to_response_preserves_subpath_with_path_rewrite() {
 				.parse()
 				.unwrap(),
 			"/a2a/tock/.well-known/agent-card.json".to_string(),
+			None,
 		),
 		&mut resp,
 	)
@@ -696,6 +704,7 @@ async fn test_apply_to_response_avoids_partial_path_segment_match() {
 				.parse()
 				.unwrap(),
 			"/internal/weather/.well-known/agent-card.json".to_string(),
+			None,
 		),
 		&mut resp,
 	)
@@ -718,6 +727,63 @@ async fn test_apply_to_response_avoids_partial_path_segment_match() {
 	assert_eq!(
 		json["supportedInterfaces"][1]["url"],
 		"http://gateway/public/weather/internal/weather-v2/jsonrpc"
+	);
+}
+
+#[tokio::test]
+async fn test_apply_to_response_uses_prefix_rewrite_context() {
+	let mut resp = ::http::Response::builder()
+		.header(header::CONTENT_TYPE, "application/json")
+		.body(http::Body::from(
+			serde_json::to_vec(&json!({
+				"name": "example",
+				"supportedInterfaces": [
+					{ "protocolBinding": "JSONRPC", "url": "https://upstream.example/svc/agent" }
+				],
+			}))
+			.unwrap(),
+		))
+		.unwrap();
+
+	apply_to_response(
+		Some(&A2aPolicy {}),
+		RequestType::AgentCard(
+			"http://gateway.example/gw/svc/agent/.well-known/agent-card.json"
+				.parse()
+				.unwrap(),
+			"/svc/agent/.well-known/agent-card.json".to_string(),
+			Some(crate::http::filters::AppliedUrlRewrite {
+				path: Some(crate::types::agent::PathRedirect::Prefix("/".into())),
+				path_match: crate::types::agent::PathMatch::PathPrefix("/gw".into()),
+			}),
+		),
+		&mut resp,
+	)
+	.await
+	.unwrap();
+
+	let body = http::read_resp_body(resp).await.unwrap();
+	let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+	assert_eq!(
+		json["supportedInterfaces"][0]["url"],
+		"http://gateway.example/gw/svc/agent"
+	);
+}
+
+#[test]
+fn test_strip_complete_path_prefix_normalizes_trailing_slashes() {
+	assert_eq!(
+		strip_complete_path_prefix("/svc/agent", "/svc/"),
+		Some("/agent")
+	);
+	assert_eq!(join_path_prefix("/gw/", "/svc/agent"), "/gw/svc/agent");
+}
+
+#[test]
+fn test_replace_path_changes_only_the_path() {
+	assert_eq!(
+		replace_path("https://gateway.example/?redirect=/", "/gw/svc/agent"),
+		"https://gateway.example/gw/svc/agent?redirect=/"
 	);
 }
 

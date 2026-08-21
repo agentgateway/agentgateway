@@ -5287,7 +5287,7 @@ pub(crate) async fn split_policies_for_target(
 		)));
 	}
 	if let Some(p) = api_key {
-		route_policies.push(TrafficPolicy::APIKey(RequestPolicy::single(p.into())));
+		route_policies.push(TrafficPolicy::APIKey(RequestPolicy::single(p.compile()?)));
 	}
 	if let Some(p) = transformations {
 		if backend_target {

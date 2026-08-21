@@ -55,6 +55,7 @@
 |`config.standardAttributes.user`|string|CEL expression used to populate the `agentgateway.user` request log attribute.|
 |`config.standardAttributes.group`|string|CEL expression used to populate the `agentgateway.group` request log attribute.|
 |`config.statsAddr`|string|Stats/metrics server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"|
+|`config.histograms`|enum|Histogram representation to collect. Native histograms are exposed only through the<br>Prometheus protobuf format. Defaults to classic.<br>Possible values: `classic`, `native`, `both`.|
 |`config.readinessAddr`|string|Readiness probe server address in the format "ip:port", "localhost:port", "unix:/path/to/socket", or "off"|
 |`config.session`|object|Configuration for stateful session management|
 |`config.session.key`|string|The AES-256-GCM session protection key to be used for session tokens.<br>If not set, sessions will not be encrypted.<br>For example, generated via `openssl rand -hex 32`.|
@@ -1638,6 +1639,7 @@
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.request[].rejection.headers.remove`|[]string|Header names to remove.|
+|`binds[].listeners[].routes[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
 |`binds[].listeners[].routes[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
@@ -3784,6 +3786,7 @@
 |`binds[].listeners[].routes[].policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].key`|string|API key value to accept.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
+|`binds[].listeners[].routes[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
 |`binds[].listeners[].routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`binds[].listeners[].routes[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].routes[].policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -7782,6 +7785,7 @@
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].rejection.headers.remove`|[]string|Header names to remove.|
+|`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
 |`binds[].listeners[].routes[].backends[].ai.policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
@@ -11107,6 +11111,7 @@
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].rejection.headers.remove`|[]string|Header names to remove.|
+|`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
 |`binds[].listeners[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
@@ -14394,6 +14399,7 @@
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].rejection.headers.remove`|[]string|Header names to remove.|
+|`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
 |`binds[].listeners[].routes[].backends[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
@@ -16834,6 +16840,7 @@
 |`binds[].listeners[].policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`binds[].listeners[].policies.apiKey.keys[].key`|string|API key value to accept.|
 |`binds[].listeners[].policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
+|`binds[].listeners[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
 |`binds[].listeners[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`binds[].listeners[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`binds[].listeners[].policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -19562,6 +19569,7 @@
 |`policies[].policy.ai.promptGuard.request[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`policies[].policy.ai.promptGuard.request[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`policies[].policy.ai.promptGuard.request[].rejection.headers.remove`|[]string|Header names to remove.|
+|`policies[].policy.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`policies[].policy.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`policies[].policy.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
 |`policies[].policy.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
@@ -21708,6 +21716,7 @@
 |`policies[].policy.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`policies[].policy.apiKey.keys[].key`|string|API key value to accept.|
 |`policies[].policy.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
+|`policies[].policy.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
 |`policies[].policy.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`policies[].policy.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`policies[].policy.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -25702,6 +25711,7 @@
 |`backends[].ai.policies.ai.promptGuard.request[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`backends[].ai.policies.ai.promptGuard.request[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`backends[].ai.policies.ai.promptGuard.request[].rejection.headers.remove`|[]string|Header names to remove.|
+|`backends[].ai.policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`backends[].ai.policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`backends[].ai.policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
 |`backends[].ai.policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
@@ -29027,6 +29037,7 @@
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].rejection.headers.remove`|[]string|Header names to remove.|
+|`backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
 |`backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
@@ -32312,6 +32323,7 @@
 |`backends[].policies.ai.promptGuard.request[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`backends[].policies.ai.promptGuard.request[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`backends[].policies.ai.promptGuard.request[].rejection.headers.remove`|[]string|Header names to remove.|
+|`backends[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`backends[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`backends[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
 |`backends[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
@@ -34697,6 +34709,7 @@
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routeGroups[].routes[].policies.ai.promptGuard.request[].rejection.headers.remove`|[]string|Header names to remove.|
+|`routeGroups[].routes[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
 |`routeGroups[].routes[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
@@ -36843,6 +36856,7 @@
 |`routeGroups[].routes[].policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`routeGroups[].routes[].policies.apiKey.keys[].key`|string|API key value to accept.|
 |`routeGroups[].routes[].policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
+|`routeGroups[].routes[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
 |`routeGroups[].routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`routeGroups[].routes[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`routeGroups[].routes[].policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -40841,6 +40855,7 @@
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].rejection.headers.remove`|[]string|Header names to remove.|
+|`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
 |`routeGroups[].routes[].backends[].ai.policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
@@ -44166,6 +44181,7 @@
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].rejection.headers.remove`|[]string|Header names to remove.|
+|`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
 |`routeGroups[].routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
@@ -47453,6 +47469,7 @@
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].rejection.headers.remove`|[]string|Header names to remove.|
+|`routeGroups[].routes[].backends[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
 |`routeGroups[].routes[].backends[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
@@ -49606,6 +49623,7 @@
 |`gateways.*.listeners[].apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`gateways.*.listeners[].apiKey.keys[].key`|string|API key value to accept.|
 |`gateways.*.listeners[].apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
+|`gateways.*.listeners[].apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
 |`gateways.*.listeners[].apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`gateways.*.listeners[].apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.listeners[].apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -50896,6 +50914,7 @@
 |`gateways.*.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`gateways.*.apiKey.keys[].key`|string|API key value to accept.|
 |`gateways.*.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
+|`gateways.*.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
 |`gateways.*.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`gateways.*.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`gateways.*.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -52424,6 +52443,7 @@
 |`routes[].policies.ai.promptGuard.request[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`routes[].policies.ai.promptGuard.request[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routes[].policies.ai.promptGuard.request[].rejection.headers.remove`|[]string|Header names to remove.|
+|`routes[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routes[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`routes[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
 |`routes[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
@@ -54570,6 +54590,7 @@
 |`routes[].policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`routes[].policies.apiKey.keys[].key`|string|API key value to accept.|
 |`routes[].policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
+|`routes[].policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
 |`routes[].policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`routes[].policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`routes[].policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -58568,6 +58589,7 @@
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routes[].backends[].ai.policies.ai.promptGuard.request[].rejection.headers.remove`|[]string|Header names to remove.|
+|`routes[].backends[].ai.policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
 |`routes[].backends[].ai.policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
@@ -61893,6 +61915,7 @@
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].rejection.headers.remove`|[]string|Header names to remove.|
+|`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
 |`routes[].backends[].ai.groups[].providers[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
@@ -65180,6 +65203,7 @@
 |`routes[].backends[].policies.ai.promptGuard.request[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`routes[].backends[].policies.ai.promptGuard.request[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`routes[].backends[].policies.ai.promptGuard.request[].rejection.headers.remove`|[]string|Header names to remove.|
+|`routes[].backends[].policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`routes[].backends[].policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`routes[].backends[].policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
 |`routes[].backends[].policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
@@ -68896,6 +68920,7 @@
 |`llm.models[].guardrails.request[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`llm.models[].guardrails.request[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`llm.models[].guardrails.request[].rejection.headers.remove`|[]string|Header names to remove.|
+|`llm.models[].guardrails.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`llm.models[].guardrails.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`llm.models[].guardrails.response[].regex`|object|Apply regex-based masking or rejection rules.|
 |`llm.models[].guardrails.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
@@ -71040,6 +71065,7 @@
 |`llm.policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`llm.policies.apiKey.keys[].key`|string|API key value to accept.|
 |`llm.policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
+|`llm.policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
 |`llm.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`llm.policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`llm.policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -72171,6 +72197,7 @@
 |`llm.policies.guardrails.request[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`llm.policies.guardrails.request[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`llm.policies.guardrails.request[].rejection.headers.remove`|[]string|Header names to remove.|
+|`llm.policies.guardrails.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`llm.policies.guardrails.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`llm.policies.guardrails.response[].regex`|object|Apply regex-based masking or rejection rules.|
 |`llm.policies.guardrails.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
@@ -75108,6 +75135,7 @@
 |`mcp.policies.ai.promptGuard.request[].rejection.headers.add`|object|Headers to append without replacing existing values.|
 |`mcp.policies.ai.promptGuard.request[].rejection.headers.set`|object|Headers to set, replacing any existing values.|
 |`mcp.policies.ai.promptGuard.request[].rejection.headers.remove`|[]string|Header names to remove.|
+|`mcp.policies.ai.promptGuard.request[].scope`|[]enum|Which parts of the request this guard inspects.<br>Possible values: `systemPrompt`, `messages`, `toolOutput`, `toolInput`.|
 |`mcp.policies.ai.promptGuard.response`|[]object|Guards applied to LLM responses before they reach the client.|
 |`mcp.policies.ai.promptGuard.response[].regex`|object|Apply regex-based masking or rejection rules.|
 |`mcp.policies.ai.promptGuard.response[].regex.action`|enum|Action to take when a regex rule matches.<br>Possible values: `mask`, `reject`.|
@@ -77254,6 +77282,7 @@
 |`mcp.policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`mcp.policies.apiKey.keys[].key`|string|API key value to accept.|
 |`mcp.policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
+|`mcp.policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
 |`mcp.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`mcp.policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`mcp.policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|
@@ -79149,6 +79178,7 @@
 |`ui.policies.apiKey.keys`|[]object|API keys that are accepted by this policy.|
 |`ui.policies.apiKey.keys[].key`|string|API key value to accept.|
 |`ui.policies.apiKey.keys[].metadata`|any|Optional metadata attached to requests authenticated with this key.|
+|`ui.policies.apiKey.keys[].allowedModels`|[]string|Model patterns this key is allowed to access.<br>Omitted means no additional constraint; an empty list denies all models.|
 |`ui.policies.apiKey.keys[].keyHash`|string|SHA-256 hash of an API key value to accept, in `sha256:<hex>` format.|
 |`ui.policies.apiKey.mode`|enum|Controls whether requests must include a valid API key.<br>Possible values: `strict`, `optional`, `permissive`.|
 |`ui.policies.apiKey.location`|object|Where to read the API key from in incoming requests.<br>Exactly one of header, queryParameter, cookie, or expression may be set.|

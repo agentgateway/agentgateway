@@ -13,6 +13,7 @@ use futures_util::FutureExt;
 use headers::HeaderMapExt;
 use hyper::upgrade::OnUpgrade;
 use hyper_util::rt::TokioIo;
+use opentelemetry::KeyValue;
 use rand::RngExt;
 use rand::seq::{IndexedRandom, IteratorRandom};
 use tracing::{debug, trace};
@@ -43,7 +44,9 @@ use crate::store::{
 	ResponsePolicy, RoutePath,
 };
 use crate::telemetry::log;
-use crate::telemetry::log::{AsyncLog, DropOnLog, LogBody, RequestLog, TraceSampler};
+use crate::telemetry::log::{
+	AsyncLog, DropOnLog, LogBody, RequestLog, SpanWriteOnDrop, SpanWriter, TraceSampler,
+};
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallLabels, OutboundCallSubtype};
 use crate::telemetry::trc::TraceParent;
 use crate::transport::stream::{Extension, Socket, TCPConnectionInfo, TLSConnectionInfo};
@@ -392,7 +395,7 @@ async fn apply_backend_policies(
 		}
 		if matches!(
 			a2a_type,
-			a2a::RequestType::Call(_) | a2a::RequestType::AgentCard(_, _)
+			a2a::RequestType::Call(_) | a2a::RequestType::AgentCard(_, _, _)
 		) {
 			log.add(|l| {
 				l.backend_protocol = Some(cel::BackendProtocol::a2a);
@@ -836,7 +839,7 @@ impl HTTPProxy {
 
 		apply_gateway_policies(
 			&gateway_policies,
-			self.policy_client(),
+			self.policy_client().with_parent(&req),
 			log,
 			&mut req,
 			response_policies,
@@ -906,9 +909,10 @@ impl HTTPProxy {
 		route_policies.register_cel_expressions(log.cel.ctx());
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
+		let policy_client = self.policy_client().with_parent(&req);
 		let route_retry = apply_request_policies(
 			&route_policies,
-			&self.policy_client(),
+			&policy_client,
 			log,
 			&mut req,
 			response_policies,
@@ -1260,8 +1264,8 @@ impl HTTPProxy {
 				},
 			};
 			ns.insert_header(req);
-			req.extensions_mut().insert(ns.clone());
 			log.outgoing_span = Some(ns);
+			log.insert_span_writer(req.extensions_mut());
 		}
 	}
 
@@ -2035,7 +2039,7 @@ async fn make_backend_call(
 		.await;
 	}
 
-	let policy_client = PolicyClient::new(inputs.clone());
+	let policy_client = PolicyClient::new(inputs.clone()).with_parent(&req);
 	let hbone_source = req
 		.extensions()
 		.get::<WaypointService>()
@@ -2287,7 +2291,7 @@ async fn make_backend_call(
 	};
 	apply_backend_policies(
 		backend_info.clone(),
-		PolicyClient::new(inputs.clone()),
+		policy_client.clone(),
 		&backend_call,
 		&mut req,
 		&mut log,
@@ -2616,11 +2620,12 @@ async fn make_backend_call(
 	dtrace::snapshot!(Request, "final request", &req);
 	let request_body_limit = crate::http::buffer_limit(&req);
 	let req = req.map(|b| dtrace::TracingBody::maybe_wrap("final request", b, request_body_limit));
-	let call = client::Call {
+	let mut call = client::Call {
 		req,
 		target: backend_call.target,
 		transport,
 	};
+	let span_target = backend_call.span_target;
 	dtrace::trace(|trace| trace.backend_call_started(&call.target));
 	let upstream = inputs.upstream.clone();
 	let llm_response_log = log.as_ref().map(|l| l.llm_response.clone());
@@ -2638,6 +2643,31 @@ async fn make_backend_call(
 	} else {
 		OutboundCallSubtype::Http
 	};
+	let outbound_labels = OutboundCallLabels {
+		kind: OutboundCallKind::Primary,
+		subtype: outbound_subtype,
+	};
+	let mut span = log.as_ref().and_then(|log| {
+		let writer = log.span_writer();
+		writer.is_enabled().then(|| {
+			let mut span = Box::new(writer.start_outbound(outbound_labels));
+			let method = call.req.method().as_str().to_owned();
+			span.rename_span(match &span_target {
+				Some(target) => format!("{method} {target}"),
+				None => method.clone(),
+			});
+			span.add_attribute(KeyValue::new("http.method", method));
+			if let Some(host) = call.req.uri().host() {
+				span.add_attribute(KeyValue::new("http.host", host.to_owned()));
+			}
+			span.add_attribute(KeyValue::new(
+				"http.path",
+				http::get_path_and_query(call.req.uri()).to_owned(),
+			));
+			span.inject_context(&mut call.req);
+			span
+		})
+	});
 	let outbound_start = std::time::Instant::now();
 	log.add(|l| {
 		if l.request_processing_duration.is_none() {
@@ -2645,14 +2675,20 @@ async fn make_backend_call(
 		}
 	});
 	let resp = upstream.call(call).await;
+	if let Some(span) = span.as_deref_mut() {
+		match &resp {
+			Ok(response) => span.add_attribute(KeyValue::new(
+				"http.status",
+				i64::from(response.status().as_u16()),
+			)),
+			Err(error) => span.set_error(error.as_reason().to_string(), error.to_string()),
+		}
+	}
 	let outbound_end = Instant::now();
 	log.add(|l| {
 		l.metrics
 			.upstream_call_duration
-			.get_or_create(&OutboundCallLabels {
-				kind: OutboundCallKind::Primary,
-				subtype: outbound_subtype,
-			})
+			.get_or_create(&outbound_labels)
 			.observe((outbound_end - outbound_start).as_secs_f64());
 		l.upstream_duration = Some(outbound_end - outbound_start);
 		if resp.is_ok() {
@@ -2826,6 +2862,7 @@ pub fn build_service_call(
 	{
 		return Ok(BackendCall {
 			target: Target::Address(destination),
+			span_target: Some(strng::format!("{}:{port}", svc.hostname)),
 			http_version_override,
 			transport_override: None,
 			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
@@ -2996,6 +3033,7 @@ pub fn build_service_call(
 
 	Ok(BackendCall {
 		target,
+		span_target: Some(strng::format!("{}:{port}", svc.hostname)),
 		http_version_override,
 		transport_override,
 		hbone_port,
@@ -3816,13 +3854,17 @@ async fn send_mirror(
 // Connection header field. These are the headers defined by the
 // obsoleted RFC 2616 (section 13.5.1) and are used for backward
 // compatibility.
-static HOP_HEADERS: [HeaderName; 9] = [
+//
+// NOTE: `Proxy-Authorization` is considered hop-by-hop according to
+// RFC 2616, but is deliberately absent here. It is not stripped so
+// that request policies such as `basicAuth` can read it when the
+// gateway acts as an authenticated forward proxy.
+static HOP_HEADERS: [HeaderName; 8] = [
 	header::CONNECTION,
 	// non-standard but still sent by libcurl and rejected by e.g. google
 	HeaderName::from_static("proxy-connection"),
 	HeaderName::from_static("keep-alive"),
 	header::PROXY_AUTHENTICATE,
-	header::PROXY_AUTHORIZATION,
 	header::TE,
 	header::TRAILER,
 	header::TRANSFER_ENCODING,
@@ -3985,6 +4027,7 @@ fn apply_internal_path(req: &mut Request, internal: &InternalBackend) -> Result<
 
 pub struct BackendCall {
 	pub target: Target,
+	pub span_target: Option<Strng>,
 	pub http_version_override: Option<::http::Version>,
 	pub transport_override: Option<(InboundProtocol, Vec<Identity>)>,
 	pub hbone_port: u16,
@@ -3998,8 +4041,13 @@ impl BackendCall {
 	}
 
 	pub fn from_shared(target: Target, backend_policies: Arc<BackendPolicies>) -> Self {
+		let span_target = match &target {
+			Target::Hostname(hostname, port) => Some(strng::format!("{hostname}:{port}")),
+			Target::Address(_) | Target::UnixSocket(_) => None,
+		};
 		Self {
 			target,
+			span_target,
 			http_version_override: None,
 			transport_override: None,
 			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
@@ -4165,14 +4213,42 @@ pub struct TunnelClient {
 #[derive(Debug, Clone)]
 pub struct PolicyClient {
 	pub inputs: Arc<ProxyInputs>,
-	pub outbound: Option<OutboundCallLabels>,
+	context: Option<Arc<PolicyClientContext>>,
+}
+
+#[derive(Debug)]
+struct PolicyClientContext {
+	outbound: Option<OutboundCallLabels>,
+	span_writer: SpanWriter,
+	dtrace_scope: Option<String>,
 }
 
 impl PolicyClient {
 	pub fn new(inputs: Arc<ProxyInputs>) -> PolicyClient {
 		PolicyClient {
 			inputs,
-			outbound: None,
+			context: None,
+		}
+	}
+
+	pub fn with_parent(&self, req: &http::Request) -> PolicyClient {
+		self.with_parent_extensions(req.extensions())
+	}
+
+	pub(crate) fn with_parent_extensions(&self, extensions: &::http::Extensions) -> PolicyClient {
+		let Some(span_writer) = extensions.get::<SpanWriter>().cloned() else {
+			return self.clone();
+		};
+		PolicyClient {
+			inputs: self.inputs.clone(),
+			context: Some(Arc::new(PolicyClientContext {
+				outbound: self.outbound(),
+				span_writer,
+				dtrace_scope: self
+					.context
+					.as_ref()
+					.and_then(|context| context.dtrace_scope.clone()),
+			})),
 		}
 	}
 
@@ -4183,42 +4259,173 @@ impl PolicyClient {
 	) -> PolicyClient {
 		PolicyClient {
 			inputs: self.inputs.clone(),
-			outbound: Some(OutboundCallLabels { kind, subtype }),
+			context: Some(Arc::new(PolicyClientContext {
+				outbound: Some(OutboundCallLabels { kind, subtype }),
+				span_writer: self
+					.context
+					.as_ref()
+					.map(|context| context.span_writer.clone())
+					.unwrap_or_default(),
+				dtrace_scope: None,
+			})),
+		}
+	}
+
+	pub(crate) fn with_dtrace_scope(&self, scope: impl Into<String>) -> PolicyClient {
+		PolicyClient {
+			inputs: self.inputs.clone(),
+			context: Some(Arc::new(PolicyClientContext {
+				outbound: self.outbound(),
+				span_writer: self
+					.context
+					.as_ref()
+					.map(|context| context.span_writer.clone())
+					.unwrap_or_default(),
+				dtrace_scope: Some(scope.into()),
+			})),
+		}
+	}
+
+	fn outbound(&self) -> Option<OutboundCallLabels> {
+		self.context.as_ref().and_then(|context| context.outbound)
+	}
+
+	fn dtrace_scope(&self) -> Option<&str> {
+		let labels = self.outbound()?;
+		if let Some(scope) = self
+			.context
+			.as_ref()
+			.and_then(|context| context.dtrace_scope.as_deref())
+		{
+			return Some(scope);
+		}
+		Some(match labels.kind {
+			OutboundCallKind::Mirror => "mirror",
+			OutboundCallKind::Primary => match labels.subtype {
+				OutboundCallSubtype::Http => "http",
+				OutboundCallSubtype::Llm => "llm",
+				OutboundCallSubtype::Mcp => "mcp",
+				_ => labels.subtype.as_str(),
+			},
+			OutboundCallKind::Policy => match labels.subtype {
+				OutboundCallSubtype::ExtAuthz => "ext_authz",
+				OutboundCallSubtype::ExtProc => "ext_proc",
+				OutboundCallSubtype::Guardrail => "guardrail",
+				OutboundCallSubtype::RateLimit => "rate_limit",
+				OutboundCallSubtype::Oidc => "oidc",
+				_ => labels.subtype.as_str(),
+			},
+		})
+	}
+
+	fn start_outbound_span(&self, req: &mut Request) -> Option<Box<SpanWriteOnDrop>> {
+		let labels = self.outbound()?;
+		let writer = req.extensions().get::<SpanWriter>().cloned().or_else(|| {
+			self
+				.context
+				.as_ref()
+				.map(|context| context.span_writer.clone())
+		})?;
+		if !writer.is_enabled() {
+			return None;
+		}
+		let mut span = Box::new(writer.start_outbound(labels));
+		span.add_attribute(KeyValue::new(
+			"http.method",
+			req.method().as_str().to_owned(),
+		));
+		if let Some(host) = req.uri().host() {
+			span.add_attribute(KeyValue::new("http.host", host.to_owned()));
+		}
+		span.add_attribute(KeyValue::new(
+			"http.path",
+			http::get_path_and_query(req.uri()).to_owned(),
+		));
+		span.inject_context(req);
+		Some(span)
+	}
+
+	pub(crate) fn start_grpc_span<T>(
+		&self,
+		req: &mut tonic::Request<T>,
+		backend_ref: &SimpleBackendReference,
+		path: &'static str,
+	) -> Option<Box<SpanWriteOnDrop>> {
+		let labels = self.outbound()?;
+		let writer = req.extensions().get::<SpanWriter>().cloned().or_else(|| {
+			self
+				.context
+				.as_ref()
+				.map(|context| context.span_writer.clone())
+		})?;
+		if !writer.is_enabled() {
+			return None;
+		}
+		let mut span = Box::new(writer.start_outbound(labels));
+		span.add_attribute(KeyValue::new("http.method", "POST"));
+		if let Ok(backend) = resolve_simple_backend(backend_ref, self.inputs.as_ref()) {
+			let hostport = backend.backend.hostport();
+			if let Ok(authority) = Authority::try_from(hostport.as_str()) {
+				span.add_attribute(KeyValue::new("http.host", authority.host().to_owned()));
+			}
+		}
+		span.add_attribute(KeyValue::new("http.path", path));
+		span.inject_grpc_context(req);
+		Some(span)
+	}
+
+	fn finish_outbound_span(
+		span: Option<&mut SpanWriteOnDrop>,
+		result: &Result<Response, ProxyError>,
+	) {
+		let Some(span) = span else {
+			return;
+		};
+		match result {
+			Ok(response) => {
+				span.add_attribute(KeyValue::new(
+					"http.status",
+					i64::from(response.status().as_u16()),
+				));
+			},
+			Err(error) => span.set_error(error.as_reason().to_string(), error.to_string()),
 		}
 	}
 
 	fn observe_outbound(&self, start: std::time::Instant) {
-		if let Some(labels) = &self.outbound {
+		if let Some(labels) = self.outbound() {
 			self
 				.inputs
 				.metrics
 				.upstream_call_duration
-				.get_or_create(labels)
+				.get_or_create(&labels)
 				.observe(start.elapsed().as_secs_f64());
 		}
 	}
 
-	pub async fn call_reference(
-		&self,
-		req: Request,
-		backend_ref: &SimpleBackendReference,
-	) -> Result<Response, ProxyError> {
-		self
-			.call_reference_with_policies(req, backend_ref, &[])
-			.await
-	}
-
-	pub async fn call_reference_with_policies(
+	pub(crate) async fn call_reference_with_policies_untraced(
 		&self,
 		mut req: Request,
 		backend_ref: &SimpleBackendReference,
 		policies: &[BackendTrafficPolicy],
 	) -> Result<Response, ProxyError> {
 		let start = std::time::Instant::now();
+		let (backend, pols) = self.prepare_reference_call(&mut req, backend_ref, policies)?;
+		let res = self.internal_call_with_policies(req, backend, pols).await;
+		self.observe_outbound(start);
+		res
+	}
+
+	fn prepare_reference_call(
+		&self,
+		req: &mut Request,
+		backend_ref: &SimpleBackendReference,
+		policies: &[BackendTrafficPolicy],
+	) -> Result<(Backend, BackendPolicies), ProxyError> {
 		let backend = resolve_simple_backend(backend_ref, self.inputs.as_ref())?;
 		trace!("resolved {:?} to {:?}", backend_ref, &backend);
 
-		http::modify_req_uri(&mut req, |uri| {
+		http::modify_req_uri(req, |uri| {
 			if uri.authority.is_none() {
 				// If host is not set, set it to the backend
 				uri.authority = Some(Authority::try_from(backend.backend.hostport())?);
@@ -4233,29 +4440,62 @@ impl PolicyClient {
 
 		let backend = BackendWithPolicies::from(backend);
 		let pols = get_backend_policies(&self.inputs, &backend, policies, None);
-		let res = self
-			.internal_call_with_policies(req, backend.backend, pols)
-			.await;
-		self.observe_outbound(start);
-		res
+		Ok((backend.backend, pols))
 	}
 
-	pub async fn call(
-		&self,
+	pub fn call_reference_with_policies<'a>(
+		&'a self,
+		mut req: Request,
+		backend_ref: &'a SimpleBackendReference,
+		policies: &'a [BackendTrafficPolicy],
+	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + 'a>> {
+		Box::pin(async move {
+			let start = std::time::Instant::now();
+			let (backend, pols) = match self.prepare_reference_call(&mut req, backend_ref, policies) {
+				Ok(prepared) => prepared,
+				Err(error) => {
+					let mut span = self.start_outbound_span(&mut req);
+					let result = Err(error);
+					Self::finish_outbound_span(span.as_deref_mut(), &result);
+					return result;
+				},
+			};
+			let mut span = self.start_outbound_span(&mut req);
+			let result = self.internal_call_with_policies(req, backend, pols).await;
+			self.observe_outbound(start);
+			Self::finish_outbound_span(span.as_deref_mut(), &result);
+			result
+		})
+	}
+
+	pub fn call_reference<'a>(
+		&'a self,
 		req: Request,
-		backend: SimpleBackendWithPolicies,
-	) -> Result<Response, ProxyError> {
-		let start = std::time::Instant::now();
-		let backend = BackendWithPolicies::from(backend);
-		let pols = get_backend_policies(&self.inputs, &backend, &[], None);
-		let res = self
-			.internal_call_with_policies(req, backend.backend, pols)
-			.await;
-		self.observe_outbound(start);
-		res
+		backend_ref: &'a SimpleBackendReference,
+	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + 'a>> {
+		self.call_reference_with_policies(req, backend_ref, &[])
 	}
 
-	pub async fn call_with_explicit_policies(
+	pub fn call(
+		&self,
+		mut req: Request,
+		backend: SimpleBackendWithPolicies,
+	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
+		Box::pin(async move {
+			let start = std::time::Instant::now();
+			let backend = BackendWithPolicies::from(backend);
+			let pols = get_backend_policies(&self.inputs, &backend, &[], None);
+			let mut span = self.start_outbound_span(&mut req);
+			let result = self
+				.internal_call_with_policies(req, backend.backend, pols)
+				.await;
+			self.observe_outbound(start);
+			Self::finish_outbound_span(span.as_deref_mut(), &result);
+			result
+		})
+	}
+
+	pub(crate) async fn call_with_explicit_policies_untraced(
 		&self,
 		req: Request,
 		backend: &SimpleBackend,
@@ -4270,21 +4510,25 @@ impl PolicyClient {
 		res
 	}
 
-	pub async fn call_with_explicit_policies_list(
+	pub fn call_with_explicit_policies_list(
 		&self,
-		req: Request,
+		mut req: Request,
 		backend: Backend,
 		policies: Vec<BackendTrafficPolicy>,
-	) -> Result<Response, ProxyError> {
-		let start = std::time::Instant::now();
-		let pols = self
-			.inputs
-			.stores
-			.read_binds()
-			.inline_backend_policies(&policies);
-		let res = self.internal_call_with_policies(req, backend, pols).await;
-		self.observe_outbound(start);
-		res
+	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
+		Box::pin(async move {
+			let start = std::time::Instant::now();
+			let pols = self
+				.inputs
+				.stores
+				.read_binds()
+				.inline_backend_policies(&policies);
+			let mut span = self.start_outbound_span(&mut req);
+			let result = self.internal_call_with_policies(req, backend, pols).await;
+			self.observe_outbound(start);
+			Self::finish_outbound_span(span.as_deref_mut(), &result);
+			result
+		})
 	}
 
 	fn internal_call_with_policies<'a>(
@@ -4295,7 +4539,8 @@ impl PolicyClient {
 	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
 		let mut req = Some(req);
 		Box::pin(async move {
-			Box::pin(
+			let mut response_policies = Default::default();
+			let call = Box::pin(
 				make_backend_call(
 					self.inputs.clone(),
 					Arc::new(LLMRequestPolicies::default()),
@@ -4306,20 +4551,28 @@ impl PolicyClient {
 					// Here we don't have a log to pass. MCP and LLM flows expect there to always be a log.
 					// As such, we ensure we ONLY call this with Simple backend type which cannot be MCP/LLM
 					None,
-					&mut Default::default(),
+					&mut response_policies,
 				)
 				.assert_size::<{ 7 * 1024 }>(),
-			)
-			.await
-			.map_err(ProxyResponse::downcast)
+			);
+			let result = dtrace::scope_future(self.dtrace_scope(), call).await;
+			result.map_err(ProxyResponse::downcast)
 		})
 	}
 
-	pub async fn simple_call(&self, req: Request) -> Result<Response, ProxyError> {
-		let start = std::time::Instant::now();
-		let res = Box::pin(self.inputs.upstream.simple_call(req)).await;
-		self.observe_outbound(start);
-		res
+	pub fn simple_call(
+		&self,
+		mut req: Request,
+	) -> Pin<Box<dyn Future<Output = Result<Response, ProxyError>> + Send + '_>> {
+		Box::pin(async move {
+			let start = std::time::Instant::now();
+			let mut span = self.start_outbound_span(&mut req);
+			let call = Box::pin(self.inputs.upstream.simple_call(req));
+			let result = dtrace::scope_future(self.dtrace_scope(), call).await;
+			self.observe_outbound(start);
+			Self::finish_outbound_span(span.as_deref_mut(), &result);
+			result
+		})
 	}
 }
 

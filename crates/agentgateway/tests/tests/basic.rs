@@ -1,4 +1,4 @@
-use agentgateway::test_helpers::oteltracemock;
+use agentgateway::test_helpers::{extauthmock, oteltracemock};
 use ppp::v2::{
 	Builder as ProxyV2Builder, Command as ProxyV2Command, Protocol as ProxyV2Protocol,
 	Version as ProxyV2Version,
@@ -214,32 +214,45 @@ async fn tracing_exports_to_otel_trace_mock() {
 		std::env::set_var("OTEL_BSP_SCHEDULE_DELAY", "20");
 	}
 	struct CountingTraceHandler {
-		exports: Arc<AtomicUsize>,
+		spans: Arc<StdMutex<Vec<opentelemetry_proto::tonic::trace::v1::Span>>>,
 	}
 
 	#[async_trait::async_trait]
 	impl oteltracemock::Handler for CountingTraceHandler {
 		async fn export(
 			&mut self,
-			_request: &opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest,
+			request: &opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceRequest,
 		) -> Result<
 			opentelemetry_proto::tonic::collector::trace::v1::ExportTraceServiceResponse,
 			tonic::Status,
 		> {
-			self.exports.fetch_add(1, Ordering::SeqCst);
+			self.spans.lock().unwrap().extend(
+				request
+					.resource_spans
+					.iter()
+					.flat_map(|resource| &resource.scope_spans)
+					.flat_map(|scope| &scope.spans)
+					.cloned(),
+			);
 			oteltracemock::ok_response()
 		}
 	}
+	struct AllowExtAuthz;
+	#[async_trait::async_trait]
+	impl extauthmock::Handler for AllowExtAuthz {}
 
-	let exports = Arc::new(AtomicUsize::new(0));
+	let spans = Arc::new(StdMutex::new(Vec::new()));
 	let otel = oteltracemock::OtelTraceMock::new({
-		let exports = Arc::clone(&exports);
+		let spans = Arc::clone(&spans);
 		move || CountingTraceHandler {
-			exports: Arc::clone(&exports),
+			spans: Arc::clone(&spans),
 		}
 	})
 	.spawn()
 	.await;
+	let authz = extauthmock::ExtAuthMock::new(|| AllowExtAuthz)
+		.spawn()
+		.await;
 
 	let (_mock, mut bind, io) = basic_setup().await;
 	bind
@@ -250,19 +263,36 @@ async fn tracing_exports_to_otel_trace_mock() {
 			}
 		}))
 		.await;
+	bind
+		.attach_gateway_policy(json!({
+			"extAuthz": {
+				"host": authz.address,
+			},
+		}))
+		.await;
 
 	let res = send_request(io, Method::GET, "http://lo").await;
 	assert_eq!(res.status(), 200);
 
 	tokio::time::timeout(Duration::from_secs(2), async {
-		while exports.load(Ordering::SeqCst) == 0 {
+		while spans.lock().unwrap().len() < 2 {
 			tokio::task::yield_now().await;
 		}
 	})
 	.await
 	.unwrap();
 
-	assert_eq!(exports.load(Ordering::SeqCst), 1);
+	let spans = spans.lock().unwrap();
+	let ext_authz = spans
+		.iter()
+		.find(|span| span.name == "ExtAuthz")
+		.expect("ExtAuthz span should be exported");
+	let request = spans
+		.iter()
+		.find(|span| span.trace_id == ext_authz.trace_id && span.span_id == ext_authz.parent_span_id)
+		.expect("parent request span should be exported");
+	assert_eq!(ext_authz.trace_id, request.trace_id);
+	assert_eq!(ext_authz.parent_span_id, request.span_id);
 }
 
 #[tokio::test]

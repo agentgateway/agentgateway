@@ -216,7 +216,16 @@ fn setup(
 ) -> crate::http::Request {
 	let mut req = crate::http::tests_common::request(uri, ::http::Method::POST, &[]);
 	provider
-		.setup_request(&mut req, route_type, Some(llm_request), None, None, false, None, None)
+		.setup_request(
+			&mut req,
+			route_type,
+			Some(llm_request),
+			None,
+			None,
+			false,
+			None,
+			None,
+		)
 		.expect("setup_request should succeed");
 	req
 }

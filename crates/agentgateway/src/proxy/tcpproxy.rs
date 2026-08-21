@@ -967,6 +967,7 @@ mod tests {
 			metrics: Arc::new(crate::metrics::Metrics::new(
 				metrics::sub_registry(&mut Registry::default()),
 				Default::default(),
+				Default::default(),
 			)),
 			model_catalog: ModelCatalog::empty(),
 			admin: None,

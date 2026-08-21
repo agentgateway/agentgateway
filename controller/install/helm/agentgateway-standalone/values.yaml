@@ -1,53 +1,63 @@
-# Image pull Secrets attached to the agentgateway pod.
+# -- Set a list of image pull secrets for Kubernetes to use when pulling the agentgateway container image from your own private registry instead of the default agentgateway registry.
 imagePullSecrets: []
 
-# Labels added to every resource created by the chart.
+# -- Additional labels to add to all resources that the Helm chart creates.
 commonLabels: {}
 
-# Override the chart label name, generated resource name, or release namespace.
+# -- Override the name to the Helm base release, which by default is 'agentgateway-standalone'.
 nameOverride: ""
+
+# -- Override the full name of the resources that the Helm chart creates.
 fullnameOverride: ""
+
+# -- Install the agentgateway resources in a different namespace than the Helm release namespace.
 namespaceOverride: ""
 
-# Number of agentgateway pods. Both supported modes allow multiple replicas.
+# -- The number of agentgateway proxy pods to run. Both storage modes support multiple replicas.
 replicaCount: 1
 
-# Old ReplicaSets retained for rollback. Unset uses the Kubernetes default of 10; 0 keeps no history.
+# -- The number of old ReplicaSets to retain so that you can roll back a Deployment. If unset, Kubernetes defaults to 10. Set to 0 to keep no history.
 revisionHistoryLimit:
 
-# Configuration persistence mode:
-# - readonly: serve the static config below from a read-only ConfigMap.
-# - database: use the static config as a baseline and store UI-managed changes in Postgres.
+# -- How agentgateway persists its configuration. In 'readonly' mode, the chart serves the static configuration in the 'config' value from a read-only ConfigMap. In 'database' mode, the chart treats that configuration as a baseline and stores the changes that you make in the Admin UI in PostgreSQL.
 mode: readonly
 
-# Optional Kubernetes Deployment strategy override.
+# -- Override the Kubernetes Deployment strategy for the agentgateway proxy.
 strategy: {}
 
-# Agentgateway image. May also be a complete image reference string, for example:
-# image: localhost:5000/agentgateway:dev
+# The agentgateway image. Can also set a complete image reference string, for example: 'image: localhost:5000/agentgateway:dev'
 image:
+  # -- The registry to pull the agentgateway proxy image from.
   registry: cr.agentgateway.dev
+  # -- The repository of the agentgateway proxy image.
   repository: agentgateway
+  # -- The tag of the agentgateway proxy image. If unset, the chart uses the chart's app version.
   tag: ""
+  # -- The image pull policy for the agentgateway proxy image.
   pullPolicy: IfNotPresent
 
-# ServiceAccount used by the agentgateway pod.
+# The ServiceAccount for the agentgateway proxy pod.
 serviceAccount:
+  # -- Create a service account for the agentgateway proxy pod. The proxy needs no Kubernetes API permissions, so this service account is only a pod identity, such as for binding a cloud IAM role or attaching image pull secrets. Set to false to use a service account that you manage outside the chart, such as when your cluster policy does not allow Helm releases to create identities, and set 'name' to that service account.
   create: true
+  # -- Annotations to add to the service account. Use these annotations to bind a cloud IAM role to the pod, such as 'eks.amazonaws.com/role-arn' for IAM roles for service accounts (IRSA) on Amazon EKS, or 'iam.gke.io/gcp-service-account' for Workload Identity on Google GKE.
   annotations: {}
+  # -- The name of the service account. If 'create' is true, this value names the service account that the chart creates, and defaults to the name of the Helm release. If 'create' is false, this value must name a service account that already exists in the release namespace, because the chart does not create one. Note that if 'create' is false and you leave this value unset, the pod runs with the namespace's 'default' service account.
   name: ""
 
-# Annotations added to the agentgateway pod.
+# -- Annotations to add to the agentgateway proxy pod. The defaults let Prometheus scrape the proxy's metrics endpoint.
 podAnnotations:
   prometheus.io/path: "/metrics"
   prometheus.io/port: "15020"
   prometheus.io/scrape: "true"
 
-# Labels added to the agentgateway pod.
+# -- Labels to add to the agentgateway proxy pod.
 podLabels: {}
 
-# Pod- and container-level security contexts.
+# -- The pod-level security context for the agentgateway proxy pod.
 podSecurityContext: {}
+
+# -- The container-level security context for the agentgateway proxy container.
 securityContext:
   allowPrivilegeEscalation: false
   readOnlyRootFilesystem: true
@@ -56,81 +66,114 @@ securityContext:
     drop:
     - ALL
 
-# Compute resource requests and limits for agentgateway.
+# -- The compute resource requests and limits for the agentgateway proxy container.
 resources:
   requests:
     cpu: 100m
     memory: 128Mi
 
-# Kubernetes scheduling constraints.
+# -- The node labels that a node must have for the agentgateway proxy pod to be scheduled on it.
 nodeSelector: {}
+
+# -- The tolerations to apply to the agentgateway proxy pod.
 tolerations: []
+
+# -- The affinity rules for scheduling the agentgateway proxy pod.
 affinity: {}
 
-# Pod DNS configuration, merged with what the kubelet derives from the pod's dnsPolicy.
-# E.g. options: [{name: ndots, value: "3"}]
+# -- The DNS configuration for the agentgateway proxy pod, which is merged with the settings that the kubelet derives from the pod's dnsPolicy. For example, 'options: [{name: ndots, value: "3"}]'.
 dnsConfig: {}
 
-# Service exposure for the unified gateway listener.
+# Configure the gateway service.
 gateway:
   service:
-    # Creates the primary Service named after the Helm release.
+    # -- Create the primary Kubernetes service for the gateway listener, named after the Helm release.
     enabled: true
+    # -- The type of the gateway service.
     type: LoadBalancer
+    # -- Annotations to add to the gateway service.
     annotations: {}
+    # -- Additional labels to add to the gateway service.
     extraLabels: {}
+    # -- The cluster IP to assign to the gateway service.
     clusterIP: ""
+    # -- The list of cluster IPs to assign to the gateway service.
     clusterIPs: []
+    # -- The external IPs to route to the gateway service.
     externalIPs: []
+    # -- The external name for a service of type ExternalName.
     externalName: ""
+    # -- The load balancer IP to request for the gateway service.
     loadBalancerIP: ""
+    # -- The client IP ranges that are allowed to access the load balancer.
     loadBalancerSourceRanges: []
+    # -- The load balancer implementation class for the gateway service.
     loadBalancerClass: ""
+    # -- Whether the gateway service routes external traffic to node-local or cluster-wide endpoints.
     externalTrafficPolicy: ""
+    # -- Whether the gateway service routes internal traffic to node-local or cluster-wide endpoints.
     internalTrafficPolicy: ""
+    # -- The node port for the load balancer's health check.
     healthCheckNodePort: null
+    # -- The session affinity for the gateway service.
     sessionAffinity: ""
+    # -- The session affinity configuration for the gateway service.
     sessionAffinityConfig: {}
+    # -- The IP families to assign to the gateway service.
     ipFamilies: []
+    # -- The IP family policy for the gateway service.
     ipFamilyPolicy: ""
+    # -- Send traffic to the gateway service's endpoints even when the pods are not ready.
     publishNotReadyAddresses: false
+    # -- Allocate node ports for a load balancer service.
     allocateLoadBalancerNodePorts: null
+    # -- The traffic distribution preference for the gateway service, such as 'PreferClose'.
     trafficDistribution: ""
+    # -- The ports to expose on the gateway service. Each target port must match a listener port in your agentgateway configuration.
     ports:
     - name: http
       port: 80
       targetPort: 4000
       protocol: TCP
-  # Additional Services selecting the same agentgateway pods.
+  # -- Additional services that select the same agentgateway proxy pods, such as a separate service for the Admin UI.
   extraServices: []
 
-# Prometheus Operator integration. Enabling this creates a PodMonitor and
-# exposes the metrics container port.
+# Prometheus Operator integration.
 monitoring:
+  # -- Enable the integration to create a PodMonitor and expose the metrics container port
   enabled: false
+  # -- Annotations to add to the PodMonitor.
   annotations: {}
+  # -- Additional labels to add to the PodMonitor.
   extraLabels: {}
   podMonitor:
+    # -- Create the PodMonitor resource.
     enabled: true
+    # -- How often Prometheus scrapes the agentgateway proxy's metrics.
     interval: 15s
 
-# Standalone agentgateway configuration. The chart manages
-# config.storage and config.database based on mode.
+# -- The standalone agentgateway configuration to serve, in the same format as a local agentgateway config file. The chart manages the 'config.storage' and 'config.database' sections for you based on the 'mode' value, so do not set them here.
 config: {}
 
 # Postgres connection used by database mode.
 database:
   postgres:
-    # Required in database mode. This value is rendered into the ConfigMap.
+    # -- The PostgreSQL connection string that the the chart renders into the ConfigMap. Required in database mode.
     url: ""
 
-# Secret containing the OIDC_COOKIE_SECRET key. When unset, the chart references
-# <release name>-oidc as an optional Secret.
+# OIDC secret that agentgateway uses to sign the Admin UI session cookie.
 oidc:
+  # -- The name of an existing secret that has the 'OIDC_COOKIE_SECRET' key. If unset, the chart references a '<release name>-oidc' secret as an optional secret.
   cookieSecretName: ""
 
-# Additional pod customization hooks.
+# -- Additional containers to run in the agentgateway proxy pod, such as a sidecar.
 extraContainers: []
+
+# -- Additional environment variables to set on the agentgateway proxy container.
 extraEnv: []
+
+# -- Additional volumes to add to the agentgateway proxy pod.
 extraVolumes: []
+
+# -- Additional volume mounts to add to the agentgateway proxy container.
 extraVolumeMounts: []

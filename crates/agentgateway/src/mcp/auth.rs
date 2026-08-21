@@ -233,6 +233,52 @@ fn strip_oauth_protected_resource_prefix(req: &Request) -> String {
 	}
 }
 
+fn issuer_from_authorization_server_metadata_request(req: &Request) -> Option<String> {
+	const OAUTH_PREFIX: &str = "/.well-known/oauth-authorization-server";
+	let external_uri = request_uri_for_oauth_metadata(req);
+	let issuer_path = issuer_path_from_metadata_path(external_uri.path(), OAUTH_PREFIX)
+		.or_else(|| issuer_path_from_metadata_path(req.uri().path(), OAUTH_PREFIX))?
+		.to_string();
+	Some(uri_with_path(external_uri, &issuer_path))
+}
+
+fn rewrite_authorization_server_issuer(
+	req: &Request,
+	auth: &McpAuthentication,
+	metadata: &mut serde_json::Value,
+) -> Result<(), ProxyError> {
+	if auth.provider.is_none() {
+		// Without a provider adapter, authorization server metadata should keep advertising the
+		// upstream IdP issuer (auth.issuer) rather than presenting the gateway as the
+		// authorization server issuer.
+		return Ok(());
+	}
+	let Some(issuer) = issuer_from_authorization_server_metadata_request(req) else {
+		return Ok(());
+	};
+	let Some(metadata) = metadata.as_object_mut() else {
+		return Err(ProxyError::ProcessingString(
+			"authorization server metadata must be a JSON object".to_string(),
+		));
+	};
+	metadata.insert("issuer".to_string(), serde_json::Value::String(issuer));
+	Ok(())
+}
+
+fn issuer_path_from_metadata_path<'a>(path: &'a str, prefix: &str) -> Option<&'a str> {
+	if let Some(remaining_path) = path.strip_prefix(prefix)
+		&& (remaining_path.is_empty() || remaining_path.starts_with('/'))
+	{
+		return Some(remaining_path);
+	}
+
+	// Older MCP clients append the well-known suffix to the resource path instead of using
+	// RFC 8414's insertion-before-path form.
+	path
+		.strip_suffix(prefix)
+		.or_else(|| path.strip_suffix(&format!("{prefix}/")))
+}
+
 fn uri_with_path(uri: Uri, path: &str) -> String {
 	let mut parts = uri.into_parts();
 	let path_and_query = if path.is_empty() {
@@ -421,6 +467,8 @@ pub(super) async fn authorization_server_metadata(
 		},
 		_ => {},
 	}
+
+	rewrite_authorization_server_issuer(req, auth, &mut resp)?;
 
 	let response = ::http::Response::builder()
 		.status(StatusCode::OK)
@@ -724,6 +772,136 @@ mod tests {
 			request_uri_for_oauth_metadata(&req).to_string(),
 			"https://example.com/.well-known/oauth-protected-resource/mcp"
 		);
+	}
+
+	#[rstest::rstest]
+	#[case::root(
+		"https://gateway.example.com/.well-known/oauth-authorization-server",
+		"https://gateway.example.com"
+	)]
+	#[case::path(
+		"https://gateway.example.com/.well-known/oauth-authorization-server/example/mcp",
+		"https://gateway.example.com/example/mcp"
+	)]
+	#[case::explicit_port_and_encoded_path(
+		"https://gateway.example.com:8443/.well-known/oauth-authorization-server/tenant%2Fname",
+		"https://gateway.example.com:8443/tenant%2Fname"
+	)]
+	#[case::trailing_slash(
+		"https://gateway.example.com/.well-known/oauth-authorization-server/",
+		"https://gateway.example.com/"
+	)]
+	fn authorization_server_issuer_matches_metadata_request(
+		#[case] metadata_uri: &'static str,
+		#[case] expected: &str,
+	) {
+		let req = ::http::Request::builder()
+			.uri(metadata_uri)
+			.body(Body::empty())
+			.expect("request should build");
+
+		assert_eq!(
+			issuer_from_authorization_server_metadata_request(&req)
+				.expect("metadata request should have an issuer"),
+			expected
+		);
+	}
+
+	#[test]
+	fn authorization_server_issuer_uses_forwarded_scheme() {
+		let req = ::http::Request::builder()
+			.uri("http://gateway.example.com/.well-known/oauth-authorization-server/example/mcp")
+			.header("x-forwarded-proto", "https")
+			.body(Body::empty())
+			.expect("request should build");
+
+		assert_eq!(
+			issuer_from_authorization_server_metadata_request(&req)
+				.expect("metadata request should have an issuer"),
+			"https://gateway.example.com/example/mcp"
+		);
+	}
+
+	#[test]
+	fn authorization_server_issuer_ignores_unexpected_path() {
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/example/mcp")
+			.body(Body::empty())
+			.expect("request should build");
+
+		assert!(issuer_from_authorization_server_metadata_request(&req).is_none());
+	}
+
+	#[rstest::rstest]
+	#[case::without_trailing_slash(
+		"https://gateway.example.com/mcp/.well-known/oauth-authorization-server"
+	)]
+	#[case::with_trailing_slash(
+		"https://gateway.example.com/mcp/.well-known/oauth-authorization-server/"
+	)]
+	fn authorization_server_issuer_supports_legacy_suffix_form(#[case] original_url: &str) {
+		let mut req = ::http::Request::builder()
+			.uri("http://backend.internal/.well-known/oauth-authorization-server")
+			.body(Body::empty())
+			.expect("request should build");
+		req.extensions_mut().insert(filters::OriginalUrl(
+			original_url.parse().expect("original URL should parse"),
+		));
+
+		assert_eq!(
+			issuer_from_authorization_server_metadata_request(&req)
+				.expect("metadata request should have an issuer"),
+			"https://gateway.example.com/mcp"
+		);
+	}
+
+	#[test]
+	fn authorization_server_metadata_replaces_or_inserts_issuer() {
+		let mut auth = default_auth();
+		auth.provider = Some(McpIDP::Entra {});
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/example/mcp")
+			.body(Body::empty())
+			.expect("request should build");
+
+		for mut metadata in [
+			serde_json::json!({"issuer": "https://idp.example.com"}),
+			serde_json::json!({"issuer": 42}),
+			serde_json::json!({}),
+		] {
+			rewrite_authorization_server_issuer(&req, &auth, &mut metadata)
+				.expect("issuer should be authoritative");
+			assert_eq!(
+				metadata["issuer"],
+				"https://gateway.example.com/example/mcp"
+			);
+		}
+	}
+
+	#[test]
+	fn authorization_server_metadata_preserves_issuer_without_provider() {
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/example/mcp")
+			.body(Body::empty())
+			.expect("request should build");
+		let mut metadata = serde_json::json!({"issuer": "https://idp.example.com"});
+
+		rewrite_authorization_server_issuer(&req, &default_auth(), &mut metadata)
+			.expect("metadata should remain valid");
+		assert_eq!(metadata["issuer"], "https://idp.example.com");
+	}
+
+	#[test]
+	fn authorization_server_metadata_rejects_non_object() {
+		let mut auth = default_auth();
+		auth.provider = Some(McpIDP::Entra {});
+		let req = ::http::Request::builder()
+			.uri("https://gateway.example.com/.well-known/oauth-authorization-server/example/mcp")
+			.body(Body::empty())
+			.expect("request should build");
+		let mut metadata = serde_json::json!([]);
+
+		assert!(rewrite_authorization_server_issuer(&req, &auth, &mut metadata).is_err());
 	}
 
 	#[test]

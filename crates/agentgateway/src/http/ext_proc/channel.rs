@@ -31,7 +31,7 @@ impl tower::Service<::http::Request<tonic::body::Body>> for GrpcReferenceChannel
 		let req = req.map(http::Body::new);
 		Box::pin(async move {
 			client
-				.call_reference_with_policies(req, &target, policies.as_slice())
+				.call_reference_with_policies_untraced(req, &target, policies.as_slice())
 				.await
 		})
 	}

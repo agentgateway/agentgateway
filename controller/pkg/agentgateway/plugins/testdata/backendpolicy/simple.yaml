@@ -70,6 +70,28 @@ output:
   resource:
     policy:
       backend:
+        backendTcp:
+          connectTimeout: 0.150s
+          keepalive:
+            interval: 30s
+            retries: 5
+            time: 60s
+      key: backend/default/agw:backend-tcp:default/test
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        route:
+          kind: HTTPRoute
+          name: test
+          namespace: default
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      backend:
         backendHttp:
           requestTimeout: 10s
           version: HTTP2

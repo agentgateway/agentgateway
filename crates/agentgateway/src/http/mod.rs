@@ -41,7 +41,10 @@ pub use recordbody::{RecordedBody, RecordedBodyHandle};
 
 pub(crate) fn mark_sensitive_headers(req: &mut Request, configured: &[HeaderName]) {
 	for (name, value) in req.headers_mut() {
-		if name == header::AUTHORIZATION || configured.contains(name) {
+		if name == header::AUTHORIZATION
+			|| name == header::PROXY_AUTHORIZATION
+			|| configured.contains(name)
+		{
 			value.set_sensitive(true)
 		}
 	}

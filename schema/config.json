@@ -291,6 +291,11 @@
             "null"
           ]
         },
+        "histograms": {
+          "description": "Histogram representation to collect. Native histograms are exposed only through the\nPrometheus protobuf format. Defaults to classic.",
+          "$ref": "#/$defs/HistogramMode",
+          "default": "classic"
+        },
         "readinessAddr": {
           "description": "Readiness probe server address in the format \"ip:port\", \"localhost:port\", \"unix:/path/to/socket\", or \"off\"",
           "type": [
@@ -747,6 +752,25 @@
         }
       },
       "additionalProperties": false
+    },
+    "HistogramMode": {
+      "oneOf": [
+        {
+          "description": "Collect classic histogram buckets only.",
+          "type": "string",
+          "const": "classic"
+        },
+        {
+          "description": "Collect native histogram buckets only.",
+          "type": "string",
+          "const": "native"
+        },
+        {
+          "description": "Collect both classic and native histogram buckets.",
+          "type": "string",
+          "const": "both"
+        }
+      ]
     },
     "RawSession": {
       "type": "object",
@@ -4842,6 +4866,18 @@
             "body": "The request was rejected due to inappropriate content",
             "status": 403
           }
+        },
+        "scope": {
+          "description": "Which parts of the request this guard inspects.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContentScope"
+          },
+          "minItems": 1,
+          "default": [
+            "systemPrompt",
+            "messages"
+          ]
         }
       },
       "unevaluatedProperties": false,
@@ -4949,6 +4985,31 @@
         }
       },
       "additionalProperties": false
+    },
+    "ContentScope": {
+      "description": "A category of request content that a prompt guard can inspect.",
+      "oneOf": [
+        {
+          "description": "The system/developer prompt.",
+          "type": "string",
+          "const": "systemPrompt"
+        },
+        {
+          "description": "Regular user/assistant message text.",
+          "type": "string",
+          "const": "messages"
+        },
+        {
+          "description": "Tool call results.",
+          "type": "string",
+          "const": "toolOutput"
+        },
+        {
+          "description": "Tool call arguments.\n\nIn APIs that send tool arguments as opaque JSON, such as Completions, the arguments are masked as a single string,\nmeaning a prompt guard has the potential to rewrite the arguments into invalid JSON.",
+          "type": "string",
+          "const": "toolInput"
+        }
+      ]
     },
     "RegexRules": {
       "type": "object",
@@ -6256,6 +6317,17 @@
             },
             "metadata": {
               "description": "Optional metadata attached to requests authenticated with this key."
+            },
+            "allowedModels": {
+              "description": "Model patterns this key is allowed to access.\nOmitted means no additional constraint; an empty list denies all models.",
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string"
+              },
+              "default": null
             }
           },
           "additionalProperties": false,
@@ -6272,6 +6344,17 @@
             },
             "metadata": {
               "description": "Optional metadata attached to requests authenticated with this key."
+            },
+            "allowedModels": {
+              "description": "Model patterns this key is allowed to access.\nOmitted means no additional constraint; an empty list denies all models.",
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string"
+              },
+              "default": null
             }
           },
           "additionalProperties": false,

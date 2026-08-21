@@ -530,6 +530,7 @@ pub fn parse_config(
 				.ctx("invalid config.metrics.fields")?
 				.unwrap_or_default(),
 		},
+		histograms: raw.histograms,
 		logging: telemetry::log::Config {
 			filter: raw
 					.logging

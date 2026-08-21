@@ -693,7 +693,11 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	};
 	let cel = log::CelLogging::new(log_cfg, MetricsConfig::default());
 	let mut prom = Registry::default();
-	let metrics = Arc::new(Metrics::new(&mut prom, FzHashSet::default()));
+	let metrics = Arc::new(Metrics::new(
+		&mut prom,
+		FzHashSet::default(),
+		Default::default(),
+	));
 	let start = agent_core::Timestamp::now();
 	let tcp_info = TCPConnectionInfo {
 		peer_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 12345),

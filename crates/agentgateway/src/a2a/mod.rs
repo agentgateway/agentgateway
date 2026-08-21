@@ -35,7 +35,11 @@ async fn classify_request(req: &mut Request<Body>) -> RequestType {
 			// Also record the (possibly rewritten) backend path so we can compute
 			// relative interface URLs on the response side.
 			let backend_path = req.uri().path().to_string();
-			RequestType::AgentCard(uri, backend_path)
+			let rewrite = req
+				.extensions()
+				.get::<filters::AppliedUrlRewrite>()
+				.cloned();
+			RequestType::AgentCard(uri, backend_path, rewrite)
 		},
 		(m, _) if m == http::Method::POST => {
 			let method = match crate::http::classify_content_type(req.headers()) {
@@ -61,7 +65,7 @@ async fn classify_request(req: &mut Request<Body>) -> RequestType {
 pub enum RequestType {
 	#[default]
 	Unknown,
-	AgentCard(http::Uri, String),
+	AgentCard(http::Uri, String, Option<filters::AppliedUrlRewrite>),
 	Call(Strng),
 }
 
@@ -159,7 +163,7 @@ pub async fn apply_to_response(
 		return Ok(None);
 	};
 	match a2a_type {
-		RequestType::AgentCard(uri, backend_path) => {
+		RequestType::AgentCard(uri, backend_path, rewrite) => {
 			// For agent card, we need to mutate the request to insert the proper URL to reach it
 			// through the gateway.
 			let buffer_limit = crate::http::response_buffer_limit(resp);
@@ -194,22 +198,13 @@ pub async fn apply_to_response(
 						// that relative path at the gateway base.
 						// Only match complete path segments to avoid partial matches
 						// (e.g., /internal/weather should not match /internal/weather-v2).
-						let relative = if iface_path == backend_agent_path {
-							// Exact match - the interface is at the agent card location
-							""
-						} else if let Some(stripped) = iface_path.strip_prefix(backend_agent_path) {
-							// Check that we matched a complete path segment
-							if stripped.starts_with('/') {
-								stripped
-							} else {
-								// Partial segment match (e.g., /weather vs /weather-v2) - don't strip
-								iface_path
-							}
-						} else {
-							// No prefix match at all
-							iface_path
-						};
-						*url_val = Value::String(format!("{gateway_base}{relative}"));
+						let url = public_interface_url(
+							&gateway_base,
+							iface_path,
+							backend_agent_path,
+							rewrite.as_ref(),
+						);
+						*url_val = Value::String(url);
 					}
 				}
 			} else if let Some(url_field) = json::traverse_mut(&mut agent_card, &["url"]) {
@@ -276,6 +271,75 @@ fn strip_agent_card_suffix(path: &str) -> &str {
 	path
 		.strip_suffix("/.well-known/agent-card.json")
 		.unwrap_or(path)
+}
+
+fn public_interface_url(
+	gateway_base: &str,
+	iface_path: &str,
+	backend_agent_path: &str,
+	rewrite: Option<&filters::AppliedUrlRewrite>,
+) -> String {
+	if let Some(path) = rewrite.and_then(|rewrite| {
+		let crate::types::agent::PathRedirect::Prefix(replacement) = rewrite.path.as_ref()? else {
+			return None;
+		};
+		let crate::types::agent::PathMatch::PathPrefix(matched) = &rewrite.path_match else {
+			return None;
+		};
+		let rest = strip_complete_path_prefix(iface_path, replacement)?;
+		Some(join_path_prefix(matched, rest))
+	}) {
+		return replace_path(gateway_base, &path);
+	}
+
+	let relative = strip_complete_path_prefix(iface_path, backend_agent_path).unwrap_or(iface_path);
+	format!("{gateway_base}{relative}")
+}
+
+fn replace_path(uri: &str, path: &str) -> String {
+	let Ok(uri) = uri.parse::<Uri>() else {
+		return format!("{uri}{path}");
+	};
+	let original = uri.to_string();
+	let query = uri.query().map(str::to_string);
+	let mut path_and_query = path.to_string();
+	if let Some(query) = query {
+		path_and_query.push('?');
+		path_and_query.push_str(&query);
+	}
+	let Ok(path_and_query) = path_and_query.parse() else {
+		return original;
+	};
+	let mut parts = uri.into_parts();
+	parts.path_and_query = Some(path_and_query);
+	Uri::from_parts(parts).map_or(original, |uri| uri.to_string())
+}
+
+/// Strip `prefix` only when it ends on a path-segment boundary.
+fn strip_complete_path_prefix<'a>(path: &'a str, prefix: &str) -> Option<&'a str> {
+	if prefix.is_empty() {
+		return None;
+	}
+	let prefix = prefix.trim_end_matches('/');
+	if prefix.is_empty() {
+		return Some(path);
+	}
+	if path == prefix {
+		return Some("");
+	}
+	let stripped = path.strip_prefix(prefix)?;
+	stripped.starts_with('/').then_some(stripped)
+}
+
+fn join_path_prefix(prefix: &str, rest: &str) -> String {
+	let prefix = prefix.trim_end_matches('/');
+	let rest = rest.trim_start_matches('/');
+	match (prefix, rest) {
+		("", "") => "/".to_string(),
+		("", rest) => format!("/{rest}"),
+		(prefix, "") => prefix.to_string(),
+		(prefix, rest) => format!("{prefix}/{rest}"),
+	}
 }
 
 #[cfg(test)]
