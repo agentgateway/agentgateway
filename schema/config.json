@@ -6022,6 +6022,17 @@
               "items": {
                 "$ref": "#/$defs/ProviderConfig"
               }
+            },
+            "mcp": {
+              "description": "Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication\nbehavior on top of standard JWT validation. Requires exactly one provider and\n`mode: strict`.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/LocalJwtMcpConfig"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "additionalProperties": false,
@@ -6069,6 +6080,17 @@
             "jwtValidationOptions": {
               "description": "Claim requirements to enforce after the token signature is verified.",
               "$ref": "#/$defs/JWTValidationOptions"
+            },
+            "mcp": {
+              "description": "Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication\nbehavior on top of standard JWT validation. Requires `mode: strict`.",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/LocalJwtMcpConfig"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "additionalProperties": false,
@@ -6128,6 +6150,38 @@
       "required": [
         "issuer",
         "jwks"
+      ]
+    },
+    "LocalJwtMcpConfig": {
+      "description": "MCP OAuth resource-metadata extension for `jwtAuth`, mirroring the k8s `JWTMCPConfig` CRD.",
+      "type": "object",
+      "properties": {
+        "resourceMetadata": {
+          "description": "Protected resource metadata returned to MCP clients at the OAuth discovery endpoint.",
+          "$ref": "#/$defs/ResourceMetadata"
+        },
+        "provider": {
+          "description": "Identity provider used to derive MCP authorization metadata.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/McpIDP"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "clientId": {
+          "description": "Client ID to use for short-circuiting Dynamic Client Registration. If set, the gateway\nwill not proxy registration requests to the IDP and instead return this client ID.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "resourceMetadata"
       ]
     },
     "LocalOidcConfig": {
