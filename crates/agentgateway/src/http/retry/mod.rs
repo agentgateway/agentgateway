@@ -2,7 +2,8 @@ mod body;
 
 use std::num::NonZeroU8;
 use std::sync::Arc;
-use std::time::Duration;
+
+use agent_core::serdes::BackoffSpec;
 
 pub use body::ReplayBody;
 
@@ -17,13 +18,19 @@ pub struct Policy {
 	#[serde(default = "default_attempts")]
 	pub attempts: NonZeroU8,
 	/// Delay between retry attempts.
+	///
+	/// Can be either:
+	/// - A single duration string (e.g. `"5s"`) — the same delay is used for every retry.
+	/// - A list of duration strings (e.g. `["2s", "4s", "8s", "16s", "32s"]`) —
+	///   the delay cycles through the list on successive retries, restarting
+	///   from the beginning when the list is exhausted.
 	#[serde(
 		default,
 		skip_serializing_if = "Option::is_none",
-		with = "serde_dur_option"
+		with = "agent_core::serdes::serde_backoff_option"
 	)]
 	#[cfg_attr(feature = "schema", schemars(with = "Option<String>"))]
-	pub backoff: Option<Duration>,
+	pub backoff: Option<BackoffSpec>,
 	/// HTTP response status codes that should be retried.
 	#[serde(serialize_with = "ser_display_iter", deserialize_with = "de_codes")]
 	#[cfg_attr(feature = "schema", schemars(with = "Vec<std::num::NonZeroU16>"))]
@@ -112,5 +119,60 @@ mod tests {
 		}))
 		.unwrap();
 		assert_eq!(pol.expressions().count(), 2);
+	}
+
+	#[test]
+	fn parses_fixed_backoff() {
+		let pol: Policy = serde_json::from_value(serde_json::json!({
+			"attempts": 3,
+			"backoff": "5s",
+			"codes": [503],
+		}))
+		.unwrap();
+		assert_eq!(pol.attempts.get(), 3);
+		let backoff = pol.backoff.expect("backoff should be set");
+		assert_eq!(
+			backoff.delay_for_attempt(0),
+			std::time::Duration::from_secs(5)
+		);
+		assert_eq!(
+			backoff.delay_for_attempt(1),
+			std::time::Duration::from_secs(5)
+		);
+		assert_eq!(
+			backoff.delay_for_attempt(10),
+			std::time::Duration::from_secs(5)
+		);
+	}
+
+	#[test]
+	fn parses_sequence_backoff() {
+		let pol: Policy = serde_json::from_value(serde_json::json!({
+			"attempts": 10,
+			"backoff": ["2s", "4s", "8s", "16s", "32s"],
+			"codes": [429, 503],
+		}))
+		.unwrap();
+		assert_eq!(pol.attempts.get(), 10);
+		let backoff = pol.backoff.expect("backoff should be set");
+		// Verify the cycling pattern
+		assert_eq!(backoff.delay_for_attempt(0), std::time::Duration::from_secs(2));
+		assert_eq!(backoff.delay_for_attempt(1), std::time::Duration::from_secs(4));
+		assert_eq!(backoff.delay_for_attempt(2), std::time::Duration::from_secs(8));
+		assert_eq!(backoff.delay_for_attempt(3), std::time::Duration::from_secs(16));
+		assert_eq!(backoff.delay_for_attempt(4), std::time::Duration::from_secs(32));
+		// Cycle restarts
+		assert_eq!(backoff.delay_for_attempt(5), std::time::Duration::from_secs(2));
+		assert_eq!(backoff.delay_for_attempt(6), std::time::Duration::from_secs(4));
+	}
+
+	#[test]
+	fn no_backoff_defaults_to_none() {
+		let pol: Policy = serde_json::from_value(serde_json::json!({
+			"attempts": 3,
+			"codes": [503],
+		}))
+		.unwrap();
+		assert!(pol.backoff.is_none());
 	}
 }

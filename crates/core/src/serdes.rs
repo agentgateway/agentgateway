@@ -164,6 +164,133 @@ pub mod serde_dur_option {
 	}
 }
 
+/// Serde module for an optional backoff that can be either a single duration
+/// string (`"5s"`) or a list of duration strings (`["2s", "4s", "8s"]`).
+/// When a list is given, the backoff cycles through the values on successive
+/// retry attempts, restarting from the beginning when exhausted.
+pub mod serde_backoff_option {
+	use std::time::Duration;
+
+	use serde::ser::SerializeSeq;
+	use serde::{Deserialize, Deserializer, Serializer};
+
+	use crate::durfmt;
+
+	use super::BackoffSpec;
+
+	/// Internal enum that lets us accept both a scalar string and a sequence
+	/// of strings during deserialization.
+	#[derive(serde::Deserialize)]
+	#[serde(untagged)]
+	enum Raw {
+		Scalar(String),
+		List(Vec<String>),
+		None,
+	}
+
+	pub fn serialize<S: Serializer>(
+		t: &Option<BackoffSpec>,
+		serializer: S,
+	) -> Result<S::Ok, S::Error> {
+		match t {
+			None => serializer.serialize_none(),
+			Some(BackoffSpec::Fixed(d)) => serializer.serialize_str(&durfmt::format(*d)),
+			Some(BackoffSpec::Sequence(durations)) => {
+				let mut seq = serializer.serialize_seq(Some(durations.len()))?;
+				for d in durations {
+					seq.serialize_element(&durfmt::format(*d))?;
+				}
+				seq.end()
+			},
+		}
+	}
+
+	pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<BackoffSpec>, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let raw: Raw = Raw::deserialize(deserializer)?;
+		match raw {
+			Raw::None => Ok(None),
+			Raw::Scalar(s) => {
+				let d = durfmt::parse(&s).map_err(serde::de::Error::custom)?;
+				Ok(Some(BackoffSpec::Fixed(d)))
+			},
+			Raw::List(list) => {
+				if list.is_empty() {
+					return Ok(None);
+				}
+				let durations = list
+					.into_iter()
+					.map(|s| durfmt::parse(&s).map_err(serde::de::Error::custom))
+					.collect::<Result<Vec<Duration>, _>>()?;
+				Ok(Some(BackoffSpec::Sequence(durations)))
+			},
+		}
+	}
+}
+
+/// A backoff specification that can be a fixed duration or a sequence of
+/// durations that cycles through on successive retry attempts.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum BackoffSpec {
+	/// A single fixed delay applied to every retry.
+	Fixed(std::time::Duration),
+	/// A sequence of delays cycled through on successive retries.
+	/// When the sequence is exhausted, it restarts from the beginning.
+	Sequence(Vec<std::time::Duration>),
+}
+
+impl BackoffSpec {
+	/// Returns the delay for the given attempt index (0-based).
+	/// For `Fixed`, always returns the same duration.
+	/// For `Sequence`, cycles through the list using `index % len`.
+	pub fn delay_for_attempt(&self, attempt: usize) -> std::time::Duration {
+		match self {
+			BackoffSpec::Fixed(d) => *d,
+			BackoffSpec::Sequence(durations) => {
+				if durations.is_empty() {
+					return std::time::Duration::ZERO;
+				}
+				durations[attempt % durations.len()]
+			},
+		}
+	}
+}
+
+#[cfg(feature = "schema")]
+impl schemars::JsonSchema for BackoffSpec {
+	fn schema_name() -> std::borrow::Cow<'static, str> {
+		std::borrow::Cow::Borrowed("backoff")
+	}
+
+	fn json_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
+		use schemars::schema::{InstanceType, Schema, SchemaObject, SingleOrVec};
+
+		let string_schema = SchemaObject {
+			instance_type: Some(InstanceType::String.into()),
+			..Default::default()
+		}
+		.into();
+		let array_schema = SchemaObject {
+			instance_type: Some(InstanceType::Array.into()),
+			array: Some(Box::new(schemars::schema::ArrayValidation {
+				items: Some(SingleOrVec::Single(Box::new(string_schema.clone()))),
+				..Default::default()
+			})),
+			..Default::default()
+		}
+		.into();
+		Schema::Object(SchemaObject {
+			subschemas: Some(Box::new(schemars::schema::SubschemaValidation {
+				any_of: Some(vec![string_schema, array_schema]),
+				..Default::default()
+			})),
+			..Default::default()
+		})
+	}
+}
+
 pub mod serde_base64 {
 	use base64::Engine;
 	use base64::prelude::BASE64_STANDARD;

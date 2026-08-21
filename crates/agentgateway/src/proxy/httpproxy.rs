@@ -220,7 +220,7 @@ async fn apply_request_policies(
 			route_retry = None;
 		}
 	}
-	l.retry_backoff = route_retry.as_ref().and_then(|r| r.backoff);
+	l.retry_backoff = route_retry.as_ref().and_then(|r| r.backoff.as_ref().map(|b| b.delay_for_attempt(0)));
 
 	rp.llm_request_policies.local_rate_limit = pol
 		.local_rate_limit
@@ -1002,7 +1002,7 @@ impl HTTPProxy {
 
 		// attempts is the total number of attempts, not the retries
 		let attempts = retries.as_ref().map(|r| r.attempts.get() + 1).unwrap_or(1);
-		let retry_backoff = retries.as_ref().and_then(|r| r.backoff);
+		let retry_backoff_spec = retries.as_ref().and_then(|r| r.backoff.as_ref());
 		let request_timeout = response_policies
 			.timeout
 			.as_ref()
@@ -1084,14 +1084,15 @@ impl HTTPProxy {
 				return res;
 			}
 			debug!(
-				backoff=?retry_backoff,
+				backoff=?retry_backoff_spec.map(|b| b.delay_for_attempt(n.into())),
 				"attempting another retry, last result was {} {:?}",
 				res.is_err(),
 				res.as_ref().map(|r| r.status())
 			);
 			finalize_attempt_for_retry(log, &mut res);
 			last_res = Some(res);
-			if let Some(bo) = retry_backoff {
+			if let Some(bo_spec) = retry_backoff_spec {
+					let bo = bo_spec.delay_for_attempt(n.into());
 				let fut = if let Some(request_timeout) = request_timeout {
 					let deadline = tokio::time::Instant::from_std(log.start.as_instant() + request_timeout);
 					tokio::time::timeout_at(deadline, tokio::time::sleep(bo)).await
