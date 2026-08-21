@@ -583,7 +583,7 @@ function upsertFileConfigResource(
 					return (stringValue(record(keyValue.metadata).id) || `@index:${keyIndex}`) === previousId;
 				})
 			: -1;
-		if (!previousId || !previousId.startsWith('@index:')) {
+		if (!previousId?.startsWith('@index:')) {
 			value.metadata = {
 				...record(value.metadata),
 				id: previousId ?? `test-key-${keys.length + 1}`
