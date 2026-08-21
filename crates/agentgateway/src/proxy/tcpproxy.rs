@@ -223,7 +223,10 @@ impl TCPProxy {
 			.call_tcp(client::TCPCall {
 				source: connection,
 				target: backend_call.target,
-				transport,
+				connection: client::ConnectionConfig {
+					transport,
+					tcp: backend_call.backend_policies.tcp.clone(),
+				},
 			})
 			.await?;
 		Ok(())

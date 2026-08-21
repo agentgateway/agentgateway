@@ -4476,18 +4476,24 @@
       "properties": {
         "keepalives": {
           "description": "TCP keepalive settings for backend connections.",
-          "$ref": "#/$defs/KeepaliveConfig"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KeepaliveConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "connectTimeout": {
           "description": "Maximum time allowed to establish a backend TCP connection.",
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
-      "additionalProperties": false,
-      "required": [
-        "keepalives",
-        "connectTimeout"
-      ]
+      "additionalProperties": false
     },
     "Tunnel": {
       "type": "object",
