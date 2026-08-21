@@ -1,0 +1,34 @@
+---
+source: crates/agentgateway/src/import.rs
+description: src/tests/import/litellm/default-fallbacks-shadowed.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: solo
+        provider: openAI
+        params:
+          model: gpt-4o
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for solo
+  - sourcePath: litellm_settings.default_fallbacks
+    status: manual
+    message: litellm_settings.default_fallbacks is shadowed by router_settings.default_fallbacks; the router_settings value was applied
+  - sourcePath: router_settings.default_fallbacks
+    status: exact
+    message: default_fallbacks changed no routes; every chain already matches the explicit fallbacks or self-exclusion removed every candidate
+  - sourcePath: router_settings.default_fallbacks
+    status: manual
+    message: "LiteLLM serves unknown model names via the first default fallback \"solo\"; agentgateway returns 404 for unmatched model names because wildcard matching applies only to concrete llm.models entries; add a \"*\" model manually if unknown names must be served"

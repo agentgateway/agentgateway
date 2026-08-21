@@ -1,0 +1,38 @@
+---
+source: crates/agentgateway/src/import.rs
+description: src/tests/import/litellm/conditional-fallbacks.yaml
+---
+source: litellm
+config:
+  config:
+    database:
+      url: "sqlite://data.db"
+  gateways:
+    default:
+      port: 4000
+  ui:
+    gateways: default
+  llm:
+    gateways: default
+    models:
+      - name: primary
+        provider: openAI
+        params:
+          model: gpt-4o
+      - name: backup
+        provider: anthropic
+        params:
+          model: claude-haiku-4
+findings:
+  - sourcePath: "model_list[0]"
+    status: exact
+    message: Imported model deployment for primary
+  - sourcePath: "model_list[1]"
+    status: exact
+    message: Imported model deployment for backup
+  - sourcePath: router_settings.context_window_fallbacks
+    status: manual
+    message: "LiteLLM context_window_fallbacks is conditional on specific error types and cannot be represented by agentgateway's unconditional priority failover; configure equivalent behavior manually"
+  - sourcePath: router_settings.content_policy_fallbacks
+    status: manual
+    message: "LiteLLM content_policy_fallbacks is conditional on specific error types and cannot be represented by agentgateway's unconditional priority failover; configure equivalent behavior manually"
