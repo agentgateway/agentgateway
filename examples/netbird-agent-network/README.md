@@ -7,6 +7,8 @@ trusted values, and forwards the request to a private agentgateway listener.
 Agentgateway authenticates NetBird with a virtual API key and routes OpenAI
 and Anthropic requests to their respective providers.
 
+### Management traffic
+
 ```text
 NetBird client
     |
@@ -17,7 +19,16 @@ public management agentgateway
     | HTTP/2 cleartext inside the cluster
     v
 private NetBird server
+```
 
+The management agentgateway has a public LoadBalancer and terminates HTTPS for
+NetBird clients. It forwards management traffic over the cluster network to the
+NetBird server's private ClusterIP Service. A NetworkPolicy permits only the
+management agentgateway to reach the server.
+
+### Agent Network traffic
+
+```text
 NetBird client
     |
     | generated Agent Network HTTPS endpoint
@@ -32,10 +43,12 @@ private agentgateway listener
     `-- all other paths ---------> OpenAI
 ```
 
-The manifests use public LoadBalancer Services for the management agentgateway
-and Agent Network proxy. The NetBird server and AI agentgateway Services are
-ClusterIP-only. NetworkPolicies permit only the management agentgateway to
-reach the server and only the NetBird proxy to reach the AI gateway.
+The Agent Network proxy has a public LoadBalancer and accepts requests from
+authorized NetBird clients. It replaces caller-supplied identity headers with
+trusted NetBird identity, adds the virtual API key, and forwards requests to
+the private AI agentgateway Service. A NetworkPolicy permits only the NetBird
+proxy to reach this gateway. Agentgateway routes Anthropic message requests by
+path and sends all other requests to OpenAI.
 
 ## Temporary NetBird images
 
