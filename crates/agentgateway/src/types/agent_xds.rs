@@ -2285,15 +2285,11 @@ fn backend_policy_from_proto(
 			})
 		},
 		Some(bps::Kind::BackendTcp(btcp)) => BackendTrafficPolicy::TCP(backend::TCP {
-			connect_timeout: btcp
-				.connect_timeout
-				.map(convert_duration)
-				.unwrap_or(backend::defaults::connect_timeout()),
+			connect_timeout: btcp.connect_timeout.map(convert_duration),
 			keepalives: btcp
 				.keepalive
 				.as_ref()
-				.map(types::agent::KeepaliveConfig::from)
-				.unwrap_or_default(),
+				.map(types::agent::KeepaliveConfig::from),
 		}),
 		Some(bps::Kind::BackendTunnel(bt)) => BackendTrafficPolicy::Tunnel(backend::Tunnel {
 			proxy: Arc::new(resolve_simple_reference(bt.proxy.as_ref())),

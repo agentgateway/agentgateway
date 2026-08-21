@@ -10,7 +10,7 @@ use http_body_util::BodyExt;
 use tracing::{debug, error, warn};
 use typespec_client_core::http::DEFAULT_ALLOWED_QUERY_PARAMETERS;
 
-use crate::client::{ApplicationTransport, Call, Client};
+use crate::client::{ApplicationTransport, Call, Client, Transport};
 use crate::types::agent::Target;
 
 #[async_trait]
@@ -64,11 +64,14 @@ impl azure_core::http::HttpClient for Client {
 						url.port_or_known_default().unwrap_or(80),
 					))),
 				},
-				transport: if url.scheme() == "https" {
-					ApplicationTransport::Tls(crate::http::backendtls::SYSTEM_TRUST.base_config()).into()
+				connection: if url.scheme() == "https" {
+					Transport::from(ApplicationTransport::Tls(
+						crate::http::backendtls::SYSTEM_TRUST.base_config(),
+					))
 				} else {
-					ApplicationTransport::Plaintext.into()
-				},
+					Transport::from(ApplicationTransport::Plaintext)
+				}
+				.into(),
 			})
 			.await
 			.map_err(|e| {

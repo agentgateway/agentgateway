@@ -323,7 +323,7 @@ async fn apply_backend_policies(
 		backend_auth,
 		a2a,
 		http,
-		// Doesn't currently have any options to set, todo
+		// Applied by the upstream connector.
 		tcp: _,
 		// Applied elsewhere
 		tunnel: _,
@@ -1162,7 +1162,13 @@ impl HTTPProxy {
 		let upstream = self
 			.inputs
 			.upstream
-			.connect_raw(backend_call.target, transport)
+			.connect_raw(
+				backend_call.target,
+				client::ConnectionConfig {
+					transport,
+					tcp: backend_call.backend_policies.tcp.clone(),
+				},
+			)
 			.await?;
 		let mut resp = ::http::Response::builder()
 			.status(StatusCode::OK)
@@ -1685,7 +1691,10 @@ pub async fn build_transport(
 			None
 		};
 		let tc = client::TunnelConfig {
-			transport: Box::new(transport),
+			connection: Box::new(client::ConnectionConfig {
+				transport,
+				tcp: call.backend_policies.tcp.clone(),
+			}),
 			target: call.target,
 			token,
 		};
@@ -2671,7 +2680,10 @@ async fn make_backend_call(
 	let mut call = client::Call {
 		req,
 		target: backend_call.target,
-		transport,
+		connection: client::ConnectionConfig {
+			transport,
+			tcp: backend_call.backend_policies.tcp.clone(),
+		},
 	};
 	let span_target = backend_call.span_target;
 	dtrace::trace(|trace| trace.backend_call_started(&call.target));

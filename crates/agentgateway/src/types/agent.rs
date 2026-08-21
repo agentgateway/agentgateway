@@ -3191,6 +3191,7 @@ impl Target {
 }
 
 #[apply(schema!)]
+#[derive(Hash, PartialEq, Eq)]
 pub struct KeepaliveConfig {
 	/// Enable TCP keepalive probes on backend connections. Defaults to true.
 	#[serde(default = "defaults::always_true")]

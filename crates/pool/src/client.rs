@@ -396,7 +396,8 @@ where
 	}
 
 	async fn connect_to(&self, version: Version, pk: PK) -> Result<pool::HttpConnection, Error> {
-		let Some(timeout) = self.connect_timeout else {
+		let timeout = pk.connect_timeout().or(self.connect_timeout);
+		let Some(timeout) = timeout else {
 			return self.connect_to_inner(version, pk).await;
 		};
 		let connect = self.connect_to_inner(version, pk);
