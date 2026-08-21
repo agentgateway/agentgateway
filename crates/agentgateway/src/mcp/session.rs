@@ -389,13 +389,27 @@ impl Session {
 			Err(UpstreamError::McpGuardrails(rej)) if req_id.is_some() => {
 				Err(mcp::Error::McpGuardrails(req_id.unwrap(), rej).into())
 			},
-			Err(UpstreamError::InvalidRequest(message)) if req_id.is_some() && downstream_modern => {
+			// InvalidRequest/Unavailable already carry an Option<RequestId> (mcp::Error
+			// accepts a missing id for notifications), so classify them precisely
+			// whenever we're on the modern protocol path -- including notifications,
+			// which previously fell through to the generic internal error below purely
+			// for lack of a request id, even though the client/server distinction was
+			// already known. Legacy (downstream_modern == false) sessions intentionally
+			// keep the broad internal-error status below: streamable-HTTP clients on a
+			// legacy session must not see a differentiated status here (see
+			// `legacy_multiplex_invalid_target_keeps_internal_error` and
+			// `legacy_session_keeps_ping_and_unknown_methods_do_not_return_404`).
+			Err(UpstreamError::InvalidRequest(message)) if downstream_modern => {
 				Err(mcp::Error::InvalidParams(req_id, message).into())
 			},
-			Err(UpstreamError::Unavailable(message)) if req_id.is_some() && downstream_modern => {
+			Err(UpstreamError::Unavailable(message)) if downstream_modern => {
 				Err(mcp::Error::Unavailable(req_id, message).into())
 			},
-			// TODO: this is too broad. We have a big tangle of errors to untangle though
+			// Everything else is an internal/transport-layer failure with no
+			// client-actionable distinction (closed upstream channels, stdio process
+			// failures, rmcp service errors, OpenAPI translation failures) plus the
+			// legacy-path cases pinned above. Surface as a generic internal error; the
+			// concrete cause is preserved in the message for diagnosis.
 			Err(e) => Err(mcp::Error::SendError(req_id, e.to_string()).into()),
 		}
 	}
@@ -1061,4 +1075,77 @@ fn get_client_info() -> ClientInfo {
 	client_info.client_info =
 		Implementation::new("agentgateway", BuildInfo::new().version.to_string());
 	client_info
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	// `InvalidRequest`/`Unavailable` are client- vs server-caused conditions that
+	// `handle_error` can classify precisely on the modern protocol path (see the
+	// comment on those match arms), including for notifications (`req_id: None`),
+	// which previously fell through to the generic 500 purely for lack of a
+	// request id. These are unit tests of `handle_error` directly (rather than a
+	// full HTTP round-trip) because the classification is pure branch logic that
+	// doesn't depend on any transport/session state.
+
+	#[tokio::test]
+	async fn modern_notification_invalid_request_maps_to_invalid_params() {
+		let err = Err(UpstreamError::InvalidRequest(
+			"unknown service x".to_string(),
+		));
+		let result = Session::handle_error(None, err, true).await;
+		match result {
+			Err(ProxyError::MCP(mcp::Error::InvalidParams(None, message))) => {
+				assert!(message.contains("unknown service x"));
+			},
+			other => panic!("expected InvalidParams with no request id, got: {other:?}"),
+		}
+	}
+
+	#[tokio::test]
+	async fn modern_notification_unavailable_maps_to_unavailable() {
+		let err = Err(UpstreamError::Unavailable(
+			"no upstreams available".to_string(),
+		));
+		let result = Session::handle_error(None, err, true).await;
+		match result {
+			Err(ProxyError::MCP(mcp::Error::Unavailable(None, message))) => {
+				assert!(message.contains("no upstreams available"));
+			},
+			other => panic!("expected Unavailable with no request id, got: {other:?}"),
+		}
+	}
+
+	#[tokio::test]
+	async fn legacy_notification_invalid_request_keeps_generic_internal_error() {
+		// Legacy (downstream_modern == false) sessions intentionally keep the broad
+		// internal-error status regardless of req_id; see
+		// `legacy_multiplex_invalid_target_keeps_internal_error` in mcp_tests.rs.
+		let err = Err(UpstreamError::InvalidRequest(
+			"unknown service x".to_string(),
+		));
+		let result = Session::handle_error(None, err, false).await;
+		assert!(matches!(
+			result,
+			Err(ProxyError::MCP(mcp::Error::SendError(None, _)))
+		));
+	}
+
+	#[tokio::test]
+	async fn modern_request_invalid_request_still_maps_to_invalid_params() {
+		// Unchanged behavior: a modern request with a request id was already
+		// classified precisely before this change.
+		let id = RequestId::Number(1);
+		let err = Err(UpstreamError::InvalidRequest(
+			"unknown service x".to_string(),
+		));
+		let result = Session::handle_error(Some(id.clone()), err, true).await;
+		match result {
+			Err(ProxyError::MCP(mcp::Error::InvalidParams(Some(got_id), _))) => {
+				assert_eq!(got_id, id);
+			},
+			other => panic!("expected InvalidParams with request id, got: {other:?}"),
+		}
+	}
 }
