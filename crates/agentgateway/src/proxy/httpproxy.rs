@@ -1660,17 +1660,25 @@ pub async fn build_transport(
 		ApplicationTransport::Plaintext
 	};
 	if let Some(tun) = backend_tunnel {
-		let backend: BackendWithPolicies =
-			super::resolve_simple_backend_with_policies(&tun.proxy, inputs)?.into();
-		let pols = crate::proxy::tcpproxy::get_backend_policies(inputs, &backend, &tun.policies, None);
-		let call = TCPProxy::build_backend_call(&mut None, None, inputs, &backend.backend, pols, None)?;
+		let resolved;
+		let call = if let Some(call) = backend_call.tunnel_proxy.as_deref() {
+			call
+		} else {
+			let backend: BackendWithPolicies =
+				super::resolve_simple_backend_with_policies(&tun.proxy, inputs)?.into();
+			let pols =
+				crate::proxy::tcpproxy::get_backend_policies(inputs, &backend, &tun.policies, None);
+			resolved =
+				TCPProxy::build_backend_call(&mut None, None, inputs, &backend.backend, pols, None)?;
+			&resolved
+		};
 		let tunnel_backend_tls = call.backend_policies.backend_tls.clone();
 		let tunnel_auth = call.backend_policies.backend_auth.clone();
 		// This is a bounded recursion; this code is only called when backend_tunnel is set, and in this call
 		// we never set it.
 		let transport = Box::pin(build_transport(
 			inputs,
-			&call,
+			call,
 			hbone_source,
 			tunnel_backend_tls,
 			None,
@@ -1686,8 +1694,9 @@ pub async fn build_transport(
 		};
 		let tc = client::TunnelConfig {
 			transport: Box::new(transport),
-			target: call.target,
+			target: call.target.clone(),
 			token,
+			connect: tun.mode == backend::TunnelMode::Connect,
 		};
 		return Ok(Transport::Tunnel(app_transport, tc));
 	}
@@ -1913,6 +1922,25 @@ pub(super) fn dynamic_backend_target_override<'a>(
 	let target = Target::try_from(s.as_str())
 		.map_err(|e| ProxyError::ProcessingString(format!("dynamic backend target {s:?}: {e}")))?;
 	Ok(Some(target))
+}
+
+fn resolve_tunnel_backend_call(
+	inputs: &ProxyInputs,
+	tunnel: &backend::Tunnel,
+	req: &Request,
+) -> Result<BackendCall, ProxyError> {
+	let backend = super::resolve_tunnel_backend(&tunnel.proxy, inputs)?;
+	let policies =
+		crate::proxy::tcpproxy::get_backend_policies(inputs, &backend, &tunnel.policies, None);
+	if let Backend::Dynamic(_, expr) = &backend.backend {
+		let executor = crate::cel::Executor::new_request(req);
+		let target = match dynamic_backend_target_override(&executor, expr)? {
+			Some(target) => target,
+			None => target_from_request(req)?,
+		};
+		return Ok(BackendCall::new(target, policies));
+	}
+	TCPProxy::build_backend_call(&mut None, None, inputs, &backend.backend, policies, None)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2361,6 +2389,9 @@ async fn make_backend_call(
 			Some(target) => target,
 			None => target_from_request(&req)?,
 		};
+	}
+	if let Some(tunnel) = backend_call.backend_policies.tunnel.clone() {
+		backend_call.set_tunnel_proxy(resolve_tunnel_backend_call(&inputs, &tunnel, &req)?);
 	}
 
 	log.add(|l| {
@@ -2916,6 +2947,7 @@ pub fn build_service_call(
 			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
 			advanced_routing: None,
 			backend_policies,
+			tunnel_proxy: None,
 		});
 	}
 
@@ -3087,6 +3119,7 @@ pub fn build_service_call(
 		hbone_port,
 		advanced_routing: BackendCallAdvancedRouting::new(network_gateway, waypoint),
 		backend_policies,
+		tunnel_proxy: None,
 	})
 }
 
@@ -4128,6 +4161,7 @@ pub struct BackendCall {
 	pub hbone_port: u16,
 	advanced_routing: Option<Box<BackendCallAdvancedRouting>>,
 	pub backend_policies: Arc<BackendPolicies>,
+	tunnel_proxy: Option<Box<BackendCall>>,
 }
 
 impl BackendCall {
@@ -4148,7 +4182,12 @@ impl BackendCall {
 			hbone_port: agent_hbone::DEFAULT_HBONE_PORT,
 			advanced_routing: None,
 			backend_policies,
+			tunnel_proxy: None,
 		}
+	}
+
+	pub(super) fn set_tunnel_proxy(&mut self, call: BackendCall) {
+		self.tunnel_proxy = Some(Box::new(call));
 	}
 
 	pub(crate) fn network_gateway(&self) -> Option<&(GatewayAddress, Vec<Identity>)> {

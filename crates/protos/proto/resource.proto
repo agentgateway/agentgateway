@@ -1587,9 +1587,16 @@ message BackendPolicySpec {
     google.protobuf.Duration request_timeout = 2;
   }
   message BackendTunnel {
+    enum Mode {
+      // Use CONNECT for TLS and non-HTTP transports, and absolute-form requests for plaintext HTTP.
+      AUTO = 0;
+      // Use CONNECT for all transports, including plaintext HTTP.
+      CONNECT = 1;
+    }
     BackendReference proxy = 1;
     // Inline backend policies (e.g. TLS, auth) for the tunnel proxy backend.
     repeated BackendPolicySpec inline_policies = 2;
+    Mode mode = 3;
   }
   message BackendTCP {
     KeepaliveConfig keepalive = 1;

@@ -76,6 +76,7 @@ pub struct TunnelConfig {
 	pub target: Target,
 	pub transport: Box<Transport>,
 	pub token: Option<HeaderValue>,
+	pub connect: bool,
 }
 
 /// The role this agentgateway is acting as when originating an HBONE CONNECT.
@@ -307,8 +308,8 @@ impl Connector {
 		trace!(?transport, "connecting");
 		let stream = match transport {
 			Transport::Plain(_) => dial(&target, ep, &self.backend_config).await?,
-			Transport::Tunnel(_, tcfg) if tls.is_some() || !http => {
-				// Tunnel case one: use CONNECT for non-plaintext HTTP
+			Transport::Tunnel(_, tcfg) if tcfg.connect || tls.is_some() || !http => {
+				// Use CONNECT when required by the transport or explicitly configured.
 				let proxy_dst: SocketAddr = self
 					// Never skip resolution for the actually proxy itself
 					.resolve_target(false, &tcfg.target)
@@ -647,6 +648,7 @@ impl Client {
 			if let Transport::Tunnel(app, tc) = &transport
 				&& let Some(h) = tc.token.as_ref()
 				&& matches!(app, ApplicationTransport::Plaintext)
+				&& !tc.connect
 			{
 				req
 					.headers_mut()

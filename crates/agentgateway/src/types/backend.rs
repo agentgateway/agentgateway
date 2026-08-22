@@ -63,10 +63,23 @@ impl HTTP {
 	}
 }
 
+#[apply(schema_enum!)]
+#[derive(Default)]
+pub enum TunnelMode {
+	/// Use CONNECT for TLS and non-HTTP transports, and absolute-form requests for plaintext HTTP.
+	#[default]
+	Auto,
+	/// Use CONNECT for all transports, including plaintext HTTP.
+	Connect,
+}
+
 #[apply(schema!)]
 pub struct Tunnel {
 	/// Proxy backend used to tunnel the connection.
 	pub proxy: Arc<SimpleBackendReference>,
+	/// How requests are sent through the proxy.
+	#[serde(default)]
+	pub mode: TunnelMode,
 	/// Policies to connect to the proxy backend
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]

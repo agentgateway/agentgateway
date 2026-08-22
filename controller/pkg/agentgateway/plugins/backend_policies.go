@@ -548,6 +548,10 @@ func translateBackendHTTP(policy *agentgateway.AgentgatewayPolicy) *api.Policy {
 
 func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPolicy) (*api.Policy, error) {
 	tunnel := policy.Spec.Backend.Tunnel
+	mode := api.BackendPolicySpec_BackendTunnel_AUTO
+	if tunnel.Mode == agentgateway.BackendTunnelModeConnect {
+		mode = api.BackendPolicySpec_BackendTunnel_CONNECT
+	}
 
 	proxy, inlinePolicies, _, err := buildPolicyBackendEndpoint(ctx, tunnel.PolicyBackendEndpoint, policy.Namespace)
 
@@ -560,6 +564,7 @@ func translateBackendTunnel(ctx PolicyCtx, policy *agentgateway.AgentgatewayPoli
 					BackendTunnel: &api.BackendPolicySpec_BackendTunnel{
 						Proxy:          proxy,
 						InlinePolicies: inlinePolicies,
+						Mode:           mode,
 					},
 				},
 			},

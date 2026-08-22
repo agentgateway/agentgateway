@@ -2275,6 +2275,15 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
+                                        mode:
+                                          default: Auto
+                                          description: |-
+                                            How requests are sent through the proxy.
+                                            Defaults to `Auto`.
+                                          enum:
+                                          - Auto
+                                          - Connect
+                                          type: string
                                         url:
                                           description: |-
                                             `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -2716,6 +2725,15 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
+                                        mode:
+                                          default: Auto
+                                          description: |-
+                                            How requests are sent through the proxy.
+                                            Defaults to `Auto`.
+                                          enum:
+                                          - Auto
+                                          - Connect
+                                          type: string
                                         url:
                                           description: |-
                                             `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -3176,6 +3194,15 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
+                                        mode:
+                                          default: Auto
+                                          description: |-
+                                            How requests are sent through the proxy.
+                                            Defaults to `Auto`.
+                                          enum:
+                                          - Auto
+                                          - Connect
+                                          type: string
                                         url:
                                           description: |-
                                             `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -3991,6 +4018,15 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
+                                        mode:
+                                          default: Auto
+                                          description: |-
+                                            How requests are sent through the proxy.
+                                            Defaults to `Auto`.
+                                          enum:
+                                          - Auto
+                                          - Connect
+                                          type: string
                                         url:
                                           description: |-
                                             `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -4432,6 +4468,15 @@ spec:
                                           - message: Must have port for Service reference
                                             rule: '(size(self.group) == 0 && self.kind
                                               == ''Service'') ? has(self.port) : true'
+                                        mode:
+                                          default: Auto
+                                          description: |-
+                                            How requests are sent through the proxy.
+                                            Defaults to `Auto`.
+                                          enum:
+                                          - Auto
+                                          - Connect
+                                          type: string
                                         url:
                                           description: |-
                                             `url` directly specifies the HTTP(S) endpoint for this policy.
@@ -4915,6 +4960,15 @@ spec:
                         - message: Must have port for Service reference
                           rule: '(size(self.group) == 0 && self.kind == ''Service'')
                             ? has(self.port) : true'
+                      mode:
+                        default: Auto
+                        description: |-
+                          How requests are sent through the proxy.
+                          Defaults to `Auto`.
+                        enum:
+                        - Auto
+                        - Connect
+                        type: string
                       url:
                         description: |-
                           `url` directly specifies the HTTP(S) endpoint for this policy.

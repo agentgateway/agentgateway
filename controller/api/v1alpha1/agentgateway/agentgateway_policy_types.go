@@ -2483,6 +2483,16 @@ const (
 	Entra     McpIDP = "Entra"
 )
 
+// +k8s:enum
+type BackendTunnelMode string
+
+const (
+	// Auto uses CONNECT for TLS and non-HTTP transports, and absolute-form requests for plaintext HTTP.
+	BackendTunnelModeAuto BackendTunnelMode = "Auto"
+	// Connect uses CONNECT for all transports, including plaintext HTTP.
+	BackendTunnelModeConnect BackendTunnelMode = "Connect"
+)
+
 // +kubebuilder:validation:ExactlyOneOf=backendRef;url
 type BackendTunnel struct {
 	// Proxy server to reach.
@@ -2490,6 +2500,12 @@ type BackendTunnel struct {
 	// +kubebuilder:validation:XValidation:rule="!has(self.url) || self.url.matches('^https?://[^/?#]+$')",message="url must not include a path for backend tunnel"
 	// +optional
 	PolicyBackendEndpoint `json:",inline"`
+
+	// How requests are sent through the proxy.
+	// Defaults to `Auto`.
+	// +kubebuilder:default=Auto
+	// +optional
+	Mode BackendTunnelMode `json:"mode,omitempty"`
 }
 
 type BackendHTTP struct {

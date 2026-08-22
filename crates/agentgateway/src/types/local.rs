@@ -1358,6 +1358,11 @@ pub enum FullLocalBackendSpec {
 	/// Hostname or IP address of the upstream to route to.
 	#[serde(rename = "host")]
 	Opaque(Target),
+	/// Resolve the dial target from request metadata using a CEL expression.
+	Dynamic {
+		#[serde(default, skip_serializing_if = "Option::is_none")]
+		target: Option<Arc<crate::cel::Expression>>,
+	},
 	/// Route to the in-process admin service instead of a network upstream.
 	#[serde(rename = "internal")]
 	Internal(InternalBackend),
@@ -1373,6 +1378,7 @@ impl From<FullLocalBackendSpec> for LocalBackend {
 	fn from(spec: FullLocalBackendSpec) -> Self {
 		match spec {
 			FullLocalBackendSpec::Opaque(t) => LocalBackend::Opaque(t),
+			FullLocalBackendSpec::Dynamic { target } => LocalBackend::Dynamic { target },
 			FullLocalBackendSpec::Internal(t) => LocalBackend::Internal(t),
 			FullLocalBackendSpec::MCP(m) => LocalBackend::MCP(m),
 			FullLocalBackendSpec::AI(a) => LocalBackend::AI(a),

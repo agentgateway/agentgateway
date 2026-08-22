@@ -1871,8 +1871,16 @@ mod dynamic_metadata_flow {
 }
 
 mod dynamic_backend_target {
+	use tokio::io::{AsyncReadExt, AsyncWriteExt};
+	use tokio::net::{TcpListener, TcpStream};
+	use tokio::sync::oneshot;
+
 	use super::*;
-	use crate::types::agent::{Backend, ResourceName};
+	use crate::proxy::request_builder::RequestBuilder;
+	use crate::types::agent::{
+		Backend, BackendTrafficPolicy, BackendWithPolicies, ResourceName, SimpleBackendReference,
+	};
+	use crate::types::backend;
 
 	struct WorkerTargetExtProc {
 		target: String,
@@ -1951,6 +1959,95 @@ mod dynamic_backend_target {
 		.await
 		.unwrap();
 		assert_eq!(res.status(), 200);
+	}
+
+	#[tokio::test]
+	async fn resolves_dynamic_connect_proxy_without_changing_actor_target() {
+		async fn run(version: ::http::Version) {
+			let actor = simple_mock().await;
+			let actor_addr = *actor.address();
+			let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+			let worker_addr = listener.local_addr().unwrap();
+			let (connect_tx, connect_rx) = oneshot::channel();
+			let worker = tokio::spawn(async move {
+				let (mut downstream, _) = listener.accept().await.unwrap();
+				let mut request = Vec::new();
+				loop {
+					let mut chunk = [0; 1024];
+					let n = downstream.read(&mut chunk).await.unwrap();
+					assert!(n > 0, "CONNECT request unexpectedly closed");
+					request.extend_from_slice(&chunk[..n]);
+					if request.windows(4).any(|w| w == b"\r\n\r\n") {
+						break;
+					}
+				}
+				connect_tx.send(request).unwrap();
+				downstream
+					.write_all(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+					.await
+					.unwrap();
+				let mut upstream = TcpStream::connect(actor_addr).await.unwrap();
+				let _ = tokio::io::copy_bidirectional(&mut downstream, &mut upstream).await;
+			});
+
+			let ext_proc = ExtProcMock::new(move || WorkerTargetExtProc {
+				target: worker_addr.to_string(),
+			})
+			.spawn()
+			.await;
+			let worker_backend = Backend::Dynamic(
+				ResourceName::new("worker".into(), "".into()),
+				Some(Arc::new(
+					Expression::new_strict("extproc.workerTarget").unwrap(),
+				)),
+			);
+			let actor_backend = Backend::Opaque(
+				ResourceName::new("actor".into(), "".into()),
+				Target::Address(actor_addr),
+			);
+			let route = basic_named_route(actor_backend.name());
+			let actor_backend = BackendWithPolicies {
+				backend: actor_backend,
+				inline_policies: vec![BackendTrafficPolicy::Tunnel(backend::Tunnel {
+					proxy: Arc::new(SimpleBackendReference::Backend(worker_backend.name())),
+					mode: backend::TunnelMode::Connect,
+					policies: vec![],
+				})],
+			};
+			let t = setup_proxy_test("{}")
+				.unwrap()
+				.with_raw_backend(worker_backend.into())
+				.with_raw_backend(actor_backend)
+				.with_backend(ext_proc.address)
+				.with_bind(simple_bind())
+				.with_route(route)
+				.attach_route_policy_builder(json!({
+					"extProc": {
+						"host": ext_proc.address,
+						"failureMode": "failClosed",
+					},
+				}))
+				.await;
+
+			let io = if version == ::http::Version::HTTP_2 {
+				t.serve_http2(strng::new("bind"))
+			} else {
+				t.serve_http(strng::new("bind"))
+			};
+			let res = RequestBuilder::new(Method::GET, "http://actor-authority/test")
+				.version(version)
+				.send(io)
+				.await
+				.unwrap();
+			assert_eq!(res.status(), 200);
+			assert_eq!(read_body(res.into_body()).await.version, version);
+			let connect = String::from_utf8(connect_rx.await.unwrap()).unwrap();
+			assert!(connect.starts_with(&format!("CONNECT {actor_addr} HTTP/1.1\r\n")));
+			worker.abort();
+		}
+
+		run(::http::Version::HTTP_11).await;
+		run(::http::Version::HTTP_2).await;
 	}
 
 	/// Omitting `target` keeps today's behavior: the request's own
