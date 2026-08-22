@@ -7,7 +7,11 @@ A simple example of an expression that could be used for MCP authorization: `jwt
 
 For post-request logging, tracing, and metrics CEL, MCP tool calls also expose payload fields such as
 `mcp.methodName`, `mcp.sessionId`, `mcp.tool.arguments`, `mcp.tool.result`, and `mcp.tool.error`.
-Request-time authorization keeps the `mcp` context identity-only, so those payload fields are absent during RBAC evaluation.
+Request-time authorization keeps the `mcp` context identity-only: `mcp.tool.target`, `mcp.tool.name`,
+and the target/name fields of prompts, resources, and tasks are available, but the post-request fields
+listed above are absent during RBAC evaluation. An `mcpAuthorization` expression that references one
+of those fields is retained with the existing authorization semantics and produces a configuration warning;
+the reference cannot enforce a condition on a value that is not available at authorization time.
 
 While CEL is not as powerful as alternatives like Lua or WASM, it is pretty fast and good enough for many use cases.
 
