@@ -46,6 +46,8 @@ deps_started=1
 export OIDC_COOKIE_SECRET="${OIDC_COOKIE_SECRET:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}"
 export OPENAI_API_KEY=dummy
 export ANTHROPIC_API_KEY=dummy
+export SPARK_API_PASSWORD=dummy
+export ASTRON_API_KEY=dummy
 
 for config_file in "${config_files[@]}"; do
   echo "Validating $config_file"
