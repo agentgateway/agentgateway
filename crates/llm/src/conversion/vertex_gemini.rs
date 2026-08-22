@@ -442,7 +442,7 @@ pub mod from_completions {
 			let Some(mime) =
 				explicit_mime_hint(image_url).or_else(|| mime_from_extension(url).map(str::to_string))
 			else {
-				return Err(AIError::InvalidResponse(strng::new(format!(
+				return Err(AIError::UnsupportedConversion(strng::new(format!(
 					"gs:// image_url ({url}) has no recognised extension or MIME hint; pass image_url.format (or mime_type/content_type), or use an object with a known extension"
 				))));
 			};
@@ -450,7 +450,7 @@ pub mod from_completions {
 		}
 
 		// http(s) and anything else are not fetchable by Vertex.
-		Err(AIError::InvalidResponse(strng::new(format!(
+		Err(AIError::UnsupportedConversion(strng::new(format!(
 			"native Gemini path rejects http(s) image_url ({url}); upload to gs:// or send inline data:"
 		))))
 	}
@@ -483,7 +483,7 @@ pub mod from_completions {
 				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
 				.or_else(|| mime_from_extension(uri).map(str::to_string))
 			else {
-				return Err(AIError::InvalidResponse(strng::new(format!(
+				return Err(AIError::UnsupportedConversion(strng::new(format!(
 					"gs:// file ({uri}) has no recognised extension or MIME hint; pass file.filename (or mime_type/content_type), or use an object with a known extension"
 				))));
 			};
@@ -491,12 +491,12 @@ pub mod from_completions {
 		}
 
 		if !file_id.is_empty() {
-			return Err(AIError::InvalidResponse(strng::new(format!(
+			return Err(AIError::UnsupportedConversion(strng::new(format!(
 				"native Gemini path cannot resolve OpenAI file_id ({file_id}); Vertex has no OpenAI Files store. Send file.file_data as an inline data: URI, or reference a gs:// object"
 			))));
 		}
 
-		Err(AIError::InvalidResponse(strng::new(
+		Err(AIError::UnsupportedConversion(strng::new(
 			"file content part has neither an inline data: file_data nor a gs:// reference",
 		)))
 	}

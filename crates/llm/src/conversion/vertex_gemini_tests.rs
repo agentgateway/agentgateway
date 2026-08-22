@@ -160,10 +160,15 @@ fn file_id_is_rejected_rather_than_dropped() {
 		&req(file_content(json!({ "file_id": "file-abc123" }))),
 		None,
 	);
-	let msg = format!("{:?}", err.expect_err("opaque file_id must be rejected"));
+	let err = err.expect_err("opaque file_id must be rejected");
+	// Load-bearing: classify_ai_request maps UnsupportedConversion to 400, InvalidResponse to 503.
 	assert!(
-		msg.contains("file_id"),
-		"error should name the field: {msg}"
+		matches!(err, crate::AIError::UnsupportedConversion(_)),
+		"bad client input must be a request error, got {err:?}"
+	);
+	assert!(
+		format!("{err:?}").contains("file_id"),
+		"error should name the field: {err:?}"
 	);
 }
 
