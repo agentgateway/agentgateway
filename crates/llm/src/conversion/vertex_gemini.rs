@@ -490,6 +490,18 @@ pub mod from_completions {
 			return Ok(file_data_part(&mime, uri));
 		}
 
+		// Raw base64 without a data URL wrapper, as bedrock.rs also accepts; mime from filename.
+		if !file_data.is_empty() && !file_data.contains("://") {
+			let Some(mime) = explicit_mime_hint(file)
+				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
+			else {
+				return Err(AIError::UnsupportedConversion(strng::literal!(
+					"raw base64 file_data has no MIME source; pass file.filename with a known extension (or mime_type/content_type), or wrap it in a data: URI"
+				)));
+			};
+			return Ok(inline_data_part(&mime, file_data));
+		}
+
 		if !file_id.is_empty() {
 			return Err(AIError::UnsupportedConversion(strng::new(format!(
 				"native Gemini path cannot resolve OpenAI file_id ({file_id}); Vertex has no OpenAI Files store. Send file.file_data as an inline data: URI, or reference a gs:// object"

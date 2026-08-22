@@ -143,6 +143,29 @@ fn file_gs_uri_without_extension_or_hint_is_rejected() {
 }
 
 #[test]
+fn raw_base64_file_data_takes_mime_from_filename() {
+	let g = to_gemini(file_content(json!({
+		"filename": "report.pdf",
+		"file_data": "JVBERi0xLjQK"
+	})));
+	let part = &g["contents"][0]["parts"][1];
+	assert_eq!(part["inlineData"]["mimeType"], "application/pdf");
+	assert_eq!(part["inlineData"]["data"], "JVBERi0xLjQK");
+}
+
+#[test]
+fn raw_base64_file_data_without_a_mime_source_is_rejected() {
+	let err = from_completions::translate(
+		&req(file_content(json!({ "file_data": "JVBERi0xLjQK" }))),
+		None,
+	);
+	assert!(
+		err.is_err(),
+		"raw base64 with no filename or hint cannot yield the mimeType Vertex requires"
+	);
+}
+
+#[test]
 fn file_id_holding_a_gs_uri_becomes_file_data() {
 	// Some clients put a bucket URI in `file_id` rather than `file_data`; Vertex can fetch
 	// that directly, so it is honoured instead of being treated as an opaque OpenAI id.
