@@ -491,7 +491,8 @@ pub mod from_completions {
 		}
 
 		// Raw base64 without a data URL wrapper, as bedrock.rs also accepts; mime from filename.
-		if !file_data.is_empty() && !file_data.contains("://") {
+		// A malformed `data:` value must not reach here, or its header becomes payload.
+		if !file_data.is_empty() && !file_data.contains("://") && !file_data.starts_with("data:") {
 			let Some(mime) = explicit_mime_hint(file)
 				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
 			else {

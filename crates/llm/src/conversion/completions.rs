@@ -9,6 +9,10 @@ use tracing::debug;
 
 use crate::{StreamingUsageGuard, logged_response_parsing, parse, types};
 
+#[cfg(test)]
+#[path = "completions_tests.rs"]
+mod tests;
+
 /// Parse a Google error response, handling both single object and array-wrapped formats.
 /// Google's OpenAI-compatible endpoints consistently return `[{"error": {...}}]`
 /// rather than `{"error": {...}}` when using the Vertex AI shim.
@@ -66,10 +70,14 @@ pub fn translate_google_error(bytes: &Bytes) -> Result<Bytes, crate::AIError> {
 pub(crate) fn parse_data_url(url: &str) -> Option<(&str, &str)> {
 	let raw = url.strip_prefix("data:")?;
 	let (meta, data) = raw.split_once(',')?;
-	let (media_type, encoding) = meta.split_once(';')?;
-	if !encoding.eq_ignore_ascii_case("base64") {
+	// RFC 2397 allows media-type parameters before the encoding marker:
+	// data:<mediatype>[;param=value]*;base64,<data>
+	let idx = meta.len().checked_sub(";base64".len())?;
+	if !meta.get(idx..)?.eq_ignore_ascii_case(";base64") {
 		return None;
 	}
+	// Parameters such as charset are not part of the media type.
+	let media_type = meta.get(..idx)?.split(';').next().unwrap_or_default();
 	Some((media_type, data))
 }
 
