@@ -221,6 +221,13 @@ spec:
                     x-kubernetes-list-map-keys:
                     - type
                     x-kubernetes-list-type: map
+                  providerOverride:
+                    description: |-
+                      Provider identity used for cost-catalog lookup and telemetry.
+                      Defaults to "custom" when unset.
+                    maxLength: 256
+                    minLength: 1
+                    type: string
                 required:
                 - formats
                 type: object

@@ -2284,6 +2284,11 @@ func (in *CustomProviderSettings) DeepCopyInto(out *CustomProviderSettings) {
 		*out = new(LocalBackendObjectReference)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.ProviderOverride != nil {
+		in, out := &in.ProviderOverride, &out.ProviderOverride
+		*out = new(ShortString)
+		**out = **in
+	}
 	if in.Formats != nil {
 		in, out := &in.Formats, &out.Formats
 		*out = make([]ProviderFormatConfig, len(*in))
