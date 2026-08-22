@@ -962,6 +962,8 @@ impl RequestLog {
 			a2a_method: None,
 			a2a_response: None,
 			inference_pool: None,
+			ate_actor_id: None,
+			ate_atespace: None,
 			request_handle: None,
 			request_snapshot: None,
 			response_snapshot: None,
@@ -1128,6 +1130,9 @@ pub struct RequestLog {
 	pub a2a_response: Option<a2a::ResponseInfo>,
 
 	pub inference_pool: Option<SocketAddr>,
+
+	pub ate_actor_id: Option<String>,
+	pub ate_atespace: Option<String>,
 
 	pub request_handle: Option<ActiveHandle>,
 	pub request_snapshot: Option<Arc<cel::RequestSnapshot>>,
@@ -1526,6 +1531,8 @@ impl Drop for DropOnLog {
 					"inferencepool.selected_endpoint",
 					log.inference_pool.display(),
 				),
+				("ate.actor.id", log.ate_actor_id.display()),
+				("ate.atespace", log.ate_atespace.display()),
 				// OpenTelemetry Gen AI Semantic Conventions v1.40.0
 				(
 					"gen_ai.operation.name",

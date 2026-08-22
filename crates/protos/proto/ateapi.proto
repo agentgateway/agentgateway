@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package ateapi;
+
+// Minimal wire-compatible subset of the Substrate control API used by
+// agentgateway's actor policies.
+service Control {
+  rpc GetActor(GetActorRequest) returns (Actor) {}
+  rpc ResumeActor(ResumeActorRequest) returns (ResumeActorResponse) {}
+}
+
+message Actor {
+  ResourceMetadata metadata = 1;
+  WorkerAssignment worker_assignment = 5;
+}
+
+// The minimal running-actor assignment required by AgentGateway ingress.
+message WorkerAssignment {
+  string worker_pod_ip = 5;
+}
+
+message ResourceMetadata {
+  int64 version = 4;
+}
+
+message ObjectRef {
+  string atespace = 1;
+  string name = 2;
+}
+
+message ResumeActorRequest {
+  ObjectRef actor = 1;
+  bool boot = 2;
+}
+
+message ResumeActorResponse {
+  Actor actor = 1;
+}
+
+message GetActorRequest {
+  ObjectRef actor = 1;
+}

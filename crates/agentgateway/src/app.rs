@@ -87,9 +87,10 @@ pub async fn run(
 		config.metrics.excluded_metrics.clone(),
 		config.histograms,
 	));
-	let client = client::Client::new(
+	let client = client::Client::new_with_h2_config(
 		&config.dns,
 		pool,
+		Arc::new(config.hbone.h2.clone()),
 		config.backend.clone(),
 		Some(metrics_handle.clone()),
 	);

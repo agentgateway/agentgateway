@@ -68,11 +68,14 @@ impl ProxyError {
 			| ProxyError::MethodNotAllowed
 			| ProxyError::ProcessingString(_)
 			| ProxyError::Processing(_)
+			| ProxyError::SubstrateEgressUnavailable(_)
 			| ProxyError::RouteCycleDetected
 			| ProxyError::Body(_)
 			| ProxyError::Http(_)
 			| ProxyError::BackendUnsupportedMirror
-			| ProxyError::FilterError(_) => ProxyResponseReason::Internal,
+			| ProxyError::FilterError(_)
+			| ProxyError::StaleAssignment => ProxyResponseReason::Internal,
+			ProxyError::SubstrateIngressFailed(status, _) => substrate_ingress_reason(*status),
 			ProxyError::AIRequest(error) => classify_ai_request(error).reason,
 			ProxyError::AIResponse(error) => classify_ai_response(error).reason,
 			ProxyError::JwtAuthenticationFailure(_) => ProxyResponseReason::JwtAuth,
@@ -82,9 +85,9 @@ impl ProxyError {
 			ProxyError::APIKeyAuthenticationFailure(_) => ProxyResponseReason::APIKeyAuth,
 			ProxyError::ExternalAuthorizationFailed(_) => ProxyResponseReason::ExtAuth,
 			ProxyError::MCP(_) => ProxyResponseReason::MCP,
-			ProxyError::AuthorizationFailed | ProxyError::CsrfValidationFailed => {
-				ProxyResponseReason::Authorization
-			},
+			ProxyError::AuthorizationFailed
+			| ProxyError::SubstrateEgressDenied(_)
+			| ProxyError::CsrfValidationFailed => ProxyResponseReason::Authorization,
 			ProxyError::UpstreamCallFailed(_)
 			| ProxyError::UpstreamTCPCallFailed(_)
 			| ProxyError::BackendAuthenticationFailed(_)
@@ -96,6 +99,16 @@ impl ProxyError {
 			},
 			ProxyError::GuardrailRejected { .. } => ProxyResponseReason::Guardrail,
 		}
+	}
+}
+
+fn substrate_ingress_reason(status: StatusCode) -> ProxyResponseReason {
+	match status {
+		StatusCode::NOT_FOUND => ProxyResponseReason::NotFound,
+		StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => ProxyResponseReason::Authorization,
+		StatusCode::TOO_MANY_REQUESTS => ProxyResponseReason::RateLimit,
+		StatusCode::REQUEST_TIMEOUT | StatusCode::GATEWAY_TIMEOUT => ProxyResponseReason::Timeout,
+		_ => ProxyResponseReason::Internal,
 	}
 }
 
@@ -157,6 +170,8 @@ pub enum ProxyError {
 	RouteCycleDetected,
 	#[error("misdirected request")]
 	MisdirectedRequest,
+	#[error("substrate worker assignment is stale")]
+	StaleAssignment,
 	#[error("no valid backends")]
 	NoValidBackends,
 	#[error("backend does not exist")]
@@ -215,6 +230,12 @@ pub enum ProxyError {
 	ExtProc(#[from] ext_proc::Error),
 	#[error("processing failed: {0}")]
 	ProcessingString(String),
+	#[error("{1}")]
+	SubstrateIngressFailed(StatusCode, String),
+	#[error("{0}")]
+	SubstrateEgressDenied(String),
+	#[error("{0}")]
+	SubstrateEgressUnavailable(String),
 	#[error("rate limit exceeded")]
 	RateLimitExceeded {
 		limit: u64,
@@ -335,6 +356,7 @@ impl ProxyError {
 			ProxyError::RouteNotFound => StatusCode::NOT_FOUND,
 			ProxyError::RouteCycleDetected => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::MisdirectedRequest => StatusCode::MISDIRECTED_REQUEST,
+			ProxyError::StaleAssignment => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::NoValidBackends => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::BackendDoesNotExist => StatusCode::INTERNAL_SERVER_ERROR,
 			ProxyError::BackendUnsupportedMirror => StatusCode::INTERNAL_SERVER_ERROR,
@@ -380,6 +402,8 @@ impl ProxyError {
 			ProxyError::APIKeyAuthenticationFailure(_) => StatusCode::UNAUTHORIZED,
 			ProxyError::McpJwtAuthenticationFailure(_, _) => StatusCode::UNAUTHORIZED,
 			ProxyError::AuthorizationFailed => StatusCode::FORBIDDEN,
+			ProxyError::SubstrateEgressDenied(_) => StatusCode::FORBIDDEN,
+			ProxyError::SubstrateEgressUnavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::ExternalAuthorizationFailed(status) => status.unwrap_or(StatusCode::FORBIDDEN),
 
 			ProxyError::DnsResolution => StatusCode::SERVICE_UNAVAILABLE,
@@ -394,6 +418,7 @@ impl ProxyError {
 			ProxyError::Http(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::Body(_) => StatusCode::SERVICE_UNAVAILABLE,
 			ProxyError::ProcessingString(_) => StatusCode::SERVICE_UNAVAILABLE,
+			ProxyError::SubstrateIngressFailed(status, _) => status,
 			ProxyError::RateLimitExceeded { .. } => StatusCode::TOO_MANY_REQUESTS,
 			// Rate limit service communication failure is a server error (500), not a rate limit (429).
 			// This matches Envoy's behavior (status_on_error defaults to 500).
@@ -633,6 +658,25 @@ pub fn resolve_simple_backend_with_policies(
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn substrate_ingress_reason_preserves_client_facing_statuses() {
+		for (status, reason) in [
+			(StatusCode::NOT_FOUND, ProxyResponseReason::NotFound),
+			(StatusCode::UNAUTHORIZED, ProxyResponseReason::Authorization),
+			(StatusCode::FORBIDDEN, ProxyResponseReason::Authorization),
+			(
+				StatusCode::TOO_MANY_REQUESTS,
+				ProxyResponseReason::RateLimit,
+			),
+			(StatusCode::GATEWAY_TIMEOUT, ProxyResponseReason::Timeout),
+		] {
+			assert_eq!(
+				ProxyResponse::Error(ProxyError::SubstrateIngressFailed(status, String::new())).as_reason(),
+				reason
+			);
+		}
+	}
 
 	fn assert_ai_error_mapping(
 		make_error: impl Fn() -> ProxyError,

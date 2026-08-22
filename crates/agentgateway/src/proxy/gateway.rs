@@ -267,9 +267,10 @@ impl Gateway {
 		let name = bind_config.borrow().key.clone();
 		let pi = if pi.cfg.threading_mode == crate::ThreadingMode::ThreadPerCore {
 			let mut pi = Arc::unwrap_or_clone(pi);
-			let client = client::Client::new(
+			let client = client::Client::new_with_h2_config(
 				&pi.cfg.dns,
 				None,
+				Arc::new(pi.cfg.hbone.h2.clone()),
 				pi.cfg.backend.clone(),
 				Some(pi.metrics.clone()),
 			);

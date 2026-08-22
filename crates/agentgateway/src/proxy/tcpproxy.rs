@@ -257,17 +257,14 @@ impl TCPProxy {
 				})?;
 				let source = log.as_deref().and_then(|log| log.source_context.as_ref());
 				let executor = crate::cel::Executor::new_tcp(source, destination);
-				let target =
-					if let Some(target) = httpproxy::dynamic_backend_target_override(&executor, target)? {
-						target
-					} else {
-						let hostname = destination.hostname.as_ref().ok_or_else(|| {
-							ProxyError::ProcessingString(
-								"dynamic TCP backend requires a TLS SNI hostname".to_string(),
-							)
-						})?;
-						Target::from((hostname.as_str(), destination.port))
-					};
+				let target = httpproxy::resolve_dynamic_backend_target(None, &executor, target, || {
+					let hostname = destination.hostname.as_ref().ok_or_else(|| {
+						ProxyError::ProcessingString(
+							"dynamic TCP backend requires a TLS SNI hostname".to_string(),
+						)
+					})?;
+					Ok(Target::from((hostname.as_str(), destination.port)))
+				})?;
 				BackendCall::new(target, backend_policies)
 			},
 			Backend::Aws(_, config) => {

@@ -1,5 +1,5 @@
 mod azure;
-mod connect_tunnel;
+pub(crate) mod connect_tunnel;
 mod dns;
 mod hbone_tunnel;
 mod tls;
@@ -270,6 +270,7 @@ impl Transport {
 #[derive(Debug, Clone)]
 struct Connector {
 	hbone_pool: Option<agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>>,
+	h2_config: Arc<agent_hbone::H2Config>,
 	backend_config: Arc<crate::BackendConfig>,
 	metrics: Option<Arc<crate::metrics::Metrics>>,
 	resolver: Arc<dns::CachedResolver>,
@@ -318,7 +319,7 @@ impl Connector {
 				// This is recursive but bounded: we cannot even tunnel to a tunnel
 				let con = Box::pin(self.connect(tcfg.target, proxy_dst, *tcfg.transport, false)).await?;
 
-				let con = connect_tunnel::handshake(con, &dest, tcfg.token)
+				let con = connect_tunnel::handshake_proxy(con, &dest, tcfg.token, self.h2_config.clone())
 					.await
 					.map_err(crate::http::Error::new)?;
 				debug!(%dest, "connected to tunnel proxy (CONNECT)");
@@ -483,6 +484,20 @@ impl Client {
 		backend_config: BackendConfig,
 		metrics: Option<Arc<crate::metrics::Metrics>>,
 	) -> Client {
+		let h2_config = hbone_pool
+			.as_ref()
+			.map(|pool| Arc::new(pool.config().h2.clone()))
+			.unwrap_or_else(|| Arc::new(agent_hbone::H2Config::default()));
+		Self::new_with_h2_config(cfg, hbone_pool, h2_config, backend_config, metrics)
+	}
+
+	pub fn new_with_h2_config(
+		cfg: &Config,
+		hbone_pool: Option<agent_hbone::pool::WorkloadHBONEPool<hbone::WorkloadKey>>,
+		h2_config: Arc<agent_hbone::H2Config>,
+		backend_config: BackendConfig,
+		metrics: Option<Arc<crate::metrics::Metrics>>,
+	) -> Client {
 		let resolver = dns::CachedResolver::new(cfg.resolver_cfg.clone(), cfg.resolver_opts.clone());
 		let mut b = agent_pool::Client::<_, PoolKey>::builder(::hyper_util::rt::TokioExecutor::new());
 		b.pool_timer(hyper_util::rt::tokio::TokioTimer::new());
@@ -497,6 +512,7 @@ impl Client {
 		let connector = Connector {
 			resolver: Arc::new(resolver),
 			hbone_pool,
+			h2_config,
 			backend_config: Arc::new(backend_config),
 			metrics,
 		};

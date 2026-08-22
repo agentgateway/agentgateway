@@ -210,6 +210,14 @@ async fn apply_request_policies(
 		.authorization
 		.apply_without_response("authorization", c, l, req, rp.headers())
 		.await?;
+	pol
+		.substrate_egress
+		.apply_without_response("substrate egress", c, l, req, rp.headers())
+		.await?;
+	pol
+		.substrate_ingress
+		.apply_without_response("substrate ingress", c, l, req, rp.headers())
+		.await?;
 
 	let mut route_retry = pol.retry.select("retry", req);
 	// Evaluate the retry precondition (if any) against the request before it is consumed.
@@ -909,6 +917,7 @@ impl HTTPProxy {
 		let route_policies = inputs.stores.read_binds().route_policies(&route_path);
 		// Register all expressions
 		route_policies.register_cel_expressions(log.cel.ctx());
+		let explicit_route_retry = !route_policies.retry.is_empty();
 		log.cel.ctx().maybe_buffer_request_body(&mut req).await;
 
 		let policy_client = self.policy_client().with_parent(&req);
@@ -922,6 +931,12 @@ impl HTTPProxy {
 		.await
 		.snapshot_on_err(log, &mut req)?;
 		dtrace::snapshot!(Request, "route policies", &req);
+		// With no explicit retry policy, Substrate only retries stale actor assignments.
+		let substrate_default_retry = !explicit_route_retry
+			&& req
+				.extensions()
+				.get::<http::substrate::SubstrateRequestState>()
+				.is_some();
 
 		let selected_backend_ref = selected_route_chain
 			.backend
@@ -1003,7 +1018,11 @@ impl HTTPProxy {
 		let llm_request_policies = Arc::new(llm_request_policies);
 
 		// attempts is the total number of attempts, not the retries
-		let attempts = retries.as_ref().map(|r| r.attempts.get() + 1).unwrap_or(1);
+		let attempts = if substrate_default_retry {
+			3
+		} else {
+			retries.as_ref().map(|r| r.attempts.get() + 1).unwrap_or(1)
+		};
 		let retry_backoff = retries.as_ref().and_then(|r| r.backoff);
 		let request_timeout = response_policies
 			.timeout
@@ -1019,13 +1038,17 @@ impl HTTPProxy {
 		} else {
 			Err(body)
 		};
+		let substrate_state = head
+			.extensions
+			.get::<http::substrate::SubstrateRequestState>()
+			.cloned();
 		let mut next = match body {
 			Ok(retry) => Some(retry),
 			Err(body) => {
 				trace!("no retries");
 				// no retries at all, just send the request as normal
 				let req = Request::from_parts(head, http::Body::new(body));
-				return self
+				let response = self
 					.attempt_upstream(
 						log,
 						&mut req_upgrade,
@@ -1037,6 +1060,16 @@ impl HTTPProxy {
 						req,
 					)
 					.await;
+				// The body cannot be retried, but future requests must not reuse this assignment.
+				let stale_assignment = is_stale_assignment(&response);
+				if stale_assignment {
+					substrate_state.as_ref().inspect(|state| state.evict());
+				}
+				return if stale_assignment && substrate_state.is_some() {
+					Ok(http::substrate::stale_assignment_unavailable())
+				} else {
+					response
+				};
 			},
 		};
 		let mut last_res: Option<Result<Response, SnapshottedProxyResponse>> = None;
@@ -1074,16 +1107,30 @@ impl HTTPProxy {
 					req,
 				)
 				.await;
-			if last
-				|| !should_retry(
-					&res,
-					retries.as_ref().unwrap(),
-					log.request_snapshot.as_deref(),
-				) {
+			let stale_assignment = is_stale_assignment(&res);
+			if stale_assignment {
+				// Clear the request-local assignment and evict the same generation from the shared cache.
+				substrate_state.as_ref().inspect(|state| state.evict());
+			}
+			let retryable = !last
+				&& if substrate_default_retry {
+					stale_assignment
+				} else {
+					should_retry(
+						&res,
+						retries.as_ref().unwrap(),
+						log.request_snapshot.as_deref(),
+					)
+				};
+			if !retryable {
 				if !last {
 					debug!("response not retry-able");
 				}
-				return res;
+				return if stale_assignment && substrate_state.is_some() {
+					Ok(http::substrate::stale_assignment_unavailable())
+				} else {
+					res
+				};
 			}
 			debug!(
 				backoff=?retry_backoff,
@@ -1119,6 +1166,16 @@ impl HTTPProxy {
 		response_policies: &mut ResponsePolicies,
 		req: &mut Request,
 	) -> Result<Response, ProxyResponse> {
+		// A Substrate CONNECT first resolves its actor to the worker's atunnel
+		// CONNECT listener. The raw downstream stream is then CONNECTed through
+		// atunnel to the actor port, rather than directly to the worker address.
+		let substrate_connect_authority = handle_substrate_backend_selection(
+			req,
+			&selected_backend.backend.backend,
+			SubstrateBackendTarget::Connect,
+		)
+		.await?
+		.map(|state| state.connect_authority());
 		let backend_call = build_connect_backend_call(
 			self.inputs.as_ref(),
 			&selected_backend.backend.backend,
@@ -1164,6 +1221,23 @@ impl HTTPProxy {
 			.upstream
 			.connect_raw(backend_call.target, transport)
 			.await?;
+		let upstream = if let Some(authority) = substrate_connect_authority {
+			match crate::client::connect_tunnel::handshake_atunnel(
+				upstream,
+				&authority,
+				Arc::new(self.inputs.cfg.hbone.h2.clone()),
+			)
+			.await
+			{
+				Ok(upstream) => upstream,
+				Err(error) if crate::client::connect_tunnel::is_stale_assignment_error(&error) => {
+					return Err(ProxyError::StaleAssignment.into());
+				},
+				Err(error) => return Err(ProxyError::Processing(error).into()),
+			}
+		} else {
+			upstream
+		};
 		let mut resp = ::http::Response::builder()
 			.status(StatusCode::OK)
 			.body(http::Body::empty())
@@ -1875,6 +1949,14 @@ impl DerefMut for MustSnapshot<'_> {
 	}
 }
 
+/// A concrete target resolved by an in-process dynamic backend implementation.
+///
+/// This is deliberately distinct from a configured CEL target expression: the
+/// latter is evaluated against the request at the dynamic-backend boundary,
+/// while this value is already a trusted, concrete result of that operation.
+#[derive(Debug, Clone)]
+pub(crate) struct DynamicBackendOverride(pub Target);
+
 fn target_from_request(req: &Request) -> Result<Target, ProxyError> {
 	let host = http::get_host(req)?;
 	let port = req
@@ -1887,16 +1969,26 @@ fn target_from_request(req: &Request) -> Result<Target, ProxyError> {
 	Ok(Target::from((host, port)))
 }
 
-/// Evaluates a `Backend::Dynamic` target expression using the caller's CEL
-/// context. Returns `Ok(None)` when there's no expression, so HTTP and TCP
-/// callers can apply their respective default target behavior.
-pub(super) fn dynamic_backend_target_override<'a>(
+/// Resolves a dynamic backend to a concrete target with consistent precedence:
+/// an in-process result, then the configured CEL expression, then the
+/// caller-provided protocol fallback.
+pub(super) fn resolve_dynamic_backend_target<'a>(
+	in_process: Option<&'a DynamicBackendOverride>,
 	executor: &'a crate::cel::Executor<'a>,
 	expr: &'a Option<Arc<crate::cel::Expression>>,
-) -> Result<Option<Target>, ProxyError> {
-	let Some(expr) = expr else {
-		return Ok(None);
-	};
+	fallback: impl FnOnce() -> Result<Target, ProxyError>,
+) -> Result<Target, ProxyError> {
+	match (in_process, expr.as_deref()) {
+		(Some(target), _) => Ok(target.0.clone()),
+		(None, Some(expr)) => evaluate_dynamic_backend_target(executor, expr),
+		(None, None) => fallback(),
+	}
+}
+
+fn evaluate_dynamic_backend_target(
+	executor: &crate::cel::Executor<'_>,
+	expr: &crate::cel::Expression,
+) -> Result<Target, ProxyError> {
 	let value = executor.eval(expr).map_err(|e| {
 		ProxyError::ProcessingString(format!("dynamic backend target expression eval: {e}"))
 	})?;
@@ -1912,7 +2004,7 @@ pub(super) fn dynamic_backend_target_override<'a>(
 	};
 	let target = Target::try_from(s.as_str())
 		.map_err(|e| ProxyError::ProcessingString(format!("dynamic backend target {s:?}: {e}")))?;
-	Ok(Some(target))
+	Ok(target)
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -2125,6 +2217,12 @@ async fn make_backend_call(
 		},
 		_ => (backend, base_policies),
 	};
+	Box::pin(handle_substrate_backend_selection(
+		&mut req,
+		backend,
+		SubstrateBackendTarget::Ingress,
+	))
+	.await?;
 
 	log.add(|l| {
 		l.backend_info = Some(backend.backend_info());
@@ -2294,10 +2392,12 @@ async fn make_backend_call(
 		},
 		Backend::Dynamic(_, expr) => {
 			let executor = crate::cel::Executor::new_request(&req);
-			let target = match dynamic_backend_target_override(&executor, expr)? {
-				Some(target) => target,
-				None => target_from_request(&req)?,
-			};
+			let target = resolve_dynamic_backend_target(
+				req.extensions().get::<DynamicBackendOverride>(),
+				&executor,
+				expr,
+				|| target_from_request(&req),
+			)?;
 			let backend_call = BackendCall::from_shared(target, policies);
 			(backend_call, None)
 		},
@@ -2357,10 +2457,12 @@ async fn make_backend_call(
 	// endpoint routing) to take effect on the actual upstream connection target.
 	if let Backend::Dynamic(_, expr) = backend {
 		let executor = crate::cel::Executor::new_request(&req);
-		backend_call.target = match dynamic_backend_target_override(&executor, expr)? {
-			Some(target) => target,
-			None => target_from_request(&req)?,
-		};
+		backend_call.target = resolve_dynamic_backend_target(
+			req.extensions().get::<DynamicBackendOverride>(),
+			&executor,
+			expr,
+			|| target_from_request(&req),
+		)?;
 	}
 
 	log.add(|l| {
@@ -2821,6 +2923,49 @@ async fn make_backend_call(
 	Ok(resp)
 }
 
+#[derive(Clone, Copy)]
+enum SubstrateBackendTarget {
+	Ingress,
+	Connect,
+}
+
+/// Resolves a Substrate actor assignment into an in-process dynamic backend result.
+async fn handle_substrate_backend_selection(
+	req: &mut Request,
+	backend: &Backend,
+	target: SubstrateBackendTarget,
+) -> Result<Option<http::substrate::SubstrateRequestState>, ProxyResponse> {
+	if let Some(state) = req
+		.extensions()
+		.get::<http::substrate::SubstrateRequestState>()
+		.cloned()
+	{
+		if !matches!(backend, Backend::Dynamic(_, _)) {
+			return Err(
+				ProxyError::ProcessingString(
+					"substrateIngress requires a dynamic route backend".to_owned(),
+				)
+				.into(),
+			);
+		}
+		let target = match target {
+			SubstrateBackendTarget::Ingress => Box::pin(state.resolve_target()).await?,
+			SubstrateBackendTarget::Connect => state.resolve_connect_target().await?,
+		};
+		req.extensions_mut().insert(DynamicBackendOverride(target));
+		Ok(Some(state))
+	} else if req.extensions().get::<DynamicBackendOverride>().is_some()
+		&& !matches!(backend, Backend::Dynamic(_, _))
+	{
+		Err(
+			ProxyError::ProcessingString("substrateIngress requires a dynamic route backend".to_owned())
+				.into(),
+		)
+	} else {
+		Ok(None)
+	}
+}
+
 fn set_backend_cel_context(req: &mut http::Request, log: Option<&&mut RequestLog>) {
 	if let Some(l) = log
 		&& let Some(bp) = l.backend_protocol
@@ -2870,11 +3015,16 @@ fn build_connect_backend_call(
 		},
 		Backend::Opaque(_, target) => Ok(BackendCall::from_shared(target.clone(), policies)),
 		Backend::Dynamic(_, expr) => {
+			// Substrate resolves a dynamic backend from ResumeActor and records the
+			// concrete worker endpoint on the request. This has the same precedence
+			// for CONNECT as it does for ordinary HTTP requests.
 			let executor = crate::cel::Executor::new_request(req);
-			let target = match dynamic_backend_target_override(&executor, expr)? {
-				Some(target) => target,
-				None => connect_authority_target(req)?,
-			};
+			let target = resolve_dynamic_backend_target(
+				req.extensions().get::<DynamicBackendOverride>(),
+				&executor,
+				expr,
+				|| connect_authority_target(req),
+			)?;
 			Ok(BackendCall::from_shared(target, policies))
 		},
 		Backend::Invalid => Err(ProxyError::BackendDoesNotExist),
@@ -3302,6 +3452,16 @@ fn should_retry(
 	}
 }
 
+fn is_stale_assignment(res: &Result<Response, SnapshottedProxyResponse>) -> bool {
+	match res {
+		Ok(response) => http::substrate::is_stale_assignment(response),
+		Err(SnapshottedProxyResponse(ProxyResponse::Error(ProxyError::StaleAssignment))) => true,
+		Err(SnapshottedProxyResponse(ProxyResponse::Error(_) | ProxyResponse::DirectResponse(_))) => {
+			false
+		},
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use std::collections::{HashMap, HashSet};
@@ -3500,6 +3660,14 @@ mod tests {
 			.body(http::Body::empty())
 			.unwrap();
 		assert!(!super::should_retry(&Ok(resp), &pol, None));
+	}
+
+	#[test]
+	fn stale_assignment_error_is_detected() {
+		let result = Err(super::SnapshottedProxyResponse(
+			crate::proxy::ProxyError::StaleAssignment.into(),
+		));
+		assert!(super::is_stale_assignment(&result));
 	}
 
 	#[test]
