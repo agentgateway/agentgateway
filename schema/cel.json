@@ -935,12 +935,14 @@
       ],
       "properties": {
         "methodName": {
+          "description": "Available only in post-request CEL; absent during MCP authorization.",
           "type": [
             "string",
             "null"
           ]
         },
         "sessionId": {
+          "description": "Available only in post-request CEL; absent during MCP authorization.",
           "type": [
             "string",
             "null"
@@ -961,7 +963,7 @@
               "type": "string"
             },
             "arguments": {
-              "description": "The JSON arguments passed to the tool call.",
+              "description": "The JSON arguments passed to the tool call. Available only in post-request CEL.",
               "type": [
                 "object",
                 "null"
@@ -969,10 +971,10 @@
               "additionalProperties": true
             },
             "result": {
-              "description": "The terminal tool result payload, if available."
+              "description": "The terminal tool result payload, if available. Available only in post-request CEL."
             },
             "error": {
-              "description": "The terminal JSON-RPC error payload, if available."
+              "description": "The terminal JSON-RPC error payload, if available. Available only in post-request CEL."
             }
           },
           "additionalProperties": false,

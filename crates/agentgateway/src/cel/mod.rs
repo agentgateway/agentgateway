@@ -310,6 +310,18 @@ impl Expression {
 		self.expression.expression()
 	}
 
+	pub(crate) fn references_property(&self, property: &[&str]) -> bool {
+		let mut properties = Vec::with_capacity(5);
+		properties::properties(
+			&self.expression.expression().expr,
+			&mut properties,
+			&mut Vec::default(),
+		);
+		properties
+			.iter()
+			.any(|referenced| referenced.starts_with(property))
+	}
+
 	pub fn needs_llm_request(&self) -> bool {
 		self.attributes.contains(Attributes::LlmRequest)
 	}
