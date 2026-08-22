@@ -97,6 +97,19 @@ func ResolveIstioIntegration(gtw *AgentgatewayHelmGateway, cols *agwplugins.AgwC
 	}
 }
 
+// ResolveSpiffeIntegration finalizes the gateway's SPIFFE block. It runs after AGWP params are
+// applied so per-gateway spec.spiffe values take precedence. When spec.spiffe.enabled is explicitly
+// false it clears the block, so the helm template (`hasKey $gateway "spiffe"`) renders no socket
+// mount or SPIFFE environment variables.
+func ResolveSpiffeIntegration(gtw *AgentgatewayHelmGateway) {
+	if gtw == nil || gtw.Spiffe == nil {
+		return
+	}
+	if gtw.Spiffe.Enabled != nil && !*gtw.Spiffe.Enabled {
+		gtw.Spiffe = nil
+	}
+}
+
 // ApplyToHelmValues applies the AgentgatewayParameters configs to the helm
 // values.  This is called before rendering the helm chart. (We render a helm
 // chart, but we do not use helm beyond that point.)
@@ -113,6 +126,12 @@ func (a *AgentgatewayParametersApplier) ApplyToHelmValues(vals *HelmConfig) {
 	res := vals.Agentgateway.AgentgatewayParametersConfigs
 
 	// Do a manual merge of the fields.
+	if configs.Workload != nil {
+		if res.Workload == nil {
+			res.Workload = &agentgateway.AgentgatewayParametersWorkload{}
+		}
+		setIfNonZero(&res.Workload.Kind, configs.Workload.Kind)
+	}
 	if configs.Image != nil {
 		if res.Image == nil {
 			res.Image = &agentgateway.Image{}
@@ -142,6 +161,7 @@ func (a *AgentgatewayParametersApplier) ApplyToHelmValues(vals *HelmConfig) {
 			res.Istio.AdditionalTrustDomains = configs.Istio.AdditionalTrustDomains
 		}
 	}
+	setIfNonNil(&res.Spiffe, configs.Spiffe)
 	setIfNonNil(&res.RawConfig, configs.RawConfig)
 
 	// Apply logging.level as RUST_LOG first, then merge explicit env vars on top.
@@ -248,6 +268,9 @@ func (g *agentgatewayParametersHelmValuesGenerator) GetValues(ctx context.Contex
 	if err != nil {
 		return nil, err
 	}
+	if err := resolved.validateWorkloadOverlays(); err != nil {
+		return nil, err
+	}
 
 	vals, err := g.getDefaultAgentgatewayHelmValues(gw)
 	if err != nil {
@@ -273,6 +296,9 @@ func (g *agentgatewayParametersHelmValuesGenerator) GetValues(ctx context.Contex
 
 	// Resolve Istio enablement and defaults after gw params so spec.istio takes precedence.
 	ResolveIstioIntegration(vals.Agentgateway, g.inputs.AgwCollections)
+
+	// Resolve SPIFFE enablement after gw params so spec.spiffe.enabled takes precedence.
+	ResolveSpiffeIntegration(vals.Agentgateway)
 
 	applyManagedSessionKeyDefaults(vals.Agentgateway, gw.Name)
 
@@ -306,6 +332,87 @@ type resolvedParameters struct {
 	gatewayClassAGWP *agentgateway.AgentgatewayParameters
 	// gatewayAGWP is the AgentgatewayParameters from the Gateway (if any).
 	gatewayAGWP *agentgateway.AgentgatewayParameters
+}
+
+// parametersLayer identifies an AgentgatewayParameters object in precedence order.
+type parametersLayer struct {
+	source string
+	params *agentgateway.AgentgatewayParameters
+}
+
+func (r *resolvedParameters) layers() []parametersLayer {
+	if r == nil {
+		return nil
+	}
+
+	return []parametersLayer{
+		{source: "GatewayClass", params: r.gatewayClassAGWP},
+		{source: "Gateway", params: r.gatewayAGWP},
+	}
+}
+
+func (r *resolvedParameters) resolveWorkloadKind() (agentgateway.AgentgatewayParametersWorkloadKind, error) {
+	resolved := agentgateway.AgentgatewayParametersWorkloadDeployment
+
+	for _, layer := range r.layers() {
+		params := layer.params
+		if params == nil || params.Spec.Workload == nil || params.Spec.Workload.Kind == "" {
+			continue
+		}
+		resolved = params.Spec.Workload.Kind
+	}
+
+	if resolved != agentgateway.AgentgatewayParametersWorkloadDeployment &&
+		resolved != agentgateway.AgentgatewayParametersWorkloadDaemonSet {
+		return "", fmt.Errorf("unsupported workload kind %q", resolved)
+	}
+
+	return resolved, nil
+}
+
+func (r *resolvedParameters) validateWorkloadOverlays() error {
+	finalKind, err := r.resolveWorkloadKind()
+	if err != nil {
+		return err
+	}
+
+	for _, layer := range r.layers() {
+		if layer.params == nil {
+			continue
+		}
+
+		overlays := layer.params.Spec.AgentgatewayParametersOverlays
+		switch finalKind {
+		case agentgateway.AgentgatewayParametersWorkloadDeployment:
+			if overlays.DaemonSet != nil {
+				return incompatibleWorkloadOverlayError(layer, "daemonSet", finalKind)
+			}
+		case agentgateway.AgentgatewayParametersWorkloadDaemonSet:
+			if overlays.Deployment != nil {
+				return incompatibleWorkloadOverlayError(layer, "deployment", finalKind)
+			}
+			if overlays.HorizontalPodAutoscaler != nil {
+				return incompatibleWorkloadOverlayError(layer, "horizontalPodAutoscaler", finalKind)
+			}
+		}
+	}
+
+	return nil
+}
+
+func incompatibleWorkloadOverlayError(
+	layer parametersLayer,
+	overlayName string,
+	finalKind agentgateway.AgentgatewayParametersWorkloadKind,
+) error {
+	return fmt.Errorf(
+		"referenced %s AgentgatewayParameters %s/%s has incompatible %s overlay for final workload kind %s",
+		layer.source,
+		layer.params.GetNamespace(),
+		layer.params.GetName(),
+		overlayName,
+		finalKind,
+	)
 }
 
 // resolveParameters resolves the AgentgatewayParameters for the Gateway.
@@ -439,10 +546,8 @@ func (g *agentgatewayParametersHelmValuesGenerator) getDefaultAgentgatewayHelmVa
 				CaCert:  &g.inputs.ControlPlane.XdsTlsCaCert,
 			},
 		},
-		AgentgatewayParametersConfigs: agentgateway.AgentgatewayParametersConfigs{
-			Resources: &corev1.ResourceRequirements{
-				Requests: defaultResourceRequests.DeepCopy(),
-			},
+		Resources: &corev1.ResourceRequirements{
+			Requests: defaultResourceRequests.DeepCopy(),
 		},
 	}
 
@@ -511,17 +616,13 @@ func (g *agentgatewayParametersHelmValuesGenerator) buildSessionKeySecret(
 		return nil, err
 	}
 	return &corev1.Secret{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: corev1.SchemeGroupVersion.String(),
-			Kind:       "Secret",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      secretName,
-			Namespace: gw.Namespace,
-			Labels: map[string]string{
-				wellknown.GatewayNameLabel:      safeLabelValue(gw.Name),
-				wellknown.GatewayClassNameLabel: string(gw.Spec.GatewayClassName),
-			},
+		APIVersion: corev1.SchemeGroupVersion.String(),
+		Kind:       "Secret",
+		Name:       secretName,
+		Namespace:  gw.Namespace,
+		Labels: map[string]string{
+			wellknown.GatewayNameLabel:      safeLabelValue(gw.Name),
+			wellknown.GatewayClassNameLabel: string(gw.Spec.GatewayClassName),
 		},
 		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
@@ -565,14 +666,16 @@ func GatewayIRFrom(gw *gwv1.Gateway, controllerNameGuess string) *collections.Ga
 		ports.Insert(l.Port)
 	}
 	return &collections.GatewayForDeployer{
-		ObjectSource: collections.ObjectSource{
-			Group:     gwv1.GroupVersion.Group,
-			Kind:      wellknown.GatewayKind,
-			Namespace: gw.Namespace,
-			Name:      gw.Name,
-		},
+		Group:          gwv1.GroupVersion.Group,
+		Kind:           wellknown.GatewayKind,
+		Namespace:      gw.Namespace,
+		Name:           gw.Name,
 		ControllerName: controllerNameGuess,
 		Ports:          smallset.New(ports.UnsortedList()...),
+		// This guess path has no ListenerSets, so internal ports are derived from the
+		// Gateway annotation only. Without this, internal (routing-only) ports would be
+		// incorrectly exposed via Service/container ports in GetPortsValues.
+		InternalPorts: collections.ComputeInternalPorts(gw, nil),
 	}
 }
 func DeepMergeResourceRequirements(dst, src *corev1.ResourceRequirements) *corev1.ResourceRequirements {

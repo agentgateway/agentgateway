@@ -21,34 +21,26 @@ func TestSectionMatcher(t *testing.T) {
 
 func TestBestMatchingAgentgatewayPolicy(t *testing.T) {
 	older := &agentgateway.AgentgatewayPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              "older-whole",
-			Namespace:         "default",
-			CreationTimestamp: metav1.Unix(10, 0),
-		},
+		Name:              "older-whole",
+		Namespace:         "default",
+		CreationTimestamp: metav1.Unix(10, 0),
 		Spec: agentgateway.AgentgatewayPolicySpec{
 			TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
-				LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
-					Group: gwv1.Group(""),
-					Kind:  gwv1.Kind("Service"),
-					Name:  gwv1.ObjectName("oauth2"),
-				},
+				Group: gwv1.Group(""),
+				Kind:  gwv1.Kind("Service"),
+				Name:  gwv1.ObjectName("oauth2"),
 			}},
 		},
 	}
 	newerExact := &agentgateway.AgentgatewayPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              "newer-exact",
-			Namespace:         "default",
-			CreationTimestamp: metav1.Unix(20, 0),
-		},
+		Name:              "newer-exact",
+		Namespace:         "default",
+		CreationTimestamp: metav1.Unix(20, 0),
 		Spec: agentgateway.AgentgatewayPolicySpec{
 			TargetRefs: []agentgateway.LocalPolicyTargetReferenceWithSectionName{{
-				LocalPolicyTargetReference: agentgateway.LocalPolicyTargetReference{
-					Group: gwv1.Group(""),
-					Kind:  gwv1.Kind("Service"),
-					Name:  gwv1.ObjectName("oauth2"),
-				},
+				Group:       gwv1.Group(""),
+				Kind:        gwv1.Kind("Service"),
+				Name:        gwv1.ObjectName("oauth2"),
 				SectionName: ptr.Of(gwv1.SectionName("https")),
 			}},
 		},
@@ -79,34 +71,26 @@ func TestBestMatchingAgentgatewayPolicy(t *testing.T) {
 
 func TestBestMatchingBackendTLSPolicy(t *testing.T) {
 	whole := &gwv1.BackendTLSPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              "whole",
-			Namespace:         "default",
-			CreationTimestamp: metav1.Unix(10, 0),
-		},
+		Name:              "whole",
+		Namespace:         "default",
+		CreationTimestamp: metav1.Unix(10, 0),
 		Spec: gwv1.BackendTLSPolicySpec{
 			TargetRefs: []gwv1.LocalPolicyTargetReferenceWithSectionName{{
-				LocalPolicyTargetReference: gwv1.LocalPolicyTargetReference{
-					Group: gwv1.Group(""),
-					Kind:  gwv1.Kind("Service"),
-					Name:  gwv1.ObjectName("oauth2"),
-				},
+				Group: gwv1.Group(""),
+				Kind:  gwv1.Kind("Service"),
+				Name:  gwv1.ObjectName("oauth2"),
 			}},
 		},
 	}
 	exact := &gwv1.BackendTLSPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              "exact",
-			Namespace:         "default",
-			CreationTimestamp: metav1.Unix(20, 0),
-		},
+		Name:              "exact",
+		Namespace:         "default",
+		CreationTimestamp: metav1.Unix(20, 0),
 		Spec: gwv1.BackendTLSPolicySpec{
 			TargetRefs: []gwv1.LocalPolicyTargetReferenceWithSectionName{{
-				LocalPolicyTargetReference: gwv1.LocalPolicyTargetReference{
-					Group: gwv1.Group(""),
-					Kind:  gwv1.Kind("Service"),
-					Name:  gwv1.ObjectName("oauth2"),
-				},
+				Group:       gwv1.Group(""),
+				Kind:        gwv1.Kind("Service"),
+				Name:        gwv1.ObjectName("oauth2"),
 				SectionName: ptr.Of(gwv1.SectionName("https")),
 			}},
 		},
@@ -125,18 +109,14 @@ func TestBestMatchingBackendTLSPolicy(t *testing.T) {
 
 func TestHasHigherPriority(t *testing.T) {
 	older := &gwv1.BackendTLSPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              "older",
-			Namespace:         "default",
-			CreationTimestamp: metav1.Unix(10, 0),
-		},
+		Name:              "older",
+		Namespace:         "default",
+		CreationTimestamp: metav1.Unix(10, 0),
 	}
 	newer := &gwv1.BackendTLSPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:              "newer",
-			Namespace:         "default",
-			CreationTimestamp: metav1.Unix(20, 0),
-		},
+		Name:              "newer",
+		Namespace:         "default",
+		CreationTimestamp: metav1.Unix(20, 0),
 	}
 
 	require.True(t, HasHigherPriority(older, newer))

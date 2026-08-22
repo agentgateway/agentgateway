@@ -10,6 +10,7 @@ use agent_core::metrics::CustomField;
 use agent_core::strng::{RichStrng, Strng};
 use agent_core::telemetry::{
 	OptionExt, OtelLogSink, ValueBag, current_connection_id, current_request_id, debug, display,
+	quoted,
 };
 use agent_core::{Timestamp, strng};
 use bytes::Buf;
@@ -19,7 +20,7 @@ use http_body::{Body, Frame, SizeHint};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use opentelemetry::logs::{AnyValue, LogRecord as _, Logger, LoggerProvider as _, Severity};
-use opentelemetry::trace::SpanKind;
+use opentelemetry::trace::{SpanKind, Status};
 use opentelemetry::{Key, KeyValue};
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::Resource;
@@ -30,23 +31,24 @@ use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use tracing::{Level, debug, trace};
+use value_bag::visit::Visit;
 
 use crate::cel::{ContextBuilder, Expression, LLMContext};
 use crate::http::{Request, health};
 use crate::llm::InputFormat;
-use crate::llm::cost::{CostLookupStatus, ModelCatalog};
+use crate::llm::catalog::{CostLookupStatus, ModelCatalog};
 use crate::mcp::{MCPInfo, MCPOperation};
 use crate::proxy::{ProxyResponseReason, dtrace};
 use crate::telemetry::metrics::{
 	CostCatalogLookupLabels, GenAILabels, GenAILabelsTokenUsage, HTTPLabels, MCPCall, Metrics,
-	RouteIdentifier,
+	OutboundCallLabels, RouteIdentifier,
 };
 use crate::telemetry::trc::TraceParent;
 use crate::telemetry::{log_store, trc};
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
 use crate::types::agent::{BackendInfo, BindKey, ListenerName, RouteName, Target};
 use crate::types::loadbalancer::ActiveHandle;
-use crate::{cel, llm, mcp};
+use crate::{a2a, cel, llm, mcp};
 
 fn u64_to_i64(value: Option<u64>) -> Option<i64> {
 	value.map(|value| value.min(i64::MAX as u64) as i64)
@@ -56,25 +58,107 @@ fn u128_to_i64(value: u128) -> i64 {
 	value.min(i64::MAX as u128) as i64
 }
 
-fn kv_to_json(kv: &[(&str, Option<ValueBag>)]) -> Value {
-	let mut map = serde_json::Map::with_capacity(kv.len());
-	for (key, value) in kv {
-		if let Some(value) = value
-			&& let Ok(value) = serde_json::to_value(value)
-		{
-			map.insert((*key).to_string(), value);
-		}
-	}
-	Value::Object(map)
+struct DatabaseAttributes {
+	json: Box<str>,
+	agentgateway_user: Option<String>,
+	agentgateway_group: Option<String>,
+	user_agent_name: Option<String>,
 }
 
-fn string_attribute(attributes: &Value, key: &str) -> Option<String> {
-	attributes
-		.get(key)
-		.and_then(Value::as_str)
-		.map(str::trim)
-		.filter(|value| !value.is_empty())
-		.map(ToOwned::to_owned)
+fn database_llm_payload(
+	mode: Option<crate::types::frontend::DatabaseLlmMode>,
+	info: Option<&LLMContext>,
+) -> Option<log_store::StoredRequestLogPayload> {
+	if mode == Some(crate::types::frontend::DatabaseLlmMode::Metadata) {
+		return None;
+	}
+	let info = info?;
+	let request_prompt_json = info
+		.prompt
+		.as_ref()
+		.and_then(|prompt| serde_json::to_value(prompt.as_ref()).ok());
+	let response_completion_json = info
+		.completion
+		.as_ref()
+		.and_then(|completion| serde_json::to_value(completion).ok());
+	(request_prompt_json.is_some() || response_completion_json.is_some()).then_some(
+		log_store::StoredRequestLogPayload {
+			request_prompt_json,
+			response_completion_json,
+		},
+	)
+}
+
+fn database_attributes(kv: &[(&str, Option<ValueBag>)]) -> DatabaseAttributes {
+	let mut agentgateway_user = None;
+	let mut agentgateway_group = None;
+	let mut user_agent_name = None;
+	for (key, value) in kv {
+		let Some(value) = value else {
+			continue;
+		};
+		match *key {
+			"agentgateway.user" => {
+				agentgateway_user = string_attribute(value);
+			},
+			"agentgateway.group" => {
+				agentgateway_group = string_attribute(value);
+			},
+			"user_agent.name" => {
+				user_agent_name = string_attribute(value);
+			},
+			_ => {},
+		}
+	}
+	let json = serde_json::to_string(&DatabaseAttributeMap(kv))
+		.unwrap_or_else(|_| "{}".to_string())
+		.into_boxed_str();
+	DatabaseAttributes {
+		json,
+		agentgateway_user,
+		agentgateway_group,
+		user_agent_name,
+	}
+}
+
+struct DatabaseAttributeMap<'a>(&'a [(&'a str, Option<ValueBag<'a>>)]);
+
+impl Serialize for DatabaseAttributeMap<'_> {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: Serializer,
+	{
+		let len = self.0.iter().filter(|(_, value)| value.is_some()).count();
+		let mut map = serializer.serialize_map(Some(len))?;
+		for (key, value) in self.0 {
+			if let Some(value) = value {
+				map.serialize_entry(key, value)?;
+			}
+		}
+		map.end()
+	}
+}
+
+fn string_attribute(value: &ValueBag) -> Option<String> {
+	struct StringVisitor(Option<String>);
+
+	impl<'v> Visit<'v> for StringVisitor {
+		fn visit_any(&mut self, _value: ValueBag) -> Result<(), value_bag::Error> {
+			Ok(())
+		}
+
+		fn visit_str(&mut self, value: &str) -> Result<(), value_bag::Error> {
+			let value = value.trim();
+			if !value.is_empty() {
+				self.0 = Some(value.to_string());
+			}
+			Ok(())
+		}
+	}
+
+	let mut visitor = StringVisitor(None);
+	let _ = value.visit(&mut visitor);
+	visitor.0
 }
 
 fn user_agent_name(req: Option<&cel::RequestSnapshot>) -> Option<String> {
@@ -325,26 +409,31 @@ pub struct TraceSampler {
 }
 
 impl TraceSampler {
-	pub fn trace_sampled(&self, req: &Request, tp: Option<&TraceParent>) -> bool {
+	pub fn trace_sampled(&self, req: &Request, tp: Option<&TraceParent>) -> (bool, &'static str) {
 		let TraceSampler {
 			random_sampling,
 			client_sampling,
 		} = &self;
-		let expr = if tp.is_some() {
+		let (expr, client) = if tp.is_some() {
 			let Some(cs) = client_sampling else {
 				// If client_sampling is not set, default to include it
-				return true;
+				return (true, "sample (client)");
 			};
-			cs
+			(cs, true)
 		} else {
 			let Some(rs) = random_sampling else {
 				// If random_sampling is not set, default to NOT include it
-				return false;
+				return (false, "not sampled (random)");
 			};
-			rs
+			(rs, false)
 		};
 		let exec = cel::Executor::new_request(req);
-		exec.eval_rng(expr.as_ref())
+		match (exec.eval_rng(expr.as_ref()), client) {
+			(true, true) => (true, "sample (client)"),
+			(true, false) => (true, "sample (random)"),
+			(false, true) => (false, "not sampled (client)"),
+			(false, false) => (false, "not sampled (random)"),
+		}
 	}
 }
 
@@ -353,6 +442,8 @@ pub struct CelLogging {
 	pub cel_context: cel::ContextBuilder,
 	pub filter: Option<Arc<cel::Expression>>,
 	pub fields: LoggingFields,
+	pub otlp_filter: Option<Arc<cel::Expression>>,
+	pub otlp_fields: LoggingFields,
 	pub database_fields: LoggingFields,
 	pub metric_fields: MetricFields,
 }
@@ -361,13 +452,23 @@ pub struct CelLoggingExecutor<'a> {
 	pub executor: cel::Executor<'a>,
 	pub filter: &'a Option<Arc<cel::Expression>>,
 	pub fields: &'a LoggingFields,
+	pub otlp_filter: &'a Option<Arc<cel::Expression>>,
+	pub otlp_fields: &'a LoggingFields,
 	pub database_fields: &'a LoggingFields,
 	pub metric_fields: &'a MetricFields,
 }
 
 impl<'a> CelLoggingExecutor<'a> {
 	fn eval_filter(&self) -> bool {
-		match self.filter.as_deref() {
+		self.eval_filter_with(self.filter)
+	}
+
+	fn eval_otlp_filter(&self) -> bool {
+		self.eval_filter_with(self.otlp_filter)
+	}
+
+	fn eval_filter_with(&self, filter: &Option<Arc<cel::Expression>>) -> bool {
+		match filter.as_deref() {
 			Some(f) => self.executor.eval_bool(f),
 			None => true,
 		}
@@ -472,6 +573,10 @@ impl<'a> CelLoggingExecutor<'a> {
 		self.eval(&self.fields.add)
 	}
 
+	fn eval_otlp_additions(&self) -> Vec<(Cow<str>, Option<Value>)> {
+		self.eval(&self.otlp_fields.add)
+	}
+
 	fn eval_database_additions(&self) -> Vec<(Cow<str>, Option<Value>)> {
 		self.eval(&self.database_fields.add)
 	}
@@ -500,6 +605,8 @@ impl CelLogging {
 			cel_context,
 			filter: cfg.filter,
 			fields: cfg.fields,
+			otlp_filter: None,
+			otlp_fields: LoggingFields::default(),
 			database_fields: cfg.database_fields,
 			metric_fields: metrics.metric_fields,
 		}
@@ -520,6 +627,8 @@ impl CelLogging {
 			cel_context: _,
 			filter,
 			fields,
+			otlp_filter,
+			otlp_fields,
 			database_fields,
 			metric_fields,
 		} = self;
@@ -541,6 +650,8 @@ impl CelLogging {
 			executor,
 			filter,
 			fields,
+			otlp_filter,
+			otlp_fields,
 			database_fields,
 			metric_fields,
 		}
@@ -807,6 +918,7 @@ impl RequestLog {
 	) -> Self {
 		RequestLog {
 			cel,
+			database_llm: Default::default(),
 			metrics,
 			model_catalog,
 			start,
@@ -848,6 +960,7 @@ impl RequestLog {
 			llm_request: None,
 			llm_response: Default::default(),
 			a2a_method: None,
+			a2a_response: None,
 			inference_pool: None,
 			request_handle: None,
 			request_snapshot: None,
@@ -858,8 +971,15 @@ impl RequestLog {
 	}
 
 	pub fn span_writer(&self) -> SpanWriter {
-		let inner = self.span_writer_inner();
+		let inner = self.span_writer_inner().map(Arc::new);
 		SpanWriter { inner }
+	}
+	pub fn insert_span_writer(&self, extensions: &mut ::http::Extensions) {
+		if let Some(inner) = self.span_writer_inner() {
+			extensions.insert(SpanWriter {
+				inner: Some(Arc::new(inner)),
+			});
+		}
 	}
 	fn span_writer_inner(&self) -> Option<SpanWriterInner> {
 		// Early return if there is no tracer enabled at all
@@ -940,6 +1060,10 @@ impl RequestLog {
 #[derive(Debug)]
 pub struct RequestLog {
 	pub cel: CelLogging,
+	/// Controls whether normalized LLM prompt/completion content is persisted in the database's
+	/// dedicated payload table. `None` preserves the legacy behavior of persisting content captured
+	/// by CEL expressions. This is independent from CEL attribute capture.
+	pub database_llm: Option<crate::types::frontend::DatabaseLlmMode>,
 	pub metrics: Arc<Metrics>,
 	pub model_catalog: Arc<ModelCatalog>,
 	pub start: Timestamp,
@@ -1001,6 +1125,7 @@ pub struct RequestLog {
 	pub llm_response: AsyncLog<llm::LLMInfo>,
 
 	pub a2a_method: Option<Strng>,
+	pub a2a_response: Option<a2a::ResponseInfo>,
 
 	pub inference_pool: Option<SocketAddr>,
 
@@ -1015,10 +1140,18 @@ pub struct RequestLog {
 
 impl Drop for DropOnLog {
 	fn drop(&mut self) {
+		let status = self
+			.log
+			.as_ref()
+			.and_then(|log| log.status.map(|status| status.as_u16()));
 		if let Some(debug_tracer) = &self.debug_tracer {
-			debug_tracer.request_completed();
+			let error = self.log.as_ref().and_then(|log| log.error.clone());
+			debug_tracer.request_completed(status, error);
 		} else {
-			dtrace::trace(|t| t.request_completed());
+			dtrace::trace(|t| {
+				let error = self.log.as_ref().and_then(|log| log.error.clone());
+				t.request_completed(status, error);
+			});
 		}
 		let debug_tracer = self.debug_tracer.clone();
 		dtrace::with_trace(debug_tracer, || {
@@ -1176,7 +1309,7 @@ impl Drop for DropOnLog {
 						method: mcp.method_name.as_ref().map(RichStrng::from).into(),
 						resource_type: mcp.resource_type().into(),
 						server: mcp.target_name().map(RichStrng::from).into(),
-						resource: mcp.resource_name().map(RichStrng::from).into(),
+						resource: mcp.metric_resource_name().map(RichStrng::from).into(),
 
 						route: route_identifier.clone(),
 						custom: custom_metric_fields.clone(),
@@ -1185,9 +1318,15 @@ impl Drop for DropOnLog {
 			}
 
 			let maybe_enable_log = agent_core::telemetry::enabled("request", &Level::INFO);
+			let otlp_log_enabled = log.otel_logger.is_some();
 			// For now we only enable this log for LLM requests to keep cost/performance appropriate.
-			let log_store_enabled = log_store::enabled() && llm_response.is_some();
-			if !maybe_enable_log && !enable_trace && !log_store_enabled {
+			let log_store_enabled = log_store::enabled()
+				&& (llm_response.is_some()
+					|| log
+						.listener_name
+						.as_ref()
+						.is_some_and(|listener| listener.listener_name.as_str() == llm::LOCAL_LISTENER_NAME));
+			if !maybe_enable_log && !enable_trace && !log_store_enabled && !otlp_log_enabled {
 				return;
 			}
 
@@ -1195,6 +1334,16 @@ impl Drop for DropOnLog {
 			let grpc = log.grpc_status.load();
 
 			let input_tokens = llm_response.as_ref().and_then(|l| l.input_tokens);
+			let time_to_first_token = llm_response
+				.as_ref()
+				.and_then(|l| l.time_to_first_token)
+				.and_then(|duration| duration.0.to_std().ok())
+				.map(|duration| duration.as_secs_f64());
+			let time_per_output_token = llm_response
+				.as_ref()
+				.and_then(|l| l.time_per_output_token)
+				.and_then(|duration| duration.0.to_std().ok())
+				.map(|duration| duration.as_secs_f64());
 			let cost = llm_response.as_ref().and_then(|l| l.cost.as_ref());
 			let usage_cost_total = cost.map(|b| b.total().to_string());
 			let trace_cost_fields = if enable_trace {
@@ -1272,6 +1421,15 @@ impl Drop for DropOnLog {
 				("route", route_identifier.route.as_deref().map(display)),
 				("endpoint", log.endpoint.display()),
 				("src.addr", Some(display(&log.tcp_info.peer_addr))),
+				(
+					"src.identity",
+					log
+						.tls_info
+						.as_ref()
+						.and_then(|tls| tls.src_identity.as_ref())
+						.and_then(|tls| tls.identity.as_ref())
+						.map(display),
+				),
 				("http.method", log.method.display()),
 				("http.host", log.host.display()),
 				("http.path", log.path.display()),
@@ -1296,6 +1454,42 @@ impl Drop for DropOnLog {
 				("protocol", log.backend_protocol.as_ref().map(debug)),
 				("a2a.method", log.a2a_method.display()),
 				(
+					"a2a.response.outcome",
+					log.a2a_response.as_ref().map(|r| r.outcome.as_str().into()),
+				),
+				(
+					"a2a.response.error_code",
+					log
+						.a2a_response
+						.as_ref()
+						.and_then(|r| r.error_code)
+						.map(Into::into),
+				),
+				(
+					"a2a.result.kind",
+					log
+						.a2a_response
+						.as_ref()
+						.and_then(|r| r.result_kind.as_ref())
+						.map(display),
+				),
+				(
+					"a2a.task.state",
+					log
+						.a2a_response
+						.as_ref()
+						.and_then(|r| r.task_state.as_ref())
+						.map(display),
+				),
+				(
+					"a2a.context.id",
+					log
+						.a2a_response
+						.as_ref()
+						.and_then(|r| r.context_id.as_ref())
+						.map(display),
+				),
+				(
 					"mcp.method.name",
 					mcp
 						.as_ref()
@@ -1313,6 +1507,20 @@ impl Drop for DropOnLog {
 						.as_ref()
 						.and_then(|m| m.session_id.as_ref())
 						.map(display),
+				),
+				(
+					"mcp.error.code",
+					mcp
+						.as_ref()
+						.and_then(|m| m.error.as_ref())
+						.map(|error| error.code.into()),
+				),
+				(
+					"mcp.error.message",
+					mcp
+						.as_ref()
+						.and_then(|m| m.error.as_ref())
+						.map(|error| quoted(&error.message)),
 				),
 				(
 					"inferencepool.selected_endpoint",
@@ -1365,6 +1573,22 @@ impl Drop for DropOnLog {
 						.and_then(|l| l.output_tokens)
 						.map(Into::into),
 				),
+				// Not part of official semconv
+				(
+					"gen_ai.usage.reasoning_tokens",
+					llm_response
+						.as_ref()
+						.and_then(|l| l.reasoning_tokens)
+						.map(Into::into),
+				),
+				(
+					"agw.ai.time_to_first_token",
+					time_to_first_token.map(Into::into),
+				),
+				(
+					"agw.ai.time_per_output_token",
+					time_per_output_token.map(Into::into),
+				),
 				(
 					"agw.ai.usage.cost.total",
 					usage_cost_total.as_deref().map(Into::into),
@@ -1375,6 +1599,14 @@ impl Drop for DropOnLog {
 					llm_response
 						.as_ref()
 						.and_then(|l| l.output_image_tokens)
+						.map(Into::into),
+				),
+				// Not part of official semconv
+				(
+					"gen_ai.usage.input_audio_tokens",
+					llm_response
+						.as_ref()
+						.and_then(|l| l.input_audio_tokens)
 						.map(Into::into),
 				),
 				// Not part of official semconv
@@ -1459,6 +1691,14 @@ impl Drop for DropOnLog {
 				extra_kv_capacity += fields.add.len();
 			}
 			kv.reserve_exact(extra_kv_capacity);
+			let protocol_span_name = mcp
+				.as_ref()
+				.and_then(|mcp| mcp.method_name.clone())
+				.or_else(|| {
+					let request = log.request_snapshot.as_ref()?;
+					crate::http::is_grpc_content_type(&request.headers)
+						.then(|| request.path.path().trim_start_matches('/').to_owned())
+				});
 
 			if enable_trace && let Some(t) = &log.tracer {
 				let base_len = kv.len();
@@ -1469,7 +1709,13 @@ impl Drop for DropOnLog {
 							.map(|(key, value)| (*key, Some(value.as_str().into()))),
 					);
 				}
-				t.send(&log, &end_time, &cel_exec, kv.as_slice());
+				t.send(
+					&log,
+					&end_time,
+					&cel_exec,
+					protocol_span_name.as_deref(),
+					kv.as_slice(),
+				);
 				kv.truncate(base_len);
 				// Flush any buffered spans created during request processing.
 				// Does best effort, if the lock is poisoned, skip flushing.
@@ -1482,6 +1728,24 @@ impl Drop for DropOnLog {
 					}
 				}
 			};
+			if let Some(otel) = &log.otel_logger
+				&& cel_exec.eval_otlp_filter()
+			{
+				let mut otlp_kv = kv.clone();
+				otlp_kv.reserve(cel_exec.otlp_fields.add.len());
+				for (k, v) in &mut otlp_kv {
+					if cel_exec.otlp_fields.has(k) {
+						*v = None;
+					}
+				}
+				let otlp_raws = cel_exec.eval_otlp_additions();
+				for (k, v) in &otlp_raws {
+					let eval = v.as_ref().map(json_value_to_value_bag);
+					otlp_kv.push((k, eval));
+				}
+				otel.emit("info", "request", &otlp_kv);
+			}
+
 			if maybe_enable_log || log_store_enabled {
 				let passes_log_filter = cel_exec.eval_filter();
 				if !passes_log_filter {
@@ -1506,10 +1770,6 @@ impl Drop for DropOnLog {
 
 				if maybe_enable_log {
 					agent_core::telemetry::log("info", "request", &kv);
-
-					if let Some(otel) = &log.otel_logger {
-						otel.emit("info", "request", &kv);
-					}
 				}
 
 				if log_store_enabled {
@@ -1558,34 +1818,16 @@ impl Drop for DropOnLog {
 							db_kv.push((*k, eval));
 						}
 					}
-					let attributes_json = kv_to_json(&db_kv);
-					let agentgateway_user = string_attribute(&attributes_json, "agentgateway.user");
-					let agentgateway_group = string_attribute(&attributes_json, "agentgateway.group");
-					let user_agent_name = string_attribute(&attributes_json, "user_agent.name");
-					let payload = llm_response.as_ref().and_then(|info| {
-						let request_prompt_json = info
-							.prompt
-							.as_ref()
-							.and_then(|prompt| serde_json::to_value(prompt.as_ref()).ok());
-						let response_completion_json = info
-							.completion
-							.as_ref()
-							.and_then(|completion| serde_json::to_value(completion).ok());
-						(request_prompt_json.is_some() || response_completion_json.is_some()).then_some(
-							log_store::StoredRequestLogPayload {
-								request_prompt_json,
-								response_completion_json,
-							},
-						)
-					});
+					let attributes = database_attributes(&db_kv);
+					let payload = database_llm_payload(log.database_llm, llm_response.as_ref());
 					let has_payload = payload.is_some();
 					let total_tokens = llm_response.as_ref().and_then(|llm| {
 						llm
 							.total_tokens
-							.or_else(|| Some(llm.input_tokens? + llm.output_tokens?))
+							.or_else(|| Some(llm.input_tokens?.saturating_add(llm.output_tokens?)))
 					});
 					log_store::emit(log_store::StoredRequestLog {
-						id: uuid::Uuid::new_v4().to_string(),
+						id: uuid::Uuid::now_v7().to_string(),
 						started_at: log.start.as_datetime().with_timezone(&chrono::Utc),
 						completed_at: end_time.as_datetime().with_timezone(&chrono::Utc),
 						duration_ms: u128_to_i64(duration.as_millis()),
@@ -1615,11 +1857,11 @@ impl Drop for DropOnLog {
 						output_tokens: u64_to_i64(llm_response.as_ref().and_then(|llm| llm.output_tokens)),
 						total_tokens: u64_to_i64(total_tokens),
 						cost: cost.and_then(|cost| cost.total().to_f64()),
-						agentgateway_user,
-						agentgateway_group,
-						user_agent_name,
+						agentgateway_user: attributes.agentgateway_user,
+						agentgateway_group: attributes.agentgateway_group,
+						user_agent_name: attributes.user_agent_name,
 						has_payload,
-						attributes_json,
+						attributes_json: attributes.json,
 						payload,
 					});
 				}
@@ -1687,6 +1929,11 @@ where
 }
 
 pub struct OtelAccessLogger {
+	inner: super::NonBlockingDrop<OtelAccessLoggerInner>,
+}
+
+#[derive(Debug)]
+struct OtelAccessLoggerInner {
 	provider: SdkLoggerProvider,
 	logger: opentelemetry_sdk::logs::SdkLogger,
 }
@@ -1870,11 +2117,13 @@ impl OtelAccessLogger {
 
 		let logger = provider.logger("agentgateway.access");
 
-		Ok(Self { provider, logger })
+		Ok(Self {
+			inner: super::NonBlockingDrop::new(OtelAccessLoggerInner { provider, logger }),
+		})
 	}
 
 	pub fn shutdown(&self) {
-		let _ = self.provider.shutdown();
+		let _ = self.inner.provider.shutdown();
 	}
 }
 
@@ -1897,7 +2146,7 @@ impl OtelLogSink for OtelAccessLogger {
 			_ => "INFO",
 		};
 
-		let mut record = self.logger.create_log_record();
+		let mut record = self.inner.logger.create_log_record();
 		record.set_severity_number(severity);
 		record.set_severity_text(severity_text);
 		record.set_target(target.to_string());
@@ -1941,24 +2190,48 @@ impl OtelLogSink for OtelAccessLogger {
 			);
 		}
 
-		self.logger.emit(record);
+		self.inner.logger.emit(record);
 	}
 
 	fn shutdown(&self) {
-		let _ = self.provider.shutdown();
+		let _ = self.inner.provider.shutdown();
 	}
 }
 
 // SpanWriter is a construct that can start otel spans
 #[derive(Debug, Default, Clone)]
 pub struct SpanWriter {
-	inner: Option<SpanWriterInner>,
+	inner: Option<Arc<SpanWriterInner>>,
+}
+
+pub fn copy_span_writer(source: &::http::Extensions, target: &mut ::http::Extensions) {
+	if let Some(writer) = source.get::<SpanWriter>() {
+		target.insert(writer.clone());
+	}
 }
 
 impl SpanWriter {
+	pub(crate) fn is_enabled(&self) -> bool {
+		self.inner.is_some()
+	}
+
 	pub fn start(&self, name: impl Into<Cow<'static, str>>) -> SpanWriteOnDrop {
 		match &self.inner {
 			Some(i) => i.start(name),
+			None => SpanWriteOnDrop::default(),
+		}
+	}
+
+	pub fn start_outbound(&self, labels: OutboundCallLabels) -> SpanWriteOnDrop {
+		match &self.inner {
+			Some(i) => i.start_with_details(
+				labels.subtype.as_str(),
+				SpanKind::Client,
+				vec![
+					KeyValue::new("agentgateway.outbound.kind", labels.kind.as_str()),
+					KeyValue::new("agentgateway.outbound.subtype", labels.subtype.as_str()),
+				],
+			),
 			None => SpanWriteOnDrop::default(),
 		}
 	}
@@ -1972,12 +2245,24 @@ pub struct SpanWriterInner {
 
 impl SpanWriterInner {
 	pub fn start(&self, name: impl Into<Cow<'static, str>>) -> SpanWriteOnDrop {
+		self.start_with_details(name, SpanKind::Server, Vec::new())
+	}
+
+	fn start_with_details(
+		&self,
+		name: impl Into<Cow<'static, str>>,
+		span_kind: SpanKind,
+		attributes: Vec<KeyValue>,
+	) -> SpanWriteOnDrop {
 		// Create a unique child span ID for this recorded span.
 		let child = self.parent.new_span();
 
 		SpanWriteOnDrop {
 			name: Some(name.into()),
+			span_kind,
 			start_time: Some(SystemTime::now()),
+			attributes,
+			status: Status::default(),
 			inner: self.inner.clone(),
 			parent: Some(self.parent.clone()),
 			span: Some(child),
@@ -1985,19 +2270,98 @@ impl SpanWriterInner {
 	}
 }
 
-#[derive(Default)]
 pub struct SpanWriteOnDrop {
 	name: Option<Cow<'static, str>>,
+	span_kind: SpanKind,
 	start_time: Option<SystemTime>,
+	attributes: Vec<KeyValue>,
+	status: Status,
 	inner: Arc<Mutex<Vec<BufferedSpan>>>,
 	parent: Option<trc::TraceParent>,
 	span: Option<trc::TraceParent>,
 }
+impl Default for SpanWriteOnDrop {
+	fn default() -> Self {
+		Self {
+			name: None,
+			span_kind: SpanKind::Internal,
+			start_time: None,
+			attributes: Vec::new(),
+			status: Status::default(),
+			inner: Arc::default(),
+			parent: None,
+			span: None,
+		}
+	}
+}
 impl SpanWriteOnDrop {
+	pub fn span_writer(&self) -> SpanWriter {
+		let inner = self.span.clone().map(|parent| {
+			Arc::new(SpanWriterInner {
+				parent,
+				inner: self.inner.clone(),
+			})
+		});
+		SpanWriter { inner }
+	}
+
 	pub fn rename_span(&mut self, name: impl Into<Cow<'static, str>>) {
 		if self.parent.is_some() {
 			self.name = Some(name.into());
 		}
+	}
+
+	pub fn inject_context(&self, req: &mut Request) {
+		if let Some(span) = &self.span {
+			span.insert_header(req);
+		}
+	}
+
+	pub fn inject_headers(&self, headers: &mut ::http::HeaderMap) {
+		if let Some(span) = &self.span {
+			span.insert_headers(headers);
+		}
+	}
+
+	pub fn inject_grpc_context<T>(&self, req: &mut tonic::Request<T>) {
+		let Some(span) = &self.span else {
+			return;
+		};
+		let traceparent = format!("{span:?}");
+		if let Ok(value) = tonic::metadata::MetadataValue::try_from(traceparent.as_str()) {
+			req.metadata_mut().insert("traceparent", value);
+		}
+	}
+
+	pub fn add_attribute(&mut self, attribute: KeyValue) {
+		if self.parent.is_some() {
+			self.attributes.push(attribute);
+		}
+	}
+
+	pub fn set_error(&mut self, error_type: impl Into<String>, description: impl Into<String>) {
+		if self.parent.is_some() {
+			self
+				.attributes
+				.push(KeyValue::new("error.type", error_type.into()));
+			self.status = Status::error(description.into());
+		}
+	}
+
+	pub fn record_grpc_result<T>(&mut self, result: &Result<tonic::Response<T>, tonic::Status>) {
+		match result {
+			Ok(_) => self.add_attribute(KeyValue::new("grpc.status", 0_i64)),
+			Err(status) => self.record_grpc_error(status),
+		}
+	}
+
+	pub fn record_grpc_status(&mut self, code: tonic::Code) {
+		self.add_attribute(KeyValue::new("grpc.status", i64::from(code as i32)));
+	}
+
+	pub fn record_grpc_error(&mut self, status: &tonic::Status) {
+		self.record_grpc_status(status.code());
+		self.set_error(format!("{:?}", status.code()), status.to_string());
 	}
 }
 impl Drop for SpanWriteOnDrop {
@@ -2013,10 +2377,11 @@ impl Drop for SpanWriteOnDrop {
 		if let Ok(mut spans) = self.inner.lock() {
 			spans.push(BufferedSpan {
 				name,
-				span_kind: SpanKind::Server,
+				span_kind: self.span_kind.clone(),
 				start_time: self.start_time.unwrap_or(end_time),
 				end_time,
-				attributes: Vec::new(),
+				attributes: std::mem::take(&mut self.attributes),
+				status: std::mem::take(&mut self.status),
 				parent,
 				span,
 			});
@@ -2031,6 +2396,7 @@ pub struct BufferedSpan {
 	start_time: SystemTime,
 	end_time: SystemTime,
 	attributes: Vec<KeyValue>,
+	status: Status,
 	parent: trc::TraceParent,
 	span: trc::TraceParent,
 }
@@ -2041,10 +2407,11 @@ impl BufferedSpan {
 			self.name,
 			self.span_kind,
 			&self.span,
-			Some(&self.parent),
+			Some((&self.parent, false)),
 			self.start_time,
 			self.end_time,
 			self.attributes,
+			self.status,
 		)
 	}
 }
@@ -2062,9 +2429,12 @@ mod tests {
 	use prometheus_client::registry::Registry;
 
 	use super::*;
-	use crate::telemetry::metrics::Metrics;
+	use crate::telemetry::metrics::{
+		Metrics, OutboundCallKind, OutboundCallLabels, OutboundCallSubtype,
+	};
 	use crate::telemetry::trc;
 	use crate::transport::stream::TCPConnectionInfo;
+	use crate::types::frontend::{DatabaseLlmMode, LoggingPolicy};
 
 	#[derive(Clone, Debug, Default)]
 	struct RecordingSpanExporter {
@@ -2095,7 +2465,7 @@ mod tests {
 			.build();
 		(
 			Arc::new(trc::Tracer {
-				provider,
+				provider: crate::telemetry::NonBlockingDrop::new(provider),
 				processor,
 				fields: Arc::new(LoggingFields::default()),
 				filter: None,
@@ -2109,11 +2479,17 @@ mod tests {
 			cel_context: crate::cel::ContextBuilder::new(),
 			filter: None,
 			fields: LoggingFields::default(),
+			otlp_filter: None,
+			otlp_fields: LoggingFields::default(),
 			metric_fields: MetricFields::default(),
 			database_fields: LoggingFields::default(),
 		};
 		let mut registry = Registry::default();
-		let metrics = Arc::new(Metrics::new(&mut registry, Default::default()));
+		let metrics = Arc::new(Metrics::new(
+			&mut registry,
+			Default::default(),
+			Default::default(),
+		));
 		RequestLog::new(
 			cel,
 			metrics,
@@ -2126,6 +2502,109 @@ mod tests {
 				raw_peer_addr: None,
 			},
 		)
+	}
+
+	fn llm_context_with_content() -> LLMContext {
+		let request = llm::LLMRequest {
+			input_tokens: None,
+			input_format: llm::InputFormat::Responses,
+			cache_convention: Default::default(),
+			request_model: "test-model".into(),
+			provider: "test-provider".into(),
+			streaming: false,
+			params: Default::default(),
+			prompt: Some(Arc::new(vec![llm::SimpleChatCompletionMessage {
+				role: "user".into(),
+				content: "hello".into(),
+			}])),
+			provider_state: None,
+		};
+		let mut context = LLMContext::from(request);
+		context.completion = Some(vec!["world".to_string()]);
+		context
+	}
+
+	#[test]
+	fn database_llm_omitted_preserves_legacy_payload_without_capture_requirements() {
+		let policy: LoggingPolicy = serde_json::from_value(serde_json::json!({
+			"database": {}
+		}))
+		.unwrap();
+		let mut log = test_request_log();
+
+		crate::proxy::httpproxy::apply_logging_policy_to_log(&mut log, &policy);
+
+		assert_eq!(log.database_llm, None);
+		assert!(!log.cel.cel_context.needs_llm_prompt());
+		assert!(!log.cel.cel_context.needs_llm_completion());
+		assert!(database_llm_payload(None, Some(&llm_context_with_content())).is_some());
+	}
+
+	#[test]
+	fn database_llm_full_enables_capture_requirements() {
+		let policy: LoggingPolicy = serde_json::from_value(serde_json::json!({
+			"database": {"llm": "full"}
+		}))
+		.unwrap();
+		let mut log = test_request_log();
+
+		crate::proxy::httpproxy::apply_logging_policy_to_log(&mut log, &policy);
+
+		assert_eq!(log.database_llm, Some(DatabaseLlmMode::Full));
+		assert!(log.cel.cel_context.needs_llm_prompt());
+		assert!(log.cel.cel_context.needs_llm_completion());
+	}
+
+	#[test]
+	fn database_llm_metadata_does_not_persist_captured_content() {
+		let context = llm_context_with_content();
+		assert!(database_llm_payload(Some(DatabaseLlmMode::Metadata), Some(&context)).is_none());
+	}
+
+	#[test]
+	fn database_add_can_capture_content_without_enabling_payload_storage() {
+		let policy: LoggingPolicy = serde_json::from_value(serde_json::json!({
+			"database": {
+				"llm": "metadata",
+				"add": {"my.prompt": "llm.prompt"}
+			}
+		}))
+		.unwrap();
+		let mut log = test_request_log();
+		let database = policy.database.as_ref().unwrap();
+		for expression in database.add.values_unordered() {
+			log
+				.cel
+				.cel_context
+				.register_log_expression(expression.as_ref());
+		}
+
+		crate::proxy::httpproxy::apply_logging_policy_to_log(&mut log, &policy);
+
+		assert!(log.cel.cel_context.needs_llm_prompt());
+		assert!(!log.cel.cel_context.needs_llm_completion());
+		assert!(log.cel.database_fields.add.contains_key("my.prompt"));
+		assert!(
+			database_llm_payload(
+				Some(DatabaseLlmMode::Metadata),
+				Some(&llm_context_with_content())
+			)
+			.is_none()
+		);
+	}
+
+	#[test]
+	fn database_llm_full_persists_content_in_payload_only() {
+		let context = llm_context_with_content();
+		let payload = database_llm_payload(Some(DatabaseLlmMode::Full), Some(&context)).unwrap();
+		assert_eq!(
+			payload.request_prompt_json,
+			Some(serde_json::json!([{"role": "user", "content": "hello"}]))
+		);
+		assert_eq!(
+			payload.response_completion_json,
+			Some(serde_json::json!(["world"]))
+		);
 	}
 
 	#[test]
@@ -2166,7 +2645,58 @@ mod tests {
 		assert_eq!(child.span_kind, SpanKind::Server);
 		assert_eq!(child.parent_span_id, outgoing.span_id.into());
 		assert_eq!(child.span_context.trace_id(), outgoing.trace_id.into());
-		assert!(child.parent_span_is_remote);
+		assert!(!child.parent_span_is_remote);
+	}
+
+	#[test]
+	fn span_writer_records_outbound_client_span_and_propagates_it() {
+		let (tracer, exporter) = test_tracer();
+		let mut request = test_request_log();
+		request.tracer = Some(tracer.clone());
+
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		request.outgoing_span = Some(outgoing.clone());
+
+		let mut outbound_request = ::http::Request::new(crate::http::Body::empty());
+		{
+			let mut span = request.span_writer().start_outbound(OutboundCallLabels {
+				kind: OutboundCallKind::Policy,
+				subtype: OutboundCallSubtype::ExtAuthz,
+			});
+			span.inject_context(&mut outbound_request);
+			span.set_error(
+				ProxyResponseReason::ExtAuth.to_string(),
+				"authorization denied",
+			);
+		}
+		let propagated = trc::TraceParent::from_request(&outbound_request).unwrap();
+
+		drop(DropOnLog::from(request));
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		let child = spans
+			.iter()
+			.find(|span| span.name.as_ref() == OutboundCallSubtype::ExtAuthz.as_str())
+			.expect("outbound span should be exported");
+		assert_eq!(child.span_kind, SpanKind::Client);
+		assert_eq!(child.parent_span_id, outgoing.span_id.into());
+		assert_eq!(child.span_context.trace_id(), outgoing.trace_id.into());
+		assert_eq!(child.span_context.span_id(), propagated.span_id.into());
+		assert!(child.attributes.contains(&KeyValue::new(
+			"agentgateway.outbound.kind",
+			OutboundCallKind::Policy.as_str(),
+		)));
+		assert!(child.attributes.contains(&KeyValue::new(
+			"agentgateway.outbound.subtype",
+			OutboundCallSubtype::ExtAuthz.as_str(),
+		)));
+		assert!(child.attributes.contains(&KeyValue::new(
+			"error.type",
+			ProxyResponseReason::ExtAuth.to_string(),
+		)));
+		assert_eq!(child.status, Status::error("authorization denied"));
 	}
 
 	#[test]
@@ -2190,6 +2720,83 @@ mod tests {
 		assert!(exporter.finished_spans().is_empty());
 	}
 
+	#[test]
+	fn llm_span_uses_cache_inclusive_input_tokens() {
+		let request = llm::LLMRequest {
+			input_tokens: None,
+			input_format: InputFormat::Messages,
+			cache_convention: llm::CacheTokenConvention::InputExcludesCache,
+			request_model: strng::literal!("claude"),
+			provider: strng::literal!("anthropic"),
+			streaming: false,
+			params: llm::LLMRequestParams::default(),
+			prompt: None,
+			provider_state: None,
+		};
+		let response = llm::LLMResponse {
+			input_tokens: Some(50),
+			cached_input_tokens: Some(40),
+			cache_creation_input_tokens: Some(10),
+			input_audio_tokens: Some(3),
+			output_tokens: Some(20),
+			output_audio_tokens: Some(4),
+			reasoning_tokens: Some(5),
+			total_tokens: Some(70),
+			..Default::default()
+		};
+
+		let (tracer, exporter) = test_tracer();
+		let mut log = test_request_log();
+		log.tracer = Some(tracer.clone());
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		log.outgoing_span = Some(outgoing);
+		log.llm_request = Some(request.clone());
+		log
+			.llm_response
+			.store(Some(llm::LLMInfo::new(request, response)));
+
+		drop(DropOnLog::from(log));
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		let span = spans
+			.iter()
+			.find(|span| span.name.as_ref() == "unknown")
+			.expect("request span should be exported");
+		let value = |key: &str| {
+			span
+				.attributes
+				.iter()
+				.find(|attr| attr.key.as_str() == key)
+				.map(|attr| &attr.value)
+		};
+		assert_eq!(
+			value("gen_ai.usage.input_tokens"),
+			Some(&opentelemetry::Value::I64(100))
+		);
+		assert_eq!(
+			value("gen_ai.usage.cache_read.input_tokens"),
+			Some(&opentelemetry::Value::I64(40))
+		);
+		assert_eq!(
+			value("gen_ai.usage.cache_creation.input_tokens"),
+			Some(&opentelemetry::Value::I64(10))
+		);
+		assert_eq!(
+			value("gen_ai.usage.reasoning_tokens"),
+			Some(&opentelemetry::Value::I64(5))
+		);
+		assert_eq!(
+			value("gen_ai.usage.input_audio_tokens"),
+			Some(&opentelemetry::Value::I64(3))
+		);
+		assert_eq!(
+			value("gen_ai.usage.output_audio_tokens"),
+			Some(&opentelemetry::Value::I64(4))
+		);
+	}
+
 	#[tokio::test]
 	async fn llm_cost_breakdown_span_attributes() {
 		let catalog_file = tempfile::NamedTempFile::new().unwrap();
@@ -2201,17 +2808,18 @@ mod tests {
 		let catalog = ModelCatalog::new(vec![crate::ModelCatalogSource::File {
 			file: catalog_file.path().to_path_buf(),
 		}])
+		.await
 		.unwrap();
 		let request = llm::LLMRequest {
 			input_tokens: None,
 			input_format: InputFormat::Completions,
-			native_format: None,
 			cache_convention: llm::CacheTokenConvention::InputIncludesCache,
 			request_model: strng::literal!("my-model"),
 			provider: strng::literal!("openai"),
 			streaming: false,
 			params: llm::LLMRequestParams::default(),
 			prompt: None,
+			provider_state: None,
 		};
 		let response = llm::LLMResponse {
 			input_tokens: Some(1_000_000),
@@ -2267,5 +2875,43 @@ mod tests {
 				.all(|attr| attr.key.as_str() != "agw.usage.cost"),
 			"cost should use the AGW AI usage namespace"
 		);
+	}
+
+	#[test]
+	fn a2a_response_span_attributes() {
+		let (tracer, exporter) = test_tracer();
+		let mut log = test_request_log();
+		log.tracer = Some(tracer.clone());
+		let mut outgoing = trc::TraceParent::new();
+		outgoing.flags = 1;
+		log.outgoing_span = Some(outgoing);
+		log.backend_protocol = Some(cel::BackendProtocol::a2a);
+		log.a2a_method = Some(strng::literal!("tasks/send"));
+		log.a2a_response = Some(a2a::ResponseInfo {
+			outcome: a2a::ResponseOutcome::Error,
+			error_code: Some(-32602),
+			result_kind: Some(strng::literal!("task")),
+			task_state: Some(strng::literal!("failed")),
+			context_id: Some(strng::literal!("ctx-123")),
+		});
+
+		drop(DropOnLog::from(log));
+		let _ = tracer.provider.force_flush();
+
+		let spans = exporter.finished_spans();
+		let span = spans
+			.iter()
+			.find(|span| span.name.as_ref() == "unknown")
+			.expect("request span should be exported");
+		let has = |key: &str| span.attributes.iter().any(|attr| attr.key.as_str() == key);
+		for expected in [
+			"a2a.response.outcome",
+			"a2a.response.error_code",
+			"a2a.result.kind",
+			"a2a.task.state",
+			"a2a.context.id",
+		] {
+			assert!(has(expected), "expected {expected} span attribute");
+		}
 	}
 }

@@ -1,0 +1,45 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/completions/reasoning.json
+info:
+  model: gpt-3.5-turbo
+  messages:
+    - role: user
+      content: How is the current weather in Columbus?
+  reasoning_effort: medium
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "How is the current weather in Columbus?"
+          }
+        ]
+      }
+    ],
+    "model": "gpt-3.5-turbo",
+    "max_tokens": 4096,
+    "thinking": {
+      "type": "enabled",
+      "budget_tokens": 2048
+    }
+  },
+  "parsed": {
+    "input_format": "Completions",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "gpt-3.5-turbo",
+    "provider": "anthropic",
+    "streaming": false,
+    "params": {},
+    "prompt": [
+      {
+        "role": "user",
+        "content": "How is the current weather in Columbus?"
+      }
+    ]
+  }
+}

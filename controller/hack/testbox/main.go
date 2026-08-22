@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os/signal"
+	"slices"
 	"syscall"
 	"time"
 )
@@ -44,8 +45,8 @@ func main() {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	for i := len(shutdowns) - 1; i >= 0; i-- {
-		if err := shutdowns[i](shutdownCtx); err != nil {
+	for _, v := range slices.Backward(shutdowns) {
+		if err := v(shutdownCtx); err != nil {
 			log.Printf("shutdown error: %v", err)
 		}
 	}

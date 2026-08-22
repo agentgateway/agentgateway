@@ -8,7 +8,6 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/test"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/remotehttp"
 )
@@ -36,9 +35,10 @@ func TestLookupFailsClosedWhenKeysetIsMissing(t *testing.T) {
 	stop := test.NewStop(t)
 	target := remotehttp.FetchTarget{URL: "https://issuer.example/jwks"}
 	persisted := NewPersistedEntriesFromCollection(
-		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, nil, krt.WithName("jwks/LookupMissingPersistedConfigMaps")),
+		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, nil, krt.WithName("jwks/LookupMissingPersistedConfigMaps"), krt.WithStop(stop)),
 		DefaultJwksStorePrefix,
 		"agentgateway-system",
+		krt.WithStop(stop),
 	)
 	lookupIndex := NewLookup(
 		persisted,
@@ -66,18 +66,17 @@ func TestLookupReturnsPersistedKeyset(t *testing.T) {
 		JwksJSON:   `{"keys":[]}`,
 	}
 	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      JwksConfigMapName(DefaultJwksStorePrefix, target.Key()),
-			Namespace: "agentgateway-system",
-			Labels:    JwksStoreConfigMapLabel(DefaultJwksStorePrefix),
-		},
+		Name:      JwksConfigMapName(DefaultJwksStorePrefix, target.Key()),
+		Namespace: "agentgateway-system",
+		Labels:    JwksStoreConfigMapLabel(DefaultJwksStorePrefix),
 	}
 	assert.NoError(t, SetJwksInConfigMap(cm, keyset))
 
 	persisted := NewPersistedEntriesFromCollection(
-		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{cm}, krt.WithName("jwks/LookupPersistedConfigMaps")),
+		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{cm}, krt.WithName("jwks/LookupPersistedConfigMaps"), krt.WithStop(stop)),
 		DefaultJwksStorePrefix,
 		"agentgateway-system",
+		krt.WithStop(stop),
 	)
 	lookupIndex := NewLookup(
 		persisted,
@@ -106,18 +105,17 @@ func TestLookupRequiresCanonicalPersistedKeysetName(t *testing.T) {
 		JwksJSON:   `{"keys":[{"kid":"legacy"}]}`,
 	}
 	cm := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "jwks-store-legacy-name",
-			Namespace: "agentgateway-system",
-			Labels:    JwksStoreConfigMapLabel(DefaultJwksStorePrefix),
-		},
+		Name:      "jwks-store-legacy-name",
+		Namespace: "agentgateway-system",
+		Labels:    JwksStoreConfigMapLabel(DefaultJwksStorePrefix),
 	}
 	assert.NoError(t, SetJwksInConfigMap(cm, keyset))
 
 	persisted := NewPersistedEntriesFromCollection(
-		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{cm}, krt.WithName("jwks/LookupLegacyNameConfigMaps")),
+		krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, []*corev1.ConfigMap{cm}, krt.WithName("jwks/LookupLegacyNameConfigMaps"), krt.WithStop(stop)),
 		DefaultJwksStorePrefix,
 		"agentgateway-system",
+		krt.WithStop(stop),
 	)
 	lookupIndex := NewLookup(
 		persisted,
@@ -138,11 +136,13 @@ func TestLookupRequiresCanonicalPersistedKeysetName(t *testing.T) {
 
 func TestLookupPropagatesResolverError(t *testing.T) {
 	sentinel := errors.New("resolver failed")
+	stop := test.NewStop(t)
 	lookupIndex := NewLookup(
 		NewPersistedEntriesFromCollection(
-			krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, nil, krt.WithName("jwks/LookupResolverErrorConfigMaps")),
+			krt.NewStaticCollection[*corev1.ConfigMap](alwaysSynced{}, nil, krt.WithName("jwks/LookupResolverErrorConfigMaps"), krt.WithStop(stop)),
 			DefaultJwksStorePrefix,
 			"agentgateway-system",
+			krt.WithStop(stop),
 		),
 		staticLookupResolver{err: sentinel},
 	)

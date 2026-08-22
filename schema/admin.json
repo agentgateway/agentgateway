@@ -27,15 +27,23 @@
     "backends": {
       "type": "array",
       "items": true
+    },
+    "models": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DumpModel"
+      }
     }
   },
+  "additionalProperties": false,
   "required": [
     "workloads",
     "services",
     "binds",
     "routes",
     "policies",
-    "backends"
+    "backends",
+    "models"
   ],
   "$defs": {
     "DumpBind": {
@@ -53,6 +61,10 @@
         "tunnelProtocol": {
           "$ref": "#/$defs/TunnelProtocol"
         },
+        "mode": {
+          "description": "Controls whether this bind opens an OS listener socket.\n`standard` (default) binds the `address`; `internal` does not bind a socket and is only\nreachable via in-process routing (e.g. CONNECT tunnel re-entry by other listeners).",
+          "$ref": "#/$defs/BindMode"
+        },
         "listeners": {
           "type": "object",
           "additionalProperties": {
@@ -60,12 +72,13 @@
           }
         }
       },
+      "additionalProperties": false,
       "required": [
         "key",
         "address",
         "protocol",
         "tunnelProtocol",
-        "listeners",
+        "mode",
         "listeners"
       ]
     },
@@ -96,7 +109,21 @@
         "connect"
       ]
     },
-    "Listener": {
+    "BindMode": {
+      "oneOf": [
+        {
+          "description": "Open a listener socket on the bind's address (the normal behavior).",
+          "type": "string",
+          "const": "standard"
+        },
+        {
+          "description": "Do not open a socket. The bind is registered for routing only and is reachable\nvia in-process re-entry (e.g. another listener redirecting CONNECT traffic to it).",
+          "type": "string",
+          "const": "internal"
+        }
+      ]
+    },
+    "DumpListener": {
       "type": "object",
       "properties": {
         "key": {
@@ -127,8 +154,27 @@
         },
         "protocol": {
           "$ref": "#/$defs/ListenerProtocol"
+        },
+        "routes": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/Route"
+          }
+        },
+        "tcpRoutes": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/TCPRoute"
+          }
         }
       },
+      "additionalProperties": false,
       "required": [
         "key",
         "gatewayName",
@@ -142,9 +188,11 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "Name identifying this resource.",
           "type": "string"
         },
         "namespace": {
+          "description": "Namespace scoping this resource, used in fully qualified `namespace/name` references.",
           "type": "string"
         }
       },
@@ -208,67 +256,12 @@
       ]
     },
     "ServerTLSConfig": {
-      "type": "null"
-    },
-    "DumpListener": {
       "type": "object",
       "properties": {
-        "key": {
+        "certificateSource": {
           "type": "string"
-        },
-        "gatewayName": {
-          "type": "string"
-        },
-        "gatewayNamespace": {
-          "type": "string"
-        },
-        "listenerName": {
-          "type": "string"
-        },
-        "listenerSet": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ResourceName"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "hostname": {
-          "description": "Can be a wildcard",
-          "type": "string"
-        },
-        "protocol": {
-          "$ref": "#/$defs/ListenerProtocol"
-        },
-        "routes": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/$defs/Route"
-          }
-        },
-        "tcpRoutes": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/$defs/TCPRoute"
-          }
         }
-      },
-      "required": [
-        "key",
-        "gatewayName",
-        "gatewayNamespace",
-        "listenerName",
-        "hostname",
-        "protocol"
-      ]
+      }
     },
     "Route": {
       "type": "object",
@@ -295,18 +288,22 @@
           "maximum": 65535
         },
         "name": {
+          "description": "Name identifying this route.",
           "type": "string"
         },
         "namespace": {
+          "description": "Namespace scoping this route, used in fully qualified `namespace/name` references.",
           "type": "string"
         },
         "ruleName": {
+          "description": "Specific rule within the route, for targeted policy references.",
           "type": [
             "string",
             "null"
           ]
         },
         "kind": {
+          "description": "Resource kind used in policy target references.",
           "type": [
             "string",
             "null"
@@ -339,6 +336,7 @@
           "items": true
         }
       },
+      "additionalProperties": false,
       "required": [
         "key",
         "name",
@@ -352,21 +350,25 @@
       "type": "object",
       "properties": {
         "headers": {
+          "description": "HTTP headers that must match for this route to apply.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/HeaderMatch"
           }
         },
         "path": {
+          "description": "Path match rule (exact, prefix, or regex). Defaults to a \"/\" prefix match.",
           "$ref": "#/$defs/PathMatch",
           "default": {
             "pathPrefix": "/"
           }
         },
         "method": {
+          "description": "HTTP method that must match for this route to apply.",
           "type": "string"
         },
         "query": {
+          "description": "Query parameters that must match for this route to apply.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/QueryMatch"
@@ -382,9 +384,11 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "HTTP header or pseudo-header name (such as `:method`) to match.",
           "type": "string"
         },
         "value": {
+          "description": "Exact or regex pattern the header value must match.",
           "$ref": "#/$defs/HeaderValueMatch"
         }
       },
@@ -478,9 +482,11 @@
       "type": "object",
       "properties": {
         "name": {
+          "description": "Query parameter name to match.",
           "type": "string"
         },
         "value": {
+          "description": "Exact or regex pattern the query parameter value must match.",
           "$ref": "#/$defs/QueryValueMatch"
         }
       },
@@ -541,6 +547,7 @@
       "required": [
         "weight"
       ],
+      "unevaluatedProperties": false,
       "oneOf": [
         {
           "type": "object",
@@ -558,6 +565,7 @@
                   "maximum": 65535
                 }
               },
+              "additionalProperties": false,
               "required": [
                 "name",
                 "port"
@@ -577,6 +585,17 @@
           },
           "required": [
             "backend"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "inlineBackend": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "inlineBackend"
           ]
         },
         {
@@ -628,18 +647,22 @@
           "maximum": 65535
         },
         "name": {
+          "description": "Name identifying this route.",
           "type": "string"
         },
         "namespace": {
+          "description": "Namespace scoping this route, used in fully qualified `namespace/name` references.",
           "type": "string"
         },
         "ruleName": {
+          "description": "Specific rule within the route, for targeted policy references.",
           "type": [
             "string",
             "null"
           ]
         },
         "kind": {
+          "description": "Resource kind used in policy target references.",
           "type": [
             "string",
             "null"
@@ -658,6 +681,7 @@
           }
         }
       },
+      "additionalProperties": false,
       "required": [
         "key",
         "name",
@@ -674,20 +698,25 @@
           "default": 1
         },
         "backend": {
-          "$ref": "#/$defs/SimpleLocalBackendSerde"
+          "$ref": "#/$defs/LocalTCPBackend"
         },
         "inlinePolicies": {
           "type": "array",
           "items": true
         }
       },
+      "additionalProperties": false,
       "required": [
         "weight",
         "backend"
       ]
     },
-    "SimpleLocalBackendSerde": {
+    "LocalTCPBackend": {
       "oneOf": [
+        {
+          "type": "string",
+          "enum": []
+        },
         {
           "description": "Service reference. Service must be defined in the top level services list.",
           "type": "object",
@@ -696,9 +725,11 @@
               "type": "object",
               "properties": {
                 "name": {
+                  "description": "Name of the target Service, as defined in the top-level `services` list.",
                   "$ref": "#/$defs/NamespacedHostname"
                 },
                 "port": {
+                  "description": "Port on the target Service to route to.",
                   "type": "integer",
                   "format": "uint16",
                   "minimum": 0,
@@ -722,12 +753,38 @@
           "type": "object",
           "properties": {
             "host": {
-              "description": "Hostname or IP address",
               "type": "string"
             }
           },
           "required": [
             "host"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "description": "Resolve the dial target from downstream TLS SNI and the original destination port.",
+          "type": "object",
+          "properties": {
+            "dynamic": {
+              "type": "object",
+              "properties": {
+                "target": {
+                  "description": "CEL expression evaluated against TCP connection context to compute a\n`host:port` dial target. Available fields include `source.*` and\n`destination.*`; for TLS, `destination.hostname` is the sniffed SNI.",
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/Expression"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "dynamic"
           ],
           "additionalProperties": false
         },
@@ -745,6 +802,9 @@
           "additionalProperties": false
         }
       ]
+    },
+    "Expression": {
+      "type": "string"
     },
     "RoutesDump": {
       "type": "object",
@@ -777,10 +837,250 @@
           }
         }
       },
+      "additionalProperties": false,
       "required": [
         "httpMesh",
         "tcpMesh",
         "routeGroups"
+      ]
+    },
+    "DumpModel": {
+      "type": "object",
+      "properties": {
+        "listenerKey": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "routerKey": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ModelRouteKind"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "listenerKey",
+        "key",
+        "name",
+        "routerKey",
+        "kind"
+      ]
+    },
+    "ModelRouteKind": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "concrete": {
+              "$ref": "#/$defs/ModelRoute"
+            }
+          },
+          "required": [
+            "concrete"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "virtual": {
+              "$ref": "#/$defs/VirtualModelRoute"
+            }
+          },
+          "required": [
+            "virtual"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ModelRoute": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "created": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "visibility": {
+          "$ref": "#/$defs/ModelVisibility"
+        },
+        "headerMatches": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/HeaderMatch"
+            }
+          }
+        },
+        "backend": {
+          "$ref": "#/$defs/RouteBackendReference"
+        },
+        "policies": true,
+        "backendPolicies": {
+          "type": "array",
+          "items": true
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "created",
+        "visibility",
+        "headerMatches",
+        "backend",
+        "policies",
+        "backendPolicies"
+      ]
+    },
+    "ModelVisibility": {
+      "oneOf": [
+        {
+          "description": "Public models can be requested directly by clients and are included in the model list.",
+          "type": "string",
+          "const": "public"
+        },
+        {
+          "description": "Internal models can be targeted by virtual models but cannot be requested directly.",
+          "type": "string",
+          "const": "internal"
+        }
+      ]
+    },
+    "VirtualModelRoute": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "created": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "llmPolicy": true,
+        "routing": {
+          "$ref": "#/$defs/VirtualModelRouting"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "created",
+        "llmPolicy",
+        "routing"
+      ]
+    },
+    "VirtualModelRouting": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "weighted": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/WeightedTarget"
+              }
+            }
+          },
+          "required": [
+            "weighted"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "failover": {
+              "type": "object",
+              "properties": {
+                "backend": {
+                  "$ref": "#/$defs/RouteBackendReference"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "backend"
+              ]
+            }
+          },
+          "required": [
+            "failover"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "conditional": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/ConditionalTarget"
+              }
+            }
+          },
+          "required": [
+            "conditional"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "WeightedTarget": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "model",
+        "weight"
+      ]
+    },
+    "ConditionalTarget": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "when": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Expression"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "model",
+        "when"
       ]
     }
   }

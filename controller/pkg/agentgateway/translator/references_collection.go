@@ -146,15 +146,47 @@ func (refs ReferenceGrants) BackendAllowed(
 		return true
 	}
 	if refKind == wellknown.HTTPRouteGVK.GroupKind() {
-		// ReferenceGrant not required for route delegation
+		// Delegation authorization is evaluated against each matched child by
+		// ParentlessHTTPRouteAllowed. A route-group selector is not itself an
+		// HTTPRoute object name and cannot be authorized here.
 		return true
 	}
-	from := Reference{Kind: k.GroupKind(), Namespace: gwv1b1.Namespace(routeNamespace)}
-	to := Reference{Kind: refKind, Namespace: backendNamespace}
+	return refs.referenceAllowed(ctx, k.GroupKind(), gwv1b1.Namespace(routeNamespace), refKind, backendNamespace, string(backendName))
+}
+
+// ParentlessHTTPRouteAllowed checks whether a parent HTTPRoute may adopt a
+// parentless HTTPRoute from another namespace. The actual child name is used
+// for the lookup so named grants continue to work with wildcard and label
+// route-group selectors.
+func (refs ReferenceGrants) ParentlessHTTPRouteAllowed(
+	ctx krt.HandlerContext,
+	parentNamespace string,
+	child types.NamespacedName,
+) bool {
+	return refs.referenceAllowed(
+		ctx,
+		wellknown.HTTPRouteGVK.GroupKind(),
+		gwv1b1.Namespace(parentNamespace),
+		wellknown.HTTPRouteGVK.GroupKind(),
+		gwv1b1.Namespace(child.Namespace),
+		child.Name,
+	)
+}
+
+func (refs ReferenceGrants) referenceAllowed(
+	ctx krt.HandlerContext,
+	fromKind schema.GroupKind,
+	fromNamespace gwv1b1.Namespace,
+	toKind schema.GroupKind,
+	toNamespace gwv1b1.Namespace,
+	toName string,
+) bool {
+	from := Reference{Kind: fromKind, Namespace: fromNamespace}
+	to := Reference{Kind: toKind, Namespace: toNamespace}
 	pair := ReferencePair{From: from, To: to}
 	grants := krt.Fetch(ctx, refs.collection, krt.FilterIndex(refs.index, pair))
 	for _, g := range grants {
-		if g.AllowAll || g.AllowedName == string(backendName) {
+		if g.AllowAll || g.AllowedName == toName {
 			return true
 		}
 	}

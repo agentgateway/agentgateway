@@ -1,10 +1,11 @@
 package config
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"io"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -129,17 +130,17 @@ func parseBackendRows(raw json.RawMessage, showAll bool) ([]backendRow, error) {
 		}
 	}
 
-	sort.SliceStable(rows, func(i, j int) bool {
-		if rows[i].Type != rows[j].Type {
-			return rows[i].Type < rows[j].Type
+	slices.SortStableFunc(rows, func(a, b backendRow) int {
+		if a.Type != b.Type {
+			return cmp.Compare(a.Type, b.Type)
 		}
-		if rows[i].Namespace != rows[j].Namespace {
-			return rows[i].Namespace < rows[j].Namespace
+		if a.Namespace != b.Namespace {
+			return cmp.Compare(a.Namespace, b.Namespace)
 		}
-		if rows[i].Name != rows[j].Name {
-			return rows[i].Name < rows[j].Name
+		if a.Name != b.Name {
+			return cmp.Compare(a.Name, b.Name)
 		}
-		return rows[i].Endpoint < rows[j].Endpoint
+		return cmp.Compare(a.Endpoint, b.Endpoint)
 	})
 
 	return rows, nil
@@ -149,8 +150,8 @@ func backendRowsForEndpointSet(backendType, name, namespace string, endpoints ba
 	rows := make([]backendRow, 0, len(endpoints.Active)+len(endpoints.Rejected))
 	rows = append(rows, backendRowsForEndpointStates(backendType, name, namespace, endpoints.Active, false, showAll)...)
 	rows = append(rows, backendRowsForEndpointStates(backendType, name, namespace, endpoints.Rejected, true, showAll)...)
-	sort.SliceStable(rows, func(i, j int) bool {
-		return rows[i].Endpoint < rows[j].Endpoint
+	slices.SortStableFunc(rows, func(a, b backendRow) int {
+		return cmp.Compare(a.Endpoint, b.Endpoint)
 	})
 	return rows
 }
@@ -165,7 +166,7 @@ func backendRowsForEndpointStates(
 	for endpointName := range states {
 		endpointNames = append(endpointNames, endpointName)
 	}
-	sort.Strings(endpointNames)
+	slices.Sort(endpointNames)
 
 	rows := make([]backendRow, 0, len(endpointNames))
 	for _, endpointName := range endpointNames {

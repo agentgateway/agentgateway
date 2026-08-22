@@ -27,10 +27,8 @@ func TestBackendTLSPolicyAndStatus(tt *testing.T) {
 	)
 
 	backendTLSPolicy := &gwv1.BackendTLSPolicy{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "tls-policy",
-			Namespace: base.Namespace,
-		},
+		Name:      "tls-policy",
+		Namespace: base.Namespace,
 	}
 	err := t.TestInstallation.ClusterContext.ControllerClient.Get(t.Ctx, client.ObjectKeyFromObject(backendTLSPolicy), backendTLSPolicy)
 	assert.NoError(t, err)
@@ -77,7 +75,7 @@ func assertBackendTLSPolicyStatus(t base.Test, policy *gwv1.BackendTLSPolicy, in
 		}
 
 		for i, ancestor := range tlsPol.Status.Ancestors {
-			expectedRef := expectedAncestorRefs[i]
+			expectedRef := expectedAncestorRefs[i] //nolint:gosec // Safe: len(Ancestors) == 1 checked above, expectedAncestorRefs has 1 element
 			if ancestor.AncestorRef.Group == nil || expectedRef.Group == nil || *ancestor.AncestorRef.Group != *expectedRef.Group ||
 				ancestor.AncestorRef.Kind == nil || expectedRef.Kind == nil || *ancestor.AncestorRef.Kind != *expectedRef.Kind ||
 				ancestor.AncestorRef.Name != expectedRef.Name {

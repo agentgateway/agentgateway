@@ -57,6 +57,7 @@ type gatewayReconciler struct {
 	nsClient         kclient.Client[*corev1.Namespace]
 	svcClient        kclient.Client[*corev1.Service]
 	deploymentClient kclient.Client[*appsv1.Deployment]
+	daemonSetClient  kclient.Client[*appsv1.DaemonSet]
 	svcAccountClient kclient.Client[*corev1.ServiceAccount]
 	configMapClient  kclient.Client[*corev1.ConfigMap]
 	secretClient     kclient.Client[*corev1.Secret]
@@ -85,6 +86,7 @@ func NewGatewayReconciler(
 		nsClient:         kclient.NewFiltered[*corev1.Namespace](cfg.Client, filter),
 		svcClient:        kclient.NewFiltered[*corev1.Service](cfg.Client, filter),
 		deploymentClient: kclient.NewFiltered[*appsv1.Deployment](cfg.Client, filter),
+		daemonSetClient:  kclient.NewFiltered[*appsv1.DaemonSet](cfg.Client, filter),
 		svcAccountClient: kclient.NewFiltered[*corev1.ServiceAccount](cfg.Client, filter),
 		configMapClient:  kclient.NewFiltered[*corev1.ConfigMap](cfg.Client, filter),
 		secretClient: kclient.NewFiltered[*corev1.Secret](cfg.Client, kclient.Filter{
@@ -198,9 +200,10 @@ func NewGatewayReconciler(
 		r.agwParamClient.AddEventHandler(agwParamEventHandler)
 	}
 
-	// Add a handler to reconcile the parent Gateway when child objects (Deployment, Service, etc.)
+	// Add a handler to reconcile the parent Gateway when child objects (Deployment, DaemonSet, Service, etc.)
 	parentHandler := controllers.ObjectHandler(controllers.EnqueueForParentHandler(r.queue, gvk.KubernetesGateway))
 	r.deploymentClient.AddEventHandler(parentHandler)
+	r.daemonSetClient.AddEventHandler(parentHandler)
 	r.svcAccountClient.AddEventHandler(parentHandler)
 	r.svcClient.AddEventHandler(parentHandler)
 	r.configMapClient.AddEventHandler(parentHandler)
@@ -240,6 +243,7 @@ func (r *gatewayReconciler) Start(ctx context.Context) error {
 		r.gwClassClient.HasSynced,
 		r.nsClient.HasSynced,
 		r.deploymentClient.HasSynced,
+		r.daemonSetClient.HasSynced,
 		r.svcAccountClient.HasSynced,
 		r.svcClient.HasSynced,
 		r.configMapClient.HasSynced,
@@ -261,6 +265,7 @@ func (r *gatewayReconciler) Start(ctx context.Context) error {
 		r.gwClassClient,
 		r.nsClient,
 		r.deploymentClient,
+		r.daemonSetClient,
 		r.svcAccountClient,
 		r.svcClient,
 		r.configMapClient,
@@ -340,15 +345,39 @@ func (r *gatewayReconciler) Reconcile(req types.NamespacedName) (rErr error) {
 		}
 	}
 	objs = r.deployer.SetNamespaceAndOwnerWithGVK(gw, wellknown.GatewayGVK, objs)
-	err = r.deployer.DeployObjsWithSource(ctx, objs, gw)
-	if err != nil {
-		return err
+	deploymentErr := r.deployer.DeployObjsWithSource(ctx, objs, gw)
+	if deploymentErr == nil {
+		// Prune any PDB/HPA/VPA resources that are no longer desired
+		if err := r.deployer.PruneRemovedResources(ctx, gw, objs); err != nil {
+			deploymentErr = fmt.Errorf("error pruning removed resources for Gateway %s: %w", req, err)
+		}
 	}
-
-	// Prune any PDB/HPA/VPA resources that are no longer desired
-	err = r.deployer.PruneRemovedResources(ctx, gw, objs)
-	if err != nil {
-		return fmt.Errorf("error pruning removed resources for Gateway %s: %w", req, err)
+	if deploymentErr != nil {
+		condition := metav1.Condition{
+			Type:               string(gwv1.GatewayConditionProgrammed),
+			Status:             metav1.ConditionFalse,
+			ObservedGeneration: gw.Generation,
+			Reason:             string(reports.GatewayReasonDeploymentFailed),
+			Message:            deploymentErr.Error(),
+		}
+		if statusErr := r.updateGatewayStatusWithRetry(gw, condition); statusErr != nil {
+			return fmt.Errorf("failed to update status for Gateway %s after deployment failed: %w", req, statusErr)
+		}
+		return deploymentErr
+	}
+	if existing := meta.FindStatusCondition(gw.Status.Conditions, string(gwv1.GatewayConditionProgrammed)); existing != nil &&
+		existing.Status == metav1.ConditionFalse &&
+		existing.Reason == string(reports.GatewayReasonDeploymentFailed) {
+		condition := metav1.Condition{
+			Type:               string(gwv1.GatewayConditionProgrammed),
+			Status:             metav1.ConditionTrue,
+			ObservedGeneration: gw.Generation,
+			Reason:             string(gwv1.GatewayReasonProgrammed),
+			Message:            reports.GatewayProgrammedMessage,
+		}
+		if statusErr := r.updateGatewayStatusWithRetry(gw, condition); statusErr != nil {
+			return fmt.Errorf("failed to update status for Gateway %s: %w", req, statusErr)
+		}
 	}
 
 	// find the name/ns of the service we own so we can grab addresses

@@ -1,0 +1,788 @@
+use agent_core::prelude::Strng;
+use agent_core::strng;
+use bytes::Bytes;
+use percent_encoding::percent_decode_str;
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
+use tracing::debug;
+
+use crate::webhook::ResponseChoice;
+use crate::{
+	AIError, ContentScope, InputFormat, LLMRequest, LLMRequestParams, LLMResponse, RequestType,
+	ResponseType, SimpleChatCompletionMessage, StreamingUsageGuard, json, parse,
+};
+
+fn lookup<'a, T, const C: usize>(
+	value: &'a Value,
+	paths: [&[&str]; C],
+	f: impl Fn(&'a Value) -> Option<T>,
+) -> Option<T> {
+	for path in paths {
+		if let Some(s) = json::traverse(value, path).and_then(&f) {
+			return Some(s);
+		}
+	}
+	None
+}
+
+#[derive(Clone, Debug)]
+pub enum Request {
+	Raw(Bytes),
+	Json(serde_json::Value),
+}
+
+impl<'de> Deserialize<'de> for Request {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		let v = Value::deserialize(deserializer)?;
+		Ok(Request::Json(v))
+	}
+}
+
+impl Request {
+	pub fn new_raw(body: Bytes) -> Self {
+		Self::Raw(body)
+	}
+
+	pub fn lookup<'a, T, const C: usize>(
+		&'a self,
+		path: [&[&str]; C],
+		f: impl Fn(&'a Value) -> Option<T>,
+	) -> Option<T> {
+		match &self {
+			Self::Raw(_) => None,
+			Self::Json(b) => lookup(b, path, f),
+		}
+	}
+}
+
+impl RequestType for Request {
+	fn supports_model(&self) -> bool {
+		false
+	}
+
+	fn body_is_json(&self) -> bool {
+		matches!(self, Self::Json(_))
+	}
+
+	fn to_value(&self) -> serde_json::Result<serde_json::Value> {
+		match self {
+			Self::Raw(body) => serde_json::from_slice(body),
+			Self::Json(body) => Ok(body.clone()),
+		}
+	}
+
+	fn model(&mut self) -> &mut Option<String> {
+		unimplemented!("model is not available");
+	}
+
+	fn prepend_prompts(&mut self, _prompts: Vec<SimpleChatCompletionMessage>) {
+		// Not supported
+	}
+
+	fn append_prompts(&mut self, _prompts: Vec<SimpleChatCompletionMessage>) {
+		// Not supported
+	}
+
+	fn to_llm_request(&self, provider: Strng, _tokenize: bool) -> Result<LLMRequest, AIError> {
+		Ok(LLMRequest {
+			// We never tokenize these, so always empty
+			input_tokens: None,
+			input_format: InputFormat::Detect,
+			cache_convention: crate::CacheTokenConvention::pending(),
+			request_model: self
+				.lookup(lookups::MODEL, |v| v.as_str())
+				.map(Into::into)
+				.unwrap_or_default(),
+			provider,
+			streaming: self
+				.lookup(lookups::STREAM, |v| v.as_bool())
+				.unwrap_or_default(),
+			params: LLMRequestParams {
+				temperature: self.lookup(lookups::TEMPERATURE, |v| v.as_f64()),
+				top_p: self.lookup(lookups::TOP_P, |v| v.as_f64()),
+				frequency_penalty: self.lookup(lookups::FREQUENCY_PENALTY, |v| v.as_f64()),
+				presence_penalty: self.lookup(lookups::PRESENCE_PENALTY, |v| v.as_f64()),
+				seed: self.lookup(lookups::SEED, |v| v.as_i64()),
+				max_tokens: self.lookup(lookups::MAX_TOKENS, |v| v.as_u64()),
+				encoding_format: self
+					.lookup(lookups::ENCODING_FORMAT, |v| v.as_str())
+					.map(Into::into),
+				dimensions: self.lookup(lookups::DIMENSIONS, |v| v.as_u64()),
+			},
+			prompt: Default::default(),
+			provider_state: None,
+		})
+	}
+
+	fn get_messages(&self) -> Vec<SimpleChatCompletionMessage> {
+		unimplemented!("get_messages is used for prompt guard; prompt guard is disabled for detect.")
+	}
+
+	fn set_messages(&mut self, _messages: Vec<SimpleChatCompletionMessage>) {
+		unimplemented!("set_messages is used for prompt guard; prompt guard is disabled for detect.")
+	}
+
+	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(ContentScope, &mut String)) {
+		unimplemented!("visit_text_mut is used for prompt guard; prompt guard is disabled for detect.")
+	}
+}
+
+pub fn amend_request_info(llm_info: &mut LLMRequest, path: &str) {
+	if path.ends_with(":streamRawPredict")
+		|| path.ends_with(":streamGenerateContent")
+		|| path.ends_with("/invoke-with-response-stream")
+		|| path.ends_with("/converse-stream")
+	{
+		llm_info.streaming = true;
+	}
+	if let Some(model) = extract_model_from_path(path) {
+		llm_info.request_model = model;
+	}
+}
+
+pub fn extract_model_from_path(path: &str) -> Option<Strng> {
+	let model = if path.ends_with(":streamRawPredict") || path.ends_with(":rawPredict") {
+		path
+			.split_once("/publishers/")
+			.and_then(|(_, rest)| rest.split_once("/models/"))
+			.and_then(|(_, rest)| rest.split_once(':').map(|(model, _)| model))
+	} else if path.ends_with(":streamGenerateContent")
+		|| path.ends_with(":generateContent")
+		|| path.ends_with(":countTokens")
+	{
+		// Vertex nests models under publishers/{publisher}/models/; the Gemini API uses a
+		// bare /v1beta/models/{model}:suffix with no publisher segment.
+		let scoped = path
+			.split_once("/publishers/")
+			.map_or(path, |(_, rest)| rest);
+		scoped
+			.split_once("/models/")
+			.and_then(|(_, rest)| rest.split_once(':').map(|(model, _)| model))
+	} else if path.ends_with("/invoke-with-response-stream")
+		|| path.ends_with("/invoke")
+		|| path.ends_with("/converse-stream")
+		|| path.ends_with("/converse")
+	{
+		path
+			.split_once("/model/")
+			.and_then(|(_, rest)| strip_bedrock_model_suffix(rest))
+	} else {
+		None
+	};
+	// Every shape above spans `/`, and the result is interpolated into upstream paths. Percent
+	// decoding is what makes this load-bearing: `models/a%2F..%2F..:generateContent` matches an
+	// `[^/]+` route regex, so the traversal only appears after this decode.
+	model
+		.map(|model| strng::new(percent_decode_str(model).decode_utf8_lossy()))
+		.filter(|model| crate::model_path::is_safe_resource_name(model))
+}
+
+fn strip_bedrock_model_suffix(rest: &str) -> Option<&str> {
+	[
+		"/invoke-with-response-stream",
+		"/invoke",
+		"/converse-stream",
+		"/converse",
+	]
+	.into_iter()
+	.find_map(|suffix| rest.strip_suffix(suffix))
+}
+
+#[cfg(test)]
+mod tests {
+	use agent_core::strng;
+
+	use super::*;
+
+	fn llm_request() -> LLMRequest {
+		LLMRequest {
+			input_tokens: None,
+			input_format: crate::InputFormat::Detect,
+			cache_convention: crate::CacheTokenConvention::pending(),
+			request_model: strng::new("unknown"),
+			provider: strng::new("aws.bedrock"),
+			streaming: false,
+			params: Default::default(),
+			prompt: None,
+			provider_state: None,
+		}
+	}
+
+	#[test]
+	fn amend_request_info_detects_bedrock_converse_stream_and_decodes_model() {
+		let mut llm_info = llm_request();
+
+		amend_request_info(
+			&mut llm_info,
+			"/model/arn:aws:bedrock:us-east-1:123456789012:application-inference-profile%2Fmy-profile/converse-stream",
+		);
+
+		assert!(llm_info.streaming);
+		assert_eq!(
+			llm_info.request_model,
+			"arn:aws:bedrock:us-east-1:123456789012:application-inference-profile/my-profile"
+		);
+	}
+
+	#[test]
+	fn amend_request_info_detects_bedrock_converse_model() {
+		let mut llm_info = llm_request();
+
+		amend_request_info(
+			&mut llm_info,
+			"/model/anthropic.claude-3-5-sonnet-20241022-v2:0/converse",
+		);
+
+		assert!(!llm_info.streaming);
+		assert_eq!(
+			llm_info.request_model,
+			"anthropic.claude-3-5-sonnet-20241022-v2:0"
+		);
+	}
+
+	#[test]
+	fn amend_request_info_extracts_vertex_raw_predict_model() {
+		let mut llm_info = llm_request();
+
+		amend_request_info(
+			&mut llm_info,
+			"/projects/hello-world-project/locations/us-east5/publishers/anthropic/models/vertex-detect:rawPredict",
+		);
+
+		assert_eq!(llm_info.request_model, "vertex-detect");
+		assert!(!llm_info.streaming);
+	}
+
+	#[test]
+	fn amend_request_info_extracts_bedrock_invoke_model() {
+		let mut llm_info = llm_request();
+
+		amend_request_info(
+			&mut llm_info,
+			"/model/us.anthropic.claude-haiku-4-5-20251001-v1:0/invoke",
+		);
+
+		assert_eq!(
+			llm_info.request_model,
+			"us.anthropic.claude-haiku-4-5-20251001-v1:0"
+		);
+		assert!(!llm_info.streaming);
+	}
+
+	#[test]
+	fn amend_request_info_extracts_vertex_stream_raw_predict_model() {
+		let mut llm_info = llm_request();
+
+		amend_request_info(
+			&mut llm_info,
+			"/projects/hello-world-project/locations/us-east5/publishers/anthropic/models/vertex-detect:streamRawPredict",
+		);
+
+		assert_eq!(llm_info.request_model, "vertex-detect");
+		assert!(llm_info.streaming);
+	}
+
+	#[test]
+	fn amend_request_info_extracts_vertex_gemini_generate_content_model() {
+		let mut llm_info = llm_request();
+
+		amend_request_info(
+			&mut llm_info,
+			"/projects/hello-world-project/locations/global/publishers/google/models/gemini-2.5-flash:generateContent",
+		);
+
+		assert_eq!(llm_info.request_model, "gemini-2.5-flash");
+		assert!(!llm_info.streaming);
+	}
+
+	#[test]
+	fn amend_request_info_extracts_vertex_gemini_stream_generate_content_model() {
+		let mut llm_info = llm_request();
+
+		amend_request_info(
+			&mut llm_info,
+			"/projects/hello-world-project/locations/global/publishers/google/models/gemini-2.5-flash:streamGenerateContent",
+		);
+
+		assert_eq!(llm_info.request_model, "gemini-2.5-flash");
+		assert!(llm_info.streaming);
+	}
+
+	#[test]
+	fn extract_model_from_path_handles_bare_gemini_api_paths() {
+		assert_eq!(
+			extract_model_from_path("/v1beta/models/gemini-2.5-flash:generateContent").as_deref(),
+			Some("gemini-2.5-flash")
+		);
+		assert_eq!(
+			extract_model_from_path("/v1beta/models/gemini-2.5-flash:streamGenerateContent").as_deref(),
+			Some("gemini-2.5-flash")
+		);
+		assert_eq!(
+			extract_model_from_path("/v1beta/models/gemini-2.5-flash:countTokens").as_deref(),
+			Some("gemini-2.5-flash")
+		);
+	}
+
+	#[test]
+	fn extract_model_from_path_handles_vertex_count_tokens() {
+		assert_eq!(
+			extract_model_from_path(
+				"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash:countTokens"
+			)
+			.as_deref(),
+			Some("gemini-2.5-flash")
+		);
+	}
+
+	#[rstest::rstest]
+	#[case::vertex_publisher(
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash/../../../../locations/global/endpoints/openapi/chat/completions:generateContent"
+	)]
+	#[case::vertex_publisher_encoded(
+		"/v1/projects/p/locations/global/publishers/google/models/gemini-2.5-flash%2F..%2F..%2Fendpoints%2Fopenapi%2Fchat%2Fcompletions:generateContent"
+	)]
+	#[case::vertex_raw_predict(
+		"/v1/projects/p/locations/us-east5/publishers/anthropic/models/claude-sonnet-4-5%2F..%2F..%2Fendpoints%2Fopenapi%2Fchat%2Fcompletions:rawPredict"
+	)]
+	#[case::bare_gemini("/v1beta/models/gemini-2.5-flash/../../foo:generateContent")]
+	#[case::bare_gemini_encoded(
+		"/v1beta/models/gemini-2.5-flash%2F..%2F..%2Ffoo:streamGenerateContent"
+	)]
+	#[case::double_encoded("/v1beta/models/gemini-2.5-flash%252F..%252F..:countTokens")]
+	#[case::backslash("/v1beta/models/gemini-2.5-flash%5C..%5C..:generateContent")]
+	#[case::empty("/v1beta/models/:generateContent")]
+	#[case::whitespace_only("/v1beta/models/%20%20:generateContent")]
+	#[case::dot_dot_segment("/v1beta/models/..:generateContent")]
+	fn extract_model_from_path_rejects_unsafe_model_segments(#[case] path: &str) {
+		// A `/` here reaches the upstream path builders, which interpolate into a single-segment
+		// slot; `%2F` is the interesting case because it still matches an `[^/]+` route regex.
+		assert_eq!(extract_model_from_path(path), None, "{path}");
+	}
+
+	#[test]
+	fn extract_model_from_path_keeps_resource_style_names() {
+		// The model router percent-encodes `/` in a virtual-model target so it stays one segment
+		// (`rewrite_path_model`); decoding it back must not look like traversal.
+		assert_eq!(
+			extract_model_from_path("/v1beta/models/tunedModels%2Fabc:generateContent").as_deref(),
+			Some("tunedModels/abc")
+		);
+		assert_eq!(
+			extract_model_from_path("/v1beta/models/models%2Fgemini-2.5-flash:countTokens").as_deref(),
+			Some("models/gemini-2.5-flash")
+		);
+	}
+
+	#[test]
+	fn to_llm_response_extracts_gemini_native_usage() {
+		let resp = Response::Json(serde_json::json!({
+			"candidates": [{
+				"content": {
+					"role": "model",
+					"parts": [{"text": "Hello!"}]
+				},
+				"finishReason": "STOP"
+			}],
+			"usageMetadata": {
+				"promptTokenCount": 8,
+				"candidatesTokenCount": 14,
+				"totalTokenCount": 22
+			},
+			"modelVersion": "gemini-2.5-flash"
+		}));
+
+		let llm_response = resp.to_llm_response(crate::LogContentFields::default());
+
+		assert_eq!(llm_response.input_tokens, Some(8));
+		assert_eq!(llm_response.output_tokens, Some(14));
+		assert_eq!(llm_response.total_tokens, Some(22));
+	}
+
+	#[test]
+	fn to_llm_response_extracts_gemini_cloud_code_usage() {
+		// Cloud Code (cloudcode-pa.googleapis.com) serves generateContent with the
+		// whole Gemini payload nested under a `response` key, so the unwrapped
+		// `usageMetadata` paths miss and usage is silently dropped.
+		let resp = Response::Json(serde_json::json!({
+			"response": {
+				"candidates": [{
+					"content": {
+						"role": "model",
+						"parts": [{"text": "Hello!"}]
+					}
+				}],
+				"usageMetadata": {
+					"promptTokenCount": 30460,
+					"candidatesTokenCount": 3,
+					"totalTokenCount": 30550,
+					"thoughtsTokenCount": 87
+				},
+				"modelVersion": "gemini-3.6-flash"
+			},
+			"traceId": "fb9dce3e019159b5"
+		}));
+
+		let llm_response = resp.to_llm_response(crate::LogContentFields::default());
+
+		assert_eq!(llm_response.input_tokens, Some(30460));
+		assert_eq!(llm_response.output_tokens, Some(3));
+		assert_eq!(llm_response.total_tokens, Some(30550));
+	}
+}
+
+#[derive(Debug, Clone)]
+pub enum Response {
+	Raw(Bytes),
+	Json(serde_json::Value),
+}
+impl Response {
+	pub fn new_raw(body: Bytes) -> Self {
+		Self::Raw(body)
+	}
+	pub fn lookup<'a, T, const C: usize>(
+		&'a self,
+		path: [&[&str]; C],
+		f: impl Fn(&'a Value) -> Option<T>,
+	) -> Option<T> {
+		match &self {
+			Self::Raw(_) => None,
+			Self::Json(b) => lookup(b, path, f),
+		}
+	}
+}
+
+mod lookups {
+	pub const MODEL: [&[&str]; 2] = [&["model"], &["message", "model"]];
+	pub const TEMPERATURE: [&[&str]; 1] = [&["temperature"]];
+	pub const STREAM: [&[&str]; 1] = [&["stream"]];
+	pub const TOP_P: [&[&str]; 1] = [&["top_p"]];
+	pub const FREQUENCY_PENALTY: [&[&str]; 1] = [&["frequency_penalty"]];
+	pub const PRESENCE_PENALTY: [&[&str]; 1] = [&["presence_penalty"]];
+	pub const SEED: [&[&str]; 1] = [&["seed"]];
+	pub const MAX_TOKENS: [&[&str]; 2] = [&["max_completion_tokens"], &["max_tokens"]];
+	pub const ENCODING_FORMAT: [&[&str]; 1] = [&["encoding_format"]];
+	pub const DIMENSIONS: [&[&str]; 1] = [&["dimensions"]];
+	pub const USAGE_INPUT_TOKENS: [&[&str]; 7] = [
+		&["usage", "input_tokens"],
+		// Responses streaming
+		&["response", "usage", "input_tokens"],
+		&["usage", "prompt_tokens"],
+		// Bedrock converse
+		&["usage", "inputTokens"],
+		// Bedrock invoke
+		&["metadata", "usage", "inputTokens"],
+		// Gemini generateContent
+		&["usageMetadata", "promptTokenCount"],
+		// Gemini generateContent via Cloud Code, which wraps the payload in a
+		// `response` envelope
+		&["response", "usageMetadata", "promptTokenCount"],
+	];
+	pub const USAGE_OUTPUT_TOKENS: [&[&str]; 7] = [
+		&["usage", "output_tokens"],
+		// Responses streaming
+		&["response", "usage", "output_tokens"],
+		&["usage", "completion_tokens"],
+		// Bedrock converse
+		&["usage", "outputTokens"],
+		// Bedrock invoke
+		&["metadata", "usage", "outputTokens"],
+		// Gemini generateContent
+		&["usageMetadata", "candidatesTokenCount"],
+		// Gemini generateContent via Cloud Code
+		&["response", "usageMetadata", "candidatesTokenCount"],
+	];
+	pub const USAGE_TOTAL_TOKENS: [&[&str]; 4] = [
+		&["usage", "total_tokens"],
+		// Bedrock converse
+		&["usage", "totalTokens"],
+		// Gemini generateContent
+		&["usageMetadata", "totalTokenCount"],
+		// Gemini generateContent via Cloud Code
+		&["response", "usageMetadata", "totalTokenCount"],
+	];
+	pub const INPUT_IMAGE_TOKENS: [&[&str]; 1] = [&["usage", "input_tokens_details", "image_tokens"]];
+	pub const INPUT_TEXT_TOKENS: [&[&str]; 1] = [&["usage", "input_tokens_details", "text_tokens"]];
+	pub const INPUT_AUDIO_TOKENS: [&[&str]; 1] =
+		[&["usage", "prompt_tokens_details", "audio_tokens"]];
+	pub const OUTPUT_IMAGE_TOKENS: [&[&str]; 1] =
+		[&["usage", "output_tokens_details", "image_tokens"]];
+	pub const OUTPUT_TEXT_TOKENS: [&[&str]; 1] = [&["usage", "output_tokens_details", "text_tokens"]];
+	pub const OUTPUT_AUDIO_TOKENS: [&[&str]; 1] =
+		[&["usage", "completion_tokens_details", "audio_tokens"]];
+	pub const REASONING: [&[&str]; 3] = [
+		// Responses
+		&["usage", "output_tokens_details", "reasoning_tokens"],
+		// Responses streaming
+		&[
+			"response",
+			"usage",
+			"output_tokens_details",
+			"reasoning_tokens",
+		],
+		// Completions
+		&["usage", "completion_tokens_details", "reasoning_tokens"],
+	];
+	pub const CACHE_CREATION_INPUT_TOKENS: [&[&str]; 6] = [
+		// Responses
+		&["usage", "input_tokens_details", "cache_write_tokens"],
+		// Responses streaming
+		&[
+			"response",
+			"usage",
+			"input_tokens_details",
+			"cache_write_tokens",
+		],
+		// Completions
+		&["usage", "prompt_tokens_details", "cache_write_tokens"],
+		// Provider-specific compatibility fields
+		&["usage", "cache_creation_input_tokens"],
+		&["usage", "cacheWriteInputTokens"],
+		// Bedrock invoke
+		&["metadata", "usage", "cacheWriteInputTokensCount"],
+	];
+	pub const CACHED_INPUT_TOKENS: [&[&str]; 6] = [
+		// Message
+		&["usage", "cache_read_input_tokens"],
+		// Responses
+		&["usage", "input_tokens_details", "cached_tokens"],
+		// Responses streaming
+		&["response", "usage", "input_tokens_details", "cached_tokens"],
+		// Completions
+		&["usage", "prompt_tokens_details", "cached_tokens"],
+		&["usage", "cacheReadInputTokens"],
+		// Bedrock invoke
+		&["metadata", "usage", "cacheReadInputTokenCount"],
+	];
+	pub const SERVICE_TIER: [&[&str]; 3] = [
+		// Completions
+		&["service_tier"],
+		&["response", "service_tier"],
+		// Messages
+		&["usage", "service_tier"],
+	];
+}
+
+impl<'de> Deserialize<'de> for Response {
+	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+		let v = Value::deserialize(deserializer)?;
+		Ok(Response::Json(v))
+	}
+}
+
+impl ResponseType for Response {
+	fn to_llm_response(&self, _log_content: crate::LogContentFields) -> LLMResponse {
+		let input_tokens = self.lookup(lookups::USAGE_INPUT_TOKENS, |v| v.as_u64());
+		let output_tokens = self.lookup(lookups::USAGE_OUTPUT_TOKENS, |v| v.as_u64());
+		let total_tokens = self.lookup(lookups::USAGE_TOTAL_TOKENS, |v| v.as_u64());
+		crate::LLMResponse {
+			count_tokens: None, // We never tokenize these, so always empty
+			input_tokens,
+			input_image_tokens: self.lookup(lookups::INPUT_IMAGE_TOKENS, |v| v.as_u64()),
+			input_text_tokens: self.lookup(lookups::INPUT_TEXT_TOKENS, |v| v.as_u64()),
+			input_audio_tokens: self.lookup(lookups::INPUT_AUDIO_TOKENS, |v| v.as_u64()),
+			output_tokens,
+			output_image_tokens: self.lookup(lookups::OUTPUT_IMAGE_TOKENS, |v| v.as_u64()),
+			output_text_tokens: self.lookup(lookups::OUTPUT_TEXT_TOKENS, |v| v.as_u64()),
+			output_audio_tokens: self.lookup(lookups::OUTPUT_AUDIO_TOKENS, |v| v.as_u64()),
+			total_tokens: total_tokens.or_else(|| Some(input_tokens? + output_tokens?)),
+			reasoning_tokens: self.lookup(lookups::REASONING, |v| v.as_u64()),
+			cache_creation_input_tokens: self
+				.lookup(lookups::CACHE_CREATION_INPUT_TOKENS, |v| v.as_u64()),
+			cached_input_tokens: self.lookup(lookups::CACHED_INPUT_TOKENS, |v| v.as_u64()),
+			service_tier: self
+				.lookup(lookups::SERVICE_TIER, |v| v.as_str())
+				.map(Into::into),
+			provider_model: self.lookup(lookups::MODEL, |v| v.as_str()).map(Into::into),
+			completion: None,
+			output_messages: None,
+			// TODO: we could probably derive this
+			first_token: None,
+		}
+	}
+
+	fn to_webhook_choices(&self) -> Vec<ResponseChoice> {
+		unimplemented!(
+			"to_webhook_choices is used for prompt guard; prompt guard is disabled for detect."
+		)
+	}
+
+	fn set_webhook_choices(&mut self, _resp: Vec<ResponseChoice>) -> anyhow::Result<()> {
+		unimplemented!(
+			"set_webhook_choices is used for prompt guard; prompt guard is disabled for detect."
+		)
+	}
+
+	fn serialize(&self) -> serde_json::Result<Vec<u8>> {
+		match self {
+			Self::Raw(bytes) => Ok(bytes.to_vec()),
+			Self::Json(v) => Ok(serde_json::to_vec(v)?),
+		}
+	}
+
+	fn visit_text_mut(&mut self, _f: &mut dyn FnMut(&mut String)) {
+		unimplemented!("visit_text_mut is used for prompt guard; prompt guard is disabled for detect.")
+	}
+}
+
+#[derive(Debug, Deserialize, Clone, Serialize)]
+pub struct StreamResponse {
+	#[serde(flatten, default)]
+	pub rest: serde_json::Value,
+}
+
+impl StreamResponse {
+	fn set_if<'a, T: Copy, const C: usize>(
+		&'a self,
+		log: &StreamingUsageGuard,
+		paths: [&[&str]; C],
+		cvt: impl Fn(&'a Value) -> Option<T>,
+		apply: impl Fn(&mut crate::LLMInfo, T),
+	) -> Option<T> {
+		if let Some(res) = lookup(&self.rest, paths, cvt) {
+			log.update(|l| apply(l, res));
+			Some(res)
+		} else {
+			None
+		}
+	}
+}
+
+pub fn amend_from_stream_response(log: &mut StreamingUsageGuard, f: &StreamResponse) {
+	let input_tokens = f.set_if(
+		log,
+		lookups::USAGE_INPUT_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.input_tokens = Some(v),
+	);
+	let output_tokens = f.set_if(
+		log,
+		lookups::USAGE_OUTPUT_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.output_tokens = Some(v),
+	);
+	let _input_image_tokens = f.set_if(
+		log,
+		lookups::INPUT_IMAGE_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.input_image_tokens = Some(v),
+	);
+	let _input_text_tokens = f.set_if(
+		log,
+		lookups::INPUT_TEXT_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.input_text_tokens = Some(v),
+	);
+	let _input_audio_tokens = f.set_if(
+		log,
+		lookups::INPUT_AUDIO_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.input_audio_tokens = Some(v),
+	);
+	let _output_image_tokens = f.set_if(
+		log,
+		lookups::OUTPUT_IMAGE_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.output_image_tokens = Some(v),
+	);
+	let _output_text_tokens = f.set_if(
+		log,
+		lookups::OUTPUT_TEXT_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.output_text_tokens = Some(v),
+	);
+	let _output_audio_tokens = f.set_if(
+		log,
+		lookups::OUTPUT_AUDIO_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.output_audio_tokens = Some(v),
+	);
+	let total_tokens = f.set_if(
+		log,
+		lookups::USAGE_TOTAL_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.total_tokens = Some(v),
+	);
+	let _reasoning_tokens = f.set_if(
+		log,
+		lookups::REASONING,
+		|v| v.as_u64(),
+		|l, v| l.response.reasoning_tokens = Some(v),
+	);
+	let _cache_creation_input_tokens = f.set_if(
+		log,
+		lookups::CACHE_CREATION_INPUT_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.cache_creation_input_tokens = Some(v),
+	);
+	let _cached_input_tokens = f.set_if(
+		log,
+		lookups::CACHED_INPUT_TOKENS,
+		|v| v.as_u64(),
+		|l, v| l.response.cached_input_tokens = Some(v),
+	);
+	let _provider_model = f.set_if(
+		log,
+		lookups::MODEL,
+		|v| v.as_str(),
+		|l, v| l.response.provider_model = Some(v.into()),
+	);
+	f.set_if(
+		log,
+		lookups::SERVICE_TIER,
+		|v| v.as_str(),
+		|l, v| l.response.service_tier = Some(v.into()),
+	);
+	if total_tokens.is_none()
+		&& let (Some(input), Some(output)) = (input_tokens, output_tokens)
+	{
+		log.update(|l| l.response.total_tokens = Some(input + output));
+	}
+	if input_tokens.is_some() || output_tokens.is_some() || total_tokens.is_some() {
+		log.report_usage();
+	}
+}
+
+pub fn passthrough_stream(
+	mut log: StreamingUsageGuard,
+	resp: http::Response<axum_core::body::Body>,
+) -> http::Response<axum_core::body::Body> {
+	let buffer_limit = agent_http::response_buffer_limit(&resp);
+	resp.map(|b| {
+		parse::sse::permissive_json_passthrough::<StreamResponse>(b, buffer_limit, move |f| match f {
+			Some(Ok(f)) => {
+				amend_from_stream_response(&mut log, &f);
+			},
+			Some(Err(e)) => {
+				debug!("failed to parse streaming response: {e}");
+			},
+			None => {},
+		})
+	})
+}
+
+pub fn passthrough_aws_stream(
+	mut log: StreamingUsageGuard,
+	resp: http::Response<axum_core::body::Body>,
+) -> http::Response<axum_core::body::Body> {
+	use base64::Engine;
+	let buffer_limit = agent_http::response_buffer_limit(&resp);
+	resp.map(|b| {
+		parse::aws_sse::inspect(b, buffer_limit, move |msg| {
+			if let Ok(parsed) = serde_json::from_slice::<StreamResponse>(msg.payload()) {
+				// Unfortunately bedrock invoke double-nests the actual content in an inner `bytes` key base64 encoded.
+				if let Some(obj) = parsed.rest.as_object()
+					&& obj.len() <= 2
+					&& let Some(serde_json::Value::String(s)) = obj.get("bytes")
+					&& let Ok(by) = base64::prelude::BASE64_STANDARD.decode(s)
+					&& let Ok(v) = serde_json::from_slice(by.as_slice())
+				{
+					let ns = crate::types::detect::StreamResponse { rest: v };
+					amend_from_stream_response(&mut log, &ns);
+				} else {
+					amend_from_stream_response(&mut log, &parsed);
+				}
+			}
+		})
+	})
+}

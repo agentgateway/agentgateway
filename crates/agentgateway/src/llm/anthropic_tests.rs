@@ -1,6 +1,6 @@
-use super::OAUTH_TOKEN_PREFIX;
 use crate::http::auth::AppliedBackendAuthLocation;
-use crate::llm::{AIProvider, RouteType};
+use crate::llm::anthropic::OAUTH_TOKEN_PREFIX;
+use crate::llm::{AIProvider, RouteType, anthropic};
 
 // ── set_required_fields integration tests ───────────────────────────────────
 
@@ -33,7 +33,7 @@ fn make_bearer_request_with_explicit_auth(token: &str) -> crate::http::Request {
 
 #[test]
 fn set_required_fields_oauth_token() {
-	let provider = AIProvider::Anthropic(super::Provider { model: None });
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
 	let mut req = make_bearer_request(&format!("{OAUTH_TOKEN_PREFIX}01234567890abcdef"));
 
 	provider
@@ -50,7 +50,7 @@ fn set_required_fields_oauth_token() {
 
 #[test]
 fn set_required_fields_oauth_token_strips_api_key() {
-	let provider = AIProvider::Anthropic(super::Provider { model: None });
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
 	let mut req = make_bearer_request_with_api_key(
 		&format!("{OAUTH_TOKEN_PREFIX}01234567890abcdef"),
 		"some-stale-key",
@@ -68,7 +68,7 @@ fn set_required_fields_oauth_token_strips_api_key() {
 
 #[test]
 fn set_required_fields_api_key_token() {
-	let provider = AIProvider::Anthropic(super::Provider { model: None });
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
 	let mut req = make_bearer_request("sk-ant-api01234567890abcdef");
 
 	provider
@@ -89,7 +89,7 @@ fn set_required_fields_api_key_token() {
 fn set_required_fields_explicit_authorization_preserved() {
 	// When backend auth location is explicitly set to Authorization header,
 	// Anthropic provider must NOT rewrite it to x-api-key (e.g. Databricks).
-	let provider = AIProvider::Anthropic(super::Provider { model: None });
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
 	let mut req = make_bearer_request_with_explicit_auth("eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9");
 
 	provider
@@ -124,7 +124,7 @@ fn set_required_fields_explicit_authorization_preserved() {
 fn set_required_fields_default_auth_still_rewrites() {
 	// When backend auth location was NOT explicitly set (defaulted),
 	// non-OAuth tokens must still be rewritten to x-api-key.
-	let provider = AIProvider::Anthropic(super::Provider { model: None });
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
 	let mut req = make_bearer_request("sk-ant-api01234567890abcdef");
 
 	// Simulate default (non-explicit) auth location
@@ -151,7 +151,7 @@ fn set_required_fields_default_auth_still_rewrites() {
 fn set_required_fields_explicit_non_authorization_location_preserved() {
 	// If user explicitly configures any location, even a non-Authorization header,
 	// Anthropic provider should not rewrite Authorization (explicit always wins).
-	let provider = AIProvider::Anthropic(super::Provider { model: None });
+	let provider = AIProvider::Anthropic(anthropic::Provider { model: None });
 	let mut req = make_bearer_request("sk-ant-api01234567890abcdef");
 
 	req

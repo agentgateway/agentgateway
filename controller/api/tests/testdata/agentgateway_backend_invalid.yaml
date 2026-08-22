@@ -10,6 +10,24 @@ spec:
         apiVersion: 2024-01-01
         endpoint: test
 ---
+_err: unknown fields
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: prompt-guard-auxiliary-oauth-token-exchange
+spec:
+  ai:
+    provider:
+      openai: {}
+    policies:
+      ai:
+        promptGuard:
+          request:
+          - openAIModeration:
+              policies:
+                auth:
+                  oauthTokenExchange: {}
+---
 _err: AI policies require AI
 apiVersion: agentgateway.dev/v1alpha1
 kind: AgentgatewayBackend

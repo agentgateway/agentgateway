@@ -38,3 +38,48 @@ metadata:
 spec:
   logging:
     format: Unknown
+---
+_err: "Unsupported value"
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: workload-kind-invalid
+spec:
+  workload:
+    kind: StatefulSet
+---
+_err: "deployment overlays are only valid when workload.kind is Deployment or unset"
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: daemonset-with-deployment-overlay
+spec:
+  workload:
+    kind: DaemonSet
+  deployment:
+    spec:
+      replicas: 3
+---
+_err: "daemonSet overlays are only valid when workload.kind is DaemonSet"
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: deployment-with-daemonset-overlay
+spec:
+  daemonSet:
+    spec:
+      updateStrategy:
+        type: RollingUpdate
+---
+_err: "horizontalPodAutoscaler is not valid when workload.kind is DaemonSet"
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayParameters
+metadata:
+  name: daemonset-with-hpa-overlay
+spec:
+  workload:
+    kind: DaemonSet
+  horizontalPodAutoscaler:
+    spec:
+      minReplicas: 1
+      maxReplicas: 3

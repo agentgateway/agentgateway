@@ -14,7 +14,7 @@ use sse_stream::SseStream;
 use crate::client::ResolvedDestination;
 use crate::http::Request;
 use crate::mcp::ClientError;
-use crate::mcp::streamablehttp::StreamableHttpPostResponse;
+use crate::mcp::streamablehttp::{StreamableHttpPostResponse, emit_standard_headers};
 use crate::mcp::upstream::IncomingRequestContext;
 use crate::*;
 
@@ -74,6 +74,14 @@ impl Client {
 		let message = ClientJsonRpcMessage::notification(req);
 		self.send_message(message, ctx).await
 	}
+
+	pub async fn send_client_message(
+		&self,
+		message: ClientJsonRpcMessage,
+		ctx: &IncomingRequestContext,
+	) -> Result<StreamableHttpPostResponse, ClientError> {
+		self.send_message(message, ctx).await
+	}
 	async fn send_message(
 		&self,
 		message: ClientJsonRpcMessage,
@@ -93,6 +101,7 @@ impl Client {
 		self.maybe_insert_session_id(&mut req)?;
 
 		ctx.apply(&mut req).map_err(ClientError::new)?;
+		emit_standard_headers(req.headers_mut(), &message);
 
 		let resp = self.http_client.call(req).await?;
 
@@ -119,7 +128,7 @@ impl Client {
 				let (body, _encoding) =
 					crate::http::compression::decompress_body(resp.into_body(), content_encoding.as_ref())
 						.map_err(ClientError::new)?;
-				let event_stream = SseStream::from_byte_stream(body.into_data_stream()).boxed();
+				let event_stream = SseStream::from_bytes_stream(body.into_data_stream()).boxed();
 				Ok(StreamableHttpPostResponse::Sse(event_stream, session_id))
 			},
 			Some(ct) if ct.as_bytes().starts_with(JSON_MIME_TYPE.as_bytes()) => {
@@ -201,7 +210,7 @@ impl Client {
 				let (body, _encoding) =
 					crate::http::compression::decompress_body(resp.into_body(), content_encoding.as_ref())
 						.map_err(ClientError::new)?;
-				let event_stream = SseStream::from_byte_stream(body.into_data_stream()).boxed();
+				let event_stream = SseStream::from_bytes_stream(body.into_data_stream()).boxed();
 				Ok(StreamableHttpPostResponse::Sse(event_stream, session_id))
 			},
 			_ => Err(ClientError::new(anyhow!(

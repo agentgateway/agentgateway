@@ -33,13 +33,19 @@
 
 <br> 
 <div align="center">
-  <img alt="agentgateway UI" src="img/architecture.svg" width="600">
+  <img alt="agentgateway UI" src="img/architecture.svg" width="800">
 </div>
 <br>
 
 ## Intro to Agentgateway Video
 
-[![Agentgateway Intro Video](https://img.youtube.com/vi/SomP92JWPmE/hqdefault.jpg)](https://youtu.be/SomP92JWPmE)
+<br>
+<div align="center">
+  <a href="https://youtu.be/SomP92JWPmE">
+    <img alt="Agentgateway Intro Video" src="https://img.youtube.com/vi/SomP92JWPmE/hqdefault.jpg">
+  </a>
+</div>
+<br>
 
 ## Key Features
 
@@ -64,14 +70,14 @@
 
 ## Getting Started
 
-- [Standalone Quickstart](https://agentgateway.dev/docs/quickstart) — Get started with agentgateway in minutes.
-- [Kubernetes Quickstart](https://agentgateway.dev/docs/kubernetes/latest) — Deploy on Kubernetes using the built-in controller and Gateway API.
+- [Standalone Quickstart](https://agentgateway.dev/docs/standalone/latest/quickstart) — Get started with agentgateway in minutes.
+- [Kubernetes Quickstart](https://agentgateway.dev/docs/kubernetes/latest/quickstart) — Deploy on Kubernetes using the built-in controller and Gateway API.
 
 ## Documentation
 
 Depending on your deployment environment, check out the following docs:
 
-- [agentgateway.dev/docs](https://agentgateway.dev/docs/): For standalone deployments such as local or on-prem. These docs are for this upstream `agentgateway/agentgateway` GitHub project.
+- [agentgateway.dev/docs](https://agentgateway.dev/docs/standalone/latest): For deployments without the full Kubernetes controller, driven by flat yaml config.
 - [agentgateway.dev/docs/kubernetes/latest](https://agentgateway.dev/docs/kubernetes/latest): For Kubernetes-based deployments using the built-in Kubernetes controller and Gateway API support.
 
 Agentgateway has a built-in UI for you to explore agentgateway connecting agent-to-agent or agent-to-tool:
@@ -116,16 +122,6 @@ Thanks to all contributors who are helping to make agentgateway better.
 
 <a href="https://github.com/agentgateway/agentgateway/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=agentgateway/agentgateway" />
-</a>
-
-### Star History
-
-<a href="https://www.star-history.com/#agentgateway/agentgateway&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=agentgateway/agentgateway&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=agentgateway/agentgateway&type=Date" />
-   <img alt="Star history of agentgateway/agentgateway over time" src="https://api.star-history.com/svg?repos=agentgateway/agentgateway&type=Date" />
- </picture>
 </a>
 
 ---

@@ -22,7 +22,7 @@ use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference, TracingC
 
 #[derive(Clone, Debug)]
 pub struct Tracer {
-	pub provider: SdkTracerProvider,
+	pub provider: super::NonBlockingDrop<SdkTracerProvider>,
 	pub processor: SharedSpanProcessor,
 	pub fields: Arc<LoggingFields>,
 	pub(crate) filter: Option<Arc<cel::Expression>>,
@@ -98,18 +98,20 @@ pub fn new_trace_processor(
 	SharedSpanProcessor::new(processor)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn trace_span_data(
 	name: impl Into<std::borrow::Cow<'static, str>>,
 	span_kind: SpanKind,
 	span: &TraceParent,
-	parent: Option<&TraceParent>,
+	parent: Option<(&TraceParent, bool)>,
 	start_time: std::time::SystemTime,
 	end_time: std::time::SystemTime,
 	attributes: Vec<KeyValue>,
+	status: Status,
 ) -> SpanData {
-	let parent_span_id = parent
-		.map(|parent| SpanId::from(parent.span_id))
-		.unwrap_or(SpanId::INVALID);
+	let (parent_span_id, parent_span_is_remote) = parent
+		.map(|(parent, remote)| (SpanId::from(parent.span_id), remote))
+		.unwrap_or((SpanId::INVALID, false));
 	SpanData {
 		span_context: SpanContext::new(
 			TraceId::from(span.trace_id),
@@ -119,7 +121,7 @@ pub fn trace_span_data(
 			TraceState::default(),
 		),
 		parent_span_id,
-		parent_span_is_remote: parent.is_some(),
+		parent_span_is_remote,
 		span_kind,
 		name: name.into(),
 		start_time,
@@ -128,7 +130,7 @@ pub fn trace_span_data(
 		dropped_attributes_count: 0,
 		events: SpanEvents::default(),
 		links: SpanLinks::default(),
-		status: Status::default(),
+		status,
 		instrumentation_scope: InstrumentationScope::builder("agentgateway").build(),
 	}
 }
@@ -228,12 +230,13 @@ impl Tracer {
 		// Choose exporter based on per-policy protocol:
 		// - gRPC when protocol is "grpc"
 		// - otherwise HTTP (fall back to gRPC if no HTTP path is available)
+		let target = &config.target;
 		let (provider, processor) = if config.protocol == crate::types::agent::TracingProtocol::Grpc {
 			// Use gRPC exporter that routes via PolicyClient/GrpcReferenceChannel
 			let exporter = PolicyGrpcSpanExporter::new(
 				policy_client.inputs.clone(),
-				Arc::new(config.provider_backend.clone()),
-				config.policies.clone(),
+				target.target.clone(),
+				target.policies.clone(),
 				exporter_runtime.clone(),
 			);
 			let processor = new_trace_processor(&resource, exporter);
@@ -246,8 +249,8 @@ impl Tracer {
 			let path = config.path.clone();
 			let http_client = PolicyOtelHttpClient {
 				policy_client,
-				backend_ref: config.provider_backend.clone(),
-				policies: config.policies.clone(),
+				backend_ref: target.target.as_ref().clone(),
+				policies: target.policies.clone(),
 				runtime: exporter_runtime,
 			};
 			let exporter = opentelemetry_otlp::SpanExporter::builder()
@@ -263,7 +266,7 @@ impl Tracer {
 			(provider, processor)
 		};
 		Ok(Tracer {
-			provider,
+			provider: super::NonBlockingDrop::new(provider),
 			processor,
 			fields,
 			filter: config.filter.clone(),
@@ -279,11 +282,13 @@ impl Tracer {
 		request: &RequestLog,
 		end: &agent_core::Timestamp,
 		cel_exec: &CelLoggingExecutor,
+		protocol_span_name: Option<&str>,
 		attrs: &[(&str, Option<ValueBag<'v>>)],
 	) {
 		let mut attributes = attrs
 			.iter()
 			.filter(|(k, _)| !self.fields.has(k))
+			.filter(|(k, _)| *k != "error")
 			.filter_map(|(k, v)| v.as_ref().map(|v| (k, v)))
 			.map(|(k, v)| KeyValue::new(Key::new(k.to_string()), to_otel(v)))
 			.collect_vec();
@@ -326,22 +331,30 @@ impl Tracer {
 			}
 		}
 
-		let span_name = span_name.unwrap_or_else(|| match (&request.method, &request.path_match) {
-			(Some(method), Some(path_match)) => {
-				format!("{method} {path_match}")
-			},
-			_ => "unknown".to_string(),
+		let span_name = span_name.unwrap_or_else(|| {
+			protocol_span_name.map(str::to_owned).unwrap_or_else(|| {
+				match (&request.method, &request.path_match) {
+					(Some(method), Some(path_match)) => format!("{method} {path_match}"),
+					_ => "unknown".to_string(),
+				}
+			})
 		});
+		let status = if let Some(error) = &request.error {
+			Status::error(error.clone())
+		} else {
+			Status::default()
+		};
 
 		let out_span = request.outgoing_span.as_ref().unwrap();
 		self.processor.emit(trace_span_data(
 			span_name,
 			SpanKind::Server,
 			out_span,
-			request.incoming_span.as_ref(),
+			request.incoming_span.as_ref().map(|parent| (parent, true)),
 			start,
 			end,
 			attributes,
+			status,
 		));
 	}
 }
@@ -478,7 +491,7 @@ impl opentelemetry_http::HttpClient for PolicyOtelHttpClient {
 		let resp = handle
 			.spawn(async move {
 				client
-					.call_reference_with_policies(req, &backend_ref, &policies)
+					.call_reference_with_policies_untraced(req, &backend_ref, &policies)
 					.await
 					.map_err(Box::new)
 			})
@@ -668,8 +681,11 @@ mod traceparent {
 			}
 		}
 		pub fn insert_header(&self, req: &mut Request) {
+			self.insert_headers(req.headers_mut());
+		}
+		pub fn insert_headers(&self, headers: &mut ::http::HeaderMap) {
 			let hv = hyper::header::HeaderValue::from_bytes(format!("{self:?}").as_bytes()).unwrap();
-			req.headers_mut().insert(TRACEPARENT, hv);
+			headers.insert(TRACEPARENT, hv);
 		}
 		pub fn from_request(req: &Request) -> Option<Self> {
 			req
@@ -715,17 +731,28 @@ mod traceparent {
 		type Error = anyhow::Error;
 
 		fn try_from(value: &str) -> Result<Self, Self::Error> {
-			if value.len() != 55 {
-				anyhow::bail!("traceparent malformed length was {}", value.len())
+			let segs: [&str; 4] = value
+				.split('-')
+				.collect::<Vec<_>>()
+				.try_into()
+				.map_err(|_| anyhow::anyhow!("traceparent malformed: expected 4 fields"))?;
+			if [segs[0].len(), segs[1].len(), segs[2].len(), segs[3].len()] != [2, 32, 16, 2] {
+				anyhow::bail!("traceparent malformed field lengths")
 			}
 
-			let segs: Vec<&str> = value.split('-').collect();
-
+			let version = u8::from_str_radix(segs[0], 16)?;
+			let trace_id = u128::from_str_radix(segs[1], 16)?;
+			let span_id = u64::from_str_radix(segs[2], 16)?;
+			let flags = u8::from_str_radix(segs[3], 16)?;
+			// W3C: version 0xff is forbidden, and all-zero trace-id / parent-id are invalid.
+			if version == 0xff || trace_id == 0 || span_id == 0 {
+				anyhow::bail!("traceparent has invalid W3C fields")
+			}
 			Ok(Self {
-				version: u8::from_str_radix(segs[0], 16)?,
-				trace_id: u128::from_str_radix(segs[1], 16)?,
-				span_id: u64::from_str_radix(segs[2], 16)?,
-				flags: u8::from_str_radix(segs[3], 16)?,
+				version,
+				trace_id,
+				span_id,
+				flags,
 			})
 		}
 	}
@@ -745,12 +772,43 @@ mod tests {
 	use prometheus_client::registry::Registry;
 
 	use super::*;
-	use crate::llm::cost::ModelCatalog;
+	use crate::llm::catalog::ModelCatalog;
 	use crate::telemetry::log::{
 		CelLogging, CelLoggingExecutor, LoggingFields, MetricFields, RequestLog,
 	};
 	use crate::telemetry::metrics::Metrics;
 	use crate::transport::stream::TCPConnectionInfo;
+
+	#[test]
+	fn traceparent_parses_valid_and_rejects_malformed() {
+		let valid = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+		assert_eq!(
+			format!("{:?}", TraceParent::try_from(valid).unwrap()),
+			valid
+		);
+
+		// 55 chars but no hyphens: must not panic on segment indexing.
+		assert!(TraceParent::try_from("0".repeat(55).as_str()).is_err());
+		// Wrong field count and wrong field lengths.
+		assert!(TraceParent::try_from("00-4bf9-00f067aa0ba902b7-01").is_err());
+		assert!(
+			TraceParent::try_from("00-4bf92f3577b34da6a3ce929d0e0e47360-0f067aa0ba902b7-01").is_err()
+		);
+		// Non-hex in a correctly-shaped value.
+		assert!(
+			TraceParent::try_from("zz-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01").is_err()
+		);
+		// W3C-invalid values: forbidden version, all-zero trace-id, all-zero parent-id.
+		assert!(
+			TraceParent::try_from("ff-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01").is_err()
+		);
+		assert!(
+			TraceParent::try_from("00-00000000000000000000000000000000-00f067aa0ba902b7-01").is_err()
+		);
+		assert!(
+			TraceParent::try_from("00-4bf92f3577b34da6a3ce929d0e0e4736-0000000000000000-01").is_err()
+		);
+	}
 
 	#[derive(Clone, Debug, Default)]
 	struct RecordingSpanExporter {
@@ -781,7 +839,7 @@ mod tests {
 			.build();
 		(
 			Tracer {
-				provider,
+				provider: crate::telemetry::NonBlockingDrop::new(provider),
 				processor,
 				fields: Arc::new(LoggingFields::default()),
 				filter: None,
@@ -795,11 +853,17 @@ mod tests {
 			cel_context: crate::cel::ContextBuilder::new(),
 			filter: None,
 			fields: LoggingFields::default(),
+			otlp_filter: None,
+			otlp_fields: LoggingFields::default(),
 			metric_fields: MetricFields::default(),
 			database_fields: LoggingFields::default(),
 		};
 		let mut registry = Registry::default();
-		let metrics = Arc::new(Metrics::new(&mut registry, Default::default()));
+		let metrics = Arc::new(Metrics::new(
+			&mut registry,
+			Default::default(),
+			Default::default(),
+		));
 		RequestLog::new(
 			cel,
 			metrics,
@@ -830,17 +894,21 @@ mod tests {
 
 		let filter = None;
 		let fields = LoggingFields::default();
+		let otlp_filter = None;
+		let otlp_fields = LoggingFields::default();
 		let metric_fields = Arc::new(MetricFields::default());
 		let database_fields = LoggingFields::default();
 		let cel_exec = CelLoggingExecutor {
 			executor: crate::cel::Executor::new_empty(),
 			filter: &filter,
 			fields: &fields,
+			otlp_filter: &otlp_filter,
+			otlp_fields: &otlp_fields,
 			metric_fields: &metric_fields,
 			database_fields: &database_fields,
 		};
 
-		tracer.send(&request, &Timestamp::now(), &cel_exec, &[]);
+		tracer.send(&request, &Timestamp::now(), &cel_exec, None, &[]);
 		let _ = tracer.provider.force_flush();
 
 		let spans = exporter.finished_spans();

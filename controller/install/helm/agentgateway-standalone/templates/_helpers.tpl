@@ -6,7 +6,7 @@
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
-{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
+{{- .Release.Name | trunc 63 | trimSuffix "-" }}
 {{- end }}
 {{- end }}
 
@@ -55,21 +55,25 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 {{- end }}
 
-{{- define "agentgateway-standalone.imageRef" -}}
-{{- $root := index . "root" -}}
-{{- $image := index . "image" -}}
-{{- $tag := index . "tag" | toString -}}
-{{- $registry := $root.Values.global.imageRegistry | default $image.registry -}}
-{{- printf "%s/%s:%s" $registry $image.repository $tag -}}
-{{- end }}
-
 {{- define "agentgateway-standalone.mainImage" -}}
+{{- if kindIs "string" .Values.image -}}
+{{- required "image must not be empty" .Values.image -}}
+{{- else if kindIs "map" .Values.image -}}
 {{- $tag := include "agentgateway-standalone.imageTag" (.Values.image.tag | default .Chart.AppVersion) -}}
-{{- include "agentgateway-standalone.imageRef" (dict "root" . "image" .Values.image "tag" $tag) -}}
+{{- printf "%s/%s:%s" .Values.image.registry .Values.image.repository $tag -}}
+{{- else -}}
+{{- fail "image must be a string or mapping" -}}
+{{- end -}}
 {{- end }}
 
-{{- define "agentgateway-standalone.configBootstrapImage" -}}
-{{- include "agentgateway-standalone.imageRef" (dict "root" . "image" .Values.configBootstrap.image "tag" .Values.configBootstrap.image.tag) -}}
+{{- define "agentgateway-standalone.mainImagePullPolicy" -}}
+{{- if kindIs "string" .Values.image -}}
+IfNotPresent
+{{- else if kindIs "map" .Values.image -}}
+{{- .Values.image.pullPolicy | default "IfNotPresent" -}}
+{{- else -}}
+{{- fail "image must be a string or mapping" -}}
+{{- end -}}
 {{- end }}
 
 {{- define "agentgateway-standalone.serviceSpecFields" -}}
@@ -131,67 +135,51 @@ trafficDistribution: {{ . }}
 {{- end }}
 {{- end }}
 
-{{- define "agentgateway-standalone.databaseUrl" -}}
-{{- if eq .Values.database.type "sqlite" -}}
-{{- printf "sqlite://%s" .Values.database.sqlite.path -}}
-{{- else if eq .Values.database.type "postgres" -}}
-{{- required "database.postgres.url is required when database.type=postgres" .Values.database.postgres.url -}}
-{{- else -}}
-{{- fail "database.type must be one of: sqlite, postgres" -}}
-{{- end -}}
-{{- end }}
-
-{{- define "agentgateway-standalone.configYaml" -}}
-{{- if .Values.configYaml -}}
-{{ .Values.configYaml }}
-{{- else if .Values.config -}}
+{{- define "agentgateway-standalone.baseConfig" -}}
+{{- if .Values.config -}}
 {{ toYaml .Values.config }}
 {{- else -}}
-config:
-  adminAddr: 0.0.0.0:{{ .Values.admin.service.port }}
-  database:
-    url: {{ include "agentgateway-standalone.databaseUrl" . }}
-binds:
-- port: 8080
-  listeners: []
-- port: 8443
-  listeners: []
+gateways:
+  default:
+    port: 4000
+ui: {}
+llm:
+  models: []
+mcp:
+  targets: []
 {{- end -}}
 {{- end }}
 
-{{- define "agentgateway-standalone.effectiveDatabaseUrl" -}}
-{{- $renderedConfig := include "agentgateway-standalone.configYaml" . | fromYaml -}}
+{{- define "agentgateway-standalone.renderedConfig" -}}
+{{- $renderedConfig := include "agentgateway-standalone.baseConfig" . | fromYaml -}}
 {{- if not (kindIs "map" $renderedConfig) -}}
-{{- "" -}}
-{{- else -}}
-{{- $config := get $renderedConfig "config" -}}
+{{- fail "config must render to a YAML mapping" -}}
+{{- end -}}
+{{- $config := get $renderedConfig "config" | default dict -}}
 {{- if not (kindIs "map" $config) -}}
-{{- "" -}}
+{{- fail "config.config must be a YAML mapping" -}}
+{{- end -}}
+{{- if eq .Values.mode "database" -}}
+{{- $_ := set $config "database" (dict "url" .Values.database.postgres.url) -}}
+{{- $_ := set $config "storage" (dict "mode" "hybrid") -}}
 {{- else -}}
-{{- $database := get $config "database" -}}
-{{- if not (kindIs "map" $database) -}}
-{{- "" -}}
-{{- else -}}
-{{- get $database "url" | default "" -}}
-{{- end -}}
-{{- end -}}
-{{- end -}}
+{{- $_ := set $config "storage" (dict "mode" "file") -}}
+{{- end }}
+{{- $_ := set $renderedConfig "config" $config -}}
+{{ toYaml $renderedConfig }}
 {{- end }}
 
 {{- define "agentgateway-standalone.validate" -}}
-{{- if gt (int .Values.replicaCount) 1 -}}
-{{- $databaseUrl := include "agentgateway-standalone.effectiveDatabaseUrl" . | trim -}}
-{{- if regexMatch "^sqlite://" $databaseUrl -}}
-{{- fail (printf "sqlite database mode supports only replicaCount=1; replicaCount > 1 requires config.database.url to be explicitly postgres:// or postgresql:// (got %s)" $databaseUrl) -}}
+{{- $mode := .Values.mode -}}
+{{- if not (has $mode (list "readonly" "database")) -}}
+{{- fail (printf "mode must be one of: readonly, database (got %q)" $mode) -}}
 {{- end -}}
-{{- if not (regexMatch "^postgres(ql)?://" $databaseUrl) -}}
-{{- fail (printf "replicaCount > 1 requires config.database.url to be explicitly postgres:// or postgresql:// (got %q)" $databaseUrl) -}}
+{{- $postgresUrl := .Values.database.postgres.url | default "" -}}
+{{- if eq $mode "database" -}}
+{{- if not (regexMatch "^postgres(ql)?://" $postgresUrl) -}}
+{{- fail (printf "mode=database requires database.postgres.url to start with postgres:// or postgresql:// (got %q)" $postgresUrl) -}}
 {{- end -}}
-{{- if not .Values.persistence.enabled -}}
-{{- fail "replicaCount > 1 requires persistence.enabled=true and an RWX volume for shared /config" -}}
-{{- end -}}
-{{- if and (not .Values.persistence.existingClaim) (not (has "ReadWriteMany" .Values.persistence.accessModes)) -}}
-{{- fail "replicaCount > 1 requires persistence.accessModes to include ReadWriteMany or persistence.existingClaim to reference an RWX volume" -}}
+{{- else if $postgresUrl -}}
+{{- fail (printf "database.postgres.url is only supported when mode=database (got mode %q)" $mode) -}}
 {{- end -}}
 {{- end -}}
-{{- end }}

@@ -15,7 +15,8 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
-	"sort"
+	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -34,7 +35,12 @@ import (
 const (
 	localForwardAddress = "127.0.0.1"
 	localRuntimeAddress = "localhost"
-	maxScannerTokenSize = 8 * 1024 * 1024
+
+	// The X11 backend in golang.design/x/clipboard sends clipboard contents in
+	// one ChangeProperty request. Its 16-bit request length can hold at most
+	// 262,116 payload bytes; a larger request corrupts the connection and leaves
+	// paste clients waiting for a SelectionNotify that never arrives.
+	x11MaxClipboardPayload = 65535*4 - 24
 )
 
 var (
@@ -74,6 +80,7 @@ type traceEvent struct {
 	Status          *uint16           `json:"status,omitempty"`
 	Error           *string           `json:"error,omitempty"`
 	Details         json.RawMessage   `json:"details,omitempty"`
+	Decision        string            `json:"decision,omitempty"`
 	Provider        string            `json:"provider,omitempty"`
 	RouteType       string            `json:"routeType,omitempty"`
 	InputFormat     string            `json:"inputFormat,omitempty"`
@@ -296,7 +303,7 @@ func runRaw(cmd *cobra.Command, target *traceTarget, body io.ReadCloser, request
 
 	printErrCh := make(chan error, 1)
 	go func() {
-		printErrCh <- consumeTrace(body, func(raw string, _ traceEnvelope) error {
+		printErrCh <- consumeTrace(body, false, func(raw string, _ traceEnvelope) error {
 			_, err := fmt.Fprintln(cmd.OutOrStdout(), raw)
 			return err
 		})
@@ -517,17 +524,23 @@ func curlConnectTo(localAddress string, requestURL *url.URL) (string, error) {
 	return fmt.Sprintf("%s:%s:%s:%s", requestHost, requestPort, localHost, localPort), nil
 }
 
-func consumeTrace(body io.Reader, onEvent func(raw string, envelope traceEnvelope) error) error {
-	scanner := bufio.NewScanner(body)
-	scanner.Buffer(make([]byte, 0, 64*1024), maxScannerTokenSize)
+func consumeTrace(body io.Reader, readErrorsAsEvents bool, onEvent func(raw string, envelope traceEnvelope) error) error {
+	reader := bufio.NewReader(body)
 
 	var dataLines []string
+	emitted := false
+	var callbackErr error
 	emit := func(raw string) error {
 		var envelope traceEnvelope
 		if err := json.Unmarshal([]byte(raw), &envelope); err != nil {
 			return fmt.Errorf("failed to decode trace event: %w", err)
 		}
-		return onEvent(raw, envelope)
+		if err := onEvent(raw, envelope); err != nil {
+			callbackErr = err
+			return err
+		}
+		emitted = true
+		return nil
 	}
 	flush := func() error {
 		if len(dataLines) == 0 {
@@ -538,29 +551,59 @@ func consumeTrace(body io.Reader, onEvent func(raw string, envelope traceEnvelop
 		return emit(raw)
 	}
 
-	for scanner.Scan() {
-		line := scanner.Text()
+	for {
+		line, err := reader.ReadString('\n')
+		if line != "" {
+			line = strings.TrimSuffix(line, "\n")
+			line = strings.TrimSuffix(line, "\r")
+		}
+		var processErr error
 		if line == "" {
-			if err := flush(); err != nil {
-				return err
-			}
-			continue
-		}
-		if after, ok := strings.CutPrefix(line, "data: "); ok {
+			processErr = flush()
+		} else if after, ok := strings.CutPrefix(line, "data: "); ok {
 			dataLines = append(dataLines, after)
-			continue
-		}
-		if strings.HasPrefix(strings.TrimSpace(line), "{") {
-			if err := flush(); err != nil {
-				return err
-			}
-			if err := emit(strings.TrimSpace(line)); err != nil {
-				return err
+		} else if strings.HasPrefix(strings.TrimSpace(line), "{") {
+			processErr = flush()
+			if processErr == nil {
+				processErr = emit(strings.TrimSpace(line))
 			}
 		}
-	}
-	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("failed to read trace stream: %w", err)
+
+		if err != nil && !errors.Is(err, io.EOF) {
+			if processErr == nil {
+				processErr = flush()
+			}
+			if callbackErr != nil {
+				return callbackErr
+			}
+			if !emitted || !readErrorsAsEvents {
+				return fmt.Errorf("failed to read trace stream: %w", err)
+			}
+
+			message := fmt.Sprintf("failed to read trace stream: %v", err)
+			if processErr != nil {
+				message += fmt.Sprintf("; failed to process final trace event: %v", processErr)
+			}
+			envelope := traceEnvelope{
+				Severity: "error",
+				Message: traceEvent{
+					Type:    "message",
+					Message: message,
+				},
+			}
+			raw, marshalErr := json.Marshal(envelope)
+			if marshalErr != nil {
+				return marshalErr
+			}
+			return onEvent(string(raw), envelope)
+		}
+		if processErr != nil {
+			return processErr
+		}
+
+		if errors.Is(err, io.EOF) {
+			break
+		}
 	}
 	return flush()
 }
@@ -569,7 +612,7 @@ func streamTraceRows(body io.Reader, onRow func(traceRow)) error {
 	var currentSnapshot json.RawMessage
 	var previousSnapshot json.RawMessage
 
-	return consumeTrace(body, func(raw string, envelope traceEnvelope) error {
+	return consumeTrace(body, true, func(raw string, envelope traceEnvelope) error {
 		row := traceRow{
 			RawJSON:          raw,
 			Envelope:         envelope,
@@ -642,6 +685,8 @@ func displayEventType(eventType string) string {
 		return "Policy"
 	case "policyEvent":
 		return "Policy Event"
+	case "traceSampling":
+		return "Tracing"
 	case "authorizationResult":
 		return "Authz"
 	case "backendCallStart":
@@ -683,6 +728,8 @@ func summarizeEvent(event traceEvent) string {
 		return summarizePolicy(event.Kind, event.Result)
 	case "policyEvent":
 		return truncate(fmt.Sprintf("%s: %s", event.Kind, eventDetailsText(event.Details)), 120)
+	case "traceSampling":
+		return event.Decision
 	case "authorizationResult":
 		return summarizeAuthorizationResult(event.Result, event.Rules)
 	case "backendCallStart":
@@ -705,7 +752,14 @@ func summarizeEvent(event traceEvent) string {
 		}
 		return truncate(strings.Join(parts, " "), 120)
 	case "requestFinished":
-		return "request finished"
+		parts := []string{"request finished"}
+		if event.Status != nil {
+			parts = append(parts, fmt.Sprintf("status=%d", *event.Status))
+		}
+		if event.Error != nil && *event.Error != "" {
+			parts = append(parts, "error="+*event.Error)
+		}
+		return truncate(strings.Join(parts, " "), 120)
 	case "bodySnapshot":
 		return fmt.Sprintf("%s body snapshot", event.Stage)
 	case "llmRouteResolved":
@@ -828,7 +882,7 @@ func summarizePolicySelection(phase string, raw json.RawMessage) string {
 		for key := range payload {
 			keys = append(keys, key)
 		}
-		sort.Strings(keys)
+		slices.Sort(keys)
 		if len(keys) == 0 {
 			return prefix + ": none"
 		}
@@ -839,6 +893,10 @@ func summarizePolicySelection(phase string, raw json.RawMessage) string {
 
 func displayPolicySelectionPhase(phase string) string {
 	switch phase {
+	case "frontend":
+		return "frontend"
+	case "listenerFrontend":
+		return "listener frontend"
 	case "subBackend":
 		return "sub-backend"
 	case "inlineBackend":
@@ -1482,6 +1540,14 @@ func copyDetailsToClipboard(screen tcell.Screen, text string) error {
 }
 
 func copyDetailsToNativeClipboard(text string) error {
+	x11Platform := runtime.GOOS == "linux" || runtime.GOOS == "freebsd" || runtime.GOOS == "openbsd" || runtime.GOOS == "netbsd"
+	// Native Wayland transfers do not have X11's request limit, but the package
+	// can silently fall back to X11 when Wayland data-control is unavailable.
+	// DISPLAY is therefore the only safe signal exposed to callers.
+	if len(text) > x11MaxClipboardPayload && x11Platform && os.Getenv("DISPLAY") != "" {
+		return fmt.Errorf("clipboard contents are too large for X11 (%d bytes)", len(text))
+	}
+
 	clipboardInitOnce.Do(func() {
 		clipboardInitErr = clipboard.Init()
 	})

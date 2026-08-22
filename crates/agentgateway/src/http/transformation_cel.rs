@@ -1,6 +1,7 @@
-use ::http::{HeaderName, header};
+use ::http::{HeaderName, HeaderValue, header};
 use agent_core::prelude::Strng;
 use serde_with::serde_as;
+use tracing::debug;
 
 use crate::cel::{Expression, RequestSnapshot};
 use crate::http::{
@@ -36,6 +37,13 @@ pub struct LocalTransform {
 	/// Header names to remove.
 	#[serde(default)]
 	pub remove: Vec<Strng>,
+	/// CEL expression that computes the full set of headers, replacing all existing headers.
+	/// The expression must evaluate to a map of header name to value (a string, or a list of
+	/// strings for a repeated header). Pseudo-headers (`:method`, `:path`, etc.) are ignored;
+	/// set those explicitly with `set`/`add`. `replace` is applied before `add`/`set`/`remove`,
+	/// so those still operate on top of the replaced headers.
+	#[serde(default)]
+	pub replace: Option<Strng>,
 	/// CEL expression that computes a replacement body.
 	#[serde(default)]
 	pub body: Option<Strng>,
@@ -96,6 +104,10 @@ impl TransformerConfig {
 			.into_iter()
 			.map(|k| HeaderName::try_from(k.as_str()))
 			.collect::<Result<_, _>>()?;
+		let replace = req
+			.replace
+			.map(|b| compile(b.as_str(), strict, warnings))
+			.transpose()?;
 		let body = req
 			.body
 			.map(|b| compile(b.as_str(), strict, warnings))
@@ -109,6 +121,7 @@ impl TransformerConfig {
 			set,
 			add,
 			remove,
+			replace,
 			body,
 			metadata,
 		})
@@ -166,6 +179,8 @@ pub struct TransformerConfig {
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub remove: Vec<HeaderName>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub replace: Option<cel::Expression>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub body: Option<cel::Expression>,
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub metadata: Vec<(Strng, cel::Expression)>,
@@ -210,6 +225,26 @@ fn eval_metadata(
 				.and_then(|v| v.json().map_err(|e| cel::Error::Variable(e.to_string())))
 				.map_err(anyhow::Error::from)
 		},
+	}
+}
+
+fn eval_headers(
+	r: &RequestOrResponse,
+	expr: &Expression,
+	request: Option<&cel::RequestSnapshot>,
+) -> anyhow::Result<serde_json::Map<String, serde_json::Value>> {
+	match eval_metadata(r, expr, request)? {
+		serde_json::Value::Object(map) => Ok(map),
+		other => anyhow::bail!("replace expression must evaluate to a map, got {other}"),
+	}
+}
+
+fn json_to_header_value(v: &serde_json::Value) -> Option<HeaderValue> {
+	match v {
+		serde_json::Value::String(s) => HeaderValue::from_str(s).ok(),
+		serde_json::Value::Number(n) => HeaderValue::from_str(&n.to_string()).ok(),
+		serde_json::Value::Bool(b) => HeaderValue::from_str(&b.to_string()).ok(),
+		serde_json::Value::Null | serde_json::Value::Array(_) | serde_json::Value::Object(_) => None,
 	}
 }
 
@@ -276,6 +311,40 @@ impl Transformation {
 				}
 			}
 		}
+		if let Some(expr) = &cfg.replace {
+			match eval_headers(&r, expr, request) {
+				Ok(headers) => {
+					// Replace the full header set. Do this before add/set/remove so those still
+					// operate on top of the replaced headers.
+					r.headers().clear();
+					for (name, value) in headers {
+						// Only real headers are replaced; pseudo-headers must be set via set/add.
+						let Ok(HeaderOrPseudo::Header(name)) = HeaderOrPseudo::try_from(name.as_str()) else {
+							continue;
+						};
+						match value {
+							serde_json::Value::Array(items) => {
+								for item in &items {
+									if let Some(hv) = json_to_header_value(item) {
+										r.headers().append(name.clone(), hv);
+									}
+								}
+							},
+							other => {
+								if let Some(hv) = json_to_header_value(&other) {
+									r.headers().insert(name.clone(), hv);
+								}
+							},
+						}
+					}
+				},
+				// On evaluation error (or a non-map result), leave headers untouched rather than
+				// dropping every header because of a transient failure.
+				Err(e) => {
+					debug!("transformation replace expression did not produce a header map: {e}");
+				},
+			}
+		}
 		for (k, v) in &cfg.add {
 			let val = Self::exec_header(&r, v, k, request);
 			r.apply_header(k, val, http::HeaderMutationAction::AppendIfExistsOrAdd);
@@ -329,10 +398,12 @@ impl crate::store::RequestPolicyTrait for Transformation {
 			.iter()
 			.map(|v| &v.1)
 			.chain(self.request.set.iter().map(|v| &v.1))
+			.chain(self.request.replace.as_ref())
 			.chain(self.request.body.as_ref())
 			.chain(self.request.metadata.iter().map(|v| &v.1))
 			.chain(self.response.add.iter().map(|v| &v.1))
 			.chain(self.response.set.iter().map(|v| &v.1))
+			.chain(self.response.replace.as_ref())
 			.chain(self.response.body.as_ref())
 			.chain(self.response.metadata.iter().map(|v| &v.1))
 	}

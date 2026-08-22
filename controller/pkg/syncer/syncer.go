@@ -213,11 +213,9 @@ func (s *Syncer) buildFinalGatewayStatus(
 		gatewayStatuses,
 		func(ctx krt.HandlerContext, i krt.ObjectWithStatus[*gwv1.Gateway, gwv1.GatewayStatus]) *krt.ObjectWithStatus[*gwv1.Gateway, gwv1.GatewayStatus] {
 			routes := krt.Fetch(ctx, routeAttachments, krt.FilterIndex(routeAttachmentsIndex, utils.TypedNamespacedName{
-				Kind: wellknown.GatewayGVK.Kind,
-				NamespacedName: types.NamespacedName{
-					Namespace: i.Obj.Namespace,
-					Name:      i.Obj.Name,
-				},
+				Kind:      wellknown.GatewayGVK.Kind,
+				Namespace: i.Obj.Namespace,
+				Name:      i.Obj.Name,
 			}))
 			counts := map[string]int32{}
 			for _, r := range routes {
@@ -247,10 +245,8 @@ func (s *Syncer) buildFinalListenerSetStatus(
 
 	gatewayIndex := krt.NewIndex(gateways, "gateway-parent-section-name", func(gwl *translator.GatewayListener) []utils.SectionedNamespacedName {
 		return []utils.SectionedNamespacedName{{
-			NamespacedName: types.NamespacedName{
-				Namespace: gwl.ParentObject.Namespace,
-				Name:      gwl.ParentObject.Name,
-			},
+			Namespace:   gwl.ParentObject.Namespace,
+			Name:        gwl.ParentObject.Name,
 			SectionName: gwl.ParentInfo.SectionName,
 		}}
 	}).AsCollection(append(krtopts.ToOptions("translator/ListenerSetListenersByParentSection"), utils.SectionedNamespacedNameIndexCollectionFunc)...)
@@ -264,11 +260,9 @@ func (s *Syncer) buildFinalListenerSetStatus(
 			invalidListenerCount := 0
 			lsStatus := i.Status.DeepCopy()
 			routes := krt.Fetch(ctx, routeAttachments, krt.FilterIndex(routeAttachmentsIndex, utils.TypedNamespacedName{
-				Kind: wellknown.ListenerSetGVK.Kind,
-				NamespacedName: types.NamespacedName{
-					Namespace: i.Obj.Namespace,
-					Name:      i.Obj.Name,
-				},
+				Kind:      wellknown.ListenerSetGVK.Kind,
+				Namespace: i.Obj.Namespace,
+				Name:      i.Obj.Name,
 			}))
 			counts := map[string]int32{}
 			for _, r := range routes {
@@ -276,10 +270,8 @@ func (s *Syncer) buildFinalListenerSetStatus(
 			}
 			for idx, l := range i.Obj.Spec.Listeners {
 				gatewayListeners := krtutil.FetchIndexObjects(ctx, gatewayIndex, utils.SectionedNamespacedName{
-					NamespacedName: types.NamespacedName{
-						Namespace: i.Obj.Namespace,
-						Name:      i.Obj.Name,
-					},
+					Namespace:   i.Obj.Namespace,
+					Name:        i.Obj.Name,
 					SectionName: l.Name,
 				})
 				if len(gatewayListeners) == 0 {
@@ -298,6 +290,10 @@ func (s *Syncer) buildFinalListenerSetStatus(
 						invalidListenerCount++
 						ListenerMessageProtocolConflict := "Found conflicting protocols on listeners, a single port can only contain listeners with compatible protocols"
 						ReportListenerSetListenerConflicts(&lsStatus.Listeners[idx], i.Obj, string(gwv1.ListenerReasonProtocolConflict), ListenerMessageProtocolConflict)
+					} else if obj.Conflict == translator.ListenerConflictBindMode {
+						invalidListenerCount++
+						listenerMessageBindModeConflict := "Found conflicting bind modes on listeners; the higher-precedence listener determines whether the shared port is internal"
+						ReportListenerSetListenerConflicts(&lsStatus.Listeners[idx], i.Obj, "BindModeConflict", listenerMessageBindModeConflict)
 					}
 				}
 				lsStatus.Listeners[idx].AttachedRoutes = counts[string(l.Name)]
@@ -371,15 +367,16 @@ func (s *Syncer) buildGatewayCollection(
 	krt.Collection[*translator.GatewayListener],
 ) {
 	return translator.GatewayCollection(translator.GatewayCollectionConfig{
-		ControllerName: s.controllerName,
-		Gateways:       s.agwCollections.Gateways,
-		ListenerSets:   listenerSets,
-		GatewayClasses: gatewayClasses,
-		Namespaces:     s.agwCollections.Namespaces,
-		Grants:         refGrants,
-		Secrets:        s.agwCollections.Secrets,
-		ConfigMaps:     s.agwCollections.ConfigMaps,
-		KrtOpts:        krtopts,
+		ControllerName:           s.controllerName,
+		Gateways:                 s.agwCollections.Gateways,
+		ListenerSets:             listenerSets,
+		GatewayClasses:           gatewayClasses,
+		Namespaces:               s.agwCollections.Namespaces,
+		Grants:                   refGrants,
+		Secrets:                  s.agwCollections.Secrets,
+		ConfigMaps:               s.agwCollections.ConfigMaps,
+		KrtOpts:                  krtopts,
+		EnableAgentgatewayModels: s.agwCollections.Settings.EnableAgentgatewayModels,
 	}, s.gatewayCollectionOptions...)
 }
 
@@ -402,6 +399,7 @@ func (s *Syncer) buildListenerSetCollection(
 				refGrants,
 				s.agwCollections.Secrets,
 				s.agwCollections.ConfigMaps,
+				s.agwCollections.Settings.EnableAgentgatewayModels,
 			)
 		}, krtopts.ToOptions("translator/ListenerSetListeners")...)
 }
@@ -417,6 +415,11 @@ func (s *Syncer) buildAgwResources(
 	// (resources for additional gateway classes should be created by the downstream providing them)
 	filteredGateways := krt.NewCollection(gateways, func(ctx krt.HandlerContext, gw *translator.GatewayListener) **translator.GatewayListener {
 		if _, isAdditionalClass := s.additionalGatewayClasses[gw.ParentInfo.ParentGatewayClassName]; isAdditionalClass {
+			return nil
+		}
+		if gw.Conflict == translator.ListenerConflictBindMode {
+			// Bind mode is selected by listener precedence. Keep the losing listener
+			// available to status reporting, but do not program it or attach routes.
 			return nil
 		}
 		return &gw
@@ -461,20 +464,30 @@ func (s *Syncer) buildAgwResources(
 	}
 
 	routeInputs := translator.RouteContextInputs{
+		Collections:         s.agwCollections,
 		Grants:              refGrants,
 		RouteParents:        routeParents,
 		ControllerName:      s.controllerName,
 		Services:            s.agwCollections.Services,
+		Secrets:             s.agwCollections.Secrets,
 		Namespaces:          s.agwCollections.Namespaces,
 		ServiceEntries:      s.agwCollections.ServiceEntries,
 		InferencePools:      s.agwCollections.InferencePools,
 		Backends:            s.agwCollections.Backends,
+		Models:              s.agwCollections.Models,
+		ModelsByNamespace:   s.agwCollections.ModelsByNamespace,
 		References:          referenceTypes,
 		BackendRefGrantMode: s.agwCollections.Settings.BackendRefGrantMode,
 	}
 
 	baseAgwRoutes, routeAttachments, ancestorBackends := translator.AgwRouteCollection(s.statusCollections, s.agwCollections.HTTPRoutes, s.agwCollections.GRPCRoutes, s.agwCollections.TCPRoutes, s.agwCollections.TLSRoutes, routeInputs, krtopts)
 	routeCollections := []krt.Collection[agwir.AgwResource]{baseAgwRoutes}
+	if s.agwCollections.Settings.EnableAgentgatewayModels {
+		modelResources, modelAttachments, modelAncestors := translator.AgwModelCollection(s.statusCollections, s.agwCollections.Models, routeInputs, krtopts)
+		routeAttachments = krt.JoinCollection([]krt.Collection[*plugins.RouteAttachment]{routeAttachments, modelAttachments}, krtopts.ToOptions("translator/RouteAttachmentsWithModels")...)
+		routeCollections = append(routeCollections, modelResources)
+		ancestorBackends = krt.JoinCollection([]krt.Collection[*utils.AncestorBackend]{ancestorBackends, modelAncestors}, krtopts.ToOptions("translator/AncestorBackendsWithModels")...)
+	}
 	if s.agwPlugins.AddResourceExtension != nil {
 		if s.agwPlugins.AddResourceExtension.Routes != nil {
 			routeCollections = append(routeCollections, s.agwPlugins.AddResourceExtension.Routes)
@@ -541,7 +554,7 @@ func (s *Syncer) buildAgwResources(
 	}
 
 	// Build the backend collection with backend+route references
-	agwBackends, agwBackendStatus := AgwBackendCollection(s.agwPlugins, referenceIndex, krtopts)
+	agwBackends, agwBackendStatus := AgwBackendCollection(s.agwPlugins, referenceIndex, refGrants, krtopts)
 	for _, col := range agwBackendStatus {
 		status.RegisterStatus(s.statusCollections, col, translator.GetStatus)
 	}
@@ -561,6 +574,7 @@ func (s *Syncer) buildBindsFromGateway(listeners []*translator.GatewayListener) 
 	type bindInfo struct {
 		protocol       api.Bind_Protocol
 		tunnelProtocol api.Bind_TunnelProtocol
+		sawInternal    bool
 	}
 	byPort := map[uint32]*bindInfo{}
 	for _, listener := range listeners {
@@ -580,18 +594,30 @@ func (s *Syncer) buildBindsFromGateway(listeners []*translator.GatewayListener) 
 			if tp := s.getTunnelProtocol(listener); tp != api.Bind_DIRECT {
 				bi.tunnelProtocol = tp
 			}
+			// A bind is internal if any contributing listener marks it internal. Translation
+			// reports disagreement as Accepted=False, but the bind must fail closed: a
+			// standard listener (including one from a delegated ListenerSet) must not make
+			// another listener's internal route externally reachable.
+			if listener.ParentInfo.Internal {
+				bi.sawInternal = true
+			}
 		}
 	}
 
 	binds := make([]agwir.AgwResource, 0, len(byPort))
 	for _, port := range slices.Sort(maps.Keys(byPort)) { // sorted for deterministic output
 		bi := byPort[port]
+		mode := api.Bind_STANDARD
+		if bi.sawInternal {
+			mode = api.Bind_INTERNAL
+		}
 		bind := translator.AgwBind{
 			Bind: &api.Bind{
 				Key:            fmt.Sprint(port) + "/" + parentGateway.String(),
 				Port:           port,
 				Protocol:       bi.protocol,
 				TunnelProtocol: bi.tunnelProtocol,
+				Mode:           mode,
 			},
 		}
 		binds = append(binds, translator.ToResourceForGateway(parentGateway, bind))
@@ -625,7 +651,7 @@ func (s *Syncer) buildListenerFromGateway(obj *translator.GatewayListener) *agwi
 	return new(translator.ToResourceForGateway(types.NamespacedName{
 		Namespace: obj.ParentGateway.Namespace,
 		Name:      obj.ParentGateway.Name,
-	}, translator.AgwListener{l}))
+	}, translator.AgwListener{Listener: l}))
 }
 
 // getProtocolAndTLSConfig extracts protocol and TLS configuration from a gateway
@@ -642,6 +668,8 @@ func (s *Syncer) getProtocolAndTLSConfig(obj *translator.GatewayListener) (api.P
 			tlsConfig.CertificateSource = api.TLSConfig_ISTIO_WORKLOAD
 		} else if obj.TLSInfo.DynamicCA {
 			tlsConfig.CertificateSource = api.TLSConfig_DYNAMIC_CA
+		} else if obj.TLSInfo.Spiffe {
+			tlsConfig.CertificateSource = api.TLSConfig_SPIFFE
 		}
 		if len(obj.TLSInfo.CaCert) > 0 {
 			tlsConfig.Root = obj.TLSInfo.CaCert
@@ -651,6 +679,8 @@ func (s *Syncer) getProtocolAndTLSConfig(obj *translator.GatewayListener) (api.P
 			tlsConfig.MtlsMode = api.TLSConfig_STRICT
 		} else if obj.TLSInfo.IstioWorkloadCert {
 			tlsConfig.MtlsMode = api.TLSConfig_DISABLE
+		} else if obj.TLSInfo.Spiffe {
+			tlsConfig.MtlsMode = api.TLSConfig_STRICT
 		} else if obj.TLSInfo.MtlsFallbackEnabled {
 			tlsConfig.MtlsMode = api.TLSConfig_ALLOW_INSECURE_FALLBACK
 		}
@@ -741,6 +771,7 @@ func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtuti
 		defaultConfig := ambient.MeshConfig{MeshConfig: mesh.DefaultMeshConfig()}
 		meshConfig = krt.NewStatic(&defaultConfig, true, krtopts.ToOptions("addresses/DefaultMeshConfig")...)
 	}
+	serviceEntryVisibility := model.ServiceEntryVisibilityCollection(meshConfig.AsCollection(), opts)
 
 	waypoints := builder.WaypointsCollection(clusterId, cols.Gateways, cols.GatewayClasses, cols.Pods, opts)
 	services := builder.ServicesCollection(
@@ -750,6 +781,7 @@ func defaultBuildAddressCollections(cols *plugins.AgwCollections, krtopts krtuti
 		waypoints,
 		cols.Namespaces,
 		meshConfig,
+		serviceEntryVisibility,
 		opts,
 		true,
 	)

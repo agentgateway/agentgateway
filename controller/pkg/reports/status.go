@@ -4,33 +4,35 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"reflect"
 	"strings"
 
 	"istio.io/istio/pkg/ptr"
 	"istio.io/istio/pkg/slices"
+	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 // Status message constants
 const (
-	GatewayAcceptedMessage       = "Successfully accepted Gateway"
-	GatewayProgrammedMessage     = "Successfully programmed Gateway"
-	ListenerSetAcceptedMessage   = "Successfully accepted ListenerSet"
-	ListenerSetProgrammedMessage = "Successfully programmed ListenerSet"
-	ListenerAcceptedMessage      = "Successfully accepted Listener"
-	ListenerNoConflictsMessage   = "Successfully verified that Listener has no conflicts"
-	ValidRefsMessage             = "Successfully resolved all references"
-	ListenerProgrammedMessage    = "Successfully programmed Listener"
-	RouteAcceptedMessage         = "Successfully accepted Route"
-	GatewayClassAcceptedMessage  = "GatewayClass accepted by agentgateway controller"
+	GatewayAcceptedMessage           = "Successfully accepted Gateway"
+	GatewayProgrammedMessage         = "Successfully programmed Gateway"
+	GatewayReasonDeploymentFailed    = gwv1.GatewayConditionReason("DeploymentFailed")
+	ListenerSetAcceptedMessage       = "Successfully accepted ListenerSet"
+	ListenerSetProgrammedMessage     = "Successfully programmed ListenerSet"
+	ListenerAcceptedMessage          = "Successfully accepted Listener"
+	ListenerNoConflictsMessage       = "Successfully verified that Listener has no conflicts"
+	ValidRefsMessage                 = "Successfully resolved all references"
+	ListenerProgrammedMessage        = "Successfully programmed Listener"
+	RouteAcceptedMessage             = "Successfully accepted Route"
+	AgentgatewayModelAcceptedMessage = "Successfully accepted AgentgatewayModel"
+	GatewayClassAcceptedMessage      = "GatewayClass accepted by agentgateway controller"
 )
 
 // TODO: refactor this struct + methods to better reflect the usage now in proxy_syncer
@@ -266,7 +268,7 @@ func (r *ReportMap) BuildRouteStatusWithParentRefDefaulting(
 		if len(parentRefs) == 0 {
 			parentRefs = append(parentRefs, routeReport.parentRefs()...)
 		}
-	case *gwv1a2.TCPRoute:
+	case *gwv1.TCPRoute:
 		existingStatus = route.Status.RouteStatus
 		parentRefs = append(parentRefs, route.Spec.ParentRefs...)
 		if len(parentRefs) == 0 {
@@ -280,6 +282,12 @@ func (r *ReportMap) BuildRouteStatusWithParentRefDefaulting(
 		}
 	case *gwv1.GRPCRoute:
 		existingStatus = route.Status.RouteStatus
+		parentRefs = append(parentRefs, route.Spec.ParentRefs...)
+		if len(parentRefs) == 0 {
+			parentRefs = append(parentRefs, routeReport.parentRefs()...)
+		}
+	case *agentgateway.AgentgatewayModel:
+		existingStatus = gwv1.RouteStatus{Parents: route.Status.Parents}
 		parentRefs = append(parentRefs, route.Spec.ParentRefs...)
 		if len(parentRefs) == 0 {
 			parentRefs = append(parentRefs, routeReport.parentRefs()...)
@@ -306,7 +314,7 @@ func (r *ReportMap) BuildRouteStatusWithParentRefDefaulting(
 		// Get the status of the current parentRef conditions if they exist
 		var currentParentRefConditions []metav1.Condition
 		currentParentRefIdx := slices.IndexFunc(existingStatus.Parents, func(s gwv1.RouteParentStatus) bool {
-			return reflect.DeepEqual(s.ParentRef, parentRef)
+			return apiequality.Semantic.DeepEqual(s.ParentRef, parentRef)
 		})
 		if currentParentRefIdx != -1 {
 			currentParentRefConditions = existingStatus.Parents[currentParentRefIdx].Conditions
@@ -398,8 +406,26 @@ func addMissingGatewayConditions(gwReport *GatewayReport, gw *gwv1.Gateway) {
 	// when the GatewayParameters are valid again. Otherwise there is a race condition between the controller and reporter.
 	// HACK: This is because both the controller and reporter set Accepted status.
 	existingAccepted := meta.FindStatusCondition(gw.Status.Conditions, string(gwv1.GatewayConditionAccepted))
-	hasInvalidParams := existingAccepted != nil && existingAccepted.Status == metav1.ConditionFalse && existingAccepted.Reason == string(gwv1.GatewayReasonInvalidParameters)
-	if !hasInvalidParams && meta.FindStatusCondition(gwReport.GetConditions(), string(gwv1.GatewayConditionAccepted)) == nil {
+	hasInvalidParams := existingAccepted != nil &&
+		existingAccepted.Status == metav1.ConditionFalse &&
+		existingAccepted.Reason == string(gwv1.GatewayReasonInvalidParameters) &&
+		existingAccepted.ObservedGeneration >= gwReport.observedGeneration
+	if hasInvalidParams {
+		gwReport.SetCondition(reporter.GatewayCondition{
+			Type:    gwv1.GatewayConditionAccepted,
+			Status:  metav1.ConditionFalse,
+			Reason:  gwv1.GatewayReasonInvalidParameters,
+			Message: existingAccepted.Message,
+		})
+		if cond := meta.FindStatusCondition(gwReport.GetConditions(), string(gwv1.GatewayConditionProgrammed)); cond == nil {
+			gwReport.SetCondition(reporter.GatewayCondition{
+				Type:    gwv1.GatewayConditionProgrammed,
+				Status:  metav1.ConditionFalse,
+				Reason:  gwv1.GatewayReasonInvalid,
+				Message: existingAccepted.Message,
+			})
+		}
+	} else if meta.FindStatusCondition(gwReport.GetConditions(), string(gwv1.GatewayConditionAccepted)) == nil {
 		gwReport.SetCondition(reporter.GatewayCondition{
 			Type:    gwv1.GatewayConditionAccepted,
 			Status:  metav1.ConditionTrue,

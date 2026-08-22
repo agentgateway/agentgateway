@@ -222,8 +222,8 @@ func ensureXdsSecret(ctx context.Context, cli apiclient.Client, ns, name string)
 		return nil, err
 	}
 	toCreate := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-		Type:       corev1.SecretTypeOpaque,
+		Name: name, Namespace: ns,
+		Type: corev1.SecretTypeOpaque,
 		Data: map[string][]byte{
 			xdsCACertKey: caCert,
 			xdsCAKeyKey:  caKey,

@@ -126,16 +126,21 @@ func ServiceTargetWithHostname(namespace, hostname string, port *string) *api.Po
 	}
 }
 
-func GatewayTarget[T ~string](namespace, name string, listener *T) *api.PolicyTarget_Gateway {
+func GatewayTarget[T ~string](namespace, name string, listener *T, port *gwv1.PortNumber) *api.PolicyTarget_Gateway {
 	var ls *string
 	if listener != nil {
 		ls = new((string)(*listener))
+	}
+	var p *uint32
+	if port != nil {
+		p = new(uint32(*port)) //nolint:gosec // G115: kubebuilder validation ensures 1-65535
 	}
 	return &api.PolicyTarget_Gateway{
 		Gateway: &api.PolicyTarget_GatewayTarget{
 			Name:      name,
 			Namespace: namespace,
 			Listener:  ls,
+			Port:      p,
 		},
 	}
 }
@@ -190,11 +195,9 @@ var TypedNamespacedNameIndexCollectionFunc = krt.WithIndexCollectionFromString(f
 		panic("invalid TypedNamespacedName: " + s)
 	}
 	return TypedNamespacedName{
-		NamespacedName: types.NamespacedName{
-			Namespace: parts[1],
-			Name:      parts[2],
-		},
-		Kind: parts[0],
+		Namespace: parts[1],
+		Name:      parts[2],
+		Kind:      parts[0],
 	}
 })
 
@@ -213,10 +216,8 @@ var SectionedNamespacedNameIndexCollectionFunc = krt.WithIndexCollectionFromStri
 		panic("invalid SectionedNamespacedName: " + s)
 	}
 	return SectionedNamespacedName{
-		NamespacedName: types.NamespacedName{
-			Namespace: parts[0],
-			Name:      parts[1],
-		},
+		Namespace:   parts[0],
+		Name:        parts[1],
 		SectionName: gwv1.SectionName(parts[2]),
 	}
 })
@@ -236,7 +237,7 @@ type AncestorBackend struct {
 	Source  TypedNamespacedName
 }
 
-func (a AncestorBackend) Equals(other AncestorBackend) bool {
+func (a *AncestorBackend) Equals(other *AncestorBackend) bool {
 	return a.Gateway == other.Gateway && a.Backend == other.Backend && a.Source == other.Source
 }
 

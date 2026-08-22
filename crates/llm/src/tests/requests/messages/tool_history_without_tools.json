@@ -1,0 +1,29 @@
+{
+  "model": "anthropic.claude-sonnet-4-20250514-v1:0",
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "call_1",
+          "name": "get_weather",
+          "input": {
+            "location": "Seattle"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "call_1",
+          "content": "rain"
+        }
+      ]
+    }
+  ]
+}

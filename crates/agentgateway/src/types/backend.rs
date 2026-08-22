@@ -67,6 +67,14 @@ impl HTTP {
 pub struct Tunnel {
 	/// Proxy backend used to tunnel the connection.
 	pub proxy: Arc<SimpleBackendReference>,
+	/// Policies to connect to the proxy backend
+	#[serde(default, skip_serializing_if = "Vec::is_empty")]
+	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
+	#[cfg_attr(
+		feature = "schema",
+		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
+	)]
+	pub policies: Vec<super::agent::BackendTrafficPolicy>,
 }
 
 #[apply(schema!)]
@@ -74,6 +82,8 @@ pub struct TCP {
 	/// TCP keepalive settings for backend connections.
 	pub keepalives: super::agent::KeepaliveConfig,
 	/// Maximum time allowed to establish a backend TCP connection.
+	#[serde(with = "crate::serdes::serde_dur")]
+	#[cfg_attr(feature = "schema", schemars(with = "String"))]
 	pub connect_timeout: Duration,
 }
 

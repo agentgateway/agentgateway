@@ -109,6 +109,7 @@ pub fn register_custom_functions(definitions: &str) -> Result<(), Error> {
 flagset::flags! {
 	enum Attributes: u32 {
 		Source,
+		Destination,
 
 		Request,
 		RequestBody,
@@ -117,8 +118,10 @@ flagset::flags! {
 		ResponseBody,
 
 		Llm,
+		LlmRequest,
 		LlmPrompt,
 		LlmCompletion,
+		LlmToolCalls,
 
 		Backend,
 
@@ -176,6 +179,11 @@ impl ContextBuilder {
 	pub fn register_log_request(&mut self) {
 		self.logging_attributes |= Attributes::Request;
 	}
+	/// Request full LLM payload capture for the database log sink without requiring a CEL
+	/// expression to also emit that payload as an attribute.
+	pub fn register_log_llm_payload(&mut self) {
+		self.logging_attributes |= Attributes::Llm | Attributes::LlmPrompt | Attributes::LlmCompletion;
+	}
 	fn any_has(&self, attr: impl Into<FlagSet<Attributes>>) -> bool {
 		let x = attr.into();
 		self.request_attributes.contains(x)
@@ -209,6 +217,7 @@ impl ContextBuilder {
 		clear: bool,
 	) -> Option<RequestSnapshot> {
 		if self.any_has(Attributes::Source)
+			|| self.any_has(Attributes::Destination)
 			|| self.any_has(Attributes::Request)
 			|| self.any_has(Attributes::Llm)
 			|| self.any_has(Attributes::Proxy)
@@ -234,7 +243,7 @@ impl ContextBuilder {
 			let Ok(body) = crate::http::inspect_body(req).await else {
 				return;
 			};
-			req.extensions_mut().insert(BufferedBody(body));
+			req.extensions_mut().insert(BufferedBody::from(body));
 		} else if self.log_only_has(Attributes::RequestBody) {
 			if req.extensions().get::<BufferedBody>().is_some() {
 				return;
@@ -261,7 +270,7 @@ impl ContextBuilder {
 			let Ok(body) = crate::http::inspect_response_body(resp).await else {
 				return;
 			};
-			resp.extensions_mut().insert(BufferedBody(body));
+			resp.extensions_mut().insert(BufferedBody::from(body));
 		} else if self.log_only_has(Attributes::ResponseBody) {
 			if resp.extensions().get::<BufferedBody>().is_some() {
 				return;
@@ -291,11 +300,18 @@ impl ContextBuilder {
 	pub fn needs_llm_completion(&self) -> bool {
 		self.any_has(Attributes::LlmCompletion)
 	}
+	pub fn needs_llm_tool_calls(&self) -> bool {
+		self.any_has(Attributes::LlmToolCalls)
+	}
 }
 
 impl Expression {
 	pub fn ast(&self) -> &cel::IdedExpr {
 		self.expression.expression()
+	}
+
+	pub fn needs_llm_request(&self) -> bool {
+		self.attributes.contains(Attributes::LlmRequest)
 	}
 
 	/// new_permissive compiles the expression. If the expression cannot be compiled, its instead replaced
@@ -354,13 +370,13 @@ fn attributes_for(expression: &cel::IdedExpr) -> FlagSet<Attributes> {
 	let mut attributes: FlagSet<Attributes> = FlagSet::default();
 	for tokens in props {
 		match tokens.as_slice() {
-			["request", "body", ..] => {
+			["request", "body" | "bodyPrefix", ..] => {
 				attributes |= Attributes::Request | Attributes::RequestBody;
 			},
 			["request", ..] => {
 				attributes |= Attributes::Request;
 			},
-			["response", "body", ..] => {
+			["response", "body" | "bodyPrefix", ..] => {
 				attributes |= Attributes::Response | Attributes::ResponseBody;
 			},
 			["response", ..] => {
@@ -372,11 +388,20 @@ fn attributes_for(expression: &cel::IdedExpr) -> FlagSet<Attributes> {
 			["llm", "completion", ..] => {
 				attributes |= Attributes::Llm | Attributes::LlmCompletion;
 			},
+			["llm", "toolCalls", ..] => {
+				attributes |= Attributes::Llm | Attributes::LlmToolCalls;
+			},
 			["llm", ..] => {
 				attributes |= Attributes::Llm;
 			},
+			["llmRequest", ..] => {
+				attributes |= Attributes::LlmRequest;
+			},
 			["source", ..] => {
 				attributes |= Attributes::Source;
+			},
+			["destination", ..] => {
+				attributes |= Attributes::Destination;
 			},
 			["backend", ..] => {
 				attributes |= Attributes::Backend;

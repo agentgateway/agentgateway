@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: agentgateway
+      POSTGRES_USER: agentgateway
+      POSTGRES_PASSWORD: agentgateway
+    ports:
+    - "127.0.0.1:5432:5432"
+    volumes:
+    - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentgateway -d agentgateway"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  postgres-data:

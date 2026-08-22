@@ -7,6 +7,7 @@ use secrecy::{ExposeSecret, SecretString};
 use tracing::trace;
 
 use crate::serdes::schema;
+use crate::util::ErrorContext;
 use crate::{apply, client, ser_redact};
 
 // The Rust sdk for Azure is the only one that requires users to manually specify their auth method
@@ -121,6 +122,8 @@ const FOUNDRY_SCOPES: &[&str] = &["https://ai.azure.com/.default"];
 /// Reference: <https://learn.microsoft.com/azure/developer/go/azure-sdk-authentication>
 struct DefaultAzureCredential {
 	sources: Vec<(&'static str, Arc<dyn TokenCredential>)>,
+	/// Errors from credentials that failed to *construct*
+	construction_errors: Vec<String>,
 	/// Index of the source that first provided a token.
 	/// `usize::MAX` indicates no source has provided a token yet.
 	cached_source_index: AtomicUsize,
@@ -166,10 +169,17 @@ impl TokenCredential for DefaultAzureCredential {
 		Err(azure_core::Error::with_message_fn(
 			azure_core::error::ErrorKind::Credential,
 			|| {
-				format!(
+				let mut msg = format!(
 					"DefaultAzureCredential: all credentials failed:\n{}",
 					format_credential_errors(&errors)
-				)
+				);
+				if !self.construction_errors.is_empty() {
+					msg.push_str(&format!(
+						"\nCredentials excluded because they could not be constructed:\n{}",
+						self.construction_errors.join("\n")
+					));
+				}
+				msg
 			},
 		))
 	}
@@ -420,6 +430,7 @@ async fn build_credential(
 
 			Ok(Arc::new(DefaultAzureCredential {
 				sources,
+				construction_errors: errors,
 				cached_source_index: AtomicUsize::new(usize::MAX),
 			}))
 		},
@@ -442,9 +453,40 @@ pub(super) async fn get_token(
 	// Foundry endpoints (.services.ai.azure.com) require the ai.azure.com scope
 	let is_foundry = matches!(target, crate::types::agent::Target::Hostname(h, _) if h.ends_with(".services.ai.azure.com"));
 	let scopes = if is_foundry { FOUNDRY_SCOPES } else { SCOPES };
-	let token = cred.get_token(scopes, None).await?;
+	let token = tokio::time::timeout(super::CLOUD_AUTH_TIMEOUT, cred.get_token(scopes, None))
+		.await
+		.ctx("Azure token fetch timed out after 5s")??;
 	let mut hv = http::HeaderValue::from_str(&format!("Bearer {}", token.token.secret()))?;
 	hv.set_sensitive(true);
 	trace!("attached Azure token (scope: {})", scopes[0]);
 	Ok(hv)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn existing_user_assigned_managed_identity_parses() {
+		serde_json::from_str::<AzureAuthCredentialSource>(
+			r#"{"managedIdentity":{"userAssignedIdentity":{"clientId":"cid"}}}"#,
+		)
+		.expect("the existing managed identity shape must remain supported");
+	}
+
+	#[tokio::test]
+	async fn empty_managed_identity_builds_sdk_credential() {
+		let credential_source =
+			serde_json::from_str(r#"{"managedIdentity":{}}"#).expect("managed identity should parse");
+		let auth = AzureAuth::ExplicitConfig {
+			credential_source,
+			cached_cred: Default::default(),
+		};
+		let config = crate::config::parse_config("{}".to_string(), None).expect("config");
+		let client = crate::client::Client::new(&config.dns, None, Default::default(), None);
+
+		build_credential(&client, &auth)
+			.await
+			.expect("system-assigned managed identity should build");
+	}
 }

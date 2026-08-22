@@ -6,6 +6,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use agent_core::drain::{DrainUpgrader, DrainWatcher};
+use agent_core::prelude::AssertSize;
 use agent_core::{drain, strng, telemetry};
 use agent_hbone::server::H2Request;
 use anyhow::anyhow;
@@ -29,12 +30,10 @@ use crate::transport::BufferLimit;
 use crate::transport::stream::{
 	ConnectHeaders, Extension, LoggingMode, Socket, TCPConnectionInfo, TLSConnectionInfo,
 };
-use crate::transport::tls::TlsInfo;
 use crate::types::agent::{
 	BindKey, BindProtocol, Listener, ListenerProtocol, TransportProtocol, TunnelProtocol,
 };
 use crate::types::discovery::Service;
-use crate::types::discovery::gatewayaddress::Destination;
 use crate::types::frontend;
 use crate::{ProxyInputs, Stores, client};
 
@@ -136,6 +135,32 @@ pub struct Gateway {
 	drain: drain::DrainWatcher,
 }
 
+enum ActiveBind {
+	Task(AbortHandle, watch::Sender<Arc<crate::types::agent::Bind>>),
+	PerCore(
+		watch::Sender<()>,
+		watch::Sender<Arc<crate::types::agent::Bind>>,
+	),
+}
+
+impl ActiveBind {
+	fn stop(self) {
+		match self {
+			Self::Task(handle, _) => handle.abort(),
+			Self::PerCore(stop, _) => {
+				let _ = stop.send(());
+			},
+		}
+	}
+
+	fn update(&self, bind: crate::types::agent::Bind) {
+		let config = match self {
+			Self::Task(_, config) | Self::PerCore(_, config) => config,
+		};
+		config.send_replace(Arc::new(bind));
+	}
+}
+
 impl Gateway {
 	pub fn new(pi: Arc<ProxyInputs>, drain: DrainWatcher) -> Gateway {
 		Gateway { drain, pi }
@@ -149,35 +174,44 @@ impl Gateway {
 			let mut binds = self.pi.stores.binds.write();
 			binds.subscribe()
 		};
-		let mut active: HashMap<BindKey, AbortHandle> = HashMap::new();
+		let mut active: HashMap<BindKey, ActiveBind> = HashMap::new();
 		let mut handle_bind = |js: &mut JoinSet<anyhow::Result<()>>, b: BindEvent| {
 			let (bind_key, bind, listeners) = match b {
 				BindEvent::Add(bind, listeners) => (bind.key.clone(), bind, listeners),
+				BindEvent::Update(bind) => {
+					if let Some(active) = active.get(&bind.key) {
+						active.update(bind);
+					}
+					return;
+				},
 				BindEvent::Remove(bind_key) => {
 					if let Some(h) = active.remove(&bind_key) {
-						h.abort();
+						h.stop();
 					}
 					return;
 				},
 			};
 			if let Some(h) = active.remove(&bind_key) {
-				h.abort();
+				h.stop();
 			}
+			let (config, config_rx) = watch::channel(Arc::new(bind));
 
-			debug!("add bind {}", bind.address);
+			debug!("add bind {}", config.borrow().address);
 			match listeners {
 				BindListeners::Single(listener) => {
 					let task = js.spawn(
-						Self::run_bind(self.pi.clone(), subdrain.clone(), Arc::new(bind), listener)
+						Self::run_bind(self.pi.clone(), subdrain.clone(), config_rx, listener)
 							.in_current_span(),
 					);
-					active.insert(bind_key, task);
+					active.insert(bind_key, ActiveBind::Task(task, config));
 				},
 				BindListeners::PerCore(listeners) => {
+					let (stop, stop_rx) = watch::channel(());
 					for (core_id, listener) in listeners {
 						let subdrain = subdrain.clone();
 						let pi = self.pi.clone();
-						let bind = bind.clone();
+						let config_rx = config_rx.clone();
+						let mut stop_rx = stop_rx.clone();
 						std::thread::spawn(move || {
 							let res = core_affinity::set_for_current(core_id);
 							if !res {
@@ -188,12 +222,15 @@ impl Gateway {
 								.build()
 								.unwrap()
 								.block_on(async {
-									let _ = Self::run_bind(pi, subdrain, Arc::new(bind), listener)
-										.in_current_span()
-										.await;
+									tokio::select! {
+										_ = stop_rx.changed() => {},
+										_ = Self::run_bind(pi, subdrain, config_rx, listener)
+											.in_current_span() => {},
+									}
 								})
 						});
 					}
+					active.insert(bind_key, ActiveBind::PerCore(stop, config));
 				},
 			}
 		};
@@ -222,14 +259,12 @@ impl Gateway {
 	pub(super) async fn run_bind(
 		pi: Arc<ProxyInputs>,
 		drain: DrainWatcher,
-		bind: Arc<crate::types::agent::Bind>,
+		bind_config: watch::Receiver<Arc<crate::types::agent::Bind>>,
 		listener: std::net::TcpListener,
 	) -> anyhow::Result<()> {
 		let min_deadline = pi.cfg.termination_min_deadline;
 		let max_deadline = pi.cfg.termination_max_deadline;
-		let name = bind.key.clone();
-		let bind_protocol = bind.protocol;
-		let tunnel_protocol = bind.tunnel_protocol;
+		let name = bind_config.borrow().key.clone();
 		let pi = if pi.cfg.threading_mode == crate::ThreadingMode::ThreadPerCore {
 			let mut pi = Arc::unwrap_or_clone(pi);
 			let client = client::Client::new(
@@ -281,14 +316,16 @@ impl Gateway {
 				let start = Instant::now();
 				let mut force_shutdown = force_shutdown.clone();
 				let name = name.clone();
+				let bind_config = bind_config.clone();
 				tokio::spawn(telemetry::connection_scope(async move {
+					let bind = bind_config.borrow().clone();
 					debug!(bind=?name, "connection started");
 					tokio::select! {
 						// We took too long; shutdown now.
 						_ = force_shutdown.changed() => {
 							info!(bind=?name, "connection forcefully terminated");
 						}
-						_ = Self::handle_tunnel(name.clone(), bind_protocol, tunnel_protocol, stream, pi, drain) => {}
+						_ = Self::handle_tunnel(name.clone(), bind.protocol, bind.tunnel_protocol, stream, pi, drain) => {}
 					}
 					debug!(bind=?name, dur=?start.elapsed(), "connection completed");
 				}));
@@ -731,8 +768,17 @@ impl Gateway {
 						Some(authority) => authority.as_str(),
 						None => return Ok(ProxyError::InvalidRequest.into_response_with_grpc(false)),
 					};
+					let binds = inputs.stores.read_binds();
 					let (target_address, bind) = if let Ok(addr) = authority.parse::<SocketAddr>() {
-						let Some(bind) = inputs.stores.read_binds().find_bind(addr) else {
+						// CONNECT re-entry must not expose a bind scoped to a concrete address
+						// (for example, a loopback-only listener). Match only an unspecified-address
+						// bind for this port; otherwise fall back to the explicit internal wildcard
+						// bind, preserving the requested address as the tunnel target.
+						let Some(bind) = binds
+							.find_bind(addr)
+							.filter(|b| b.address.ip().is_unspecified())
+							.or_else(|| binds.find_wildcard_bind())
+						else {
 							return Ok(ProxyError::BindNotFound.into_response_with_grpc(false));
 						};
 						(addr, bind)
@@ -740,7 +786,12 @@ impl Gateway {
 						let Some(port) = req.uri().port_u16() else {
 							return Ok(ProxyError::InvalidRequest.into_response_with_grpc(false));
 						};
-						let Some(bind) = inputs.stores.read_binds().find_bind_by_port(port) else {
+						// Match a bind by the requested port; otherwise fall back to the internal
+						// wildcard bind, which serves any destination port via a dynamic backend.
+						let Some(bind) = binds
+							.find_bind_by_port(port)
+							.or_else(|| binds.find_wildcard_bind())
+						else {
 							return Ok(ProxyError::BindNotFound.into_response_with_grpc(false));
 						};
 						let target_ip = if bind.address.ip().is_unspecified() {
@@ -753,6 +804,8 @@ impl Gateway {
 						};
 						(SocketAddr::new(target_ip, port), bind)
 					};
+					// Release the binds read lock before spawning the tunnel task.
+					drop(binds);
 
 					tokio::task::spawn(async move {
 						let downstream = match upgrade.await {
@@ -764,6 +817,7 @@ impl Gateway {
 						};
 						let mut downstream = Socket::from_upgraded(connection, target_address, downstream);
 						downstream.ext_mut().insert(ConnectHeaders(connect_headers));
+						downstream.ext_mut().insert(BufferLimit::new(buffer));
 						Self::proxy_bind(bind.key.clone(), bind.protocol, downstream, inputs, drain).await;
 					});
 
@@ -832,6 +886,7 @@ impl Gateway {
 			tls.and_then(|t| t.src_identity.clone()),
 			unverified_workload,
 		);
+		let dst = crate::cel::DestinationContext::from_tcp_connection(tcp);
 		// Surface CONNECT tunnel headers (captured in `terminate_connect_tunnel`) on
 		// the source context so request policies can reference `source.connectHeaders`.
 		// Move the map out of the stream extension (it has no other consumer) to avoid
@@ -844,7 +899,18 @@ impl Gateway {
 		{
 			anyhow::bail!("network authorization denied: {e}");
 		}
+		if let Some(authz) = policies.network_ext_authz.as_ref() {
+			authz
+				.check_network(
+					super::httpproxy::PolicyClient::new(inputs.clone()),
+					src.clone(),
+					dst.clone(),
+				)
+				.await
+				.map_err(|e| anyhow::anyhow!("network external authorization denied: {e}"))?;
+		}
 		stream.ext_mut().insert(src);
+		stream.ext_mut().insert(dst);
 
 		let transport_metrics = inputs.metrics.clone();
 		let _max_dur_metrics = transport_metrics.clone();
@@ -861,10 +927,12 @@ impl Gateway {
 		stream.set_transport_metrics(transport_metrics, transport_labels);
 
 		let def = frontend::HTTP::default();
+		let tunneled_buffer = stream.ext::<BufferLimit>().map(|b| b.0);
 		let buffer = policies
 			.http
 			.as_ref()
 			.map(|h| h.max_buffer_size)
+			.or(tunneled_buffer)
 			.unwrap_or(def.max_buffer_size);
 
 		let max_connection_duration = policies
@@ -880,9 +948,14 @@ impl Gateway {
 				let connection = connection.clone();
 				req.extensions_mut().insert(BufferLimit::new(buffer));
 				let req = req.map(crate::http::Body::new);
-				telemetry::request_scope(dtrace::DebugTracer::maybe_scope(req, |req| async move {
-					proxy.proxy(connection, req).map(Ok::<_, Infallible>).await
-				}))
+				telemetry::request_scope(
+					// This is the per-request HTTP flow future. It is the baseline task state
+					// multiplied by concurrent in-flight requests on this connection.
+					dtrace::DebugTracer::maybe_scope(req, |req| async move {
+						proxy.proxy(connection, req).map(Ok::<_, Infallible>).await
+					})
+					.assert_size::<{ 17 * 1024 }>(),
+				)
 			}),
 		);
 		let (connection_drain_tx, connection_drain_rx) = drain::new();
@@ -955,7 +1028,7 @@ impl Gateway {
 		bind_name: BindKey,
 		inputs: Arc<ProxyInputs>,
 		selected_listener: Option<Arc<Listener>>,
-		stream: Socket,
+		mut stream: Socket,
 		_drain: DrainWatcher,
 	) {
 		let selected_listener = match selected_listener {
@@ -971,6 +1044,25 @@ impl Gateway {
 				selected_listener
 			},
 		};
+		let tcp = stream.tcp();
+		let unverified_workload = crate::cel::WorkloadContext::from_stores(
+			&inputs.stores,
+			&inputs.cfg.network,
+			tcp.peer_addr.ip(),
+		);
+		let mut source = crate::cel::SourceContext::from_tcp_connection(
+			tcp,
+			stream
+				.ext::<TLSConnectionInfo>()
+				.and_then(|tls| tls.src_identity.clone()),
+			unverified_workload,
+		);
+		if let Some(headers) = stream.ext_mut().remove::<ConnectHeaders>() {
+			source.connect_headers = headers.0;
+		} else if let Some(existing) = stream.ext::<crate::cel::SourceContext>() {
+			source.connect_headers = existing.connect_headers.clone();
+		}
+		stream.ext_mut().insert(source);
 		let target_address = stream.target_address();
 		let proxy = super::tcpproxy::TCPProxy {
 			bind_name,
@@ -1059,7 +1151,11 @@ impl Gateway {
 			let best = listeners
 				.best_match_tls(sni)
 				.ok_or(anyhow!("no TLS listener match for {sni}"))?;
-			match best.protocol.tls(tls_pol, inp.ca.as_ref()).await {
+			match best
+				.protocol
+				.tls(tls_pol, inp.ca.as_ref(), inp.spiffe.as_ref())
+				.await
+			{
 				Some(Err(e)) => {
 					// There is a TLS config for this listener, but its invalid. Reject the connection
 					Err(e)
@@ -1128,24 +1224,6 @@ impl Gateway {
 				raw_peer_addr: Some(raw_peer_addr),
 			});
 		}
-
-		// Insert TLSConnectionInfo with identity from TLV 0xD0
-		// Even though there's no TLS on this connection, we use this struct
-		// to carry the peer identity that ztunnel extracted from mTLS
-		if let Some(identity) = pp_info.peer_identity {
-			raw_stream.ext_mut().insert(TLSConnectionInfo {
-				src_identity: Some(TlsInfo {
-					identity: Some(identity),
-					subject_alt_names: vec![],
-					issuer: crate::strng::EMPTY,
-					subject: crate::strng::EMPTY,
-					subject_cn: None,
-					certificate: None,
-				}),
-				server_name: None,
-				negotiated_alpn: None,
-			});
-		}
 	}
 
 	/// Handle incoming connection with a PROXY protocol header.
@@ -1185,8 +1263,7 @@ impl Gateway {
 			},
 		};
 
-		// Continue with normal protocol handling. Any PROXY-derived identity is now in the socket
-		// extensions and will flow through to CEL authorization via with_source().
+		// Continue with normal protocol handling.
 		Self::proxy_bind(bind_name, bind_protocol, raw_stream, inp, drain).await;
 		Ok(())
 	}
@@ -1422,32 +1499,29 @@ impl Gateway {
 		};
 
 		// Make sure the service is actually bound to us
-		let Some(wp) = svc.waypoint.as_ref() else {
+		if !svc.has_fronting_waypoint() {
 			anyhow::bail!(
 				"service {}.{} is not bound to a waypoint",
 				svc.hostname,
 				svc.namespace
 			);
-		};
+		}
 		let Some(self_id) = pi.cfg.self_addr.as_ref() else {
 			anyhow::bail!("self_id required for waypoint");
 		};
-		let is_ours = match &wp.destination {
-			Destination::Address(addr) => self_id.matches_address(addr, |a| {
-				discovery
-					.services
-					.get_by_vip(a)
-					.map(|s| (s.name.clone(), s.namespace.clone()))
-			}),
-			Destination::Hostname(n) => self_id.matches_hostname(n),
-		};
+		let is_ours = self_id.fronts_service(&svc, |a| {
+			discovery
+				.services
+				.get_by_vip(a)
+				.map(|s| (s.name.clone(), s.namespace.clone()))
+		});
 		if !is_ours {
 			anyhow::bail!(
-				"service {} is meant for waypoint {:?}, but we are {}.{}",
+				"service {} is not fronted by waypoint {}.{}; its waypoints are {:?}",
 				svc.hostname,
-				wp.destination,
 				self_id.gateway,
-				self_id.namespace
+				self_id.namespace,
+				svc.fronting_waypoint_destinations(),
 			);
 		}
 

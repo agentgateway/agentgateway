@@ -1,0 +1,27 @@
+# Keycloak 26.5 + preview features (JWT Authorization Grant is a 26.5 preview feature).
+# Two realms: `idp` (external provider that issues the assertion) and `backend-oauth`
+# (resource realm that trusts `idp` and mints the upstream token).
+services:
+  keycloak:
+    container_name: backend-oauth-keycloak
+    image: quay.io/keycloak/keycloak:26.5
+    command: ["start-dev", "--import-realm", "--features=preview", "--http-port", "7080", "--https-port", "7443"]
+    environment:
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_PORT: 7080
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "true"
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+      KC_LOG_LEVEL: info
+    volumes:
+    - ./jwtbearer-import:/opt/keycloak/data/import:ro
+    ports:
+    - "7080:7080"
+    - "7443:7443"
+
+  app:
+    container_name: backend-oauth-upstream
+    image: registry.istio.io/testing/app
+    ports:
+    - "18080:8080"

@@ -1,0 +1,25 @@
+{
+  "contents": [
+    { "role": "user", "parts": [{ "text": "Who won the 2018 world cup?" }] },
+    { "role": "model", "parts": [{ "text": "France." }] },
+    { "role": "user", "parts": [{ "text": "And the runner up?" }] }
+  ],
+  "systemInstruction": { "parts": [{ "text": "Answer in one sentence." }] },
+  "generationConfig": {
+    "temperature": 0.7,
+    "topP": 0.95,
+    "topK": 40,
+    "maxOutputTokens": 1024,
+    "stopSequences": ["END"],
+    "candidateCount": 1,
+    "seed": 42
+  },
+  "safetySettings": [
+    {
+      "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+      "threshold": "BLOCK_ONLY_HIGH"
+    }
+  ],
+  "cachedContent": "projects/p/locations/global/cachedContents/123",
+  "labels": { "team": "search" }
+}

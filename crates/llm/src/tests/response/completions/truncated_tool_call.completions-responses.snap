@@ -1,0 +1,80 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/truncated_tool_call.json
+info:
+  id: chatcmpl-truncated-tool-call
+  object: chat.completion
+  created: 1700000000
+  model: gpt-x
+  choices:
+    - index: 0
+      message:
+        role: assistant
+        content: ~
+        tool_calls:
+          - id: call_1
+            type: function
+            function:
+              name: get_weather
+              arguments: "{\"location\": \"Par"
+      finish_reason: length
+  usage:
+    prompt_tokens: 20
+    completion_tokens: 15
+    total_tokens: 35
+---
+{
+  "response": {
+    "id": "[id]",
+    "status": "incomplete",
+    "output": [
+      {
+        "type": "function_call",
+        "arguments": "{\"location\": \"Par",
+        "call_id": "call_1",
+        "name": "get_weather",
+        "id": "[id]",
+        "status": "completed"
+      }
+    ],
+    "model": "input-model",
+    "usage": {
+      "input_tokens": 20,
+      "output_tokens": 15,
+      "input_tokens_details": {
+        "cached_tokens": 0
+      },
+      "output_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "total_tokens": 35
+    },
+    "created_at": "[date]",
+    "incomplete_details": {
+      "reason": "max_tokens"
+    },
+    "object": "response"
+  },
+  "parsed": {
+    "input_tokens": 20,
+    "output_tokens": 15,
+    "total_tokens": 35,
+    "reasoning_tokens": 0,
+    "cached_input_tokens": 0,
+    "provider_model": "input-model",
+    "output_messages": [
+      {
+        "role": "assistant",
+        "content": [
+          {
+            "type": "tool_call",
+            "id": "call_1",
+            "name": "get_weather",
+            "arguments": "{\"location\": \"Par"
+          }
+        ],
+        "finish_reason": "incomplete"
+      }
+    ]
+  }
+}

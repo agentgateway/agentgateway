@@ -1,0 +1,35 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: gateway
+  namespace: agentgateway-frontendtls
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - protocol: HTTP
+    port: 80
+    name: http
+  - protocol: HTTPS
+    port: 443
+    name: https
+    allowedRoutes:
+      namespaces:
+        from: All
+    tls:
+      mode: Terminate
+      certificateRefs:
+      - name: gateway-cert
+        kind: Secret
+  tls:
+    frontend:
+      default:
+        validation:
+          caCertificateRefs:
+          - group: ""
+            kind: ConfigMap
+            name: invalid1
+            namespace: agentgateway-frontendtls
+          - group: ""
+            kind: ConfigMap
+            name: invalid2
+            namespace: agentgateway-frontendtls

@@ -13,9 +13,11 @@ use crate::control::caclient;
 use crate::telemetry::log::{LoggingFields, MetricFields, OrderedStringMap};
 use crate::telemetry::trc;
 use crate::types::discovery::{Identity, WaypointIdentity};
+use crate::util::ErrorContext;
 use crate::{
-	Address, Config, ConfigSource, DnsLookupFamily, NestedRawConfig, RawLoggingFields,
-	RawLoggingLevel, StringOrInt, ThreadingMode, XDSConfig, cel, client, serdes, telemetry, types,
+	Address, Config, ConfigSource, ConfigStoreMode, DnsLookupFamily, NestedRawConfig,
+	RawLoggingFields, RawLoggingLevel, StorageConfig, StringOrInt, ThreadingMode, XDSConfig, cel,
+	client, serdes, telemetry, types,
 };
 
 const DEFAULT_UI_USER_ATTRIBUTE: &str = r#"coalesce(apiKey.user, apiKey.name, apiKey.owner, jwt.sub, jwt.email, basicAuth.username, source.identity.namespace + "/" + source.identity.serviceAccount, source.subjectCn, null)"#;
@@ -32,9 +34,20 @@ pub fn parse_config(
 	contents: String,
 	local_config_source: Option<ConfigSource>,
 ) -> anyhow::Result<Config> {
-	let nested: NestedRawConfig = serdes::yamlviajson::from_str(&contents)?;
+	// Shellexpend before parsing it
+	let contents = contents.replace("# yaml-language-server: $schema", "#");
+	let contents = shellexpand::full(&contents)?;
+	let nested: NestedRawConfig = serdes::yamlviajson::from_str(&contents).ctx("invalid config")?;
 	let raw = nested.config.unwrap_or_default();
-	cel::register_custom_functions(&raw.custom_functions)?;
+	cel::register_custom_functions(&raw.custom_functions).ctx("invalid config.customFunctions")?;
+	let sensitive_headers = raw
+		.sensitive_headers
+		.iter()
+		.map(|name| {
+			::http::HeaderName::from_str(name)
+				.map_err(|e| anyhow::anyhow!("invalid sensitive header '{name}': {e}"))
+		})
+		.collect::<anyhow::Result<Vec<_>>>()?;
 
 	let ipv6_enabled = parse::<bool>("IPV6_ENABLED")?
 		.or(raw.enable_ipv6)
@@ -60,7 +73,7 @@ pub fn parse_config(
 
 	let dns = raw.dns.unwrap_or_default();
 	let dns_lookup_family = match env::var("DNS_LOOKUP_FAMILY") {
-		Ok(val) => Some(DnsLookupFamily::from_env_str(&val)?),
+		Ok(val) => Some(DnsLookupFamily::from_env_str(&val).ctx("invalid DNS_LOOKUP_FAMILY")?),
 		Err(_) => None,
 	}
 	.or(dns.lookup_family)
@@ -80,7 +93,8 @@ pub fn parse_config(
 		.or(raw.cluster_id.clone())
 		.unwrap_or("Kubernetes".to_string());
 	let xds = {
-		let address = validate_uri(empty_to_none(parse("XDS_ADDRESS")?).or(raw.xds_address))?;
+		let address = validate_uri(empty_to_none(parse("XDS_ADDRESS")?).or(raw.xds_address))
+			.ctx("invalid XDS_ADDRESS/config.xdsAddress")?;
 		// if local_config.is_none() && address.is_none() {
 		// 	anyhow::bail!("file or XDS configuration is required")
 		// }
@@ -88,10 +102,10 @@ pub fn parse_config(
 			(
 				parse("NAMESPACE")?
 					.or(raw.namespace.clone())
-					.context("NAMESPACE is required")?,
+					.ctx("NAMESPACE/config.namespace is required when XDS is configured")?,
 				parse("GATEWAY")?
 					.or(raw.gateway)
-					.context("GATEWAY is required")?,
+					.ctx("GATEWAY/config.gateway is required when XDS is configured")?,
 			)
 		} else {
 			("default".to_string(), "default".to_string())
@@ -115,7 +129,7 @@ pub fn parse_config(
 				crate::control::AuthSource::Token(PathBuf::from(p), cluster.clone())
 			},
 			Some(p) => {
-				anyhow::bail!("auth token {p} not found")
+				anyhow::bail!("invalid XDS_AUTH_TOKEN/config.xdsAuthToken: file {p} not found")
 			},
 		};
 		let xds_cert = parse_default(
@@ -130,10 +144,12 @@ pub fn parse_config(
 		} else {
 			crate::control::RootCert::Default
 		};
+		let headers = parse_headers("XDS_HEADER_").ctx("invalid XDS_HEADER_*")?;
 		XDSConfig {
 			address,
 			auth,
 			ca_cert: xds_root_cert,
+			headers,
 			namespace: namespace.into(),
 			gateway: gateway.into(),
 			local_config,
@@ -147,17 +163,18 @@ pub fn parse_config(
 	} else {
 		None
 	};
-	let ca_address = validate_uri(empty_to_none(parse("CA_ADDRESS")?).or(raw.ca_address))?;
+	let ca_address = validate_uri(empty_to_none(parse("CA_ADDRESS")?).or(raw.ca_address))
+		.ctx("invalid CA_ADDRESS/config.caAddress")?;
 	let ca = if let Some(addr) = ca_address {
 		let td = parse("TRUST_DOMAIN")?
 			.or(raw.trust_domain)
 			.unwrap_or("cluster.local".to_string());
 		let ns = parse("NAMESPACE")?
 			.or(raw.namespace)
-			.context("NAMESPACE is required")?;
+			.ctx("NAMESPACE/config.namespace is required when CA is configured")?;
 		let sa = parse("SERVICE_ACCOUNT")?
 			.or(raw.service_account)
-			.context("SERVICE_ACCOUNT is required")?;
+			.ctx("SERVICE_ACCOUNT/config.serviceAccount is required when CA is configured")?;
 		let tok = parse("CA_AUTH_TOKEN")?.or(raw.ca_auth_token);
 		let auth = match tok {
 			None => {
@@ -176,7 +193,7 @@ pub fn parse_config(
 				crate::control::AuthSource::Token(PathBuf::from(p), cluster.clone())
 			},
 			Some(p) => {
-				anyhow::bail!("auth token {p} not found")
+				anyhow::bail!("invalid CA_AUTH_TOKEN/config.caAuthToken: file {p} not found")
 			},
 		};
 		let ca_headers = parse_headers("CA_HEADER_");
@@ -217,13 +234,19 @@ pub fn parse_config(
 			},
 			auth,
 			ca_cert: ca_root_cert,
-			ca_headers: ca_headers?,
+			ca_headers: ca_headers.ctx("invalid CA_HEADER_*")?,
 			allowed_trust_domains: allowed_trust_domains.into(),
 			skip_validate_trust_domain,
 		})
 	} else {
 		None
 	};
+
+	let spiffe = raw
+		.spiffe
+		.and_then(|cfg| cfg.endpoint)
+		.map(|endpoint| crate::control::spiffe::Config { endpoint });
+
 	let network = parse("NETWORK")?.or(raw.network).unwrap_or_default();
 
 	// Self-identity for locality-aware load balancing.
@@ -279,7 +302,7 @@ pub fn parse_config(
 		.unwrap_or_default();
 	let termination_max_deadline =
 		parse_duration("CONNECTION_TERMINATION_DEADLINE")?.or(raw.connection_termination_deadline);
-	let tracing_env = resolve_tracing_env_overrides()?;
+	let tracing_env = resolve_tracing_env_overrides().ctx("invalid tracing environment overrides")?;
 
 	let mut otlp_headers = raw
 		.tracing
@@ -299,19 +322,22 @@ pub fn parse_config(
 	let admin_addr = parse::<String>("ADMIN_ADDR")?
 		.or(raw.admin_addr)
 		.map(|addr| Address::new(ipv6_localhost_enabled, &addr))
-		.transpose()?
+		.transpose()
+		.ctx("invalid ADMIN_ADDR/config.adminAddr")?
 		.unwrap_or(Address::Localhost(ipv6_localhost_enabled, 15000));
 	// Parse stats_addr from environment variable or config file
 	let stats_addr = parse::<String>("STATS_ADDR")?
 		.or(raw.stats_addr)
 		.map(|addr| Address::new(ipv6_localhost_enabled, &addr))
-		.transpose()?
+		.transpose()
+		.ctx("invalid STATS_ADDR/config.statsAddr")?
 		.unwrap_or(Address::SocketAddr(SocketAddr::new(bind_wildcard, 15020)));
 	// Parse readiness_addr from environment variable or config file
 	let readiness_addr = parse::<String>("READINESS_ADDR")?
 		.or(raw.readiness_addr)
 		.map(|addr| Address::new(ipv6_localhost_enabled, &addr))
-		.transpose()?
+		.transpose()
+		.ctx("invalid READINESS_ADDR/config.readinessAddr")?
 		.unwrap_or(Address::SocketAddr(SocketAddr::new(bind_wildcard, 15021)));
 
 	let threading_mode = if parse::<String>("THREADING_MODE")?.as_deref() == Some("thread_per_core") {
@@ -321,33 +347,62 @@ pub fn parse_config(
 	};
 
 	let session_encoder = if let Some(key) = parse::<String>("SESSION_KEY")? {
-		crate::http::sessionpersistence::Encoder::aes(key.trim())?
+		crate::http::sessionpersistence::Encoder::aes(key.trim())
+			.ctx("invalid session persistence key SESSION_KEY")?
 	} else {
 		match raw.session.as_ref() {
 			None => crate::http::sessionpersistence::Encoder::base64(),
-			Some(session) => crate::http::sessionpersistence::Encoder::aes(session.key.expose_secret())?,
+			Some(session) => {
+				let key = session.key.expose_secret();
+				crate::http::sessionpersistence::Encoder::aes(key)
+					.ctx("invalid session persistence key config.session.key")?
+			},
 		}
 	};
 	// Browser OIDC cookie crypto is core gateway runtime config, not per-policy input.
 	let oidc_cookie_encoder = parse::<String>("OIDC_COOKIE_SECRET")?
-		.map(|key| crate::http::sessionpersistence::Encoder::aes(key.trim()))
-		.transpose()?;
-	let dynamic_ca_cert_cache = parse_dynamic_ca_cert_cache_config()?;
-
-	let model_catalog_sources = parse::<String>("MODEL_CATALOG_PATHS")?
-		.map(|s| {
-			s.split(',')
-				.map(|p| PathBuf::from(p.trim()))
-				.filter(|p| !p.as_os_str().is_empty())
-				.map(|file| crate::ModelCatalogSource::File { file })
-				.collect::<Vec<_>>()
+		.map(|key| {
+			crate::http::sessionpersistence::Encoder::aes(key.trim())
+				.ctx("invalid OIDC session cookie key OIDC_COOKIE_SECRET")
 		})
-		.or(raw.model_catalog)
-		.unwrap_or_default();
-	let database = raw
-		.database
-		.clone()
-		.or_else(|| raw.logging.as_ref().and_then(|l| l.database.clone()));
+		.transpose()?;
+	let dynamic_ca_cert_cache =
+		parse_dynamic_ca_cert_cache_config().ctx("invalid dynamic CA cert cache config")?;
+
+	let model_catalog_sources = raw.model_catalog.unwrap_or_default();
+	let database = raw.database.clone();
+	let explicit_logging_database = raw.logging.as_ref().and_then(|l| l.database.clone());
+	if database
+		.as_ref()
+		.is_some_and(|database| database.max_connections == Some(0))
+	{
+		anyhow::bail!("config.database.maxConnections must be greater than zero");
+	}
+	if explicit_logging_database
+		.as_ref()
+		.is_some_and(|database| database.max_connections == Some(0))
+	{
+		anyhow::bail!("config.logging.database.maxConnections must be greater than zero");
+	}
+	let logging_database = explicit_logging_database.or_else(|| database.clone());
+
+	let mut storage_mode = raw.storage.clone().unwrap_or_default().mode;
+	if parse::<bool>("UI_READ_ONLY")?.unwrap_or(false) {
+		storage_mode = ConfigStoreMode::ReadOnly;
+	};
+	let storage = StorageConfig { mode: storage_mode };
+	if storage.mode == ConfigStoreMode::Hybrid && database.is_none() {
+		anyhow::bail!("config.storage.mode=hybrid requires config.database.url");
+	}
+	if storage.mode == ConfigStoreMode::Hybrid
+		&& database.as_ref().is_some_and(|database| {
+			(database.url.starts_with("postgres://") || database.url.starts_with("postgresql://"))
+				&& database.max_connections == Some(1)
+		}) {
+		anyhow::bail!(
+			"config.database.maxConnections must be at least 2 for PostgreSQL hybrid storage"
+		);
+	}
 
 	Ok(crate::Config {
 		ipv6_enabled,
@@ -359,14 +414,16 @@ pub fn parse_config(
 		self_addr,
 		xds,
 		ca,
-		num_worker_threads: parse_worker_threads(raw.worker_threads)?,
+		spiffe,
+		num_worker_threads: parse_worker_threads(raw.worker_threads)
+			.ctx("invalid WORKER_THREADS/config.workerThreads")?,
 		termination_min_deadline,
 		threading_mode,
 		backend: raw.backend,
 		admin_runtime_handle: None,
 		termination_max_deadline: match termination_max_deadline {
-			Some(period) => period,
-			None => match parse::<u64>("TERMINATION_GRACE_PERIOD_SECONDS")? {
+				Some(period) => period,
+				None => match parse::<u64>("TERMINATION_GRACE_PERIOD_SECONDS")? {
 				// We want our drain period to be less than Kubernetes, so we can use the last few seconds
 				// to abruptly terminate anything remaining before Kubernetes SIGKILLs us.
 				// We could just take the SIGKILL, but it is even more abrupt (TCP RST vs RST_STREAM/TLS close, etc)
@@ -388,13 +445,14 @@ pub fn parse_config(
 			.tracing
 			.clone()
 			.map(|t| {
-				let (otlp_endpoint, otlp_path) = normalize_tracing_endpoint(
-					tracing_env.endpoint.clone().or(t.otlp_endpoint.clone()),
-					t.path.clone(),
-				)?;
-				let endpoint = otlp_endpoint.context(
-					"config.tracing requires otlpEndpoint or one of OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, or OTEL_EXPORTER_OTLP_ENDPOINT",
-				)?;
+					let (otlp_endpoint, otlp_path) = normalize_tracing_endpoint(
+						tracing_env.endpoint.clone().or(t.otlp_endpoint.clone()),
+						t.path.clone(),
+					)
+					.ctx("invalid config.tracing.otlpEndpoint/config.tracing.path")?;
+					let endpoint = otlp_endpoint.ctx(
+						"config.tracing requires otlpEndpoint or one of OTLP_ENDPOINT, OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, or OTEL_EXPORTER_OTLP_ENDPOINT",
+					)?;
 				Ok::<_, anyhow::Error>(trc::DeprecatedConfig {
 					endpoint: Some(endpoint),
 					headers: otlp_headers.clone(),
@@ -408,33 +466,44 @@ pub fn parse_config(
 								remove: Arc::new(fields.remove.into_iter().collect()),
 								add: Arc::new(
 									fields
-										.add
-										.iter()
-										.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
-										.collect::<Result<_, _>>()?,
+											.add
+											.iter()
+											.map(|(k, v)| {
+												cel::Expression::new_strict(v)
+													.ctx(format!("invalid config.tracing.fields.add.{k}"))
+													.map(|v| (k.clone(), Arc::new(v)))
+											})
+											.collect::<Result<_, _>>()?,
 								),
 							})
 						})
 						.transpose()?
 						.unwrap_or_default(),
 					random_sampling: t
-						.random_sampling
-						.as_ref()
-						.map(|c| c.0.as_str())
-						.map(cel::Expression::new_strict)
-						.transpose()?
-						.map(Arc::new),
+							.random_sampling
+							.as_ref()
+							.map(|c| c.0.as_str())
+							.map(|expression| {
+								cel::Expression::new_strict(expression)
+									.ctx("invalid config.tracing.randomSampling")
+							})
+							.transpose()?
+							.map(Arc::new),
 					client_sampling: t
-						.client_sampling
-						.as_ref()
-						.map(|c| c.0.as_str())
-						.map(cel::Expression::new_strict)
-						.transpose()?
-						.map(Arc::new),
+							.client_sampling
+							.as_ref()
+							.map(|c| c.0.as_str())
+							.map(|expression| {
+								cel::Expression::new_strict(expression)
+									.ctx("invalid config.tracing.clientSampling")
+							})
+							.transpose()?
+							.map(Arc::new),
 					path: otlp_path.unwrap_or_else(|| "/v1/traces".to_string()),
 				})
 			})
-			.transpose()?,
+			.transpose()
+			.ctx("invalid config.tracing")?,
 		metrics: telemetry::log::MetricsConfig {
 			excluded_metrics: raw
 				.metrics
@@ -453,24 +522,32 @@ pub fn parse_config(
 					Ok::<_, anyhow::Error>(MetricFields {
 						add: Arc::new(
 							fields
-								.add
-								.iter()
-								.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
-								.collect::<Result<_, _>>()?,
+									.add
+									.iter()
+									.map(|(k, v)| {
+										cel::Expression::new_strict(v)
+											.ctx(format!("invalid config.metrics.fields.add.{k}"))
+											.map(|v| (k.clone(), Arc::new(v)))
+									})
+									.collect::<Result<_, _>>()?,
 						),
 					})
 				})
-				.transpose()?
+				.transpose()
+				.ctx("invalid config.metrics.fields")?
 				.unwrap_or_default(),
 		},
+		histograms: raw.histograms,
 		logging: telemetry::log::Config {
 			filter: raw
-				.logging
-				.as_ref()
-				.and_then(|l| l.filter.as_ref())
-				.map(cel::Expression::new_strict)
-				.transpose()?
-				.map(Arc::new),
+					.logging
+					.as_ref()
+					.and_then(|l| l.filter.as_ref())
+					.map(|expression| {
+						cel::Expression::new_strict(expression).ctx("invalid config.logging.filter")
+					})
+					.transpose()?
+					.map(Arc::new),
 			level: match raw.logging.as_ref().and_then(|l| l.level.as_ref()) {
 				None => "".to_string(),
 				Some(RawLoggingLevel::Single(level)) => level.to_string(),
@@ -481,13 +558,15 @@ pub fn parse_config(
 				.as_ref()
 				.and_then(|l| l.format.clone())
 				.unwrap_or_default(),
-			database: database.clone(),
-			fields: logging_fields(raw.logging.as_ref().and_then(|f| f.fields.clone()))?,
-			database_fields: if database.is_some() {
-				database_logging_fields(raw.standard_attributes.as_ref())?
-			} else {
-				Default::default()
-			},
+			database: logging_database.clone(),
+				fields: logging_fields(raw.logging.as_ref().and_then(|f| f.fields.clone()))
+					.ctx("invalid config.logging.fields")?,
+				database_fields: if logging_database.is_some() {
+					database_logging_fields(raw.standard_attributes.as_ref())
+						.ctx("invalid config.standardAttributes")?
+				} else {
+					Default::default()
+				},
 		},
 		dns: client::Config {
 			resolver_cfg,
@@ -513,31 +592,34 @@ pub fn parse_config(
 			sources: model_catalog_sources,
 		},
 		database,
+		storage,
+		sensitive_headers,
 		session_encoder,
 		oidc_cookie_encoder,
-		hbone: Arc::new(agent_hbone::Config {
-			// window size: per-stream limit
-			window_size: parse("HTTP2_STREAM_WINDOW_SIZE")?
-				.or(raw.hbone.as_ref().and_then(|h| h.window_size))
-				.unwrap_or(4u32 * 1024 * 1024),
+			hbone: Arc::new(agent_hbone::Config {
+				// window size: per-stream limit
+				window_size: parse("HTTP2_STREAM_WINDOW_SIZE")
+					.ctx("invalid HTTP2_STREAM_WINDOW_SIZE")?
+					.or(raw.hbone.as_ref().and_then(|h| h.window_size))
+					.unwrap_or(4u32 * 1024 * 1024),
 			// connection window size: per connection.
 			// Setting this to the same value as window_size can introduce deadlocks in some applications
 			// where clients do not read data on streamA until they receive data on streamB.
 			// If streamA consumes the entire connection window, we enter a deadlock.
 			// A 4x limit should be appropriate without introducing too much potential buffering.
-			connection_window_size: parse("HTTP2_CONNECTION_WINDOW_SIZE")?
-				.or(raw.hbone.as_ref().and_then(|h| h.connection_window_size))
-				.unwrap_or(16u32 * 1024 * 1024),
-			frame_size: parse("HTTP2_FRAME_SIZE")?
-				.or(raw.hbone.as_ref().and_then(|h| h.frame_size))
-				.unwrap_or(1024u32 * 1024),
-			pool_max_streams_per_conn: parse("POOL_MAX_STREAMS_PER_CONNECTION")?
-				.or(raw.hbone.as_ref().and_then(|h| h.pool_max_streams_per_conn))
-				.unwrap_or(100u16),
-			pool_unused_release_timeout: parse_duration("POOL_UNUSED_RELEASE_TIMEOUT")?
-				.or(
-					raw
-						.hbone
+				connection_window_size: parse("HTTP2_CONNECTION_WINDOW_SIZE")?
+					.or(raw.hbone.as_ref().and_then(|h| h.connection_window_size))
+					.unwrap_or(16u32 * 1024 * 1024),
+				frame_size: parse("HTTP2_FRAME_SIZE")?
+					.or(raw.hbone.as_ref().and_then(|h| h.frame_size))
+					.unwrap_or(1024u32 * 1024),
+				pool_max_streams_per_conn: parse("POOL_MAX_STREAMS_PER_CONNECTION")?
+					.or(raw.hbone.as_ref().and_then(|h| h.pool_max_streams_per_conn))
+					.unwrap_or(100u16),
+				pool_unused_release_timeout: parse_duration("POOL_UNUSED_RELEASE_TIMEOUT")?
+					.or(
+						raw
+							.hbone
 						.as_ref()
 						.and_then(|h| h.pool_unused_release_timeout),
 				)
@@ -557,7 +639,11 @@ fn logging_fields(fields: Option<RawLoggingFields>) -> anyhow::Result<LoggingFie
 			fields
 				.add
 				.iter()
-				.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
+				.map(|(k, v)| {
+					cel::Expression::new_strict(v)
+						.ctx(format!("invalid expression for field {k}"))
+						.map(|v| (k.clone(), Arc::new(v)))
+				})
 				.collect::<Result<_, _>>()?,
 		),
 	})
@@ -586,7 +672,11 @@ fn database_logging_fields(
 		add: Arc::new(
 			add
 				.iter()
-				.map(|(k, v)| cel::Expression::new_strict(v).map(|v| (k.clone(), Arc::new(v))))
+				.map(|(k, v)| {
+					cel::Expression::new_strict(v)
+						.ctx(format!("invalid expression for field {k}"))
+						.map(|v| (k.clone(), Arc::new(v)))
+				})
 				.collect::<Result<OrderedStringMap<_>, _>>()?,
 		),
 	})
@@ -644,7 +734,7 @@ fn validate_uri(uri_str: Option<String>) -> anyhow::Result<Option<String>> {
 	let Some(uri_str) = uri_str else {
 		return Ok(uri_str);
 	};
-	let uri = http::Uri::try_from(&uri_str)?;
+	let uri = http::Uri::try_from(&uri_str).ctx(format!("invalid URI {uri_str}"))?;
 	if uri.scheme().is_none() {
 		return Ok(Some("https://".to_owned() + &uri_str));
 	}
@@ -770,7 +860,9 @@ fn normalize_tracing_endpoint(
 		return Ok((None, path));
 	};
 
-	let uri: http::Uri = endpoint.parse()?;
+	let uri: http::Uri = endpoint
+		.parse()
+		.ctx(format!("invalid tracing endpoint URI {endpoint}"))?;
 	let endpoint = match (uri.scheme_str(), uri.authority()) {
 		(Some(scheme), Some(authority)) => format!("{scheme}://{authority}"),
 		_ => endpoint,
@@ -870,6 +962,22 @@ fn parse_headers(prefix: &str) -> Result<Vec<(String, String)>, anyhow::Error> {
 	Ok(headers)
 }
 
+// tokio Mutex so async tests can hold the guard across an await without tripping
+// clippy::await_holding_lock (denied in CI).
+#[cfg(test)]
+static ENV_LOCK: std::sync::LazyLock<tokio::sync::Mutex<()>> =
+	std::sync::LazyLock::new(|| tokio::sync::Mutex::new(()));
+
+#[cfg(test)]
+pub(crate) fn lock_env_for_tests() -> tokio::sync::MutexGuard<'static, ()> {
+	ENV_LOCK.blocking_lock()
+}
+
+#[cfg(test)]
+pub(crate) async fn lock_env_for_tests_async() -> tokio::sync::MutexGuard<'static, ()> {
+	ENV_LOCK.lock().await
+}
+
 #[cfg(test)]
 mod parse_headers_tests {
 	use std::env;
@@ -950,14 +1058,11 @@ mod parse_headers_tests {
 mod tests {
 	use std::env;
 	use std::ffi::OsString;
-	use std::sync::{LazyLock, Mutex};
 
 	use super::*;
 
-	static ENV_LOCK: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
-
-	fn lock_env() -> std::sync::MutexGuard<'static, ()> {
-		ENV_LOCK.lock().expect("env mutex poisoned")
+	fn lock_env() -> tokio::sync::MutexGuard<'static, ()> {
+		lock_env_for_tests()
 	}
 
 	struct TempEnvVar {
@@ -1168,6 +1273,212 @@ config:
 	}
 
 	#[test]
+	fn storage_defaults_to_file_mode() {
+		let _env_lock = lock_env();
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+
+		assert_eq!(config.storage.mode, ConfigStoreMode::File);
+		assert!(config.database.is_none());
+	}
+
+	#[test]
+	fn xds_headers_are_loaded_from_environment() {
+		let _env_lock = lock_env();
+		let _address = TempEnvVar::set("XDS_ADDRESS", "http://127.0.0.1:15010");
+		let _namespace = TempEnvVar::set("NAMESPACE", "default");
+		let _gateway = TempEnvVar::set("GATEWAY", "agentgateway");
+		let _revision = TempEnvVar::set("XDS_HEADER_X_ISTIO_REVISION", "canary");
+		let _tenant = TempEnvVar::set("XDS_HEADER_X_TENANT", "team-a");
+
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+
+		assert!(
+			config
+				.xds
+				.headers
+				.contains(&("x-istio-revision".to_string(), "canary".to_string()))
+		);
+		assert!(
+			config
+				.xds
+				.headers
+				.contains(&("x-tenant".to_string(), "team-a".to_string()))
+		);
+	}
+
+	#[test]
+	fn invalid_xds_header_is_rejected_during_startup() {
+		let _env_lock = lock_env();
+		let _header = TempEnvVar::set("XDS_HEADER_X_TENANT", "bad\nvalue");
+
+		let err = parse_config("{}".to_string(), None).expect_err("invalid header should fail");
+
+		assert!(
+			err.to_string().contains("invalid XDS_HEADER_*"),
+			"unexpected error: {err}"
+		);
+	}
+
+	#[test]
+	fn storage_hybrid_uses_shared_database_url() {
+		let _env_lock = lock_env();
+		let config = parse_config(
+			r#"
+config:
+  database:
+    url: "sqlite::memory:"
+  storage:
+    mode: hybrid
+"#
+			.to_string(),
+			None,
+		)
+		.expect("hybrid config should parse with primary database");
+
+		assert_eq!(config.storage.mode, ConfigStoreMode::Hybrid);
+		assert_eq!(
+			config.database.as_ref().map(|db| db.url.as_str()),
+			Some("sqlite::memory:")
+		);
+		assert_eq!(
+			config.logging.database.as_ref().map(|db| db.url.as_str()),
+			Some("sqlite::memory:")
+		);
+		assert_eq!(config.database.as_ref(), config.logging.database.as_ref());
+
+		let err = parse_config(
+			r#"
+config:
+  storage:
+    mode: hybrid
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("hybrid config without database should fail");
+
+		assert!(
+			err
+				.to_string()
+				.contains("config.storage.mode=hybrid requires config.database.url"),
+			"unexpected error: {err}"
+		);
+
+		let err = parse_config(
+			r#"
+config:
+  logging:
+    database:
+      url: "sqlite::memory:"
+  storage:
+    mode: hybrid
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("hybrid config should require top-level database");
+
+		assert!(
+			err
+				.to_string()
+				.contains("config.storage.mode=hybrid requires config.database.url"),
+			"unexpected error: {err}"
+		);
+	}
+
+	#[test]
+	fn primary_and_logging_databases_can_differ() {
+		let _env_lock = lock_env();
+		let config = parse_config(
+			r#"
+config:
+  database:
+    url: "postgres://config.example/database"
+    maxConnections: 7
+  logging:
+    database:
+      url: "postgres://logs.example/database"
+      maxConnections: 11
+  storage:
+    mode: hybrid
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config should preserve both databases");
+
+		let database = config.database.as_ref().expect("primary database");
+		let logging_database = config.logging.database.as_ref().expect("logging database");
+		assert_eq!(database.url, "postgres://config.example/database");
+		assert_eq!(database.max_connections, Some(7));
+		assert_eq!(logging_database.url, "postgres://logs.example/database");
+		assert_eq!(logging_database.max_connections, Some(11));
+		assert_ne!(database, logging_database);
+	}
+
+	#[test]
+	fn legacy_logging_database_does_not_become_primary_database() {
+		let _env_lock = lock_env();
+		let config = parse_config(
+			r#"
+config:
+  logging:
+    database:
+      url: "sqlite::memory:"
+"#
+			.to_string(),
+			None,
+		)
+		.expect("legacy logging database should parse");
+
+		assert!(config.database.is_none());
+		assert_eq!(
+			config.logging.database.as_ref().map(|db| db.url.as_str()),
+			Some("sqlite::memory:")
+		);
+	}
+
+	#[test]
+	fn database_pool_sizes_must_be_usable() {
+		let _env_lock = lock_env();
+		let err = parse_config(
+			r#"
+config:
+  database:
+    url: "sqlite::memory:"
+    maxConnections: 0
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("zero-sized pool should fail");
+		assert!(
+			err
+				.to_string()
+				.contains("config.database.maxConnections must be greater than zero")
+		);
+
+		let err = parse_config(
+			r#"
+config:
+  database:
+    url: "postgres://database.example/database"
+    maxConnections: 1
+  storage:
+    mode: hybrid
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("PostgreSQL hybrid pool needs a slot besides its listener");
+		assert!(
+			err
+				.to_string()
+				.contains("maxConnections must be at least 2 for PostgreSQL hybrid storage")
+		);
+	}
+
+	#[test]
 	fn dynamic_ca_cert_cache_uses_defaults_without_env() {
 		let _env_lock = lock_env();
 		let defaults = crate::DynamicCaCertCacheConfig::default();
@@ -1247,6 +1558,85 @@ config:
 		unsafe {
 			env::remove_var("SESSION_KEY");
 		}
+	}
+
+	#[test]
+	fn expands_environment_variables_in_config() {
+		let _env_lock = lock_env();
+		let _network = TempEnvVar::set("TEST_EXPAND_NETWORK", "expanded-network");
+
+		let config = parse_config(
+			r#"
+config:
+  network: "${TEST_EXPAND_NETWORK}"
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config should parse");
+
+		assert_eq!(config.network.as_str(), "expanded-network");
+	}
+
+	#[test]
+	fn expands_environment_variables_with_default_values() {
+		let _env_lock = lock_env();
+		unsafe {
+			env::remove_var("TEST_EXPAND_UNSET");
+		}
+
+		let config = parse_config(
+			r#"
+config:
+  network: "${TEST_EXPAND_UNSET:-fallback-network}"
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config should parse");
+
+		assert_eq!(config.network.as_str(), "fallback-network");
+	}
+
+	#[test]
+	fn does_not_expand_schema_comment() {
+		let _env_lock = lock_env();
+
+		// The schema comment contains a `$schema` token that must not be treated as a variable.
+		let config = parse_config(
+			r#"# yaml-language-server: $schema=https://example.com/schema.json
+config:
+  network: "static-network"
+"#
+			.to_string(),
+			None,
+		)
+		.expect("config with schema comment should parse");
+
+		assert_eq!(config.network.as_str(), "static-network");
+	}
+
+	#[test]
+	fn errors_on_unset_environment_variable() {
+		let _env_lock = lock_env();
+		unsafe {
+			env::remove_var("TEST_EXPAND_MISSING");
+		}
+
+		let err = parse_config(
+			r#"
+config:
+  network: "${TEST_EXPAND_MISSING}"
+"#
+			.to_string(),
+			None,
+		)
+		.expect_err("unset variable should fail expansion");
+
+		assert!(
+			err.to_string().contains("environment variable not found"),
+			"unexpected error: {err}"
+		);
 	}
 
 	#[test]
@@ -1366,5 +1756,29 @@ config:
 		unsafe {
 			env::remove_var("SESSION_KEY");
 		}
+	}
+
+	#[test]
+	fn spiffe_disabled_without_endpoint() {
+		let _env = lock_env();
+		let config = parse_config("{}".to_string(), None).expect("config should parse");
+		assert!(
+			config.spiffe.is_none(),
+			"SPIFFE must be disabled when no socket is configured"
+		);
+	}
+
+	#[test]
+	fn spiffe_enabled_from_raw_endpoint_field() {
+		let _env = lock_env();
+		let config = parse_config(
+			"config:\n  spiffe:\n    endpoint: unix:///run/spire/agent.sock\n".to_string(),
+			None,
+		)
+		.expect("config should parse");
+		let spiffe = config
+			.spiffe
+			.expect("spiffe.endpoint should enable the SPIFFE Workload API");
+		assert_eq!(spiffe.endpoint, "unix:///run/spire/agent.sock");
 	}
 }

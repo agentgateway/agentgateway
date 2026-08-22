@@ -1,0 +1,220 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: mixed
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: http
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      kinds:
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      namespaces:
+        from: Same
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayModel
+metadata:
+  name: gpt-5-mini
+  namespace: default
+spec:
+  parentRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: mixed
+    sectionName: http
+  provider: OpenAI
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: health
+  namespace: default
+spec:
+  parentRefs:
+  - name: mixed
+    sectionName: http
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /healthz
+    backendRefs:
+    - name: http-backend
+      port: 8080
+---
+# Output
+output:
+- gateway:
+    Name: mixed
+    Namespace: default
+  resource:
+    backend:
+      ai:
+        providerGroups:
+        - providers:
+          - name: backend
+            openai: {}
+      key: default/gpt-5-mini/backend.http
+      name:
+        name: gpt-5-mini
+        namespace: default
+- gateway:
+    Name: mixed
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/mixed
+      port: 80
+- gateway:
+    Name: mixed
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/mixed
+      key: default/mixed.http
+      name:
+        gatewayName: mixed
+        gatewayNamespace: default
+        listenerName: http
+      protocol: HTTP
+- gateway:
+    Name: mixed
+    Namespace: default
+  resource:
+    modelRoute:
+      concreteModel:
+        backend:
+          backend: default/gpt-5-mini/backend.http
+      key: default/gpt-5-mini.http
+      listenerKey: default/mixed.http
+      match:
+        model: gpt-5-mini
+- gateway:
+    Name: mixed
+    Namespace: default
+  resource:
+    route:
+      backends:
+      - backend:
+          port: 8080
+          service:
+            hostname: http-backend.default.svc.cluster.local
+            namespace: default
+        weight: 1
+      key: default/health.00.http
+      listenerKey: default/mixed.http
+      matches:
+      - path:
+          pathPrefix: /healthz
+      name:
+        kind: HTTPRoute
+        name: health
+        namespace: default
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayModel
+  metadata:
+    name: gpt-5-mini
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: Successfully accepted AgentgatewayModel
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: mixed
+        namespace: default
+        sectionName: http
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: mixed
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 2
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: http
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: agentgateway.dev
+        kind: AgentgatewayModel
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: HTTPRoute
+  metadata:
+    name: health
+    namespace: default
+  spec: null
+  status:
+    parents:
+    - conditions:
+      - lastTransitionTime: fake
+        message: ""
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: ""
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      controllerName: agentgateway.dev/agentgateway
+      parentRef:
+        group: gateway.networking.k8s.io
+        kind: Gateway
+        name: mixed
+        namespace: default
+        sectionName: http

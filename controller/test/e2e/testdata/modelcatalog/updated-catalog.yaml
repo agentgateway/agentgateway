@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: catalog
+  namespace: default
+data:
+  catalog.json: |
+    {
+      "providers": {
+        "openai": {
+          "models": {
+            "gpt-4o-mini": {
+              "rates": {
+                "input": "1",
+                "output": "1"
+              }
+            }
+          }
+        }
+      }
+    }

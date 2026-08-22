@@ -355,6 +355,7 @@ impl HttpConnection {
 			HttpConnection::Http2(h) => h.load.remaining_capacity(),
 		}
 	}
+	#[allow(clippy::result_large_err)]
 	pub fn try_send_request(
 		&mut self,
 		req: Request<RequestBody>,
@@ -434,7 +435,7 @@ impl H2Load {
 		let max = self.max_streams.load(Ordering::Acquire);
 		let prev = self
 			.active_streams
-			.fetch_update(Ordering::AcqRel, Ordering::Acquire, |active| {
+			.try_update(Ordering::AcqRel, Ordering::Acquire, |active| {
 				if active < max { Some(active + 1) } else { None }
 			});
 

@@ -64,16 +64,43 @@ pub fn with_trace<R>(debug_tracer: Option<DebugTracer>, f: impl FnOnce() -> R) -
 	}
 }
 
-pub fn timed_start() -> Option<Instant> {
-	is_active().then(Instant::now)
+async fn with_trace_future<F: Future>(debug_tracer: Option<DebugTracer>, future: F) -> F::Output {
+	match debug_tracer {
+		Some(debug_tracer) => ACTIVE.scope(Some(debug_tracer), future).await,
+		None => future.await,
+	}
 }
 
-pub fn start_scope(name: impl Into<String>) -> ScopeGuard {
-	ACTIVE
-		.try_with(|active| active.as_ref().map(|trace| trace.start_scope(name.into())))
-		.ok()
-		.flatten()
-		.unwrap_or_else(ScopeGuard::noop)
+/// Spawn a task that inherits the caller's active debug trace.
+/// Use this instead of `tokio::spawn` for request-scoped work that emits dtrace events.
+pub fn spawn<F>(future: F) -> tokio::task::JoinHandle<F::Output>
+where
+	F: Future + Send + 'static,
+	F::Output: Send + 'static,
+{
+	let debug_tracer = DebugTracer::active().map(|trace| trace.detached());
+	tokio::task::spawn(with_trace_future(debug_tracer, future))
+}
+
+/// Run a future in an optional child dtrace scope of the currently active trace.
+/// The trace state is detached so concurrently-polled sibling futures cannot leak scopes into each other.
+pub async fn scope_future<F: Future>(name: Option<&str>, future: F) -> F::Output {
+	let Some(name) = name else {
+		return future.await;
+	};
+	let debug_tracer = DebugTracer::active().map(|trace| trace.detached());
+	match debug_tracer {
+		Some(debug_tracer) => {
+			ACTIVE
+				.scope(Some(debug_tracer.scoped(name.to_string())), future)
+				.await
+		},
+		None => future.await,
+	}
+}
+
+pub fn timed_start() -> Option<Instant> {
+	is_active().then(Instant::now)
 }
 
 pub fn policy_response_details(pr: &crate::http::PolicyResponse) -> String {
@@ -348,6 +375,9 @@ pub enum MessageType {
 		kind: String,
 		details: PolicyEventDetails,
 	},
+	TraceSampling {
+		decision: String,
+	},
 	AuthorizationResult {
 		rules: Vec<AuthorizationRuleResult>,
 		result: AuthorizationResult,
@@ -366,17 +396,20 @@ pub enum MessageType {
 	LlmRequestDetected {
 		provider: String,
 		inputFormat: String,
-		nativeFormat: Option<String>,
+		upstreamRouteType: Option<String>,
 		requestModel: String,
 		streaming: bool,
 	},
 	LlmStreamingTranslation {
 		provider: String,
 		inputFormat: String,
-		nativeFormat: Option<String>,
+		upstreamRouteType: Option<String>,
 		streamFormat: String,
 	},
-	RequestFinished,
+	RequestFinished {
+		status: Option<u16>,
+		error: Option<String>,
+	},
 }
 
 impl MessageType {
@@ -397,7 +430,7 @@ impl MessageType {
 			| MessageType::LlmStreamingTranslation { .. }
 			| MessageType::Policy { .. }
 			| MessageType::PolicyEvent { .. }
-			| MessageType::RequestFinished => Severity::Info,
+			| MessageType::TraceSampling { .. } => Severity::Info,
 
 			MessageType::AuthorizationResult {
 				result: AuthorizationResult::Allow,
@@ -413,7 +446,8 @@ impl MessageType {
 				..
 			} => Severity::Error,
 			MessageType::Cel { result, .. } => cel_severity(result),
-			MessageType::BackendCallResult { status, error, .. } => {
+			MessageType::BackendCallResult { status, error, .. }
+			| MessageType::RequestFinished { status, error, .. } => {
 				if error.is_some() || status.is_some_and(|status| status >= 500) {
 					Severity::Error
 				} else if status.is_some_and(|status| status >= 400) {
@@ -443,29 +477,7 @@ pub struct DebugTracer {
 
 #[derive(Debug)]
 struct ScopeState {
-	next_id: u64,
-	stack: Vec<ScopeFrame>,
-}
-
-#[derive(Debug)]
-struct ScopeFrame {
-	id: u64,
-	name: String,
-}
-
-#[must_use = "dropping the guard closes the scope"]
-pub struct ScopeGuard {
-	scope_state: Option<Arc<Mutex<ScopeState>>>,
-	id: Option<u64>,
-}
-
-impl ScopeGuard {
-	fn noop() -> Self {
-		Self {
-			scope_state: None,
-			id: None,
-		}
-	}
+	stack: Vec<String>,
 }
 
 struct Watcher {
@@ -484,9 +496,15 @@ pub struct TraceReceiver {
 }
 
 impl TraceReceiver {
-	#[cfg(test)]
 	pub async fn recv(&mut self) -> Option<Message> {
 		self.receiver.recv().await
+	}
+
+	#[cfg(test)]
+	pub(crate) fn closed_for_test() -> Self {
+		let (sender, receiver) = tokio::sync::mpsc::channel(1);
+		drop(sender);
+		Self { id: 0, receiver }
 	}
 }
 
@@ -570,28 +588,30 @@ impl DebugTracer {
 		let ins = DebugTracer {
 			sender: tx,
 			start: Instant::now(),
-			scope_state: Arc::new(Mutex::new(ScopeState {
-				next_id: 0,
-				stack: Vec::new(),
-			})),
+			scope_state: Arc::new(Mutex::new(ScopeState { stack: Vec::new() })),
 		};
 		ACTIVE.scope(Some(ins), f(req)).await
 	}
 	pub fn active() -> Option<Self> {
 		ACTIVE.try_with(Clone::clone).ok().flatten()
 	}
-	pub fn start_scope(&self, name: impl Into<String>) -> ScopeGuard {
-		let mut scope_state = self.scope_state.lock().expect("scope mutex poisoned");
-		let id = scope_state.next_id;
-		scope_state.next_id += 1;
-		scope_state.stack.push(ScopeFrame {
-			id,
-			name: name.into(),
-		});
-		ScopeGuard {
-			scope_state: Some(Arc::clone(&self.scope_state)),
-			id: Some(id),
+	fn detached(&self) -> Self {
+		let scope_state = self.scope_state.lock().expect("scope mutex poisoned");
+		Self {
+			sender: self.sender.clone(),
+			start: self.start,
+			scope_state: Arc::new(Mutex::new(ScopeState {
+				stack: scope_state.stack.clone(),
+			})),
 		}
+	}
+	fn scoped(&self, name: String) -> Self {
+		let scoped = self.detached();
+		{
+			let mut scope_state = scoped.scope_state.lock().expect("scope mutex poisoned");
+			scope_state.stack.push(name);
+		}
+		scoped
 	}
 	fn current_scope(&self) -> Vec<String> {
 		self
@@ -599,9 +619,7 @@ impl DebugTracer {
 			.lock()
 			.expect("scope mutex poisoned")
 			.stack
-			.iter()
-			.map(|frame| frame.name.clone())
-			.collect()
+			.clone()
 	}
 	fn send(&self, msg: MessageType) {
 		self.send_with_timings(None, Instant::now(), msg)
@@ -631,8 +649,8 @@ impl DebugTracer {
 	pub fn request_started(&self) {
 		self.send(MessageType::RequestStarted)
 	}
-	pub fn request_completed(&self) {
-		self.send(MessageType::RequestFinished)
+	pub fn request_completed(&self, status: Option<u16>, error: Option<String>) {
+		self.send(MessageType::RequestFinished { status, error })
 	}
 	pub fn cel_eval(
 		&self,
@@ -711,6 +729,11 @@ impl DebugTracer {
 			},
 		)
 	}
+	pub fn trace_sampling(&self, decision: &str) {
+		self.send(MessageType::TraceSampling {
+			decision: decision.to_owned(),
+		})
+	}
 	pub fn authorization_result(
 		&self,
 		rules: Vec<AuthorizationRuleResult>,
@@ -748,14 +771,14 @@ impl DebugTracer {
 		&self,
 		provider: String,
 		input_format: String,
-		native_format: Option<String>,
+		upstream_route_type: Option<String>,
 		request_model: String,
 		streaming: bool,
 	) {
 		self.send(MessageType::LlmRequestDetected {
 			provider,
 			inputFormat: input_format,
-			nativeFormat: native_format,
+			upstreamRouteType: upstream_route_type,
 			requestModel: request_model,
 			streaming,
 		})
@@ -764,30 +787,15 @@ impl DebugTracer {
 		&self,
 		provider: String,
 		input_format: String,
-		native_format: Option<String>,
+		upstream_route_type: Option<String>,
 		stream_format: String,
 	) {
 		self.send(MessageType::LlmStreamingTranslation {
 			provider,
 			inputFormat: input_format,
-			nativeFormat: native_format,
+			upstreamRouteType: upstream_route_type,
 			streamFormat: stream_format,
 		})
-	}
-}
-
-impl Drop for ScopeGuard {
-	fn drop(&mut self) {
-		let Some(scope_state) = self.scope_state.as_ref() else {
-			return;
-		};
-		let Some(id) = self.id.take() else {
-			return;
-		};
-		let mut scope_state = scope_state.lock().expect("scope mutex poisoned");
-		if let Some(idx) = scope_state.stack.iter().position(|frame| frame.id == id) {
-			scope_state.stack.remove(idx);
-		}
 	}
 }
 
@@ -797,33 +805,50 @@ mod tests {
 	use crate::cel::{Executor, Expression};
 	use crate::http::Body;
 
-	#[test]
-	fn scope_guard_drop_only_removes_its_own_frame() {
-		let (tx, _rx) = tokio::sync::mpsc::channel(1);
+	#[tokio::test]
+	async fn scope_future_isolates_concurrent_captured_scopes() {
+		let (tx, mut rx) = tokio::sync::mpsc::channel(2);
 		let tracer = DebugTracer {
 			sender: tx,
 			start: Instant::now(),
-			scope_state: Arc::new(Mutex::new(ScopeState {
-				next_id: 0,
-				stack: Vec::new(),
-			})),
+			scope_state: Arc::new(Mutex::new(ScopeState { stack: Vec::new() })),
 		};
 
-		let first = tracer.start_scope("first");
-		let second = tracer.start_scope("second");
+		let emit = |name| {
+			let tracer = tracer.clone();
+			async move {
+				with_trace_future(Some(tracer), async {
+					scope_future(Some(name), async {
+						tokio::task::yield_now().await;
+						trace(|trace| trace.request_started());
+					})
+					.await;
+				})
+				.await;
+			}
+		};
+		tokio::join!(emit("first"), emit("second"));
 
-		drop(first);
-		assert_eq!(tracer.current_scope(), vec!["second"]);
-
-		drop(second);
-		assert!(tracer.current_scope().is_empty());
+		let mut scopes = vec![
+			rx.recv().await.unwrap().scope,
+			rx.recv().await.unwrap().scope,
+		];
+		scopes.sort();
+		assert_eq!(
+			scopes,
+			vec![vec!["first".to_string()], vec!["second".to_string()]]
+		);
 	}
 
 	#[tokio::test]
 	async fn cel_eval_emits_events_while_debug_trace_is_active() {
-		let mut trace_rx = track_expression(None);
+		// Scope the watcher to a unique path so concurrent tests can't consume its one-shot sender.
+		const PATH: &str = "/cel-eval-emits-events-probe";
+		let mut trace_rx = track_expression(Some(
+			Expression::new_strict(format!("request.path == '{PATH}'")).expect("filter compiles"),
+		));
 		let req = http::Request::builder()
-			.uri("http://example.com/test")
+			.uri(format!("http://example.com{PATH}"))
 			.body(Body::empty())
 			.expect("request should build");
 		let expr = Expression::new_strict("request.path").expect("expression should compile");
@@ -831,7 +856,7 @@ mod tests {
 		DebugTracer::maybe_scope(req, |req| async move {
 			let executor = Executor::new_request(&req);
 			let value = executor.eval(&expr).expect("expression should evaluate");
-			assert_eq!(value.as_str().unwrap(), "/test");
+			assert_eq!(value.as_str().unwrap(), PATH);
 		})
 		.await;
 
@@ -839,7 +864,7 @@ mod tests {
 			while let Some(msg) = trace_rx.recv().await {
 				if let MessageType::Cel { expr, result, .. } = msg.message {
 					assert_eq!(expr, "request.path");
-					assert_eq!(result, serde_json::json!("/test"));
+					assert_eq!(result, serde_json::json!(PATH));
 					return;
 				}
 			}
@@ -855,10 +880,7 @@ mod tests {
 		let tracer = DebugTracer {
 			sender: tx,
 			start: Instant::now(),
-			scope_state: Arc::new(Mutex::new(ScopeState {
-				next_id: 0,
-				stack: Vec::new(),
-			})),
+			scope_state: Arc::new(Mutex::new(ScopeState { stack: Vec::new() })),
 		};
 		let req = http::Request::builder()
 			.uri("http://example.com/deferred")

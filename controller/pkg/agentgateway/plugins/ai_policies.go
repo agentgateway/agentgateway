@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -47,10 +48,28 @@ func processRequestGuard(ctx PolicyCtx, namespace string, reqs []agentgateway.Pr
 				Status: uint32(req.CustomResponse.StatusCode), // nolint:gosec // G115: kubebuilder validation ensures safe for uint32
 			}
 		}
+		for _, scope := range req.Scope {
+			pgReq.Scope = append(pgReq.Scope, processContentScope(scope))
+		}
 		res = append(res, pgReq)
 	}
 
 	return res, nil
+}
+
+func processContentScope(scope agentgateway.ContentScope) api.BackendPolicySpec_Ai_ContentScope {
+	switch scope {
+	case agentgateway.ContentScopeSystemPrompt:
+		return api.BackendPolicySpec_Ai_CONTENT_SCOPE_SYSTEM_PROMPT
+	case agentgateway.ContentScopeMessages:
+		return api.BackendPolicySpec_Ai_CONTENT_SCOPE_MESSAGES
+	case agentgateway.ContentScopeToolOutput:
+		return api.BackendPolicySpec_Ai_CONTENT_SCOPE_TOOL_OUTPUT
+	case agentgateway.ContentScopeToolInput:
+		return api.BackendPolicySpec_Ai_CONTENT_SCOPE_TOOL_INPUT
+	default:
+		return api.BackendPolicySpec_Ai_CONTENT_SCOPE_UNSPECIFIED
+	}
 }
 
 func processResponseGuard(ctx PolicyCtx, namespace string, resps []agentgateway.PromptguardResponse) ([]*api.BackendPolicySpec_Ai_ResponseGuard, error) {
@@ -126,6 +145,14 @@ func processWebhook(ctx PolicyCtx, namespace string, webhook *agentgateway.Webho
 	w := &api.BackendPolicySpec_Ai_Webhook{
 		Backend:     be,
 		FailureMode: webhookFailureMode(webhook.FailureMode),
+	}
+
+	var errs []error
+	w.Headers = castCELMap(webhook.Headers, func(key string, expr agentgateway.CELExpression) {
+		errs = append(errs, fmt.Errorf("webhook header %q is not a valid CEL expression: %s", key, expr))
+	})
+	if err := errors.Join(errs...); err != nil {
+		return nil, err
 	}
 
 	if len(webhook.ForwardHeaderMatches) > 0 {
@@ -231,10 +258,7 @@ func processModeration(ctx PolicyCtx, namespace string, moderation *agentgateway
 	pgModeration.Model = moderation.Model
 
 	if moderation.Policies != nil {
-		pol := &agentgateway.BackendFull{
-			BackendSimple: *moderation.Policies,
-		}
-		pols, err := TranslateInlineBackendPolicy(ctx, namespace, pol)
+		pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, moderation.Policies)
 		if err != nil {
 			logger.Warn("failed to translate policy", "err", err)
 		} else {
@@ -257,10 +281,7 @@ func processBedrockGuardrails(ctx PolicyCtx, namespace string, guardrails *agent
 	}
 
 	if guardrails.Policies != nil {
-		pol := &agentgateway.BackendFull{
-			BackendSimple: *guardrails.Policies,
-		}
-		pols, err := TranslateInlineBackendPolicy(ctx, namespace, pol)
+		pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, guardrails.Policies)
 		if err != nil {
 			logger.Warn("failed to translate policy", "err", err)
 		} else {
@@ -289,10 +310,7 @@ func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgatewa
 	}
 
 	if armor.Policies != nil {
-		pol := &agentgateway.BackendFull{
-			BackendSimple: *armor.Policies,
-		}
-		pols, err := TranslateInlineBackendPolicy(ctx, namespace, pol)
+		pols, err := translateAuxiliaryBackendPolicies(ctx, namespace, armor.Policies)
 		if err != nil {
 			logger.Warn("failed to translate policy", "err", err)
 		} else {
@@ -301,4 +319,22 @@ func processGoogleModelArmor(ctx PolicyCtx, namespace string, armor *agentgatewa
 	}
 
 	return pgArmor
+}
+
+type backendSimplePolicy interface {
+	BackendSimple() *agentgateway.BackendSimple
+}
+
+func translateAuxiliaryBackendPolicies(ctx PolicyCtx, namespace string, policies backendSimplePolicy) ([]*api.BackendPolicySpec, error) {
+	if policies == nil {
+		return nil, nil
+	}
+	backend := policies.BackendSimple()
+	if backend == nil {
+		return nil, nil
+	}
+	pol := &agentgateway.BackendFull{
+		BackendSimple: *backend,
+	}
+	return TranslateInlineBackendPolicy(ctx, namespace, pol)
 }

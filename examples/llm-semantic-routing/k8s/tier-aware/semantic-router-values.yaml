@@ -1,0 +1,87 @@
+# Shared Helm values for the Basic, Standard, and Pro semantic routers.
+router:
+  skipProcessing:
+    enabled: true
+
+# This example uses keyword signals only, so it does not need an embedding
+# model override or persistent model storage.
+env: []
+
+args:
+- --secure=false
+
+persistence:
+  enabled: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+config:
+  version: v0.3
+  listeners: []
+
+  # IntelligentPool overlays the default model and tier-specific model
+  # metadata. Keep only the shared default here because static provider
+  # metadata is merged with (rather than replaced by) the pool.
+  providers:
+    defaults:
+      default_model: gpt-4.1
+      reasoning_families:
+        gpt:
+          type: reasoning_effort
+          parameter: reasoning_effort
+    models:
+    - name: gpt-4.1
+      provider_model_id: gpt-4.1
+      api_format: openai
+
+  routing:
+    # The router validates its default model before the Kubernetes CRD
+    # reconciler applies the tier-specific IntelligentPool. Declare the
+    # logical aliases here so each instance can bootstrap cleanly.
+    modelCards:
+      - name: gpt-4.1
+      - name: gpt-5.4
+      - name: claude-haiku-4.5
+      - name: claude-sonnet-4.6
+    signals: {}
+    projections: {}
+    decisions: []
+
+  global:
+    router:
+      config_source: kubernetes
+      auto_model_name: auto
+      strategy: priority
+      clear_route_cache: false
+      model_selection:
+        enabled: false
+      streamed_body:
+        enabled: true
+        max_bytes: 10485760
+        timeout_sec: 30
+      skip_processing:
+        enabled: true
+    services:
+      # Entitlement enforcement belongs to Agentgateway in this example.
+      # Disable the chart's sample local rate-limit rules.
+      ratelimit:
+        providers: []
+    model_catalog:
+      kbs: []
+      embeddings: null
+      modules: null
+    integrations:
+      tools:
+        enabled: false
+    stores:
+      memory: null
+      semantic_cache:
+        enabled: false
+      vector_store:
+        enabled: false

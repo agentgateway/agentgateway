@@ -1,0 +1,66 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/completions/cache_write.json
+info:
+  id: chatcmpl-cache-write
+  object: chat.completion
+  created: 1784217600
+  model: gpt-5.6
+  choices:
+    - index: 0
+      message:
+        role: assistant
+        content: cached response
+      finish_reason: stop
+  usage:
+    prompt_tokens: 1000
+    completion_tokens: 10
+    total_tokens: 1010
+    prompt_tokens_details:
+      cached_tokens: 300
+      cache_write_tokens: 200
+    completion_tokens_details:
+      reasoning_tokens: 0
+  service_tier: default
+---
+{
+  "response": {
+    "model": "gpt-5.6",
+    "service_tier": "default",
+    "usage": {
+      "prompt_tokens": 1000,
+      "completion_tokens": 10,
+      "total_tokens": 1010,
+      "completion_tokens_details": {
+        "reasoning_tokens": 0
+      },
+      "prompt_tokens_details": {
+        "cached_tokens": 300,
+        "cache_write_tokens": 200
+      }
+    },
+    "choices": [
+      {
+        "message": {
+          "content": "cached response",
+          "role": "assistant"
+        },
+        "index": 0,
+        "finish_reason": "stop"
+      }
+    ],
+    "id": "[id]",
+    "object": "chat.completion",
+    "created": "[date]"
+  },
+  "parsed": {
+    "input_tokens": 1000,
+    "output_tokens": 10,
+    "total_tokens": 1010,
+    "reasoning_tokens": 0,
+    "cache_creation_input_tokens": 200,
+    "cached_input_tokens": 300,
+    "service_tier": "default",
+    "provider_model": "gpt-5.6"
+  }
+}

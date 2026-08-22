@@ -1,0 +1,76 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/requests/messages/structured-output.json
+info:
+  model: anthropic.claude-3-sonnet
+  max_tokens: 100
+  temperature: 0.7
+  top_p: 0.8
+  top_k: 50
+  output_config:
+    effort: high
+    format:
+      type: json_schema
+      schema:
+        type: object
+        properties:
+          answer:
+            type: number
+        required:
+          - answer
+        additionalProperties: false
+  messages:
+    - role: user
+      content: What is 2+2?
+---
+{
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "What is 2+2?"
+      }
+    ],
+    "model": "anthropic.claude-3-sonnet",
+    "top_p": 0.8,
+    "temperature": 0.7,
+    "max_tokens": 100,
+    "top_k": 50,
+    "output_config": {
+      "effort": "high",
+      "format": {
+        "type": "json_schema",
+        "schema": {
+          "type": "object",
+          "properties": {
+            "answer": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "answer"
+          ],
+          "additionalProperties": false
+        }
+      }
+    }
+  },
+  "parsed": {
+    "input_format": "Messages",
+    "cache_convention": "InputIncludesCache",
+    "request_model": "anthropic.claude-3-sonnet",
+    "provider": "anthropic",
+    "streaming": false,
+    "params": {
+      "temperature": 0.699999988079071,
+      "top_p": 0.800000011920929,
+      "max_tokens": 100
+    },
+    "prompt": [
+      {
+        "role": "user",
+        "content": "What is 2+2?"
+      }
+    ]
+  }
+}

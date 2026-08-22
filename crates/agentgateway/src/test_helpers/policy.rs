@@ -24,7 +24,7 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	use frozen_collections::FzHashSet;
 	use prometheus_client::registry::Registry;
 
-	use crate::llm::cost::ModelCatalog;
+	use crate::llm::catalog::ModelCatalog;
 	use crate::telemetry::log;
 	use crate::telemetry::log::{LoggingFields, RequestLog};
 	use crate::telemetry::metrics::Metrics;
@@ -40,7 +40,11 @@ fn make_min_req_log() -> crate::telemetry::log::RequestLog {
 	};
 	let cel = log::CelLogging::new(log_cfg, MetricsConfig::default());
 	let mut prom = Registry::default();
-	let metrics = Arc::new(Metrics::new(&mut prom, FzHashSet::default()));
+	let metrics = Arc::new(Metrics::new(
+		&mut prom,
+		FzHashSet::default(),
+		Default::default(),
+	));
 	let model_catalog = ModelCatalog::empty();
 	let start = agent_core::Timestamp::now();
 	let tcp_info = TCPConnectionInfo {

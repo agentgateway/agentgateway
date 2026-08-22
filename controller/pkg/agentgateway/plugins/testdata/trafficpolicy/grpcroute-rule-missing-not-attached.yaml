@@ -1,0 +1,76 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: GRPCRoute
+metadata:
+  name: grpc-named-rules
+  namespace: default
+spec:
+  parentRefs:
+    - name: test
+  rules:
+    - name: rule-one
+      backendRefs:
+        - name: reviews
+          port: 8080
+---
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayPolicy
+metadata:
+  name: agw
+  namespace: default
+spec:
+  targetRefs:
+  - kind: GRPCRoute
+    name: grpc-named-rules
+    group: gateway.networking.k8s.io
+    sectionName: no-such-rule
+  traffic:
+    timeouts:
+      request: 5s
+
+---
+# Output
+output:
+- gateway:
+    Name: test
+    Namespace: default
+  resource:
+    policy:
+      key: traffic/default/agw:timeout:default/grpc-named-rules/no-such-rule
+      name:
+        kind: AgentgatewayPolicy
+        name: agw
+        namespace: default
+      target:
+        route:
+          kind: GRPCRoute
+          name: grpc-named-rules
+          namespace: default
+          routeRule: no-such-rule
+      traffic:
+        timeout:
+          request: 5s
+status:
+- apiVersion: agentgateway.dev/v1alpha1
+  kind: AgentgatewayPolicy
+  metadata:
+    name: agw
+    namespace: default
+  spec: null
+  status:
+    ancestors:
+    - ancestorRef:
+        group: agentgateway.dev
+        name: StatusSummary
+      conditions:
+      - lastTransitionTime: fake
+        message: Policy accepted
+        reason: Valid
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: 'Policy is not attached: sectionName "no-such-rule" not found in
+          GRPCRoute default/grpc-named-rules'
+        reason: Pending
+        status: "False"
+        type: Attached
+      controllerName: agentgateway.dev/agentgateway

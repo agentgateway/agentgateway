@@ -1,0 +1,12 @@
+model_list:
+- model_name: chat
+  litellm_params:
+    model: openai/gpt-4o
+    rpm: 100
+- model_name: chat
+  litellm_params:
+    model: openai/gpt-4o-mini
+    rpm: 50
+    tpm: 10000
+router_settings:
+  routing_strategy: least-busy

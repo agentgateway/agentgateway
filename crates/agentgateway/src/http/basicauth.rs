@@ -1,12 +1,11 @@
 use base64::Engine;
 use htpasswd_verify_fork::Htpasswd;
-use macro_rules_attribute::apply;
 
 use crate::http::Request;
 use crate::http::auth::AuthorizationLocation;
 use crate::proxy::dtrace::{self};
 use crate::proxy::{ProxyError, ProxyResponse};
-use crate::*;
+use crate::{apply, *};
 
 #[cfg(test)]
 #[path = "basicauth_tests.rs"]
@@ -15,10 +14,28 @@ mod tests;
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
 	#[error("no basic authentication credentials found")]
-	Missing { realm: String },
+	Missing { realm: String, proxy: bool },
 
 	#[error("invalid credentials")]
-	InvalidCredentials { realm: String },
+	InvalidCredentials { realm: String, proxy: bool },
+}
+
+impl Error {
+	pub fn realm(&self) -> &str {
+		match self {
+			Error::Missing { realm, .. } => realm,
+			Error::InvalidCredentials { realm, .. } => realm,
+		}
+	}
+
+	/// Whether the credentials were addressed to the gateway acting as a forward proxy, which
+	/// requires a `407` + `Proxy-Authenticate` challenge instead of `401` + `WWW-Authenticate`.
+	pub fn is_proxy(&self) -> bool {
+		match self {
+			Error::Missing { proxy, .. } => *proxy,
+			Error::InvalidCredentials { proxy, .. } => *proxy,
+		}
+	}
 }
 
 /// Validation mode for Basic Auth.
@@ -86,6 +103,7 @@ impl BasicAuthentication {
 	}
 
 	async fn verify(&self, req: &mut Request) -> Result<Option<Claims>, ProxyError> {
+		let proxy = self.authorization_location.is_proxy_header();
 		let Some(encoded_credentials) = self.authorization_location.extract(req) else {
 			// In strict mode, we require credentials
 			if self.mode == Mode::Strict {
@@ -96,6 +114,7 @@ impl BasicAuthentication {
 				);
 				return Err(ProxyError::BasicAuthenticationFailure(Error::Missing {
 					realm: self.realm.clone().unwrap_or_else(default_realm),
+					proxy,
 				}));
 			}
 			// Otherwise without credentials, don't attempt to authenticate
@@ -110,6 +129,7 @@ impl BasicAuthentication {
 		let invalid_credentials = || {
 			ProxyError::BasicAuthenticationFailure(Error::InvalidCredentials {
 				realm: self.realm.clone().unwrap_or_else(default_realm),
+				proxy,
 			})
 		};
 		let (username, password) = base64::engine::general_purpose::STANDARD

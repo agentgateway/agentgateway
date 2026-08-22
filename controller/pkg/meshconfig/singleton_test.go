@@ -8,7 +8,6 @@ import (
 	"istio.io/istio/pkg/kube/krt"
 	"istio.io/istio/pkg/test"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/krtutil"
 )
@@ -20,8 +19,8 @@ func (alwaysSynced) HasSynced() bool                           { return true }
 
 func cm(ns, name, mesh string) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{Namespace: ns, Name: name},
-		Data:       map[string]string{IstioMeshConfigMapKey: mesh},
+		Namespace: ns, Name: name,
+		Data: map[string]string{IstioMeshConfigMapKey: mesh},
 	}
 }
 

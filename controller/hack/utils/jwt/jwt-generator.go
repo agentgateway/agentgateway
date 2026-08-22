@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
+	"flag"
 	"fmt"
 	random "math/rand"
 	"os"
@@ -17,6 +18,9 @@ import (
 // use this to generate jwks and a jwt signed by the key in it
 
 func main() {
+	audience := flag.String("audience", "", "optional JWT audience")
+	flag.Parse()
+
 	kid := strconv.Itoa(random.Int()) //nolint:gosec
 	jwks, key, err := generateJWKS(kid)
 	if err != nil {
@@ -30,13 +34,13 @@ func main() {
 		os.Exit(1)
 	}
 
-	jwt, err := generateJwt("ignore@agentgateway.dev", kid, key)
+	jwt, err := generateJwt("ignore@agentgateway.dev", *audience, kid, key)
 	if err != nil {
 		fmt.Printf("error generating jwt: %s", err.Error())
 		os.Exit(1)
 	}
 
-	jwt1, err := generateJwt("boom@agentgateway.dev", kid, key)
+	jwt1, err := generateJwt("boom@agentgateway.dev", *audience, kid, key)
 	if err != nil {
 		fmt.Printf("error generating jwt: %s", err.Error())
 		os.Exit(1)
@@ -64,10 +68,15 @@ func generateJWKS(kid string) (*jose.JSONWebKeySet, *rsa.PrivateKey, error) {
 	}, rsaKey, nil
 }
 
-func generateJwt(sub, kid string, key *rsa.PrivateKey) (string, error) {
+func generateJwt(sub, audience, kid string, key *rsa.PrivateKey) (string, error) {
+	var audiences jwt.ClaimStrings
+	if audience != "" {
+		audiences = jwt.ClaimStrings{audience}
+	}
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.RegisteredClaims{
 		Issuer:    "https://agentgateway.dev",
 		Subject:   sub,
+		Audience:  audiences,
 		IssuedAt:  jwt.NewNumericDate(time.Now()),
 		NotBefore: jwt.NewNumericDate(time.Now()),
 		ExpiresAt: jwt.NewNumericDate(time.Now().Add(85440 * time.Hour)), // 10 years

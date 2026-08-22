@@ -11,7 +11,12 @@ import (
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
-var AgentgatewayControllerName = wellknown.DefaultAgwControllerName
+var (
+	AgentgatewayControllerName = wellknown.DefaultAgwControllerName
+	agentgatewayBackendGVK     = wellknown.AgentgatewayBackendGVK
+	agentgatewayParametersGVK  = wellknown.AgentgatewayParametersGVK
+	agentgatewayPolicyGVK      = wellknown.AgentgatewayPolicyGVK
+)
 
 var configureTest = func(t *testing.T) {}
 

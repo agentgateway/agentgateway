@@ -79,3 +79,20 @@ pub mod ext_mcp {
 pub mod workload {
 	pub use crate::istio::workload::*;
 }
+
+// SPIFFE Workload API bindings (gRPC client + server), generated from proto/spiffe_workload.proto.
+//
+// TEST/E2E ONLY: gated behind the `spiffe-test-server` feature, which is enabled via agentgateway's
+// dev-dependencies.
+// We only ever use the generated *server* (to stand up a fake Workload API in tests); the gateway's
+// real client is the `spiffe` crate, talking to a real SPIFFE Workload API endpoint.
+//
+// Why `include_proto!("_")`: the macro argument is a protobuf *package* name, not a file name, and
+// it expands to `include!(OUT_DIR/<package>.rs)`. spiffe_workload.proto declares no package, and
+// prost names the empty package's output `_.rs` — hence `"_"`.
+#[cfg(feature = "spiffe-test-server")]
+#[allow(warnings)]
+#[allow(clippy::derive_partial_eq_without_eq)]
+pub mod spiffe_workload_api {
+	tonic::include_proto!("_");
+}

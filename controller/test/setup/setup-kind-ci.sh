@@ -129,7 +129,15 @@ step_deploy_metallb() {
     fi
   fi
 
-  # Give this cluster of those IPs
+  # Reserve one IP from the far end before building the auto-assigned pool.
+  # GatewayStaticAddresses needs this address to remain unused until the test
+  # explicitly requests it.
+  STATIC_CONFORMANCE_INDEX=$((${#METALLB_IPS4[@]} - 1))
+  STATIC_CONFORMANCE_IP="${METALLB_IPS4[$STATIC_CONFORMANCE_INDEX]}"
+  unset 'METALLB_IPS4[$STATIC_CONFORMANCE_INDEX]'
+
+  # Give this cluster some auto-assigned IPs, plus one static-only IP that
+  # conformance can request without racing parallel LoadBalancer allocations.
   RANGE="["
   for i in {0..19}; do
     RANGE+="${METALLB_IPS4[1]},"
@@ -151,6 +159,16 @@ spec:
   addresses: '"$RANGE"'
 ---
 apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: static-conformance-pool
+  namespace: metallb-system
+spec:
+  autoAssign: false
+  addresses:
+  - '"${STATIC_CONFORMANCE_IP}"'
+---
+apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
 metadata:
   name: default-l2
@@ -158,6 +176,7 @@ metadata:
 spec:
   ipAddressPools:
   - default-pool
+  - static-conformance-pool
 ' | kubectl apply -f -
 }
 
@@ -238,10 +257,12 @@ function step_push_proxy_to_local_registry() {
 function step_deploy_helm() {
 	helm upgrade -i --create-namespace --namespace agentgateway-system agentgateway-crds ./controller/install/helm/agentgateway-crds/
 	helm upgrade -i --namespace agentgateway-system agentgateway ./controller/install/helm/agentgateway  \
+	  --wait --timeout=5m \
 	  --set image.registry=localhost:5000 \
 	  --set-string image.tag="${TAG}"\
 	   --set controller.image.repository=agentgateway-controller \
 	   --set inferenceExtension.enabled=true \
+	   --set agentgatewayModels.enabled=true \
 	   "$@"
 }
 function step_setup_gateway_api() {
@@ -307,12 +328,12 @@ function main() {
   (await $PID_KIND && run_step "deploy-metallb" step_deploy_metallb) &
   (await $PID_KIND && run_step "create-local-kind-registry" step_create_local_kind_registry) & PID_REGISTRY=$!
 
-  (await $PID_REGISTRY $PID_BUILD_CONTROLLER && run_step "push-go-controller-to-local-registry" step_push_go_controller_to_local_registry) &
+  (await $PID_REGISTRY $PID_BUILD_CONTROLLER && run_step "push-go-controller-to-local-registry" step_push_go_controller_to_local_registry) & PID_PUSH_CONTROLLER=$!
   (await $PID_REGISTRY $PID_BUILD_PROXY && run_step "push-proxy-to-local-registry" step_push_proxy_to_local_registry) &
 
   (await $PID_REGISTRY && run_step "preload-images" step_preload_images) &
   (await $PID_KIND && run_step "deploy-gateway-api" step_setup_gateway_api) & PID_GATEWAY_API=$!
-  (await $PID_GATEWAY_API && run_step "deploy-helm" step_deploy_helm "$@") &
+  (await $PID_GATEWAY_API $PID_PUSH_CONTROLLER && run_step "deploy-helm" step_deploy_helm "$@") &
 
   # Wait each one, not just a raw `wait`, to ensure we fail on errors
   for pid in $(jobs -p); do

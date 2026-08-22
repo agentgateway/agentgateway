@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
+	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
 
 // ErrUnsupportedCredentialKind signals that a resolver does not own the
@@ -116,7 +117,7 @@ func GetSecretDataValue(data map[string][]byte, key string) (string, bool) {
 // GetSecretDataAuth extracts an authentication value from Secret data.
 // It looks for the "Authorization" field and strips the "Bearer " prefix if present.
 func GetSecretDataAuth(data map[string][]byte) (string, bool) {
-	if authValue, exists := GetSecretDataValue(data, "Authorization"); exists {
+	if authValue, exists := GetSecretDataValue(data, wellknown.Authorization); exists {
 		// Strip the "Bearer " prefix if present, as it will be added by the provider
 		authValue = strings.TrimSpace(authValue)
 		authKey := strings.TrimSpace(strings.TrimPrefix(authValue, "Bearer "))

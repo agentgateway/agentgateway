@@ -20,6 +20,7 @@ import (
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
 	"github.com/agentgateway/agentgateway/api"
+	"github.com/agentgateway/agentgateway/controller/api/annotations"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/ir"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/plugins"
 	"github.com/agentgateway/agentgateway/controller/pkg/agentgateway/utils"
@@ -48,6 +49,8 @@ func ToAgwResource(t any) *api.Resource {
 		return &api.Resource{Kind: &api.Resource_TcpRoute{TcpRoute: tt.TCPRoute}}
 	case AgwPolicy:
 		return &api.Resource{Kind: &api.Resource_Policy{Policy: tt.Policy}}
+	case *api.ModelRoute:
+		return &api.Resource{Kind: &api.Resource_ModelRoute{ModelRoute: tt}}
 	case *api.Resource:
 		return tt
 	}
@@ -144,6 +147,7 @@ type TLSInfo struct {
 	IstioWorkloadCert   bool
 	IstioMutual         bool
 	DynamicCA           bool
+	Spiffe              bool
 }
 
 // PortBindings is a wrapper type that contains the listener on the gateway, as well as the status for the listener.
@@ -157,7 +161,7 @@ func (g PortBindings) ResourceName() string {
 }
 
 func (g PortBindings) Equals(other PortBindings) bool {
-	return g.GatewayListener.Equals(other.GatewayListener) &&
+	return g.GatewayListener.Equals(&other.GatewayListener) &&
 		g.Port == other.Port
 }
 
@@ -179,7 +183,7 @@ func (g GatewayListener) ResourceName() string {
 	return g.Name
 }
 
-func (g GatewayListener) Equals(other GatewayListener) bool {
+func (g *GatewayListener) Equals(other *GatewayListener) bool {
 	if (g.TLSInfo != nil) != (other.TLSInfo != nil) {
 		return false
 	}
@@ -190,7 +194,8 @@ func (g GatewayListener) Equals(other GatewayListener) bool {
 			g.TLSInfo.MtlsFallbackEnabled != other.TLSInfo.MtlsFallbackEnabled ||
 			g.TLSInfo.IstioWorkloadCert != other.TLSInfo.IstioWorkloadCert ||
 			g.TLSInfo.IstioMutual != other.TLSInfo.IstioMutual ||
-			g.TLSInfo.DynamicCA != other.TLSInfo.DynamicCA {
+			g.TLSInfo.DynamicCA != other.TLSInfo.DynamicCA ||
+			g.TLSInfo.Spiffe != other.TLSInfo.Spiffe {
 			return false
 		}
 	}
@@ -203,15 +208,16 @@ func (g GatewayListener) Equals(other GatewayListener) bool {
 }
 
 type GatewayCollectionConfig struct {
-	ControllerName string
-	Gateways       krt.Collection[*gwv1.Gateway]
-	ListenerSets   krt.Collection[ListenerSet]
-	GatewayClasses krt.Collection[GatewayClass]
-	Namespaces     krt.Collection[*corev1.Namespace]
-	Grants         ReferenceGrants
-	Secrets        krt.Collection[*corev1.Secret]
-	ConfigMaps     krt.Collection[*corev1.ConfigMap]
-	KrtOpts        krtutil.KrtOptions
+	ControllerName           string
+	Gateways                 krt.Collection[*gwv1.Gateway]
+	ListenerSets             krt.Collection[ListenerSet]
+	GatewayClasses           krt.Collection[GatewayClass]
+	Namespaces               krt.Collection[*corev1.Namespace]
+	Grants                   ReferenceGrants
+	Secrets                  krt.Collection[*corev1.Secret]
+	ConfigMaps               krt.Collection[*corev1.ConfigMap]
+	KrtOpts                  krtutil.KrtOptions
+	EnableAgentgatewayModels bool
 
 	listenerIndex      krt.Index[types.NamespacedName, ListenerSet]
 	transformationFunc GatewayTransformationFunction
@@ -234,11 +240,11 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 	return func(ctx krt.HandlerContext, obj *gwv1.Gateway) (*gwv1.GatewayStatus, []*GatewayListener) {
 		class := krt.FetchOne(ctx, cfg.GatewayClasses, krt.FilterKey(string(obj.Spec.GatewayClassName)))
 		if class == nil {
-			logger.Debug("gateway class not found, skipping", "gw_name", obj.GetName(), "gatewayClassName", obj.Spec.GatewayClassName)
+			logger.Debug("gateway class not found, skipping", "gw_name", obj.GetName(), "gateway_class_name", obj.Spec.GatewayClassName)
 			return nil, nil
 		}
 		if string(class.Controller) != cfg.ControllerName {
-			logger.Debug("skipping gateway not managed by our controller", "gw_name", obj.GetName(), "gatewayClassName", obj.Spec.GatewayClassName, "controllerName", class.Controller)
+			logger.Debug("skipping gateway not managed by our controller", "gw_name", obj.GetName(), "gateway_class_name", obj.Spec.GatewayClassName, "controller_name", class.Controller)
 			return nil, nil // ignore gateways not managed by our controller
 		}
 		rm := reports.NewReportMap()
@@ -264,17 +270,31 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 			return rm.BuildGWStatus(context.Background(), *obj, 0), nil
 		}
 
+		// Ports whose bind should be internal, from the gateway's internal-ports annotation.
+		// May only reference this gateway's own listener ports.
+		internalPorts, internalErrs := annotations.ParseInternalPorts(
+			obj.GetAnnotations()[annotations.InternalPorts],
+			func(p int32) bool {
+				for _, l := range kgw.Listeners {
+					if int32(l.Port) == p {
+						return true
+					}
+				}
+				return false
+			},
+		)
+
 		for i, l := range kgw.Listeners {
 			// Attached Routes count starts at 0 and gets updated later in the status syncer
 			// when the real count is available after route processing
 
-			hostnames, tlsInfo, updatedStatus, programmed := BuildListener(ctx, cfg.Secrets, cfg.ConfigMaps, cfg.Grants, cfg.Namespaces, obj, status.Listeners, kgw, l, i, nil, false)
+			hostnames, tlsInfo, updatedStatus, programmed := BuildListener(ctx, cfg.Secrets, cfg.ConfigMaps, cfg.Grants, cfg.Namespaces, obj, status.Listeners, kgw, l, i, nil, false, cfg.EnableAgentgatewayModels)
 			status.Listeners = updatedStatus
 
 			lstatus := status.Listeners[i]
 
 			// Generate supported kinds for the listener
-			allowed, _ := GenerateSupportedKinds(l)
+			allowed, _ := GenerateSupportedKinds(l, cfg.EnableAgentgatewayModels)
 
 			// Set all listener conditions from the actual status
 			for _, lcond := range lstatus.Conditions {
@@ -301,6 +321,7 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 				Port:                   l.Port,
 				Protocol:               l.Protocol,
 				TLSPassthrough:         l.TLS != nil && l.TLS.Mode != nil && *l.TLS.Mode == gwv1.TLSModePassthrough,
+				Internal:               internalPorts.Has(l.Port),
 			}
 
 			res := &GatewayListener{
@@ -323,6 +344,14 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 				Reason: gwv1.GatewayReasonAccepted,
 			})
 			result = append(result, res)
+		}
+		if len(internalErrs) > 0 {
+			gwReporter.SetCondition(reporter.GatewayCondition{
+				Type:    gwv1.GatewayConditionAccepted,
+				Status:  metav1.ConditionFalse,
+				Reason:  gwv1.GatewayReasonInvalid,
+				Message: "invalid " + annotations.InternalPorts + " annotation: " + strings.Join(internalErrs, "; "),
+			})
 		}
 		listenersFromSets := krt.Fetch(ctx, cfg.ListenerSets, krt.FilterIndex(cfg.listenerIndex, config.NamespacedName(obj)))
 		// Sort by listener precedence
@@ -375,6 +404,7 @@ func GatewayTransformationFunc(cfg GatewayCollectionConfig) func(ctx krt.Handler
 type portProtocol struct {
 	hostnames sets.String
 	protocol  gwv1.ProtocolType
+	internal  bool
 }
 
 type ListenerConflict string
@@ -382,13 +412,18 @@ type ListenerConflict string
 const (
 	ListenerConflictHostname = "hostname"
 	ListenerConflictProtocol = "protocol"
+	ListenerConflictBindMode = "bind-mode"
 )
 
 func validateListenerConflicts(listeners []*GatewayListener) {
 	portMap := make(map[gwv1.PortNumber]*portProtocol)
 	for _, listener := range listeners {
 		if p, ok := portMap[listener.ParentInfo.Port]; ok {
-			if p.protocol == listener.ParentInfo.Protocol {
+			if p.internal != listener.ParentInfo.Internal {
+				// Listeners are ordered by Gateway API precedence before validation.
+				// Preserve the winning bind mode and reject only the later listener.
+				listener.Conflict = ListenerConflictBindMode
+			} else if p.protocol == listener.ParentInfo.Protocol {
 				if slices.ContainsFunc(listener.ParentInfo.Hostnames, p.hostnames.Contains) {
 					listener.Conflict = ListenerConflictHostname
 				} else {
@@ -401,6 +436,7 @@ func validateListenerConflicts(listeners []*GatewayListener) {
 			portMap[listener.ParentInfo.Port] = &portProtocol{
 				hostnames: sets.New(listener.ParentInfo.Hostnames...),
 				protocol:  listener.ParentInfo.Protocol,
+				internal:  listener.ParentInfo.Internal,
 			}
 		}
 	}
@@ -430,7 +466,8 @@ func (g ListenerSet) Equals(other ListenerSet) bool {
 			g.TLSInfo.MtlsFallbackEnabled != other.TLSInfo.MtlsFallbackEnabled ||
 			g.TLSInfo.IstioWorkloadCert != other.TLSInfo.IstioWorkloadCert ||
 			g.TLSInfo.IstioMutual != other.TLSInfo.IstioMutual ||
-			g.TLSInfo.DynamicCA != other.TLSInfo.DynamicCA {
+			g.TLSInfo.DynamicCA != other.TLSInfo.DynamicCA ||
+			g.TLSInfo.Spiffe != other.TLSInfo.Spiffe {
 			return false
 		}
 	}
@@ -450,6 +487,7 @@ func ListenerSetBuilder(
 	grants ReferenceGrants,
 	secrets krt.Collection[*corev1.Secret],
 	configMaps krt.Collection[*corev1.ConfigMap],
+	enableAgentgatewayModels bool,
 ) (*gwv1.ListenerSetStatus, []ListenerSet) {
 	result := []ListenerSet{}
 	ls := obj.Spec
@@ -469,11 +507,11 @@ func ListenerSetBuilder(
 	}
 	class := krt.FetchOne(ctx, gatewayClasses, krt.FilterKey(string(parentGwObj.Spec.GatewayClassName)))
 	if class == nil {
-		logger.Debug("gateway class not found, skipping", "gw_name", obj.GetName(), "gatewayClassName", parentGwObj.Spec.GatewayClassName)
+		logger.Debug("gateway class not found, skipping", "gw_name", obj.GetName(), "gateway_class_name", parentGwObj.Spec.GatewayClassName)
 		return nil, nil
 	}
 	if string(class.Controller) != controllerName {
-		logger.Debug("skipping gateway not managed by our controller", "gw_name", obj.GetName(), "gatewayClassName", parentGwObj.Spec.GatewayClassName, "controllerName", class.Controller)
+		logger.Debug("skipping gateway not managed by our controller", "gw_name", obj.GetName(), "gateway_class_name", parentGwObj.Spec.GatewayClassName, "controller_name", class.Controller)
 		return nil, nil // ignore gateways not managed by our controller
 	}
 
@@ -484,13 +522,27 @@ func ListenerSetBuilder(
 		return status, nil
 	}
 
+	// Ports whose bind should be internal, from the ListenerSet's internal-ports
+	// annotation. May only reference this ListenerSet's own listener ports.
+	internalPorts, internalErrs := annotations.ParseInternalPorts(
+		obj.GetAnnotations()[annotations.InternalPorts],
+		func(p int32) bool {
+			for _, l := range ls.Listeners {
+				if port, err := kubeutils.DetectListenerPortNumber(l.Protocol, l.Port); err == nil && int32(port) == p {
+					return true
+				}
+			}
+			return false
+		},
+	)
+
 	for i, l := range ls.Listeners {
 		port, portErr := kubeutils.DetectListenerPortNumber(l.Protocol, l.Port)
 		l.Port = port
 		standardListener := convertListenerSetToListener(l)
 		originalStatus := slices.Map(status.Listeners, convertListenerSetStatusToStandardStatus)
 		hostnames, tlsInfo, updatedStatus, programmed := BuildListener(ctx, secrets, configMaps, grants, namespaces,
-			obj, originalStatus, parentGwObj.Spec, standardListener, i, portErr, true)
+			obj, originalStatus, parentGwObj.Spec, standardListener, i, portErr, true, enableAgentgatewayModels)
 		status.Listeners = slices.Map(updatedStatus, convertStandardStatusToListenerSetStatus)
 
 		if controllerName == constants.ManagedGatewayMeshController || controllerName == constants.ManagedGatewayEastWestController {
@@ -499,7 +551,7 @@ func ListenerSetBuilder(
 		}
 		name := utils.InternalGatewayName(obj.Namespace, obj.Name, string(l.Name))
 
-		allowed, _ := GenerateSupportedKinds(standardListener)
+		allowed, _ := GenerateSupportedKinds(standardListener, enableAgentgatewayModels)
 		pri := ParentInfo{
 			ParentGateway:    config.NamespacedName(parentGwObj),
 			ListenerKey:      name,
@@ -510,6 +562,7 @@ func ListenerSetBuilder(
 			Port:             l.Port,
 			Protocol:         l.Protocol,
 			TLSPassthrough:   l.TLS != nil && l.TLS.Mode != nil && *l.TLS.Mode == gwv1.TLSModePassthrough,
+			Internal:         internalPorts.Has(l.Port),
 		}
 
 		res := ListenerSet{
@@ -521,6 +574,16 @@ func ListenerSetBuilder(
 			ParentInfo:    pri,
 		}
 		result = append(result, res)
+	}
+
+	if len(internalErrs) > 0 {
+		status.Conditions = SetConditions(obj.Generation, status.Conditions, map[string]*Condition{
+			string(gwv1.GatewayConditionAccepted): {
+				Reason:  string(gwv1.GatewayReasonInvalid),
+				Status:  metav1.ConditionFalse,
+				Message: "invalid " + annotations.InternalPorts + " annotation: " + strings.Join(internalErrs, "; "),
+			},
+		})
 	}
 
 	reportListenerSetStatus(obj, status)

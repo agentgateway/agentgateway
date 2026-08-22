@@ -16,7 +16,9 @@ use bytes::Bytes;
 
 use crate::mcp::upstream::IncomingRequestContext;
 use crate::proxy::httpproxy::PolicyClient;
-use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
+#[cfg(test)]
+use crate::types::agent::SimpleBackendReference;
+use crate::types::agent::SimpleBackendReferenceWithPolicies;
 use crate::*;
 
 /// Per-request bag of values that `mcpGuardrails` request-phase processors attach via
@@ -122,17 +124,9 @@ impl McpGuardrails {
 // TLS/auth may also be set inline via `policies`.
 #[apply(schema!)]
 pub struct Remote {
-	/// Reference to the external MCP policy service backend.
+	/// Reference to the external MCP policy service backend and policies used when connecting to it.
 	#[serde(flatten)]
-	pub target: Arc<SimpleBackendReference>,
-	/// Policies to connect to the backend.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
-	#[cfg_attr(
-		feature = "schema",
-		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
-	)]
-	pub policies: Vec<BackendTrafficPolicy>,
+	pub target: SimpleBackendReferenceWithPolicies,
 	/// Behavior when the processor is unavailable or returns an error.
 	#[serde(default)]
 	pub failure_mode: FailureMode,
@@ -151,8 +145,10 @@ pub struct Remote {
 #[apply(schema!)]
 #[derive(Default)]
 pub struct HeaderFilter {
+	/// Headers to forward; an empty list forwards all headers.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub allowed: Vec<crate::http::HeaderOrPseudo>,
+	/// Headers to drop; takes precedence over the allow list.
 	#[serde(default, skip_serializing_if = "Vec::is_empty")]
 	pub disallowed: Vec<crate::http::HeaderOrPseudo>,
 }
@@ -242,12 +238,13 @@ pub async fn run_call_request<P: serde::de::DeserializeOwned>(
 	req_ctx: &mut IncomingRequestContext,
 	client: &PolicyClient,
 ) -> Outcome<P> {
+	let client = client.with_parent_extensions(req_ctx.extensions());
 	let mut composed = Outcome::Pass;
 	for processor in &ext.processors {
 		if !processor.runs_request(ctx.method) {
 			continue;
 		}
-		match processor.call_request::<P>(ctx, req_ctx, client).await {
+		match processor.call_request::<P>(ctx, req_ctx, &client).await {
 			Outcome::Pass => {},
 			Outcome::Mutated(p) => composed = Outcome::Mutated(p),
 			Outcome::Reject(e) => return Outcome::Reject(e),
@@ -265,13 +262,14 @@ pub async fn run_response(
 	req_ctx: &IncomingRequestContext,
 	client: &PolicyClient,
 ) -> Outcome<rmcp::model::ServerResult> {
+	let client = client.with_parent_extensions(req_ctx.extensions());
 	let mut composed = Outcome::Pass;
 	for processor in &ext.processors {
 		if !processor.runs_response(method) {
 			continue;
 		}
 		match processor
-			.response(method, backends, &mut body, req_ctx, client)
+			.response(method, backends, &mut body, req_ctx, &client)
 			.await
 		{
 			Outcome::Pass => {},
@@ -311,11 +309,11 @@ processors:
 		assert_eq!(d0.methods.get("*/list"), Some(&Phase::Response));
 		let ProcessorKind::Remote(r0) = &d0.kind;
 		assert!(matches!(
-			r0.target.as_ref(),
+			r0.target.target.as_ref(),
 			SimpleBackendReference::InlineBackend(_)
 		));
 		assert_eq!(r0.failure_mode, FailureMode::FailOpen);
-		assert_eq!(r0.policies.len(), 1, "backendTLS should translate");
+		assert_eq!(r0.target.policies.len(), 1, "backendTLS should translate");
 		assert_eq!(r0.request_headers.allowed.len(), 1);
 		assert!(
 			r0.request_headers
@@ -325,7 +323,7 @@ processors:
 
 		let ProcessorKind::Remote(r1) = &ext.processors[1].kind;
 		assert!(matches!(
-			r1.target.as_ref(),
+			r1.target.target.as_ref(),
 			SimpleBackendReference::Backend(_)
 		));
 		assert_eq!(r1.failure_mode, FailureMode::FailClosed);
@@ -336,8 +334,10 @@ processors:
 			processors: vec![Processor {
 				methods: pairs.iter().map(|(k, v)| (k.to_string(), *v)).collect(),
 				kind: ProcessorKind::Remote(Remote {
-					target: Arc::new(SimpleBackendReference::Backend("b".into())),
-					policies: Vec::new(),
+					target: SimpleBackendReferenceWithPolicies {
+						target: Arc::new(SimpleBackendReference::Backend("b".into())),
+						policies: Vec::new(),
+					},
 					failure_mode: FailureMode::default(),
 					metadata: HashMap::new(),
 					request_headers: HeaderFilter::default(),

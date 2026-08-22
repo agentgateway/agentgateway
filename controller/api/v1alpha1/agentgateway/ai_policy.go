@@ -83,17 +83,36 @@ const (
 )
 
 // Action to take if a regex pattern is matched in a request or response.
-// This setting applies only to request matches. `PromptguardResponse`
-// matches are always masked by default.
+// The action applies to request and response matches alike. Note that
+// `Mask` is not applied to streamed responses: matched content in a
+// streamed response is passed through unmodified.
 // +k8s:enum
 type Action string
 
 const (
-	// Mask the matched data in the request.
+	// Mask the matched data in the request or response.
 	MASK Action = "Mask"
 
-	// Reject the request if the regex matches content in the request.
+	// Reject the request or response that contains the matched content.
 	REJECT Action = "Reject"
+)
+
+// Which category of request content a prompt guard inspects.
+// +k8s:enum
+type ContentScope string
+
+const (
+	// The system/developer prompt.
+	ContentScopeSystemPrompt ContentScope = "SystemPrompt"
+
+	// Regular user/assistant message text.
+	ContentScopeMessages ContentScope = "Messages"
+
+	// Tool call results fed back to the model.
+	ContentScopeToolOutput ContentScope = "ToolOutput"
+
+	// Tool call arguments, usually produced by the model.
+	ContentScopeToolInput ContentScope = "ToolInput"
 )
 
 // Streaming prompt guard mode.
@@ -102,6 +121,8 @@ type PromptGuardStreamingMode string
 
 const (
 	// Enable prompt guards for streaming responses and realtime websocket messages.
+	// A guard can reject a streamed response, but `Mask` actions are not applied to
+	// streamed content.
 	PromptGuardStreamingModeEnabled PromptGuardStreamingMode = "Enabled"
 )
 
@@ -118,8 +139,9 @@ type Regex struct {
 	Builtins []BuiltIn `json:"builtins,omitempty"`
 
 	// The action to take if a regex pattern is matched in a request or response.
-	// This setting applies only to request matches. `PromptguardResponse`
-	// matches are always masked by default.
+	// The action applies to request and response matches alike. Note that
+	// `Mask` is not applied to streamed responses: matched content in a
+	// streamed response is passed through unmodified.
 	// Defaults to `Mask`.
 	// +kubebuilder:default=Mask
 	// +optional
@@ -133,6 +155,11 @@ type Webhook struct {
 	// Supported types: Service and Backend.
 	// +required
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`
+
+	// CEL-computed headers to include in webhook requests.
+	// +kubebuilder:validation:MaxProperties=64
+	// +optional
+	Headers map[string]CELExpression `json:"headers,omitempty"`
 
 	// HTTP header matches used to select the headers to forward to the webhook.
 	// Request headers are used when forwarding requests and response headers
@@ -172,9 +199,8 @@ type OpenAIModeration struct {
 	// +optional
 	Model *string `json:"model,omitempty"`
 	// Policies for communicating with OpenAI.
-	// +kubebuilder:validation:AtLeastOneFieldSet
 	// +optional
-	Policies *BackendSimple `json:"policies,omitempty"`
+	Policies *OpenAIModerationPolicy `json:"policies,omitempty"`
 }
 
 type BedrockGuardrails struct {
@@ -192,9 +218,8 @@ type BedrockGuardrails struct {
 	Region ShortString `json:"region"`
 
 	// Policies for communicating with AWS Bedrock Guardrails.
-	// +kubebuilder:validation:AtLeastOneFieldSet
 	// +optional
-	Policies *BackendSimple `json:"policies,omitempty"`
+	Policies *BedrockGuardrailsPolicy `json:"policies,omitempty"`
 }
 
 type GoogleModelArmor struct {
@@ -213,18 +238,30 @@ type GoogleModelArmor struct {
 	Location *ShortString `json:"location,omitempty"`
 
 	// Policies for communicating with Google Model Armor.
-	// +kubebuilder:validation:AtLeastOneFieldSet
 	// +optional
-	Policies *BackendSimple `json:"policies,omitempty"`
+	Policies *GoogleModelArmorPolicy `json:"policies,omitempty"`
 }
 
 // Prompt guards to apply to requests sent by the client.
 // +kubebuilder:validation:ExactlyOneOf=regex;webhook;openAIModeration;bedrockGuardrails;googleModelArmor
+// +kubebuilder:validation:XValidation:rule="!has(self.scope) || has(self.regex) || has(self.bedrockGuardrails) || (self.scope.size() == 2 && 'SystemPrompt' in self.scope && 'Messages' in self.scope)",message="scope: only regex and bedrockGuardrails guards support a non-default scope; other guard kinds always inspect the default (SystemPrompt + Messages)"
 type PromptguardRequest struct {
 	// Custom response message to return to the client. If not specified, defaults to
 	// `The request was rejected due to inappropriate content`.
 	// +optional
 	CustomResponse *CustomResponse `json:"response,omitempty"`
+
+	// Which parts of the request this guard inspects. When unset, defaults to
+	// `SystemPrompt` and `Messages`. Tool call inputs and outputs are not
+	// inspected unless `ToolInput`/`ToolOutput` are listed explicitly.
+	// In APIs that send tool arguments as opaque JSON, such as Completions, the
+	// arguments are masked as a single string, meaning a prompt guard has the
+	// potential to rewrite the arguments into invalid JSON.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=4
+	// +listType=set
+	// +optional
+	Scope []ContentScope `json:"scope,omitempty"`
 
 	// Regular expression (regex) matching for prompt guards and data masking.
 	// +optional
@@ -352,7 +389,6 @@ type AIPromptGuard struct {
 // Note: The `field` values correspond to keys in the JSON request body, not fields in this CRD.
 type FieldDefault struct {
 	// Name of the field.
-	// +kubebuilder:validation:MinLength=1
 	// +required
 	Field ShortString `json:"field"`
 
@@ -367,7 +403,6 @@ type FieldDefault struct {
 // is assigned to the configured field.
 type FieldTransformation struct {
 	// Name of the field to set.
-	// +kubebuilder:validation:MinLength=1
 	// +required
 	Field ShortString `json:"field"`
 

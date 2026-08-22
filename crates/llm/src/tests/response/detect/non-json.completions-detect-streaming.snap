@@ -1,0 +1,9 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/detect/non-json
+---
+{
+  this isn't json!
+}
+
+{}

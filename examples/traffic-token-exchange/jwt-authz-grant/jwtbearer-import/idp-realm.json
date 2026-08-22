@@ -1,0 +1,48 @@
+{
+  "realm": "idp",
+  "enabled": true,
+  "sslRequired": "NONE",
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "clients": [
+    {
+      "clientId": "idp-app",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "idp-secret",
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "protocolMappers": [
+        {
+          "name": "backend-oauth-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.custom.audience": "http://localhost:7080/realms/backend-oauth",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "idpuser",
+      "email": "idpuser@example.com",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Idp",
+      "lastName": "User",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "idppass",
+          "temporary": false
+        }
+      ],
+      "id": "11111111-2222-3333-4444-555555555555"
+    }
+  ]
+}

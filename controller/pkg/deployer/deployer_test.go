@@ -3,16 +3,23 @@ package deployer_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"istio.io/istio/pkg/config/schema/gvk"
 	"istio.io/istio/pkg/test/util/assert"
 	"istio.io/istio/pkg/util/smallset"
+	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
 	policyv1 "k8s.io/api/policy/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	dynamicclient "k8s.io/client-go/dynamic"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
+	"k8s.io/client-go/tools/cache"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
 
@@ -25,6 +32,54 @@ import (
 )
 
 var scheme = schemes.DefaultScheme()
+
+type dynamicOverrideClient struct {
+	apiclient.Client
+	dynamicClient dynamicclient.Interface
+}
+
+func (c dynamicOverrideClient) Dynamic() dynamicclient.Interface {
+	return c.dynamicClient
+}
+
+type failingHelmValuesGenerator struct {
+	err error
+}
+
+func (g failingHelmValuesGenerator) GetValues(context.Context, client.Object) (map[string]any, error) {
+	return nil, g.err
+}
+
+func (g failingHelmValuesGenerator) GetCacheSyncHandlers() []cache.InformerSynced {
+	return nil
+}
+
+func TestGetObjsToDeploy_FormatsGatewayGVKFromKnownType(t *testing.T) {
+	expectedErr := errors.New("bad params")
+	d := deployer.NewDeployerWithMultipleCharts(
+		wellknown.DefaultAgwControllerName,
+		wellknown.DefaultAgwClassName,
+		nil,
+		fake.NewClient(t),
+		nil,
+		failingHelmValuesGenerator{err: expectedErr},
+		deployer.GatewayReleaseNameAndNamespace,
+	)
+	gw := &gwv1.Gateway{
+		Name: "gw", Namespace: "default",
+	}
+
+	_, err := d.GetObjsToDeploy(context.Background(), gw)
+	if err == nil {
+		t.Fatal("expected GetObjsToDeploy to fail")
+	}
+	if !strings.Contains(err.Error(), "failed to get helm values for object gateway.networking.k8s.io/v1, Kind=Gateway default/gw") {
+		t.Fatalf("expected error to contain formatted Gateway GVK, got %q", err.Error())
+	}
+	if !strings.Contains(err.Error(), expectedErr.Error()) {
+		t.Fatalf("expected error to contain %q, got %q", expectedErr.Error(), err.Error())
+	}
+}
 
 func TestDeployObjs(t *testing.T) {
 	t.Helper()
@@ -52,9 +107,9 @@ func TestDeployObjs(t *testing.T) {
 
 	t.Run("skips patch if object is unchanged", func(t *testing.T) {
 		cm := &corev1.ConfigMap{
-			TypeMeta:   metav1.TypeMeta{Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion()},
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-			Data:       map[string]string{"foo": "bar"},
+			Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion(),
+			Name: name, Namespace: ns,
+			Data: map[string]string{"foo": "bar"},
 		}
 		fc := fake.NewClient(t, cm.DeepCopy())
 		d := getDeployer(t, fc, func(client apiclient.Client, fieldManager string, gvr schema.GroupVersionResource, name string, namespace string, data []byte, subresources ...string) error {
@@ -69,10 +124,10 @@ func TestDeployObjs(t *testing.T) {
 
 	t.Run("skips patch when only change is object status", func(t *testing.T) {
 		pod1 := &corev1.Pod{
-			TypeMeta:   metav1.TypeMeta{Kind: gvk.Pod.Kind, APIVersion: gvk.Pod.GroupVersion()},
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-			Spec:       corev1.PodSpec{Containers: []corev1.Container{{Name: "test", Image: "test:latest"}}},
-			Status:     corev1.PodStatus{Phase: corev1.PodPending},
+			Kind: gvk.Pod.Kind, APIVersion: gvk.Pod.GroupVersion(),
+			Name: name, Namespace: ns,
+			Spec:   corev1.PodSpec{Containers: []corev1.Container{{Name: "test", Image: "test:latest"}}},
+			Status: corev1.PodStatus{Phase: corev1.PodPending},
 		}
 		pod2 := pod1.DeepCopy()
 
@@ -91,10 +146,10 @@ func TestDeployObjs(t *testing.T) {
 
 	t.Run("patches if object is different", func(t *testing.T) {
 		cm := &corev1.ConfigMap{
-			TypeMeta: metav1.TypeMeta{Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion()},
+			Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion(),
 
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-			Data:       map[string]string{"foo": "bar"},
+			Name: name, Namespace: ns,
+			Data: map[string]string{"foo": "bar"},
 		}
 		fc := fake.NewClient(t, cm.DeepCopy())
 		cm.Data = map[string]string{"foo": "bar", "bar": "baz"}
@@ -112,8 +167,8 @@ func TestDeployObjs(t *testing.T) {
 
 	t.Run("patches if object does not exist (IsNotFound error)", func(t *testing.T) {
 		cm := &corev1.ConfigMap{
-			TypeMeta:   metav1.TypeMeta{Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion()},
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
+			Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion(),
+			Name: name, Namespace: ns,
 		}
 		fc := fake.NewClient(t)
 		patched := false
@@ -131,18 +186,18 @@ func TestDeployObjs(t *testing.T) {
 	t.Run("uses GatewayClass controllerName (not class name) as SSA field manager", func(t *testing.T) {
 		customClassName := "custom-agw-class"
 		gwc := &gwv1.GatewayClass{
-			ObjectMeta: metav1.ObjectMeta{Name: customClassName},
-			Spec:       gwv1.GatewayClassSpec{ControllerName: wellknown.DefaultAgwControllerName},
+			Name: customClassName,
+			Spec: gwv1.GatewayClassSpec{ControllerName: wellknown.DefaultAgwControllerName},
 		}
 		gw := &gwv1.Gateway{
-			ObjectMeta: metav1.ObjectMeta{Name: "test-gw", Namespace: ns, UID: "12345"},
-			Spec:       gwv1.GatewaySpec{GatewayClassName: gwv1.ObjectName(customClassName)},
+			Name: "test-gw", Namespace: ns, UID: "12345",
+			Spec: gwv1.GatewaySpec{GatewayClassName: gwv1.ObjectName(customClassName)},
 		}
 		gw.SetGroupVersionKind(wellknown.GatewayGVK)
 		cm := &corev1.ConfigMap{
-			TypeMeta:   metav1.TypeMeta{Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion()},
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-			Data:       map[string]string{"foo": "bar"},
+			Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion(),
+			Name: name, Namespace: ns,
+			Data: map[string]string{"foo": "bar"},
 		}
 
 		fc := fake.NewClient(t, gwc)
@@ -160,14 +215,14 @@ func TestDeployObjs(t *testing.T) {
 
 	t.Run("falls back to class name comparison when GatewayClass lookup fails", func(t *testing.T) {
 		gw := &gwv1.Gateway{
-			ObjectMeta: metav1.ObjectMeta{Name: "test-gw", Namespace: ns, UID: "12345"},
-			Spec:       gwv1.GatewaySpec{GatewayClassName: wellknown.DefaultAgwClassName},
+			Name: "test-gw", Namespace: ns, UID: "12345",
+			Spec: gwv1.GatewaySpec{GatewayClassName: wellknown.DefaultAgwClassName},
 		}
 		gw.SetGroupVersionKind(wellknown.GatewayGVK)
 		cm := &corev1.ConfigMap{
-			TypeMeta:   metav1.TypeMeta{Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion()},
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns},
-			Data:       map[string]string{"foo": "bar"},
+			Kind: gvk.ConfigMap.Kind, APIVersion: gvk.ConfigMap.GroupVersion(),
+			Name: name, Namespace: ns,
+			Data: map[string]string{"foo": "bar"},
 		}
 
 		fc := fake.NewClient(t) // no GatewayClass created
@@ -193,12 +248,10 @@ func TestGatewayAndListenerSetPortModifications(t *testing.T) {
 	createGatewayForDeployer := func(ports ...int32) *collections.GatewayForDeployer {
 		portSet := smallset.New(ports...)
 		return &collections.GatewayForDeployer{
-			ObjectSource: collections.ObjectSource{
-				Name:      "test-gateway",
-				Namespace: ns,
-				Group:     gwv1.GroupVersion.Group,
-				Kind:      wellknown.GatewayKind,
-			},
+			Name:           "test-gateway",
+			Namespace:      ns,
+			Group:          gwv1.GroupVersion.Group,
+			Kind:           wellknown.GatewayKind,
 			ControllerName: wellknown.DefaultAgwControllerName,
 			Ports:          portSet,
 		}
@@ -229,6 +282,16 @@ func TestGatewayAndListenerSetPortModifications(t *testing.T) {
 		assert.Equal(t, true, has8080)
 		assert.Equal(t, true, has9090)
 		assert.Equal(t, true, has3000)
+	})
+
+	t.Run("GetPortsValues skips internal ports", func(t *testing.T) {
+		// 8080 is internal (routing-only): it must not appear as a Service/container port.
+		gw := createGatewayForDeployer(80, 8080)
+		gw.InternalPorts = smallset.New[int32](8080)
+		ports := deployer.GetPortsValues(gw, 0)
+
+		assert.Equal(t, 1, len(ports))
+		assert.Equal(t, int32(80), *ports[0].Port)
 	})
 
 	t.Run("GetPortsValues skips reserved ports", func(t *testing.T) {
@@ -304,7 +367,7 @@ func TestPruneRemovedResources(t *testing.T) {
 		hpaName    = "test-hpa"
 	)
 
-	getDeployer := func(t *testing.T, fc apiclient.Client) *deployer.Deployer {
+	getDeployer := func(t *testing.T, fc apiclient.Client, opts ...deployer.Option) *deployer.Deployer {
 		t.Helper()
 		d, err := deployer.NewGatewayDeployer(
 			wellknown.DefaultAgwControllerName,
@@ -312,6 +375,7 @@ func TestPruneRemovedResources(t *testing.T) {
 			scheme,
 			fc,
 			nil,
+			opts...,
 		)
 		assert.NoError(t, err)
 		return d
@@ -319,10 +383,9 @@ func TestPruneRemovedResources(t *testing.T) {
 
 	createGateway := func() *gwv1.Gateway {
 		gw := &gwv1.Gateway{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      gwName,
-				Namespace: ns,
-			},
+			Name:      gwName,
+			Namespace: ns,
+			UID:       "gateway-uid",
 			Spec: gwv1.GatewaySpec{
 				GatewayClassName: wellknown.DefaultAgwClassName,
 			},
@@ -331,18 +394,19 @@ func TestPruneRemovedResources(t *testing.T) {
 		return gw
 	}
 
-	createPDB := func(name string, gatewayName string) *policyv1.PodDisruptionBudget {
+	createPDB := func(
+		name string,
+		gatewayName string,
+		ownerRefs []metav1.OwnerReference,
+	) *policyv1.PodDisruptionBudget {
 		pdb := &policyv1.PodDisruptionBudget{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       wellknown.PodDisruptionBudgetGVK.Kind,
-				APIVersion: wellknown.PodDisruptionBudgetGVK.GroupVersion().String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: ns,
-				Labels: map[string]string{
-					wellknown.GatewayNameLabel: gatewayName,
-				},
+			Kind:            wellknown.PodDisruptionBudgetGVK.Kind,
+			APIVersion:      wellknown.PodDisruptionBudgetGVK.GroupVersion().String(),
+			Name:            name,
+			Namespace:       ns,
+			OwnerReferences: ownerRefs,
+			Labels: map[string]string{
+				wellknown.GatewayNameLabel: gatewayName,
 			},
 			Spec: policyv1.PodDisruptionBudgetSpec{
 				Selector: &metav1.LabelSelector{
@@ -353,18 +417,19 @@ func TestPruneRemovedResources(t *testing.T) {
 		return pdb
 	}
 
-	createHPA := func(name string, gatewayName string) *autoscalingv2.HorizontalPodAutoscaler {
+	createHPA := func(
+		name string,
+		gatewayName string,
+		ownerRefs []metav1.OwnerReference,
+	) *autoscalingv2.HorizontalPodAutoscaler {
 		hpa := &autoscalingv2.HorizontalPodAutoscaler{
-			TypeMeta: metav1.TypeMeta{
-				Kind:       wellknown.HorizontalPodAutoscalerGVK.Kind,
-				APIVersion: wellknown.HorizontalPodAutoscalerGVK.GroupVersion().String(),
-			},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: ns,
-				Labels: map[string]string{
-					wellknown.GatewayNameLabel: gatewayName,
-				},
+			Kind:            wellknown.HorizontalPodAutoscalerGVK.Kind,
+			APIVersion:      wellknown.HorizontalPodAutoscalerGVK.GroupVersion().String(),
+			Name:            name,
+			Namespace:       ns,
+			OwnerReferences: ownerRefs,
+			Labels: map[string]string{
+				wellknown.GatewayNameLabel: gatewayName,
 			},
 			Spec: autoscalingv2.HorizontalPodAutoscalerSpec{
 				ScaleTargetRef: autoscalingv2.CrossVersionObjectReference{
@@ -378,9 +443,74 @@ func TestPruneRemovedResources(t *testing.T) {
 		return hpa
 	}
 
+	ownerRefForGateway := func(gw *gwv1.Gateway, controller bool) []metav1.OwnerReference {
+		return []metav1.OwnerReference{{
+			APIVersion: wellknown.GatewayGVK.GroupVersion().String(),
+			Kind:       wellknown.GatewayGVK.Kind,
+			Name:       gw.GetName(),
+			UID:        gw.GetUID(),
+			Controller: &controller,
+		}}
+	}
+
+	createDeployment := func(name string, gatewayName string, ownerRefs []metav1.OwnerReference) *appsv1.Deployment {
+		return &appsv1.Deployment{
+			Kind:            wellknown.DeploymentGVK.Kind,
+			APIVersion:      wellknown.DeploymentGVK.GroupVersion().String(),
+			Name:            name,
+			Namespace:       ns,
+			OwnerReferences: ownerRefs,
+			Labels: map[string]string{
+				wellknown.GatewayNameLabel: gatewayName,
+			},
+		}
+	}
+
+	createDaemonSet := func(name string, gatewayName string, ownerRefs []metav1.OwnerReference) *appsv1.DaemonSet {
+		return &appsv1.DaemonSet{
+			Kind:            wellknown.DaemonSetGVK.Kind,
+			APIVersion:      wellknown.DaemonSetGVK.GroupVersion().String(),
+			Name:            name,
+			Namespace:       ns,
+			OwnerReferences: ownerRefs,
+			Labels: map[string]string{
+				wellknown.GatewayNameLabel: gatewayName,
+			},
+		}
+	}
+
+	createVPA := func(
+		name string,
+		gatewayName string,
+		ownerRefs []metav1.OwnerReference,
+	) *unstructured.Unstructured {
+		vpa := &unstructured.Unstructured{Object: map[string]any{
+			"apiVersion": wellknown.VerticalPodAutoscalerGVK.GroupVersion().String(),
+			"kind":       wellknown.VerticalPodAutoscalerGVK.Kind,
+			"metadata": map[string]any{
+				"name":      name,
+				"namespace": ns,
+				"labels": map[string]any{
+					wellknown.GatewayNameLabel: gatewayName,
+				},
+			},
+			"spec": map[string]any{
+				"targetRef": map[string]any{
+					"apiVersion": wellknown.DeploymentGVK.GroupVersion().String(),
+					"kind":       wellknown.DeploymentGVK.Kind,
+					"name":       deployName,
+				},
+			},
+		}}
+		vpa.SetGroupVersionKind(wellknown.VerticalPodAutoscalerGVK)
+		vpa.SetOwnerReferences(ownerRefs)
+
+		return vpa
+	}
+
 	t.Run("prunes PDB when not in desired set", func(t *testing.T) {
 		gw := createGateway()
-		pdb := createPDB(pdbName, gwName)
+		pdb := createPDB(pdbName, gwName, ownerRefForGateway(gw, true))
 
 		fc := fake.NewClient(t, gw, pdb)
 		d := getDeployer(t, fc)
@@ -400,14 +530,14 @@ func TestPruneRemovedResources(t *testing.T) {
 
 	t.Run("keeps PDB when in desired set", func(t *testing.T) {
 		gw := createGateway()
-		pdb := createPDB(pdbName, gwName)
+		pdb := createPDB(pdbName, gwName, ownerRefForGateway(gw, true))
 
 		fc := fake.NewClient(t, gw, pdb)
 		d := getDeployer(t, fc)
 		fc.RunAndWait(ctx.Done())
 
 		// PDB is in desired set - should be kept
-		desiredPDB := createPDB(pdbName, gwName)
+		desiredPDB := createPDB(pdbName, gwName, nil)
 		err := d.PruneRemovedResources(ctx, gw, []client.Object{desiredPDB})
 		assert.NoError(t, err)
 
@@ -423,7 +553,7 @@ func TestPruneRemovedResources(t *testing.T) {
 	t.Run("skips resources belonging to a different Gateway", func(t *testing.T) {
 		gw := createGateway()
 		// PDB labeled for a different Gateway
-		pdb := createPDB(pdbName, "other-gateway")
+		pdb := createPDB(pdbName, "other-gateway", nil)
 
 		fc := fake.NewClient(t, gw, pdb)
 		d := getDeployer(t, fc)
@@ -443,18 +573,19 @@ func TestPruneRemovedResources(t *testing.T) {
 
 	t.Run("prunes multiple resources in one call", func(t *testing.T) {
 		gw := createGateway()
-		pdb := createPDB(pdbName, gwName)
-		hpa := createHPA(hpaName, gwName)
+		ownerRefs := ownerRefForGateway(gw, true)
+		pdb := createPDB(pdbName, gwName, ownerRefs)
+		hpa := createHPA(hpaName, gwName, ownerRefs)
 
 		fc := fake.NewClient(t, gw, pdb, hpa)
 		d := getDeployer(t, fc)
 		fc.RunAndWait(ctx.Done())
 
-		// Empty desired set - both should be pruned
+		// Empty desired set - generated support resources should be pruned
 		err := d.PruneRemovedResources(ctx, gw, []client.Object{})
 		assert.NoError(t, err)
 
-		// Verify both were deleted
+		// Verify support resources were deleted
 		pdbGVR, err := wellknown.GVKToGVR(wellknown.PodDisruptionBudgetGVK)
 		assert.NoError(t, err)
 		pdbList, err := fc.Dynamic().Resource(pdbGVR).Namespace(ns).List(ctx, metav1.ListOptions{})
@@ -470,15 +601,16 @@ func TestPruneRemovedResources(t *testing.T) {
 
 	t.Run("prunes some resources while keeping others", func(t *testing.T) {
 		gw := createGateway()
-		pdb := createPDB(pdbName, gwName)
-		hpa := createHPA(hpaName, gwName)
+		ownerRefs := ownerRefForGateway(gw, true)
+		pdb := createPDB(pdbName, gwName, ownerRefs)
+		hpa := createHPA(hpaName, gwName, ownerRefs)
 
 		fc := fake.NewClient(t, gw, pdb, hpa)
 		d := getDeployer(t, fc)
 		fc.RunAndWait(ctx.Done())
 
 		// Only PDB in desired set - HPA should be pruned
-		desiredPDB := createPDB(pdbName, gwName)
+		desiredPDB := createPDB(pdbName, gwName, nil)
 		err := d.PruneRemovedResources(ctx, gw, []client.Object{desiredPDB})
 		assert.NoError(t, err)
 
@@ -511,8 +643,9 @@ func TestPruneRemovedResources(t *testing.T) {
 
 	t.Run("handles empty desired set", func(t *testing.T) {
 		gw := createGateway()
-		pdb := createPDB(pdbName, gwName)
-		hpa := createHPA(hpaName, gwName)
+		ownerRefs := ownerRefForGateway(gw, true)
+		pdb := createPDB(pdbName, gwName, ownerRefs)
+		hpa := createHPA(hpaName, gwName, ownerRefs)
 
 		fc := fake.NewClient(t, gw, pdb, hpa)
 		d := getDeployer(t, fc)
@@ -534,5 +667,222 @@ func TestPruneRemovedResources(t *testing.T) {
 		hpaList, err := fc.Dynamic().Resource(hpaGVR).Namespace(ns).List(ctx, metav1.ListOptions{})
 		assert.NoError(t, err)
 		assert.Equal(t, 0, len(hpaList.Items))
+	})
+
+	t.Run("keeps VPA when default pruner has no VPA GVR mapping", func(t *testing.T) {
+		gw := createGateway()
+		vpaGVR := wellknown.VerticalPodAutoscalerGVK.GroupVersion().WithResource("verticalpodautoscalers")
+		vpa := createVPA("test-vpa", gwName, ownerRefForGateway(gw, true))
+
+		fc := fake.NewClientWithExtraGVRs(t, []schema.GroupVersionResource{vpaGVR}, gw)
+		_, err := fc.Dynamic().Resource(vpaGVR).Namespace(ns).Create(ctx, vpa, metav1.CreateOptions{})
+		assert.NoError(t, err)
+		d := getDeployer(t, fc)
+		fc.RunAndWait(ctx.Done())
+
+		err = d.PruneRemovedResources(ctx, gw, []client.Object{})
+		assert.NoError(t, err)
+
+		_, err = fc.Dynamic().Resource(vpaGVR).Namespace(ns).Get(ctx, "test-vpa", metav1.GetOptions{})
+		assert.NoError(t, err)
+	})
+
+	t.Run("prunes VPA when explicit VPA GVR mapping is supplied", func(t *testing.T) {
+		gw := createGateway()
+		deploymentGVR := wellknown.DeploymentGVK.GroupVersion().WithResource("deployments")
+		daemonSetGVR := wellknown.DaemonSetGVK.GroupVersion().WithResource("daemonsets")
+		pdbGVR := wellknown.PodDisruptionBudgetGVK.GroupVersion().WithResource("poddisruptionbudgets")
+		hpaGVR := wellknown.HorizontalPodAutoscalerGVK.GroupVersion().WithResource("horizontalpodautoscalers")
+		vpaGVR := wellknown.VerticalPodAutoscalerGVK.GroupVersion().WithResource("verticalpodautoscalers")
+		vpa := createVPA("test-vpa", gwName, ownerRefForGateway(gw, true))
+		baseClient := fake.NewClient(t, gw)
+		fc := dynamicOverrideClient{
+			Client: baseClient,
+			dynamicClient: dynamicfake.NewSimpleDynamicClientWithCustomListKinds(
+				scheme,
+				map[schema.GroupVersionResource]string{
+					deploymentGVR: "DeploymentList",
+					daemonSetGVR:  "DaemonSetList",
+					pdbGVR:        "PodDisruptionBudgetList",
+					hpaGVR:        "HorizontalPodAutoscalerList",
+					vpaGVR:        "VerticalPodAutoscalerList",
+				},
+				vpa,
+			),
+		}
+		d := getDeployer(
+			t,
+			fc,
+			deployer.WithGVKToGVRMapper(map[schema.GroupVersionKind]schema.GroupVersionResource{
+				wellknown.VerticalPodAutoscalerGVK: vpaGVR,
+			}),
+		)
+		baseClient.RunAndWait(ctx.Done())
+
+		err := d.PruneRemovedResources(ctx, gw, []client.Object{})
+		assert.NoError(t, err)
+
+		_, err = fc.Dynamic().Resource(vpaGVR).Namespace(ns).Get(ctx, "test-vpa", metav1.GetOptions{})
+		assert.Equal(t, true, apierrors.IsNotFound(err))
+	})
+
+	t.Run("prunes stale Deployment when desired workload is DaemonSet", func(t *testing.T) {
+		gw := createGateway()
+		deployment := createDeployment(gwName, gwName, ownerRefForGateway(gw, true))
+		desiredDaemonSet := createDaemonSet(gwName, gwName, nil)
+
+		fc := fake.NewClient(t, gw, deployment)
+		d := getDeployer(t, fc)
+		fc.RunAndWait(ctx.Done())
+
+		err := d.PruneRemovedResources(ctx, gw, []client.Object{desiredDaemonSet})
+		assert.NoError(t, err)
+
+		deploymentGVR, err := wellknown.GVKToGVR(wellknown.DeploymentGVK)
+		assert.NoError(t, err)
+		deploymentList, err := fc.Dynamic().Resource(deploymentGVR).Namespace(ns).List(ctx, metav1.ListOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(deploymentList.Items))
+	})
+
+	t.Run("prunes stale Deployment for long Gateway name labeled with safe value", func(t *testing.T) {
+		longGwName := strings.Join([]string{
+			"extremely-long-gateway-name-that-exceeds-the-sixty-three-character-limit",
+			"imposed-by-kubernetes-dns-naming-requirements",
+		}, "-")
+		safeGwName := "extremely-long-gateway-name-that-exceeds-the-sixty-ff41b39ff097"
+		gw := createGateway()
+		gw.Name = longGwName
+		deployment := createDeployment(safeGwName, safeGwName, ownerRefForGateway(gw, true))
+		desiredDaemonSet := createDaemonSet(safeGwName, safeGwName, nil)
+
+		fc := fake.NewClient(t, gw, deployment)
+		d := getDeployer(t, fc)
+		fc.RunAndWait(ctx.Done())
+
+		err := d.PruneRemovedResources(ctx, gw, []client.Object{desiredDaemonSet})
+		assert.NoError(t, err)
+
+		deploymentGVR, err := wellknown.GVKToGVR(wellknown.DeploymentGVK)
+		assert.NoError(t, err)
+		deploymentList, err := fc.Dynamic().Resource(deploymentGVR).Namespace(ns).List(ctx, metav1.ListOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(deploymentList.Items))
+	})
+
+	t.Run("prunes stale HPA when desired workload is DaemonSet", func(t *testing.T) {
+		gw := createGateway()
+		ownerRefs := ownerRefForGateway(gw, true)
+		deployment := createDeployment(gwName, gwName, ownerRefs)
+		hpa := createHPA(hpaName, gwName, ownerRefs)
+		desiredDaemonSet := createDaemonSet(gwName, gwName, nil)
+
+		fc := fake.NewClient(t, gw, deployment, hpa)
+		d := getDeployer(t, fc)
+		fc.RunAndWait(ctx.Done())
+
+		err := d.PruneRemovedResources(ctx, gw, []client.Object{desiredDaemonSet})
+		assert.NoError(t, err)
+
+		hpaGVR, err := wellknown.GVKToGVR(wellknown.HorizontalPodAutoscalerGVK)
+		assert.NoError(t, err)
+		hpaList, err := fc.Dynamic().Resource(hpaGVR).Namespace(ns).List(ctx, metav1.ListOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(hpaList.Items))
+	})
+
+	t.Run("prunes stale DaemonSet when desired workload is Deployment", func(t *testing.T) {
+		gw := createGateway()
+		daemonSet := createDaemonSet(gwName, gwName, ownerRefForGateway(gw, true))
+		desiredDeployment := createDeployment(gwName, gwName, nil)
+
+		fc := fake.NewClient(t, gw, daemonSet)
+		d := getDeployer(t, fc)
+		fc.RunAndWait(ctx.Done())
+
+		err := d.PruneRemovedResources(ctx, gw, []client.Object{desiredDeployment})
+		assert.NoError(t, err)
+
+		daemonSetGVR, err := wellknown.GVKToGVR(wellknown.DaemonSetGVK)
+		assert.NoError(t, err)
+		daemonSetList, err := fc.Dynamic().Resource(daemonSetGVR).Namespace(ns).List(ctx, metav1.ListOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(daemonSetList.Items))
+	})
+
+	t.Run("keeps stale workload without Gateway owner reference", func(t *testing.T) {
+		gw := createGateway()
+		deployment := createDeployment(gwName, gwName, nil)
+		desiredDaemonSet := createDaemonSet(gwName, gwName, nil)
+
+		fc := fake.NewClient(t, gw, deployment)
+		d := getDeployer(t, fc)
+		fc.RunAndWait(ctx.Done())
+
+		err := d.PruneRemovedResources(ctx, gw, []client.Object{desiredDaemonSet})
+		assert.NoError(t, err)
+
+		deploymentGVR, err := wellknown.GVKToGVR(wellknown.DeploymentGVK)
+		assert.NoError(t, err)
+		deploymentList, err := fc.Dynamic().Resource(deploymentGVR).Namespace(ns).List(ctx, metav1.ListOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(deploymentList.Items))
+	})
+
+	t.Run("keeps labeled resources without Gateway controller owner reference", func(t *testing.T) {
+		gw := createGateway()
+		deployment := createDeployment("user-deploy", gwName, nil)
+		daemonSet := createDaemonSet("user-daemonset", gwName, nil)
+		pdb := createPDB("user-pdb", gwName, nil)
+		hpa := createHPA("user-hpa", gwName, nil)
+
+		fc := fake.NewClient(t, gw, deployment, daemonSet, pdb, hpa)
+		d := getDeployer(t, fc)
+		fc.RunAndWait(ctx.Done())
+
+		err := d.PruneRemovedResources(ctx, gw, []client.Object{})
+		assert.NoError(t, err)
+
+		deploymentGVR, err := wellknown.GVKToGVR(wellknown.DeploymentGVK)
+		assert.NoError(t, err)
+		deploymentList, err := fc.Dynamic().Resource(deploymentGVR).Namespace(ns).List(ctx, metav1.ListOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(deploymentList.Items))
+
+		daemonSetGVR, err := wellknown.GVKToGVR(wellknown.DaemonSetGVK)
+		assert.NoError(t, err)
+		daemonSetList, err := fc.Dynamic().Resource(daemonSetGVR).Namespace(ns).List(ctx, metav1.ListOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(daemonSetList.Items))
+
+		pdbGVR, err := wellknown.GVKToGVR(wellknown.PodDisruptionBudgetGVK)
+		assert.NoError(t, err)
+		pdbList, err := fc.Dynamic().Resource(pdbGVR).Namespace(ns).List(ctx, metav1.ListOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(pdbList.Items))
+
+		hpaGVR, err := wellknown.GVKToGVR(wellknown.HorizontalPodAutoscalerGVK)
+		assert.NoError(t, err)
+		hpaList, err := fc.Dynamic().Resource(hpaGVR).Namespace(ns).List(ctx, metav1.ListOptions{})
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(hpaList.Items))
+	})
+
+	t.Run("keeps stale workload with non-controller Gateway owner reference", func(t *testing.T) {
+		gw := createGateway()
+		deployment := createDeployment(gwName, gwName, ownerRefForGateway(gw, false))
+		desiredDaemonSet := createDaemonSet(gwName, gwName, nil)
+
+		fc := fake.NewClient(t, gw, deployment)
+		d := getDeployer(t, fc)
+		fc.RunAndWait(ctx.Done())
+
+		err := d.PruneRemovedResources(ctx, gw, []client.Object{desiredDaemonSet})
+		assert.NoError(t, err)
+
+		deploymentGVR, err := wellknown.GVKToGVR(wellknown.DeploymentGVK)
+		assert.NoError(t, err)
+		_, err = fc.Dynamic().Resource(deploymentGVR).Namespace(ns).Get(ctx, gwName, metav1.GetOptions{})
+		assert.NoError(t, err)
 	})
 }

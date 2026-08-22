@@ -44,6 +44,8 @@ deps_started=1
 # Example validation runs without shell setup, so provide a deterministic cookie
 # secret for configs that enable browser auth.
 export OIDC_COOKIE_SECRET="${OIDC_COOKIE_SECRET:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}"
+export OPENAI_API_KEY=dummy
+export ANTHROPIC_API_KEY=dummy
 
 for config_file in "${config_files[@]}"; do
   echo "Validating $config_file"

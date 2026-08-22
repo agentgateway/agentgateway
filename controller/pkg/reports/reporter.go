@@ -8,8 +8,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
-	gwv1a2 "sigs.k8s.io/gateway-api/apis/v1alpha2"
 
+	"github.com/agentgateway/agentgateway/controller/api/v1alpha1/agentgateway"
 	"github.com/agentgateway/agentgateway/controller/pkg/pluginsdk/reporter"
 	"github.com/agentgateway/agentgateway/controller/pkg/wellknown"
 )
@@ -20,6 +20,7 @@ type ReportMap struct {
 	GRPCRoutes map[types.NamespacedName]*RouteReport
 	TCPRoutes  map[types.NamespacedName]*RouteReport
 	TLSRoutes  map[types.NamespacedName]*RouteReport
+	Models     map[types.NamespacedName]*RouteReport
 }
 
 type GatewayReport struct {
@@ -55,6 +56,7 @@ func NewReportMap() ReportMap {
 		GRPCRoutes: make(map[types.NamespacedName]*RouteReport),
 		TCPRoutes:  make(map[types.NamespacedName]*RouteReport),
 		TLSRoutes:  make(map[types.NamespacedName]*RouteReport),
+		Models:     make(map[types.NamespacedName]*RouteReport),
 	}
 }
 
@@ -88,18 +90,21 @@ func (r *ReportMap) newGatewayReport(gateway *gwv1.Gateway) *GatewayReport {
 // * TCPRoute
 // * TLSRoute
 // * GRPCRoute
+// * AgentgatewayModel
 func (r *ReportMap) route(obj metav1.Object) *RouteReport {
 	key := key(obj)
 
 	switch obj.(type) {
 	case *gwv1.HTTPRoute:
 		return r.HTTPRoutes[key]
-	case *gwv1a2.TCPRoute:
+	case *gwv1.TCPRoute:
 		return r.TCPRoutes[key]
 	case *gwv1.TLSRoute:
 		return r.TLSRoutes[key]
 	case *gwv1.GRPCRoute:
 		return r.GRPCRoutes[key]
+	case *agentgateway.AgentgatewayModel:
+		return r.Models[key]
 	default:
 		slog.Warn("unsupported route type", "route_type", fmt.Sprintf("%T", obj))
 		return nil
@@ -116,12 +121,14 @@ func (r *ReportMap) newRouteReport(obj metav1.Object) *RouteReport {
 	switch obj.(type) {
 	case *gwv1.HTTPRoute:
 		r.HTTPRoutes[key] = rr
-	case *gwv1a2.TCPRoute:
+	case *gwv1.TCPRoute:
 		r.TCPRoutes[key] = rr
 	case *gwv1.TLSRoute:
 		r.TLSRoutes[key] = rr
 	case *gwv1.GRPCRoute:
 		r.GRPCRoutes[key] = rr
+	case *agentgateway.AgentgatewayModel:
+		r.Models[key] = rr
 	default:
 		slog.Warn("unsupported route type", "route_type", fmt.Sprintf("%T", obj))
 		return nil
@@ -232,12 +239,10 @@ func getParentRefKey(parentRef *gwv1.ParentReference) ParentRefKey {
 		ns = string(*parentRef.Namespace)
 	}
 	return ParentRefKey{
-		Group: group,
-		Kind:  kind,
-		NamespacedName: types.NamespacedName{
-			Namespace: ns,
-			Name:      string(parentRef.Name),
-		},
+		Group:     group,
+		Kind:      kind,
+		Namespace: ns,
+		Name:      string(parentRef.Name),
 	}
 }
 

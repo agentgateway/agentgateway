@@ -1,18 +1,21 @@
 # syntax=docker/dockerfile:1.11
 ARG BUILDER=base
 
-FROM docker.io/library/node:23.11.0-bookworm AS node
+FROM docker.io/library/node:24.17.0-bookworm AS node
 
 WORKDIR /app
 
 COPY ui .
 COPY schema /schema
 
-RUN --mount=type=cache,target=/app/npm/cache npm install
+RUN corepack enable
 
-RUN --mount=type=cache,target=/app/npm/cache npm run build
+RUN --mount=type=cache,id=agentgateway-ui-pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile --store-dir=/pnpm/store
 
-FROM docker.io/library/rust:1.96.0-trixie AS musl-builder
+RUN pnpm build
+
+FROM docker.io/library/rust:1.98.0-trixie AS musl-builder
 
 ARG TARGETARCH
 
@@ -34,7 +37,7 @@ else
 fi
 EOF
 
-FROM docker.io/library/rust:1.96.0-trixie AS base-builder
+FROM docker.io/library/rust:1.98.0-trixie AS base-builder
 
 ARG TARGETARCH
 
@@ -62,7 +65,7 @@ COPY Makefile Cargo.toml Cargo.lock ./
 COPY .cargo ./.cargo
 COPY crates ./crates
 COPY tools ./tools
-COPY --from=node /app/out ./ui/out
+COPY --from=node /app/dist ./ui/dist
 
 RUN \
     --mount=type=cache,id=cargo,target=/usr/local/cargo/registry \

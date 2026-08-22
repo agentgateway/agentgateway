@@ -1,6 +1,6 @@
 fn main() -> Result<(), anyhow::Error> {
 	let cwd = std::env::current_dir()?;
-	let proto_files = [
+	let proto_names = [
 		"proto/shared_envoy.proto",
 		"proto/xds.proto",
 		"proto/citadel.proto",
@@ -10,10 +10,16 @@ fn main() -> Result<(), anyhow::Error> {
 		"proto/rls.proto",
 		"proto/workload.proto",
 		"proto/resource.proto",
-	]
-	.iter()
-	.map(|name| cwd.join(name))
-	.collect::<Vec<_>>();
+		// SPIFFE Workload API. The generated bindings are gated behind the `spiffe-test-server`
+		// feature in lib.rs (see the `spiffe_workload_api` module) so they are only compiled into
+		// the crate for tests; generating the descriptor here unconditionally is harmless and keeps
+		// the build script free of feature-name coupling.
+		"proto/spiffe_workload.proto",
+	];
+	let proto_files = proto_names
+		.iter()
+		.map(|name| cwd.join(name))
+		.collect::<Vec<_>>();
 	let include_dirs = [cwd.join("proto")];
 
 	let config = {

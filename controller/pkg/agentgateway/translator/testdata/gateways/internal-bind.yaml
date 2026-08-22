@@ -1,0 +1,136 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: test-gateway
+  namespace: default
+  annotations:
+    agentgateway.dev/internal-ports: "8080"
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+    - name: public
+      port: 80
+      protocol: HTTP
+    - name: internal
+      port: 8080
+      protocol: HTTP
+
+---
+# Output
+output:
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    bind:
+      key: 80/default/test-gateway
+      port: 80
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    bind:
+      key: 8080/default/test-gateway
+      mode: INTERNAL
+      port: 8080
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 8080/default/test-gateway
+      key: default/test-gateway.internal
+      name:
+        gatewayName: test-gateway
+        gatewayNamespace: default
+        listenerName: internal
+      protocol: HTTP
+- gateway:
+    Name: test-gateway
+    Namespace: default
+  resource:
+    listener:
+      bindKey: 80/default/test-gateway
+      key: default/test-gateway.public
+      name:
+        gatewayName: test-gateway
+        gatewayNamespace: default
+        listenerName: public
+      protocol: HTTP
+status:
+- apiVersion: gateway.networking.k8s.io/v1
+  kind: Gateway
+  metadata:
+    name: test-gateway
+    namespace: default
+  spec: null
+  status:
+    attachedListenerSets: 0
+    conditions:
+    - lastTransitionTime: fake
+      message: ""
+      reason: Accepted
+      status: "True"
+      type: Accepted
+    - lastTransitionTime: fake
+      message: Successfully programmed Gateway
+      reason: Programmed
+      status: "True"
+      type: Programmed
+    listeners:
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: public
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute
+    - attachedRoutes: 0
+      conditions:
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Accepted
+        status: "True"
+        type: Accepted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: NoConflicts
+        status: "False"
+        type: Conflicted
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: Programmed
+        status: "True"
+        type: Programmed
+      - lastTransitionTime: fake
+        message: No errors found
+        reason: ResolvedRefs
+        status: "True"
+        type: ResolvedRefs
+      name: internal
+      supportedKinds:
+      - group: gateway.networking.k8s.io
+        kind: HTTPRoute
+      - group: gateway.networking.k8s.io
+        kind: GRPCRoute

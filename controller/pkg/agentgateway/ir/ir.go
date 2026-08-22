@@ -24,6 +24,8 @@ func GetAgwResourceName(r *api.Resource) string {
 		return "route/" + t.Route.GetKey()
 	case *api.Resource_RouteGroup:
 		return "route_group/" + t.RouteGroup.GetKey()
+	case *api.Resource_ModelRoute:
+		return "model_route/" + t.ModelRoute.GetKey()
 	case *api.Resource_TcpRoute:
 		return "tcp_route/" + t.TcpRoute.GetKey()
 	case *api.Resource_Policy:

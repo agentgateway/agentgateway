@@ -1,0 +1,9 @@
+---
+source: crates/llm/src/golden_tests.rs
+description: src/tests/response/detect/broken-sse
+info: "data: {}\n\ndata: ha this isn't json!\n\nthis isn't sse at all!"
+---
+{
+  "response": "data: {}\n\ndata: ha this isn't json!\n\nthis isn't sse at all!",
+  "parsed": {}
+}

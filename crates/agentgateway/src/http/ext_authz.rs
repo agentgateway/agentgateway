@@ -18,7 +18,6 @@ use crate::http::ext_authz::proto::check_response::HttpResponse;
 use crate::http::ext_authz::proto::{
 	AttributeContext, CheckRequest, DeniedHttpResponse, HeaderValueOption, Metadata, OkHttpResponse,
 };
-use crate::http::ext_proc::GrpcReferenceChannel;
 use crate::http::filters::BackendRequestTimeout;
 use crate::http::{
 	HeaderName, HeaderOrPseudo, PolicyResponse, Request, RequestOrResponse, Response,
@@ -27,14 +26,29 @@ use crate::http::{
 use crate::proxy::dtrace::{Severity, pol_event, pol_result_timed};
 use crate::proxy::httpproxy::PolicyClient;
 use crate::proxy::{ProxyError, ProxyResponse, dtrace};
-use crate::telemetry::log::RequestLog;
+use crate::telemetry::log::{RequestLog, copy_span_writer};
 use crate::telemetry::metrics::{OutboundCallKind, OutboundCallSubtype};
 use crate::transport::stream::{TCPConnectionInfo, TLSConnectionInfo};
-use crate::types::agent::{BackendTrafficPolicy, SimpleBackendReference};
+use crate::types::agent::SimpleBackendReferenceWithPolicies;
 use crate::*;
 
 const TRACE_POLICY_KIND: &str = "ext_auth";
 const DEFAULT_CACHE_ENTRIES: usize = 10_000;
+
+/// The verified peer principal for ext_authz: the Istio identity, falling back to the raw SPIFFE ID
+/// when the SVID isn't in Istio `ns/sa` form. Gateway-set from the verified peer cert (never
+/// client-supplied), so the authz server can trust it.
+fn peer_principal(tls_info: Option<&TLSConnectionInfo>) -> String {
+	tls_info
+		.and_then(|tls| tls.src_identity.as_ref())
+		.and_then(|id| {
+			id.identity
+				.as_ref()
+				.map(|i| i.to_string())
+				.or_else(|| id.spiffe_id.as_ref().map(|s| s.to_string()))
+		})
+		.unwrap_or_default()
+}
 
 #[cfg(test)]
 #[path = "ext_authz_tests.rs"]
@@ -147,43 +161,18 @@ pub struct CacheConfig {
 	/// CEL expression that returns how long cached authorization results are reused.
 	/// The expression is evaluated after the authorization response has been applied
 	/// to the request, and must return either a duration or timestamp.
-	#[serde(deserialize_with = "deserialize_cache_ttl")]
+	#[serde(deserialize_with = "crate::cel::de_duration_or_expression")]
 	pub ttl: Arc<cel::Expression>,
 	/// Maximum number of authorization results to keep in the cache.
 	#[serde(default = "default_cache_entries")]
 	pub max_entries: usize,
 }
 
-fn deserialize_cache_ttl<'de, D>(deserializer: D) -> Result<Arc<cel::Expression>, D::Error>
-where
-	D: serde::Deserializer<'de>,
-{
-	use serde::Deserialize;
-
-	let raw = String::deserialize(deserializer)?;
-	let expression = if agent_core::durfmt::parse(&raw).is_ok() {
-		format!("duration({raw:?})")
-	} else {
-		raw
-	};
-	cel::Expression::new_strict(&expression)
-		.map(Arc::new)
-		.map_err(serde::de::Error::custom)
-}
-
 #[apply(schema!)]
 pub struct ExtAuthz {
-	/// Backend that receives authorization checks.
+	/// Backend that receives authorization checks and policies used when connecting to it.
 	#[serde(flatten)]
-	pub target: Arc<SimpleBackendReference>,
-	/// Backend policies used when connecting to the authorization service.
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	#[serde(deserialize_with = "crate::types::local::de_from_local_backend_policy")]
-	#[cfg_attr(
-		feature = "schema",
-		schemars(with = "Option<crate::types::local::SimpleLocalBackendPolicies>")
-	)]
-	pub policies: Vec<BackendTrafficPolicy>,
+	pub target: SimpleBackendReferenceWithPolicies,
 	/// Protocol used to call the authorization service. Use gRPC unless the service only supports HTTP.
 	#[serde(default)]
 	pub protocol: Protocol,
@@ -215,6 +204,29 @@ impl ExtAuthz {
 			.map(|cache| cache_store(effective_cache_entries(cache.max_entries)))
 			.unwrap_or_else(default_cache_store);
 		self
+	}
+
+	pub async fn check_network(
+		&self,
+		client: PolicyClient,
+		source: crate::cel::SourceContext,
+		destination: crate::cel::DestinationContext,
+	) -> Result<(), ProxyError> {
+		debug_assert!(matches!(self.protocol, Protocol::Http { .. }));
+		let mut req = ::http::Request::builder()
+			.uri("/")
+			.body(http::Body::empty())
+			.map_err(|e| ProxyError::Processing(e.into()))?;
+		req.extensions_mut().insert(source);
+		req.extensions_mut().insert(destination);
+
+		let response = self.check_http(client, &mut req).await?;
+		match response.direct_response {
+			Some(response) => Err(ProxyError::ExternalAuthorizationFailed(Some(
+				response.status(),
+			))),
+			None => Ok(()),
+		}
 	}
 
 	fn cache_key(&self, req: &Request) -> Result<CacheKey, CacheMissReason> {
@@ -280,21 +292,18 @@ impl ExtAuthz {
 	) -> Result<BufferedRequestBody, BufferRequestBodyError> {
 		let max_size = body_opts.max_request_bytes as usize;
 
-		let peek_limit = max_size.saturating_add(1);
-		let body = crate::http::inspect_body_with_limit(req.body_mut(), peek_limit)
+		let inspection = crate::http::inspect_body_with_limit(req.body_mut(), max_size)
 			.await
 			.map_err(BufferRequestBodyError::Read)?;
-		let is_partial = body.len() > max_size;
+		let (body, is_partial) = match inspection {
+			crate::http::BodyInspection::Complete(body) => (body, false),
+			crate::http::BodyInspection::Partial(body) => (body, true),
+		};
 
 		if is_partial && !body_opts.allow_partial_message {
 			return Err(BufferRequestBodyError::TooLarge);
 		}
 
-		let body = if is_partial {
-			body.slice(0..max_size)
-		} else {
-			body
-		};
 		let original_size = match is_partial {
 			false => i64::try_from(body.len()).unwrap_or(i64::MAX),
 			true => -1,
@@ -370,11 +379,11 @@ impl ExtAuthz {
 		req: &mut Request,
 	) -> Result<PolicyResponse, ProxyError> {
 		if matches!(self.protocol, Protocol::Http { .. }) {
-			trace!(protocol = "http", "connecting to {:?}", self.target);
+			trace!(protocol = "http", "connecting to {:?}", self.target.target);
 			return self.check_http(client, req).await;
 		}
 		let start = dtrace::timed_start();
-		trace!(protocol = "grpc", "connecting to {:?}", self.target);
+		trace!(protocol = "grpc", "connecting to {:?}", self.target.target);
 
 		let Protocol::Grpc { context, metadata } = &self.protocol else {
 			unreachable!();
@@ -385,12 +394,11 @@ impl ExtAuthz {
 			return cached_response.apply(req);
 		}
 		pol_event!(Severity::Info, "{}", cache_lookup);
-		let chan = GrpcReferenceChannel {
-			target: self.target.clone(),
-			policies: Arc::new(self.policies.clone()),
-			client: client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtAuthz),
-		};
-		let mut grpc_client = AuthorizationClient::new(chan);
+		let policy_client =
+			client.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtAuthz);
+		let chan = self.target.grpc_channel(policy_client.clone());
+		let mut grpc_client = AuthorizationClient::new(chan)
+			.max_decoding_message_size(defaults::GRPC_MAX_DECODING_MESSAGE_SIZE);
 		// Get connection info with proper error handling
 		// Clone the fields we need to avoid borrow checker issues
 		let (peer_addr, local_addr, connection_start_time) = {
@@ -513,15 +521,7 @@ impl ExtAuthz {
 			}),
 			service: String::new(),
 			labels: HashMap::new(),
-			principal: tls_info
-				.as_ref()
-				.and_then(|tls| {
-					tls
-						.src_identity
-						.as_ref()
-						.and_then(|id| id.identity.as_ref().map(|s| s.to_string()))
-				})
-				.unwrap_or_default(),
+			principal: peer_principal(tls_info.as_ref()),
 			certificate: String::new(),
 		});
 
@@ -560,10 +560,18 @@ impl ExtAuthz {
 				tls_session,
 			}),
 		};
+		let mut authz_req = tonic::Request::new(authz_req);
+		copy_span_writer(req.extensions(), authz_req.extensions_mut());
+		let mut span = policy_client.start_grpc_span(
+			&mut authz_req,
+			self.target.target.as_ref(),
+			"/envoy.service.auth.v3.Authorization/Check",
+		);
 
-		let scope = dtrace::start_scope("ext_authz");
 		let resp = grpc_client.check(authz_req).await;
-		drop(scope);
+		if let Some(span) = span.as_deref_mut() {
+			span.record_grpc_result(&resp);
+		}
 
 		trace!("check response: {:?}", resp);
 		let cr = match resp {
@@ -805,6 +813,7 @@ impl ExtAuthz {
 		let mut check_req = rb
 			.body(http::Body::from(body))
 			.map_err(|e| ProxyError::Processing(e.into()))?;
+		copy_span_writer(req.extensions(), check_req.extensions_mut());
 
 		// Include any request headers
 		let include = if self.include_request_headers.is_empty() {
@@ -844,11 +853,14 @@ impl ExtAuthz {
 		// Set the default request timeout. This can be overridden by a timeout on the Backend object itself.
 		check_req
 			.extensions_mut()
-			.insert(BackendRequestTimeout(Duration::from_millis(200)));
-		let scope = dtrace::start_scope("ext_authz");
+			.insert(BackendRequestTimeout(Duration::from_secs(2)));
 		let resp = client
 			.with_outbound(OutboundCallKind::Policy, OutboundCallSubtype::ExtAuthz)
-			.call_reference(check_req, &self.target)
+			.call_reference_with_policies(
+				check_req,
+				&self.target.target,
+				self.target.policies.as_slice(),
+			)
 			.await;
 		let mut resp = match resp {
 			Ok(r) => r,
@@ -857,7 +869,6 @@ impl ExtAuthz {
 				return self.handle_auth_failure(&e.to_string());
 			},
 		};
-		drop(scope);
 		if resp.status().is_success() {
 			let mut included_headers = HeaderMap::new();
 			for k in include_response_headers {
@@ -870,7 +881,7 @@ impl ExtAuthz {
 			let mut dynamic_metadata = None;
 			if !metadata.is_empty() {
 				if let Ok(body) = crate::http::inspect_response_body(&mut resp).await {
-					resp.extensions_mut().insert(BufferedBody(body));
+					resp.extensions_mut().insert(BufferedBody::from(body));
 				};
 				let m = metadata
 					.iter()

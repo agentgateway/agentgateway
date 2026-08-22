@@ -11,6 +11,8 @@ import (
 	"istio.io/istio/pkg/test/util/retry"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	ktypes "k8s.io/apimachinery/pkg/types"
 	inf "sigs.k8s.io/gateway-api-inference-extension/api/v1"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -80,6 +82,23 @@ func EventuallyGatewayListenerAttachedRoutes(t Test, gatewayName string, gateway
 	})
 }
 
+func EventuallyGatewayListenerCondition(t Test, gatewayName string, gatewayNamespace string, listener gwv1.SectionName, cond gwv1.ListenerConditionType, expect metav1.ConditionStatus) {
+	t.Helper()
+	retry.UntilSuccessOrFail(t, func() error {
+		gw := &gwv1.Gateway{}
+		if err := t.E2EClusterContext().ControllerClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: gatewayName, Namespace: gatewayNamespace}, gw); err != nil {
+			return fmt.Errorf("failed to get Gateway %s/%s: %w", gatewayNamespace, gatewayName, err)
+		}
+		for _, l := range gw.Status.Listeners {
+			if l.Name != listener {
+				continue
+			}
+			return expectMatch(l.Conditions, matchers.HaveCondition(string(cond), expect), "Gateway %s/%s listener %s condition %s=%s", gatewayNamespace, gatewayName, listener, cond, expect)
+		}
+		return fmt.Errorf("listener %s not found in Gateway %s/%s; full status: %+v", listener, gatewayNamespace, gatewayName, gw.Status)
+	})
+}
+
 func EventuallyHTTPRouteCondition(t Test, routeName string, routeNamespace string, cond gwv1.RouteConditionType, expect metav1.ConditionStatus) {
 	t.Helper()
 	retry.UntilSuccessOrFail(t, func() error {
@@ -102,6 +121,17 @@ func EventuallyGRPCRouteCondition(t Test, routeName string, routeNamespace strin
 	})
 }
 
+func EventuallyAgentgatewayModelCondition(t Test, modelName string, modelNamespace string, cond gwv1.RouteConditionType, expect metav1.ConditionStatus) {
+	t.Helper()
+	retry.UntilSuccessOrFail(t, func() error {
+		model := &agentgateway.AgentgatewayModel{}
+		if err := t.E2EClusterContext().ControllerClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: modelName, Namespace: modelNamespace}, model); err != nil {
+			return fmt.Errorf("failed to get AgentgatewayModel %s/%s: %w", modelNamespace, modelName, err)
+		}
+		return expectMatch(extractParentConditions(model.Status.Parents), matchers.HaveAnyParentCondition(string(cond), expect), "AgentgatewayModel %s/%s parent condition %s=%s", modelNamespace, modelName, cond, expect)
+	})
+}
+
 func EventuallyInferencePoolCondition(t Test, poolName string, poolNamespace string, cond inf.InferencePoolConditionType, expect metav1.ConditionStatus) {
 	t.Helper()
 	retry.UntilSuccessOrFail(t, func() error {
@@ -113,25 +143,61 @@ func EventuallyInferencePoolCondition(t Test, poolName string, poolNamespace str
 	})
 }
 
-func EventuallyAgwBackendCondition(t Test, name string, namespace string, condition string, expect metav1.ConditionStatus) {
+func EventuallyAgwBackendCondition(t AGWTest, name string, namespace string, condition string, expect metav1.ConditionStatus) {
 	t.Helper()
+	gvk := t.AgentgatewayBackendGVK()
 	retry.UntilSuccessOrFail(t, func() error {
-		backend := &agentgateway.AgentgatewayBackend{}
+		backend := &unstructured.Unstructured{}
+		backend.SetGroupVersionKind(gvk)
 		if err := t.E2EClusterContext().ControllerClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: name, Namespace: namespace}, backend); err != nil {
-			return fmt.Errorf("failed to get AgentgatewayBackend %s/%s: %w", namespace, name, err)
+			return fmt.Errorf("failed to get %s %s/%s: %w", gvk.Kind, namespace, name, err)
 		}
-		return expectMatch(backend.Status.Conditions, matchers.HaveCondition(condition, expect), "AgentgatewayBackend %s/%s condition %s=%s", namespace, name, condition, expect)
+
+		status, found, err := unstructured.NestedMap(backend.Object, "status")
+		if err != nil {
+			return fmt.Errorf("failed to read %s %s/%s status: %w", gvk.Kind, namespace, name, err)
+		}
+		if !found {
+			return fmt.Errorf("%s %s/%s status is not set", gvk.Kind, namespace, name)
+		}
+		var backendStatus agentgateway.AgentgatewayBackendStatus
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(status, &backendStatus); err != nil {
+			return fmt.Errorf("failed to decode %s %s/%s status: %w", gvk.Kind, namespace, name, err)
+		}
+		return expectMatch(backendStatus.Conditions, matchers.HaveCondition(condition, expect), "%s %s/%s condition %s=%s", gvk.Kind, namespace, name, condition, expect)
 	})
 }
 
-func EventuallyAgwPolicyCondition(t Test, name string, namespace string, condType string, expect metav1.ConditionStatus) {
+func EventuallyAgwPolicyCondition(t AGWTest, name string, namespace string, condType string, expect metav1.ConditionStatus) {
 	t.Helper()
+	gvk := t.AgentgatewayPolicyGVK()
+	EventuallyAgwPolicyStatus(t, name, namespace, func(status gwv1.PolicyStatus) error {
+		return expectMatch(extractAgwPolicyAncestorConditions(status.Ancestors), matchers.HaveAnyAncestorCondition(condType, expect), "%s %s/%s ancestor condition %s=%s", gvk.Kind, namespace, name, condType, expect)
+	})
+}
+
+func EventuallyAgwPolicyStatus(t AGWTest, name string, namespace string, validate func(gwv1.PolicyStatus) error) {
+	t.Helper()
+	gvk := t.AgentgatewayPolicyGVK()
 	retry.UntilSuccessOrFail(t, func() error {
-		policy := &agentgateway.AgentgatewayPolicy{}
+		policy := &unstructured.Unstructured{}
+		policy.SetGroupVersionKind(gvk)
 		if err := t.E2EClusterContext().ControllerClient.Get(t.E2EContext(), ktypes.NamespacedName{Name: name, Namespace: namespace}, policy); err != nil {
-			return fmt.Errorf("failed to get AgentgatewayPolicy %s/%s: %w", namespace, name, err)
+			return fmt.Errorf("failed to get %s %s/%s: %w", gvk.Kind, namespace, name, err)
 		}
-		return expectMatch(extractAgwPolicyAncestorConditions(policy.Status.Ancestors), matchers.HaveAnyAncestorCondition(condType, expect), "AgentgatewayPolicy %s/%s ancestor condition %s=%s", namespace, name, condType, expect)
+
+		status, found, err := unstructured.NestedMap(policy.Object, "status")
+		if err != nil {
+			return fmt.Errorf("failed to read %s %s/%s status: %w", gvk.Kind, namespace, name, err)
+		}
+		if !found {
+			return fmt.Errorf("%s %s/%s status is not set", gvk.Kind, namespace, name)
+		}
+		var policyStatus gwv1.PolicyStatus
+		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(status, &policyStatus); err != nil {
+			return fmt.Errorf("failed to decode %s %s/%s status: %w", gvk.Kind, namespace, name, err)
+		}
+		return validate(policyStatus)
 	})
 }
 

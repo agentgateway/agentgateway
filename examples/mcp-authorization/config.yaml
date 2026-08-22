@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://agentgateway.dev/schema/config
+mcp:
+  port: 3000
+  policies:
+    cors:
+      allowOrigins:
+      - "*"
+      allowHeaders:
+      - "*"
+      exposeHeaders:
+      - "Mcp-Session-Id"
+    backendAuth:
+      passthrough: {}
+    jwtAuth:
+      issuer: agentgateway.dev
+      audiences: [test.agentgateway.dev]
+      jwks:
+        # Relative to the folder the binary runs from, not the config file
+        file: ./manifests/jwt/pub-key
+    mcpAuthorization:
+      rules:
+      # Allow anyone to call 'echo'
+      - 'mcp.tool.name == "echo"'
+      # Only the test-user can call 'get-sum'
+      - 'jwt.sub == "test-user" && mcp.tool.name == "get-sum"'
+      # Any authenticated user with the claim `nested.key == value` can access 'get-env'
+      - 'mcp.tool.name == "get-env" && jwt.nested.key == "value"'
+  targets:
+  - name: mcp2
+    mcp:
+      host: http://localhost:3001/mcp

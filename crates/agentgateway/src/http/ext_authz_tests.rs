@@ -10,14 +10,18 @@ use crate::http::ext_authz::proto::{
 	HeaderValue as ProtoHeaderValue, HeaderValueOption, QueryParameter,
 };
 use crate::http::ext_authz::{BodyOptions, ExtAuthz, ExtAuthzDynamicMetadata, FailureMode};
-use crate::types::agent::SimpleBackendReference;
+use crate::types::agent::{
+	BackendTrafficPolicy, SimpleBackendReference, SimpleBackendReferenceWithPolicies, Target,
+};
 use crate::*;
 
 impl Default for ExtAuthz {
 	fn default() -> Self {
 		Self {
-			target: Arc::new(SimpleBackendReference::Invalid),
-			policies: Default::default(),
+			target: SimpleBackendReferenceWithPolicies {
+				target: Arc::new(SimpleBackendReference::Invalid),
+				policies: Default::default(),
+			},
 			failure_mode: FailureMode::default(),
 			include_request_headers: Vec::new(),
 			include_request_body: None,
@@ -29,6 +33,38 @@ impl Default for ExtAuthz {
 			},
 		}
 	}
+}
+
+#[test]
+fn ext_authz_https_host_defaults_port_and_tls_policy() {
+	let authz: ExtAuthz = serde_json::from_value(serde_json::json!({
+		"host": "https://foo.com/",
+	}))
+	.expect("deserialize ext_authz");
+
+	assert!(matches!(
+		authz.target.target.as_ref(),
+		SimpleBackendReference::InlineBackend(Target::Hostname(host, 443)) if host.as_str() == "foo.com"
+	));
+	assert!(matches!(
+		authz.target.policies.as_slice(),
+		[BackendTrafficPolicy::BackendTLS(_)]
+	));
+}
+
+#[test]
+fn ext_authz_url_host_rejects_unknown_scheme_with_explicit_port() {
+	let err = serde_json::from_value::<ExtAuthz>(serde_json::json!({
+		"host": "foo://example.com:123",
+	}))
+	.expect_err("unsupported scheme should be rejected");
+
+	assert!(
+		err
+			.to_string()
+			.contains("backend URL scheme must be http or https"),
+		"got: {err}"
+	);
 }
 
 #[test]
@@ -552,7 +588,10 @@ async fn test_cached_http_direct_response_replays_status_headers_and_body() {
 	let body = crate::http::inspect_response_body(&mut direct_response)
 		.await
 		.unwrap();
-	assert_eq!(body, Bytes::from_static(b"nope"));
+	assert!(matches!(
+		body,
+		crate::http::BodyInspection::Complete(body) if body == Bytes::from_static(b"nope")
+	));
 }
 
 #[test]
@@ -1291,4 +1330,65 @@ fn test_apply_query_parameters_to_request_clears_query_when_empty() {
 	super::apply_query_parameters_to_request(&mut req, &[], &["remove".to_string()]).unwrap();
 
 	assert_eq!(req.uri().to_string(), "https://example.com/resource");
+}
+
+fn tls_conn(tls: transport::tls::TlsInfo) -> transport::stream::TLSConnectionInfo {
+	transport::stream::TLSConnectionInfo {
+		src_identity: Some(tls),
+		..Default::default()
+	}
+}
+
+#[test]
+fn test_peer_principal_falls_back_to_spiffe_id_when_not_istio_format() {
+	let tls = transport::tls::TlsInfo {
+		spiffe_id: Some(strng::new("spiffe://example.org/ns/foo/workload")),
+		identity: None,
+		..Default::default()
+	};
+	assert_eq!(
+		super::peer_principal(Some(&tls_conn(tls))),
+		"spiffe://example.org/ns/foo/workload"
+	);
+}
+
+#[test]
+fn test_peer_principal_uses_istio_identity() {
+	let tls = transport::tls::TlsInfo {
+		spiffe_id: None,
+		identity: Some(transport::tls::IstioIdentity::new(
+			strng::new("cluster.local"),
+			strng::new("ns"),
+			strng::new("sa"),
+		)),
+		..Default::default()
+	};
+	assert_eq!(
+		super::peer_principal(Some(&tls_conn(tls))),
+		"spiffe://cluster.local/ns/ns/sa/sa"
+	);
+}
+
+#[test]
+fn test_peer_principal_prefers_istio_identity_when_both_present() {
+	let tls = transport::tls::TlsInfo {
+		spiffe_id: Some(strng::new("spiffe://example.org/workload")),
+		identity: Some(transport::tls::IstioIdentity::new(
+			strng::new("cluster.local"),
+			strng::new("ns"),
+			strng::new("sa"),
+		)),
+		..Default::default()
+	};
+	assert_eq!(
+		super::peer_principal(Some(&tls_conn(tls))),
+		"spiffe://cluster.local/ns/ns/sa/sa"
+	);
+}
+
+#[test]
+fn test_peer_principal_empty_without_identity() {
+	assert_eq!(super::peer_principal(None), "");
+	let tls = transport::tls::TlsInfo::default();
+	assert_eq!(super::peer_principal(Some(&tls_conn(tls))), "");
 }

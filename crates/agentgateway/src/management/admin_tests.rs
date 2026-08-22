@@ -1,6 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use http_body_util::BodyExt;
 use tokio::runtime::Handle;
 
 use super::*;
@@ -8,12 +9,17 @@ use super::*;
 async fn spawn_admin(cfg: &str) -> (SocketAddr, agent_core::drain::DrainTrigger) {
 	let config = Arc::new(crate::config::parse_config(cfg.to_string(), None).unwrap());
 	let stores = crate::store::Stores::new(config.ipv6_enabled, config.threading_mode);
+	let client = crate::client::Client::new(&config.dns, None, Default::default(), None);
+	let resource_manager =
+		crate::resource_manager::ResourceManager::new(client).expect("resource manager");
 	let shutdown = signal::Shutdown::new();
 	let (drain_tx, drain_rx) = agent_core::drain::new();
 	let svc = Service::new(
 		config,
-		crate::llm::cost::ModelCatalog::empty(),
+		crate::llm::catalog::ModelCatalog::empty(),
+		None,
 		stores,
+		resource_manager,
 		shutdown.trigger(),
 		drain_rx,
 		Handle::current(),
@@ -52,4 +58,17 @@ config:
 		body.contains("visible-value"),
 		"config dump should preserve non-sensitive header values: {body}"
 	);
+}
+
+#[tokio::test]
+async fn trace_sse_stream_does_not_repoll_after_eof() {
+	let stream = trace_sse_stream(crate::proxy::dtrace::TraceReceiver::closed_for_test());
+	let mut body = crate::http::Body::from_stream(stream);
+
+	assert!(
+		body.frame().await.is_some(),
+		"ready frame should be present"
+	);
+	assert!(body.frame().await.is_none(), "stream should report EOF");
+	assert!(body.frame().await.is_none(), "stream must remain at EOF");
 }

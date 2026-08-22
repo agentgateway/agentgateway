@@ -1,4 +1,5 @@
 mod arc;
+pub mod assertions;
 pub mod bow;
 pub mod copy;
 pub mod drain;
@@ -8,6 +9,7 @@ pub mod metrics;
 pub mod prelude;
 pub mod readiness;
 pub mod responsechannel;
+pub mod serdes;
 pub mod signal;
 pub mod strng;
 pub mod telemetry;
