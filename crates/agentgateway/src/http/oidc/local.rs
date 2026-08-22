@@ -345,6 +345,7 @@ impl PreparedOidcPolicy {
 				transaction_ttl: session::default_transaction_ttl(),
 				encoder: oidc_cookie_encoder.clone(),
 			},
+			browser_session_store: Arc::new(oidc_cookie_encoder.clone()),
 			scopes,
 		})
 	}
