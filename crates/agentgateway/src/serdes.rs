@@ -73,7 +73,7 @@ impl FileInlineOrRemote {
 		})
 	}
 
-	fn as_resource_ref(&self, kind: ResourceKind) -> Option<ResourceRef> {
+	pub(crate) fn as_resource_ref(&self, kind: ResourceKind) -> Option<ResourceRef> {
 		match self {
 			FileInlineOrRemote::File { file } => Some(ResourceRef::File(file.clone())),
 			FileInlineOrRemote::Inline(_) => None,

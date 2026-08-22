@@ -23,6 +23,7 @@ const OPENAPI_TTL: Duration = Duration::from_hours(24);
 const GENERIC_TTL: Duration = Duration::from_mins(15);
 const FAILED_HTTP_REFRESH: Duration = Duration::from_secs(15);
 const MIN_HTTP_REFRESH: Duration = Duration::from_secs(60);
+const ON_DEMAND_REFRESH_MIN_INTERVAL: Duration = Duration::from_secs(10);
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum ResourceKind {
@@ -145,6 +146,18 @@ impl ResourceFetcher {
 		}
 	}
 
+	/// Returns the underlying resource manager when this fetcher participates
+	/// in config reloads, so callers can trigger an on-demand refresh (e.g. on
+	/// an unknown JWKS key id) that persists via the normal config-rebuild path.
+	pub(crate) fn managed_resource_manager(&self) -> Option<ResourceManager> {
+		match &self.mode {
+			ResourceFetcherMode::Managed(manager) => Some(manager.clone()),
+			ResourceFetcherMode::CachedOrDirect(_)
+			| ResourceFetcherMode::Direct(_)
+			| ResourceFetcherMode::FilesOnly => None,
+		}
+	}
+
 	/// Records managed resource lookups during a full config computation.
 	/// The returned guard commits fetched resources on success, or restores the
 	/// last committed set on failure so failed reloads do not leave stale state.
@@ -225,6 +238,9 @@ struct Inner {
 	scheduler_tx: mpsc::UnboundedSender<ScheduledRefresh>,
 	change_tx: watch::Sender<ResourceChange>,
 	change_counter: AtomicU64,
+	// Timestamp of the last on-demand (out-of-band) refresh per resource, used
+	// to debounce refresh_and_wait.
+	on_demand_refresh: Mutex<HashMap<ResourceRef, Instant>>,
 }
 
 struct Entry {
@@ -343,6 +359,7 @@ impl ResourceManager {
 				scheduler_tx,
 				change_tx,
 				change_counter: AtomicU64::new(0),
+				on_demand_refresh: Default::default(),
 			}),
 		};
 		manager.start_http_scheduler(scheduler_rx);
@@ -468,8 +485,7 @@ impl ResourceManager {
 		if !self.is_active(&resource) {
 			return;
 		}
-		let result = self.fetch(&resource).await;
-		let FetchResult { content, next } = match result {
+		let FetchResult { content, next } = match self.fetch(&resource).await {
 			Ok(result) => result,
 			Err(e) => {
 				warn!(resource = %resource_key(&resource), "failed to refresh resource: {e}");
@@ -487,7 +503,48 @@ impl ResourceManager {
 		if !self.is_active(&resource) {
 			return;
 		}
+		if self.store_if_changed(resource.clone(), content, next) {
+			self.notify_changed(&resource);
+		}
+	}
 
+	/// Immediately refetches `resource`, bypassing the cache, and returns the
+	/// fresh bytes. Used to recover from an unknown JWKS key id before the next
+	/// scheduled refresh. Debounced per-resource so a burst of tokens
+	/// referencing unknown key ids cannot flood the upstream endpoint.
+	pub async fn refresh_and_wait(&self, resource: &ResourceRef) -> anyhow::Result<Bytes> {
+		if !self.mark_on_demand_refresh(resource) {
+			return Err(anyhow!(
+				"on-demand refresh for {} debounced",
+				resource_key(resource)
+			));
+		}
+		let FetchResult { content, next } = self.fetch(resource).await?;
+		if self.store_if_changed(resource.clone(), content.clone(), next) {
+			self.notify_changed(resource);
+		}
+		Ok(content)
+	}
+
+	fn mark_on_demand_refresh(&self, resource: &ResourceRef) -> bool {
+		let mut last_refresh = self
+			.inner
+			.on_demand_refresh
+			.lock()
+			.expect("on-demand refresh mutex poisoned");
+		let now = Instant::now();
+		if let Some(last) = last_refresh.get(resource)
+			&& now.duration_since(*last) < ON_DEMAND_REFRESH_MIN_INTERVAL
+		{
+			return false;
+		}
+		last_refresh.insert(resource.clone(), now);
+		true
+	}
+
+	/// Stores freshly fetched content and schedules its next refresh, returning
+	/// whether the content differs from what was previously cached.
+	fn store_if_changed(&self, resource: ResourceRef, content: Bytes, next: Option<Instant>) -> bool {
 		let changed = {
 			let mut entries = self
 				.inner
@@ -512,14 +569,12 @@ impl ResourceManager {
 				refresh_in = ?at.saturating_duration_since(Instant::now()),
 				"scheduled resource refresh"
 			);
-			let _ = self.inner.scheduler_tx.send(ScheduledRefresh {
-				at,
-				resource: resource.clone(),
-			});
+			let _ = self
+				.inner
+				.scheduler_tx
+				.send(ScheduledRefresh { at, resource });
 		}
-		if changed {
-			self.notify_changed(&resource);
-		}
+		changed
 	}
 
 	async fn fetch(&self, resource: &ResourceRef) -> anyhow::Result<FetchResult> {
