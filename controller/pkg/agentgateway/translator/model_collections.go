@@ -640,8 +640,9 @@ func translateModelLLMProvider(ctx RouteContext, namespace string, model *agentg
 			return nil, err
 		}
 		provider.Provider = &api.AIBackend_Provider_Custom{Custom: &api.AIBackend_Custom{
-			Formats: formats,
-			Model:   providerModel(selectedModel, llm.Custom.Model),
+			Formats:          formats,
+			Model:            providerModel(selectedModel, llm.Custom.Model),
+			ProviderOverride: llm.Custom.ProviderOverride,
 		}}
 		if llm.Custom.BackendRef != nil {
 			ref, err := plugins.TranslateCustomProviderBackendRef(ctx.Krt, ctx.References.RouteBackend, namespace, *llm.Custom.BackendRef)

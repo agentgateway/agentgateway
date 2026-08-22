@@ -327,6 +327,11 @@ type CustomProviderSettings struct {
 	// +optional
 	BackendRef *LocalBackendObjectReference `json:"backendRef,omitempty"`
 
+	// Provider identity used for cost-catalog lookup and telemetry.
+	// Defaults to "custom" when unset.
+	// +optional
+	ProviderOverride *ShortString `json:"providerOverride,omitempty"`
+
 	// Provider-native API formats this provider supports.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=6

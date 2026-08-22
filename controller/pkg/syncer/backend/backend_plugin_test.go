@@ -463,6 +463,7 @@ func TestBuildAIBackend(t *testing.T) {
 					AI: &agentgateway.AIBackend{
 						LLM: &agentgateway.LLMProvider{
 							Custom: &agentgateway.CustomProvider{
+								ProviderOverride: new("team-a"),
 								Formats: []agentgateway.ProviderFormatConfig{
 									{Type: agentgateway.ProviderFormatCompletions},
 									{Type: agentgateway.ProviderFormatResponses, Path: "/v1/responses"},

@@ -559,8 +559,9 @@ func translateLLMProvider(ctx plugins.PolicyCtx, namespace string, llm *agentgat
 		}
 		provider.Provider = &api.AIBackend_Provider_Custom{
 			Custom: &api.AIBackend_Custom{
-				Formats: formats,
-				Model:   llm.Custom.Model,
+				Formats:          formats,
+				Model:            llm.Custom.Model,
+				ProviderOverride: llm.Custom.ProviderOverride,
 			},
 		}
 		if llm.Custom.BackendRef != nil {
