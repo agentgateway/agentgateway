@@ -475,7 +475,7 @@ llm:
 	let io = t.serve_http(strng::literal!("bind/0"));
 	let body = multipart_audio_body("real-model");
 
-	let res = send_multipart_audio(io.clone(), body.clone()).await;	
+	let res = send_multipart_audio(io.clone(), body.clone()).await;
 	assert_eq!(res.status(), StatusCode::OK);
 	let _ = read_body_raw(res.into_body()).await;
 
@@ -489,6 +489,7 @@ llm:
 	let log = agent_core::telemetry::testing::eventually_find(&[
 		("scope", "request"),
 		("http.path", "/v1/audio/transcriptions"),
+		("gen_ai.provider.name", "openai"),
 	])
 	.await
 	.unwrap();

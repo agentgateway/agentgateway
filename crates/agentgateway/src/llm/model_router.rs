@@ -711,7 +711,6 @@ async fn multipart_model(body: &Bytes, boundary: &str) -> RouterResult<String> {
 	)))
 }
 
-
 async fn rewrite_multipart_body_model(
 	body: &Bytes,
 	boundary: &str,
@@ -1178,7 +1177,6 @@ mod tests {
 			"http://example.com/model/real%2Fmodel/converse?trace=true"
 		);
 	}
-
 
 	#[tokio::test]
 	async fn rewrite_multipart_body_model_preserves_non_model_bytes() {
