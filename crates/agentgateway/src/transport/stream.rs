@@ -377,12 +377,13 @@ impl Socket {
 
 	pub fn apply_tcp_settings(&mut self, settings: &TCP) {
 		if let SocketType::Tcp(tcp) = &self.inner
-			&& settings.keepalives.enabled
+			&& let Some(keepalives) = &settings.keepalives
+			&& keepalives.enabled
 		{
 			let ka = socket2::TcpKeepalive::new()
-				.with_time(settings.keepalives.time)
-				.with_retries(settings.keepalives.retries)
-				.with_interval(settings.keepalives.interval);
+				.with_time(keepalives.time)
+				.with_retries(keepalives.retries)
+				.with_interval(keepalives.interval);
 			let res = socket2::SockRef::from(tcp).set_tcp_keepalive(&ka);
 			tracing::trace!("set keepalive: {:?}", res);
 		}

@@ -199,11 +199,11 @@ impl Default for TLS {
 #[cfg_attr(feature = "schema", schemars(rename = "FrontendTCP"))]
 pub struct TCP {
 	/// TCP keepalive settings for downstream connections.
-	#[serde(default)]
-	pub keepalives: super::agent::KeepaliveConfig,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub keepalives: Option<super::agent::KeepaliveConfig>,
 	/// Max concurrent downstream connections processed on this bind.
-	/// When at cap the listener stops calling accept() (HAProxy maxconn): extra SYNs sit in
-	/// the kernel backlog instead of becoming tokio tasks / H2 sessions. Unset = unlimited.
+	/// When at cap the listener stops calling accept(): extra SYNs sit in the kernel backlog
+	/// instead of becoming tokio tasks / H2 sessions. Unset = unlimited.
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub max_connections: Option<u32>,
 	/// How many connections may wait in-process for an active slot. Defaults to `maxConnections`.

@@ -3,7 +3,7 @@ use std::convert::Infallible;
 use std::error::Error as StdError;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::{Duration, Instant};
 
 use agent_core::drain::{DrainUpgrader, DrainWatcher};
@@ -356,7 +356,11 @@ impl Gateway {
 				&pi.metrics.downstream_connections_shed,
 				&name,
 			));
-			let warned_idle = AtomicBool::new(false);
+			let initial_policies = Self::frontend_policies_for_bind(&name, &pi);
+			if admission::Limits::from_tcp(initial_policies.tcp.as_ref()).is_some() {
+				Self::warn_if_idle_unbounded(&name, &initial_policies);
+			}
+			Self::refresh_memory_threshold(&memory_threshold, initial_policies.tcp.as_ref());
 			let handle_stream = |stream: TcpStream, upgrader: &DrainUpgrader| {
 				let Ok(mut stream) = Socket::from_tcp(stream) else {
 					// Can fail if they immediately disconnected; not much we can do.
@@ -373,9 +377,6 @@ impl Gateway {
 				let policies = Self::frontend_policies_for_bind(&name, &pi);
 				let tcp_limits = admission::Limits::from_tcp(policies.tcp.as_ref());
 				Self::refresh_memory_threshold(&memory_threshold, policies.tcp.as_ref());
-				if tcp_limits.is_some() {
-					Self::warn_if_idle_unbounded(&warned_idle, &policies);
-				}
 				// Reserve the slot *before* spawning. A flood of accept() otherwise drains the
 				// backlog long before any spawned task increments the counter, so the cap would
 				// never bound sockets or HTTP/2 sessions.
@@ -710,19 +711,17 @@ impl Gateway {
 
 	/// A capped bind makes idle connections expensive: a client that finishes the HTTP/2
 	/// preface and never opens a stream holds its slot until something else closes it, so a
-	/// handful of them can exhaust a small cap. Warn once when nothing bounds idle time.
-	fn warn_if_idle_unbounded(warned: &AtomicBool, policies: &FrontendPolices) {
-		if warned.load(Ordering::Relaxed) {
-			return;
-		}
+	/// handful of them can exhaust a small cap. Warn when the bind starts if nothing bounds idle time.
+	fn warn_if_idle_unbounded(bind: &BindKey, policies: &FrontendPolices) {
 		let bounded = policies
 			.http
 			.as_ref()
 			.is_some_and(|h| h.http2_keepalive_interval.is_some() || h.max_connection_duration.is_some());
-		if bounded || warned.swap(true, Ordering::Relaxed) {
+		if bounded {
 			return;
 		}
 		warn!(
+			bind = ?bind,
 			"maxConnections is set without http2KeepaliveInterval or maxConnectionDuration; \
 			 idle HTTP/2 connections can hold connection slots indefinitely"
 		);

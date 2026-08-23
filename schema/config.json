@@ -9657,16 +9657,17 @@
       "properties": {
         "keepalives": {
           "description": "TCP keepalive settings for downstream connections.",
-          "$ref": "#/$defs/KeepaliveConfig",
-          "default": {
-            "enabled": true,
-            "time": "3m0s",
-            "interval": "3m0s",
-            "retries": 9
-          }
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KeepaliveConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "maxConnections": {
-          "description": "Max concurrent downstream connections processed on this bind.\nWhen at cap the listener stops calling accept() (HAProxy maxconn): extra SYNs sit in\nthe kernel backlog instead of becoming tokio tasks / H2 sessions. Unset = unlimited.",
+          "description": "Max concurrent downstream connections processed on this bind.\nWhen at cap the listener stops calling accept(): extra SYNs sit in\nthe kernel backlog instead of becoming tokio tasks / H2 sessions. Unset = unlimited.",
           "type": [
             "integer",
             "null"

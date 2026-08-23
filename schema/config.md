@@ -16954,7 +16954,7 @@
 |`frontendPolicies.tcp.keepalives.time`|string|Idle time before the first keepalive probe is sent.|
 |`frontendPolicies.tcp.keepalives.interval`|string|Time between successive keepalive probes.|
 |`frontendPolicies.tcp.keepalives.retries`|integer|Number of unacknowledged probes before the connection is considered dead.|
-|`frontendPolicies.tcp.maxConnections`|integer|Max concurrent downstream connections processed on this bind.<br>When at cap the listener stops calling accept() (HAProxy maxconn): extra SYNs sit in<br>the kernel backlog instead of becoming tokio tasks / H2 sessions. Unset = unlimited.|
+|`frontendPolicies.tcp.maxConnections`|integer|Max concurrent downstream connections processed on this bind.<br>When at cap the listener stops calling accept(): extra SYNs sit in<br>the kernel backlog instead of becoming tokio tasks / H2 sessions. Unset = unlimited.|
 |`frontendPolicies.tcp.maxPendingConnections`|integer|How many connections may wait in-process for an active slot. Defaults to `maxConnections`.<br>`0` means do not wait: stop accept() when at `maxConnections`.|
 |`frontendPolicies.tcp.maxConnectionWait`|string|How long a pending connection waits for a free slot. Defaults to 10s. `0` means do not wait.|
 |`frontendPolicies.tcp.stopAcceptingAtMemoryPercent`|integer|Pause accept() when the cgroup memory working set (usage minus reclaimable page cache,<br>the same figure kubelet uses for OOM decisions) reaches this percent of the memory<br>limit, in the style of Envoy's overload manager. Typical: 75. Accepting resumes 10<br>points below the threshold. Unset = disabled; a cgroup that cannot be read fails open.|

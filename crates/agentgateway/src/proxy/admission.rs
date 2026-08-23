@@ -1,5 +1,4 @@
-//! Admission control shared by downstream connections (HAProxy-style `maxconn`) and
-//! in-flight HTTP requests.
+//! Admission control for downstream connections and in-flight HTTP requests.
 //!
 //! Two invariants drive the design:
 //!

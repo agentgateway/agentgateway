@@ -3356,8 +3356,7 @@ fn frontend_policy_from_proto(
 			keepalives: t
 				.keepalives
 				.as_ref()
-				.map(types::agent::KeepaliveConfig::from)
-				.unwrap_or_default(),
+				.map(types::agent::KeepaliveConfig::from),
 			max_connections: t.max_connections,
 			max_pending_connections: t.max_pending_connections,
 			max_connection_wait: t.max_connection_wait.map(convert_duration),
