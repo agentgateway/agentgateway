@@ -2381,6 +2381,16 @@ async fn make_backend_call(
 				.as_ref()
 				.map(|policy| policy.resolve_route(req.uri().path()))
 				.unwrap_or(llm::RouteType::Completions);
+			if matches!(route_type, RouteType::Detect | RouteType::Passthrough)
+				&& let Some(provider_model) = llm.provider.override_model()
+			{
+				Box::pin(model_router::rewrite_multipart_request_model(
+					&mut req,
+					provider_model.as_str(),
+				))
+				.await
+				.map_err(ProxyResponse::DirectResponse)?;
+			}
 			trace!("llm: route {} to {route_type:?}", req.uri().path());
 			let llm_provider = llm.provider.provider().to_string();
 			dtrace::trace(|trace| {

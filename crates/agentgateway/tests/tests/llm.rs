@@ -473,29 +473,9 @@ llm:
 	);
 	let t = setup_local_llm_config(&config).await;
 	let io = t.serve_http(strng::literal!("bind/0"));
-	let body = concat!(
-		"--audio-boundary\r\n",
-		"Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n",
-		"Content-Type: audio/wav\r\n",
-		"\r\n",
-		"fake-audio-bytes\r\n",
-		"--audio-boundary\r\n",
-		"Content-Disposition: form-data; name=\"model\"\r\n",
-		"\r\n",
-		"real-model\r\n",
-		"--audio-boundary--\r\n",
-	)
-	.as_bytes();
+	let body = multipart_audio_body("real-model");
 
-	let res = RequestBuilder::new(Method::POST, "http://lo/v1/audio/transcriptions")
-		.header(
-			header::CONTENT_TYPE,
-			"multipart/form-data; boundary=audio-boundary",
-		)
-		.body(Body::from(body.to_vec()))
-		.send(io.clone())
-		.await
-		.unwrap();
+	let res = send_multipart_audio(io.clone(), body.clone()).await;	
 	assert_eq!(res.status(), StatusCode::OK);
 	let _ = read_body_raw(res.into_body()).await;
 
@@ -519,6 +499,166 @@ llm:
 		"gen_ai.usage.output_tokens": 23
 	});
 	assert!(is_json_subset(&want, &log), "want={want:#?} got={log:#?}");
+}
+
+#[tokio::test]
+async fn llm_model_router_rewrites_multipart_virtual_model() {
+	let mock = body_mock(include_bytes!(
+		"../../../llm/src/tests/response/completions/basic.json"
+	))
+	.await;
+	let config = format!(
+		r#"
+llm:
+  port: 0
+  models:
+  - name: real-model
+    visibility: internal
+    provider: openAI
+    params:
+      baseUrl: http://{}
+    passthrough: detect
+  virtualModels:
+  - name: public-model
+    routing:
+      weighted:
+        targets:
+        - model: real-model
+"#,
+		mock.address()
+	);
+	let t = setup_local_llm_config(&config).await;
+	let io = t.serve_http(strng::literal!("bind/0"));
+
+	let res = send_multipart_audio(io, multipart_audio_body("public-model")).await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let _ = read_body_raw(res.into_body()).await;
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(requests[0].body, multipart_audio_body("real-model"));
+}
+
+#[tokio::test]
+async fn llm_model_router_applies_provider_model_to_opaque_multipart() {
+	let mock = body_mock(include_bytes!(
+		"../../../llm/src/tests/response/completions/basic.json"
+	))
+	.await;
+	let config = format!(
+		r#"
+llm:
+  port: 0
+  models:
+  - name: public-model
+    provider: openAI
+    params:
+      baseUrl: http://{}
+      model: upstream-model
+    passthrough: opaque
+"#,
+		mock.address()
+	);
+	let t = setup_local_llm_config(&config).await;
+	let io = t.serve_http(strng::literal!("bind/0"));
+
+	let res = send_multipart_audio(io, multipart_audio_body("public-model")).await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let _ = read_body_raw(res.into_body()).await;
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(requests[0].body, multipart_audio_body("upstream-model"));
+}
+
+#[tokio::test]
+async fn llm_model_router_prefers_provider_model_after_multipart_virtual_routing() {
+	let mock = body_mock(include_bytes!(
+		"../../../llm/src/tests/response/completions/basic.json"
+	))
+	.await;
+	let config = format!(
+		r#"
+llm:
+  port: 0
+  models:
+  - name: routed-model
+    visibility: internal
+    provider: openAI
+    params:
+      baseUrl: http://{}
+      model: upstream-model
+    passthrough: detect
+  virtualModels:
+  - name: public-model
+    routing:
+      weighted:
+        targets:
+        - model: routed-model
+"#,
+		mock.address()
+	);
+	let t = setup_local_llm_config(&config).await;
+	let io = t.serve_http(strng::literal!("bind/0"));
+
+	let res = send_multipart_audio(io, multipart_audio_body("public-model")).await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let _ = read_body_raw(res.into_body()).await;
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(requests[0].body, multipart_audio_body("upstream-model"));
+}
+
+#[tokio::test]
+async fn llm_model_router_rewrites_failover_virtual_multipart_model() {
+	let mock = body_mock(include_bytes!(
+		"../../../llm/src/tests/response/completions/basic.json"
+	))
+	.await;
+	let config = format!(
+		r#"
+llm:
+  port: 0
+  models:
+  - name: real-model
+    visibility: internal
+    provider: openAI
+    params:
+      baseUrl: http://{}
+    passthrough: opaque
+  virtualModels:
+  - name: public-model
+    routing:
+      failover:
+        targets:
+        - model: real-model
+          priority: 0
+"#,
+		mock.address()
+	);
+	let t = setup_local_llm_config(&config).await;
+	let io = t.serve_http(strng::literal!("bind/0"));
+
+	let res = send_multipart_audio(io, multipart_audio_body("public-model")).await;
+	assert_eq!(res.status(), StatusCode::OK);
+	let _ = read_body_raw(res.into_body()).await;
+
+	let requests = mock
+		.received_requests()
+		.await
+		.expect("request recording should be enabled");
+	assert_eq!(requests.len(), 1);
+	assert_eq!(requests[0].body, multipart_audio_body("real-model"));
 }
 
 #[tokio::test]
@@ -840,6 +980,37 @@ fn completions_request_body_with_model(model: &str) -> Vec<u8> {
 		.expect("request fixture should be valid JSON");
 	body["model"] = json!(model);
 	serde_json::to_vec(&body).expect("request fixture should serialize")
+}
+
+fn multipart_audio_body(model: &str) -> Vec<u8> {
+	format!(
+		concat!(
+			"--audio-boundary\r\n",
+			"Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n",
+			"Content-Type: audio/wav\r\n",
+			"\r\n",
+			"fake-audio-public-model-bytes\r\n",
+			"--audio-boundary\r\n",
+			"Content-Disposition: form-data; name=\"model\"\r\n",
+			"\r\n",
+			"{}\r\n",
+			"--audio-boundary--\r\n",
+		),
+		model,
+	)
+	.into_bytes()
+}
+
+async fn send_multipart_audio(io: MemoryClient, body: Vec<u8>) -> Response {
+	RequestBuilder::new(Method::POST, "http://lo/v1/audio/transcriptions")
+		.header(
+			header::CONTENT_TYPE,
+			"multipart/form-data; boundary=audio-boundary",
+		)
+		.body(Body::from(body))
+		.send(io)
+		.await
+		.expect("multipart audio request")
 }
 
 async fn send_completions_with_model(

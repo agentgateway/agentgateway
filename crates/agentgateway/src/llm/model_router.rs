@@ -1,3 +1,4 @@
+use std::ops::Range;
 use std::sync::Arc;
 
 use agent_core::strng;
@@ -293,7 +294,8 @@ impl ModelRouter {
 				}
 			},
 		};
-		if let Err(resp) = rewrite_request_model(req, location, &target) {
+
+		if let Err(resp) = Box::pin(rewrite_request_model(req, location, &target)).await {
 			return ResolveResult::DirectResponse(*resp);
 		}
 		match self.resolve_concrete_model(&target, true, req) {
@@ -532,7 +534,7 @@ async fn requested_model(req: &mut Request) -> RouterResult<RequestedModel> {
 	})
 }
 
-fn rewrite_request_model(
+async fn rewrite_request_model(
 	req: &mut Request,
 	location: RequestedModelLocation,
 	target: &str,
@@ -540,8 +542,7 @@ fn rewrite_request_model(
 	match location {
 		RequestedModelLocation::Body(body) => rewrite_body_model(req, body, target),
 		RequestedModelLocation::Path => rewrite_uri_model(req, target),
-		// TODO: Rewrite multipart model fields for virtual model routing.
-		RequestedModelLocation::Multipart => Ok(()),
+		RequestedModelLocation::Multipart => rewrite_multipart_request_model(req, target).await,
 	}
 }
 
@@ -663,6 +664,24 @@ fn multipart_boundary(req: &Request) -> Option<String> {
 		.and_then(|content_type| multer::parse_boundary(content_type).ok())
 }
 
+pub(crate) async fn rewrite_multipart_request_model(
+	req: &mut Request,
+	target: &str,
+) -> Result<(), Box<Response>> {
+	let Some(boundary) = multipart_boundary(req) else {
+		return Ok(());
+	};
+	let body = body_bytes(req).await?;
+	let Some(body) = rewrite_multipart_body_model(&body, &boundary, target).await? else {
+		return Ok(());
+	};
+	*req.body_mut() = http::Body::from(body);
+	req.headers_mut().remove(::http::header::CONTENT_LENGTH);
+	req.headers_mut().remove(::http::header::TRANSFER_ENCODING);
+	req.extensions_mut().remove::<cel::BufferedBody>();
+	Ok(())
+}
+
 async fn multipart_model(body: &Bytes, boundary: &str) -> RouterResult<String> {
 	let stream = stream::once(std::future::ready(Ok::<Bytes, multer::Error>(body.clone())));
 	let mut multipart = multer::Multipart::new(stream, boundary);
@@ -690,6 +709,117 @@ async fn multipart_model(body: &Bytes, boundary: &str) -> RouterResult<String> {
 		"LLM multipart request body is missing string field 'model'",
 		"missing_model",
 	)))
+}
+
+
+async fn rewrite_multipart_body_model(
+	body: &Bytes,
+	boundary: &str,
+	target: &str,
+) -> RouterResult<Option<Bytes>> {
+	let fields = multipart_field_ranges(body, boundary).ok_or_else(|| {
+		Box::new(llm_error_response(
+			::http::StatusCode::BAD_REQUEST,
+			"LLM multipart request body must be valid multipart/form-data",
+			"invalid_request_body",
+		))
+	})?;
+	let stream = stream::once(std::future::ready(Ok::<Bytes, multer::Error>(body.clone())));
+	let mut multipart = multer::Multipart::new(stream, boundary);
+	let mut model_ranges = Vec::new();
+	while let Some((index, field)) = multipart.next_field_with_idx().await.map_err(|err| {
+		tracing::debug!(%err, "failed to parse LLM multipart request body for model rewrite");
+		Box::new(llm_error_response(
+			::http::StatusCode::BAD_REQUEST,
+			"LLM multipart request body must be valid multipart/form-data",
+			"invalid_request_body",
+		))
+	})? {
+		if field.name() != Some("model") {
+			continue;
+		}
+		field.text().await.map_err(|err| {
+			tracing::debug!(%err, "failed to parse LLM multipart model field for rewrite");
+			Box::new(llm_error_response(
+				::http::StatusCode::BAD_REQUEST,
+				"LLM multipart request body has invalid string field 'model'",
+				"invalid_model",
+			))
+		})?;
+		model_ranges.push(fields.get(index).cloned().ok_or_else(|| {
+			Box::new(llm_error_response(
+				::http::StatusCode::BAD_REQUEST,
+				"LLM multipart request body must be valid multipart/form-data",
+				"invalid_request_body",
+			))
+		})?);
+	}
+	if model_ranges.is_empty() {
+		return Ok(None);
+	}
+	if model_ranges
+		.iter()
+		.all(|range| &body[range.clone()] == target.as_bytes())
+	{
+		return Ok(None);
+	}
+
+	let removed = model_ranges.iter().map(Range::len).sum::<usize>();
+	let mut rewritten = Vec::with_capacity(
+		body
+			.len()
+			.saturating_sub(removed)
+			.saturating_add(target.len().saturating_mul(model_ranges.len())),
+	);
+	let mut copied = 0;
+	for range in model_ranges {
+		rewritten.extend_from_slice(&body[copied..range.start]);
+		rewritten.extend_from_slice(target.as_bytes());
+		copied = range.end;
+	}
+	rewritten.extend_from_slice(&body[copied..]);
+	Ok(Some(Bytes::from(rewritten)))
+}
+
+fn multipart_field_ranges(body: &[u8], boundary: &str) -> Option<Vec<Range<usize>>> {
+	// Multer identifies field names but does not expose source offsets. Mirror its boundary
+	// framing here so model data can be spliced without reserializing files or headers.
+	let delimiter = format!("--{boundary}").into_bytes();
+	let field_delimiter = format!("\r\n--{boundary}").into_bytes();
+	let mut cursor = find_bytes(body, &delimiter)?;
+	let mut fields = Vec::new();
+
+	loop {
+		if !body.get(cursor..)?.starts_with(&delimiter) {
+			return None;
+		}
+		cursor += delimiter.len();
+		if body.get(cursor..)?.starts_with(b"--") {
+			return Some(fields);
+		}
+		while matches!(body.get(cursor), Some(b' ' | b'\t')) {
+			cursor += 1;
+		}
+		if !body.get(cursor..)?.starts_with(b"\r\n") {
+			return None;
+		}
+		cursor += 2;
+
+		let headers_end = cursor + find_bytes(body.get(cursor..)?, b"\r\n\r\n")?;
+		let field_start = headers_end + 4;
+		let field_end = field_start + find_bytes(body.get(field_start..)?, &field_delimiter)?;
+		fields.push(field_start..field_end);
+		cursor = field_end + 2;
+	}
+}
+
+fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+	if needle.is_empty() {
+		return Some(0);
+	}
+	haystack
+		.windows(needle.len())
+		.position(|window| window == needle)
 }
 
 async fn body_bytes(req: &mut Request) -> RouterResult<Bytes> {
@@ -1047,6 +1177,123 @@ mod tests {
 			req.uri().to_string(),
 			"http://example.com/model/real%2Fmodel/converse?trace=true"
 		);
+	}
+
+
+	#[tokio::test]
+	async fn rewrite_multipart_body_model_preserves_non_model_bytes() {
+		let body = Bytes::from_static(
+			concat!(
+				"--audio-boundary\r\n",
+				"Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n",
+				"Content-Type: audio/wav\r\n",
+				"\r\n",
+				"audio--audio-boundary-public-model-bytes\r\n",
+				"--audio-boundary\r\n",
+				"Content-Disposition: form-data; name=\"model\"\r\n",
+				"\r\n",
+				"public-model\r\n",
+				"--audio-boundary\r\n",
+				"Content-Disposition: form-data; name=\"model\"\r\n",
+				"X-Field-Metadata: preserved\r\n",
+				"\r\n",
+				"stale-duplicate\r\n",
+				"--audio-boundary--\r\n",
+			)
+			.as_bytes(),
+		);
+		let expected = Bytes::from_static(
+			concat!(
+				"--audio-boundary\r\n",
+				"Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n",
+				"Content-Type: audio/wav\r\n",
+				"\r\n",
+				"audio--audio-boundary-public-model-bytes\r\n",
+				"--audio-boundary\r\n",
+				"Content-Disposition: form-data; name=\"model\"\r\n",
+				"\r\n",
+				"upstream-model\r\n",
+				"--audio-boundary\r\n",
+				"Content-Disposition: form-data; name=\"model\"\r\n",
+				"X-Field-Metadata: preserved\r\n",
+				"\r\n",
+				"upstream-model\r\n",
+				"--audio-boundary--\r\n",
+			)
+			.as_bytes(),
+		);
+
+		let rewritten = rewrite_multipart_body_model(&body, "audio-boundary", "upstream-model")
+			.await
+			.expect("multipart body should parse")
+			.expect("model fields should change");
+		assert_eq!(rewritten, expected);
+	}
+
+	#[tokio::test]
+	async fn rewrite_multipart_request_model_clears_stale_body_metadata() {
+		let body = Bytes::from_static(
+			concat!(
+				"--quoted-boundary\r\n",
+				"Content-Disposition: form-data; name=\"model\"\r\n",
+				"\r\n",
+				"short\r\n",
+				"--quoted-boundary--\r\n",
+			)
+			.as_bytes(),
+		);
+		let mut req = ::http::Request::builder()
+			.uri("http://example.com/v1/audio/transcriptions")
+			.header(
+				::http::header::CONTENT_TYPE,
+				"multipart/form-data; boundary=\"quoted-boundary\"",
+			)
+			.header(::http::header::CONTENT_LENGTH, body.len())
+			.header(::http::header::TRANSFER_ENCODING, "chunked")
+			.body(http::Body::from(body.clone()))
+			.expect("valid request");
+		req
+			.extensions_mut()
+			.insert(cel::BufferedBody::complete(body));
+
+		rewrite_multipart_request_model(&mut req, "a-much-longer-model")
+			.await
+			.expect("multipart model rewrite");
+
+		assert!(!req.headers().contains_key(::http::header::CONTENT_LENGTH));
+		assert!(
+			!req
+				.headers()
+				.contains_key(::http::header::TRANSFER_ENCODING)
+		);
+		assert!(req.extensions().get::<cel::BufferedBody>().is_none());
+		let rewritten = http::read_body_with_limit(req.into_body(), 1024)
+			.await
+			.expect("rewritten request body");
+		assert!(
+			rewritten
+				.windows(b"a-much-longer-model".len())
+				.any(|window| window == b"a-much-longer-model")
+		);
+	}
+
+	#[tokio::test]
+	async fn rewrite_multipart_body_model_without_model_is_unchanged() {
+		let body = Bytes::from_static(
+			concat!(
+				"--audio-boundary\r\n",
+				"Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n",
+				"\r\n",
+				"audio-bytes\r\n",
+				"--audio-boundary--\r\n",
+			)
+			.as_bytes(),
+		);
+
+		let rewritten = rewrite_multipart_body_model(&body, "audio-boundary", "upstream-model")
+			.await
+			.expect("multipart body should parse");
+		assert!(rewritten.is_none());
 	}
 
 	#[tokio::test]
