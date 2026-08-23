@@ -66,6 +66,8 @@ pub enum JwkError {
 		key_id: String,
 		curve: EllipticCurve,
 	},
+	#[error("{0}")]
+	InvalidMcpConfig(String),
 }
 
 #[derive(Clone)]
@@ -144,6 +146,10 @@ pub enum LocalJwtConfig {
 		location: AuthorizationLocation,
 		/// Trusted issuers and their signing keys.
 		providers: Vec<ProviderConfig>,
+		/// Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication
+		/// behavior on top of standard JWT validation. Requires exactly one provider and
+		/// `mode: strict`.
+		mcp: Option<LocalJwtMcpConfig>,
 	},
 	/// Validate JWTs against a single trusted token issuer.
 	Single {
@@ -162,7 +168,33 @@ pub enum LocalJwtConfig {
 		/// Claim requirements to enforce after the token signature is verified.
 		#[cfg_attr(feature = "schema", schemars(default))]
 		jwt_validation_options: JWTValidationOptions,
+		/// Enables MCP OAuth resource metadata (RFC 9728) and MCP-specific authentication
+		/// behavior on top of standard JWT validation. Requires `mode: strict`.
+		mcp: Option<LocalJwtMcpConfig>,
 	},
+}
+
+/// MCP OAuth resource-metadata extension for `jwtAuth`, mirroring the k8s `JWTMCPConfig` CRD.
+#[apply(schema_de!)]
+pub struct LocalJwtMcpConfig {
+	/// Protected resource metadata returned to MCP clients at the OAuth discovery endpoint.
+	pub resource_metadata: crate::types::agent::ResourceMetadata,
+	/// Identity provider used to derive MCP authorization metadata.
+	pub provider: Option<crate::types::agent::McpIDP>,
+	/// Client ID to use for short-circuiting Dynamic Client Registration. If set, the gateway
+	/// will not proxy registration requests to the IDP and instead return this client ID.
+	pub client_id: Option<String>,
+}
+
+/// Resolved MCP OAuth extension for a `jwtAuth` policy: the sole provider's issuer/audiences
+/// plus the user-configured [`LocalJwtMcpConfig`], ready to build a runtime `McpAuthentication`.
+#[derive(Debug, Clone)]
+pub struct ResolvedJwtMcp {
+	pub issuer: String,
+	pub audiences: Vec<String>,
+	pub resource_metadata: crate::types::agent::ResourceMetadata,
+	pub provider: Option<crate::types::agent::McpIDP>,
+	pub client_id: Option<String>,
 }
 
 #[apply(schema_de!)]
@@ -172,6 +204,7 @@ struct LocalJwtMultiConfig {
 	#[serde(default)]
 	location: AuthorizationLocation,
 	providers: Vec<ProviderConfig>,
+	mcp: Option<LocalJwtMcpConfig>,
 }
 
 #[apply(schema_de!)]
@@ -185,6 +218,7 @@ struct LocalJwtSingleConfig {
 	jwks: serdes::FileInlineOrRemote,
 	#[serde(default)]
 	jwt_validation_options: JWTValidationOptions,
+	mcp: Option<LocalJwtMcpConfig>,
 }
 
 // Select the configuration shape before deserializing it so serde does not discard the
@@ -202,6 +236,7 @@ impl<'de> Deserialize<'de> for LocalJwtConfig {
 				mode: config.mode,
 				location: config.location,
 				providers: config.providers,
+				mcp: config.mcp,
 			})
 		} else {
 			let config: LocalJwtSingleConfig =
@@ -213,6 +248,7 @@ impl<'de> Deserialize<'de> for LocalJwtConfig {
 				audiences: config.audiences,
 				jwks: config.jwks,
 				jwt_validation_options: config.jwt_validation_options,
+				mcp: config.mcp,
 			})
 		}
 	}
@@ -304,13 +340,14 @@ impl LocalJwtConfig {
 	pub async fn try_into(
 		self,
 		resources: &crate::resource_manager::ResourceFetcher,
-	) -> Result<Jwt, JwkError> {
-		let (mode, authorization_location, providers_cfg) = match self {
+	) -> Result<(Jwt, Option<ResolvedJwtMcp>), JwkError> {
+		let (mode, authorization_location, providers_cfg, mcp) = match self {
 			LocalJwtConfig::Multi {
 				mode,
 				location: authorization_location,
 				providers,
-			} => (mode, authorization_location, providers),
+				mcp,
+			} => (mode, authorization_location, providers, mcp),
 			LocalJwtConfig::Single {
 				mode,
 				location: authorization_location,
@@ -318,6 +355,7 @@ impl LocalJwtConfig {
 				audiences,
 				jwks,
 				jwt_validation_options,
+				mcp,
 			} => (
 				mode,
 				authorization_location,
@@ -327,7 +365,31 @@ impl LocalJwtConfig {
 					jwks,
 					jwt_validation_options,
 				}],
+				mcp,
 			),
+		};
+
+		let resolved_mcp = match mcp {
+			Some(mcp_cfg) => {
+				let [provider] = providers_cfg.as_slice() else {
+					return Err(JwkError::InvalidMcpConfig(
+						"jwtAuth.mcp requires exactly one provider".to_string(),
+					));
+				};
+				if mode != Mode::Strict {
+					return Err(JwkError::InvalidMcpConfig(
+						"jwtAuth.mcp requires mode: strict".to_string(),
+					));
+				}
+				Some(ResolvedJwtMcp {
+					issuer: provider.issuer.clone(),
+					audiences: provider.audiences.clone().unwrap_or_default(),
+					resource_metadata: mcp_cfg.resource_metadata,
+					provider: mcp_cfg.provider,
+					client_id: mcp_cfg.client_id,
+				})
+			},
+			None => None,
 		};
 
 		let mut providers = Vec::with_capacity(providers_cfg.len());
@@ -340,11 +402,14 @@ impl LocalJwtConfig {
 			let provider = Provider::from_jwks(jwks, pc.issuer, pc.audiences, pc.jwt_validation_options)?;
 			providers.push(provider);
 		}
-		Ok(Jwt {
-			mode,
-			providers,
-			location: authorization_location,
-		})
+		Ok((
+			Jwt {
+				mode,
+				providers,
+				location: authorization_location,
+			},
+			resolved_mcp,
+		))
 	}
 }
 
