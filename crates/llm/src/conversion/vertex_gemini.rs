@@ -471,7 +471,18 @@ pub mod from_completions {
 		let file_id = field("file_id");
 
 		if let Some((mime, data)) = parse_data_url(file_data) {
-			return Ok(inline_data_part(mime, data));
+			if !mime.is_empty() {
+				return Ok(inline_data_part(mime, data));
+			}
+			// RFC 2397 allows an absent media type; Vertex rejects an empty mimeType.
+			let Some(mime) = explicit_mime_hint(file)
+				.or_else(|| mime_from_extension(field("filename")).map(str::to_string))
+			else {
+				return Err(AIError::UnsupportedConversion(strng::literal!(
+					"data: file_data has no media type; pass file.filename with a known extension (or mime_type/content_type)"
+				)));
+			};
+			return Ok(inline_data_part(&mime, data));
 		}
 
 		// Clients carry a gs:// object in either field; Vertex fetches those directly.

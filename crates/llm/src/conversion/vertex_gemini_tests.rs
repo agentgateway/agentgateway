@@ -143,6 +143,32 @@ fn file_gs_uri_without_extension_or_hint_is_rejected() {
 }
 
 #[test]
+fn data_url_without_media_type_falls_back_to_filename() {
+	let g = to_gemini(file_content(json!({
+		"filename": "report.pdf",
+		"file_data": "data:;base64,JVBERi0xLjQK"
+	})));
+	assert_eq!(
+		g["contents"][0]["parts"][1]["inlineData"]["mimeType"],
+		"application/pdf"
+	);
+}
+
+#[test]
+fn data_url_without_media_type_or_filename_is_rejected() {
+	let err = from_completions::translate(
+		&req(file_content(
+			json!({ "file_data": "data:;base64,JVBERi0xLjQK" }),
+		)),
+		None,
+	);
+	assert!(
+		err.is_err(),
+		"an empty mimeType is rejected by Vertex, so it must not be sent"
+	);
+}
+
+#[test]
 fn raw_base64_file_data_takes_mime_from_filename() {
 	let g = to_gemini(file_content(json!({
 		"filename": "report.pdf",
